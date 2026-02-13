@@ -1,0 +1,17 @@
+# Android / Gradle artifacts
+*.iml
+.gradle/
+.idea/
+local.properties
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+.cmake
+
+# C++ Build Junk
+cmake-build-debug/
+cmake-build-release/
+app/build/
+app/.cxx/

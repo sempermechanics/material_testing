@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:gravity="center_horizontal">
+
+        <TextView
+            android:id="@+id/tvGuideStep1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="1. Load Reference Image"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btnLoadRef"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Select Reference Image"/>
+
+        <TextView
+            android:id="@+id/tvRefName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No file selected"
+            android:textColor="#555555"
+            android:textSize="12sp"
+            android:layout_marginBottom="5dp"/>
+
+        <TextView
+            android:id="@+id/tvInstruction"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Instruction: Draw a Box on the Image below"
+            android:textColor="#CC0000"
+            android:textStyle="bold"
+            android:layout_marginTop="5dp"
+            android:layout_marginBottom="5dp"/>
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:background="#333333">
+
+            <ImageView
+                android:id="@+id/imgRef"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxWidth="350dp"
+                android:maxHeight="400dp"
+                android:adjustViewBounds="true"
+                android:scaleType="fitCenter" />
+
+            <com.rafad.indicvisiondic.OverlayView
+                android:id="@+id/overlayRef"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"/>
+        </FrameLayout>
+
+        <Button
+            android:id="@+id/btnFullImage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="OR Use Full Image Center"
+            android:backgroundTint="#555555"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="20dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="2. Load Deformed Image"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btnLoadDef"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Select Deformed Image"/>
+
+        <TextView
+            android:id="@+id/tvDefName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No file selected"
+            android:textColor="#555555"
+            android:textSize="12sp"
+            android:layout_marginBottom="5dp"/>
+
+        <ImageView
+            android:id="@+id/imgDef"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxWidth="200dp"
+            android:maxHeight="200dp"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:background="#EEEEEE"
+            android:layout_marginTop="5dp"
+            android:layout_marginBottom="20dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="4dp">
+            <TextView android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:text="Subset Size"
+                android:textStyle="bold" android:textSize="11sp" android:gravity="center"/>
+            <TextView android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:text="Step Size"
+                android:textStyle="bold" android:textSize="11sp" android:gravity="center"/>
+            <TextView android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:text="Strain Window"
+                android:textStyle="bold" android:textSize="11sp" android:gravity="center"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <EditText
+                android:id="@+id/etSubsetSize"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:hint="SS"
+                android:text="41"
+                android:gravity="center"/>
+
+            <EditText
+                android:id="@+id/etStepSize"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:hint="Step"
+                android:text="5"
+                android:gravity="center"/>
+
+            <EditText
+                android:id="@+id/etStrainWindow"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:hint="Win"
+                android:text="9"
+                android:gravity="center"
+                android:backgroundTint="#FF9800"/>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="5dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Interpolator:"
+                android:textStyle="bold"/>
+
+            <Spinner
+                android:id="@+id/spInterpolator"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:entries="@array/interpolator_options"/>
+        </LinearLayout>
+        <Button
+            android:id="@+id/btnCalculate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Test Point Displacement"
+            android:enabled="false"
+            android:backgroundTint="#00AA00"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="10dp"/>
+
+        <Button
+            android:id="@+id/btnCalculateDisp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="1. COMPUTE DISPLACEMENT PROFILE"
+            android:backgroundTint="#0000AA"
+            android:textColor="#FFFFFF"
+            android:enabled="false"/>
+
+        <Button
+            android:id="@+id/btnCalculateStrain"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="2. COMPUTE STRAIN FROM DATA"
+            android:backgroundTint="#5500AA"
+            android:textColor="#FFFFFF"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:gravity="center">
+
+            <ProgressBar
+                android:id="@+id/pbAnalysis"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:max="100"/>
+
+            <TextView
+                android:id="@+id/tvTimer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Elapsed Time: 0s"
+                android:visibility="gone"
+                android:textColor="#000000"
+                android:textStyle="italic"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvStaticResult"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Result: --"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textAlignment="center"
+            android:layout_marginTop="10dp"
+            android:paddingBottom="50dp"/>
+
+    </LinearLayout>
+</ScrollView>

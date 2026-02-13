@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">IndicVisionDIC</string>
+    <string-array name="interpolator_options">
+        <item>Bicubic (Fast)</item>
+        <item>Lanczos-6 (High Acc.)</item>
+    </string-array>
+</resources>
