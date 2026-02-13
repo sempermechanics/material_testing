@@ -4,6 +4,9 @@
 #include <android/bitmap.h>
 #include <android/log.h>
 #include <opencv2/opencv.hpp>
+#include <opencv2/features2d.hpp>
+#include <queue>
+#include <set>
 #include "IndicVisionCore.h"
 
 #ifdef LOG_TAG
@@ -12,6 +15,43 @@
 #define LOG_TAG "IndicVisionJNI"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+// --- Helper: Global Feature Matching (AKAZE) ---
+void computeGlobalShift(cv::Mat& ref, cv::Mat& def, double& u, double& v) {
+    auto detector = cv::AKAZE::create();
+    std::vector<cv::KeyPoint> kp1, kp2;
+    cv::Mat desc1, desc2;
+
+    detector->detectAndCompute(ref, cv::noArray(), kp1, desc1);
+    detector->detectAndCompute(def, cv::noArray(), kp2, desc2);
+
+    if(kp1.empty() || kp2.empty()) return;
+
+    cv::BFMatcher matcher(cv::NORM_HAMMING);
+    std::vector<std::vector<cv::DMatch>> matches;
+    matcher.knnMatch(desc1, desc2, matches, 2);
+
+    std::vector<cv::Point2f> p1, p2;
+    for(auto& m : matches) {
+        if(m.size() == 2 && m[0].distance < 0.75 * m[1].distance) {
+            p1.push_back(kp1[m[0].queryIdx].pt);
+            p2.push_back(kp2[m[0].trainIdx].pt);
+        }
+    }
+
+    if(p1.size() > 5) {
+        std::vector<double> us, vs;
+        for(size_t i=0; i<p1.size(); ++i) {
+            us.push_back(p2[i].x - p1[i].x);
+            vs.push_back(p2[i].y - p1[i].y);
+        }
+        std::sort(us.begin(), us.end());
+        std::sort(vs.begin(), vs.end());
+        u = us[us.size()/2];
+        v = vs[vs.size()/2];
+        LOGD("Global Feature Match: u=%.2f, v=%.2f", u, v);
+    }
+}
 
 // Helper to convert and pre-filter images like DICe
 cv::Mat bytesToMat(JNIEnv* env, jbyteArray bytes) {
@@ -23,7 +63,6 @@ cv::Mat bytesToMat(JNIEnv* env, jbyteArray bytes) {
     delete[] buf;
 
     if (!img.empty()) {
-        // Gaussian Pre-filter to prevent aliasing
         cv::GaussianBlur(img, img, cv::Size(0, 0), 0.8);
     }
     return img;
@@ -31,7 +70,7 @@ cv::Mat bytesToMat(JNIEnv* env, jbyteArray bytes) {
 
 extern "C" {
 
-// 2. GET PREVIEW (Returns a Bitmap for the UI)
+// 2. GET PREVIEW
 JNIEXPORT jobject JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getPreviewFromBytes(
         JNIEnv* env, jobject, jbyteArray fileData, jint targetWidth) {
@@ -51,8 +90,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getPreviewFromBytes(
     cv::resize(fullImg, resizedImg, cv::Size(targetWidth, targetHeight));
 
     jclass bitmapCls = env->FindClass("android/graphics/Bitmap");
-    jmethodID createBitmapMethod = env->GetStaticMethodID(bitmapCls, "createBitmap",
-                                                          "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;");
+    jmethodID createBitmapMethod = env->GetStaticMethodID(bitmapCls, "createBitmap", "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;");
     jclass configCls = env->FindClass("android/graphics/Bitmap$Config");
     jfieldID argb8888Field = env->GetStaticFieldID(configCls, "ARGB_8888", "Landroid/graphics/Bitmap$Config;");
     jobject config = env->GetStaticObjectField(configCls, argb8888Field);
@@ -66,46 +104,53 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getPreviewFromBytes(
     return jBitmap;
 }
 
-// 3. ANALYZE RAW BYTES (Single Point - 6-DOF Accuracy Mode)
+// 3. ANALYZE RAW BYTES (Single Point)
 JNIEXPORT jfloatArray JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
         JNIEnv* env, jobject,
         jbyteArray refBytes, jbyteArray defBytes,
         jint roiX, jint roiY, jint subsetSize,
-        jint originalWidth, jint originalHeight,jint interpId) {
+        jint originalWidth, jint originalHeight, jint interpId) {
 
     cv::Mat refMat = bytesToMat(env, refBytes);
     cv::Mat defMat = bytesToMat(env, defBytes);
 
     if (refMat.empty() || defMat.empty()) {
         jfloatArray fail = env->NewFloatArray(5);
-        jfloat temp[] = {0,0,0,0,1}; // Status 1 = Fail
+        jfloat temp[] = {0,0,0,0,1};
         env->SetFloatArrayRegion(fail, 0, 5, temp);
         return fail;
     }
-    // Add this to the very first line of Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes
-    LOGD("JNI_CALL: analyzeRawBytes entered. Subset: %d, ROI: %d, %d", subsetSize, roiX, roiY);
 
     IndicVision::Image refImg(refMat.cols, refMat.rows, refMat.data);
     IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
 
-    // Set Interpolator
-    auto type = (interpId == 1) ? IndicVision::INTERP_QUINTIC : IndicVision::INTERP_BICUBIC;
-    refImg.set_interpolator(type);
-    defImg.set_interpolator(type);
+    if (interpId == 2) {
+        refImg.set_settings(IndicVision::INTERP_BSPLINE, IndicVision::GRAD_BSPLINE_ANALYTIC);
+        defImg.set_settings(IndicVision::INTERP_BSPLINE, IndicVision::GRAD_BSPLINE_ANALYTIC);
+    } else if (interpId == 1) {
+        refImg.set_settings(IndicVision::INTERP_LANCZOS, IndicVision::GRAD_CENTRAL_DIFF);
+        defImg.set_settings(IndicVision::INTERP_LANCZOS, IndicVision::GRAD_CENTRAL_DIFF);
+    } else {
+        refImg.set_settings(IndicVision::INTERP_BICUBIC, IndicVision::GRAD_CENTRAL_DIFF);
+        defImg.set_settings(IndicVision::INTERP_BICUBIC, IndicVision::GRAD_CENTRAL_DIFF);
+    }
+
+    refImg.prepare_data();
+    defImg.prepare_data();
 
     auto engine = std::make_unique<IndicVision::Engine>();
     engine->set_reference(refImg, roiX, roiY, subsetSize);
 
-    // Initial guess 0,0 for single point analysis
-    IndicVision::AnalysisResult result = engine->calculate_deformation(defImg, 0.0, 0.0);
+    // FIXED: Added 4th param INIT_GRID_SEARCH
+    IndicVision::AnalysisResult result = engine->calculate_deformation(defImg, 0.0, 0.0, IndicVision::INIT_GRID_SEARCH);
 
     jfloatArray output = env->NewFloatArray(5);
     jfloat temp[5];
     temp[0] = static_cast<jfloat>(result.u);
     temp[1] = static_cast<jfloat>(result.v);
-    temp[2] = static_cast<jfloat>(0.0);       // Theta placeholder
-    temp[3] = static_cast<jfloat>(result.ux); // Strain Exx (du/dx)
+    temp[2] = static_cast<jfloat>(0.0);
+    temp[3] = static_cast<jfloat>(result.ux);
     temp[4] = static_cast<jfloat>(result.status);
 
     env->SetFloatArrayRegion(output, 0, 5, temp);
@@ -134,52 +179,113 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getImageDimensions(
     return result;
 }
 
+// 5. COMPUTE LINE PROFILE
 JNIEXPORT jfloatArray JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeLineProfile(
         JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray defBytes,
-        jint startX, jint endX, jint y, jint step, jint subsetSize,jint interpId, jobject callbackObj) {
+        jint startX, jint endX, jint y, jint step, jint subsetSize,
+        jint interpId,
+        jboolean useReliabilityGuided,
+        jboolean useFeatureMatching,
+        jobject callbackObj) {
 
     cv::Mat refMat = bytesToMat(env, refBytes);
     cv::Mat defMat = bytesToMat(env, defBytes);
     IndicVision::Image refImg(refMat.cols, refMat.rows, refMat.data);
     IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
 
-    // Set Interpolator
-    auto type = (interpId == 1) ? IndicVision::INTERP_QUINTIC : IndicVision::INTERP_BICUBIC;
-    refImg.set_interpolator(type);
-    defImg.set_interpolator(type);
+    if (interpId == 2) {
+        refImg.set_settings(IndicVision::INTERP_BSPLINE, IndicVision::GRAD_BSPLINE_ANALYTIC);
+        defImg.set_settings(IndicVision::INTERP_BSPLINE, IndicVision::GRAD_BSPLINE_ANALYTIC);
+    } else if (interpId == 1) {
+        refImg.set_settings(IndicVision::INTERP_LANCZOS, IndicVision::GRAD_CENTRAL_DIFF);
+        defImg.set_settings(IndicVision::INTERP_LANCZOS, IndicVision::GRAD_CENTRAL_DIFF);
+    } else {
+        refImg.set_settings(IndicVision::INTERP_BICUBIC, IndicVision::GRAD_CENTRAL_DIFF);
+        defImg.set_settings(IndicVision::INTERP_BICUBIC, IndicVision::GRAD_CENTRAL_DIFF);
+    }
+
+    refImg.prepare_data();
+    defImg.prepare_data();
+
+    // --- GLOBAL FEATURE MATCHING ---
+    double globalU = 0.0;
+    double globalV = 0.0;
+    if (useFeatureMatching) {
+        computeGlobalShift(refMat, defMat, globalU, globalV);
+    }
 
     auto engine = std::make_unique<IndicVision::Engine>();
-    std::vector<float> results;
+
+    int numPoints = (endX - startX) / step;
+    std::vector<float> results(numPoints, -999.0f);
+    std::vector<bool> processed(numPoints, false);
 
     jclass callbackClass = env->GetObjectClass(callbackObj);
     jmethodID methodId = env->GetMethodID(callbackClass, "onProgressUpdate", "(I)V");
 
-    int totalPoints = (endX - startX) / step;
-    int currentPoint = 0;
+    if (useReliabilityGuided) {
+        std::priority_queue<IndicVision::SeedNode> queue;
 
-    // --- DICe SEED PROPAGATION ---
-    double lastU = 0.0;
-    double lastV = 0.0;
+        int centerIdx = numPoints / 2;
+        int centerX = startX + centerIdx * step;
 
-    for (int x = startX; x < endX; x += step) {
-        engine->set_reference(refImg, x, y, subsetSize);
-
-        // Pass the last known good displacement as the guess for the next point
-        IndicVision::AnalysisResult res = engine->calculate_deformation(defImg, lastU, lastV);
+        engine->set_reference(refImg, centerX, y, subsetSize);
+        // FIXED: Added 4th param
+        IndicVision::AnalysisResult res = engine->calculate_deformation(defImg, globalU, globalV, IndicVision::INIT_GRID_SEARCH);
 
         if (res.status == 0) {
-            results.push_back((float)res.u);
-            lastU = res.u; // Update seed for next neighbor
-            lastV = res.v;
-        } else {
-            results.push_back(-999.0f);
-            // NOTE: We do NOT reset lastU/lastV to 0.
-            // We use the last valid position to try and skip the bad region.
+            results[centerIdx] = (float)res.u;
+            processed[centerIdx] = true;
+            queue.push({centerIdx, res.u, res.v, res.correlation_score});
         }
 
-        currentPoint++;
-        env->CallVoidMethod(callbackObj, methodId, (jint)((currentPoint * 100) / totalPoints));
+        int count = 0;
+        while(!queue.empty()) {
+            IndicVision::SeedNode seed = queue.top();
+            queue.pop();
+
+            int neighbors[] = {seed.x_idx - 1, seed.x_idx + 1};
+
+            for(int idx : neighbors) {
+                if(idx >= 0 && idx < numPoints && !processed[idx]) {
+                    int realX = startX + idx * step;
+
+                    engine->set_reference(refImg, realX, y, subsetSize);
+                    // FIXED: Added 4th param (INIT_GRID_SEARCH is safe here as we have good seeds)
+                    IndicVision::AnalysisResult nRes = engine->calculate_deformation(defImg, seed.u, seed.v, IndicVision::INIT_GRID_SEARCH);
+
+                    if (nRes.status == 0) {
+                        results[idx] = (float)nRes.u;
+                        queue.push({idx, nRes.u, nRes.v, nRes.correlation_score});
+                    }
+                    processed[idx] = true;
+
+                    count++;
+                    if(count % 10 == 0) env->CallVoidMethod(callbackObj, methodId, (jint)((count * 100) / numPoints));
+                }
+            }
+        }
+
+    } else {
+        // --- STANDARD SCAN ---
+        double lastU = globalU;
+        double lastV = globalV;
+
+        for (int i=0; i<numPoints; ++i) {
+            int x = startX + i * step;
+            engine->set_reference(refImg, x, y, subsetSize);
+
+            // FIXED: Added 4th param
+            IndicVision::AnalysisResult res = engine->calculate_deformation(defImg, lastU, lastV, IndicVision::INIT_GRID_SEARCH);
+
+            if(res.status==0) {
+                results[i] = (float)res.u;
+                lastU = res.u;
+                lastV = res.v;
+            }
+            env->CallVoidMethod(callbackObj, methodId, (jint)((i * 100) / numPoints));
+        }
     }
 
     jfloatArray output = env->NewFloatArray(results.size());

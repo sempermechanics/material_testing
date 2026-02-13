@@ -85,7 +85,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val pickDef = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let { handleImageSelection(it, isRef = false) }
         }
-        val methods = arrayOf("Bicubic (Fast)", "Lanczos-6 (High Acc.)")
+        val methods = arrayOf("Bicubic (Fast)", "Lanczos-6 (High Acc.)", "B-Spline (DICe)")
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, methods)
         spInterpolator.adapter = adapter
         btnLoadRef.setOnClickListener { pickRef.launch("image/*") }
@@ -157,6 +157,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 val subset = etSubsetSize.text.toString().toIntOrNull() ?: 41
                 val step = etStepSize.text.toString().toIntOrNull() ?: 5
 
+                // --- NEW SETTINGS ---
+                // 0=Bicubic, 1=Lanczos, 2=B-Spline
+                // Get this from your Spinner (spInterpolator)
+                val interpId = findViewById<Spinner>(R.id.spInterpolator).selectedItemPosition
+
+                // ENABLE THE NEW DICe FEATURES
+                val useReliabilityGuided = true
+                val useFeatureMatching = true
+                // --------------------
+
                 progressBar.visibility = View.VISIBLE
                 progressBar.progress = 0
                 tvTimer.visibility = View.VISIBLE
@@ -173,16 +183,23 @@ class StaticAnalysisActivity : AppCompatActivity() {
                             }
                         }
                     }
-                    val interpId = spInterpolator.selectedItemPosition
+
+                    // CALL THE UPDATED NATIVE FUNCTION
                     val uValues = IndicVisionNativeLib.computeLineProfile(
-                        refBytes!!, defBytes!!, 50, realRefWidth - 50, (realRefHeight/2), step, subset,
-                        interpId, callback)
+                        refBytes!!, defBytes!!,
+                        50, realRefWidth - 50, (realRefHeight/2),
+                        step, subset,
+                        interpId,
+                        useReliabilityGuided,
+                        useFeatureMatching,
+                        callback
+                    )
 
                     lastDisplacementData = uValues
                     val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
                     runOnUiThread {
                         progressBar.visibility = View.GONE
-                        tvTimer.text = "Displacement done in %.2f seconds".format(totalTime)
+                        tvTimer.text = "Analysis done in %.2f seconds".format(totalTime)
                         btnCalculateDisp.isEnabled = true
                         btnCalculateStrain.visibility = View.VISIBLE
                         saveResultsToCSV(uValues, null, step, 50)

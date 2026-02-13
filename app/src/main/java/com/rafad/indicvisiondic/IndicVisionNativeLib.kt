@@ -30,7 +30,7 @@ object IndicVisionNativeLib {
     /**
      * Get the real dimensions of the image [width, height].
      */
-// 2. Update this signature to use the interface
+// --- UPDATED SIGNATURE TO MATCH C++ ---
     external fun computeLineProfile(
         refData: ByteArray,
         defData: ByteArray,
@@ -38,8 +38,10 @@ object IndicVisionNativeLib {
         endX: Int,
         y: Int,
         step: Int,
-        subsetSize: Int, interpolatorId: Int,
-        callback: ProgressCallback // <--- CHANGED THIS
+        subsetSize: Int,
+        interpolatorId: Int,       // 0=Bicubic, 1=Lanczos, 2=B-Spline
+        useReliabilityGuided: Boolean, // NEW
+        useFeatureMatching: Boolean,   // NEW
+        callback: ProgressCallback
     ): FloatArray
-
 }
