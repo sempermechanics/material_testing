@@ -178,7 +178,13 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getImageDimensions(
     env->SetIntArrayRegion(result, 0, 2, temp);
     return result;
 }
-
+// In IndicVisionJNI.cpp
+struct CompareSeedNode {
+    bool operator()(const IndicVision::SeedNode& a, const IndicVision::SeedNode& b) {
+        // Change 'correlation_score' to 'correlation'
+        return a.correlation > b.correlation;
+    }
+};
 // 5. COMPUTE LINE PROFILE
 JNIEXPORT jfloatArray JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeLineProfile(
@@ -189,11 +195,16 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeLineProfile(
         jboolean useFeatureMatching,
         jobject callbackObj) {
 
+    // 1. Prepare Images
     cv::Mat refMat = bytesToMat(env, refBytes);
     cv::Mat defMat = bytesToMat(env, defBytes);
     IndicVision::Image refImg(refMat.cols, refMat.rows, refMat.data);
     IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
 
+    LOGD("--- STARTING LINE PROFILE ---");
+    LOGD("Scan Line Y=%d, Range X[%d - %d], Step=%d", y, startX, endX);
+
+    // 2. Interpolator Settings
     if (interpId == 2) {
         refImg.set_settings(IndicVision::INTERP_BSPLINE, IndicVision::GRAD_BSPLINE_ANALYTIC);
         defImg.set_settings(IndicVision::INTERP_BSPLINE, IndicVision::GRAD_BSPLINE_ANALYTIC);
@@ -208,7 +219,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeLineProfile(
     refImg.prepare_data();
     defImg.prepare_data();
 
-    // --- GLOBAL FEATURE MATCHING ---
+    // 3. Global Initialization (Feature Matching)
     double globalU = 0.0;
     double globalV = 0.0;
     if (useFeatureMatching) {
@@ -217,6 +228,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeLineProfile(
 
     auto engine = std::make_unique<IndicVision::Engine>();
 
+    // 4. Result Storage
     int numPoints = (endX - startX) / step;
     std::vector<float> results(numPoints, -999.0f);
     std::vector<bool> processed(numPoints, false);
@@ -225,50 +237,100 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeLineProfile(
     jmethodID methodId = env->GetMethodID(callbackClass, "onProgressUpdate", "(I)V");
 
     if (useReliabilityGuided) {
-        std::priority_queue<IndicVision::SeedNode> queue;
+        // --- RELIABILITY GUIDED SCAN ---
+        // Priority Queue (Min-Heap based on Correlation Score)
+        std::priority_queue<IndicVision::SeedNode, std::vector<IndicVision::SeedNode>, CompareSeedNode> queue;
 
+        // A. Start at Center
         int centerIdx = numPoints / 2;
         int centerX = startX + centerIdx * step;
 
+        LOGD("Calculated Center Seed: Index=%d, X=%d, Y=%d", centerIdx, centerX, y);
+
         engine->set_reference(refImg, centerX, y, subsetSize);
-        // FIXED: Added 4th param
+        // Use Global Feature Match as guess for the very first point
         IndicVision::AnalysisResult res = engine->calculate_deformation(defImg, globalU, globalV, IndicVision::INIT_GRID_SEARCH);
 
         if (res.status == 0) {
             results[centerIdx] = (float)res.u;
             processed[centerIdx] = true;
-            queue.push({centerIdx, res.u, res.v, res.correlation_score});
+
+            // Push Seed to Queue (9 Arguments)
+            queue.push({
+                               centerIdx, 0,           // x_idx, y_idx
+                               res.u, res.v,           // u, v
+                               res.ux, res.uy,         // ux, uy
+                               res.vx, res.vy,         // vx, vy
+                               res.correlation_score   // correlation
+                       });
+
+            LOGD("SEED SUCCESS: U=%.4f, Score=%.5f", res.u, res.correlation_score);
+        } else {
+            LOGE("SEED FAILED: Status=%d. Aborting scan.", res.status);
         }
 
+        // B. Propagate
         int count = 0;
+        int lastPercent = -1;
+
         while(!queue.empty()) {
             IndicVision::SeedNode seed = queue.top();
             queue.pop();
 
             int neighbors[] = {seed.x_idx - 1, seed.x_idx + 1};
 
-            for(int idx : neighbors) {
-                if(idx >= 0 && idx < numPoints && !processed[idx]) {
+            for (int idx: neighbors) {
+                // Check bounds and if already processed
+                if (idx >= 0 && idx < numPoints && !processed[idx]) {
                     int realX = startX + idx * step;
 
+                    // >>> DIAGNOSTIC LOG: What guess are we passing? <<<
+                    // This helps identify if we are passing 0.0 or the previous result
+                    // Only log every 5th point to keep logcat somewhat readable but useful
+                    if (idx % 5 == 0) {
+                        LOGD("Processing X=%d. Using Guess from Neighbor: U=%.6f, V=%.6f", realX, seed.u, seed.v);
+                    }
+
                     engine->set_reference(refImg, realX, y, subsetSize);
-                    // FIXED: Added 4th param (INIT_GRID_SEARCH is safe here as we have good seeds)
-                    IndicVision::AnalysisResult nRes = engine->calculate_deformation(defImg, seed.u, seed.v, IndicVision::INIT_GRID_SEARCH);
+
+                    // PASS NEIGHBOR'S SOLUTION AS GUESS
+                    IndicVision::AnalysisResult nRes = engine->calculate_deformation(
+                            defImg, seed.u, seed.v, IndicVision::INIT_GRID_SEARCH
+                    );
 
                     if (nRes.status == 0) {
-                        results[idx] = (float)nRes.u;
-                        queue.push({idx, nRes.u, nRes.v, nRes.correlation_score});
-                    }
-                    processed[idx] = true;
+                        results[idx] = (float) nRes.u;
 
+                        // Push Neighbor to Queue (9 Arguments)
+                        queue.push({
+                                           idx, 0,                 // x_idx (The Neighbor!), y_idx
+                                           nRes.u, nRes.v,         // u, v (The New Result!)
+                                           nRes.ux, nRes.uy,       // ux, uy
+                                           nRes.vx, nRes.vy,       // vx, vy
+                                           nRes.correlation_score  // correlation
+                                   });
+
+                        // LOGD("  > Solved X=%d: U=%.4f", realX, nRes.u);
+                    } else {
+                        // LOGD("  > Failed X=%d", realX);
+                    }
+
+                    processed[idx] = true;
                     count++;
-                    if(count % 10 == 0) env->CallVoidMethod(callbackObj, methodId, (jint)((count * 100) / numPoints));
+
+                    // Throttle UI Updates (Every 1% change only)
+                    int percent = (count * 100) / numPoints;
+                    if (percent != lastPercent) {
+                        env->CallVoidMethod(callbackObj, methodId, (jint)percent);
+                        lastPercent = percent;
+                    }
                 }
             }
         }
+        LOGD("Reliability Guided Loop Finished. Processed %d points.", count);
 
     } else {
-        // --- STANDARD SCAN ---
+        // --- STANDARD SCAN (Left-to-Right) ---
         double lastU = globalU;
         double lastV = globalV;
 
@@ -276,14 +338,14 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeLineProfile(
             int x = startX + i * step;
             engine->set_reference(refImg, x, y, subsetSize);
 
-            // FIXED: Added 4th param
             IndicVision::AnalysisResult res = engine->calculate_deformation(defImg, lastU, lastV, IndicVision::INIT_GRID_SEARCH);
 
             if(res.status==0) {
                 results[i] = (float)res.u;
-                lastU = res.u;
+                lastU = res.u; // Update guess for next point
                 lastV = res.v;
             }
+            // Simple UI update
             env->CallVoidMethod(callbackObj, methodId, (jint)((i * 100) / numPoints));
         }
     }
@@ -292,5 +354,160 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeLineProfile(
     env->SetFloatArrayRegion(output, 0, results.size(), results.data());
     return output;
 }
+// 6. COMPUTE FULL FIELD (2D Heatmap)
+JNIEXPORT jfloatArray JNICALL
+Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
+        JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray defBytes,
+        jint rectX, jint rectY, jint rectWidth, jint rectHeight,
+        jint step, jint subsetSize,
+        jint interpId,
+        jboolean useReliabilityGuided,
+        jboolean useFeatureMatching,
+        jobject callbackObj) {
 
+    cv::Mat refMat = bytesToMat(env, refBytes);
+    cv::Mat defMat = bytesToMat(env, defBytes);
+    IndicVision::Image refImg(refMat.cols, refMat.rows, refMat.data);
+    IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
+
+    // Settings (Same as 1D)
+    if (interpId == 2) {
+        refImg.set_settings(IndicVision::INTERP_BSPLINE, IndicVision::GRAD_BSPLINE_ANALYTIC);
+        defImg.set_settings(IndicVision::INTERP_BSPLINE, IndicVision::GRAD_BSPLINE_ANALYTIC);
+    } else if (interpId == 1) {
+        refImg.set_settings(IndicVision::INTERP_LANCZOS, IndicVision::GRAD_CENTRAL_DIFF);
+        defImg.set_settings(IndicVision::INTERP_LANCZOS, IndicVision::GRAD_CENTRAL_DIFF);
+    } else {
+        refImg.set_settings(IndicVision::INTERP_BICUBIC, IndicVision::GRAD_CENTRAL_DIFF);
+        defImg.set_settings(IndicVision::INTERP_BICUBIC, IndicVision::GRAD_CENTRAL_DIFF);
+    }
+
+    refImg.prepare_data();
+    defImg.prepare_data();
+
+    // Global Match
+    double globalU = 0.0, globalV = 0.0;
+    if (useFeatureMatching) {
+        computeGlobalShift(refMat, defMat, globalU, globalV);
+    }
+
+    auto engine = std::make_unique<IndicVision::Engine>();
+
+    // Grid Dimensions
+    int gridW = rectWidth / step;
+    int gridH = rectHeight / step;
+    int totalPoints = gridW * gridH;
+
+    // Output Storage: [x, y, u, v, corr] per point
+    // We flatten it later.
+    std::vector<std::vector<float>> resultGrid(gridH, std::vector<float>(gridW * 5, 0.0f));
+    std::vector<std::vector<bool>> processed(gridH, std::vector<bool>(gridW, false));
+
+    jclass callbackClass = env->GetObjectClass(callbackObj);
+    jmethodID methodId = env->GetMethodID(callbackClass, "onProgressUpdate", "(I)V");
+
+    // --- SEED INITIALIZATION (Center of ROI) ---
+    std::priority_queue<IndicVision::SeedNode> queue;
+
+    int seedGx = gridW / 2;
+    int seedGy = gridH / 2;
+    int seedX = rectX + seedGx * step;
+    int seedY = rectY + seedGy * step;
+
+    engine->set_reference(refImg, seedX, seedY, subsetSize);
+    IndicVision::AnalysisResult seedRes = engine->calculate_deformation(defImg, globalU, globalV, IndicVision::INIT_GRID_SEARCH);
+
+    // ... inside computeFullField, after calculating seed ...
+    if (seedRes.status == 0) {
+        // UPDATE THIS LINE: Provide 9 arguments
+        queue.push({
+                           seedGx, seedGy,             // x_idx, y_idx
+                           seedRes.u, seedRes.v,       // u, v
+                           seedRes.ux, seedRes.uy,     // ux, uy
+                           seedRes.vx, seedRes.vy,     // vx, vy
+                           seedRes.correlation_score   // correlation
+                   });
+
+        processed[seedGy][seedGx] = true;
+        // ... store results ...
+
+        // Store Result
+        resultGrid[seedGy][seedGx*5 + 0] = (float)seedX;
+        resultGrid[seedGy][seedGx*5 + 1] = (float)seedY;
+        resultGrid[seedGy][seedGx*5 + 2] = (float)seedRes.u;
+        resultGrid[seedGy][seedGx*5 + 3] = (float)seedRes.v;
+        resultGrid[seedGy][seedGx*5 + 4] = (float)seedRes.correlation_score;
+    }
+
+    // --- 2D FLOOD FILL ---
+    int count = 0;
+    // Neighbors: Right, Left, Down, Up
+    int dx[] = {1, -1, 0, 0};
+    int dy[] = {0, 0, 1, -1};
+
+    while(!queue.empty()) {
+        IndicVision::SeedNode current = queue.top();
+        queue.pop();
+
+        for(int k=0; k<4; ++k) {
+            int nx = current.x_idx + dx[k];
+            int ny = current.y_idx + dy[k];
+
+            // Boundary Check
+            if(nx >= 0 && nx < gridW && ny >= 0 && ny < gridH && !processed[ny][nx]) {
+
+                int realX = rectX + nx * step;
+                int realY = rectY + ny * step;
+
+                engine->set_reference(refImg, realX, realY, subsetSize);
+
+                // Use Neighbor's U/V as guess (Reliability Guided)
+                IndicVision::AnalysisResult res = engine->calculate_deformation(defImg, current.u, current.v, IndicVision::INIT_GRID_SEARCH);
+
+                // ... inside the 2D flood fill loop ...
+                if (res.status == 0) {
+                    // UPDATE THIS LINE: Provide 9 arguments
+                    queue.push({
+                                       nx, ny,                   // x_idx, y_idx
+                                       res.u, res.v,             // u, v
+                                       res.ux, res.uy,           // ux, uy
+                                       res.vx, res.vy,           // vx, vy
+                                       res.correlation_score     // correlation
+                               });
+
+                    // ... store results ...
+
+                    resultGrid[ny][nx*5 + 0] = (float)realX;
+                    resultGrid[ny][nx*5 + 1] = (float)realY;
+                    resultGrid[ny][nx*5 + 2] = (float)res.u;
+                    resultGrid[ny][nx*5 + 3] = (float)res.v;
+                    resultGrid[ny][nx*5 + 4] = (float)res.correlation_score;
+                }
+
+                processed[ny][nx] = true;
+                count++;
+                if(count % 50 == 0) env->CallVoidMethod(callbackObj, methodId, (jint)((count * 100) / totalPoints));
+            }
+        }
+    }
+
+    // --- FLATTEN RESULTS ---
+    // Only return Valid points to save memory
+    std::vector<float> flatOutput;
+    for(int y=0; y<gridH; ++y) {
+        for(int x=0; x<gridW; ++x) {
+            if (processed[y][x] && resultGrid[y][x*5+4] != 0.0f) { // Check if valid
+                flatOutput.push_back(resultGrid[y][x*5+0]); // x
+                flatOutput.push_back(resultGrid[y][x*5+1]); // y
+                flatOutput.push_back(resultGrid[y][x*5+2]); // u
+                flatOutput.push_back(resultGrid[y][x*5+3]); // v
+                flatOutput.push_back(resultGrid[y][x*5+4]); // corr
+            }
+        }
+    }
+
+    jfloatArray output = env->NewFloatArray(flatOutput.size());
+    env->SetFloatArrayRegion(output, 0, flatOutput.size(), flatOutput.data());
+    return output;
+}
 } // extern C

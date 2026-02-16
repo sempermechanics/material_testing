@@ -198,10 +198,20 @@
             android:id="@+id/btnCalculateDisp"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="1. COMPUTE DISPLACEMENT PROFILE"
+            android:text="1. Compute 1D Profile (Validation)"
             android:backgroundTint="#0000AA"
             android:textColor="#FFFFFF"
             android:enabled="false"/>
+
+        <Button
+            android:id="@+id/btnCalculateFullField"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="2. Compute Full Field 2D (Heatmap)"
+            android:backgroundTint="#008800"
+            android:textColor="#FFFFFF"
+            android:enabled="false"
+            android:layout_marginTop="8dp"/>
 
         <Button
             android:id="@+id/btnCalculateStrain"

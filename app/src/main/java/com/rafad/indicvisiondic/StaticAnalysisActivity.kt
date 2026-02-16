@@ -16,6 +16,9 @@ import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 import java.io.FileWriter
 import java.io.InputStream
+import android.content.ContentValues
+import android.provider.MediaStore
+import java.io.OutputStream
 
 class StaticAnalysisActivity : AppCompatActivity() {
 
@@ -38,7 +41,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var etStrainWindow: EditText // Added missing declaration
     private lateinit var progressBar: ProgressBar
     private lateinit var tvTimer: TextView
-
+    private lateinit var btnCalculateFullField: Button // New
     // Data Storage
     private var refBytes: ByteArray? = null
     private var defBytes: ByteArray? = null
@@ -78,6 +81,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etStepSize = findViewById(R.id.etStepSize)
         etStrainWindow = findViewById(R.id.etStrainWindow) // Added missing binding
         spInterpolator = findViewById(R.id.spInterpolator)
+        btnCalculateDisp = findViewById(R.id.btnCalculateDisp)
+        btnCalculateFullField = findViewById(R.id.btnCalculateFullField) // New
         // 2. Image Pickers
         val pickRef = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let { handleImageSelection(it, isRef = true) }
@@ -152,16 +157,26 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         // 6. Logic: Displacement Profile Scan
-        btnCalculateDisp.setOnClickListener {
+        btnCalculateDisp.setOnClickListener {// ... inside btnCalculateDisp.setOnClickListener ...
             if (refBytes != null && defBytes != null) {
                 val subset = etSubsetSize.text.toString().toIntOrNull() ?: 41
                 val step = etStepSize.text.toString().toIntOrNull() ?: 5
-
-                // --- NEW SETTINGS ---
-                // 0=Bicubic, 1=Lanczos, 2=B-Spline
-                // Get this from your Spinner (spInterpolator)
                 val interpId = findViewById<Spinner>(R.id.spInterpolator).selectedItemPosition
 
+                // 1. DETERMINE Y-COORDINATE
+                // If you touched the screen, use that Y. Otherwise, default to center.
+                val scanY = if (isRoiSelected) roiCenterY else realRefHeight / 2
+
+                // 2. VISUAL DEBUGGING (CRITICAL)
+                // Draw a blue line on the screen where we are about to solve.
+                // If this line hits black background, we know why it fails.
+                val screenCoords = mapImageToScreen(0f, scanY.toFloat())
+                overlayRef.drawScanLine(screenCoords[1])
+
+                // 3. LOGGING
+                Log.d("DIC_DIAG", "Real Image Size: $realRefWidth x $realRefHeight")
+                Log.d("DIC_DIAG", "User Selected ROI? $isRoiSelected")
+                Log.d("DIC_DIAG", "Sending Scan Line Y = $scanY to Engine")
                 // ENABLE THE NEW DICe FEATURES
                 val useReliabilityGuided = true
                 val useFeatureMatching = true
@@ -187,7 +202,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     // CALL THE UPDATED NATIVE FUNCTION
                     val uValues = IndicVisionNativeLib.computeLineProfile(
                         refBytes!!, defBytes!!,
-                        50, realRefWidth - 50, (realRefHeight/2),
+                        50, realRefWidth - 50, scanY,
                         step, subset,
                         interpId,
                         useReliabilityGuided,
@@ -234,6 +249,73 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     tvResult.text = "✅ Strain Saved ($method, Win $winSize)"
                 }
             }.start()
+        }
+        // --- NEW: FULL FIELD 2D LISTENER ---
+        btnCalculateFullField.setOnClickListener {
+            if (refBytes != null && defBytes != null) {
+                val subset = etSubsetSize.text.toString().toIntOrNull() ?: 41
+                val step = etStepSize.text.toString().toIntOrNull() ?: 5 // Use larger step (e.g. 10) for speed if needed
+
+                // Get Settings
+                val interpId = findViewById<Spinner>(R.id.spInterpolator).selectedItemPosition
+                val useReliabilityGuided = true
+                val useFeatureMatching = true
+
+                // Define ROI: Whole Image with 20px margin
+                val margin = 20
+                val rectX = margin
+                val rectY = margin
+                val rectW = realRefWidth - (2 * margin)
+                val rectH = realRefHeight - (2 * margin)
+
+                progressBar.visibility = View.VISIBLE
+                progressBar.progress = 0
+                tvTimer.visibility = View.VISIBLE
+                tvTimer.text = "Initializing 2D Scan..."
+
+                // Disable buttons
+                btnCalculateDisp.isEnabled = false
+                btnCalculateFullField.isEnabled = false
+
+                val startTime = System.currentTimeMillis()
+
+                Thread {
+                    val callback = object : ProgressCallback {
+                        override fun onProgressUpdate(percentage: Int) {
+                            runOnUiThread {
+                                progressBar.progress = percentage
+                                val elapsed = (System.currentTimeMillis() - startTime) / 1000
+                                tvTimer.text = "2D Scanning... ${elapsed}s ($percentage%)"
+                            }
+                        }
+                    }
+
+                    // CALL THE 2D NATIVE FUNCTION
+                    val rawData = IndicVisionNativeLib.computeFullField(
+                        refBytes!!, defBytes!!,
+                        rectX, rectY, rectW, rectH,
+                        step, subset,
+                        interpId,
+                        useReliabilityGuided,
+                        useFeatureMatching,
+                        callback
+                    )
+
+                    val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
+
+                    runOnUiThread {
+                        progressBar.visibility = View.GONE
+                        tvTimer.text = "Full Field Done in %.2f s. Points: ${rawData.size / 5}".format(totalTime)
+
+                        // Re-enable buttons
+                        btnCalculateDisp.isEnabled = true
+                        btnCalculateFullField.isEnabled = true
+
+                        // Save to CSV immediately
+                        saveFullFieldToCSV(rawData)
+                    }
+                }.start()
+            }
         }
     }
 
@@ -333,7 +415,66 @@ class StaticAnalysisActivity : AppCompatActivity() {
             runOnUiThread { tvResult.text = "✅ SAVED: $fileName" }
         } catch (e: Exception) { runOnUiThread { tvResult.text = "❌ CSV Error" } }
     }
+    // In StaticAnalysisActivity.kt
 
+
+
+    private fun saveFullFieldToCSV(data: FloatArray) {
+        val fileName = "IndicVision_2D_${System.currentTimeMillis()}.csv"
+
+        // 1. Create file metadata
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+        }
+
+        // 2. Insert into MediaStore to get a URI
+        val resolver = applicationContext.contentResolver
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+
+        if (uri != null) {
+            try {
+                // 3. Open output stream to that URI
+                resolver.openOutputStream(uri)?.use { outputStream ->
+                    val writer = outputStream.bufferedWriter()
+
+                    // Write Header
+                    writer.write("X,Y,U_Displacement,V_Displacement,Correlation\n")
+
+                    // Write Data Loop
+                    var i = 0
+                    while (i < data.size) {
+                        // Check for invalid results (-999) and skip them to keep CSV clean?
+                        // Or write them for debugging. Let's write them.
+                        val x = data[i]
+                        val y = data[i+1]
+                        val u = data[i+2]
+                        val v = data[i+3]
+                        val c = data[i+4]
+
+                        writer.write("$x,$y,$u,$v,$c\n")
+                        i += 5
+                    }
+                    writer.flush()
+                    writer.close()
+                }
+
+                // UI Feedback
+                runOnUiThread {
+                    tvResult.text = "✅ Saved to Downloads: $fileName"
+                    Toast.makeText(this, "File saved successfully", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                runOnUiThread {
+                    tvResult.text = "❌ Save Failed: ${e.message}"
+                }
+            }
+        } else {
+            runOnUiThread { tvResult.text = "❌ Could not create file entry" }
+        }
+    }
     // Coordinate Mapping Helpers
     private fun mapScreenToImage(touchX: Float, touchY: Float): FloatArray? {
         val drawable = imgRef.drawable ?: return null
@@ -393,6 +534,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val ready = (refBytes != null && defBytes != null)
         btnCalculate.isEnabled = (ready && isRoiSelected)
         btnCalculateDisp.isEnabled = ready
+        btnCalculateFullField.isEnabled = ready // New
         if (ready) btnCalculateDisp.setBackgroundColor(android.graphics.Color.parseColor("#0000AA"))
     }
 }

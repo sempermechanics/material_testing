@@ -44,4 +44,19 @@ object IndicVisionNativeLib {
         useFeatureMatching: Boolean,   // NEW
         callback: ProgressCallback
     ): FloatArray
+    // --- NEW: 2D FULL FIELD ANALYSIS ---
+    external fun computeFullField(
+        refData: ByteArray,
+        defData: ByteArray,
+        rectX: Int,
+        rectY: Int,
+        rectWidth: Int,
+        rectHeight: Int,
+        step: Int,
+        subsetSize: Int,
+        interpolatorId: Int,
+        useReliabilityGuided: Boolean,
+        useFeatureMatching: Boolean,
+        callback: ProgressCallback
+    ): FloatArray
 }
