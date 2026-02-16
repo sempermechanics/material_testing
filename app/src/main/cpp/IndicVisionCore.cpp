@@ -201,6 +201,7 @@ namespace IndicVision {
         std::vector<scalar_t> gx_vec(n);
         std::vector<scalar_t> gy_vec(n);
 
+        // --- CHANGE 1: Calculate Mean AND Standard Deviation ---
         for (size_t i = 0; i < n; ++i) {
             double px = cx + x_offsets[i];
             double py = cy + y_offsets[i];
@@ -214,14 +215,31 @@ namespace IndicVision {
         }
         mean_intensity = sum / n;
 
+        // Calculate Sum of Squared Differences for Std Dev
+        double sum_sq_diff = 0.0;
+        for(double val : ref_intensities) {
+            sum_sq_diff += (val - mean_intensity) * (val - mean_intensity);
+        }
+        double ref_std = std::sqrt(sum_sq_diff / n); // Population std dev
+
+        // Safety: Prevent division by zero if image is purely flat black/white
+        if (ref_std < 1e-5) ref_std = 1.0;
+
+        // --- END CHANGE 1 ---
+
         // Build Hessian
         Eigen::Matrix<double, 6, 6> H = Eigen::Matrix<double, 6, 6>::Zero();
 
         for (size_t i = 0; i < n; ++i) {
             double x = x_offsets[i]; // Local centered
             double y = y_offsets[i];
-            double gx = gx_vec[i];
-            double gy = gy_vec[i];
+
+            // --- CHANGE 2: Normalize Gradients ---
+            // We divide raw gradients by the subset's standard deviation
+            // This effectively converts units from "Intensity" to "Sigmas"
+            double gx = gx_vec[i] / ref_std;
+            double gy = gy_vec[i] / ref_std;
+            // --- END CHANGE 2 ---
 
             // 6-DOF Affine Jacobian [u, v, ux, uy, vx, vy]
             // W(x) = [ (1+ux)x + uy*y + u ]
@@ -239,8 +257,11 @@ namespace IndicVision {
             H += sd * sd.transpose();
         }
         H_inv = H.inverse();
-        LOGD("Subset Init @ (%d,%d) | H_inv norm: %.4f", cx, cy, H_inv.norm());
-        LOGD("Hessian Determinant: %f", H.determinant());
+
+        // --- CHANGE 3: Better Debugging ---
+        // Log the Std Dev so we can confirm the fix works
+        LOGD("Subset Init @ (%d,%d) | StdDev: %.4f | H_inv norm: %.4f", cx, cy, ref_std, H_inv.norm());
+        // --- END CHANGE 3 ---
     }
 
     // ==========================================
@@ -468,10 +489,10 @@ namespace IndicVision {
             //LOGD("Skipping Simplex: Score %.6f is good enough", start.correlation_score);
             //return start;
         //}
-        if (start.status == 1) {
-            LOGE("Skipping Simplex: ICGN failed status.");
-            return start;
-        }
+        //if (start.status == 1) {
+            //LOGE("Skipping Simplex: ICGN failed status.");
+            //return start;
+        //}
 
         LOGD("Starting Simplex... Init Cost: %.6f", start.correlation_score);
 
