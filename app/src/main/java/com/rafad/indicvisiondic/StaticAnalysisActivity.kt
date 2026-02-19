@@ -55,8 +55,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private var isRoiSelected = false
     private var startX = 0f
     private var startY = 0f
-    private lateinit var spInterpolator: Spinner
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_static_analysis)
@@ -80,7 +78,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etSubsetSize = findViewById(R.id.etSubsetSize)
         etStepSize = findViewById(R.id.etStepSize)
         etStrainWindow = findViewById(R.id.etStrainWindow) // Added missing binding
-        spInterpolator = findViewById(R.id.spInterpolator)
         btnCalculateDisp = findViewById(R.id.btnCalculateDisp)
         btnCalculateFullField = findViewById(R.id.btnCalculateFullField) // New
         // 2. Image Pickers
@@ -90,9 +87,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val pickDef = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let { handleImageSelection(it, isRef = false) }
         }
-        val methods = arrayOf("Bicubic (Fast)", "Lanczos-6 (High Acc.)", "B-Spline (DICe)")
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, methods)
-        spInterpolator.adapter = adapter
         btnLoadRef.setOnClickListener { pickRef.launch("image/*") }
         btnLoadDef.setOnClickListener { pickDef.launch("image/*") }
 
@@ -146,8 +140,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (refBytes != null && defBytes != null && isRoiSelected) {
                 val subset = etSubsetSize.text.toString().toIntOrNull() ?: 61
                 Thread {
-                    val interpId = spInterpolator.selectedItemPosition // 0 or 1
-                    val res = IndicVisionNativeLib.analyzeRawBytes(refBytes!!, defBytes!!, roiCenterX, roiCenterY, subset, realRefWidth, realRefHeight,interpId)
+                    val res = IndicVisionNativeLib.analyzeRawBytes(refBytes!!, defBytes!!, roiCenterX, roiCenterY, subset, realRefWidth, realRefHeight)
                     runOnUiThread {
                         if (res[4].toInt() == 0) tvResult.text = "SUCCESS\nU: %.4f px\nError: %.4f".format(res[0], res[3])
                         else tvResult.text = "Analysis Failed"
@@ -161,7 +154,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (refBytes != null && defBytes != null) {
                 val subset = etSubsetSize.text.toString().toIntOrNull() ?: 41
                 val step = etStepSize.text.toString().toIntOrNull() ?: 5
-                val interpId = findViewById<Spinner>(R.id.spInterpolator).selectedItemPosition
 
                 // 1. DETERMINE Y-COORDINATE
                 // If you touched the screen, use that Y. Otherwise, default to center.
@@ -204,7 +196,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         refBytes!!, defBytes!!,
                         50, realRefWidth - 50, scanY,
                         step, subset,
-                        interpId,
                         useReliabilityGuided,
                         useFeatureMatching,
                         callback
@@ -257,7 +248,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 val step = etStepSize.text.toString().toIntOrNull() ?: 5 // Use larger step (e.g. 10) for speed if needed
 
                 // Get Settings
-                val interpId = findViewById<Spinner>(R.id.spInterpolator).selectedItemPosition
                 val useReliabilityGuided = true
                 val useFeatureMatching = true
 
@@ -295,7 +285,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         refBytes!!, defBytes!!,
                         rectX, rectY, rectW, rectH,
                         step, subset,
-                        interpId,
                         useReliabilityGuided,
                         useFeatureMatching,
                         callback
