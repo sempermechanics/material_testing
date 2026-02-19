@@ -351,11 +351,14 @@ namespace IndicVision {
     }
 
     // --- SIMPLEX RESCUE METHOD ---
-    AnalysisResult Engine::solve_simplex(const Subset &subset, const Image &def_img, AnalysisResult start) {
-        LOGD("[Simplex] Activated to rescue point (Start cost: %.4f)", start.correlation_score);
+    // --- SIMPLEX RESCUE METHOD (DICe-Style with Translation-Only Support) ---
+    AnalysisResult Engine::solve_simplex(const Subset &subset, const Image &def_img, AnalysisResult start, bool translation_only) {
+        LOGD("[Simplex] Activated (TransOnly: %d, Start cost: %.4f)", translation_only, start.correlation_score);
 
-        const int DIM = 6;
+        // If translation only, we only optimize 2 dimensions (u, v). Otherwise, 6 (Affine).
+        const int DIM = translation_only ? 2 : 6;
         int n_pts = DIM + 1;
+
         std::vector<std::vector<double>> p(n_pts, std::vector<double>(DIM));
         std::vector<double> y(n_pts);
 
@@ -365,37 +368,52 @@ namespace IndicVision {
         // Single pre-allocated buffer for the hundreds of ZNSSD checks
         std::vector<double> eval_buffer(subset.dim * subset.dim, 0.0);
 
-        p[0] = {start.u, start.v, start.ux, start.uy, start.vx, start.vy};
-        y[0] = evaluate_znssd(subset, def_img, p[0][0], p[0][1], p[0][2], p[0][3], p[0][4], p[0][5], eval_buffer);
+        // Helper lambda to cleanly evaluate cost function based on mode
+        auto eval_pt = [&](const std::vector<double>& pt) {
+            if (translation_only) return evaluate_znssd(subset, def_img, pt[0], pt[1], 0, 0, 0, 0, eval_buffer);
+            return evaluate_znssd(subset, def_img, pt[0], pt[1], pt[2], pt[3], pt[4], pt[5], eval_buffer);
+        };
 
+        // Initialize Vertex 0
+        if (translation_only) {
+            p[0] = {start.u, start.v};
+        } else {
+            p[0] = {start.u, start.v, start.ux, start.uy, start.vx, start.vy};
+        }
+        y[0] = eval_pt(p[0]);
+
+        // Create initial simplex shape
         for (int i = 1; i < n_pts; ++i) {
             p[i] = p[0];
             p[i][i-1] += scale[i-1];
-            y[i] = evaluate_znssd(subset, def_img, p[i][0], p[i][1], p[i][2], p[i][3], p[i][4], p[i][5], eval_buffer);
+            y[i] = eval_pt(p[i]);
         }
 
+        // Nelder-Mead Loop
         const double alpha=1.0, gamma=2.0, rho=0.5, sigma=0.5;
         for (int iter = 0; iter < 80; ++iter) {
             std::vector<int> idx(n_pts);
             for(int k=0; k<n_pts; ++k) idx[k] = k;
             std::sort(idx.begin(), idx.end(), [&](int a, int b){ return y[a] < y[b]; });
 
+            // Convergence check
             if (std::abs(y[idx[0]] - y[idx[n_pts-1]]) < 1e-5) break;
 
             std::vector<double> p_bar(DIM, 0.0);
-            for (int i = 0; i < DIM; ++i) for (int j = 0; j < DIM; ++j) p_bar[j] += p[idx[i]][j];
+            for (int i = 0; i < DIM; ++i)
+                for (int j = 0; j < DIM; ++j) p_bar[j] += p[idx[i]][j];
             for (int j = 0; j < DIM; ++j) p_bar[j] /= DIM;
 
             std::vector<double> p_r(DIM);
             for (int j = 0; j < DIM; ++j) p_r[j] = p_bar[j] + alpha * (p_bar[j] - p[idx[n_pts-1]][j]);
-            double y_r = evaluate_znssd(subset, def_img, p_r[0], p_r[1], p_r[2], p_r[3], p_r[4], p_r[5], eval_buffer);
+            double y_r = eval_pt(p_r);
 
             if (y[idx[0]] <= y_r && y_r < y[idx[n_pts-2]]) {
                 p[idx[n_pts-1]] = p_r; y[idx[n_pts-1]] = y_r;
             } else if (y_r < y[idx[0]]) {
                 std::vector<double> p_e(DIM);
                 for (int j = 0; j < DIM; ++j) p_e[j] = p_bar[j] + gamma * (p_r[j] - p_bar[j]);
-                double y_e = evaluate_znssd(subset, def_img, p_e[0], p_e[1], p_e[2], p_e[3], p_e[4], p_e[5], eval_buffer);
+                double y_e = eval_pt(p_e);
                 if (y_e < y_r) { p[idx[n_pts-1]] = p_e; y[idx[n_pts-1]] = y_e; }
                 else           { p[idx[n_pts-1]] = p_r; y[idx[n_pts-1]] = y_r; }
             } else {
@@ -403,13 +421,13 @@ namespace IndicVision {
                 bool outside = (y_r < y[idx[n_pts-1]]);
                 std::vector<double>& base_p = outside ? p_r : p[idx[n_pts-1]];
                 for (int j = 0; j < DIM; ++j) p_c[j] = p_bar[j] + rho * (base_p[j] - p_bar[j]);
-                double y_c = evaluate_znssd(subset, def_img, p_c[0], p_c[1], p_c[2], p_c[3], p_c[4], p_c[5], eval_buffer);
+                double y_c = eval_pt(p_c);
                 if (y_c < std::min(y_r, y[idx[n_pts-1]])) {
                     p[idx[n_pts-1]] = p_c; y[idx[n_pts-1]] = y_c;
                 } else {
                     for (int i = 1; i < n_pts; ++i) {
                         for (int j = 0; j < DIM; ++j) p[idx[i]][j] = p[idx[0]][j] + sigma * (p[idx[i]][j] - p[idx[0]][j]);
-                        y[idx[i]] = evaluate_znssd(subset, def_img, p[idx[i]][0], p[idx[i]][1], p[idx[i]][2], p[idx[i]][3], p[idx[i]][4], p[idx[i]][5], eval_buffer);
+                        y[idx[i]] = eval_pt(p[idx[i]]);
                     }
                 }
             }
@@ -418,29 +436,49 @@ namespace IndicVision {
         int best = 0;
         for(int k=1; k<n_pts; ++k) if(y[k] < y[best]) best = k;
 
-        // If simplex still couldn't find a good score, mark as failure (-2)
-        int final_status = (y[best] > 0.05) ? -2 : 0;
+        int final_status = (y[best] > 0.1) ? -2 : 0;
+
+        if (translation_only) {
+            return {p[best][0], p[best][1], 0, 0, 0, 0, final_status, y[best]};
+        }
         return {p[best][0], p[best][1], p[best][2], p[best][3], p[best][4], p[best][5], final_status, y[best]};
     }
 
+    // --- DICe-STYLE SMART GATEKEEPING ---
     AnalysisResult Engine::calculate_deformation(const Image &def_img, scalar_t guess_u, scalar_t guess_v, InitializationMode init_mode) {
         if (!active_subset) return {0,0,0,0,0,0, 1, 1.0};
 
         scalar_t u = guess_u;
         scalar_t v = guess_v;
+        AnalysisResult res;
 
-        // If Auto Search is forced and we have no guess, do a coarse grid search
-        if (init_mode == INIT_AUTO_SEARCH && u == 0.0 && v == 0.0) {
-            estimate_initial_guess(*active_subset, def_img, u, v);
+        // SCENARIO 1: Seed Point Initialization
+        if (init_mode == INIT_AUTO_SEARCH) {
+            // Do a coarse grid search if we have absolutely no idea where we are
+            if (u == 0.0 && v == 0.0) {
+                estimate_initial_guess(*active_subset, def_img, u, v);
+            }
+
+            // Run Translation-Only Simplex to firmly establish the seed neighborhood
+            AnalysisResult start_guess = {u, v, 0, 0, 0, 0, 0, 1.0};
+            AnalysisResult coarse_res = solve_simplex(*active_subset, def_img, start_guess, true);
+
+            // Now feed the robust u,v back to ICGN to solve for high-accuracy strains
+            res = solve_icgn(*active_subset, def_img, coarse_res.u, coarse_res.v);
         }
+            // SCENARIO 2: Standard Propagation
+        else {
+            // Trust the neighbor completely. Go straight to ICGN.
+            res = solve_icgn(*active_subset, def_img, u, v);
 
-        // Fast Solver
-        AnalysisResult res = solve_icgn(*active_subset, def_img, u, v);
-
-        // --- STRICT SIMPLEX GATING ---
-        // Simplex ONLY runs if ICGN failed entirely OR if the correlation is suspiciously bad
-        if (res.status != 0 || res.correlation_score > 0.05) {
-            res = solve_simplex(*active_subset, def_img, res);
+            // CATASTROPHIC RESCUE ONLY
+            // ZNSSD > 0.4 means the subset is completely lost (e.g. edge of a hole or heavy glare).
+            if (res.status != 0 || res.correlation_score > 0.4) {
+                LOGW("Catastrophic failure at %d, %d. Attempting Simplex Rescue...", active_subset->cx, active_subset->cy);
+                AnalysisResult start_guess = {u, v, 0, 0, 0, 0, 0, 1.0};
+                AnalysisResult rescue_res = solve_simplex(*active_subset, def_img, start_guess, true);
+                res = solve_icgn(*active_subset, def_img, rescue_res.u, rescue_res.v);
+            }
         }
 
         return res;

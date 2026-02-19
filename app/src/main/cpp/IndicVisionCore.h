@@ -11,6 +11,8 @@
 #define LOG_TAG "IndicVisionNative"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
 
 namespace IndicVision {
 
@@ -91,7 +93,7 @@ namespace IndicVision {
 
         void estimate_initial_guess(const Subset& subset, const Image& def_img, scalar_t& best_u, scalar_t& best_v);
         AnalysisResult solve_icgn(const Subset& subset, const Image& def_img, double init_u, double init_v);
-        AnalysisResult solve_simplex(const Subset& subset, const Image& def_img, AnalysisResult start);
+        AnalysisResult solve_simplex(const Subset& subset, const Image& def_img, AnalysisResult start, bool translation_only = false);
         double evaluate_znssd(const Subset& subset, const Image& def_img, double u, double v, double ux, double uy, double vx, double vy, std::vector<double>& buffer);    };
 }
 #endif
