@@ -19,9 +19,9 @@ namespace IndicVision {
         void prepare_data();
 
         // Fast, branchless Keys 4th Order Bicubic
-        inline scalar_t interpolate_bicubic(scalar_t x, scalar_t y) const;
-        inline scalar_t gradient_x(scalar_t x, scalar_t y) const;
-        inline scalar_t gradient_y(scalar_t x, scalar_t y) const;
+        scalar_t interpolate_bicubic(scalar_t x, scalar_t y) const;
+        scalar_t gradient_x(scalar_t x, scalar_t y) const;
+        scalar_t gradient_y(scalar_t x, scalar_t y) const;
     };
 
 }

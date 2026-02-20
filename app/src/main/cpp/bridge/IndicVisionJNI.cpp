@@ -6,8 +6,13 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/features2d.hpp>
 #include <queue>
-#include "IndicVisionCore.h"
 #include <chrono>
+
+// --- ARCHITECTURE HEADERS ---
+#include "../preprocessing/ImageProcessor.h"
+#include "../preprocessing/SubsetPrecomputer.h"
+#include "../core/OptimizationEngine.h"
+#include "../postprocessing/StrainCalculator.h"
 
 #ifdef LOG_TAG
 #undef LOG_TAG
@@ -16,10 +21,11 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-// --- OPTIMIZED AKAZE GLOBAL SHIFT ---
+// ==========================================
+// 1. UTILITY: AKAZE GLOBAL SHIFT
+// ==========================================
 void computeGlobalShift(cv::Mat& ref, cv::Mat& def, double& u, double& v) {
-    // 1. Scale images down by a factor of 4 for speed!
-    double scale = 0.25;
+    double scale = 0.25; // Scale down 4x for extreme speed
     cv::Mat smallRef, smallDef;
     cv::resize(ref, smallRef, cv::Size(), scale, scale, cv::INTER_NEAREST);
     cv::resize(def, smallDef, cv::Size(), scale, scale, cv::INTER_NEAREST);
@@ -54,31 +60,36 @@ void computeGlobalShift(cv::Mat& ref, cv::Mat& def, double& u, double& v) {
         std::sort(us.begin(), us.end());
         std::sort(vs.begin(), vs.end());
 
-        // 2. Scale the answer BACK UP to full resolution!
+        // Scale the answer back up to full resolution
         u = us[us.size()/2] * (1.0 / scale);
         v = vs[vs.size()/2] * (1.0 / scale);
         LOGD("Global Feature Match (Scaled): u=%.2f, v=%.2f", u, v);
     }
 }
 
+// ==========================================
+// 2. UTILITY: BYTES TO MAT
+// ==========================================
 cv::Mat bytesToMat(JNIEnv* env, jbyteArray bytes) {
     jsize len = env->GetArrayLength(bytes);
     unsigned char* buf = new unsigned char[len];
     env->GetByteArrayRegion(bytes, 0, len, reinterpret_cast<jbyte*>(buf));
     std::vector<unsigned char> data(buf, buf + len);
 
-    // Just decode the raw bytes. No physics manipulation here!
     cv::Mat img = cv::imdecode(data, cv::IMREAD_GRAYSCALE);
     delete[] buf;
-
     return img;
 }
 
 extern "C" {
 
+// ==========================================
+// 3. UI PREVIEW GENERATOR
+// ==========================================
 JNIEXPORT jobject JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getPreviewFromBytes(
         JNIEnv* env, jobject, jbyteArray fileData, jint targetWidth) {
+
     jsize len = env->GetArrayLength(fileData);
     unsigned char* buf = new unsigned char[len];
     env->GetByteArrayRegion(fileData, 0, len, reinterpret_cast<jbyte*>(buf));
@@ -108,43 +119,13 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getPreviewFromBytes(
     return jBitmap;
 }
 
-JNIEXPORT jfloatArray JNICALL
-Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
-        JNIEnv* env, jobject,
-        jbyteArray refBytes, jbyteArray defBytes,
-        jint roiX, jint roiY, jint subsetSize,
-        jint originalWidth, jint originalHeight) {
-
-    cv::Mat refMat = bytesToMat(env, refBytes);
-    cv::Mat defMat = bytesToMat(env, defBytes);
-
-    if (refMat.empty() || defMat.empty()) {
-        jfloatArray fail = env->NewFloatArray(5);
-        jfloat temp[] = {0,0,0,0,1};
-        env->SetFloatArrayRegion(fail, 0, 5, temp);
-        return fail;
-    }
-
-    IndicVision::Image refImg(refMat.cols, refMat.rows, refMat.data);
-    IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
-
-    refImg.prepare_data();
-    defImg.prepare_data();
-
-    auto engine = std::make_unique<IndicVision::Engine>();
-    engine->set_reference(refImg, roiX, roiY, subsetSize);
-
-    IndicVision::AnalysisResult result = engine->calculate_deformation(defImg, 0.0, 0.0, IndicVision::INIT_AUTO_SEARCH);
-
-    jfloatArray output = env->NewFloatArray(5);
-    jfloat temp[5] = { (jfloat)result.u, (jfloat)result.v, 0.0f, (jfloat)result.ux, (jfloat)result.status };
-    env->SetFloatArrayRegion(output, 0, 5, temp);
-    return output;
-}
-
+// ==========================================
+// 4. IMAGE DIMENSIONS
+// ==========================================
 JNIEXPORT jintArray JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getImageDimensions(
         JNIEnv* env, jobject, jbyteArray fileData) {
+
     jsize len = env->GetArrayLength(fileData);
     unsigned char* buf = new unsigned char[len];
     env->GetByteArrayRegion(fileData, 0, len, reinterpret_cast<jbyte*>(buf));
@@ -163,86 +144,49 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getImageDimensions(
     return result;
 }
 
+// ==========================================
+// 5. ANALYZE SINGLE POINT (1D / LIVE MODE)
+// ==========================================
 JNIEXPORT jfloatArray JNICALL
-Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeLineProfile(
-        JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray defBytes,
-        jint startX, jint endX, jint y, jint step, jint subsetSize,
-        jboolean useReliabilityGuided, jboolean useFeatureMatching,
-        jobject callbackObj) {
+Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
+        JNIEnv* env, jobject,
+        jbyteArray refBytes, jbyteArray defBytes,
+        jint roiX, jint roiY, jint subsetSize,
+        jint originalWidth, jint originalHeight) {
 
     cv::Mat refMat = bytesToMat(env, refBytes);
     cv::Mat defMat = bytesToMat(env, defBytes);
-    if (refMat.empty() || defMat.empty()) return nullptr;
+
+    if (refMat.empty() || defMat.empty()) {
+        jfloatArray fail = env->NewFloatArray(5);
+        jfloat temp[] = {0,0,0,0,1}; // Status 1 = Fail
+        env->SetFloatArrayRegion(fail, 0, 5, temp);
+        return fail;
+    }
 
     IndicVision::Image refImg(refMat.cols, refMat.rows, refMat.data);
     IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
-    refImg.prepare_data(); defImg.prepare_data();
 
-    double globalU = 0.0, globalV = 0.0;
-    if (useFeatureMatching) computeGlobalShift(refMat, defMat, globalU, globalV);
+    refImg.prepare_data();
+    defImg.prepare_data();
 
-    auto engine = std::make_unique<IndicVision::Engine>();
-    int numPoints = (endX - startX) / step;
-    if (numPoints <= 0) return nullptr;
+    // Fix: Use correct parameters roiX and roiY
+    IndicVision::SubsetData subset;
+    IndicVision::SubsetPrecomputer::precompute_subset(subset, refImg, roiX, roiY, subsetSize);
 
-    std::vector<float> results(numPoints, -999.0f);
-    std::vector<bool> processed(numPoints, false);
+    // Fix: Use 0.0 starting guess since single point doesn't run AKAZE
+    IndicVision::OptimizationEngine engine;
+    double startU = 0.0;
+    double startV = 0.0;
+    IndicVision::AnalysisResult res = engine.calculate_deformation(subset, defImg, startU, startV, IndicVision::INIT_AUTO_SEARCH);
 
-    jclass callbackClass = env->GetObjectClass(callbackObj);
-    jmethodID methodId = env->GetMethodID(callbackClass, "onProgressUpdate", "(I)V");
-
-    if (useReliabilityGuided) {
-        std::priority_queue<IndicVision::SeedNode> queue;
-        int centerIdx = numPoints / 2;
-        int centerX = startX + centerIdx * step;
-
-        engine->set_reference(refImg, centerX, y, subsetSize);
-        IndicVision::AnalysisResult res = engine->calculate_deformation(defImg, globalU, globalV, IndicVision::INIT_AUTO_SEARCH);
-
-        if (res.status == 0) {
-            results[centerIdx] = (float)res.u;
-            processed[centerIdx] = true;
-            queue.push(IndicVision::SeedNode(centerIdx, 0, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
-        }
-
-        int count = 0, lastPercent = -1;
-        while(!queue.empty()) {
-            IndicVision::SeedNode seed = queue.top();
-            queue.pop();
-            int neighbors[] = {seed.x_idx - 1, seed.x_idx + 1};
-
-            for (int idx: neighbors) {
-                if (idx >= 0 && idx < numPoints && !processed[idx]) {
-                    engine->set_reference(refImg, startX + idx * step, y, subsetSize);
-                    IndicVision::AnalysisResult nRes = engine->calculate_deformation(defImg, seed.u, seed.v, IndicVision::INIT_NO_SEARCH);
-
-                    if (nRes.status == 0) {
-                        results[idx] = (float) nRes.u;
-                        queue.push(IndicVision::SeedNode(idx, 0, nRes.u, nRes.v, nRes.ux, nRes.uy, nRes.vx, nRes.vy, nRes.correlation_score));
-                    }
-                    processed[idx] = true;
-                    count++;
-                    int percent = (count * 100) / numPoints;
-                    if (percent != lastPercent) { env->CallVoidMethod(callbackObj, methodId, (jint)percent); lastPercent = percent; }
-                }
-            }
-        }
-    } else {
-        double lastU = globalU, lastV = globalV;
-        for (int i=0; i<numPoints; ++i) {
-            engine->set_reference(refImg, startX + i * step, y, subsetSize);
-            IndicVision::AnalysisResult res = engine->calculate_deformation(defImg, lastU, lastV, IndicVision::INIT_AUTO_SEARCH);
-            if(res.status==0) { results[i] = (float)res.u; lastU = res.u; lastV = res.v; }
-            env->CallVoidMethod(callbackObj, methodId, (jint)((i * 100) / numPoints));
-        }
-    }
-
-    jfloatArray output = env->NewFloatArray(results.size());
-    env->SetFloatArrayRegion(output, 0, results.size(), results.data());
+    jfloatArray output = env->NewFloatArray(5);
+    jfloat temp[5] = { (jfloat)res.u, (jfloat)res.v, 0.0f, (jfloat)res.ux, (jfloat)res.status };
+    env->SetFloatArrayRegion(output, 0, 5, temp);
     return output;
 }
 
-// 6. COMPUTE FULL FIELD (2D Heatmap & Strain) - FULLY PROFILED
+// 6. COMPUTE FULL FIELD (2D HEATMAP & STRAIN)
 JNIEXPORT jfloatArray JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
         JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray defBytes,
@@ -253,26 +197,22 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
     auto start_total = std::chrono::high_resolution_clock::now();
 
-    // --- PHASE 1: OpenCV Image Decoding ---
     auto start_decode = std::chrono::high_resolution_clock::now();
     cv::Mat refMat = bytesToMat(env, refBytes);
     cv::Mat defMat = bytesToMat(env, defBytes);
     if (refMat.empty() || defMat.empty()) return nullptr;
     auto end_decode = std::chrono::high_resolution_clock::now();
 
-    // --- PHASE 2: Image Object Allocation ---
     auto start_alloc = std::chrono::high_resolution_clock::now();
     IndicVision::Image refImg(refMat.cols, refMat.rows, refMat.data);
     IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
     auto end_alloc = std::chrono::high_resolution_clock::now();
 
-    // --- PHASE 3: Gradient Preprocessing ---
     auto start_prep = std::chrono::high_resolution_clock::now();
     refImg.prepare_data();
     defImg.prepare_data();
     auto end_prep = std::chrono::high_resolution_clock::now();
 
-    // --- PHASE 4: AKAZE Feature Matching ---
     auto start_akaze = std::chrono::high_resolution_clock::now();
     double globalU = 0.0, globalV = 0.0;
     if (useFeatureMatching) {
@@ -285,7 +225,6 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     }
     auto end_akaze = std::chrono::high_resolution_clock::now();
 
-    auto engine = std::make_unique<IndicVision::Engine>();
     int gridW = rectWidth / step;
     int gridH = rectHeight / step;
     if (gridW * gridH <= 0) return nullptr;
@@ -297,7 +236,13 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     jclass callbackClass = env->GetObjectClass(callbackObj);
     jmethodID methodId = env->GetMethodID(callbackClass, "onProgressUpdate", "(I)V");
 
-    // --- PHASE 5: Initial Seed Search ---
+    // The single instances that will be recycled!
+    IndicVision::OptimizationEngine engine;
+    IndicVision::SubsetData shared_subset;
+
+    // -----------------------------------------------------------
+    // INITIAL SEED SEARCH
+    // -----------------------------------------------------------
     auto start_seed = std::chrono::high_resolution_clock::now();
     int seedGx = gridW / 2, seedGy = gridH / 2;
     bool seedFound = false;
@@ -307,11 +252,16 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
                 if (std::abs(i) != r && std::abs(j) != r) continue;
                 int cx = seedGx + i, cy = seedGy + j;
                 if (cx >= 0 && cx < gridW && cy >= 0 && cy < gridH) {
+
                     int seedX = rectX + cx * step;
                     int seedY = rectY + cy * step;
-                    engine->set_reference(refImg, seedX, seedY, subsetSize);
 
-                    IndicVision::AnalysisResult res = engine->calculate_deformation(defImg, globalU, globalV, IndicVision::INIT_AUTO_SEARCH);
+                    // Calculate Hessian ON THE FLY
+                    IndicVision::SubsetPrecomputer::precompute_subset(shared_subset, refImg, seedX, seedY, subsetSize);
+
+                    if (!shared_subset.is_initialized) continue; // Boundary safety
+
+                    IndicVision::AnalysisResult res = engine.calculate_deformation(shared_subset, defImg, globalU, globalV, IndicVision::INIT_AUTO_SEARCH);
 
                     if (res.status == 0 && res.correlation_score < 0.15) {
                         resultGrid[cy][cx] = {(float)seedX, (float)seedY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
@@ -327,10 +277,13 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     if (!seedFound) return nullptr;
     auto end_seed = std::chrono::high_resolution_clock::now();
 
+    // -----------------------------------------------------------
+    // PROPAGATION TRACKING
+    // -----------------------------------------------------------
     int count = 1, totalPoints = gridW * gridH;
     int dx[] = {1, -1, 0, 0}; int dy[] = {0, 0, 1, -1};
 
-    // --- PHASE 6: PROPAGATION TRACKING ---
+    double time_hessian_ms = 0.0;
     auto start_track = std::chrono::high_resolution_clock::now();
     while(!queue.empty()) {
         IndicVision::SeedNode current = queue.top(); queue.pop();
@@ -338,9 +291,18 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
             int nx = current.x_idx + dx[k], ny = current.y_idx + dy[k];
 
             if(nx >= 0 && nx < gridW && ny >= 0 && ny < gridH && !resultGrid[ny][nx].solved) {
-                int realX = rectX + nx * step, realY = rectY + ny * step;
-                engine->set_reference(refImg, realX, realY, subsetSize);
-                IndicVision::AnalysisResult res = engine->calculate_deformation(defImg, current.u, current.v, IndicVision::INIT_NO_SEARCH);
+
+                int realX = rectX + nx * step;
+                int realY = rectY + ny * step;
+
+                // Calculate Hessian ON THE FLY
+                auto th1 = std::chrono::high_resolution_clock::now();
+                IndicVision::SubsetPrecomputer::precompute_subset(shared_subset, refImg, realX, realY, subsetSize);
+                auto th2 = std::chrono::high_resolution_clock::now();
+                time_hessian_ms += std::chrono::duration<double, std::milli>(th2 - th1).count();
+                if (!shared_subset.is_initialized) continue; // Boundary safety
+
+                IndicVision::AnalysisResult res = engine.calculate_deformation(shared_subset, defImg, current.u, current.v, IndicVision::INIT_NO_SEARCH);
 
                 resultGrid[ny][nx] = {(float)realX, (float)realY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
                 if (res.status == 0 && res.correlation_score < 0.3) {
@@ -352,7 +314,9 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     }
     auto end_track = std::chrono::high_resolution_clock::now();
 
-    // --- PHASE 7: STRAIN POST-PROCESSING ---
+    // -----------------------------------------------------------
+    // STRAIN POST-PROCESSING
+    // -----------------------------------------------------------
     auto start_post = std::chrono::high_resolution_clock::now();
     IndicVision::DisplacementField dispField;
     dispField.width = gridW;
@@ -373,11 +337,12 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
         }
     }
 
-    // Change to compute_vsg_strain if you used Snippet B from earlier!
-    IndicVision::StrainField strainField = IndicVision::StrainCalculator::compute_nlvc_strain(dispField, strainWindow);
+    IndicVision::StrainField strainField = IndicVision::StrainCalculator::compute_vsg_strain(dispField, strainWindow);
     auto end_post = std::chrono::high_resolution_clock::now();
 
-    // --- PHASE 8: JNI FLATTENING & MEMORY ALLOCATION ---
+    // -----------------------------------------------------------
+    // JNI FLATTENING
+    // -----------------------------------------------------------
     auto start_jni = std::chrono::high_resolution_clock::now();
     std::vector<float> flatOutput;
     flatOutput.reserve(count * 8);
@@ -404,19 +369,21 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
     auto end_total = std::chrono::high_resolution_clock::now();
 
-    // --- PRINT DETAILED PROFILE LOGS ---
+    // -----------------------------------------------------------
+    // PROFILING LOGS
+    // -----------------------------------------------------------
     double t_decode = std::chrono::duration<double, std::milli>(end_decode - start_decode).count();
     double t_alloc = std::chrono::duration<double, std::milli>(end_alloc - start_alloc).count();
     double t_prep = std::chrono::duration<double, std::milli>(end_prep - start_prep).count();
     double t_akaze = std::chrono::duration<double, std::milli>(end_akaze - start_akaze).count();
     double t_seed = std::chrono::duration<double, std::milli>(end_seed - start_seed).count();
     double t_track = std::chrono::duration<double, std::milli>(end_track - start_track).count();
+    double internal_queue_overhead = t_track - engine.time_icgn_ms - engine.time_simplex_ms - time_hessian_ms;
     double t_post = std::chrono::duration<double, std::milli>(end_post - start_post).count();
     double t_jni = std::chrono::duration<double, std::milli>(end_jni - start_jni).count();
     double t_total = std::chrono::duration<double, std::milli>(end_total - start_total).count();
 
-    // Calculate internal overhead inside the tracking loop (Queue logic + Subset creation)
-    double internal_overhead = t_track - engine->time_icgn_ms - engine->time_simplex_ms;
+    double internal_overhead = t_track - engine.time_icgn_ms - engine.time_simplex_ms;
 
     LOGD("=== DETAILED DIC PERFORMANCE PROFILE ===");
     LOGD("1. OpenCV Bytes Decoding : %.2f ms", t_decode);
@@ -425,9 +392,10 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     LOGD("4. AKAZE Feature Match   : %.2f ms", t_akaze);
     LOGD("5. Initial Seed Search   : %.2f ms", t_seed);
     LOGD("6. Propagation Tracking  : %.2f ms", t_track);
-    LOGD("     -> ICGN Time        : %.2f ms (Count: %d)", engine->time_icgn_ms, engine->count_icgn);
-    LOGD("     -> Simplex Time     : %.2f ms (Count: %d)", engine->time_simplex_ms, engine->count_simplex);
-    LOGD("     -> Engine Overhead  : %.2f ms", internal_overhead);
+    LOGD("     -> ICGN Math Time   : %.2f ms (Count: %d)", engine.time_icgn_ms, engine.count_icgn);
+    LOGD("     -> Simplex Time     : %.2f ms (Count: %d)", engine.time_simplex_ms, engine.count_simplex);
+    LOGD("     -> Hessian Setup    : %.2f ms", time_hessian_ms);
+    LOGD("     -> Queue Overhead   : %.2f ms", internal_queue_overhead);
     LOGD("7. Strain Post-Process   : %.2f ms", t_post);
     LOGD("8. JNI Memory/Flattening : %.2f ms", t_jni);
     LOGD("----------------------------------------");
@@ -436,6 +404,5 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
     return output;
 }
-}
 
- // extern C
+} // extern "C"
