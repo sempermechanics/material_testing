@@ -125,14 +125,15 @@ namespace IndicVision {
             if (def_std < 1e-5) def_std = 1.0;
 
             // 3. Compute Gradients & Delta
+            // 3. Compute Gradients & Delta
             Eigen::Matrix<double, 6, 1> dp_sum = Eigen::Matrix<double, 6, 1>::Zero();
             double error_sum_sq = 0.0;
 
             for (size_t i = 0; i < n; ++i) {
                 if (def_vals[i] >= 0.0) {
-                    double norm_ref = (subset.ref_intensities[i] - subset.mean_intensity) / subset.std_dev;
+                    // FAST: Directly use the pre-calculated norm_ref!
                     double norm_def = (def_vals[i] - def_mean) / def_std;
-                    double diff = norm_ref - norm_def;
+                    double diff = subset.norm_ref_intensities[i] - norm_def;
 
                     error_sum_sq += diff * diff;
                     dp_sum += subset.steepest_descent_images[i] * diff;
@@ -206,9 +207,9 @@ namespace IndicVision {
         double znssd = 0.0;
         for (size_t i = 0; i < n; ++i) {
             if (buffer[i] >= 0.0) {
-                double norm_ref = (subset.ref_intensities[i] - subset.mean_intensity) / subset.std_dev;
+                // FAST: Directly use the pre-calculated norm_ref!
                 double norm_def = (buffer[i] - def_mean) / def_std;
-                double diff = norm_ref - norm_def;
+                double diff = subset.norm_ref_intensities[i] - norm_def;
                 znssd += diff * diff;
             }
         }

@@ -6,12 +6,12 @@ namespace IndicVision {
     void SubsetPrecomputer::precompute_subset(SubsetData& data, const Image& ref_img, int_t cx, int_t cy, int_t dim) {
         int n = dim * dim;
 
-        // 1. ALLOCATE ONLY ONCE! If the size is the same, we reuse the existing memory.
         if (data.dim != dim) {
             data.dim = dim;
             data.x_offsets.resize(n);
             data.y_offsets.resize(n);
             data.ref_intensities.resize(n);
+            data.norm_ref_intensities.resize(n); // NEW
             data.gx_vec.resize(n);
             data.gy_vec.resize(n);
             data.steepest_descent_images.resize(n);
@@ -31,19 +31,22 @@ namespace IndicVision {
         data.cy = cy;
         double sum = 0.0;
 
-        // 2. Sample Reference Intensities and Gradients directly into existing memory
+        // 1. FAST INTEGER LOOKUPS (No Bicubic Math!)
         for (int i = 0; i < n; ++i) {
-            double px = cx + data.x_offsets[i];
-            double py = cy + data.y_offsets[i];
+            int ix = cx + data.x_offsets[i];
+            int iy = cy + data.y_offsets[i];
 
-            data.ref_intensities[i] = ref_img.interpolate_bicubic(px, py);
+            // Direct 1D array access is nearly instant
+            int img_idx = iy * ref_img.width + ix;
+
+            data.ref_intensities[i] = ref_img.intensities[img_idx];
             sum += data.ref_intensities[i];
 
-            data.gx_vec[i] = ref_img.gradient_x(px, py);
-            data.gy_vec[i] = ref_img.gradient_y(px, py);
+            data.gx_vec[i] = ref_img.grad_x[img_idx];
+            data.gy_vec[i] = ref_img.grad_y[img_idx];
         }
 
-        // 3. Compute Stats
+        // 2. Compute Stats
         data.mean_intensity = sum / n;
         double sum_sq_diff = 0.0;
         for (int i = 0; i < n; ++i) {
@@ -53,9 +56,13 @@ namespace IndicVision {
         data.std_dev = std::sqrt(sum_sq_diff / n);
         if (data.std_dev < 1e-5) data.std_dev = 1.0;
 
+        // 3. PRE-CALCULATE NORMALIZED REFERENCE (Kills redundant ICGN math)
+        for (int i = 0; i < n; ++i) {
+            data.norm_ref_intensities[i] = (data.ref_intensities[i] - data.mean_intensity) / data.std_dev;
+        }
+
         // 4. Build Hessian
         Eigen::Matrix<double, 6, 6> H = Eigen::Matrix<double, 6, 6>::Zero();
-
         for (int i = 0; i < n; ++i) {
             double x = data.x_offsets[i];
             double y = data.y_offsets[i];

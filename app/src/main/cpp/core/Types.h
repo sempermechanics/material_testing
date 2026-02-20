@@ -50,6 +50,7 @@ namespace IndicVision {
         int_t cx, cy, dim;
         std::vector<int_t> x_offsets, y_offsets;
         std::vector<scalar_t> ref_intensities;
+        std::vector<scalar_t> norm_ref_intensities;
         std::vector<scalar_t> gx_vec, gy_vec; // Pre-sampled gradients
         scalar_t mean_intensity;
         scalar_t std_dev;
