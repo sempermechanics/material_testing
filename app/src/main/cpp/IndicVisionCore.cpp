@@ -13,11 +13,40 @@ namespace IndicVision {
         }
     }
 
+    // --- OPTIONAL: DICe 7-Tap Gaussian Blur Kernel ---
+    static const double gf_coeffs_7[49] = {
+            3.60000000e-05,3.63600000e-04,1.45080000e-03,2.29860000e-03,1.45080000e-03,3.63600000e-04,3.60000000e-05,
+            3.63600000e-04,3.67236000e-03,1.46530800e-02,2.32158600e-02,1.46530800e-02,3.67236000e-03,3.63600000e-04,
+            1.45080000e-03,1.46530800e-02,5.84672400e-02,9.26335800e-02,5.84672400e-02,1.46530800e-02,1.45080000e-03,
+            2.29860000e-03,2.32158600e-02,9.26335800e-02,1.46765610e-01,9.26335800e-02,2.32158600e-02,2.29860000e-03,
+            1.45080000e-03,1.46530800e-02,5.84672400e-02,9.26335800e-02,5.84672400e-02,1.46530800e-02,1.45080000e-03,
+            3.63600000e-04,3.67236000e-03,1.46530800e-02,2.32158600e-02,1.46530800e-02,3.67236000e-03,3.63600000e-04,
+            3.60000000e-05,3.63600000e-04,1.45080000e-03,2.29860000e-03,1.45080000e-03,3.63600000e-04,3.60000000e-05
+    };
+
     void Image::prepare_data() {
+        bool use_gaussian_blur = true; // Toggle this to 'true' for noisy mobile camera input
+
+        if (use_gaussian_blur) {
+            std::vector<scalar_t> temp = intensities;
+            int half_mask = 3; // 7/2
+            for (int y = half_mask; y < height - half_mask; ++y) {
+                for (int x = half_mask; x < width - half_mask; ++x) {
+                    double val = 0.0;
+                    for (int i = 0; i < 7; ++i) {
+                        for (int j = 0; j < 7; ++j) {
+                            val += gf_coeffs_7[i * 7 + j] * temp[(y + (j - half_mask)) * width + x + (i - half_mask)];
+                        }
+                    }
+                    intensities[y * width + x] = val;
+                }
+            }
+        }
+
         grad_x.assign(width * height, 0.0);
         grad_y.assign(width * height, 0.0);
 
-        // Pre-compute 2nd order central difference gradients (avoids re-calculating them inside the subset)
+        // Pre-compute 2nd order central difference gradients
         for (int y = 2; y < height - 2; ++y) {
             for (int x = 2; x < width - 2; ++x) {
                 int idx = y * width + x;
@@ -95,9 +124,15 @@ namespace IndicVision {
     Subset::Subset(int_t centroid_x, int_t centroid_y, int_t subset_size)
             : cx(centroid_x), cy(centroid_y), dim(subset_size) {
         int_t half = dim / 2;
-        int expected_size = dim * dim;
-        x_offsets.reserve(expected_size);
-        y_offsets.reserve(expected_size);
+        int n = dim * dim;
+
+        // PRE-ALLOCATE MEMORY ONCE!
+        x_offsets.reserve(n);
+        y_offsets.reserve(n);
+        ref_intensities.assign(n, 0.0);
+        gx_vec.assign(n, 0.0); // Use the class members defined in the .h file
+        gy_vec.assign(n, 0.0);
+        steepest_descent_images.assign(n, Eigen::Matrix<double, 6, 1>::Zero());
 
         for (int y = -half; y <= half; ++y) {
             for (int x = -half; x <= half; ++x) {
@@ -109,19 +144,18 @@ namespace IndicVision {
 
     void Subset::initialize(const Image &ref_img) {
         size_t n = x_offsets.size();
-        ref_intensities.resize(n);
-        steepest_descent_images.resize(n);
+
+        // NO .resize() CALLS HERE. NO local std::vector<double> gx_vec(n);
+        // Everything is already allocated in memory!
 
         double sum = 0.0;
-        std::vector<double> gx_vec(n);
-        std::vector<double> gy_vec(n);
 
         // 1. Calculate Intensities and Raw Gradients
         for (size_t i = 0; i < n; ++i) {
             double px = cx + x_offsets[i];
             double py = cy + y_offsets[i];
 
-            ref_intensities[i] = ref_img.interpolate_bicubic(px, py);
+            ref_intensities[i] = ref_img.interpolate_bicubic(px, py); // Or interpolate_bicubic if using the optimized one
             sum += ref_intensities[i];
 
             gx_vec[i] = ref_img.gradient_x(px, py);
@@ -137,7 +171,7 @@ namespace IndicVision {
         }
         std_dev = std::sqrt(sum_sq_diff / n);
 
-        if (std_dev < 1e-5) std_dev = 1.0; // Prevent divide by zero
+        if (std_dev < 1e-5) std_dev = 1.0;
 
         // 3. Build Hessian Matrix
         Eigen::Matrix<double, 6, 6> H = Eigen::Matrix<double, 6, 6>::Zero();
@@ -146,7 +180,6 @@ namespace IndicVision {
             double x = x_offsets[i];
             double y = y_offsets[i];
 
-            // Normalize gradients by the image std dev (crucial for ZNSSD mathematical stability)
             double gx = gx_vec[i] / std_dev;
             double gy = gy_vec[i] / std_dev;
 
@@ -157,9 +190,6 @@ namespace IndicVision {
             steepest_descent_images[i] = sd;
             H += sd * sd.transpose();
         }
-
-        // We REMOVED the permanent damping (H(k,k) *= 1.001) from here.
-        // It belongs in the solver, not baked into the inverse permanently!
 
         double det = H.determinant();
         if (std::abs(det) < 1e-12) {
@@ -177,7 +207,17 @@ namespace IndicVision {
     void Engine::set_reference(const Image &ref_img, int_t roi_x, int_t roi_y, int_t subset_size) {
         int_t cx = roi_x + subset_size / 2;
         int_t cy = roi_y + subset_size / 2;
-        active_subset = std::make_unique<Subset>(cx, cy, subset_size);
+
+        // MAGIC FIX: Only allocate the Subset object ONCE.
+        // If it already exists, just update its coordinates!
+        if (!active_subset || active_subset->dim != subset_size) {
+            active_subset = std::make_unique<Subset>(cx, cy, subset_size);
+        } else {
+            active_subset->cx = cx;
+            active_subset->cy = cy;
+        }
+
+        // Re-initialize the math using the existing memory
         active_subset->initialize(ref_img);
     }
 
@@ -444,7 +484,7 @@ namespace IndicVision {
         return {p[best][0], p[best][1], p[best][2], p[best][3], p[best][4], p[best][5], final_status, y[best]};
     }
 
-    // --- DICe-STYLE SMART GATEKEEPING ---
+    // --- INSTRUMENTED calculate_deformation ---
     AnalysisResult Engine::calculate_deformation(const Image &def_img, scalar_t guess_u, scalar_t guess_v, InitializationMode init_mode) {
         if (!active_subset) return {0,0,0,0,0,0, 1, 1.0};
 
@@ -452,35 +492,107 @@ namespace IndicVision {
         scalar_t v = guess_v;
         AnalysisResult res;
 
+        // Lambda helper to time ICGN
+        auto run_icgn = [&](double start_u, double start_v) {
+            auto t1 = std::chrono::high_resolution_clock::now();
+            AnalysisResult r = solve_icgn(*active_subset, def_img, start_u, start_v);
+            auto t2 = std::chrono::high_resolution_clock::now();
+            time_icgn_ms += std::chrono::duration<double, std::milli>(t2 - t1).count();
+            count_icgn++;
+            return r;
+        };
+
+        // Lambda helper to time Simplex
+        auto run_simplex = [&](AnalysisResult start_g, bool trans_only) {
+            auto t1 = std::chrono::high_resolution_clock::now();
+            AnalysisResult r = solve_simplex(*active_subset, def_img, start_g, trans_only);
+            auto t2 = std::chrono::high_resolution_clock::now();
+            time_simplex_ms += std::chrono::duration<double, std::milli>(t2 - t1).count();
+            count_simplex++;
+            return r;
+        };
+
         // SCENARIO 1: Seed Point Initialization
         if (init_mode == INIT_AUTO_SEARCH) {
-            // Do a coarse grid search if we have absolutely no idea where we are
             if (u == 0.0 && v == 0.0) {
                 estimate_initial_guess(*active_subset, def_img, u, v);
             }
-
-            // Run Translation-Only Simplex to firmly establish the seed neighborhood
             AnalysisResult start_guess = {u, v, 0, 0, 0, 0, 0, 1.0};
-            AnalysisResult coarse_res = solve_simplex(*active_subset, def_img, start_guess, true);
-
-            // Now feed the robust u,v back to ICGN to solve for high-accuracy strains
-            res = solve_icgn(*active_subset, def_img, coarse_res.u, coarse_res.v);
+            AnalysisResult coarse_res = run_simplex(start_guess, true);
+            res = run_icgn(coarse_res.u, coarse_res.v);
         }
             // SCENARIO 2: Standard Propagation
         else {
-            // Trust the neighbor completely. Go straight to ICGN.
-            res = solve_icgn(*active_subset, def_img, u, v);
+            res = run_icgn(u, v);
 
             // CATASTROPHIC RESCUE ONLY
-            // ZNSSD > 0.4 means the subset is completely lost (e.g. edge of a hole or heavy glare).
             if (res.status != 0 || res.correlation_score > 0.4) {
-                LOGW("Catastrophic failure at %d, %d. Attempting Simplex Rescue...", active_subset->cx, active_subset->cy);
                 AnalysisResult start_guess = {u, v, 0, 0, 0, 0, 0, 1.0};
-                AnalysisResult rescue_res = solve_simplex(*active_subset, def_img, start_guess, true);
-                res = solve_icgn(*active_subset, def_img, rescue_res.u, rescue_res.v);
+                AnalysisResult rescue_res = run_simplex(start_guess, true);
+                res = run_icgn(rescue_res.u, rescue_res.v);
             }
         }
-
         return res;
+    }
+    // ==========================================
+    // 5. DICe NLVC STRAIN CALCULATOR
+    // ==========================================
+    StrainField StrainCalculator::compute_nlvc_strain(const DisplacementField& disp, int horizon) {
+        StrainField strain;
+        int total_pts = disp.width * disp.height;
+        strain.exx.assign(total_pts, 0.0);
+        strain.eyy.assign(total_pts, 0.0);
+        strain.exy.assign(total_pts, 0.0);
+
+        // DICe NLVC Kernel parameters (From DICe_PostProcessor.cpp)
+        double h = (double)horizon * 0.5;
+        double s = h / 3.0; // 3-sigma rule fits inside the half-horizon
+        double s2 = s * s;
+        double const_multiplier = (s == 0.0) ? 0.0 : 1.0 / (2.0 * M_PI * s2);
+
+        int half_window = horizon / (2 * disp.step);
+        double patch_area = (double)(disp.step * disp.step);
+
+        for (int y = 0; y < disp.height; ++y) {
+            for (int x = 0; x < disp.width; ++x) {
+                int idx = y * disp.width + x;
+                if (!disp.valid[idx]) continue;
+
+                double dudx = 0.0, dudy = 0.0, dvdx = 0.0, dvdy = 0.0;
+
+                // Loop over neighborhood
+                for (int dy = -half_window; dy <= half_window; ++dy) {
+                    for (int dx = -half_window; dx <= half_window; ++dx) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+
+                        if (nx < 0 || nx >= disp.width || ny < 0 || ny >= disp.height) continue;
+                        int nidx = ny * disp.width + nx;
+                        if (!disp.valid[nidx]) continue;
+
+                        double phys_dx = dx * disp.step;
+                        double phys_dy = dy * disp.step;
+                        double r2 = phys_dx * phys_dx + phys_dy * phys_dy;
+
+                        // Compute DICe analytical Gaussian derivative kernel
+                        double exp_term = std::exp(-(r2 / (2.0 * s2)));
+                        double kx = const_multiplier * (-phys_dx / s2) * exp_term;
+                        double ky = const_multiplier * (-phys_dy / s2) * exp_term;
+
+                        // Accumulate derivatives (minus sign matches DICe logic)
+                        dudx -= disp.u[nidx] * kx * patch_area;
+                        dudy -= disp.u[nidx] * ky * patch_area;
+                        dvdx -= disp.v[nidx] * kx * patch_area;
+                        dvdy -= disp.v[nidx] * ky * patch_area;
+                    }
+                }
+
+                // Green-Lagrange Strain Tensor (Handles large deformations/rotations)
+                strain.exx[idx] = 0.5 * (2.0 * dudx + dudx * dudx + dvdx * dvdx);
+                strain.eyy[idx] = 0.5 * (2.0 * dvdy + dudy * dudy + dvdy * dvdy);
+                strain.exy[idx] = 0.5 * (dudy + dvdx + dudx * dudy + dvdx * dvdy);
+            }
+        }
+        return strain;
     }
 }

@@ -39,7 +39,7 @@
             android:id="@+id/tvInstruction"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Instruction: Draw a Box on the Image below"
+            android:text="Instruction: Click on the center image button"
             android:textColor="#CC0000"
             android:textStyle="bold"
             android:layout_marginTop="5dp"
@@ -70,7 +70,7 @@
             android:id="@+id/btnFullImage"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="OR Use Full Image Center"
+            android:text="Use Full Image Center"
             android:backgroundTint="#555555"
             android:textColor="#FFFFFF"
             android:layout_marginBottom="20dp"/>

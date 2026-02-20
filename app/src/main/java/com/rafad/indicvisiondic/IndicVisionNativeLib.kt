@@ -44,6 +44,7 @@ object IndicVisionNativeLib {
         rectHeight: Int,
         step: Int,
         subsetSize: Int,
+        strainWindow: Int,          // <--- NEW PARAMETER
         useReliabilityGuided: Boolean,
         useFeatureMatching: Boolean,
         callback: ProgressCallback

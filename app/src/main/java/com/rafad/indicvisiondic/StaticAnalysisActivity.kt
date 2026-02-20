@@ -250,9 +250,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 // Get Settings
                 val useReliabilityGuided = true
                 val useFeatureMatching = true
+                val strainWin = etStrainWindow.text.toString().toIntOrNull() ?: 15
 
                 // Define ROI: Whole Image with 20px margin
-                val margin = 20
+                val margin = (subset / 2) + 10
                 val rectX = margin
                 val rectY = margin
                 val rectW = realRefWidth - (2 * margin)
@@ -284,7 +285,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     val rawData = IndicVisionNativeLib.computeFullField(
                         refBytes!!, defBytes!!,
                         rectX, rectY, rectW, rectH,
-                        step, subset,
+                        step, subset,strainWin,
                         useReliabilityGuided,
                         useFeatureMatching,
                         callback
@@ -411,57 +412,49 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun saveFullFieldToCSV(data: FloatArray) {
         val fileName = "IndicVision_2D_${System.currentTimeMillis()}.csv"
 
-        // 1. Create file metadata
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
 
-        // 2. Insert into MediaStore to get a URI
         val resolver = applicationContext.contentResolver
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
 
         if (uri != null) {
             try {
-                // 3. Open output stream to that URI
                 resolver.openOutputStream(uri)?.use { outputStream ->
                     val writer = outputStream.bufferedWriter()
 
-                    // Write Header
-                    writer.write("X,Y,U_Displacement,V_Displacement,Correlation\n")
+                    // UPDATED HEADER for Strains
+                    writer.write("X,Y,U_Displacement,V_Displacement,Exx,Eyy,Exy,Correlation\n")
 
-                    // Write Data Loop
+                    // LOOP THROUGH 8 ELEMENTS PER POINT
                     var i = 0
                     while (i < data.size) {
-                        // Check for invalid results (-999) and skip them to keep CSV clean?
-                        // Or write them for debugging. Let's write them.
                         val x = data[i]
                         val y = data[i+1]
                         val u = data[i+2]
                         val v = data[i+3]
-                        val c = data[i+4]
+                        val exx = data[i+4]
+                        val eyy = data[i+5]
+                        val exy = data[i+6]
+                        val c = data[i+7]
 
-                        writer.write("$x,$y,$u,$v,$c\n")
-                        i += 5
+                        writer.write("$x,$y,$u,$v,$exx,$eyy,$exy,$c\n")
+                        i += 8
                     }
                     writer.flush()
                     writer.close()
                 }
-
-                // UI Feedback
                 runOnUiThread {
                     tvResult.text = "✅ Saved to Downloads: $fileName"
                     Toast.makeText(this, "File saved successfully", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                runOnUiThread {
-                    tvResult.text = "❌ Save Failed: ${e.message}"
-                }
+                runOnUiThread { tvResult.text = "❌ Save Failed: ${e.message}" }
             }
-        } else {
-            runOnUiThread { tvResult.text = "❌ Could not create file entry" }
         }
     }
     // Coordinate Mapping Helpers

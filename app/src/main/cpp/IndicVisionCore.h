@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <android/log.h>
 #include <Eigen/Dense>
+#include <chrono> // <--- ADD THIS
 
 #define LOG_TAG "IndicVisionNative"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
@@ -69,7 +70,8 @@ namespace IndicVision {
         int_t cx, cy, dim;
         std::vector<int_t> x_offsets;
         std::vector<int_t> y_offsets;
-
+        std::vector<scalar_t> gx_vec;
+        std::vector<scalar_t> gy_vec;
         std::vector<scalar_t> ref_intensities;
         scalar_t mean_intensity;
         scalar_t std_dev; // Precalculated to save time in evaluate_znssd
@@ -80,11 +82,31 @@ namespace IndicVision {
         Subset(int_t centroid_x, int_t centroid_y, int_t subset_size);
         void initialize(const Image& ref_img);
     };
+    // --- NEW: DICe NLVC Strain Data Structures ---
+    struct DisplacementField {
+        int width, height, step;
+        std::vector<double> u, v;
+        std::vector<bool> valid;
+    };
 
+    struct StrainField {
+        std::vector<double> exx, eyy, exy;
+    };
+
+    class StrainCalculator {
+    public:
+        // Implements DICe's Non-Local Vector Calculus (NLVC) derivative
+        static StrainField compute_nlvc_strain(const DisplacementField& disp, int horizon_pixels);
+    };
     class Engine {
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         Engine();
+        // --- NEW: Internal Timing Trackers ---
+        double time_icgn_ms = 0.0;
+        double time_simplex_ms = 0.0;
+        int count_icgn = 0;
+        int count_simplex = 0;
         void set_reference(const Image& ref_img, int_t roi_x, int_t roi_y, int_t subset_size);
         AnalysisResult calculate_deformation(const Image& def_img, scalar_t guess_u, scalar_t guess_v, InitializationMode init_mode);
 
