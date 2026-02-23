@@ -20,6 +20,7 @@ namespace IndicVision {
     public:
         // Implements DICe's Standard VSG (Linear Least Squares Plane Fit)
         static StrainField compute_vsg_strain(const DisplacementField& disp, int window_pixels);
+        static StrainField compute_nlvc_strain(const DisplacementField& disp, int horizon_pixels);
     };
 
 }

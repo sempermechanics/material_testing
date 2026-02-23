@@ -7,7 +7,9 @@
 #include <opencv2/features2d.hpp>
 #include <queue>
 #include <chrono>
-
+#include <omp.h>
+#include <atomic>
+#include <thread>
 // --- ARCHITECTURE HEADERS ---
 #include "../preprocessing/ImageProcessor.h"
 #include "../preprocessing/SubsetPrecomputer.h"
@@ -186,21 +188,45 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
     return output;
 }
 
+#include <omp.h>
+#include <thread>
+
 // 6. COMPUTE FULL FIELD (2D HEATMAP & STRAIN)
 JNIEXPORT jfloatArray JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
         JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray defBytes,
+        jbyteArray maskBytes, // <--- FIXED: ADDED THE MISSING MASK PARAMETER
         jint rectX, jint rectY, jint rectWidth, jint rectHeight,
         jint step, jint subsetSize, jint strainWindow,
         jboolean useReliabilityGuided, jboolean useFeatureMatching,
+        jboolean applyGaussianBlur, jboolean useNlvcStrain,
         jobject callbackObj) {
 
     auto start_total = std::chrono::high_resolution_clock::now();
 
+    // --- 1. JNI & DECODING (Single Thread) ---
     auto start_decode = std::chrono::high_resolution_clock::now();
     cv::Mat refMat = bytesToMat(env, refBytes);
     cv::Mat defMat = bytesToMat(env, defBytes);
     if (refMat.empty() || defMat.empty()) return nullptr;
+
+    // --- NEW: SAFE MASK DECODING ---
+    cv::Mat roiMask;
+    if (maskBytes != nullptr) {
+        jsize maskLen = env->GetArrayLength(maskBytes);
+        if (maskLen > 0) {
+            roiMask = bytesToMat(env, maskBytes);
+            if (!roiMask.empty() && (roiMask.cols != refMat.cols || roiMask.rows != refMat.rows)) {
+                cv::resize(roiMask, roiMask, refMat.size(), 0, 0, cv::INTER_NEAREST);
+            }
+        }
+    }
+
+    if (applyGaussianBlur) {
+        cv::GaussianBlur(refMat, refMat, cv::Size(7, 7), 0);
+        cv::GaussianBlur(defMat, defMat, cv::Size(7, 7), 0);
+        LOGD("Applied 7x7 Gaussian Blur based on User Settings");
+    }
     auto end_decode = std::chrono::high_resolution_clock::now();
 
     auto start_alloc = std::chrono::high_resolution_clock::now();
@@ -213,110 +239,173 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     defImg.prepare_data();
     auto end_prep = std::chrono::high_resolution_clock::now();
 
+    // --- 2. GLOBAL AKAZE SHIFT (Single Thread) ---
     auto start_akaze = std::chrono::high_resolution_clock::now();
     double globalU = 0.0, globalV = 0.0;
     if (useFeatureMatching) {
         cv::Rect roi(rectX, rectY, rectWidth, rectHeight);
         roi = roi & cv::Rect(0, 0, refMat.cols, refMat.rows);
-        if (roi.width > 0 && roi.height > 0) {
-            cv::Mat refROI = refMat(roi); cv::Mat defROI = defMat(roi);
-            computeGlobalShift(refROI, defROI, globalU, globalV);
+
+        if (roi.width > 32 && roi.height > 32) {
+            try {
+                cv::Mat refROI = refMat(roi); cv::Mat defROI = defMat(roi);
+                computeGlobalShift(refROI, defROI, globalU, globalV);
+            } catch (const cv::Exception& e) {
+                LOGE("AKAZE Exception caught. Ignoring global shift. Error: %s", e.what());
+            }
+        } else {
+            LOGE("ROI too small for Global AKAZE shift. Proceeding with 0,0 guess.");
         }
     }
     auto end_akaze = std::chrono::high_resolution_clock::now();
 
+    // --- NEW: SAFE PROGRESS UPDATE ---
+    jclass callbackClass = nullptr;
+    jmethodID methodId = nullptr;
+    if (callbackObj != nullptr) {
+        callbackClass = env->GetObjectClass(callbackObj);
+        methodId = env->GetMethodID(callbackClass, "onProgressUpdate", "(I)V");
+        if (methodId != nullptr) {
+            env->CallVoidMethod(callbackObj, methodId, (jint)10);
+        }
+    }
+
+    // --- 3. GRID ALLOCATION & MASK APPLICATION ---
     int gridW = rectWidth / step;
     int gridH = rectHeight / step;
     if (gridW * gridH <= 0) return nullptr;
 
     struct GridPoint { float x, y, u, v, corr; bool solved; };
-    std::vector<std::vector<GridPoint>> resultGrid(gridH, std::vector<GridPoint>(gridW, {0,0,0,0,0,false}));
-    std::priority_queue<IndicVision::SeedNode> queue;
+    std::vector<std::vector<GridPoint>> resultGrid(gridH, std::vector<GridPoint>(gridW));
 
-    jclass callbackClass = env->GetObjectClass(callbackObj);
-    jmethodID methodId = env->GetMethodID(callbackClass, "onProgressUpdate", "(I)V");
+    for (int y = 0; y < gridH; ++y) {
+        for (int x = 0; x < gridW; ++x) {
+            int realX = rectX + x * step;
+            int realY = rectY + y * step;
+            bool shouldSkip = false;
 
-    // The single instances that will be recycled!
-    IndicVision::OptimizationEngine engine;
-    IndicVision::SubsetData shared_subset;
+            // If the pixel is outside the Custom PNG Mask, skip tracking it!
+            if (!roiMask.empty()) {
+                if (roiMask.at<uchar>(realY, realX) < 128) {
+                    shouldSkip = true;
+                }
+            }
+            resultGrid[y][x] = {(float)realX, (float)realY, 0, 0, 0, shouldSkip};
+        }
+    }
 
-    // -----------------------------------------------------------
-    // INITIAL SEED SEARCH
-    // -----------------------------------------------------------
-    auto start_seed = std::chrono::high_resolution_clock::now();
-    int seedGx = gridW / 2, seedGy = gridH / 2;
-    bool seedFound = false;
-    for (int r = 0; r <= std::max(gridW, gridH) / 2; ++r) {
-        for (int i = -r; i <= r; ++i) {
-            for (int j = -r; j <= r; ++j) {
-                if (std::abs(i) != r && std::abs(j) != r) continue;
-                int cx = seedGx + i, cy = seedGy + j;
-                if (cx >= 0 && cx < gridW && cy >= 0 && cy < gridH) {
+    // --- 4. SAFE THREAD ALLOCATION ---
+    int total_cores = std::thread::hardware_concurrency();
+    int safe_cores = std::max(1, total_cores - 2);
 
-                    int seedX = rectX + cx * step;
-                    int seedY = rectY + cy * step;
+    std::vector<double> t_icgn_arr(safe_cores, 0.0), t_simplex_arr(safe_cores, 0.0), t_hessian_arr(safe_cores, 0.0);
+    std::vector<int> c_icgn_arr(safe_cores, 0), c_simplex_arr(safe_cores, 0), c_points_arr(safe_cores, 0);
 
-                    // Calculate Hessian ON THE FLY
-                    IndicVision::SubsetPrecomputer::precompute_subset(shared_subset, refImg, seedX, seedY, subsetSize);
+    auto start_track = std::chrono::high_resolution_clock::now();
 
-                    if (!shared_subset.is_initialized) continue; // Boundary safety
+    // ====================================================================
+    // --- 5. PARALLEL MULTI-QUEUE RGDIC ---
+    // ====================================================================
+#pragma omp parallel num_threads(safe_cores)
+    {
+        int tid = omp_get_thread_num();
 
-                    IndicVision::AnalysisResult res = engine.calculate_deformation(shared_subset, defImg, globalU, globalV, IndicVision::INIT_AUTO_SEARCH);
+        int strip_height = gridH / safe_cores;
+        int start_y = tid * strip_height;
+        int end_y = (tid == safe_cores - 1) ? gridH : start_y + strip_height;
 
-                    if (res.status == 0 && res.correlation_score < 0.15) {
-                        resultGrid[cy][cx] = {(float)seedX, (float)seedY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
-                        queue.push(IndicVision::SeedNode(cx, cy, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
-                        seedFound = true;
-                        goto seed_loop_end;
+        IndicVision::OptimizationEngine local_engine;
+        IndicVision::SubsetData local_subset;
+        std::priority_queue<IndicVision::SeedNode> local_queue;
+
+        double local_hessian_ms = 0.0;
+        int local_points_solved = 0;
+
+        int seedGx = gridW / 2;
+        int seedGy = start_y + (end_y - start_y) / 2;
+        int max_r = std::max(gridW, end_y - start_y) / 2;
+
+        for (int r = 0; r <= max_r; ++r) {
+            for (int i = -r; i <= r; ++i) {
+                for (int j = -r; j <= r; ++j) {
+                    if (std::abs(i) != r && std::abs(j) != r) continue;
+                    int cx = seedGx + i, cy = seedGy + j;
+
+                    if (cx >= 0 && cx < gridW && cy >= start_y && cy < end_y && !resultGrid[cy][cx].solved) {
+                        int seedX = rectX + cx * step;
+                        int seedY = rectY + cy * step;
+
+                        auto th1 = std::chrono::high_resolution_clock::now();
+                        IndicVision::SubsetPrecomputer::precompute_subset(local_subset, refImg, seedX, seedY, subsetSize);
+                        auto th2 = std::chrono::high_resolution_clock::now();
+                        local_hessian_ms += std::chrono::duration<double, std::milli>(th2 - th1).count();
+
+                        if (!local_subset.is_initialized) continue;
+
+                        IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, globalU, globalV, IndicVision::INIT_AUTO_SEARCH);
+
+                        if (res.status == 0 && res.correlation_score < 0.15) {
+                            resultGrid[cy][cx] = {(float)seedX, (float)seedY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
+                            local_queue.push(IndicVision::SeedNode(cx, cy, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+                            local_points_solved++;
+                            goto local_seed_loop_end;
+                        }
                     }
                 }
             }
         }
-    }
-    seed_loop_end:
-    if (!seedFound) return nullptr;
-    auto end_seed = std::chrono::high_resolution_clock::now();
+        local_seed_loop_end:
 
-    // -----------------------------------------------------------
-    // PROPAGATION TRACKING
-    // -----------------------------------------------------------
-    int count = 1, totalPoints = gridW * gridH;
-    int dx[] = {1, -1, 0, 0}; int dy[] = {0, 0, 1, -1};
+        int dx[] = {1, -1, 0, 0};
+        int dy[] = {0, 0, 1, -1};
 
-    double time_hessian_ms = 0.0;
-    auto start_track = std::chrono::high_resolution_clock::now();
-    while(!queue.empty()) {
-        IndicVision::SeedNode current = queue.top(); queue.pop();
-        for(int k=0; k<4; ++k) {
-            int nx = current.x_idx + dx[k], ny = current.y_idx + dy[k];
+        while(!local_queue.empty()) {
+            IndicVision::SeedNode current = local_queue.top();
+            local_queue.pop();
 
-            if(nx >= 0 && nx < gridW && ny >= 0 && ny < gridH && !resultGrid[ny][nx].solved) {
+            for(int k=0; k<4; ++k) {
+                int nx = current.x_idx + dx[k];
+                int ny = current.y_idx + dy[k];
 
-                int realX = rectX + nx * step;
-                int realY = rectY + ny * step;
+                if(nx >= 0 && nx < gridW && ny >= start_y && ny < end_y && !resultGrid[ny][nx].solved) {
 
-                // Calculate Hessian ON THE FLY
-                auto th1 = std::chrono::high_resolution_clock::now();
-                IndicVision::SubsetPrecomputer::precompute_subset(shared_subset, refImg, realX, realY, subsetSize);
-                auto th2 = std::chrono::high_resolution_clock::now();
-                time_hessian_ms += std::chrono::duration<double, std::milli>(th2 - th1).count();
-                if (!shared_subset.is_initialized) continue; // Boundary safety
+                    int realX = rectX + nx * step;
+                    int realY = rectY + ny * step;
 
-                IndicVision::AnalysisResult res = engine.calculate_deformation(shared_subset, defImg, current.u, current.v, IndicVision::INIT_NO_SEARCH);
+                    auto th1 = std::chrono::high_resolution_clock::now();
+                    IndicVision::SubsetPrecomputer::precompute_subset(local_subset, refImg, realX, realY, subsetSize);
+                    auto th2 = std::chrono::high_resolution_clock::now();
+                    local_hessian_ms += std::chrono::duration<double, std::milli>(th2 - th1).count();
 
-                resultGrid[ny][nx] = {(float)realX, (float)realY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
-                if (res.status == 0 && res.correlation_score < 0.3) {
-                    queue.push(IndicVision::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+                    if (!local_subset.is_initialized) continue;
+
+                    IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, current.u, current.v, IndicVision::INIT_NO_SEARCH);
+
+                    resultGrid[ny][nx] = {(float)realX, (float)realY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
+                    if (res.status == 0 && res.correlation_score < 0.3) {
+                        local_queue.push(IndicVision::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+                    }
+                    local_points_solved++;
                 }
-                if(++count % 50 == 0) env->CallVoidMethod(callbackObj, methodId, (jint)((count * 100) / totalPoints));
             }
         }
+
+        t_icgn_arr[tid] = local_engine.time_icgn_ms;
+        t_simplex_arr[tid] = local_engine.time_simplex_ms;
+        t_hessian_arr[tid] = local_hessian_ms;
+        c_icgn_arr[tid] = local_engine.count_icgn;
+        c_simplex_arr[tid] = local_engine.count_simplex;
+        c_points_arr[tid] = local_points_solved;
     }
+    // ====================================================================
+
     auto end_track = std::chrono::high_resolution_clock::now();
 
-    // -----------------------------------------------------------
-    // STRAIN POST-PROCESSING
-    // -----------------------------------------------------------
+    if (callbackObj != nullptr && methodId != nullptr) {
+        env->CallVoidMethod(callbackObj, methodId, (jint)90);
+    }
+
+    // --- 6. STRAIN POST-PROCESSING ---
     auto start_post = std::chrono::high_resolution_clock::now();
     IndicVision::DisplacementField dispField;
     dispField.width = gridW;
@@ -337,15 +426,23 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
         }
     }
 
-    IndicVision::StrainField strainField = IndicVision::StrainCalculator::compute_vsg_strain(dispField, strainWindow);
+    IndicVision::StrainField strainField;
+    if (useNlvcStrain) {
+        strainField = IndicVision::StrainCalculator::compute_nlvc_strain(dispField, strainWindow);
+        LOGD("Computed Strain using NLVC");
+    } else {
+        strainField = IndicVision::StrainCalculator::compute_vsg_strain(dispField, strainWindow);
+        LOGD("Computed Strain using VSG");
+    }
     auto end_post = std::chrono::high_resolution_clock::now();
 
-    // -----------------------------------------------------------
-    // JNI FLATTENING
-    // -----------------------------------------------------------
+    // --- 7. JNI FLATTENING ---
     auto start_jni = std::chrono::high_resolution_clock::now();
     std::vector<float> flatOutput;
-    flatOutput.reserve(count * 8);
+
+    int total_solved = 0;
+    for (int count : c_points_arr) total_solved += count;
+    flatOutput.reserve(total_solved * 8);
 
     for(int y=0; y<gridH; ++y) {
         for(int x=0; x<gridW; ++x) {
@@ -366,43 +463,19 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     jfloatArray output = env->NewFloatArray(flatOutput.size());
     env->SetFloatArrayRegion(output, 0, flatOutput.size(), flatOutput.data());
     auto end_jni = std::chrono::high_resolution_clock::now();
-
     auto end_total = std::chrono::high_resolution_clock::now();
 
-    // -----------------------------------------------------------
-    // PROFILING LOGS
-    // -----------------------------------------------------------
-    double t_decode = std::chrono::duration<double, std::milli>(end_decode - start_decode).count();
-    double t_alloc = std::chrono::duration<double, std::milli>(end_alloc - start_alloc).count();
-    double t_prep = std::chrono::duration<double, std::milli>(end_prep - start_prep).count();
-    double t_akaze = std::chrono::duration<double, std::milli>(end_akaze - start_akaze).count();
-    double t_seed = std::chrono::duration<double, std::milli>(end_seed - start_seed).count();
+    if (callbackObj != nullptr && methodId != nullptr) {
+        env->CallVoidMethod(callbackObj, methodId, (jint)100);
+    }
+
+    // --- 8. PROFILING LOGS ---
     double t_track = std::chrono::duration<double, std::milli>(end_track - start_track).count();
-    double internal_queue_overhead = t_track - engine.time_icgn_ms - engine.time_simplex_ms - time_hessian_ms;
-    double t_post = std::chrono::duration<double, std::milli>(end_post - start_post).count();
-    double t_jni = std::chrono::duration<double, std::milli>(end_jni - start_jni).count();
-    double t_total = std::chrono::duration<double, std::milli>(end_total - start_total).count();
-
-    double internal_overhead = t_track - engine.time_icgn_ms - engine.time_simplex_ms;
-
-    LOGD("=== DETAILED DIC PERFORMANCE PROFILE ===");
-    LOGD("1. OpenCV Bytes Decoding : %.2f ms", t_decode);
-    LOGD("2. Raw Image Allocation  : %.2f ms", t_alloc);
-    LOGD("3. Preprocessing (Grads) : %.2f ms", t_prep);
-    LOGD("4. AKAZE Feature Match   : %.2f ms", t_akaze);
-    LOGD("5. Initial Seed Search   : %.2f ms", t_seed);
-    LOGD("6. Propagation Tracking  : %.2f ms", t_track);
-    LOGD("     -> ICGN Math Time   : %.2f ms (Count: %d)", engine.time_icgn_ms, engine.count_icgn);
-    LOGD("     -> Simplex Time     : %.2f ms (Count: %d)", engine.time_simplex_ms, engine.count_simplex);
-    LOGD("     -> Hessian Setup    : %.2f ms", time_hessian_ms);
-    LOGD("     -> Queue Overhead   : %.2f ms", internal_queue_overhead);
-    LOGD("7. Strain Post-Process   : %.2f ms", t_post);
-    LOGD("8. JNI Memory/Flattening : %.2f ms", t_jni);
-    LOGD("----------------------------------------");
-    LOGD("TOTAL JNI EXECUTION TIME : %.2f ms", t_total);
+    LOGD("=== OPENMP RGDIC PERFORMANCE PROFILE ===");
+    LOGD("OpenMP Wall Time         : %.2f ms", t_track);
+    LOGD("Total JNI Execution Time : %.2f ms", std::chrono::duration<double, std::milli>(end_total - start_total).count());
     LOGD("========================================");
 
     return output;
 }
-
 } // extern "C"

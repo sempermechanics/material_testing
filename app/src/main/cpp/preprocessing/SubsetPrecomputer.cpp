@@ -5,18 +5,18 @@ namespace IndicVision {
 
     void SubsetPrecomputer::precompute_subset(SubsetData& data, const Image& ref_img, int_t cx, int_t cy, int_t dim) {
         int n = dim * dim;
+        int half = dim / 2;
 
         if (data.dim != dim) {
             data.dim = dim;
             data.x_offsets.resize(n);
             data.y_offsets.resize(n);
             data.ref_intensities.resize(n);
-            data.norm_ref_intensities.resize(n); // NEW
+            data.norm_ref_intensities.resize(n);
             data.gx_vec.resize(n);
             data.gy_vec.resize(n);
             data.steepest_descent_images.resize(n);
 
-            int half = dim / 2;
             int idx = 0;
             for (int y = -half; y <= half; ++y) {
                 for (int x = -half; x <= half; ++x) {
@@ -29,14 +29,23 @@ namespace IndicVision {
 
         data.cx = cx;
         data.cy = cy;
+
+        // ==========================================
+        // THE CRASH FIX: O(1) BOUNDS CHECKING
+        // ==========================================
+        if (cx - half < 0 || cx + half >= ref_img.width ||
+            cy - half < 0 || cy + half >= ref_img.height) {
+            data.is_initialized = false;
+            return; // Abort instantly!
+        }
+
         double sum = 0.0;
 
-        // 1. FAST INTEGER LOOKUPS (No Bicubic Math!)
+        // 1. FAST INTEGER LOOKUPS
         for (int i = 0; i < n; ++i) {
             int ix = cx + data.x_offsets[i];
             int iy = cy + data.y_offsets[i];
 
-            // Direct 1D array access is nearly instant
             int img_idx = iy * ref_img.width + ix;
 
             data.ref_intensities[i] = ref_img.intensities[img_idx];
@@ -56,7 +65,7 @@ namespace IndicVision {
         data.std_dev = std::sqrt(sum_sq_diff / n);
         if (data.std_dev < 1e-5) data.std_dev = 1.0;
 
-        // 3. PRE-CALCULATE NORMALIZED REFERENCE (Kills redundant ICGN math)
+        // 3. PRE-CALCULATE NORMALIZED REFERENCE
         for (int i = 0; i < n; ++i) {
             data.norm_ref_intensities[i] = (data.ref_intensities[i] - data.mean_intensity) / data.std_dev;
         }

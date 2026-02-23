@@ -7,14 +7,9 @@ interface ProgressCallback {
 }
 
 object IndicVisionNativeLib {
-
     init {
         System.loadLibrary("indicvision_core")
     }
-
-    external fun getPreviewFromBytes(fileData: ByteArray, targetWidth: Int): Bitmap?
-
-    external fun getImageDimensions(fileData: ByteArray): IntArray
 
     external fun analyzeRawBytes(
         refData: ByteArray, defData: ByteArray,
@@ -22,31 +17,26 @@ object IndicVisionNativeLib {
         originalWidth: Int, originalHeight: Int
     ): FloatArray
 
-    external fun computeLineProfile(
-        refData: ByteArray,
-        defData: ByteArray,
-        startX: Int,
-        endX: Int,
-        y: Int,
-        step: Int,
-        subsetSize: Int,
-        useReliabilityGuided: Boolean,
-        useFeatureMatching: Boolean,
-        callback: ProgressCallback
-    ): FloatArray
-
+    // CRITICAL FIX: Ensure maskData is included so it matches C++ exactly
     external fun computeFullField(
         refData: ByteArray,
         defData: ByteArray,
+        maskData: ByteArray, // FIXED: Added missing parameter
         rectX: Int,
         rectY: Int,
         rectWidth: Int,
         rectHeight: Int,
         step: Int,
         subsetSize: Int,
-        strainWindow: Int,          // <--- NEW PARAMETER
+        strainWindow: Int,
         useReliabilityGuided: Boolean,
         useFeatureMatching: Boolean,
+        applyBlur: Boolean,
+        useNlvc: Boolean,
         callback: ProgressCallback
-    ): FloatArray
-}
+    ): FloatArray?
+
+    external fun getPreviewFromBytes(imageBytes: ByteArray, maxDim: Int): android.graphics.Bitmap?
+
+    external fun getImageDimensions(imageBytes: ByteArray): IntArray
+} // <-- Only ONE closing brace here!

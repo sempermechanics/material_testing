@@ -1,60 +1,69 @@
 package com.rafad.indicvisiondic
 
 import android.annotation.SuppressLint
-import android.graphics.Matrix
-import android.graphics.RectF
+import android.app.Activity
+import android.content.ContentValues
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Log
-import android.view.MotionEvent
 import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
-import java.io.FileWriter
-import java.io.InputStream
-import android.content.ContentValues
-import android.provider.MediaStore
-import java.io.OutputStream
 
 class StaticAnalysisActivity : AppCompatActivity() {
 
     // UI Components
     private lateinit var imgRef: ImageView
     private lateinit var imgDef: ImageView
-    private lateinit var overlayRef: OverlayView
     private lateinit var btnLoadRef: Button
     private lateinit var btnLoadDef: Button
     private lateinit var btnFullImage: Button
-    private lateinit var btnCalculate: Button
-    private lateinit var btnCalculateDisp: Button
-    private lateinit var btnCalculateStrain: Button
+    private lateinit var btnDefineRoi: Button
+    private lateinit var btnLoadRoiMask: Button
     private lateinit var tvResult: TextView
     private lateinit var tvInstruction: TextView
     private lateinit var tvRefName: TextView
     private lateinit var tvDefName: TextView
     private lateinit var etSubsetSize: EditText
     private lateinit var etStepSize: EditText
-    private lateinit var etStrainWindow: EditText // Added missing declaration
+    private lateinit var etStrainWindow: EditText
     private lateinit var progressBar: ProgressBar
     private lateinit var tvTimer: TextView
-    private lateinit var btnCalculateFullField: Button // New
+    private lateinit var btnCalculateFullField: Button
+    private lateinit var switchBlur: Switch
+    private lateinit var rgStrainMethod: RadioGroup
+
+    // --- NEW: View Last Result Button ---
+    private lateinit var btnViewResults: Button
+
     // Data Storage
     private var refBytes: ByteArray? = null
     private var defBytes: ByteArray? = null
-    private var lastDisplacementData: FloatArray? = null
+    private var roiMaskBytes: ByteArray? = null
+    private var refImageUriString: String? = null
 
-    // Image Dimensions and ROI
+    // --- NEW: State Storage for Last Results ---
+    private var lastDataPath: String? = null
+    private var lastDefPath: String? = null
+    private var lastGridW: Int = 0
+    private var lastGridH: Int = 0
+    private var lastStep: Int = 5
+
+    // Image Dimensions & ROI Bounds
     private var realRefWidth = 0
     private var realRefHeight = 0
-    private var roiCenterX = 0
-    private var roiCenterY = 0
-    private var isRoiSelected = false
-    private var startX = 0f
-    private var startY = 0f
+    private var roiX = 0
+    private var roiY = 0
+    private var roiW = 0
+    private var roiH = 0
+    private var hasCustomRoi = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_static_analysis)
@@ -64,208 +73,122 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvTimer = findViewById(R.id.tvTimer)
         imgRef = findViewById(R.id.imgRef)
         imgDef = findViewById(R.id.imgDef)
-        overlayRef = findViewById(R.id.overlayRef)
         btnLoadRef = findViewById(R.id.btnLoadRef)
         btnLoadDef = findViewById(R.id.btnLoadDef)
         btnFullImage = findViewById(R.id.btnFullImage)
-        btnCalculate = findViewById(R.id.btnCalculate)
-        btnCalculateDisp = findViewById(R.id.btnCalculateDisp)
-        btnCalculateStrain = findViewById(R.id.btnCalculateStrain)
+        btnDefineRoi = findViewById(R.id.btnDefineRoi)
+        btnLoadRoiMask = findViewById(R.id.btnLoadRoiMask)
         tvResult = findViewById(R.id.tvStaticResult)
         tvInstruction = findViewById(R.id.tvInstruction)
         tvRefName = findViewById(R.id.tvRefName)
         tvDefName = findViewById(R.id.tvDefName)
         etSubsetSize = findViewById(R.id.etSubsetSize)
         etStepSize = findViewById(R.id.etStepSize)
-        etStrainWindow = findViewById(R.id.etStrainWindow) // Added missing binding
-        btnCalculateDisp = findViewById(R.id.btnCalculateDisp)
-        btnCalculateFullField = findViewById(R.id.btnCalculateFullField) // New
-        // 2. Image Pickers
+        etStrainWindow = findViewById(R.id.etStrainWindow)
+        btnCalculateFullField = findViewById(R.id.btnCalculateFullField)
+        switchBlur = findViewById(R.id.switchBlur)
+        rgStrainMethod = findViewById(R.id.rgStrainMethod)
+
+        // Bind the new button
+        btnViewResults = findViewById(R.id.btnViewResults)
+        // 2. Launchers for Images and Mask
         val pickRef = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let { handleImageSelection(it, isRef = true) }
         }
         val pickDef = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let { handleImageSelection(it, isRef = false) }
         }
+        val pickMask = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let { handleMaskSelection(it) }
+        }
+
+        // The ROI Studio Launcher
+        val roiStudioLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                val data = result.data
+                if (data != null) {
+                    roiX = data.getIntExtra("ROI_X", 0)
+                    roiY = data.getIntExtra("ROI_Y", 0)
+                    roiW = data.getIntExtra("ROI_W", realRefWidth)
+                    roiH = data.getIntExtra("ROI_H", realRefHeight)
+                    hasCustomRoi = true
+                    tvInstruction.text = "✅ ROI Set: $roiW x $roiH px"
+                    checkReady()
+                }
+            } else {
+                tvInstruction.text = "❌ ROI Selection Cancelled"
+            }
+        }
+
+        // Button Listeners
         btnLoadRef.setOnClickListener { pickRef.launch("image/*") }
         btnLoadDef.setOnClickListener { pickDef.launch("image/*") }
+        btnLoadRoiMask.setOnClickListener { pickMask.launch("image/*") }
 
-        // 3. Logic: Full Image Center
+        btnDefineRoi.setOnClickListener {
+            if (refBytes != null) {
+                val tempFile = File(cacheDir, "temp_roi_ref.bin")
+                tempFile.writeBytes(refBytes!!)
+
+                val intent = Intent(this, RoiDrawActivity::class.java)
+                intent.putExtra("IMAGE_FILE_PATH", tempFile.absolutePath)
+                intent.putExtra("IMAGE_WIDTH", realRefWidth)
+                intent.putExtra("IMAGE_HEIGHT", realRefHeight)
+
+                roiStudioLauncher.launch(intent)
+            }
+        }
+
         btnFullImage.setOnClickListener {
             if (realRefWidth > 0) {
-                roiCenterX = realRefWidth / 2
-                roiCenterY = realRefHeight / 2
-                isRoiSelected = true
-                val drawable = imgRef.drawable
-                if (drawable != null) {
-                    val screenPoint = mapImageToScreen(roiCenterX.toFloat(), roiCenterY.toFloat())
-                    overlayRef.drawPoint(screenPoint[0], screenPoint[1])
-                }
-                tvInstruction.text = "✅ Center ROI Locked: ($roiCenterX, $roiCenterY)"
+                hasCustomRoi = false
+                tvInstruction.text = "✅ Using Full Image"
                 checkReady()
             }
         }
 
-        // 4. Logic: Draw Box/ROI
-        overlayRef.setOnTouchListener { v, event ->
-            if (refBytes == null) return@setOnTouchListener false
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    startX = event.x; startY = event.y
-                    overlayRef.clear(); isRoiSelected = false; checkReady()
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val rect = RectF(Math.min(startX, event.x), Math.min(startY, event.y), Math.max(startX, event.x), Math.max(startY, event.y))
-                    overlayRef.drawRect(rect); true
-                }
-                MotionEvent.ACTION_UP -> {
-                    val midX = (startX + event.x) / 2; val midY = (startY + event.y) / 2
-                    overlayRef.drawPoint(midX, midY)
-                    val imgPoint = mapScreenToImage(midX, midY)
-                    if (imgPoint != null) {
-                        roiCenterX = imgPoint[0].toInt(); roiCenterY = imgPoint[1].toInt()
-                        isRoiSelected = true
-                        tvInstruction.text = "✅ ROI Set at ($roiCenterX, $roiCenterY)"
-                        checkReady()
-                    }
-                    true
-                }
-                else -> false
-            }
-        }
-
-        // 5. Logic: Single Point Test
-        btnCalculate.setOnClickListener {
-            if (refBytes != null && defBytes != null && isRoiSelected) {
-                val subset = etSubsetSize.text.toString().toIntOrNull() ?: 61
-                Thread {
-                    val res = IndicVisionNativeLib.analyzeRawBytes(refBytes!!, defBytes!!, roiCenterX, roiCenterY, subset, realRefWidth, realRefHeight)
-                    runOnUiThread {
-                        if (res[4].toInt() == 0) tvResult.text = "SUCCESS\nU: %.4f px\nError: %.4f".format(res[0], res[3])
-                        else tvResult.text = "Analysis Failed"
-                    }
-                }.start()
-            }
-        }
-
-        // 6. Logic: Displacement Profile Scan
-        btnCalculateDisp.setOnClickListener {// ... inside btnCalculateDisp.setOnClickListener ...
-            if (refBytes != null && defBytes != null) {
-                val subset = etSubsetSize.text.toString().toIntOrNull() ?: 41
-                val step = etStepSize.text.toString().toIntOrNull() ?: 5
-
-                // 1. DETERMINE Y-COORDINATE
-                // If you touched the screen, use that Y. Otherwise, default to center.
-                val scanY = if (isRoiSelected) roiCenterY else realRefHeight / 2
-
-                // 2. VISUAL DEBUGGING (CRITICAL)
-                // Draw a blue line on the screen where we are about to solve.
-                // If this line hits black background, we know why it fails.
-                val screenCoords = mapImageToScreen(0f, scanY.toFloat())
-                overlayRef.drawScanLine(screenCoords[1])
-
-                // 3. LOGGING
-                Log.d("DIC_DIAG", "Real Image Size: $realRefWidth x $realRefHeight")
-                Log.d("DIC_DIAG", "User Selected ROI? $isRoiSelected")
-                Log.d("DIC_DIAG", "Sending Scan Line Y = $scanY to Engine")
-                // ENABLE THE NEW DICe FEATURES
-                val useReliabilityGuided = true
-                val useFeatureMatching = true
-                // --------------------
-
-                progressBar.visibility = View.VISIBLE
-                progressBar.progress = 0
-                tvTimer.visibility = View.VISIBLE
-                btnCalculateDisp.isEnabled = false
-                val startTime = System.currentTimeMillis()
-
-                Thread {
-                    val callback = object : ProgressCallback {
-                        override fun onProgressUpdate(percentage: Int) {
-                            runOnUiThread {
-                                progressBar.progress = percentage
-                                val elapsed = (System.currentTimeMillis() - startTime) / 1000
-                                tvTimer.text = "Elapsed Time: ${elapsed}s ($percentage%)"
-                            }
-                        }
-                    }
-
-                    // CALL THE UPDATED NATIVE FUNCTION
-                    val uValues = IndicVisionNativeLib.computeLineProfile(
-                        refBytes!!, defBytes!!,
-                        50, realRefWidth - 50, scanY,
-                        step, subset,
-                        useReliabilityGuided,
-                        useFeatureMatching,
-                        callback
-                    )
-
-                    lastDisplacementData = uValues
-                    val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
-                    runOnUiThread {
-                        progressBar.visibility = View.GONE
-                        tvTimer.text = "Analysis done in %.2f seconds".format(totalTime)
-                        btnCalculateDisp.isEnabled = true
-                        btnCalculateStrain.visibility = View.VISIBLE
-                        saveResultsToCSV(uValues, null, step, 50)
-                    }
-                }.start()
-            }
-        }
-
-        // 7. Logic: Separate Strain Calculation (Windowing)
-        btnCalculateStrain.setOnClickListener {
-            val data = lastDisplacementData ?: return@setOnClickListener
-            val step = etStepSize.text.toString().toIntOrNull() ?: 5
-            var winSize = etStrainWindow.text.toString().toIntOrNull() ?: 15 // Default 15
-            if (winSize % 2 == 0) winSize += 1
-
-            // --- TOGGLE HERE: Change to false for Linear, true for Quadratic ---
-            val USE_QUADRATIC = true
-            // ------------------------------------------------------------------
-
-            val method = if (USE_QUADRATIC) "Quadratic (Curve Fit)" else "Linear (Line Fit)"
-            tvResult.text = "Applying $method VSG (Window $winSize)..."
-
-            Thread {
-                val strains = if (USE_QUADRATIC) {
-                    calculateVSGStrainQuadratic(data, step, winSize)
-                } else {
-                    calculateVSGStrainLinear(data, step, winSize)
-                }
-
-                runOnUiThread {
-                    saveResultsToCSV(data, strains, step, 50)
-                    tvResult.text = "✅ Strain Saved ($method, Win $winSize)"
-                }
-            }.start()
-        }
-        // --- NEW: FULL FIELD 2D LISTENER ---
+        // 3. Logic: FULL FIELD 2D
         btnCalculateFullField.setOnClickListener {
             if (refBytes != null && defBytes != null) {
                 val subset = etSubsetSize.text.toString().toIntOrNull() ?: 41
-                val step = etStepSize.text.toString().toIntOrNull() ?: 5 // Use larger step (e.g. 10) for speed if needed
-
-                // Get Settings
-                val useReliabilityGuided = true
-                val useFeatureMatching = true
+                val step = etStepSize.text.toString().toIntOrNull() ?: 5
                 val strainWin = etStrainWindow.text.toString().toIntOrNull() ?: 15
 
-                // Define ROI: Whole Image with 20px margin
-                val margin = (subset / 2) + 10
-                val rectX = margin
-                val rectY = margin
-                val rectW = realRefWidth - (2 * margin)
-                val rectH = realRefHeight - (2 * margin)
+                // Decide boundaries
+                var finalRectX: Int
+                var finalRectY: Int
+                var finalRectW: Int
+                var finalRectH: Int
+
+                if (hasCustomRoi) {
+                    finalRectX = roiX
+                    finalRectY = roiY
+                    finalRectW = roiW
+                    finalRectH = roiH
+                } else {
+                    val margin = (subset / 2) + 10
+                    finalRectX = margin
+                    finalRectY = margin
+                    finalRectW = realRefWidth - (2 * margin)
+                    finalRectH = realRefHeight - (2 * margin)
+                }
+
+                if (finalRectW < subset || finalRectH < subset) {
+                    Toast.makeText(this, "ROI is too small! Must be larger than subset.", Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                if (finalRectX < 0 || finalRectY < 0 || finalRectX + finalRectW > realRefWidth || finalRectY + finalRectH > realRefHeight) {
+                    Toast.makeText(this, "ROI is out of bounds!", Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+
+                Log.d("DIC", "Processing ROI: X:$finalRectX, Y:$finalRectY, W:$finalRectW, H:$finalRectH")
 
                 progressBar.visibility = View.VISIBLE
                 progressBar.progress = 0
                 tvTimer.visibility = View.VISIBLE
                 tvTimer.text = "Initializing 2D Scan..."
 
-                // Disable buttons
-                btnCalculateDisp.isEnabled = false
                 btnCalculateFullField.isEnabled = false
 
                 val startTime = System.currentTimeMillis()
@@ -281,13 +204,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         }
                     }
 
+                    val applyBlur = switchBlur.isChecked
+                    val useNlvc = rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc
+                    val maskData = roiMaskBytes ?: ByteArray(0)
+
                     // CALL THE 2D NATIVE FUNCTION
                     val rawData = IndicVisionNativeLib.computeFullField(
                         refBytes!!, defBytes!!,
-                        rectX, rectY, rectW, rectH,
-                        step, subset,strainWin,
-                        useReliabilityGuided,
-                        useFeatureMatching,
+                        maskData,
+                        finalRectX, finalRectY, finalRectW, finalRectH,
+                        step, subset, strainWin,
+                        true, true,
+                        applyBlur,
+                        useNlvc,
                         callback
                     )
 
@@ -295,123 +224,72 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                     runOnUiThread {
                         progressBar.visibility = View.GONE
-                        tvTimer.text = "Full Field Done in %.2f s. Points: ${rawData.size / 5}".format(totalTime)
 
-                        // Re-enable buttons
-                        btnCalculateDisp.isEnabled = true
+                        if (rawData == null || rawData.isEmpty()) {
+                            tvTimer.text = "Analysis Failed"
+                            tvResult.text = "❌ Engine returned no data"
+                        } else {
+                            tvTimer.text = "Analysis Done in %.2f s. Points: ${rawData.size / 8}".format(totalTime)
+
+                            // 1. Save raw data to a cache file
+                            val dataFile = File(cacheDir, "analysis_results.bin")
+                            val buffer = java.nio.ByteBuffer.allocate(rawData.size * 4)
+                            buffer.order(java.nio.ByteOrder.nativeOrder())
+                            buffer.asFloatBuffer().put(rawData)
+                            dataFile.writeBytes(buffer.array())
+
+                            // 2. Save Deformed Image to cache
+                            val defFile = File(cacheDir, "temp_def_view.jpg")
+                            defBytes?.let { defFile.writeBytes(it) }
+
+                            // --- CRITICAL FIX: Save state for the View button ---
+                            lastStep = step
+                            roiX = finalRectX
+                            roiY = finalRectY
+                            // ----------------------------------------------------
+
+                            // 3. Launch Viewer with all necessary data
+                            val intent = Intent(this@StaticAnalysisActivity, ResultViewerActivity::class.java)
+                            intent.putExtra("DATA_PATH", dataFile.absolutePath)
+                            intent.putExtra("IMG_W", realRefWidth)
+                            intent.putExtra("IMG_H", realRefHeight)
+                            intent.putExtra("STEP", step)
+                            intent.putExtra("DEF_PATH", defFile.absolutePath)
+                            intent.putExtra("ROI_X", finalRectX)
+                            intent.putExtra("ROI_Y", finalRectY)
+
+                            startActivity(intent)
+                            btnViewResults.visibility = View.VISIBLE
+                        }
                         btnCalculateFullField.isEnabled = true
-
-                        // Save to CSV immediately
-                        saveFullFieldToCSV(rawData)
                     }
                 }.start()
             }
         }
-    }
 
-    /**
-     * METHOD A: QUADRATIC VSG (The "Sine Wave" Expert)
-     * Fits u(x) = ax^2 + bx + c. Returns 'b'.
-     * Best for curved signals (like Sample 14) but needs a moderate window (13-15) to avoid over-fitting noise.
-     */
-    private fun calculateVSGStrainQuadratic(uValues: FloatArray, step: Int, windowSize: Int): FloatArray {
-        val strains = FloatArray(uValues.size)
-        val half = windowSize / 2
+        btnViewResults.setOnClickListener {
+            val dataFile = File(cacheDir, "analysis_results.bin")
+            val defFile = File(cacheDir, "temp_def_view.jpg")
 
-        for (i in 0 until uValues.size) {
-            if (i < half || i >= uValues.size - half) { strains[i] = 0f; continue }
-
-            var n = 0.0; var sumX = 0.0; var sumX2 = 0.0; var sumX3 = 0.0; var sumX4 = 0.0
-            var sumU = 0.0; var sumXU = 0.0; var sumX2U = 0.0
-            var validPoints = 0
-
-            for (j in -half..half) {
-                val u = uValues[i + j].toDouble()
-                if (u > -900) {
-                    val x = (j * step).toDouble()
-                    val x2 = x * x
-                    n += 1.0; sumX += x; sumX2 += x2; sumX3 += x2 * x; sumX4 += x2 * x2
-                    sumU += u; sumXU += x * u; sumX2U += x2 * u
-                    validPoints++
-                }
-            }
-
-            if (validPoints >= 5) {
-                val det = n * (sumX2 * sumX4 - sumX3 * sumX3) -
-                        sumX * (sumX * sumX4 - sumX3 * sumX2) +
-                        sumX2 * (sumX * sumX3 - sumX2 * sumX2)
-
-                if (Math.abs(det) > 1e-9) {
-                    // Solves for 'b' using Cramer's Rule (Fixed Typo Version)
-                    val detB = n * (sumXU * sumX4 - sumX2U * sumX3) -
-                            sumU * (sumX * sumX4 - sumX3 * sumX2) +
-                            sumX2 * (sumX * sumX2U - sumX2 * sumXU)
-                    strains[i] = (detB / det).toFloat()
-                }
+            if (dataFile.exists() && defFile.exists()) {
+                val intent = Intent(this@StaticAnalysisActivity, ResultViewerActivity::class.java)
+                intent.putExtra("DATA_PATH", dataFile.absolutePath)
+                intent.putExtra("IMG_W", realRefWidth)
+                intent.putExtra("IMG_H", realRefHeight)
+                intent.putExtra("STEP", lastStep)
+                intent.putExtra("DEF_PATH", defFile.absolutePath)
+                intent.putExtra("ROI_X", roiX)
+                intent.putExtra("ROI_Y", roiY)
+                startActivity(intent)
+            } else {
+                Toast.makeText(this, "No previous results found. Please compute first.", Toast.LENGTH_SHORT).show()
+                btnViewResults.visibility = View.GONE
             }
         }
-        return strains
     }
-
-    /**
-     * METHOD B: LINEAR VSG (The "Noise Killer")
-     * Fits u(x) = bx + c. Returns 'b'.
-     * Best for flat specimens or when noise is very high. Ignores curvature.
-     */
-    private fun calculateVSGStrainLinear(uValues: FloatArray, step: Int, windowSize: Int): FloatArray {
-        val strains = FloatArray(uValues.size)
-        val half = windowSize / 2
-
-        for (i in 0 until uValues.size) {
-            if (i < half || i >= uValues.size - half) { strains[i] = 0f; continue }
-
-            var sumX2 = 0.0
-            var sumXU = 0.0
-            var validPoints = 0
-
-            for (j in -half..half) {
-                val u = uValues[i + j].toDouble()
-                if (u > -900) {
-                    val x = (j * step).toDouble()
-                    // For linear fit centered at 0, slope = Sum(x*u) / Sum(x^2)
-                    sumX2 += x * x
-                    sumXU += x * u
-                    validPoints++
-                }
-            }
-
-            if (validPoints > half && Math.abs(sumX2) > 1e-9) {
-                strains[i] = (sumXU / sumX2).toFloat()
-            }
-        }
-        return strains
-    }
-
-    private fun saveResultsToCSV(uValues: FloatArray, strains: FloatArray?, step: Int, startX: Int) {
-        val folder = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-        val type = if (strains == null) "Disp" else "Full"
-        val fileName = "IndicVision_${type}_${System.currentTimeMillis()}.csv"
-        val file = File(folder, fileName)
-        try {
-            val writer = FileWriter(file)
-            writer.append("X_Pixel,U_Displacement,Strain_Exx\n")
-            var currentX = startX
-            for (i in uValues.indices) {
-                val sVal = if (strains != null) strains[i] else 0.0f
-                writer.append("$currentX,${uValues[i]},$sVal\n")
-                currentX += step
-            }
-            writer.flush(); writer.close()
-            runOnUiThread { tvResult.text = "✅ SAVED: $fileName" }
-        } catch (e: Exception) { runOnUiThread { tvResult.text = "❌ CSV Error" } }
-    }
-    // In StaticAnalysisActivity.kt
-
-
 
     private fun saveFullFieldToCSV(data: FloatArray) {
         val fileName = "IndicVision_2D_${System.currentTimeMillis()}.csv"
-
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
@@ -425,27 +303,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
             try {
                 resolver.openOutputStream(uri)?.use { outputStream ->
                     val writer = outputStream.bufferedWriter()
-
-                    // UPDATED HEADER for Strains
                     writer.write("X,Y,U_Displacement,V_Displacement,Exx,Eyy,Exy,Correlation\n")
 
-                    // LOOP THROUGH 8 ELEMENTS PER POINT
                     var i = 0
                     while (i < data.size) {
-                        val x = data[i]
-                        val y = data[i+1]
-                        val u = data[i+2]
-                        val v = data[i+3]
-                        val exx = data[i+4]
-                        val eyy = data[i+5]
-                        val exy = data[i+6]
+                        val x = data[i]; val y = data[i+1]
+                        val u = data[i+2]; val v = data[i+3]
+                        val exx = data[i+4]; val eyy = data[i+5]; val exy = data[i+6]
                         val c = data[i+7]
-
                         writer.write("$x,$y,$u,$v,$exx,$eyy,$exy,$c\n")
                         i += 8
                     }
                     writer.flush()
-                    writer.close()
                 }
                 runOnUiThread {
                     tvResult.text = "✅ Saved to Downloads: $fileName"
@@ -457,27 +326,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
             }
         }
     }
-    // Coordinate Mapping Helpers
-    private fun mapScreenToImage(touchX: Float, touchY: Float): FloatArray? {
-        val drawable = imgRef.drawable ?: return null
-        val inv = Matrix(); imgRef.imageMatrix.invert(inv)
-        val pts = floatArrayOf(touchX, touchY)
-        inv.mapPoints(pts)
-        val scale = realRefWidth.toFloat() / drawable.intrinsicWidth.toFloat()
-        return floatArrayOf(pts[0] * scale, pts[1] * scale)
-    }
-
-    private fun mapImageToScreen(imgX: Float, imgY: Float): FloatArray {
-        val drawable = imgRef.drawable ?: return floatArrayOf(0f, 0f)
-        val scale = drawable.intrinsicWidth.toFloat() / realRefWidth.toFloat()
-        val pts = floatArrayOf(imgX * scale, imgY * scale)
-        imgRef.imageMatrix.mapPoints(pts)
-        return pts
-    }
 
     private fun handleImageSelection(uri: Uri, isRef: Boolean) {
         val name = getFileName(uri)
-        if (isRef) tvRefName.text = "Selected: $name" else tvDefName.text = "Selected: $name"
+        if (isRef) {
+            tvRefName.text = "Ref: $name"
+            refImageUriString = uri.toString()
+        } else {
+            tvDefName.text = "Def: $name"
+        }
+
         try {
             contentResolver.openInputStream(uri)?.use { stream ->
                 val bytes = stream.readBytes()
@@ -490,6 +348,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     defBytes = bytes
                     imgDef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000))
                 }
+                checkReady()
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    private fun handleMaskSelection(uri: Uri) {
+        try {
+            contentResolver.openInputStream(uri)?.use { stream ->
+                roiMaskBytes = stream.readBytes()
+                Toast.makeText(this, "Custom ROI Mask Uploaded!", Toast.LENGTH_SHORT).show()
+                btnLoadRoiMask.text = "Mask Uploaded ✅"
+                btnLoadRoiMask.setBackgroundColor(android.graphics.Color.parseColor("#00AA00"))
+                hasCustomRoi = true
                 checkReady()
             }
         } catch (e: Exception) { e.printStackTrace() }
@@ -514,9 +385,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun checkReady() {
         val ready = (refBytes != null && defBytes != null)
-        btnCalculate.isEnabled = (ready && isRoiSelected)
-        btnCalculateDisp.isEnabled = ready
-        btnCalculateFullField.isEnabled = ready // New
-        if (ready) btnCalculateDisp.setBackgroundColor(android.graphics.Color.parseColor("#0000AA"))
+        btnCalculateFullField.isEnabled = ready
+        btnDefineRoi.isEnabled = (refBytes != null)
+
+        if (ready) btnCalculateFullField.setBackgroundColor(android.graphics.Color.parseColor("#0000AA"))
+        if (refBytes != null) btnDefineRoi.setBackgroundColor(android.graphics.Color.parseColor("#673AB7"))
     }
 }

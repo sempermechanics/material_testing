@@ -39,7 +39,7 @@
             android:id="@+id/tvInstruction"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Instruction: Click on the center image button"
+            android:text="Instruction: Load images to begin"
             android:textColor="#CC0000"
             android:textStyle="bold"
             android:layout_marginTop="5dp"
@@ -59,18 +59,23 @@
                 android:maxHeight="400dp"
                 android:adjustViewBounds="true"
                 android:scaleType="fitCenter" />
-
-            <com.rafad.indicvisiondic.OverlayView
-                android:id="@+id/overlayRef"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"/>
         </FrameLayout>
+
+        <Button
+            android:id="@+id/btnDefineRoi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📐 Define ROI (Open Studio)"
+            android:backgroundTint="#673AB7"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="5dp"
+            android:enabled="false"/>
 
         <Button
             android:id="@+id/btnFullImage"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Use Full Image Center"
+            android:text="Use Full Image (No ROI)"
             android:backgroundTint="#555555"
             android:textColor="#FFFFFF"
             android:layout_marginBottom="20dp"/>
@@ -159,48 +164,84 @@
                 android:layout_height="wrap_content"
                 android:inputType="number"
                 android:hint="Win"
-                android:text="9"
+                android:text="15"
                 android:gravity="center"
                 android:backgroundTint="#FF9800"/>
         </LinearLayout>
-        <Button
-            android:id="@+id/btnCalculate"
+
+        <Switch
+            android:id="@+id/switchBlur"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Test Point Displacement"
-            android:enabled="false"
-            android:backgroundTint="#00AA00"
-            android:textColor="#FFFFFF"
-            android:layout_marginBottom="10dp"/>
+            android:text="Apply Gaussian Blur (Noise Reduction)"
+            android:layout_marginBottom="8dp"
+            android:paddingHorizontal="8dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Strain Calculation Method:"
+            android:textStyle="bold"
+            android:paddingHorizontal="8dp"/>
+
+        <RadioGroup
+            android:id="@+id/rgStrainMethod"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="10dp"
+            android:paddingHorizontal="8dp">
+
+            <RadioButton
+                android:id="@+id/rbVsg"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="VSG (Smooth)"
+                android:checked="true"
+                android:layout_marginEnd="16dp"/>
+
+            <RadioButton
+                android:id="@+id/rbNlvc"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="NLVC (Fractures)"/>
+        </RadioGroup>
 
         <Button
-            android:id="@+id/btnCalculateDisp"
+            android:id="@+id/btnLoadRoiMask"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="1. Compute 1D Profile (Validation)"
-            android:backgroundTint="#0000AA"
+            android:text="Optional: Upload Custom ROI Mask (PNG)"
+            android:backgroundTint="#FF9800"
             android:textColor="#FFFFFF"
-            android:enabled="false"/>
+            android:layout_marginBottom="10dp"/>
 
         <Button
             android:id="@+id/btnCalculateFullField"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="2. Compute Full Field 2D (Heatmap)"
+            android:text="Compute Full Field 2D Strain"
             android:backgroundTint="#008800"
             android:textColor="#FFFFFF"
             android:enabled="false"
             android:layout_marginTop="8dp"/>
-
         <Button
-            android:id="@+id/btnCalculateStrain"
+            android:id="@+id/btnViewResults"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="2. COMPUTE STRAIN FROM DATA"
-            android:backgroundTint="#5500AA"
+            android:text="📊 View Last Results"
+            android:backgroundTint="#2196F3"
+            android:visibility="gone"
+            android:layout_marginTop="8dp"/>
+        <Button
+            android:id="@+id/btnViewLastResult"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="👁️ View Last Results"
+            android:backgroundTint="#2196F3"
             android:textColor="#FFFFFF"
-            android:layout_marginTop="8dp"
-            android:visibility="gone"/>
+            android:visibility="gone"
+            android:layout_marginTop="8dp"/>
 
         <LinearLayout
             android:layout_width="match_parent"

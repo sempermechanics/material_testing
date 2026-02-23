@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#111111">
+
+    <Spinner
+        android:id="@+id/spinnerResultType"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:background="@android:drawable/btn_dropdown" />
+
+    <FrameLayout
+        android:id="@+id/zoomContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/spinnerResultType">
+
+        <com.rafad.indicvisiondic.TouchImageView
+            android:id="@+id/imgBaseResult"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="matrix" />
+
+        <ImageView
+            android:id="@+id/imgHeatmapOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="matrix"
+            android:alpha="0.7" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="200dp"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginEnd="10dp"
+            android:background="#99000000"
+            android:orientation="horizontal"
+            android:padding="4dp">
+
+            <TextView
+                android:id="@+id/tvScaleMax"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:text="Max\n\n\n\nMin"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:gravity="center_vertical"/>
+
+            <View
+                android:id="@+id/viewColorScale"
+                android:layout_width="20dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/jet_gradient_bar"/>
+        </LinearLayout>
+    </FrameLayout>
+</RelativeLayout>

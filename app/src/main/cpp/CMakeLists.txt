@@ -6,6 +6,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # OpenCV
 set(OpenCV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/opencv/sdk/native/jni")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -flto -fexceptions -fno-limit-debug-info -fopenmp")
 find_package(OpenCV REQUIRED)
 
 # Compiler optimizations (Maximum Speed!)
@@ -31,4 +32,7 @@ target_link_libraries(
         log
         android
         jnigraphics
+        -fopenmp
+        -static-openmp
+        -static-libstdc++
 )
