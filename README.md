@@ -31,9 +31,9 @@ A complete workflow from setup to analysis results on a mobile device.
 
 <p align="center">
   <img src="images/setup_screen.png" width="22%" alt="Main Interface & Setup" style="margin-right:10px;">
-  <img src="images/draw_roi.jpg" width="22%" alt="Interactive ROI Drawing" style="margin-right:10px;">
+  <img src="images/draw_roi.png" width="22%" alt="Interactive ROI Drawing" style="margin-right:10px;">
   <img src="images/manual_roi.png" width="22%" alt="Numerical ROI Input" style="margin-right:10px;">
-  <img src="images/heatmap_result.jpg" width="22%" alt="Visualized Heatmap Results">
+  <img src="images/heatmap_result.png" width="22%" alt="Visualized Heatmap Results">
 </p>
 <p align="center">
   <i>From left to right: Main setup interface, interactive ROI drawing, numerical shape input dialog, and final strain heatmap visualization with a legend.</i>
