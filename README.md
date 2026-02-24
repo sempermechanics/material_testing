@@ -36,7 +36,7 @@ A complete workflow from setup to analysis results on a mobile device.
   <img src="images/heatmap_result.png" width="22%" alt="Visualized Heatmap Results">
 </p>
 <p align="center">
-  <i>From left to right: Main setup interface, interactive ROI drawing, numerical shape input dialog, and final strain heatmap visualization with a legend.</i>
+  <i>From left to right: Main setup interface, interactive ROI drawing, numerical shape input dialog, and final displacement and strain heatmap visualization with a legend.</i>
 </p>
 
 ---
