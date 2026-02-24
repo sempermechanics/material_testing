@@ -11,26 +11,51 @@
 
 ## ✨ Key Features
 
-* **High-Performance C++ Core:** Utilizes the Android NDK, OpenCV, and OpenMP multi-threading to process large 12-Megapixel datasets (40,000+ points) in just seconds.
-* **Advanced Mathematical Solvers:** Implements Zero-Normalized Cross-Correlation (ZNCC) with an Inverse Compositional Gauss-Newton (IC-GN) optimizer, backed by a Simplex fallback for complex deformations.
-* **Versatile ROI Selection:** * **Interactive:** Draw a Region of Interest directly on the touchscreen.
+* **High-Performance C++ Core:** Utilizes the Android NDK, OpenCV, and OpenMP multi-threading with a thread-safe shared priority queue to process large 12-Megapixel datasets (40,000+ points) in just seconds.
+* **Advanced Mathematical Solvers:** Implements a **Zero-Normalized Sum of Squared Differences (ZNSSD)** criterion optimized via an Inverse Compositional Gauss-Newton (IC-GN) algorithm, backed by a Simplex fallback for complex deformations. Achieves sub-pixel precision using **Bicubic Keys interpolation**.
+* **Smart Initialization & Tracking:** Uses **AKAZE** feature matching for automatic global shift estimation, coupled with **Reliability-Guided DIC (RGDIC)** for robust, seed-based propagation that actively avoids decorrelated regions.
+* **Versatile ROI Selection:**
+  * **Interactive:** Draw a Region of Interest directly on the touchscreen.
   * **Mathematical/Numerical:** Input precise pixel dimensions for Rectangles, Circles, Ellipses, and Triangles.
   * **Custom Masks:** Upload external image masks for complex specimen geometries.
 * **Publication-Ready Visualization:** Features a smooth, Google-Maps-style pan/zoom viewport. The internal engine applies 2nd/98th percentile statistical outlier filtering to generate clean, noise-free "Jet" colormap heatmaps.
-* **Comprehensive Export Suite:** * **Image Export:** Safely merges the raw deformed specimen image with the translucent heatmap overlay into a high-res `.PNG` saved to the Android Gallery.
+* **Comprehensive Export Suite:**
+  * **Image Export:** Safely merges the raw deformed specimen image with the translucent heatmap overlay into a high-res `.PNG` saved to the Android Gallery.
   * **Data Export:** Dumps tracking data into a neatly formatted `.CSV` spreadsheet in the device Downloads folder.
 * **Robust Architecture:** Architected with Kotlin `ViewModel`s to survive lifecycle changes (like screen rotations) and `std::mutex` hardware locks to ensure memory safety during parallel computing.
 
 ---
 
-## 📸 Screenshots
+## 📊 Validation & Accuracy
 
-*(Replace these placeholders with actual screenshots of your app!)*
+IndicVision has been rigorously tested against standard experimental DIC datasets to ensure research-grade accuracy. 
+
+On the standard **Sample 14 L5** dataset, the app's native mobile engine achieved:
+* **Displacement Accuracy:** RMSE of **0.0078 px**
+* **Strain Accuracy:** Within **400 µε** (microstrain)
 
 <p align="center">
-  <img src="link_to_home_screen_image" width="250" alt="Setup Screen">
-  <img src="link_to_roi_screen_image" width="250" alt="ROI Selection">
-  <img src="link_to_heatmap_image" width="250" alt="Strain Heatmap">
+  <img src="images/IndicVision_v1.2_HighestAccuracy_fastest.png" width="48%" alt="Displacement Validation Plot" style="margin-right:2%;">
+  <img src="images/Strain_Validation.png" width="48%" alt="Strain Validation Plot">
+</p>
+<p align="center">
+  <i>Left: U-Displacement profile matching ground truth. Right: Strain Exx profile matching ground truth.</i>
+</p>
+
+---
+
+## 📸 Screenshots
+
+A complete workflow from setup to analysis results on a mobile device.
+
+<p align="center">
+  <img src="images/setup_screen.png" width="22%" alt="Main Interface & Setup" style="margin-right:10px;">
+  <img src="images/draw_roi.png" width="22%" alt="Interactive ROI Drawing" style="margin-right:10px;">
+  <img src="images/manual_roi.png" width="22%" alt="Numerical ROI Input" style="margin-right:10px;">
+  <img src="images/heatmap_result.png" width="22%" alt="Visualized Heatmap Results">
+</p>
+<p align="center">
+  <i>From left to right: Main setup interface, interactive ROI drawing, numerical shape input dialog, and final strain heatmap visualization with a legend.</i>
 </p>
 
 ---
@@ -48,7 +73,7 @@
 ### 2. Define the Region of Interest (ROI)
 * Tap **Draw ROI** to trace a bounding box with your finger.
 * Tap **Manual ROI** to mathematically define a specific shape (Rectangle, Circle, Ellipse, Triangle) using exact pixel coordinates.
-* *Or* tap **Full Image** to compute the entire specimen.
+* *Or* tap **Use Full Image** to compute the entire specimen.
 
 ### 3. Compute & View
 1. Hit **Calculate Full Field**. The C++ engine will execute in the background.
@@ -57,7 +82,7 @@
 4. Pinch to zoom and drag to inspect stress concentrations.
 
 ### 4. Export
-Use the Floating Action Buttons at the bottom right:
+Use the Floating Action Buttons at the bottom right of the results view:
 * **💾 CSV:** Saves the raw X, Y, U, V, Strain, and Correlation data to your `Downloads/IndicVision` folder.
 * **📷 Image:** Saves a combined, high-resolution PNG of your specimen and the active heatmap to your `Pictures/IndicVision` folder.
 
@@ -67,7 +92,7 @@ Use the Floating Action Buttons at the bottom right:
 * **Frontend UI:** Kotlin, XML, Android SDK, ViewModels, MediaStore API.
 * **Backend Engine:** C++17, Android NDK, CMake.
 * **Computer Vision:** OpenCV (cv::Mat, cv::GaussianBlur, AKAZE Global Feature Matching).
-* **Parallelization:** OpenMP (`#pragma omp parallel`), `<atomic>`, `<mutex>`.
+* **Parallelization:** OpenMP (`#pragma omp parallel`), `<atomic>`, `<mutex>`, `std::priority_queue`.
 * **Data Flow:** Flat JNI arrays (`jfloatArray`) to minimize Java-to-C++ memory overhead.
 
 ---
