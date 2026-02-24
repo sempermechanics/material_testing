@@ -55,8 +55,12 @@ class ResultViewerActivity : AppCompatActivity() {
         // 2. Load deformed image
         val defPath = intent.getStringExtra("DEF_PATH")
         if (defPath != null) {
-            // This will now automatically trigger fitToScreen() inside TouchImageView!
             imgMain.setImageBitmap(BitmapFactory.decodeFile(defPath))
+
+            // --- THE FIX: Forcefully inject the true dimensions & Log it! ---
+            Log.d("TouchDebug", "Activity forcing dimensions into TouchImageView: W=$imgW, H=$imgH")
+            imgMain.setTrueImageDimensions(imgW, imgH)
+            // ----------------------------------------------------------------
         }
 
         // 3. Setup Continuous Matrix Sync (Fixes zoom lag AND initial load)

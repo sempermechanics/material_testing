@@ -1,14 +1,13 @@
 package com.rafad.indicvisiondic
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.PointF
+import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import androidx.appcompat.widget.AppCompatImageView
-import kotlin.math.min
 
 class TouchImageView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
@@ -19,14 +18,17 @@ class TouchImageView @JvmOverloads constructor(
     private var last = PointF()
     private var start = PointF()
     private var minScale = 1f
-    private var maxScale = 5f
+    private var maxScale = 10f
+    private var currentScale = 1f
     private var m: FloatArray = FloatArray(9)
     private var viewWidth = 0
     private var viewHeight = 0
-    private var saveScale = 1f
     private var mScaleDetector: ScaleGestureDetector
 
-    // Callback to tell the heatmap to update its position
+    // --- CRITICAL FIX: Explicit dimensions provided by the Activity ---
+    private var trueImageWidth = 0f
+    private var trueImageHeight = 0f
+
     var onMatrixChangedListener: (() -> Unit)? = null
 
     init {
@@ -37,17 +39,18 @@ class TouchImageView @JvmOverloads constructor(
         setOnTouchListener { _, event ->
             mScaleDetector.onTouchEvent(event)
             val curr = PointF(event.x, event.y)
-            when (event.action) {
+
+            when (event.action and MotionEvent.ACTION_MASK) {
                 MotionEvent.ACTION_DOWN -> {
                     last.set(curr)
                     start.set(last)
                     mode = 1
                 }
-                MotionEvent.ACTION_MOVE -> if (mode == 1) {
+                MotionEvent.ACTION_MOVE -> if (mode == 1 && !mScaleDetector.isInProgress && event.pointerCount == 1) {
                     val deltaX = curr.x - last.x
                     val deltaY = curr.y - last.y
                     matrix.postTranslate(deltaX, deltaY)
-                    fixTrans()
+                    limitPan()
                     last.set(curr.x, curr.y)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
@@ -56,23 +59,20 @@ class TouchImageView @JvmOverloads constructor(
             }
             imageMatrix = matrix
             invalidate()
-            onMatrixChangedListener?.invoke() // Broadcast the movement!
+            onMatrixChangedListener?.invoke()
             true
         }
     }
 
-    // --- CRITICAL OVERRIDE ---
-    // This tells the view to fit the image to the screen the moment it is loaded!
-    override fun setImageBitmap(bm: Bitmap?) {
-        super.setImageBitmap(bm)
+    // --- NEW: Manually inject the known dimensions ---
+    fun setTrueImageDimensions(width: Int, height: Int) {
+        trueImageWidth = width.toFloat()
+        trueImageHeight = height.toFloat()
         post {
-            if (viewWidth > 0 && viewHeight > 0) {
-                fitToScreen()
-            }
+            if (viewWidth > 0 && viewHeight > 0) fitToScreen()
         }
     }
 
-    // Called when the layout is drawn on the screen
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         viewWidth = w
@@ -80,33 +80,23 @@ class TouchImageView @JvmOverloads constructor(
         fitToScreen()
     }
 
-    // Calculates the "fitCenter" scale automatically
-    fun fitToScreen() {
-        val d = drawable ?: return
-        val drawableWidth = d.intrinsicWidth.toFloat()
-        val drawableHeight = d.intrinsicHeight.toFloat()
+    private fun fitToScreen() {
+        if (trueImageWidth <= 0f || trueImageHeight <= 0f || viewWidth <= 0 || viewHeight <= 0) return
 
-        // Safety check to prevent math errors that make the image disappear
-        if (drawableWidth <= 0f || drawableHeight <= 0f || viewWidth <= 0 || viewHeight <= 0) return
+        val drawableRect = RectF(0f, 0f, trueImageWidth, trueImageHeight)
+        val viewRect = RectF(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat())
 
-        val scaleX = viewWidth.toFloat() / drawableWidth
-        val scaleY = viewHeight.toFloat() / drawableHeight
-        val scale = min(scaleX, scaleY)
+        matrix.setRectToRect(drawableRect, viewRect, Matrix.ScaleToFit.CENTER)
 
-        matrix.setScale(scale, scale)
+        matrix.getValues(m)
+        val baseScale = m[Matrix.MSCALE_X]
 
-        // Center the image within the view
-        val redundantYSpace = viewHeight.toFloat() - (scale * drawableHeight)
-        val redundantXSpace = viewWidth.toFloat() - (scale * drawableWidth)
-        matrix.postTranslate(redundantXSpace / 2f, redundantYSpace / 2f)
-
-        minScale = scale
-        maxScale = scale * 5f // Allow 5x zoom from the fit size
-        saveScale = scale
+        minScale = baseScale
+        currentScale = baseScale
 
         imageMatrix = matrix
         invalidate()
-        onMatrixChangedListener?.invoke() // Force the heatmap to align on load
+        onMatrixChangedListener?.invoke()
     }
 
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -114,54 +104,58 @@ class TouchImageView @JvmOverloads constructor(
             mode = 2
             return true
         }
-
         override fun onScale(detector: ScaleGestureDetector): Boolean {
-            var mScaleFactor = detector.scaleFactor
-            val origScale = saveScale
-            saveScale *= mScaleFactor
-            if (saveScale > maxScale) {
-                saveScale = maxScale
-                mScaleFactor = maxScale / origScale
-            } else if (saveScale < minScale) {
-                saveScale = minScale
-                mScaleFactor = minScale / origScale
+            var scaleFactor = detector.scaleFactor
+            val origScale = currentScale
+            currentScale *= scaleFactor
+
+            if (currentScale > maxScale) {
+                currentScale = maxScale
+                scaleFactor = maxScale / origScale
+            } else if (currentScale < minScale) {
+                currentScale = minScale
+                scaleFactor = minScale / origScale
             }
 
-            if (viewWidth == 0 || viewHeight == 0) return false
-
-            matrix.postScale(mScaleFactor, mScaleFactor, detector.focusX, detector.focusY)
-            fixTrans()
+            matrix.postScale(scaleFactor, scaleFactor, detector.focusX, detector.focusY)
+            limitPan()
             return true
         }
     }
 
-    private fun fixTrans() {
+    private fun limitPan() {
         matrix.getValues(m)
         val transX = m[Matrix.MTRANS_X]
         val transY = m[Matrix.MTRANS_Y]
+        val scaleX = m[Matrix.MSCALE_X]
+        val scaleY = m[Matrix.MSCALE_Y]
 
-        val d = drawable ?: return
-        val fixTransX = getFixTrans(transX, viewWidth.toFloat(), d.intrinsicWidth * saveScale)
-        val fixTransY = getFixTrans(transY, viewHeight.toFloat(), d.intrinsicHeight * saveScale)
+        // Use the mathematically guaranteed dimensions!
+        val contentW = trueImageWidth * scaleX
+        val contentH = trueImageHeight * scaleY
 
-        if (fixTransX != 0f || fixTransY != 0f) {
-            matrix.postTranslate(fixTransX, fixTransY)
-        }
-    }
+        var deltaX = 0f
+        var deltaY = 0f
 
-    private fun getFixTrans(trans: Float, viewSize: Float, contentSize: Float): Float {
-        val minTrans: Float
-        val maxTrans: Float
-        if (contentSize <= viewSize) {
-            minTrans = (viewSize - contentSize) / 2f
-            maxTrans = (viewSize - contentSize) / 2f
+        if (contentW <= viewWidth) {
+            val targetX = (viewWidth - contentW) / 2f
+            deltaX = targetX - transX
         } else {
-            minTrans = viewSize - contentSize
-            maxTrans = 0f
+            if (transX > 0) deltaX = -transX
+            else if (transX + contentW < viewWidth) deltaX = viewWidth - (transX + contentW)
         }
-        if (trans < minTrans) return -trans + minTrans
-        if (trans > maxTrans) return -trans + maxTrans
-        return 0f
+
+        if (contentH <= viewHeight) {
+            val targetY = (viewHeight - contentH) / 2f
+            deltaY = targetY - transY
+        } else {
+            if (transY > 0) deltaY = -transY
+            else if (transY + contentH < viewHeight) deltaY = viewHeight - (transY + contentH)
+        }
+
+        if (deltaX != 0f || deltaY != 0f) {
+            matrix.postTranslate(deltaX, deltaY)
+        }
     }
 
     fun getZoomMatrix(): Matrix = matrix

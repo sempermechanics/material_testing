@@ -57,4 +57,5 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:${camerax_version}")
     implementation("androidx.camera:camera-view:${camerax_version}")
     implementation("androidx.camera:camera-extensions:${camerax_version}")
+    implementation("androidx.activity:activity-ktx:1.8.2")
 }
