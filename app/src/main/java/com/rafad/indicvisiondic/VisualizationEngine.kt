@@ -1,81 +1,106 @@
 package com.rafad.indicvisiondic
 
-import android.graphics.*
-import kotlin.math.max
-import kotlin.math.min
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 
 object VisualizationEngine {
 
     fun generateHeatmap(
         data: FloatArray,
-        imgWidth: Int,
-        imgHeight: Int,
-        dataIndex: Int,
+        imgW: Int,
+        imgH: Int,
+        valIndex: Int,
         step: Int
     ): Triple<Bitmap, Float, Float> {
 
-        // 1. Create a FULL-SIZED transparent canvas
-        val bitmap = Bitmap.createBitmap(imgWidth, imgHeight, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val paint = Paint().apply {
-            style = Paint.Style.FILL
-            isAntiAlias = false
-        }
-
-        // 2. Find Percentiles for Color Scaling (Drops noise outliers)
+        // 1. Extract valid data points
         val validValues = mutableListOf<Float>()
-        var i = 0
-        while (i < data.size) {
-            val v = data[i + dataIndex]
-            if (v > -900f) validValues.add(v)
-            i += 8
+        for (i in data.indices step 8) {
+            val corr = data[i + 7]
+            // Only consider points that actually tracked (corr != 0)
+            // and have a reasonable correlation score (lower is better in ZNCC)
+            if (corr != 0f && corr < 0.25f) {
+                validValues.add(data[i + valIndex])
+            }
         }
 
         if (validValues.isEmpty()) {
-            return Triple(bitmap, 0f, 0f)
+            return Triple(Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888), 0f, 0f)
         }
 
+        // 2. STATISTICAL OUTLIER REJECTION (The Secret to beautiful heatmaps)
         validValues.sort()
-        var minVal = validValues[(validValues.size * 0.02).toInt()]
-        var maxVal = validValues[(validValues.size * 0.98).toInt()]
 
-        if (maxVal <= minVal) maxVal = minVal + 0.0001f
-        val range = maxVal - minVal
+        // Take the 2nd percentile and 98th percentile to ignore extreme noise spikes
+        val minIdx = (validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)
+        val maxIdx = (validValues.size * 0.98).toInt().coerceIn(0, validValues.size - 1)
 
-        // 3. Draw directly onto the full-size canvas using absolute coordinates!
-        val halfStep = step / 2f
-        i = 0
-        while (i < data.size) {
+        val minV = validValues[minIdx]
+        val maxV = validValues[maxIdx]
+        val range = if (maxV - minV == 0f) 0.0001f else maxV - minV
+
+        // 3. Draw the Heatmap
+        val bitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint().apply { style = Paint.Style.FILL }
+
+        // Expand the drawn rectangles slightly to eliminate grid lines between steps
+        val drawStep = step.toFloat() * 1.2f
+
+        for (i in data.indices step 8) {
+            val corr = data[i + 7]
+            if (corr == 0f || corr > 0.25f) continue // Skip bad tracking points
+
             val x = data[i]
             val y = data[i + 1]
-            val value = data[i + dataIndex]
+            val value = data[i + valIndex]
 
-            if (value > -900f) {
-                val normalized = ((value - minVal) / range).coerceIn(0f, 1f)
+            // Clamp the value to our statistical bounds
+            val clampedValue = value.coerceIn(minV, maxV)
 
-                // Alpha = 180 (about 70% opacity) so we can see the image underneath
-                paint.color = getJetColor(normalized.toDouble(), 180)
+            // Normalize between 0.0 and 1.0
+            val norm = (clampedValue - minV) / range
 
-                canvas.drawRect(
-                    x - halfStep,
-                    y - halfStep,
-                    x + halfStep,
-                    y + halfStep,
-                    paint
-                )
-            }
-            i += 8
+            paint.color = getJetColor(norm)
+            canvas.drawRect(
+                x - drawStep / 2,
+                y - drawStep / 2,
+                x + drawStep / 2,
+                y + drawStep / 2,
+                paint
+            )
         }
 
-        return Triple(bitmap, minVal, maxVal)
+        return Triple(bitmap, minV, maxV)
     }
 
-    private fun getJetColor(v: Double, alpha: Int): Int {
-        val r = clamp(min(4.0 * v - 1.5, -4.0 * v + 4.5))
-        val g = clamp(min(4.0 * v - 0.5, -4.0 * v + 3.5))
-        val b = clamp(min(4.0 * v + 0.5, -4.0 * v + 2.5))
-        return Color.argb(alpha, (r * 255).toInt(), (g * 255).toInt(), (b * 255).toInt())
-    }
+    // Classic Engineering "Jet" Colormap (Blue -> Cyan -> Green -> Yellow -> Red)
+    private fun getJetColor(v: Float): Int {
+        val vClamped = v.coerceIn(0f, 1f)
+        var r = 1.0f
+        var g = 1.0f
+        var b = 1.0f
 
-    private fun clamp(v: Double): Double = max(0.0, min(1.0, v))
+        if (vClamped < 0.25f) {
+            r = 0.0f
+            g = 4.0f * vClamped
+        } else if (vClamped < 0.5f) {
+            r = 0.0f
+            b = 1.0f + 4.0f * (0.25f - vClamped)
+        } else if (vClamped < 0.75f) {
+            r = 4.0f * (vClamped - 0.5f)
+            b = 0.0f
+        } else {
+            g = 1.0f + 4.0f * (0.75f - vClamped)
+            b = 0.0f
+        }
+
+        return Color.rgb(
+            (r * 255).toInt().coerceIn(0, 255),
+            (g * 255).toInt().coerceIn(0, 255),
+            (b * 255).toInt().coerceIn(0, 255)
+        )
+    }
 }

@@ -1,7 +1,10 @@
 package com.rafad.indicvisiondic
 
+import android.content.ContentValues
 import android.graphics.*
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.widget.*
@@ -9,7 +12,6 @@ import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.math.min
 
 class ResultViewerActivity : AppCompatActivity() {
 
@@ -18,12 +20,20 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var spinnerType: Spinner
     private lateinit var tvScaleMax: TextView
 
+    // Export Buttons
+    private lateinit var btnExportCsv: Button
+    private lateinit var btnExportImage: Button
+
     private var rawData: FloatArray? = null
     private var imgW = 0
     private var imgH = 0
     private var step = 5
-    private var roiX = 0
-    private var roiY = 0
+
+    // Variables for Exporter
+    private var cachedBaseImage: Bitmap? = null
+    private var cachedHeatmap: Bitmap? = null
+    private var currentTypeString: String = "Displacement"
+    private var isGeneratingHeatmap = false // --- NEW: Safety Lock ---
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,54 +44,56 @@ class ResultViewerActivity : AppCompatActivity() {
         spinnerType = findViewById(R.id.spinnerResultType)
         tvScaleMax = findViewById(R.id.tvScaleMax)
 
+        btnExportCsv = findViewById(R.id.btnExportCsv)
+        btnExportImage = findViewById(R.id.btnExportImage)
+
         imgW = intent.getIntExtra("IMG_W", 0)
         imgH = intent.getIntExtra("IMG_H", 0)
         step = intent.getIntExtra("STEP", 5)
 
-        // CRITICAL: We need the ROI offset!
-        roiX = intent.getIntExtra("ROI_X", 0)
-        roiY = intent.getIntExtra("ROI_Y", 0)
-
-        // 1. Read raw data
+        // Read raw data
         val dataPath = intent.getStringExtra("DATA_PATH")
         if (dataPath != null) {
             val file = File(dataPath)
             val bytes = file.readBytes()
             rawData = FloatArray(bytes.size / 4)
             ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(rawData)
-            diagnoseData() // Print stats to Logcat
         }
 
-        // 2. Load deformed image
+        // Load deformed image into memory
         val defPath = intent.getStringExtra("DEF_PATH")
         if (defPath != null) {
-            imgMain.setImageBitmap(BitmapFactory.decodeFile(defPath))
-
-            // --- THE FIX: Forcefully inject the true dimensions & Log it! ---
-            Log.d("TouchDebug", "Activity forcing dimensions into TouchImageView: W=$imgW, H=$imgH")
+            cachedBaseImage = BitmapFactory.decodeFile(defPath)
+            imgMain.setImageBitmap(cachedBaseImage)
             imgMain.setTrueImageDimensions(imgW, imgH)
-            // ----------------------------------------------------------------
         }
 
-        // 3. Setup Continuous Matrix Sync (Fixes zoom lag AND initial load)
+        // Matrix Sync
         imgMain.onMatrixChangedListener = {
             imgHeatmap.imageMatrix = imgMain.getZoomMatrix()
             imgHeatmap.invalidate()
         }
 
-        // 4. Setup Spinner
+        // Setup Spinner
         val options = arrayOf("U Displacement", "V Displacement", "Exx Strain", "Eyy Strain", "Exy Shear")
         spinnerType.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
         spinnerType.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p0: AdapterView<*>?, p1: View?, position: Int, p3: Long) {
+                currentTypeString = options[position].replace(" ", "_")
                 updateVisualization(position + 2)
             }
             override fun onNothingSelected(p0: AdapterView<*>?) {}
         }
+
+        // Setup Export Listeners
+        btnExportCsv.setOnClickListener { exportToCSV() }
+        btnExportImage.setOnClickListener { exportMergedImage() }
     }
 
     private fun updateVisualization(index: Int) {
         val data = rawData ?: return
+
+        isGeneratingHeatmap = true // Lock the export button
 
         Thread {
             val result = VisualizationEngine.generateHeatmap(data, imgW, imgH, index, step)
@@ -90,23 +102,125 @@ class ResultViewerActivity : AppCompatActivity() {
             val maxV = result.third
 
             runOnUiThread {
+                cachedHeatmap = heatmap
                 imgHeatmap.setImageBitmap(heatmap)
                 imgHeatmap.imageMatrix = imgMain.getZoomMatrix()
                 imgHeatmap.invalidate()
 
                 val unit = if (index > 3) " [ε]" else " px"
                 tvScaleMax.text = "%.4f%s\n\n\n\n\n\n\n\n\n%.4f%s".format(maxV, unit, minV, unit)
+
+                isGeneratingHeatmap = false // Unlock the export button!
             }
         }.start()
     }
 
-    private fun diagnoseData() {
-        val data = rawData ?: return
-        Log.d("DataDiagnosis", "=== RAW DATA DIAGNOSIS ===")
-        Log.d("DataDiagnosis", "Expected points: ${data.size / 8}")
-        for (i in 0 until min(5, data.size / 8)) {
-            val idx = i * 8
-            Log.d("DataDiagnosis", "Pt $i: X=${data[idx]}, Y=${data[idx+1]}, U=${data[idx+2]}, V=${data[idx+3]}, Exx=${data[idx+4]}")
+    // --- EXPORT SUITE LOGIC ---
+
+    private fun exportToCSV() {
+        val data = rawData
+        if (data == null) {
+            Toast.makeText(this, "No data to save.", Toast.LENGTH_SHORT).show()
+            return
         }
+
+        Toast.makeText(this, "Saving CSV...", Toast.LENGTH_SHORT).show()
+
+        Thread {
+            val fileName = "IndicVision_${System.currentTimeMillis()}.csv"
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/IndicVision")
+            }
+
+            val resolver = applicationContext.contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+
+            if (uri != null) {
+                try {
+                    resolver.openOutputStream(uri)?.use { outputStream ->
+                        val writer = outputStream.bufferedWriter()
+                        writer.write("X,Y,U_Displacement,V_Displacement,Exx_Strain,Eyy_Strain,Exy_Shear,Correlation\n")
+
+                        var i = 0
+                        while (i < data.size) {
+                            val x = data[i]; val y = data[i+1]
+                            val u = data[i+2]; val v = data[i+3]
+                            val exx = data[i+4]; val eyy = data[i+5]; val exy = data[i+6]
+                            val c = data[i+7]
+
+                            // Only export successfully tracked points
+                            if (c != 0f) {
+                                writer.write("$x,$y,$u,$v,$exx,$eyy,$exy,$c\n")
+                            }
+                            i += 8
+                        }
+                        writer.flush()
+                    }
+                    runOnUiThread {
+                        Toast.makeText(this@ResultViewerActivity, "✅ CSV Saved to Downloads/IndicVision", Toast.LENGTH_LONG).show()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save CSV", Toast.LENGTH_SHORT).show() }
+                }
+            }
+        }.start()
+    }
+
+    private fun exportMergedImage() {
+        if (isGeneratingHeatmap) {
+            Toast.makeText(this, "Please wait, Heatmap is drawing...", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val base = cachedBaseImage
+        val overlay = cachedHeatmap
+
+        if (base == null || overlay == null) {
+            Toast.makeText(this, "Error: Images missing from memory.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Toast.makeText(this, "Merging High-Res Image...", Toast.LENGTH_SHORT).show()
+
+        Thread {
+            try {
+                // Create a blank full-resolution canvas
+                val mergedBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(mergedBitmap)
+
+                // Draw base image
+                canvas.drawBitmap(base, 0f, 0f, null)
+
+                // Draw the translucent heatmap over it exactly as the user sees it
+                val alphaPaint = Paint().apply { alpha = 180 }
+                canvas.drawBitmap(overlay, 0f, 0f, alphaPaint)
+
+                // Save to Gallery
+                val fileName = "IndicVision_${currentTypeString}_${System.currentTimeMillis()}.png"
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/IndicVision")
+                }
+
+                val resolver = applicationContext.contentResolver
+                val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { outputStream ->
+                        mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                    }
+                    runOnUiThread {
+                        Toast.makeText(this@ResultViewerActivity, "✅ Image Saved to Pictures/IndicVision", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save Image", Toast.LENGTH_SHORT).show() }
+            }
+        }.start()
     }
 }

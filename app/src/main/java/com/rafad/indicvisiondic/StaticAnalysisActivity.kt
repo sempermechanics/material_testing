@@ -16,7 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
-
+import android.graphics.Bitmap
 class StaticAnalysisActivity : AppCompatActivity() {
 
     // --- CRITICAL FIX: The ViewModel Vault ---
@@ -205,8 +205,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
                             buffer.asFloatBuffer().put(rawData)
                             dataFile.writeBytes(buffer.array())
 
-                            val defFile = File(cacheDir, "temp_def_view.jpg")
-                            viewModel.defBytes?.let { defFile.writeBytes(it) }
+                            // 2. Save Deformed Image to cache as a TRUE PNG (Bypasses Android's TIFF limitation)
+                            val defFile = File(cacheDir, "temp_def_view.png")
+                            viewModel.defBytes?.let { bytes ->
+                                // Use OpenCV to decode the TIFF bytes into an Android Bitmap at full resolution
+                                val fullResBitmap = IndicVisionNativeLib.getPreviewFromBytes(bytes, viewModel.realRefWidth)
+
+                                // Save it as a genuine PNG so ResultViewerActivity can read it safely
+                                defFile.outputStream().use { out ->
+                                    fullResBitmap?.compress(Bitmap.CompressFormat.PNG, 100, out)
+                                }
+                            }
 
                             // Save state to ViewModel
                             viewModel.lastStep = step

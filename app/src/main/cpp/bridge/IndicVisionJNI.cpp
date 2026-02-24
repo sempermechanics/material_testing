@@ -192,6 +192,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
 #include <thread>
 #include <atomic>
 #include <chrono>
+#include <mutex>
 
 // 6. COMPUTE FULL FIELD (2D HEATMAP & STRAIN)
 JNIEXPORT jfloatArray JNICALL
@@ -296,7 +297,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
     // --- 5. PARALLEL EXECUTION & PROGRESS REPORTING ---
     int total_cores = std::thread::hardware_concurrency();
-    int safe_cores = std::max(1, total_cores); // Use all cores for max speed
+    int safe_cores = std::max(1, total_cores);
 
     std::vector<double> t_icgn_arr(safe_cores, 0.0), t_simplex_arr(safe_cores, 0.0), t_hessian_arr(safe_cores, 0.0);
     std::vector<int> c_icgn_arr(safe_cores, 0), c_simplex_arr(safe_cores, 0), c_points_arr(safe_cores, 0);
@@ -304,6 +305,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     std::atomic<int> seed_index(0);
     std::atomic<int> global_points_solved(0);
     std::atomic<bool> computation_running(true);
+    std::mutex grid_mutex; // SAFEGUARD MUTEX
 
     jclass callbackClass = nullptr;
     jmethodID methodId = nullptr;
@@ -317,7 +319,6 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
         methodId = env->GetMethodID(callbackClass, "onProgressUpdate", "(I)V");
     }
 
-    // Progress Thread
     std::thread progress_thread([&]() {
         if (jvm == nullptr || globalCallbackObj == nullptr || methodId == nullptr) return;
         JNIEnv* pEnv = nullptr;
@@ -358,8 +359,10 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
                     if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
                         bool claimed = false;
-#pragma omp critical(ClaimPoint)
+
+                        // --- FIX: Replaced OpenMP critical with C++ Mutex for deep thread safety ---
                         {
+                            std::lock_guard<std::mutex> lock(grid_mutex);
                             if (!resultGrid[ny][nx].solved) {
                                 resultGrid[ny][nx].solved = true;
                                 claimed = true;
@@ -380,7 +383,11 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
                         IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, current.u, current.v, IndicVision::INIT_NO_SEARCH);
 
-                        resultGrid[ny][nx] = {(float)realX, (float)realY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
+                        // --- FIX: Safely write to grid ---
+                        {
+                            std::lock_guard<std::mutex> lock(grid_mutex);
+                            resultGrid[ny][nx] = {(float)realX, (float)realY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
+                        }
 
                         if (res.status == 0 && res.correlation_score < 0.3) {
                             local_queue.push(IndicVision::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
@@ -391,7 +398,6 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
                 }
             }
 
-            // Steal 64 points at once
             int chunk_size = 64;
             int start_idx = seed_index.fetch_add(chunk_size, std::memory_order_relaxed);
             if (start_idx >= (int)global_seeds.size()) break;
@@ -402,8 +408,9 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
                 IndicVision::SeedNode seed = global_seeds[current_idx];
                 bool claimed = false;
 
-#pragma omp critical(ClaimPoint)
+                // --- FIX: Replaced OpenMP critical with C++ Mutex ---
                 {
+                    std::lock_guard<std::mutex> lock(grid_mutex);
                     if (!resultGrid[seed.y_idx][seed.x_idx].solved) {
                         resultGrid[seed.y_idx][seed.x_idx].solved = true;
                         claimed = true;
@@ -423,7 +430,11 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
                 IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, globalU, globalV, IndicVision::INIT_AUTO_SEARCH);
 
-                resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
+                // --- FIX: Safely write to grid ---
+                {
+                    std::lock_guard<std::mutex> lock(grid_mutex);
+                    resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
+                }
 
                 if (res.status == 0 && res.correlation_score < 0.15) {
                     local_queue.push(IndicVision::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
@@ -443,13 +454,11 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
     auto end_track = std::chrono::high_resolution_clock::now();
 
-    // --- CRITICAL FIX: PROPERLY STOP AND JOIN THE PROGRESS THREAD ---
     computation_running = false;
     if (progress_thread.joinable()) {
         progress_thread.join();
     }
 
-    // Clean up Global JNI Reference safely using the original env
     if (globalCallbackObj != nullptr) {
         env->DeleteGlobalRef(globalCallbackObj);
     }
@@ -514,7 +523,6 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
     auto end_total = std::chrono::high_resolution_clock::now();
 
-    // --- 8. PROFILING LOGS ---
     double t_track = std::chrono::duration<double, std::milli>(end_track - start_track).count();
     LOGD("=== OPENMP RGDIC PERFORMANCE PROFILE ===");
     LOGD("OpenMP Wall Time         : %.2f ms", t_track);
