@@ -12,12 +12,14 @@
 ## ✨ Key Features
 
 * **High-Performance C++ Core:** Utilizes the Android NDK, OpenCV, and OpenMP multi-threading to process large 12-Megapixel datasets (40,000+ points) in just seconds.
-* **Advanced Mathematical Solvers:** Implements Zero-Normalized Cross-Correlation (ZNCC) with an Inverse Compositional Gauss-Newton (IC-GN) optimizer, backed by a Simplex fallback for complex deformations.
-* **Versatile ROI Selection:** * **Interactive:** Draw a Region of Interest directly on the touchscreen.
+* **Advanced Mathematical Solvers:** Implements a **Zero-Normalized Sum of Squared Differences (ZNSSD)** criterion optimized via an Inverse Compositional Gauss-Newton (IC-GN) algorithm, backed by a Simplex fallback for complex deformations.
+* **Versatile ROI Selection:**
+  * **Interactive:** Draw a Region of Interest directly on the touchscreen.
   * **Mathematical/Numerical:** Input precise pixel dimensions for Rectangles, Circles, Ellipses, and Triangles.
   * **Custom Masks:** Upload external image masks for complex specimen geometries.
 * **Publication-Ready Visualization:** Features a smooth, Google-Maps-style pan/zoom viewport. The internal engine applies 2nd/98th percentile statistical outlier filtering to generate clean, noise-free "Jet" colormap heatmaps.
-* **Comprehensive Export Suite:** * **Image Export:** Safely merges the raw deformed specimen image with the translucent heatmap overlay into a high-res `.PNG` saved to the Android Gallery.
+* **Comprehensive Export Suite:**
+  * **Image Export:** Safely merges the raw deformed specimen image with the translucent heatmap overlay into a high-res `.PNG` saved to the Android Gallery.
   * **Data Export:** Dumps tracking data into a neatly formatted `.CSV` spreadsheet in the device Downloads folder.
 * **Robust Architecture:** Architected with Kotlin `ViewModel`s to survive lifecycle changes (like screen rotations) and `std::mutex` hardware locks to ensure memory safety during parallel computing.
 
@@ -25,12 +27,16 @@
 
 ## 📸 Screenshots
 
-*(Replace these placeholders with actual screenshots of your app!)*
+A complete workflow from setup to analysis results on a mobile device.
 
 <p align="center">
-  <img src="link_to_home_screen_image" width="250" alt="Setup Screen">
-  <img src="link_to_roi_screen_image" width="250" alt="ROI Selection">
-  <img src="link_to_heatmap_image" width="250" alt="Strain Heatmap">
+  <img src="images/setup_screen.png" width="22%" alt="Main Interface & Setup" style="margin-right:10px;">
+  <img src="images/draw_roi.jpg" width="22%" alt="Interactive ROI Drawing" style="margin-right:10px;">
+  <img src="images/manual_roi.png" width="22%" alt="Numerical ROI Input" style="margin-right:10px;">
+  <img src="images/heatmap_result.jpg" width="22%" alt="Visualized Heatmap Results">
+</p>
+<p align="center">
+  <i>From left to right: Main setup interface, interactive ROI drawing, numerical shape input dialog, and final strain heatmap visualization with a legend.</i>
 </p>
 
 ---
@@ -48,7 +54,7 @@
 ### 2. Define the Region of Interest (ROI)
 * Tap **Draw ROI** to trace a bounding box with your finger.
 * Tap **Manual ROI** to mathematically define a specific shape (Rectangle, Circle, Ellipse, Triangle) using exact pixel coordinates.
-* *Or* tap **Full Image** to compute the entire specimen.
+* *Or* tap **Use Full Image** to compute the entire specimen.
 
 ### 3. Compute & View
 1. Hit **Calculate Full Field**. The C++ engine will execute in the background.
@@ -57,7 +63,7 @@
 4. Pinch to zoom and drag to inspect stress concentrations.
 
 ### 4. Export
-Use the Floating Action Buttons at the bottom right:
+Use the Floating Action Buttons at the bottom right of the results view:
 * **💾 CSV:** Saves the raw X, Y, U, V, Strain, and Correlation data to your `Downloads/IndicVision` folder.
 * **📷 Image:** Saves a combined, high-resolution PNG of your specimen and the active heatmap to your `Pictures/IndicVision` folder.
 
@@ -66,7 +72,7 @@ Use the Floating Action Buttons at the bottom right:
 ## 🛠️ Tech Stack & Architecture
 * **Frontend UI:** Kotlin, XML, Android SDK, ViewModels, MediaStore API.
 * **Backend Engine:** C++17, Android NDK, CMake.
-* **Computer Vision:** OpenCV (cv::Mat, cv::GaussianBlur, AKAZE Global Feature Matching).
+* **Computer Vision:** OpenCV (cv::Mat, cv::GaussianBlur).
 * **Parallelization:** OpenMP (`#pragma omp parallel`), `<atomic>`, `<mutex>`.
 * **Data Flow:** Flat JNI arrays (`jfloatArray`) to minimize Java-to-C++ memory overhead.
 
