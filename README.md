@@ -11,8 +11,9 @@
 
 ## ✨ Key Features
 
-* **High-Performance C++ Core:** Utilizes the Android NDK, OpenCV, and OpenMP multi-threading to process large 12-Megapixel datasets (40,000+ points) in just seconds.
-* **Advanced Mathematical Solvers:** Implements a **Zero-Normalized Sum of Squared Differences (ZNSSD)** criterion optimized via an Inverse Compositional Gauss-Newton (IC-GN) algorithm, backed by a Simplex fallback for complex deformations.
+* **High-Performance C++ Core:** Utilizes the Android NDK, OpenCV, and OpenMP multi-threading with a thread-safe shared priority queue to process large 12-Megapixel datasets (40,000+ points) in just seconds.
+* **Advanced Mathematical Solvers:** Implements a **Zero-Normalized Sum of Squared Differences (ZNSSD)** criterion optimized via an Inverse Compositional Gauss-Newton (IC-GN) algorithm, backed by a Simplex fallback for complex deformations. Achieves sub-pixel precision using **Bicubic Keys interpolation**.
+* **Smart Initialization & Tracking:** Uses **AKAZE** feature matching for automatic global shift estimation, coupled with **Reliability-Guided DIC (RGDIC)** for robust, seed-based propagation that actively avoids decorrelated regions.
 * **Versatile ROI Selection:**
   * **Interactive:** Draw a Region of Interest directly on the touchscreen.
   * **Mathematical/Numerical:** Input precise pixel dimensions for Rectangles, Circles, Ellipses, and Triangles.
@@ -22,6 +23,24 @@
   * **Image Export:** Safely merges the raw deformed specimen image with the translucent heatmap overlay into a high-res `.PNG` saved to the Android Gallery.
   * **Data Export:** Dumps tracking data into a neatly formatted `.CSV` spreadsheet in the device Downloads folder.
 * **Robust Architecture:** Architected with Kotlin `ViewModel`s to survive lifecycle changes (like screen rotations) and `std::mutex` hardware locks to ensure memory safety during parallel computing.
+
+---
+
+## 📊 Validation & Accuracy
+
+IndicVision has been rigorously tested against standard experimental DIC datasets to ensure research-grade accuracy. 
+
+On the standard **Sample 14 L5** dataset, the app's native mobile engine achieved:
+* **Displacement Accuracy:** RMSE of **0.0078 px**
+* **Strain Accuracy:** Within **400 µε** (microstrain)
+
+<p align="center">
+  <img src="images/IndicVision_v1.2_HighestAccuracy_fastest.png" width="48%" alt="Displacement Validation Plot" style="margin-right:2%;">
+  <img src="images/Strain_Validation.png" width="48%" alt="Strain Validation Plot">
+</p>
+<p align="center">
+  <i>Left: U-Displacement profile matching ground truth. Right: Strain Exx profile matching ground truth.</i>
+</p>
 
 ---
 
@@ -36,7 +55,7 @@ A complete workflow from setup to analysis results on a mobile device.
   <img src="images/heatmap_result.png" width="22%" alt="Visualized Heatmap Results">
 </p>
 <p align="center">
-  <i>From left to right: Main setup interface, interactive ROI drawing, numerical shape input dialog, and final displacement and strain heatmap visualization with a legend.</i>
+  <i>From left to right: Main setup interface, interactive ROI drawing, numerical shape input dialog, and final strain heatmap visualization with a legend.</i>
 </p>
 
 ---
@@ -72,8 +91,8 @@ Use the Floating Action Buttons at the bottom right of the results view:
 ## 🛠️ Tech Stack & Architecture
 * **Frontend UI:** Kotlin, XML, Android SDK, ViewModels, MediaStore API.
 * **Backend Engine:** C++17, Android NDK, CMake.
-* **Computer Vision:** OpenCV (cv::Mat, cv::GaussianBlur).
-* **Parallelization:** OpenMP (`#pragma omp parallel`), `<atomic>`, `<mutex>`.
+* **Computer Vision:** OpenCV (cv::Mat, cv::GaussianBlur, AKAZE Global Feature Matching).
+* **Parallelization:** OpenMP (`#pragma omp parallel`), `<atomic>`, `<mutex>`, `std::priority_queue`.
 * **Data Flow:** Flat JNI arrays (`jfloatArray`) to minimize Java-to-C++ memory overhead.
 
 ---
