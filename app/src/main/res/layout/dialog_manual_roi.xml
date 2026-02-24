@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Select ROI Shape:"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"/>
+
+        <Spinner
+            android:id="@+id/spinnerShape"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@android:drawable/btn_dropdown"
+            android:layout_marginBottom="16dp"/>
+
+        <LinearLayout android:id="@+id/layoutRect" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+            <EditText android:id="@+id/etRectX" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="X Offset (Left)" android:inputType="number"/>
+            <EditText android:id="@+id/etRectY" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Y Offset (Top)" android:inputType="number"/>
+            <EditText android:id="@+id/etRectW" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Width" android:inputType="number"/>
+            <EditText android:id="@+id/etRectH" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Height" android:inputType="number"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/layoutCircle" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+            <EditText android:id="@+id/etCircCx" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Center X" android:inputType="number"/>
+            <EditText android:id="@+id/etCircCy" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Center Y" android:inputType="number"/>
+            <EditText android:id="@+id/etCircR" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Radius" android:inputType="number"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/layoutEllipse" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+            <EditText android:id="@+id/etEllCx" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Center X" android:inputType="number"/>
+            <EditText android:id="@+id/etEllCy" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Center Y" android:inputType="number"/>
+            <EditText android:id="@+id/etEllRx" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Radius X (Horizontal)" android:inputType="number"/>
+            <EditText android:id="@+id/etEllRy" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Radius Y (Vertical)" android:inputType="number"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/layoutTri" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Point 1 (Top usually)"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                <EditText android:id="@+id/etTriX1" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="X1" android:inputType="number"/>
+                <EditText android:id="@+id/etTriY1" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="Y1" android:inputType="number"/>
+            </LinearLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Point 2 (Bottom Left)"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                <EditText android:id="@+id/etTriX2" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="X2" android:inputType="number"/>
+                <EditText android:id="@+id/etTriY2" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="Y2" android:inputType="number"/>
+            </LinearLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Point 3 (Bottom Right)"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                <EditText android:id="@+id/etTriX3" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="X3" android:inputType="number"/>
+                <EditText android:id="@+id/etTriY3" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="Y3" android:inputType="number"/>
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

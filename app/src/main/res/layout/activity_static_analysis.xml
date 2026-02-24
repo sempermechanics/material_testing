@@ -61,15 +61,34 @@
                 android:scaleType="fitCenter" />
         </FrameLayout>
 
-        <Button
-            android:id="@+id/btnDefineRoi"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📐 Define ROI (Open Studio)"
-            android:backgroundTint="#673AB7"
-            android:textColor="#FFFFFF"
-            android:layout_marginBottom="5dp"
-            android:enabled="false"/>
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="8dp">
+
+            <Button
+                android:id="@+id/btnDefineRoi"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="Draw ROI"
+                android:backgroundTint="#673AB7"
+                android:textColor="#FFFFFF"
+                android:layout_marginEnd="4dp"/>
+
+            <Button
+                android:id="@+id/btnManualRoi"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="Manual ROI"
+                android:backgroundTint="#009688"
+                android:textColor="#FFFFFF"
+                android:layout_marginStart="4dp"/>
+
+        </LinearLayout>
 
         <Button
             android:id="@+id/btnFullImage"
