@@ -188,10 +188,23 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     val useNlvc = rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc
                     val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
 
-                    val rawData = IndicVisionNativeLib.computeFullField(
+                    // 🚀 1. CALCULATE MAXIMUM POSSIBLE POINTS
+                    val gridW = finalRectW / step
+                    val gridH = finalRectH / step
+                    val maxPoints = gridW * gridH
+
+                    // 🚀 2. ALLOCATE DIRECT SHARED MEMORY
+                    // 8 floats per point, 4 bytes per float
+                    val byteCapacity = maxPoints * 8 * 4
+                    val outputBuffer = java.nio.ByteBuffer.allocateDirect(byteCapacity)
+                    outputBuffer.order(java.nio.ByteOrder.nativeOrder())
+
+                    // 🚀 3. CALL C++ TO WRITE DIRECTLY INTO THE BUFFER
+                    val validPointsCount = IndicVisionNativeLib.computeFullFieldDirect(
                         viewModel.refBytes!!, viewModel.defBytes!!, maskData,
                         finalRectX, finalRectY, finalRectW, finalRectH,
-                        step, subset, strainWin, true, true, applyBlur, useNlvc, callback
+                        step, subset, strainWin, true, true, applyBlur, useNlvc,
+                        outputBuffer, callback
                     )
 
                     val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
@@ -199,17 +212,21 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     runOnUiThread {
                         progressBar.visibility = View.GONE
 
-                        if (rawData == null || rawData.isEmpty()) {
+                        if (validPointsCount <= 0) {
                             tvTimer.text = "Analysis Failed"
                             tvResult.text = "❌ Engine returned no data"
                         } else {
-                            tvTimer.text = "Analysis Done in %.2f s. Points: ${rawData.size / 8}".format(totalTime)
+                            tvTimer.text = "Analysis Done in %.2f s. Points: $validPointsCount".format(totalTime)
 
+                            // 🚀 4. EXTRACT ONLY THE VALID BYTES AND SAVE TO DISK
                             val dataFile = File(cacheDir, "analysis_results.bin")
-                            val buffer = java.nio.ByteBuffer.allocate(rawData.size * 4)
-                            buffer.order(java.nio.ByteOrder.nativeOrder())
-                            buffer.asFloatBuffer().put(rawData)
-                            dataFile.writeBytes(buffer.array())
+                            val validByteCount = validPointsCount * 8 * 4
+
+                            val exactBytes = ByteArray(validByteCount)
+                            outputBuffer.position(0) // Reset buffer pointer to the start
+                            outputBuffer.get(exactBytes, 0, validByteCount) // Copy exact payload
+
+                            dataFile.writeBytes(exactBytes) // Save instantly
 
                             val defFile = File(cacheDir, "temp_def_view.png")
                             viewModel.defBytes?.let { bytes ->
