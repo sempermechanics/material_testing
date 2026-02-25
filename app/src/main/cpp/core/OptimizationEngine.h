@@ -3,7 +3,9 @@
 
 #include "Types.h"
 #include "../preprocessing/ImageProcessor.h"
-
+#if defined(__ARM_NEON__) || defined(__aarch64__)
+#include <arm_neon.h>
+#endif
 namespace IndicVision {
 
     class OptimizationEngine {

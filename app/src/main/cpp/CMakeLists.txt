@@ -14,7 +14,7 @@ find_package(OpenCV REQUIRED)
 # -ffast-math: Aggressive floating point math vectorization (MASSIVE speedup for DIC)
 # -fvisibility=hidden: Strips unused symbols, making the .so file smaller and faster to load
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -flto -ffast-math -fexceptions -fvisibility=hidden -fvisibility-inlines-hidden -fopenmp")
-
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 add_library(
         indicvision_core
         SHARED

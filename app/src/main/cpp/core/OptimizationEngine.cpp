@@ -1,6 +1,7 @@
 #include "OptimizationEngine.h"
 #include <chrono>
 #include <algorithm>
+#include <arm_neon.h>
 
 namespace IndicVision {
 
@@ -70,16 +71,14 @@ namespace IndicVision {
         }
     }
 
-    // --- PURE ICGN SOLVER (No Allocations in Loop) ---
+    // --- PURE ICGN SOLVER ---
     AnalysisResult OptimizationEngine::solve_icgn(const SubsetData& subset, const Image &def_img, double init_u, double init_v) {
         size_t n = subset.x_offsets.size();
 
-        // Stack-allocated matrix for Warp (Very fast)
         Eigen::Matrix3d W = Eigen::Matrix3d::Identity();
         W(0, 2) = init_u;
         W(1, 2) = init_v;
 
-        // Pre-allocate buffer ONCE outside the loop to prevent heap fragmentation
         std::vector<double> def_vals(n, 0.0);
         double final_score = 1.0;
 
@@ -97,79 +96,148 @@ namespace IndicVision {
 
                 double val = def_img.interpolate_bicubic(final_x, final_y);
 
-                // Zero-Poisoning Fix: Ignore 0.0 which means Out-Of-Bounds
                 if (val > 0.0) {
                     def_vals[i] = val;
                     def_sum += val;
                     valid_pixels++;
                 } else {
-                    def_vals[i] = -1.0; // Marker for invalid
+                    def_vals[i] = -1.0;
                 }
             }
 
-            // Early Exit: If too much of the subset is outside the image, abort.
             if (valid_pixels < n * 0.90) {
                 return {W(0,2), W(1,2), W(0,0)-1.0, W(0,1), W(1,0), W(1,1)-1.0, 1, 2.0};
             }
 
-            // 2. Exact Normalization (Only on valid pixels)
             double def_mean = def_sum / valid_pixels;
             double def_sum_sq = 0.0;
-            for (size_t i = 0; i < n; ++i) {
-                if (def_vals[i] >= 0.0) {
-                    double diff = def_vals[i] - def_mean;
-                    def_sum_sq += diff * diff;
-                }
-            }
-            double def_std = std::sqrt(def_sum_sq / valid_pixels);
-            if (def_std < 1e-5) def_std = 1.0;
-
-            // 3. Compute Gradients & Delta
-            // 3. Compute Gradients & Delta
             Eigen::Matrix<double, 6, 1> dp_sum = Eigen::Matrix<double, 6, 1>::Zero();
             double error_sum_sq = 0.0;
 
-            for (size_t i = 0; i < n; ++i) {
-                if (def_vals[i] >= 0.0) {
-                    // FAST: Directly use the pre-calculated norm_ref!
-                    double norm_def = (def_vals[i] - def_mean) / def_std;
-                    double diff = subset.norm_ref_intensities[i] - norm_def;
+            // 🚀 FAST-PATH: All pixels are safely inside the image boundaries
+            if (valid_pixels == n) {
 
+#if defined(__aarch64__)
+                // ==========================================
+                // 1A. 64-BIT ARM NEON VECTOR MATH
+                // ==========================================
+                float64x2_t sum_sq_vec = vdupq_n_f64(0.0);
+                float64x2_t mean_vec = vdupq_n_f64(def_mean);
+                size_t i = 0;
+
+                for (; i + 1 < n; i += 2) {
+                    float64x2_t vals = vld1q_f64(&def_vals[i]);
+                    float64x2_t diff = vsubq_f64(vals, mean_vec);
+                    sum_sq_vec = vaddq_f64(sum_sq_vec, vmulq_f64(diff, diff));
+                }
+                double lane_sums[2];
+                vst1q_f64(lane_sums, sum_sq_vec);
+                def_sum_sq = lane_sums[0] + lane_sums[1];
+
+                for (; i < n; ++i) {
+                    double diff = def_vals[i] - def_mean;
+                    def_sum_sq += diff * diff;
+                }
+
+                double def_std = std::sqrt(def_sum_sq / valid_pixels);
+                if (def_std < 1e-5) def_std = 1.0;
+                double inv_std = 1.0 / def_std;
+
+                float64x2_t err_sum_vec = vdupq_n_f64(0.0);
+                float64x2_t inv_std_vec = vdupq_n_f64(inv_std);
+                i = 0;
+
+                for (; i + 1 < n; i += 2) {
+                    float64x2_t def_v = vld1q_f64(&def_vals[i]);
+                    float64x2_t norm_def = vmulq_f64(vsubq_f64(def_v, mean_vec), inv_std_vec);
+                    float64x2_t ref_v = vld1q_f64(&subset.norm_ref_intensities[i]);
+                    float64x2_t diff = vsubq_f64(ref_v, norm_def);
+                    err_sum_vec = vaddq_f64(err_sum_vec, vmulq_f64(diff, diff));
+
+                    double diff_arr[2];
+                    vst1q_f64(diff_arr, diff);
+                    dp_sum += subset.steepest_descent_images[i] * diff_arr[0];
+                    dp_sum += subset.steepest_descent_images[i+1] * diff_arr[1];
+                }
+
+                vst1q_f64(lane_sums, err_sum_vec);
+                error_sum_sq = lane_sums[0] + lane_sums[1];
+
+                for (; i < n; ++i) {
+                    double norm_def = (def_vals[i] - def_mean) * inv_std;
+                    double diff = subset.norm_ref_intensities[i] - norm_def;
                     error_sum_sq += diff * diff;
                     dp_sum += subset.steepest_descent_images[i] * diff;
+                }
+#else
+                // ==========================================
+                // 1B. 32-BIT SCALAR FAST MATH (Fallback)
+                // ==========================================
+                for (size_t i = 0; i < n; ++i) {
+                    double diff = def_vals[i] - def_mean;
+                    def_sum_sq += diff * diff;
+                }
+                double def_std = std::sqrt(def_sum_sq / valid_pixels);
+                if (def_std < 1e-5) def_std = 1.0;
+                double inv_std = 1.0 / def_std;
+
+                for (size_t i = 0; i < n; ++i) {
+                    double norm_def = (def_vals[i] - def_mean) * inv_std;
+                    double diff = subset.norm_ref_intensities[i] - norm_def;
+                    error_sum_sq += diff * diff;
+                    dp_sum += subset.steepest_descent_images[i] * diff;
+                }
+#endif
+            }
+            else {
+                // ==========================================
+                // 🐌 2. SLOW-PATH (Subset is hitting the edge)
+                // ==========================================
+                for (size_t i = 0; i < n; ++i) {
+                    if (def_vals[i] >= 0.0) {
+                        double diff = def_vals[i] - def_mean;
+                        def_sum_sq += diff * diff;
+                    }
+                }
+                double def_std = std::sqrt(def_sum_sq / valid_pixels);
+                if (def_std < 1e-5) def_std = 1.0;
+
+                for (size_t i = 0; i < n; ++i) {
+                    if (def_vals[i] >= 0.0) {
+                        double norm_def = (def_vals[i] - def_mean) / def_std;
+                        double diff = subset.norm_ref_intensities[i] - norm_def;
+                        error_sum_sq += diff * diff;
+                        dp_sum += subset.steepest_descent_images[i] * diff;
+                    }
                 }
             }
 
             final_score = error_sum_sq / valid_pixels;
 
-            // Pure ICGN update: delta = -H_inv * dp_sum
+            // Update step
             Eigen::Matrix<double, 6, 1> delta_p = -subset.H_inv * dp_sum;
-
-            // 4. Update W (Inverse Compositional)
             Eigen::Matrix3d dW = Eigen::Matrix3d::Identity();
-            dW(0,0) += delta_p(2); // ux
-            dW(0,1) += delta_p(3); // uy
-            dW(0,2) += delta_p(0); // u
-            dW(1,0) += delta_p(4); // vx
-            dW(1,1) += delta_p(5); // vy
-            dW(1,2) += delta_p(1); // v
+            dW(0,0) += delta_p(2);
+            dW(0,1) += delta_p(3);
+            dW(0,2) += delta_p(0);
+            dW(1,0) += delta_p(4);
+            dW(1,1) += delta_p(5);
+            dW(1,2) += delta_p(1);
 
             W = W * dW.inverse();
 
-            // 5. Convergence Check (Sub-pixel stability)
-            if (delta_p.norm() < 1e-4) {
+            if (delta_p.norm() < 0.001) {
                 return {W(0,2), W(1,2), W(0,0)-1.0, W(0,1), W(1,0), W(1,1)-1.0, 0, final_score};
             }
         }
 
-        // Reached max iters without tight convergence, mark as fail
         return {W(0,2), W(1,2), W(0,0)-1.0, W(0,1), W(1,0), W(1,1)-1.0, 1, final_score};
     }
 
     // --- HIGH-SPEED ZNSSD FOR SIMPLEX ---
     double OptimizationEngine::evaluate_znssd(const SubsetData& subset, const Image &def_img,
-                                  double u, double v, double ux, double uy, double vx, double vy,
-                                  std::vector<double>& buffer) {
+                                              double u, double v, double ux, double uy, double vx, double vy,
+                                              std::vector<double>& buffer) {
         size_t n = subset.x_offsets.size();
         double def_mean = 0.0;
         int valid_pixels = 0;
@@ -191,28 +259,101 @@ namespace IndicVision {
             }
         }
 
-        if (valid_pixels < n * 0.90) return 2.0; // Heavy penalty for going OOB
+        if (valid_pixels < n * 0.90) return 2.0;
 
         def_mean /= valid_pixels;
         double def_sum_sq = 0.0;
-        for (size_t i = 0; i < n; ++i) {
-            if (buffer[i] >= 0.0) {
+        double znssd = 0.0;
+
+        // 🚀 FAST-PATH: All pixels valid
+        if (valid_pixels == n) {
+
+#if defined(__aarch64__)
+            // ==========================================
+            // 1A. 64-BIT ARM NEON VECTOR MATH
+            // ==========================================
+            float64x2_t sum_sq_vec = vdupq_n_f64(0.0);
+            float64x2_t mean_vec = vdupq_n_f64(def_mean);
+            size_t i = 0;
+
+            for (; i + 1 < n; i += 2) {
+                float64x2_t vals = vld1q_f64(&buffer[i]);
+                float64x2_t diff = vsubq_f64(vals, mean_vec);
+                sum_sq_vec = vaddq_f64(sum_sq_vec, vmulq_f64(diff, diff));
+            }
+            double lane_sums[2];
+            vst1q_f64(lane_sums, sum_sq_vec);
+            def_sum_sq = lane_sums[0] + lane_sums[1];
+
+            for (; i < n; ++i) {
                 double diff = buffer[i] - def_mean;
                 def_sum_sq += diff * diff;
             }
-        }
-        double def_std = std::sqrt(def_sum_sq / valid_pixels);
-        if (def_std < 1e-5) def_std = 1.0;
 
-        double znssd = 0.0;
-        for (size_t i = 0; i < n; ++i) {
-            if (buffer[i] >= 0.0) {
-                // FAST: Directly use the pre-calculated norm_ref!
-                double norm_def = (buffer[i] - def_mean) / def_std;
+            double def_std = std::sqrt(def_sum_sq / valid_pixels);
+            if (def_std < 1e-5) def_std = 1.0;
+            double inv_std = 1.0 / def_std;
+
+            float64x2_t znssd_vec = vdupq_n_f64(0.0);
+            float64x2_t inv_std_vec = vdupq_n_f64(inv_std);
+            i = 0;
+
+            for (; i + 1 < n; i += 2) {
+                float64x2_t def_v = vld1q_f64(&buffer[i]);
+                float64x2_t norm_def = vmulq_f64(vsubq_f64(def_v, mean_vec), inv_std_vec);
+                float64x2_t ref_v = vld1q_f64(&subset.norm_ref_intensities[i]);
+                float64x2_t diff = vsubq_f64(ref_v, norm_def);
+                znssd_vec = vaddq_f64(znssd_vec, vmulq_f64(diff, diff));
+            }
+            vst1q_f64(lane_sums, znssd_vec);
+            znssd = lane_sums[0] + lane_sums[1];
+
+            for (; i < n; ++i) {
+                double norm_def = (buffer[i] - def_mean) * inv_std;
                 double diff = subset.norm_ref_intensities[i] - norm_def;
                 znssd += diff * diff;
             }
+#else
+            // ==========================================
+            // 1B. 32-BIT SCALAR FAST MATH (Fallback)
+            // ==========================================
+            for (size_t i = 0; i < n; ++i) {
+                double diff = buffer[i] - def_mean;
+                def_sum_sq += diff * diff;
+            }
+            double def_std = std::sqrt(def_sum_sq / valid_pixels);
+            if (def_std < 1e-5) def_std = 1.0;
+            double inv_std = 1.0 / def_std;
+
+            for (size_t i = 0; i < n; ++i) {
+                double norm_def = (buffer[i] - def_mean) * inv_std;
+                double diff = subset.norm_ref_intensities[i] - norm_def;
+                znssd += diff * diff;
+            }
+#endif
         }
+        else {
+            // ==========================================
+            // 🐌 2. SLOW-PATH (Edge of image)
+            // ==========================================
+            for (size_t i = 0; i < n; ++i) {
+                if (buffer[i] >= 0.0) {
+                    double diff = buffer[i] - def_mean;
+                    def_sum_sq += diff * diff;
+                }
+            }
+            double def_std = std::sqrt(def_sum_sq / valid_pixels);
+            if (def_std < 1e-5) def_std = 1.0;
+
+            for (size_t i = 0; i < n; ++i) {
+                if (buffer[i] >= 0.0) {
+                    double norm_def = (buffer[i] - def_mean) / def_std;
+                    double diff = subset.norm_ref_intensities[i] - norm_def;
+                    znssd += diff * diff;
+                }
+            }
+        }
+
         return znssd / valid_pixels;
     }
 

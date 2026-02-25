@@ -1322,38 +1322,9 @@ cv::Mat img = cv::imdecode(c_bytes)  // Decode in C++
 
 **Decision:** VSG is default, NLVC is user-selectable option.
 
----
+## 11. Known Issues & Future Work
 
-## 11. Performance Characteristics
-
-### 11.1 Benchmarks (Samsung Galaxy S21, Snapdragon 888)
-
-| Operation | Time | Notes |
-|-----------|------|-------|
-| Image decode (2048×1536) | 50 ms | OpenCV JPEG decode |
-| Gradient computation | 200 ms | 5-point central difference |
-| AKAZE feature matching | 100 ms | 500 keypoints |
-| Grid initialization | 10 ms | Allocate 42,728 structs |
-| **Parallel DIC (6 threads)** | **5.5 s** | **Main bottleneck** |
-| Strain calculation (VSG) | 50 ms | Polynomial fitting |
-| Data flattening | 20 ms | Memcpy to jfloatArray |
-| **Total** | **5.93 s** | **~6 seconds end-to-end** |
-
-### 11.2 Scalability
-
-| Device | Cores | DIC Time | Speedup |
-|--------|-------|----------|---------|
-| Pixel 5 (Snapdragon 765G) | 8 | 7.2 s | 3.6x |
-| Galaxy S21 (Snapdragon 888) | 8 | 5.5 s | 4.7x |
-| Galaxy S23 (Snapdragon 8 Gen 2) | 8 | 4.1 s | 6.2x |
-
-**Observation:** Newer CPUs benefit from better branch prediction and larger L2 cache.
-
----
-
-## 12. Known Issues & Future Work
-
-### 12.1 Current Limitations
+### 11.1 Current Limitations
 
 #### 1. Visualization Black Screen Bug (Fixed)
 **Status:** ✅ Fixed in v2.0  
@@ -1379,9 +1350,9 @@ cv::Mat img = cv::imdecode(c_bytes)  // Decode in C++
 
 ---
 
-### 12.2 Future Enhancements
+### 11.2 Future Enhancements
 
-#### 12.2.1 GPU Acceleration (High Priority)
+#### 11.2.1 GPU Acceleration (High Priority)
 
 **Target:** Reduce DIC time from 5s to <1s
 
@@ -1404,7 +1375,7 @@ cv::Mat img = cv::imdecode(c_bytes)  // Decode in C++
 
 ---
 
-#### 12.2.2 Live Camera DIC
+#### 11.2.2 Live Camera DIC
 
 **Goal:** Real-time strain monitoring during material testing
 
@@ -1448,7 +1419,7 @@ fun convertYUVToGrayscale(image: ImageProxy): ByteArray {
 
 ---
 
-#### 12.2.3 Machine Learning Subset Selection
+#### 11.2.3 Machine Learning Subset Selection
 
 **Problem:** Fixed grid wastes computation on flat, textureless regions.
 
@@ -1469,7 +1440,7 @@ Adaptive Grid: More points where texture is high
 
 ---
 
-#### 12.2.4 Crack Detection Post-Processing
+#### 11.2.4 Crack Detection Post-Processing
 
 **Goal:** Automatically detect cracks in strain maps
 
@@ -1483,9 +1454,9 @@ Adaptive Grid: More points where texture is high
 
 ---
 
-## 13. Appendix: Code Walkthrough
+## 12. Appendix: Code Walkthrough
 
-### 13.1 How to Add a New Strain Method
+### 12.1 How to Add a New Strain Method
 
 **Example:** Implement Maximum Shear Strain
 
@@ -1556,7 +1527,7 @@ spinnerType.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdow
 
 ---
 
-### 13.2 How to Debug Black Heatmap
+### 12.2 How to Debug Black Heatmap
 
 **Diagnostic Checklist:**
 
