@@ -65,6 +65,14 @@
                 android:layout_height="wrap_content"
                 android:text="Cancel"
                 android:backgroundTint="#AA0000"
+                android:layout_marginEnd="8dp"/>
+
+            <Button
+                android:id="@+id/btnResetRoi"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Reset"
+                android:backgroundTint="#555555"
                 android:layout_marginEnd="16dp"/>
 
             <RadioGroup

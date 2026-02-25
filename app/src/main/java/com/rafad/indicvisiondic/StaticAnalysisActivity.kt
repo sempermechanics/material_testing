@@ -114,14 +114,28 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         btnDefineRoi.setOnClickListener {
             if (viewModel.refBytes != null) {
+                // 🚀 THE FIX: Use the RAW, original bytes from the ViewModel
+                // Do NOT use the downscaled preview from the ImageView!
                 val tempFile = File(cacheDir, "temp_roi_ref.bin")
-                tempFile.writeBytes(viewModel.refBytes!!)
 
-                val intent = Intent(this, RoiDrawActivity::class.java)
-                intent.putExtra("IMAGE_FILE_PATH", tempFile.absolutePath)
-                intent.putExtra("IMAGE_WIDTH", viewModel.realRefWidth)
-                intent.putExtra("IMAGE_HEIGHT", viewModel.realRefHeight)
-                roiStudioLauncher.launch(intent)
+                try {
+                    // Instantly write the true raw image bytes to disk
+                    tempFile.writeBytes(viewModel.refBytes!!)
+
+                    val intent = Intent(this, RoiDrawActivity::class.java)
+                    intent.putExtra("IMAGE_FILE_PATH", tempFile.absolutePath)
+
+                    // Pass the TRUE original dimensions (e.g., 4000x3000)
+                    intent.putExtra("IMAGE_WIDTH", viewModel.realRefWidth)
+                    intent.putExtra("IMAGE_HEIGHT", viewModel.realRefHeight)
+
+                    roiStudioLauncher.launch(intent)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(this, "Failed to save temp file", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(this, "Load an image first!", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -349,20 +363,43 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun showShapeRoiDialog() {
+        // 1. Safety Check
         if (viewModel.refBytes == null) {
             Toast.makeText(this, "Load Reference Image first!", Toast.LENGTH_SHORT).show()
             return
         }
 
         val dialogView = layoutInflater.inflate(R.layout.dialog_manual_roi, null)
-        val spinner = dialogView.findViewById<Spinner>(R.id.spinnerShape)
-        val shapes = arrayOf("Rectangle / Square", "Circle", "Ellipse", "Triangle")
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, shapes)
+        val imgW = viewModel.realRefWidth
+        val imgH = viewModel.realRefHeight
 
+        // 2. UI Bindings
+        val spinner = dialogView.findViewById<Spinner>(R.id.spinnerShape)
+
+        // Layout containers for visibility toggling
         val layoutRect = dialogView.findViewById<View>(R.id.layoutRect)
         val layoutCircle = dialogView.findViewById<View>(R.id.layoutCircle)
         val layoutEllipse = dialogView.findViewById<View>(R.id.layoutEllipse)
         val layoutTri = dialogView.findViewById<View>(R.id.layoutTri)
+
+        // Rectangle inputs (Pre-fill with current values)
+        val etRectX = dialogView.findViewById<EditText>(R.id.etRectX)
+        val etRectY = dialogView.findViewById<EditText>(R.id.etRectY)
+        val etRectW = dialogView.findViewById<EditText>(R.id.etRectW)
+        val etRectH = dialogView.findViewById<EditText>(R.id.etRectH)
+
+        etRectX.setText(viewModel.roiX.toString())
+        etRectY.setText(viewModel.roiY.toString())
+        etRectW.setText(if (viewModel.roiW > 0) viewModel.roiW.toString() else imgW.toString())
+        etRectH.setText(if (viewModel.roiH > 0) viewModel.roiH.toString() else imgH.toString())
+
+        // Hints to help user
+        etRectW.hint = "Max: $imgW"
+        etRectH.hint = "Max: $imgH"
+
+        // 3. Setup Spinner
+        val shapes = arrayOf("Rectangle / Square", "Circle", "Ellipse", "Triangle")
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, shapes)
 
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p0: AdapterView<*>?, p1: View?, pos: Int, p3: Long) {
@@ -374,98 +411,116 @@ class StaticAnalysisActivity : AppCompatActivity() {
             override fun onNothingSelected(p0: AdapterView<*>?) {}
         }
 
-        // Pre-fill Rectangle info
-        dialogView.findViewById<EditText>(R.id.etRectX).setText(viewModel.roiX.toString())
-        dialogView.findViewById<EditText>(R.id.etRectY).setText(viewModel.roiY.toString())
-        dialogView.findViewById<EditText>(R.id.etRectW).setText(if (viewModel.roiW > 0) viewModel.roiW.toString() else viewModel.realRefWidth.toString())
-        dialogView.findViewById<EditText>(R.id.etRectH).setText(if (viewModel.roiH > 0) viewModel.roiH.toString() else viewModel.realRefHeight.toString())
-
-        android.app.AlertDialog.Builder(this)
+        // 4. Create Dialog (But don't set the listener yet!)
+        val dialog = android.app.AlertDialog.Builder(this)
             .setTitle("Define Mathematical ROI")
             .setView(dialogView)
-            .setPositiveButton("Apply") { _, _ ->
-                var finalX = 0; var finalY = 0; var finalW = 0; var finalH = 0
-                var requiresMask = false
-                val imgW = viewModel.realRefWidth
-                val imgH = viewModel.realRefHeight
+            .setPositiveButton("Apply", null) // Set null here to prevent auto-dismiss
+            .setNegativeButton("Cancel", null)
+            .create()
 
-                // Virtual Canvas for Mask Generation
-                val maskBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(maskBitmap)
-                canvas.drawColor(Color.BLACK) // Black = ignore
-                val paint = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL } // White = compute
+        dialog.show()
 
-                when (spinner.selectedItemPosition) {
-                    0 -> { // Rectangle
-                        finalX = dialogView.findViewById<EditText>(R.id.etRectX).text.toString().toIntOrNull() ?: 0
-                        finalY = dialogView.findViewById<EditText>(R.id.etRectY).text.toString().toIntOrNull() ?: 0
-                        finalW = dialogView.findViewById<EditText>(R.id.etRectW).text.toString().toIntOrNull() ?: imgW
-                        finalH = dialogView.findViewById<EditText>(R.id.etRectH).text.toString().toIntOrNull() ?: imgH
-                        viewModel.roiMaskBytes = null // No mask needed for basic rect
-                    }
-                    1 -> { // Circle
-                        requiresMask = true
-                        val cx = dialogView.findViewById<EditText>(R.id.etCircCx).text.toString().toFloatOrNull() ?: (imgW/2f)
-                        val cy = dialogView.findViewById<EditText>(R.id.etCircCy).text.toString().toFloatOrNull() ?: (imgH/2f)
-                        val r = dialogView.findViewById<EditText>(R.id.etCircR).text.toString().toFloatOrNull() ?: 100f
-                        canvas.drawCircle(cx, cy, r, paint)
+        // 5. Override the Button Logic for Validation
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            var finalX = 0; var finalY = 0; var finalW = 0; var finalH = 0
+            var requiresMask = false
 
-                        finalX = (cx - r).toInt().coerceAtLeast(0)
-                        finalY = (cy - r).toInt().coerceAtLeast(0)
-                        finalW = (r * 2).toInt()
-                        finalH = (r * 2).toInt()
-                    }
-                    2 -> { // Ellipse
-                        requiresMask = true
-                        val cx = dialogView.findViewById<EditText>(R.id.etEllCx).text.toString().toFloatOrNull() ?: (imgW/2f)
-                        val cy = dialogView.findViewById<EditText>(R.id.etEllCy).text.toString().toFloatOrNull() ?: (imgH/2f)
-                        val rx = dialogView.findViewById<EditText>(R.id.etEllRx).text.toString().toFloatOrNull() ?: 150f
-                        val ry = dialogView.findViewById<EditText>(R.id.etEllRy).text.toString().toFloatOrNull() ?: 100f
-                        canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, paint)
+            // Virtual Canvas for Mask Generation (only used if requiresMask becomes true)
+            // We create it lazily to save memory, or just create it here:
+            val maskBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(maskBitmap)
+            canvas.drawColor(Color.BLACK) // Black = ignore
+            val paint = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL } // White = compute
 
-                        finalX = (cx - rx).toInt().coerceAtLeast(0)
-                        finalY = (cy - ry).toInt().coerceAtLeast(0)
-                        finalW = (rx * 2).toInt()
-                        finalH = (ry * 2).toInt()
-                    }
-                    3 -> { // Triangle
-                        requiresMask = true
-                        val x1 = dialogView.findViewById<EditText>(R.id.etTriX1).text.toString().toFloatOrNull() ?: 0f
-                        val y1 = dialogView.findViewById<EditText>(R.id.etTriY1).text.toString().toFloatOrNull() ?: 0f
-                        val x2 = dialogView.findViewById<EditText>(R.id.etTriX2).text.toString().toFloatOrNull() ?: 0f
-                        val y2 = dialogView.findViewById<EditText>(R.id.etTriY2).text.toString().toFloatOrNull() ?: 0f
-                        val x3 = dialogView.findViewById<EditText>(R.id.etTriX3).text.toString().toFloatOrNull() ?: 0f
-                        val y3 = dialogView.findViewById<EditText>(R.id.etTriY3).text.toString().toFloatOrNull() ?: 0f
-
-                        val path = Path().apply { moveTo(x1, y1); lineTo(x2, y2); lineTo(x3, y3); close() }
-                        canvas.drawPath(path, paint)
-
-                        finalX = minOf(x1, x2, x3).toInt().coerceAtLeast(0)
-                        finalY = minOf(y1, y2, y3).toInt().coerceAtLeast(0)
-                        finalW = (maxOf(x1, x2, x3) - finalX).toInt()
-                        finalH = (maxOf(y1, y2, y3) - finalY).toInt()
-                    }
+            // --- CALCULATE BOUNDS BASED ON SHAPE ---
+            when (spinner.selectedItemPosition) {
+                0 -> { // Rectangle
+                    finalX = etRectX.text.toString().toIntOrNull() ?: 0
+                    finalY = etRectY.text.toString().toIntOrNull() ?: 0
+                    finalW = etRectW.text.toString().toIntOrNull() ?: 0
+                    finalH = etRectH.text.toString().toIntOrNull() ?: 0
+                    viewModel.roiMaskBytes = null
                 }
+                1 -> { // Circle
+                    requiresMask = true
+                    val cx = dialogView.findViewById<EditText>(R.id.etCircCx).text.toString().toFloatOrNull() ?: (imgW/2f)
+                    val cy = dialogView.findViewById<EditText>(R.id.etCircCy).text.toString().toFloatOrNull() ?: (imgH/2f)
+                    val r = dialogView.findViewById<EditText>(R.id.etCircR).text.toString().toFloatOrNull() ?: 100f
 
-                // If a non-rectangular shape was chosen, compress the virtual canvas to bytes for C++
+                    canvas.drawCircle(cx, cy, r, paint)
+
+                    finalX = (cx - r).toInt()
+                    finalY = (cy - r).toInt()
+                    finalW = (r * 2).toInt()
+                    finalH = (r * 2).toInt()
+                }
+                2 -> { // Ellipse
+                    requiresMask = true
+                    val cx = dialogView.findViewById<EditText>(R.id.etEllCx).text.toString().toFloatOrNull() ?: (imgW/2f)
+                    val cy = dialogView.findViewById<EditText>(R.id.etEllCy).text.toString().toFloatOrNull() ?: (imgH/2f)
+                    val rx = dialogView.findViewById<EditText>(R.id.etEllRx).text.toString().toFloatOrNull() ?: 150f
+                    val ry = dialogView.findViewById<EditText>(R.id.etEllRy).text.toString().toFloatOrNull() ?: 100f
+
+                    canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, paint)
+
+                    finalX = (cx - rx).toInt()
+                    finalY = (cy - ry).toInt()
+                    finalW = (rx * 2).toInt()
+                    finalH = (ry * 2).toInt()
+                }
+                3 -> { // Triangle
+                    requiresMask = true
+                    val x1 = dialogView.findViewById<EditText>(R.id.etTriX1).text.toString().toFloatOrNull() ?: 0f
+                    val y1 = dialogView.findViewById<EditText>(R.id.etTriY1).text.toString().toFloatOrNull() ?: 0f
+                    val x2 = dialogView.findViewById<EditText>(R.id.etTriX2).text.toString().toFloatOrNull() ?: 0f
+                    val y2 = dialogView.findViewById<EditText>(R.id.etTriY2).text.toString().toFloatOrNull() ?: 0f
+                    val x3 = dialogView.findViewById<EditText>(R.id.etTriX3).text.toString().toFloatOrNull() ?: 0f
+                    val y3 = dialogView.findViewById<EditText>(R.id.etTriY3).text.toString().toFloatOrNull() ?: 0f
+
+                    val path = Path().apply { moveTo(x1, y1); lineTo(x2, y2); lineTo(x3, y3); close() }
+                    canvas.drawPath(path, paint)
+
+                    finalX = minOf(x1, x2, x3).toInt()
+                    finalY = minOf(y1, y2, y3).toInt()
+                    finalW = (maxOf(x1, x2, x3) - finalX).toInt()
+                    finalH = (maxOf(y1, y2, y3) - finalY).toInt()
+                }
+            }
+
+            // 🚀 BOUNDARY VALIDATION LOGIC
+            // We check the Bounding Box of whatever shape was drawn
+            if (finalX < 0 || finalY < 0 || (finalX + finalW) > imgW || (finalY + finalH) > imgH || finalW <= 0 || finalH <= 0) {
+                val errorMsg = if (finalW <= 0 || finalH <= 0) {
+                    "Dimensions must be positive!"
+                } else {
+                    "Shape is out of bounds!\nMax Size: ${imgW}x${imgH}.\nYour Shape Ends at: ${finalX+finalW}x${finalY+finalH}"
+                }
+                Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
+                // Do NOT dismiss dialog, let user fix it
+            } else {
+                // ✅ SUCCESS
+
+                // Generate Mask Bytes if needed
                 if (requiresMask) {
                     val stream = java.io.ByteArrayOutputStream()
                     maskBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
                     viewModel.roiMaskBytes = stream.toByteArray()
-                    tvInstruction.text = "✅ Complex Shape ROI Generated & Applied!"
+                    tvInstruction.text = "✅ Complex Shape ROI Applied!"
                 } else {
                     tvInstruction.text = "✅ Rectangular ROI Set: $finalW x $finalH px"
                 }
 
-                // Save Bounding Box to ViewModel
+                // Save to ViewModel
                 viewModel.roiX = finalX
                 viewModel.roiY = finalY
                 viewModel.roiW = finalW
                 viewModel.roiH = finalH
                 viewModel.hasCustomRoi = true
+
                 checkReady()
+                dialog.dismiss() // NOW we dismiss
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+        }
     }
 }

@@ -5,13 +5,14 @@ import android.graphics.*
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import android.util.Log
+import android.view.MotionEvent
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.sqrt
 
 class ResultViewerActivity : AppCompatActivity() {
 
@@ -19,6 +20,9 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var imgHeatmap: ImageView
     private lateinit var spinnerType: Spinner
     private lateinit var tvScaleMax: TextView
+
+    // New: Point Inspector UI
+    private var tvPointInfo: TextView? = null
 
     // Export Buttons
     private lateinit var btnExportCsv: Button
@@ -33,20 +37,25 @@ class ResultViewerActivity : AppCompatActivity() {
     private var cachedBaseImage: Bitmap? = null
     private var cachedHeatmap: Bitmap? = null
     private var currentTypeString: String = "Displacement"
-    private var isGeneratingHeatmap = false // --- NEW: Safety Lock ---
+    private var isGeneratingHeatmap = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_result_viewer)
 
+        // 1. Bind UI
         imgMain = findViewById(R.id.imgBaseResult)
         imgHeatmap = findViewById(R.id.imgHeatmapOverlay)
         spinnerType = findViewById(R.id.spinnerResultType)
         tvScaleMax = findViewById(R.id.tvScaleMax)
 
+        // Try to find the inspector text view (Safe if missing)
+        tvPointInfo = findViewById(R.id.tvPointInfo)
+
         btnExportCsv = findViewById(R.id.btnExportCsv)
         btnExportImage = findViewById(R.id.btnExportImage)
 
+        // 2. Get Intent Data
         imgW = intent.getIntExtra("IMG_W", 0)
         imgH = intent.getIntExtra("IMG_H", 0)
         step = intent.getIntExtra("STEP", 5)
@@ -55,9 +64,11 @@ class ResultViewerActivity : AppCompatActivity() {
         val dataPath = intent.getStringExtra("DATA_PATH")
         if (dataPath != null) {
             val file = File(dataPath)
-            val bytes = file.readBytes()
-            rawData = FloatArray(bytes.size / 4)
-            ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(rawData)
+            if (file.exists()) {
+                val bytes = file.readBytes()
+                rawData = FloatArray(bytes.size / 4)
+                ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(rawData)
+            }
         }
 
         // Load deformed image into memory
@@ -65,16 +76,17 @@ class ResultViewerActivity : AppCompatActivity() {
         if (defPath != null) {
             cachedBaseImage = BitmapFactory.decodeFile(defPath)
             imgMain.setImageBitmap(cachedBaseImage)
+            // Important: Tell TouchImageView the real dimensions for accurate coordinate mapping
             imgMain.setTrueImageDimensions(imgW, imgH)
         }
 
-        // Matrix Sync
+        // 3. Matrix Sync (Keeps heatmap locked to base image)
         imgMain.onMatrixChangedListener = {
             imgHeatmap.imageMatrix = imgMain.getZoomMatrix()
             imgHeatmap.invalidate()
         }
 
-        // Setup Spinner
+        // 4. Setup Spinner
         val options = arrayOf("U Displacement", "V Displacement", "Exx Strain", "Eyy Strain", "Exy Shear")
         spinnerType.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
         spinnerType.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -85,15 +97,78 @@ class ResultViewerActivity : AppCompatActivity() {
             override fun onNothingSelected(p0: AdapterView<*>?) {}
         }
 
-        // Setup Export Listeners
+        // 5. Setup Export Listeners
         btnExportCsv.setOnClickListener { exportToCSV() }
         btnExportImage.setOnClickListener { exportMergedImage() }
+
+        // 6. Setup Point Inspector (Touch Listener)
+        setupPointInspector()
+    }
+
+    private fun setupPointInspector() {
+        imgMain.setOnTouchListener { _, event ->
+            // Only process if we have data and a TextView to show it in
+            if (rawData == null || tvPointInfo == null) return@setOnTouchListener false
+
+            if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
+                // A. Map Screen Touch -> Physical Image Coordinates
+                val pts = floatArrayOf(event.x, event.y)
+                val inverse = Matrix()
+                // Use getZoomMatrix() from your TouchImageView to get the current transform
+                imgMain.getZoomMatrix().invert(inverse)
+                inverse.mapPoints(pts)
+
+                val physX = pts[0]
+                val physY = pts[1]
+
+                // B. Find Nearest DIC Grid Point
+                // (Optimization: We search 1D array, but we could spatially hash for speed if needed)
+                val data = rawData!!
+                var closestIdx = -1
+                var minDist = 50f // Search radius (pixels)
+
+                // rawData format: [x, y, u, v, exx, eyy, exy, corr]... repeated
+                for (i in data.indices step 8) {
+                    val gx = data[i]
+                    val gy = data[i+1]
+
+                    // Simple distance check
+                    val dx = gx - physX
+                    val dy = gy - physY
+                    val dist = sqrt((dx*dx + dy*dy).toDouble()).toFloat()
+
+                    if (dist < minDist) {
+                        minDist = dist
+                        closestIdx = i
+                    }
+                }
+
+                // C. Update UI
+                if (closestIdx != -1) {
+                    val u = data[closestIdx + 2]
+                    val v = data[closestIdx + 3]
+                    val exx = data[closestIdx + 4]
+                    val eyy = data[closestIdx + 5]
+
+                    val infoText = "Point (${physX.toInt()}, ${physY.toInt()})\n" +
+                            "U: %.3f px  V: %.3f px\n".format(u, v) +
+                            "Exx: %.4f  Eyy: %.4f".format(exx, eyy)
+
+                    tvPointInfo?.text = infoText
+                    tvPointInfo?.visibility = View.VISIBLE
+                } else {
+                    tvPointInfo?.text = "No data point nearby"
+                }
+            }
+            // Return false so the touch event propagates to TouchImageView for zooming/panning
+            false
+        }
     }
 
     private fun updateVisualization(index: Int) {
         val data = rawData ?: return
 
-        isGeneratingHeatmap = true // Lock the export button
+        isGeneratingHeatmap = true // Lock export
 
         Thread {
             val result = VisualizationEngine.generateHeatmap(data, imgW, imgH, index, step)
@@ -110,12 +185,10 @@ class ResultViewerActivity : AppCompatActivity() {
                 val unit = if (index > 3) " [ε]" else " px"
                 tvScaleMax.text = "%.4f%s\n\n\n\n\n\n\n\n\n%.4f%s".format(maxV, unit, minV, unit)
 
-                isGeneratingHeatmap = false // Unlock the export button!
+                isGeneratingHeatmap = false // Unlock export
             }
         }.start()
     }
-
-    // --- EXPORT SUITE LOGIC ---
 
     private fun exportToCSV() {
         val data = rawData
@@ -150,7 +223,6 @@ class ResultViewerActivity : AppCompatActivity() {
                             val exx = data[i+4]; val eyy = data[i+5]; val exy = data[i+6]
                             val c = data[i+7]
 
-                            // Only export successfully tracked points
                             if (c != 0f) {
                                 writer.write("$x,$y,$u,$v,$exx,$eyy,$exy,$c\n")
                             }

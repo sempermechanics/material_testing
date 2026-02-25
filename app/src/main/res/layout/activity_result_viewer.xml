@@ -82,5 +82,17 @@
             android:backgroundTint="#2196F3"
             android:textColor="#FFFFFF"/>
     </LinearLayout>
+    <TextView
+        android:id="@+id/tvPointInfo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:background="#AA000000"
+        android:padding="8dp"
+        android:textColor="#FFFFFF"
+        android:text="Tap image to inspect"
+        android:visibility="visible"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true" />
 
 </RelativeLayout>
