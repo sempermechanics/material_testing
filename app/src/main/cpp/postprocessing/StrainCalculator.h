@@ -8,12 +8,12 @@ namespace IndicVision {
 
     struct DisplacementField {
         int width, height, step;
-        std::vector<double> u, v;
+        std::vector<float> u, v; // 🚀 Changed to float
         std::vector<bool> valid;
     };
 
     struct StrainField {
-        std::vector<double> exx, eyy, exy;
+        std::vector<float> exx, eyy, exy; // 🚀 Changed to float
     };
 
     class StrainCalculator {

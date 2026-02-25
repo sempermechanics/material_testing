@@ -30,64 +30,76 @@ namespace IndicVision {
         data.cx = cx;
         data.cy = cy;
 
-        // ==========================================
-        // THE CRASH FIX: O(1) BOUNDS CHECKING
-        // ==========================================
         if (cx - half < 0 || cx + half >= ref_img.width ||
             cy - half < 0 || cy + half >= ref_img.height) {
             data.is_initialized = false;
-            return; // Abort instantly!
+            return;
         }
 
-        double sum = 0.0;
+        // 🚀 Float conversion
+        float sum = 0.0f;
+        int idx = 0;
 
-        // 1. FAST INTEGER LOOKUPS
-        for (int i = 0; i < n; ++i) {
-            int ix = cx + data.x_offsets[i];
-            int iy = cy + data.y_offsets[i];
+        // ==========================================
+        // 🚀 CONTIGUOUS MEMORY SCAN (Hardware Prefetching)
+        // ==========================================
+        int start_y = cy - half;
+        int start_x = cx - half;
 
-            int img_idx = iy * ref_img.width + ix;
+        for (int y = 0; y < dim; ++y) {
+            const scalar_t* int_row = &ref_img.intensities[(start_y + y) * ref_img.width + start_x];
+            const scalar_t* gx_row = &ref_img.grad_x[(start_y + y) * ref_img.width + start_x];
+            const scalar_t* gy_row = &ref_img.grad_y[(start_y + y) * ref_img.width + start_x];
 
-            data.ref_intensities[i] = ref_img.intensities[img_idx];
-            sum += data.ref_intensities[i];
-
-            data.gx_vec[i] = ref_img.grad_x[img_idx];
-            data.gy_vec[i] = ref_img.grad_y[img_idx];
+            for (int x = 0; x < dim; ++x) {
+                data.ref_intensities[idx] = int_row[x];
+                data.gx_vec[idx] = gx_row[x];
+                data.gy_vec[idx] = gy_row[x];
+                sum += int_row[x];
+                idx++;
+            }
         }
 
-        // 2. Compute Stats
         data.mean_intensity = sum / n;
-        double sum_sq_diff = 0.0;
+        float sum_sq_diff = 0.0f; // 🚀 Float conversion
+
         for (int i = 0; i < n; ++i) {
-            double diff = data.ref_intensities[i] - data.mean_intensity;
+            float diff = data.ref_intensities[i] - data.mean_intensity;
             sum_sq_diff += diff * diff;
         }
         data.std_dev = std::sqrt(sum_sq_diff / n);
-        if (data.std_dev < 1e-5) data.std_dev = 1.0;
+        if (data.std_dev < 1e-5f) data.std_dev = 1.0f;
 
-        // 3. PRE-CALCULATE NORMALIZED REFERENCE
         for (int i = 0; i < n; ++i) {
             data.norm_ref_intensities[i] = (data.ref_intensities[i] - data.mean_intensity) / data.std_dev;
         }
 
-        // 4. Build Hessian
-        Eigen::Matrix<double, 6, 6> H = Eigen::Matrix<double, 6, 6>::Zero();
-        for (int i = 0; i < n; ++i) {
-            double x = data.x_offsets[i];
-            double y = data.y_offsets[i];
-            double gx = data.gx_vec[i] / data.std_dev;
-            double gy = data.gy_vec[i] / data.std_dev;
+        // 🚀 Convert to Matrix<float>
+        Eigen::Matrix<float, 6, 6> H = Eigen::Matrix<float, 6, 6>::Zero();
+        idx = 0;
 
-            Eigen::Matrix<double, 6, 1> sd;
-            sd << gx, gy, gx * x, gx * y, gy * x, gy * y;
+        // Exact Hessian Computation using direct relative coordinates
+        for (int y = -half; y <= half; ++y) {
+            for (int x = -half; x <= half; ++x) {
+                float gx = data.gx_vec[idx] / data.std_dev;
+                float gy = data.gy_vec[idx] / data.std_dev;
 
-            data.steepest_descent_images[i] = sd;
-            H += sd * sd.transpose();
+                // 🚀 Convert to Matrix<float>
+                Eigen::Matrix<float, 6, 1> sd;
+                // Cast x and y to float to prevent implicit double promotion
+                sd << gx, gy, gx * (float)x, gx * (float)y, gy * (float)x, gy * (float)y;
+
+                data.steepest_descent_images[idx] = sd;
+                H.noalias() += sd * sd.transpose();
+                idx++;
+            }
         }
 
-        double det = H.determinant();
-        if (std::abs(det) < 1e-12) {
-            data.H_inv = Eigen::Matrix<double, 6, 6>::Zero();
+        float det = H.determinant();
+
+        // 🚀 Relaxed threshold for float precision (1e-6 instead of 1e-12)
+        if (std::abs(det) < 1e-6f) {
+            data.H_inv = Eigen::Matrix<float, 6, 6>::Zero();
         } else {
             data.H_inv = H.inverse();
         }

@@ -26,7 +26,8 @@
 // ==========================================
 // 1. UTILITY: AKAZE GLOBAL SHIFT
 // ==========================================
-void computeGlobalShift(cv::Mat& ref, cv::Mat& def, double& u, double& v) {
+// 🚀 Converted parameters to float
+void computeGlobalShift(cv::Mat& ref, cv::Mat& def, float& u, float& v) {
     double scale = 0.25; // Scale down 4x for extreme speed
     cv::Mat smallRef, smallDef;
     cv::resize(ref, smallRef, cv::Size(), scale, scale, cv::INTER_NEAREST);
@@ -47,14 +48,14 @@ void computeGlobalShift(cv::Mat& ref, cv::Mat& def, double& u, double& v) {
 
     std::vector<cv::Point2f> p1, p2;
     for(auto& m : matches) {
-        if(m.size() == 2 && m[0].distance < 0.75 * m[1].distance) {
+        if(m.size() == 2 && m[0].distance < 0.75f * m[1].distance) {
             p1.push_back(kp1[m[0].queryIdx].pt);
             p2.push_back(kp2[m[0].trainIdx].pt);
         }
     }
 
     if(p1.size() > 5) {
-        std::vector<double> us, vs;
+        std::vector<float> us, vs; // 🚀 Float vectors
         for(size_t i=0; i<p1.size(); ++i) {
             us.push_back(p2[i].x - p1[i].x);
             vs.push_back(p2[i].y - p1[i].y);
@@ -63,8 +64,8 @@ void computeGlobalShift(cv::Mat& ref, cv::Mat& def, double& u, double& v) {
         std::sort(vs.begin(), vs.end());
 
         // Scale the answer back up to full resolution
-        u = us[us.size()/2] * (1.0 / scale);
-        v = vs[vs.size()/2] * (1.0 / scale);
+        u = us[us.size()/2] * (1.0f / (float)scale);
+        v = vs[vs.size()/2] * (1.0f / (float)scale);
         LOGD("Global Feature Match (Scaled): u=%.2f, v=%.2f", u, v);
     }
 }
@@ -161,7 +162,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
 
     if (refMat.empty() || defMat.empty()) {
         jfloatArray fail = env->NewFloatArray(5);
-        jfloat temp[] = {0,0,0,0,1}; // Status 1 = Fail
+        jfloat temp[] = {0.0f,0.0f,0.0f,0.0f,1.0f};
         env->SetFloatArrayRegion(fail, 0, 5, temp);
         return fail;
     }
@@ -172,27 +173,19 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
     refImg.prepare_data();
     defImg.prepare_data();
 
-    // Fix: Use correct parameters roiX and roiY
     IndicVision::SubsetData subset;
     IndicVision::SubsetPrecomputer::precompute_subset(subset, refImg, roiX, roiY, subsetSize);
 
-    // Fix: Use 0.0 starting guess since single point doesn't run AKAZE
     IndicVision::OptimizationEngine engine;
-    double startU = 0.0;
-    double startV = 0.0;
+    float startU = 0.0f; // 🚀 Float
+    float startV = 0.0f; // 🚀 Float
     IndicVision::AnalysisResult res = engine.calculate_deformation(subset, defImg, startU, startV, IndicVision::INIT_AUTO_SEARCH);
 
     jfloatArray output = env->NewFloatArray(5);
-    jfloat temp[5] = { (jfloat)res.u, (jfloat)res.v, 0.0f, (jfloat)res.ux, (jfloat)res.status };
+    jfloat temp[5] = { res.u, res.v, 0.0f, res.ux, (jfloat)res.status };
     env->SetFloatArrayRegion(output, 0, 5, temp);
     return output;
 }
-
-#include <omp.h>
-#include <thread>
-#include <atomic>
-#include <chrono>
-#include <mutex>
 
 // 6. COMPUTE FULL FIELD (2D HEATMAP & STRAIN)
 JNIEXPORT jfloatArray JNICALL
@@ -234,7 +227,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     defImg.prepare_data();
 
     // --- 2. GLOBAL AKAZE SHIFT ---
-    double globalU = 0.0, globalV = 0.0;
+    float globalU = 0.0f, globalV = 0.0f; // 🚀 Float
     if (useFeatureMatching) {
         cv::Rect roi(rectX, rectY, rectWidth, rectHeight);
         roi = roi & cv::Rect(0, 0, refMat.cols, refMat.rows);
@@ -269,7 +262,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
             } else {
                 total_valid_points++;
             }
-            resultGrid[y][x] = {(float)realX, (float)realY, 0, 0, 0, shouldSkip};
+            resultGrid[y][x] = {(float)realX, (float)realY, 0.0f, 0.0f, 0.0f, shouldSkip};
         }
     }
 
@@ -287,7 +280,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
                 if (std::abs(i) != r && std::abs(j) != r) continue;
                 int cx = seedGx + i, cy = seedGy + j;
                 if (cx >= 0 && cx < gridW && cy >= 0 && cy < gridH && !resultGrid[cy][cx].solved) {
-                    global_seeds.push_back(IndicVision::SeedNode(cx, cy, 0, 0, 0, 0, 0, 0, 0));
+                    global_seeds.push_back(IndicVision::SeedNode(cx, cy, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
                 }
             }
         }
@@ -299,13 +292,14 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     int total_cores = std::thread::hardware_concurrency();
     int safe_cores = std::max(1, total_cores);
 
+    // Trackers stay double to hold absolute MS precision
     std::vector<double> t_icgn_arr(safe_cores, 0.0), t_simplex_arr(safe_cores, 0.0), t_hessian_arr(safe_cores, 0.0);
     std::vector<int> c_icgn_arr(safe_cores, 0), c_simplex_arr(safe_cores, 0), c_points_arr(safe_cores, 0);
 
     std::atomic<int> seed_index(0);
     std::atomic<int> global_points_solved(0);
     std::atomic<bool> computation_running(true);
-    std::mutex grid_mutex; // SAFEGUARD MUTEX
+    std::mutex grid_mutex;
 
     jclass callbackClass = nullptr;
     jmethodID methodId = nullptr;
@@ -360,7 +354,6 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
                     if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
                         bool claimed = false;
 
-                        // --- FIX: Replaced OpenMP critical with C++ Mutex for deep thread safety ---
                         {
                             std::lock_guard<std::mutex> lock(grid_mutex);
                             if (!resultGrid[ny][nx].solved) {
@@ -383,14 +376,14 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
                         IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, current.u, current.v, IndicVision::INIT_NO_SEARCH);
 
-                        // --- FIX: Safely write to grid ---
                         {
                             std::lock_guard<std::mutex> lock(grid_mutex);
-                            resultGrid[ny][nx] = {(float)realX, (float)realY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
+                            resultGrid[ny][nx] = {(float)realX, (float)realY, res.u, res.v, res.correlation_score, true};
                         }
 
-                        if (res.status == 0 && res.correlation_score < 0.3) {
-                            local_queue.push(IndicVision::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+                        if (res.status == 0 && res.correlation_score < 0.3f) {
+                            IndicVision::SeedNode childNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score);
+                            local_queue.push(childNode);
                         }
                         local_points_solved++;
                         global_points_solved.fetch_add(1, std::memory_order_relaxed);
@@ -408,7 +401,6 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
                 IndicVision::SeedNode seed = global_seeds[current_idx];
                 bool claimed = false;
 
-                // --- FIX: Replaced OpenMP critical with C++ Mutex ---
                 {
                     std::lock_guard<std::mutex> lock(grid_mutex);
                     if (!resultGrid[seed.y_idx][seed.x_idx].solved) {
@@ -430,14 +422,15 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
 
                 IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, globalU, globalV, IndicVision::INIT_AUTO_SEARCH);
 
-                // --- FIX: Safely write to grid ---
                 {
                     std::lock_guard<std::mutex> lock(grid_mutex);
-                    resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, (float)res.u, (float)res.v, (float)res.correlation_score, true};
+                    resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.correlation_score, true};
                 }
 
-                if (res.status == 0 && res.correlation_score < 0.15) {
-                    local_queue.push(IndicVision::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+                if (res.status == 0 && res.correlation_score < 0.15f) {
+                    IndicVision::SeedNode newSeed(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score);
+                    local_queue.push(newSeed);
+
                     local_points_solved++;
                     global_points_solved.fetch_add(1, std::memory_order_relaxed);
                 }
@@ -468,8 +461,8 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     dispField.width = gridW;
     dispField.height = gridH;
     dispField.step = step;
-    dispField.u.resize(gridW * gridH, 0.0);
-    dispField.v.resize(gridW * gridH, 0.0);
+    dispField.u.resize(gridW * gridH, 0.0f);
+    dispField.v.resize(gridW * gridH, 0.0f);
     dispField.valid.resize(gridW * gridH, false);
 
     for(int y=0; y<gridH; ++y) {
@@ -504,11 +497,11 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
             if (dispField.valid[idx]) {
                 flatOutput.push_back(resultGrid[y][x].x);
                 flatOutput.push_back(resultGrid[y][x].y);
-                flatOutput.push_back((float)dispField.u[idx]);
-                flatOutput.push_back((float)dispField.v[idx]);
-                flatOutput.push_back((float)strainField.exx[idx]);
-                flatOutput.push_back((float)strainField.eyy[idx]);
-                flatOutput.push_back((float)strainField.exy[idx]);
+                flatOutput.push_back(dispField.u[idx]);
+                flatOutput.push_back(dispField.v[idx]);
+                flatOutput.push_back(strainField.exx[idx]);
+                flatOutput.push_back(strainField.eyy[idx]);
+                flatOutput.push_back(strainField.exy[idx]);
                 flatOutput.push_back(resultGrid[y][x].corr);
             }
         }
@@ -528,7 +521,8 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullField(
     LOGD("OpenMP Wall Time         : %.2f ms", t_track);
     LOGD("Total Points Solved      : %d", global_points_solved.load());
     for(int i=0; i<safe_cores; i++) {
-        LOGD(" Thread %d: Pts=%d, Hessian=%.1fms, Simplex=%.1fms", i, c_points_arr[i], t_hessian_arr[i], t_simplex_arr[i]);
+        LOGD(" Thread %d: Pts=%d, Hessian=%.1fms, ICGN=%.1fms, Simplex=%.1fms",
+             i, c_points_arr[i], t_hessian_arr[i], t_icgn_arr[i], t_simplex_arr[i]);
     }
     LOGD("Total JNI Execution Time : %.2f ms", std::chrono::duration<double, std::milli>(end_total - start_total).count());
     LOGD("========================================");

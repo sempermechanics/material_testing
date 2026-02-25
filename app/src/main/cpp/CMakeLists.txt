@@ -13,8 +13,7 @@ find_package(OpenCV REQUIRED)
 # -flto: Link-time optimization (cross-file inlining)
 # -ffast-math: Aggressive floating point math vectorization (MASSIVE speedup for DIC)
 # -fvisibility=hidden: Strips unused symbols, making the .so file smaller and faster to load
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -flto -ffast-math -fexceptions -fvisibility=hidden -fvisibility-inlines-hidden -fopenmp")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -flto -ffast-math -Wno-nan-infinity-disabled -fexceptions -fvisibility=hidden -fvisibility-inlines-hidden -fopenmp -O3 -fno-limit-debug-info -fPIC")
 add_library(
         indicvision_core
         SHARED
