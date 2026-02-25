@@ -1,5 +1,6 @@
 package com.rafad.indicvisiondic
 
+import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.graphics.*
 import android.os.Bundle
@@ -12,7 +13,6 @@ import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.math.sqrt
 
 class ResultViewerActivity : AppCompatActivity() {
 
@@ -21,154 +21,165 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var spinnerType: Spinner
     private lateinit var tvScaleMax: TextView
 
-    // New: Point Inspector UI
-    private var tvPointInfo: TextView? = null
-
     // Export Buttons
     private lateinit var btnExportCsv: Button
     private lateinit var btnExportImage: Button
+
+    // Inspector UI Components
+    private lateinit var toggleInspect: ToggleButton
+    private lateinit var cardInspectorHud: androidx.cardview.widget.CardView
+    private lateinit var tvInspectorData: TextView
+    private lateinit var glassShield: View // 🚀 The new touch barrier
 
     private var rawData: FloatArray? = null
     private var imgW = 0
     private var imgH = 0
     private var step = 5
 
-    // Variables for Exporter
     private var cachedBaseImage: Bitmap? = null
     private var cachedHeatmap: Bitmap? = null
-    private var currentTypeString: String = "Displacement"
+    private var currentTypeString: String = "U_Displacement"
     private var isGeneratingHeatmap = false
 
+    // Inspector States
+    private var currentDataIndex = 2
+    private var isInspectModeActive = false
+
+    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_result_viewer)
 
-        // 1. Bind UI
         imgMain = findViewById(R.id.imgBaseResult)
         imgHeatmap = findViewById(R.id.imgHeatmapOverlay)
         spinnerType = findViewById(R.id.spinnerResultType)
         tvScaleMax = findViewById(R.id.tvScaleMax)
-
-        // Try to find the inspector text view (Safe if missing)
-        tvPointInfo = findViewById(R.id.tvPointInfo)
-
         btnExportCsv = findViewById(R.id.btnExportCsv)
         btnExportImage = findViewById(R.id.btnExportImage)
 
-        // 2. Get Intent Data
+        // Bind New UI
+        toggleInspect = findViewById(R.id.toggleInspect)
+        cardInspectorHud = findViewById(R.id.cardInspectorHud)
+        tvInspectorData = findViewById(R.id.tvInspectorData)
+        glassShield = findViewById(R.id.glassShield)
+
         imgW = intent.getIntExtra("IMG_W", 0)
         imgH = intent.getIntExtra("IMG_H", 0)
         step = intent.getIntExtra("STEP", 5)
 
-        // Read raw data
         val dataPath = intent.getStringExtra("DATA_PATH")
         if (dataPath != null) {
             val file = File(dataPath)
-            if (file.exists()) {
-                val bytes = file.readBytes()
-                rawData = FloatArray(bytes.size / 4)
-                ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(rawData)
-            }
+            val bytes = file.readBytes()
+            rawData = FloatArray(bytes.size / 4)
+            ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(rawData)
         }
 
-        // Load deformed image into memory
         val defPath = intent.getStringExtra("DEF_PATH")
         if (defPath != null) {
             cachedBaseImage = BitmapFactory.decodeFile(defPath)
             imgMain.setImageBitmap(cachedBaseImage)
-            // Important: Tell TouchImageView the real dimensions for accurate coordinate mapping
             imgMain.setTrueImageDimensions(imgW, imgH)
         }
 
-        // 3. Matrix Sync (Keeps heatmap locked to base image)
         imgMain.onMatrixChangedListener = {
             imgHeatmap.imageMatrix = imgMain.getZoomMatrix()
             imgHeatmap.invalidate()
         }
 
-        // 4. Setup Spinner
         val options = arrayOf("U Displacement", "V Displacement", "Exx Strain", "Eyy Strain", "Exy Shear")
         spinnerType.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
         spinnerType.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p0: AdapterView<*>?, p1: View?, position: Int, p3: Long) {
                 currentTypeString = options[position].replace(" ", "_")
-                updateVisualization(position + 2)
+                currentDataIndex = position + 2
+                updateVisualization(currentDataIndex)
+
+                // Hide HUD when changing types to prevent stale data display
+                if (isInspectModeActive) {
+                    tvInspectorData.text = "Tap image to inspect"
+                }
             }
             override fun onNothingSelected(p0: AdapterView<*>?) {}
         }
 
-        // 5. Setup Export Listeners
-        btnExportCsv.setOnClickListener { exportToCSV() }
-        btnExportImage.setOnClickListener { exportMergedImage() }
+        // 🚀 TOGGLE LOGIC: Controls the Glass Shield
+        toggleInspect.setOnCheckedChangeListener { _, isChecked ->
+            isInspectModeActive = isChecked
+            if (isChecked) {
+                // Activate the shield and show the prompt
+                glassShield.visibility = View.VISIBLE
+                cardInspectorHud.visibility = View.VISIBLE
+                tvInspectorData.text = "Tap image to inspect"
+            } else {
+                // Remove the shield so imgMain can be zoomed/panned again
+                glassShield.visibility = View.GONE
+                cardInspectorHud.visibility = View.GONE
+            }
+        }
 
-        // 6. Setup Point Inspector (Touch Listener)
-        setupPointInspector()
-    }
-
-    private fun setupPointInspector() {
-        imgMain.setOnTouchListener { _, event ->
-            // Only process if we have data and a TextView to show it in
-            if (rawData == null || tvPointInfo == null) return@setOnTouchListener false
-
+        // 🚀 THE GLASS SHIELD TOUCH LISTENER
+        // This ONLY runs when Inspect Mode is ON, because the shield is GONE otherwise.
+        glassShield.setOnTouchListener { _, event ->
             if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
-                // A. Map Screen Touch -> Physical Image Coordinates
+
+                // 1. Math: Map touch to physical image pixels using the underlying image matrix
                 val pts = floatArrayOf(event.x, event.y)
-                val inverse = Matrix()
-                // Use getZoomMatrix() from your TouchImageView to get the current transform
-                imgMain.getZoomMatrix().invert(inverse)
+                val inverse = android.graphics.Matrix()
+                imgMain.imageMatrix.invert(inverse)
                 inverse.mapPoints(pts)
 
                 val physX = pts[0]
                 val physY = pts[1]
 
-                // B. Find Nearest DIC Grid Point
-                // (Optimization: We search 1D array, but we could spatially hash for speed if needed)
-                val data = rawData!!
-                var closestIdx = -1
-                var minDist = 50f // Search radius (pixels)
+                // 2. Data Scan
+                val data = rawData
+                if (data != null) {
+                    var closestIdx = -1
+                    var minDistSq = Float.MAX_VALUE
+                    val searchRadius = step * 1.5f
+                    val searchRadiusSq = searchRadius * searchRadius
 
-                // rawData format: [x, y, u, v, exx, eyy, exy, corr]... repeated
-                for (i in data.indices step 8) {
-                    val gx = data[i]
-                    val gy = data[i+1]
+                    for (i in data.indices step 8) {
+                        val dx = data[i] - physX
+                        val dy = data[i+1] - physY
+                        val distSq = dx * dx + dy * dy
 
-                    // Simple distance check
-                    val dx = gx - physX
-                    val dy = gy - physY
-                    val dist = sqrt((dx*dx + dy*dy).toDouble()).toFloat()
+                        if (distSq < minDistSq && distSq <= searchRadiusSq) {
+                            val corr = data[i + 7]
+                            if (corr != 0f && corr <= 0.25f) {
+                                minDistSq = distSq
+                                closestIdx = i
+                            }
+                        }
+                    }
 
-                    if (dist < minDist) {
-                        minDist = dist
-                        closestIdx = i
+                    // 3. UI Update
+                    if (closestIdx != -1) {
+                        val actualX = data[closestIdx].toInt()
+                        val actualY = data[closestIdx + 1].toInt()
+                        val value = data[closestIdx + currentDataIndex]
+
+                        val unit = if (currentDataIndex > 3) "ε" else "px"
+                        val valName = spinnerType.selectedItem.toString()
+
+                        tvInspectorData.text = "Loc: ($actualX, $actualY)\n$valName: %.5f %s".format(value, unit)
+                    } else {
+                        tvInspectorData.text = "Out of bounds / No Data"
                     }
                 }
-
-                // C. Update UI
-                if (closestIdx != -1) {
-                    val u = data[closestIdx + 2]
-                    val v = data[closestIdx + 3]
-                    val exx = data[closestIdx + 4]
-                    val eyy = data[closestIdx + 5]
-
-                    val infoText = "Point (${physX.toInt()}, ${physY.toInt()})\n" +
-                            "U: %.3f px  V: %.3f px\n".format(u, v) +
-                            "Exx: %.4f  Eyy: %.4f".format(exx, eyy)
-
-                    tvPointInfo?.text = infoText
-                    tvPointInfo?.visibility = View.VISIBLE
-                } else {
-                    tvPointInfo?.text = "No data point nearby"
-                }
             }
-            // Return false so the touch event propagates to TouchImageView for zooming/panning
-            false
+            // Always consume the touch so it doesn't leak through to the image below
+            true
         }
+
+        btnExportCsv.setOnClickListener { exportToCSV() }
+        btnExportImage.setOnClickListener { exportMergedImage() }
     }
 
     private fun updateVisualization(index: Int) {
         val data = rawData ?: return
-
-        isGeneratingHeatmap = true // Lock export
+        isGeneratingHeatmap = true
 
         Thread {
             val result = VisualizationEngine.generateHeatmap(data, imgW, imgH, index, step)
@@ -184,8 +195,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
                 val unit = if (index > 3) " [ε]" else " px"
                 tvScaleMax.text = "%.4f%s\n\n\n\n\n\n\n\n\n%.4f%s".format(maxV, unit, minV, unit)
-
-                isGeneratingHeatmap = false // Unlock export
+                isGeneratingHeatmap = false
             }
         }.start()
     }
@@ -259,18 +269,14 @@ class ResultViewerActivity : AppCompatActivity() {
 
         Thread {
             try {
-                // Create a blank full-resolution canvas
                 val mergedBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(mergedBitmap)
 
-                // Draw base image
                 canvas.drawBitmap(base, 0f, 0f, null)
 
-                // Draw the translucent heatmap over it exactly as the user sees it
                 val alphaPaint = Paint().apply { alpha = 180 }
                 canvas.drawBitmap(overlay, 0f, 0f, alphaPaint)
 
-                // Save to Gallery
                 val fileName = "IndicVision_${currentTypeString}_${System.currentTimeMillis()}.png"
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)

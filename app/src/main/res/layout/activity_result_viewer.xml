@@ -2,7 +2,8 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#111111">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:background="#1E1E24">
 
     <Spinner
         android:id="@+id/spinnerResultType"
@@ -17,6 +18,16 @@
         android:layout_height="match_parent"
         android:layout_below="@id/spinnerResultType">
 
+        <ToggleButton
+            android:id="@+id/toggleInspect"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textOn="INSPECT: ON"
+            android:textOff="INSPECT: OFF"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#4CAF50"
+            android:layout_margin="8dp" />
+
         <com.rafad.indicvisiondic.TouchImageView
             android:id="@+id/imgBaseResult"
             android:layout_width="match_parent"
@@ -29,7 +40,17 @@
             android:layout_height="match_parent"
             android:scaleType="matrix"
             android:alpha="0.7" />
-
+        <View
+            android:id="@+id/glassShield"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone"
+            app:layout_constraintTop_toTopOf="@id/imgBaseResult"
+            app:layout_constraintBottom_toBottomOf="@id/imgBaseResult"
+            app:layout_constraintStart_toStartOf="@id/imgBaseResult"
+            app:layout_constraintEnd_toEndOf="@id/imgBaseResult"/>
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="200dp"
@@ -82,17 +103,28 @@
             android:backgroundTint="#2196F3"
             android:textColor="#FFFFFF"/>
     </LinearLayout>
-    <TextView
-        android:id="@+id/tvPointInfo"
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cardInspectorHud"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:background="#AA000000"
-        android:padding="8dp"
-        android:textColor="#FFFFFF"
-        android:text="Tap image to inspect"
-        android:visibility="visible"
-        android:layout_alignParentTop="true"
-        android:layout_centerHorizontal="true" />
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentStart="true"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="100dp"
+        app:cardBackgroundColor="#CC1E1E24"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="6dp"
+        android:visibility="gone">
 
+        <TextView
+            android:id="@+id/tvInspectorData"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="16dp"
+            android:text="Tap image to inspect"
+            android:textColor="#00FF00"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"/>
+    </androidx.cardview.widget.CardView>
 </RelativeLayout>
