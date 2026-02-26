@@ -29,8 +29,7 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var toggleInspect: ToggleButton
     private lateinit var cardInspectorHud: androidx.cardview.widget.CardView
     private lateinit var tvInspectorData: TextView
-    private lateinit var glassShield: View // 🚀 The new touch barrier
-
+    private lateinit var glassShield: InspectOverlayView
     private var rawData: FloatArray? = null
     private var imgW = 0
     private var imgH = 0
@@ -44,9 +43,13 @@ class ResultViewerActivity : AppCompatActivity() {
     // Inspector States
     private var currentDataIndex = 2
     private var isInspectModeActive = false
+    private var lastClosestIdx = -1
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (savedInstanceState != null) {
+            lastClosestIdx = savedInstanceState.getInt("LAST_CLOSEST_IDX", -1)
+        }
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_result_viewer)
 
@@ -95,88 +98,106 @@ class ResultViewerActivity : AppCompatActivity() {
                 currentDataIndex = position + 2
                 updateVisualization(currentDataIndex)
 
-                // Hide HUD when changing types to prevent stale data display
+                // 🚀 Update text dynamically if probe is active, else hide
                 if (isInspectModeActive) {
-                    tvInspectorData.text = "Tap image to inspect"
+                    if (lastClosestIdx != -1) refreshCrosshair()
+                    else tvInspectorData.text = "Tap image to inspect"
                 }
             }
             override fun onNothingSelected(p0: AdapterView<*>?) {}
         }
 
-        // 🚀 TOGGLE LOGIC: Controls the Glass Shield
         toggleInspect.setOnCheckedChangeListener { _, isChecked ->
             isInspectModeActive = isChecked
             if (isChecked) {
-                // Activate the shield and show the prompt
                 glassShield.visibility = View.VISIBLE
                 cardInspectorHud.visibility = View.VISIBLE
-                tvInspectorData.text = "Tap image to inspect"
+                if (lastClosestIdx != -1) refreshCrosshair() // 🚀 Recalculate if image was panned
+                else tvInspectorData.text = "Tap image to inspect"
             } else {
-                // Remove the shield so imgMain can be zoomed/panned again
+                glassShield.hide()
                 glassShield.visibility = View.GONE
                 cardInspectorHud.visibility = View.GONE
             }
         }
 
         // 🚀 THE GLASS SHIELD TOUCH LISTENER
-        // This ONLY runs when Inspect Mode is ON, because the shield is GONE otherwise.
         glassShield.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
+            when (event.action) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
 
-                // 1. Math: Map touch to physical image pixels using the underlying image matrix
-                val pts = floatArrayOf(event.x, event.y)
-                val inverse = android.graphics.Matrix()
-                imgMain.imageMatrix.invert(inverse)
-                inverse.mapPoints(pts)
+                    // 1. Math: Map touch to physical image pixels using the underlying image matrix
+                    val pts = floatArrayOf(event.x, event.y)
+                    val inverse = android.graphics.Matrix()
+                    imgMain.imageMatrix.invert(inverse)
+                    inverse.mapPoints(pts)
 
-                val physX = pts[0]
-                val physY = pts[1]
+                    val physX = pts[0]
+                    val physY = pts[1]
 
-                // 2. Data Scan
-                val data = rawData
-                if (data != null) {
-                    var closestIdx = -1
-                    var minDistSq = Float.MAX_VALUE
-                    val searchRadius = step * 1.5f
-                    val searchRadiusSq = searchRadius * searchRadius
+                    // 2. Data Scan
+                    val data = rawData
+                    if (data != null) {
+                        var closestIdx = -1
+                        var minDistSq = Float.MAX_VALUE
+                        val searchRadius = step * 1.5f
+                        val searchRadiusSq = searchRadius * searchRadius
 
-                    for (i in data.indices step 8) {
-                        val dx = data[i] - physX
-                        val dy = data[i+1] - physY
-                        val distSq = dx * dx + dy * dy
+                        for (i in data.indices step 8) {
+                            val dx = data[i] - physX
+                            val dy = data[i+1] - physY
+                            val distSq = dx * dx + dy * dy
 
-                        if (distSq < minDistSq && distSq <= searchRadiusSq) {
-                            val corr = data[i + 7]
-                            if (corr != 0f && corr <= 0.25f) {
-                                minDistSq = distSq
-                                closestIdx = i
+                            if (distSq < minDistSq && distSq <= searchRadiusSq) {
+                                val corr = data[i + 7]
+                                if (corr != 0f && corr <= 0.25f) {
+                                    minDistSq = distSq
+                                    closestIdx = i
+                                }
                             }
                         }
+
+                        // 3. UI Update & Boundary Logic
+                        if (closestIdx != -1) {
+                            // ✅ VALID DATA: Update crosshair position and show data
+                            glassShield.updatePosition(event.x, event.y)
+
+                            val actualX = data[closestIdx].toInt()
+                            val actualY = data[closestIdx + 1].toInt()
+                            val value = data[closestIdx + currentDataIndex]
+
+                            val unit = if (currentDataIndex > 3) "ε" else "px"
+                            val valName = spinnerType.selectedItem.toString()
+                            lastClosestIdx = closestIdx // 🚀 SAVE THE STATE
+                            refreshCrosshair()          // 🚀 CALL OUR HELPER
+
+                            tvInspectorData.text = "Loc: ($actualX, $actualY)\n$valName: %.5f %s".format(value, unit)
+                        } else {
+                            lastClosestIdx = -1         // 🚀 CLEAR THE STATE                            // ❌ OUT OF BOUNDS: Hide crosshair, but update text to warn user
+                            glassShield.hide()
+                            tvInspectorData.text = "Out of bounds / No Data"
+                        }
                     }
-
-                    // 3. UI Update
-                    if (closestIdx != -1) {
-                        val actualX = data[closestIdx].toInt()
-                        val actualY = data[closestIdx + 1].toInt()
-                        val value = data[closestIdx + currentDataIndex]
-
-                        val unit = if (currentDataIndex > 3) "ε" else "px"
-                        val valName = spinnerType.selectedItem.toString()
-
-                        tvInspectorData.text = "Loc: ($actualX, $actualY)\n$valName: %.5f %s".format(value, unit)
-                    } else {
-                        tvInspectorData.text = "Out of bounds / No Data"
-                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // 🚀 DO NOTHING!
+                    // By removing the hide() command here, the crosshair and HUD
+                    // permanently stay frozen at the last valid location you touched.
                 }
             }
             // Always consume the touch so it doesn't leak through to the image below
             true
         }
-
+        imgMain.post {
+            if (isInspectModeActive) refreshCrosshair()
+        }
         btnExportCsv.setOnClickListener { exportToCSV() }
         btnExportImage.setOnClickListener { exportMergedImage() }
     }
-
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("LAST_CLOSEST_IDX", lastClosestIdx)
+    }
     private fun updateVisualization(index: Int) {
         val data = rawData ?: return
         isGeneratingHeatmap = true
@@ -300,5 +321,24 @@ class ResultViewerActivity : AppCompatActivity() {
                 runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save Image", Toast.LENGTH_SHORT).show() }
             }
         }.start()
+    }
+    private fun refreshCrosshair() {
+        if (isInspectModeActive && lastClosestIdx != -1 && rawData != null) {
+            val data = rawData!!
+            val actualX = data[lastClosestIdx].toInt()
+            val actualY = data[lastClosestIdx + 1].toInt()
+            val value = data[lastClosestIdx + currentDataIndex]
+
+            val unit = if (currentDataIndex > 3) "ε" else "px"
+            val valName = spinnerType.selectedItem.toString()
+
+            tvInspectorData.text = "Loc: ($actualX, $actualY)\n$valName: %.5f %s".format(value, unit)
+            cardInspectorHud.visibility = View.VISIBLE
+
+            // 🚀 The Magic: Map the physical pixel back to the new Screen Coordinates
+            val pts = floatArrayOf(actualX.toFloat(), actualY.toFloat())
+            imgMain.imageMatrix.mapPoints(pts)
+            glassShield.updatePosition(pts[0], pts[1])
+        }
     }
 }

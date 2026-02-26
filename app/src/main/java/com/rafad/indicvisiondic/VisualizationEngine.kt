@@ -24,11 +24,27 @@ object VisualizationEngine {
         step: Int
     ): Triple<Bitmap, Float, Float> {
 
-        // 1. Statistical analysis remains the same (it's fast enough)
+        // 1. Setup Data Bounds
+        var minX = Int.MAX_VALUE
+        var minY = Int.MAX_VALUE
+        var maxX = Int.MIN_VALUE
+        var maxY = Int.MIN_VALUE
+
         val validValues = mutableListOf<Float>()
+
+        // Find the bounding box of valid DIC data
         for (i in data.indices step 8) {
-            if (data[i + 7] != 0f && data[i + 7] < 0.25f) {
-                validValues.add(data[i + valIndex])
+            val corr = data[i + 7]
+            if (corr != 0f && corr <= 0.25f) {
+                val x = data[i].toInt()
+                val y = data[i+1].toInt()
+                val v = data[i+valIndex]
+
+                validValues.add(v)
+                if (x < minX) minX = x
+                if (x > maxX) maxX = x
+                if (y < minY) minY = y
+                if (y > maxY) maxY = y
             }
         }
 
@@ -36,45 +52,83 @@ object VisualizationEngine {
             return Triple(Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888), 0f, 0f)
         }
 
+        // Calculate Scale
         validValues.sort()
         val minV = validValues[(validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)]
         val maxV = validValues[(validValues.size * 0.98).toInt().coerceIn(0, validValues.size - 1)]
         val range = if (maxV - minV == 0f) 0.0001f else maxV - minV
 
-        // 🚀 2. THE PIXEL BUFFER (Total Image Area)
-        // This is where the magic happens. We write to RAM, not a Canvas.
-        val pixels = IntArray(imgW * imgH)
+        val pixels = IntArray(imgW * imgH) // Transparent by default (0x00000000)
 
-        // 3. Fill the pixel array
-        val halfStep = step / 2
+        // 🚀 2. RECONSTRUCT THE 2D GRID
+        val cols = ((maxX - minX) / step) + 1
+        val rows = ((maxY - minY) / step) + 1
+        val grid = FloatArray(cols * rows) { Float.NaN } // Fill with NaN initially
+
         for (i in data.indices step 8) {
             val corr = data[i + 7]
-            if (corr == 0f || corr > 0.25f) continue
+            if (corr != 0f && corr <= 0.25f) {
+                val x = data[i].toInt()
+                val y = data[i+1].toInt()
+                val c = (x - minX) / step
+                val r = (y - minY) / step
 
-            val centerX = data[i].toInt()
-            val centerY = data[i + 1].toInt()
-            val value = data[i + valIndex]
-
-            // Get color from LUT (No math needed here!)
-            val norm = ((value.coerceIn(minV, maxV) - minV) / range * 255).toInt()
-            val color = JET_LUT[norm.coerceIn(0, 255)]
-
-            // 🚀 FAST BLOCK FILL: Instead of drawRect, we fill the IntArray
-            // This is the direct equivalent of drawing a solid rectangle
-            val yStart = (centerY - halfStep).coerceIn(0, imgH - 1)
-            val yEnd = (centerY + halfStep).coerceIn(0, imgH - 1)
-            val xStart = (centerX - halfStep).coerceIn(0, imgW - 1)
-            val xEnd = (centerX + halfStep).coerceIn(0, imgW - 1)
-
-            for (y in yStart..yEnd) {
-                val rowOffset = y * imgW
-                for (x in xStart..xEnd) {
-                    pixels[rowOffset + x] = color
+                if (c in 0 until cols && r in 0 until rows) {
+                    grid[r * cols + c] = data[i+valIndex]
                 }
             }
         }
 
-        // 🚀 4. BLAST TO GPU: One-time memory copy to the Bitmap
+        // Precompute coordinate weights for blazing fast math inside the loop
+        val weights = FloatArray(step) { it / step.toFloat() }
+
+        // 🚀 3. BILINEAR INTERPOLATION (Cell by Cell)
+        for (r in 0 until rows - 1) {
+            for (c in 0 until cols - 1) {
+
+                // Get the 4 corners of the current grid cell
+                val v00 = grid[r * cols + c]           // Top-Left
+                val v10 = grid[r * cols + (c + 1)]     // Top-Right
+                val v01 = grid[(r + 1) * cols + c]     // Bottom-Left
+                val v11 = grid[(r + 1) * cols + (c + 1)] // Bottom-Right
+
+                // Only render the cell if ALL 4 corners are valid mathematical points
+                if (!v00.isNaN() && !v10.isNaN() && !v01.isNaN() && !v11.isNaN()) {
+                    val pxStart = minX + c * step
+                    val pyStart = minY + r * step
+
+                    // Loop through every pixel inside this cell
+                    for (py in 0 until step) {
+                        val wy = weights[py]
+                        val absY = pyStart + py
+                        if (absY < 0 || absY >= imgH) continue
+                        val rowOffset = absY * imgW
+
+                        // 🚀 Mathematical Speedup: Interpolate the Y-axis edges first outside the X-loop
+                        val leftEdgeV = v00 + wy * (v01 - v00)
+                        val rightEdgeV = v10 + wy * (v11 - v10)
+
+                        for (px in 0 until step) {
+                            val absX = pxStart + px
+                            if (absX < 0 || absX >= imgW) continue
+
+                            val wx = weights[px]
+
+                            // Final X-axis interpolation between the two Y-edges
+                            val v = leftEdgeV + wx * (rightEdgeV - leftEdgeV)
+
+                            // Apply Color mapping
+                            val norm = ((v.coerceIn(minV, maxV) - minV) / range * 255).toInt()
+                            val color = JET_LUT[norm.coerceIn(0, 255)]
+
+                            pixels[rowOffset + absX] = color
+                        }
+                    }
+                }
+            }
+        }
+
+        // 🚀 4. ONE-TIME MEMORY TRANSFER TO GPU
         val bitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
         bitmap.setPixels(pixels, 0, imgW, 0, 0, imgW, imgH)
 

@@ -40,17 +40,13 @@
             android:layout_height="match_parent"
             android:scaleType="matrix"
             android:alpha="0.7" />
-        <View
+        <com.rafad.indicvisiondic.InspectOverlayView
             android:id="@+id/glassShield"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clickable="true"
             android:focusable="true"
-            android:visibility="gone"
-            app:layout_constraintTop_toTopOf="@id/imgBaseResult"
-            app:layout_constraintBottom_toBottomOf="@id/imgBaseResult"
-            app:layout_constraintStart_toStartOf="@id/imgBaseResult"
-            app:layout_constraintEnd_toEndOf="@id/imgBaseResult"/>
+            android:visibility="gone" />
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="200dp"
