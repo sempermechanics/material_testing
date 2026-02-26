@@ -1,32 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="#1E1E24">
 
-    <Spinner
-        android:id="@+id/spinnerResultType"
+    <HorizontalScrollView
+        android:id="@+id/topScroll"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:background="@android:drawable/btn_dropdown" />
+        android:layout_alignParentTop="true"
+        android:scrollbars="none">
 
-    <FrameLayout
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="8dp">
+
+            <Spinner
+                android:id="@+id/spinnerResultType"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@android:drawable/btn_dropdown"
+                android:layout_marginEnd="8dp" />
+
+            <ToggleButton
+                android:id="@+id/toggleInspect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textOn="INSPECT: ON"
+                android:textOff="INSPECT: OFF"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#4CAF50"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/btnInputCoords"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📍 X,Y"
+                android:backgroundTint="#FF9800"
+                android:textColor="#FFFFFF"
+                android:layout_marginEnd="8dp"/>
+
+            <ToggleButton
+                android:id="@+id/toggleMaxMin"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textOn="🔥 MAX/MIN"
+                android:textOff="🔥 MAX/MIN"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#E91E63" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <RelativeLayout
         android:id="@+id/zoomContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/spinnerResultType">
-
-        <ToggleButton
-            android:id="@+id/toggleInspect"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textOn="INSPECT: ON"
-            android:textOff="INSPECT: OFF"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#4CAF50"
-            android:layout_margin="8dp" />
+        android:layout_below="@id/topScroll">
 
         <com.rafad.indicvisiondic.TouchImageView
             android:id="@+id/imgBaseResult"
@@ -40,6 +74,7 @@
             android:layout_height="match_parent"
             android:scaleType="matrix"
             android:alpha="0.7" />
+
         <com.rafad.indicvisiondic.InspectOverlayView
             android:id="@+id/glassShield"
             android:layout_width="match_parent"
@@ -47,34 +82,53 @@
             android:clickable="true"
             android:focusable="true"
             android:visibility="gone" />
+
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="200dp"
-            android:layout_gravity="end|center_vertical"
-            android:layout_marginEnd="10dp"
-            android:background="#99000000"
+            android:id="@+id/layoutColorScale"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentTop="true"
+            android:layout_marginHorizontal="32dp"
+            android:layout_marginTop="8dp"
             android:orientation="horizontal"
-            android:padding="4dp">
+            android:background="#CC1E1E24"
+            android:padding="8dp"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground">
+
+            <TextView
+                android:id="@+id/tvScaleMin"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Min: 0.0"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="12dp"/>
+
+            <View
+                android:id="@+id/viewColorScale"
+                android:layout_width="0dp"
+                android:layout_height="16dp"
+                android:layout_weight="1"
+                android:background="@drawable/jet_gradient_horizontal"/>
 
             <TextView
                 android:id="@+id/tvScaleMax"
                 android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:text="Max\n\n\n\nMin"
+                android:layout_height="wrap_content"
+                android:text="Max: 0.0"
                 android:textColor="#FFFFFF"
-                android:textSize="10sp"
-                android:gravity="center_vertical"/>
-
-            <View
-                android:id="@+id/viewColorScale"
-                android:layout_width="20dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="4dp"
-                android:background="@drawable/jet_gradient_bar"/>
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginStart="12dp"/>
         </LinearLayout>
-    </FrameLayout>
+    </RelativeLayout>
 
     <LinearLayout
+        android:id="@+id/layoutExport"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
@@ -99,14 +153,15 @@
             android:backgroundTint="#2196F3"
             android:textColor="#FFFFFF"/>
     </LinearLayout>
+
     <androidx.cardview.widget.CardView
         android:id="@+id/cardInspectorHud"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
+        android:layout_above="@id/layoutExport"
         android:layout_alignParentStart="true"
         android:layout_marginStart="16dp"
-        android:layout_marginBottom="100dp"
+        android:layout_marginBottom="0dp"
         app:cardBackgroundColor="#CC1E1E24"
         app:cardCornerRadius="8dp"
         app:cardElevation="6dp"
@@ -116,11 +171,37 @@
             android:id="@+id/tvInspectorData"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:padding="16dp"
+            android:padding="12dp"
             android:text="Tap image to inspect"
             android:textColor="#00FF00"
-            android:textSize="15sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:fontFamily="monospace"/>
     </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cardMaxMinHud"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/cardInspectorHud"
+        android:layout_alignParentStart="true"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="2dp"
+        app:cardBackgroundColor="#CC1E1E24"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvMaxMinData"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:text="Max: --\nMin: --"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"/>
+    </androidx.cardview.widget.CardView>
+
 </RelativeLayout>

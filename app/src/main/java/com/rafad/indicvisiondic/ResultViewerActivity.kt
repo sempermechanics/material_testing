@@ -19,51 +19,76 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var imgMain: TouchImageView
     private lateinit var imgHeatmap: ImageView
     private lateinit var spinnerType: Spinner
-    private lateinit var tvScaleMax: TextView
 
-    // Export Buttons
+    // UI - Scale Bar
+    private lateinit var layoutColorScale: LinearLayout
+    private lateinit var tvScaleMax: TextView
+    private lateinit var tvScaleMin: TextView
+
     private lateinit var btnExportCsv: Button
     private lateinit var btnExportImage: Button
+    private lateinit var btnInputCoords: Button
+    private lateinit var toggleMaxMin: ToggleButton
 
-    // Inspector UI Components
+    // UI - Inspector Components
     private lateinit var toggleInspect: ToggleButton
     private lateinit var cardInspectorHud: androidx.cardview.widget.CardView
     private lateinit var tvInspectorData: TextView
+    private lateinit var cardMaxMinHud: androidx.cardview.widget.CardView
+    private lateinit var tvMaxMinData: TextView
     private lateinit var glassShield: InspectOverlayView
+
     private var rawData: FloatArray? = null
-    private var imgW = 0
-    private var imgH = 0
-    private var step = 5
+    private var imgW = 0; private var imgH = 0; private var step = 5
 
     private var cachedBaseImage: Bitmap? = null
     private var cachedHeatmap: Bitmap? = null
-    private var currentTypeString: String = "U_Displacement"
+    private var currentTypeString: String = "U"
     private var isGeneratingHeatmap = false
 
-    // Inspector States
+    // States
     private var currentDataIndex = 2
     private var isInspectModeActive = false
+    private var isMaxMinActive = false
+
     private var lastClosestIdx = -1
+    private var lastMaxIdx = -1
+    private var lastMinIdx = -1
+
+    private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (savedInstanceState != null) {
-            lastClosestIdx = savedInstanceState.getInt("LAST_CLOSEST_IDX", -1)
-        }
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_result_viewer)
+
+        // Restore state on screen rotation
+        if (savedInstanceState != null) {
+            lastClosestIdx = savedInstanceState.getInt("LAST_CLOSEST_IDX", -1)
+            lastMaxIdx = savedInstanceState.getInt("LAST_MAX_IDX", -1)
+            lastMinIdx = savedInstanceState.getInt("LAST_MIN_IDX", -1)
+            isMaxMinActive = savedInstanceState.getBoolean("MAX_MIN_ACTIVE", false)
+        }
 
         imgMain = findViewById(R.id.imgBaseResult)
         imgHeatmap = findViewById(R.id.imgHeatmapOverlay)
         spinnerType = findViewById(R.id.spinnerResultType)
+
+        layoutColorScale = findViewById(R.id.layoutColorScale)
         tvScaleMax = findViewById(R.id.tvScaleMax)
+        tvScaleMin = findViewById(R.id.tvScaleMin)
+
         btnExportCsv = findViewById(R.id.btnExportCsv)
         btnExportImage = findViewById(R.id.btnExportImage)
 
-        // Bind New UI
         toggleInspect = findViewById(R.id.toggleInspect)
+        btnInputCoords = findViewById(R.id.btnInputCoords)
+        toggleMaxMin = findViewById(R.id.toggleMaxMin)
+
         cardInspectorHud = findViewById(R.id.cardInspectorHud)
         tvInspectorData = findViewById(R.id.tvInspectorData)
+        cardMaxMinHud = findViewById(R.id.cardMaxMinHud)
+        tvMaxMinData = findViewById(R.id.tvMaxMinData)
         glassShield = findViewById(R.id.glassShield)
 
         imgW = intent.getIntExtra("IMG_W", 0)
@@ -85,125 +110,310 @@ class ResultViewerActivity : AppCompatActivity() {
             imgMain.setTrueImageDimensions(imgW, imgH)
         }
 
+        // BIND CROSSHAIRS AND STICKY BAR TO ZOOM/PAN MATRIX
         imgMain.onMatrixChangedListener = {
             imgHeatmap.imageMatrix = imgMain.getZoomMatrix()
             imgHeatmap.invalidate()
+            refreshCrosshairs()
+            updateStickyScaleBar()
         }
 
-        val options = arrayOf("U Displacement", "V Displacement", "Exx Strain", "Eyy Strain", "Exy Shear")
+        val options = arrayOf("U", "V", "Exx", "Eyy", "Exy")
         spinnerType.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
         spinnerType.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p0: AdapterView<*>?, p1: View?, position: Int, p3: Long) {
-                currentTypeString = options[position].replace(" ", "_")
+                currentTypeString = options[position]
                 currentDataIndex = position + 2
                 updateVisualization(currentDataIndex)
 
-                // 🚀 Update text dynamically if probe is active, else hide
-                if (isInspectModeActive) {
-                    if (lastClosestIdx != -1) refreshCrosshair()
-                    else tvInspectorData.text = "Tap image to inspect"
-                }
+                if (isMaxMinActive) calculateMaxMin()
+                refreshCrosshairs()
             }
             override fun onNothingSelected(p0: AdapterView<*>?) {}
         }
 
+        layoutColorScale.setOnClickListener { showCustomScaleDialog() }
+
+        // PROBE TOGGLE
         toggleInspect.setOnCheckedChangeListener { _, isChecked ->
             isInspectModeActive = isChecked
-            if (isChecked) {
-                glassShield.visibility = View.VISIBLE
-                cardInspectorHud.visibility = View.VISIBLE
-                if (lastClosestIdx != -1) refreshCrosshair() // 🚀 Recalculate if image was panned
-                else tvInspectorData.text = "Tap image to inspect"
-            } else {
-                glassShield.hide()
-                glassShield.visibility = View.GONE
-                cardInspectorHud.visibility = View.GONE
-            }
+            manageGlassShieldState()
+            refreshCrosshairs()
         }
 
-        // 🚀 THE GLASS SHIELD TOUCH LISTENER
+        // MAX/MIN TOGGLE
+        toggleMaxMin.isChecked = isMaxMinActive
+        toggleMaxMin.setOnCheckedChangeListener { _, isChecked ->
+            isMaxMinActive = isChecked
+            if (isChecked) calculateMaxMin()
+            manageGlassShieldState()
+            refreshCrosshairs()
+        }
+
+        // INPUT COORDS
+        btnInputCoords.setOnClickListener { showCoordinateInputDialog() }
+
+        // 🚀 UPDATED TOUCH LISTENER: Acts as a transparent proxy when Inspect is OFF
         glassShield.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-
-                    // 1. Math: Map touch to physical image pixels using the underlying image matrix
-                    val pts = floatArrayOf(event.x, event.y)
-                    val inverse = android.graphics.Matrix()
-                    imgMain.imageMatrix.invert(inverse)
-                    inverse.mapPoints(pts)
-
-                    val physX = pts[0]
-                    val physY = pts[1]
-
-                    // 2. Data Scan
-                    val data = rawData
-                    if (data != null) {
-                        var closestIdx = -1
-                        var minDistSq = Float.MAX_VALUE
-                        val searchRadius = step * 1.5f
-                        val searchRadiusSq = searchRadius * searchRadius
-
-                        for (i in data.indices step 8) {
-                            val dx = data[i] - physX
-                            val dy = data[i+1] - physY
-                            val distSq = dx * dx + dy * dy
-
-                            if (distSq < minDistSq && distSq <= searchRadiusSq) {
-                                val corr = data[i + 7]
-                                if (corr != 0f && corr <= 0.25f) {
-                                    minDistSq = distSq
-                                    closestIdx = i
-                                }
-                            }
-                        }
-
-                        // 3. UI Update & Boundary Logic
-                        if (closestIdx != -1) {
-                            // ✅ VALID DATA: Update crosshair position and show data
-                            glassShield.updatePosition(event.x, event.y)
-
-                            val actualX = data[closestIdx].toInt()
-                            val actualY = data[closestIdx + 1].toInt()
-                            val value = data[closestIdx + currentDataIndex]
-
-                            val unit = if (currentDataIndex > 3) "ε" else "px"
-                            val valName = spinnerType.selectedItem.toString()
-                            lastClosestIdx = closestIdx // 🚀 SAVE THE STATE
-                            refreshCrosshair()          // 🚀 CALL OUR HELPER
-
-                            tvInspectorData.text = "Loc: ($actualX, $actualY)\n$valName: %.5f %s".format(value, unit)
-                        } else {
-                            lastClosestIdx = -1         // 🚀 CLEAR THE STATE                            // ❌ OUT OF BOUNDS: Hide crosshair, but update text to warn user
-                            glassShield.hide()
-                            tvInspectorData.text = "Out of bounds / No Data"
-                        }
-                    }
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    // 🚀 DO NOTHING!
-                    // By removing the hide() command here, the crosshair and HUD
-                    // permanently stay frozen at the last valid location you touched.
-                }
+            if (!isInspectModeActive) {
+                // 🚀 Manually forward the physical gesture to the TouchImageView underneath!
+                imgMain.dispatchTouchEvent(event)
+                return@setOnTouchListener true
             }
-            // Always consume the touch so it doesn't leak through to the image below
-            true
+
+            // If Inspect IS active, handle the manual probe math
+            if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
+                val pts = floatArrayOf(event.x, event.y)
+                val inverse = android.graphics.Matrix()
+                imgMain.imageMatrix.invert(inverse)
+                inverse.mapPoints(pts)
+
+                findNearestDataPoint(pts[0], pts[1])
+            }
+            true // Consume touch so it doesn't leak
         }
-        imgMain.post {
-            if (isInspectModeActive) refreshCrosshair()
-        }
+
         btnExportCsv.setOnClickListener { exportToCSV() }
         btnExportImage.setOnClickListener { exportMergedImage() }
+
+        // Initial setup after views have dimensions
+        imgMain.post {
+            refreshCrosshairs()
+            updateStickyScaleBar()
+            if (isMaxMinActive && lastMaxIdx == -1) {
+                calculateMaxMin()
+                refreshCrosshairs()
+            }
+        }
     }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt("LAST_CLOSEST_IDX", lastClosestIdx)
+        outState.putInt("LAST_MAX_IDX", lastMaxIdx)
+        outState.putInt("LAST_MIN_IDX", lastMinIdx)
+        outState.putBoolean("MAX_MIN_ACTIVE", isMaxMinActive)
     }
+
+    private fun updateStickyScaleBar() {
+        val pts = floatArrayOf(0f, 0f)
+        imgMain.imageMatrix.mapPoints(pts)
+        val imageTopY = pts[1]
+
+        val barHeight = layoutColorScale.height.toFloat()
+        if (barHeight > 0) {
+            val targetY = imageTopY - barHeight - 16f
+            layoutColorScale.translationY = maxOf(0f, targetY)
+        }
+    }
+
+    private fun manageGlassShieldState() {
+        if (isInspectModeActive || isMaxMinActive) {
+            glassShield.visibility = View.VISIBLE
+        } else {
+            glassShield.visibility = View.GONE
+        }
+    }
+
+    private fun calculateMaxMin() {
+        val data = rawData ?: return
+        var maxV = -Float.MAX_VALUE
+        var minV = Float.MAX_VALUE
+        lastMaxIdx = -1
+        lastMinIdx = -1
+
+        for (i in data.indices step 8) {
+            val corr = data[i + 7]
+            if (corr != 0f && corr <= 0.25f) {
+                val v = data[i + currentDataIndex]
+                if (v > maxV) { maxV = v; lastMaxIdx = i }
+                if (v < minV) { minV = v; lastMinIdx = i }
+            }
+        }
+    }
+
+    // 🚀 FIXED: Enforces boundary checking
+    private fun findNearestDataPoint(physX: Float, physY: Float) {
+        val data = rawData ?: return
+        var closestIdx = -1
+        var minDistSq = Float.MAX_VALUE
+
+        val searchRadius = step * 1.5f
+        val searchRadiusSq = searchRadius * searchRadius
+
+        for (i in data.indices step 8) {
+            val dx = data[i] - physX
+            val dy = data[i+1] - physY
+            val distSq = dx * dx + dy * dy
+
+            if (distSq < minDistSq && distSq <= searchRadiusSq) {
+                val corr = data[i + 7]
+                if (corr != 0f && corr <= 0.25f) {
+                    minDistSq = distSq
+                    closestIdx = i
+                }
+            }
+        }
+
+        lastClosestIdx = closestIdx
+        refreshCrosshairs()
+    }
+
+    // 🚀 FIXED: Hides crosshair and shows Out of Bounds when off the heatmap
+    private fun refreshCrosshairs() {
+        val data = rawData ?: return
+
+        // 1. Probe Logic
+        if (isInspectModeActive) {
+            cardInspectorHud.visibility = View.VISIBLE
+
+            if (lastClosestIdx != -1) {
+                val actualX = data[lastClosestIdx].toInt()
+                val actualY = data[lastClosestIdx + 1].toInt()
+                val value = data[lastClosestIdx + currentDataIndex]
+                val unit = if (currentDataIndex > 3) "ε" else "px"
+
+                tvInspectorData.text = "Loc: ($actualX, $actualY)\n$currentTypeString: %.5f %s".format(value, unit)
+
+                val pts = floatArrayOf(actualX.toFloat(), actualY.toFloat())
+                imgMain.imageMatrix.mapPoints(pts)
+                glassShield.updatePosition(pts[0], pts[1])
+            } else {
+                glassShield.hide()
+                tvInspectorData.text = "Out of bounds / No Data"
+            }
+        } else {
+            glassShield.hide()
+            cardInspectorHud.visibility = View.GONE
+        }
+
+        // 2. Max/Min Logic
+        if (isMaxMinActive && lastMaxIdx != -1 && lastMinIdx != -1) {
+            val maxX = data[lastMaxIdx].toInt(); val maxY = data[lastMaxIdx+1].toInt()
+            val minX = data[lastMinIdx].toInt(); val minY = data[lastMinIdx+1].toInt()
+            val maxV = data[lastMaxIdx+currentDataIndex]
+            val minV = data[lastMinIdx+currentDataIndex]
+
+            val ptsMax = floatArrayOf(maxX.toFloat(), maxY.toFloat())
+            val ptsMin = floatArrayOf(minX.toFloat(), minY.toFloat())
+            imgMain.imageMatrix.mapPoints(ptsMax)
+            imgMain.imageMatrix.mapPoints(ptsMin)
+
+            glassShield.updateMaxMinPositions(ptsMax[0], ptsMax[1], ptsMin[0], ptsMin[1])
+
+            val unit = if (currentDataIndex > 3) "ε" else "px"
+            tvMaxMinData.text = "🔴 MAX: ($maxX, $maxY) = %.5f $unit\n🔵 MIN: ($minX, $minY) = %.5f $unit".format(maxV, minV)
+            cardMaxMinHud.visibility = View.VISIBLE
+        } else {
+            glassShield.hideMaxMin()
+            cardMaxMinHud.visibility = View.GONE
+        }
+    }
+
+    private fun showCoordinateInputDialog() {
+        val dialogView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(64, 32, 64, 32)
+        }
+
+        val etX = EditText(this).apply {
+            hint = "X Coordinate (0 to $imgW)"
+            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+
+        val etY = EditText(this).apply {
+            hint = "Y Coordinate (0 to $imgH)"
+            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+
+        dialogView.addView(etX)
+        dialogView.addView(etY)
+
+        android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Go to Pixel Coordinate")
+            .setView(dialogView)
+            .setPositiveButton("Find") { _, _ ->
+                val x = etX.text.toString().toFloatOrNull()
+                val y = etY.text.toString().toFloatOrNull()
+
+                if (x != null && y != null) {
+                    if (x < 0 || x > imgW || y < 0 || y > imgH) {
+                        Toast.makeText(this, "Error: Coordinates out of bounds.", Toast.LENGTH_LONG).show()
+                    } else {
+                        if (!isInspectModeActive) toggleInspect.isChecked = true
+                        findNearestDataPoint(x, y)
+                    }
+                } else {
+                    Toast.makeText(this, "Invalid input.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showCustomScaleDialog() {
+        val dialogView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(64, 32, 64, 32)
+        }
+
+        val etMax = EditText(this).apply {
+            hint = "Max Value"
+            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
+        }
+
+        val etMin = EditText(this).apply {
+            hint = "Min Value"
+            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
+        }
+
+        val existing = customBoundsMap[currentDataIndex]
+        if (existing != null) {
+            etMin.setText(existing.first.toString())
+            etMax.setText(existing.second.toString())
+        }
+
+        dialogView.addView(TextView(this).apply { text = "Maximum Value:"; setTextColor(Color.LTGRAY) })
+        dialogView.addView(etMax)
+        dialogView.addView(TextView(this).apply { text = "Minimum Value:"; setTextColor(Color.LTGRAY); setPadding(0, 32, 0, 0) })
+        dialogView.addView(etMin)
+
+        android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Custom Scale: $currentTypeString")
+            .setView(dialogView)
+            .setPositiveButton("Apply") { _, _ ->
+                val maxVal = etMax.text.toString().toFloatOrNull()
+                val minVal = etMin.text.toString().toFloatOrNull()
+
+                if (maxVal != null && minVal != null && maxVal > minVal) {
+                    customBoundsMap[currentDataIndex] = Pair(minVal, maxVal)
+                    updateVisualization(currentDataIndex)
+                } else {
+                    Toast.makeText(this, "Invalid inputs.", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNeutralButton("Auto-Scale") { _, _ ->
+                customBoundsMap.remove(currentDataIndex)
+                updateVisualization(currentDataIndex)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun updateVisualization(index: Int) {
         val data = rawData ?: return
         isGeneratingHeatmap = true
+        val customBounds = customBoundsMap[index]
 
         Thread {
-            val result = VisualizationEngine.generateHeatmap(data, imgW, imgH, index, step)
+            val result = VisualizationEngine.generateHeatmap(
+                data, imgW, imgH, index, step,
+                customBounds?.first, customBounds?.second
+            )
             val heatmap = result.first
             val minV = result.second
             val maxV = result.third
@@ -215,7 +425,8 @@ class ResultViewerActivity : AppCompatActivity() {
                 imgHeatmap.invalidate()
 
                 val unit = if (index > 3) " [ε]" else " px"
-                tvScaleMax.text = "%.4f%s\n\n\n\n\n\n\n\n\n%.4f%s".format(maxV, unit, minV, unit)
+                tvScaleMax.text = "Max: %.4f%s".format(maxV, unit)
+                tvScaleMin.text = "Min: %.4f%s".format(minV, unit)
                 isGeneratingHeatmap = false
             }
         }.start()
@@ -321,24 +532,5 @@ class ResultViewerActivity : AppCompatActivity() {
                 runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save Image", Toast.LENGTH_SHORT).show() }
             }
         }.start()
-    }
-    private fun refreshCrosshair() {
-        if (isInspectModeActive && lastClosestIdx != -1 && rawData != null) {
-            val data = rawData!!
-            val actualX = data[lastClosestIdx].toInt()
-            val actualY = data[lastClosestIdx + 1].toInt()
-            val value = data[lastClosestIdx + currentDataIndex]
-
-            val unit = if (currentDataIndex > 3) "ε" else "px"
-            val valName = spinnerType.selectedItem.toString()
-
-            tvInspectorData.text = "Loc: ($actualX, $actualY)\n$valName: %.5f %s".format(value, unit)
-            cardInspectorHud.visibility = View.VISIBLE
-
-            // 🚀 The Magic: Map the physical pixel back to the new Screen Coordinates
-            val pts = floatArrayOf(actualX.toFloat(), actualY.toFloat())
-            imgMain.imageMatrix.mapPoints(pts)
-            glassShield.updatePosition(pts[0], pts[1])
-        }
     }
 }
