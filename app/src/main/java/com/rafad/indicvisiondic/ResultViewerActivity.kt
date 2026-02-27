@@ -153,10 +153,9 @@ class ResultViewerActivity : AppCompatActivity() {
         // INPUT COORDS
         btnInputCoords.setOnClickListener { showCoordinateInputDialog() }
 
-        // 🚀 UPDATED TOUCH LISTENER: Acts as a transparent proxy when Inspect is OFF
+        // ACTS AS A TRANSPARENT PROXY WHEN INSPECT IS OFF
         glassShield.setOnTouchListener { _, event ->
             if (!isInspectModeActive) {
-                // 🚀 Manually forward the physical gesture to the TouchImageView underneath!
                 imgMain.dispatchTouchEvent(event)
                 return@setOnTouchListener true
             }
@@ -170,7 +169,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
                 findNearestDataPoint(pts[0], pts[1])
             }
-            true // Consume touch so it doesn't leak
+            true
         }
 
         btnExportCsv.setOnClickListener { exportToCSV() }
@@ -232,7 +231,6 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    // 🚀 FIXED: Enforces boundary checking
     private fun findNearestDataPoint(physX: Float, physY: Float) {
         val data = rawData ?: return
         var closestIdx = -1
@@ -259,9 +257,13 @@ class ResultViewerActivity : AppCompatActivity() {
         refreshCrosshairs()
     }
 
-    // 🚀 FIXED: Hides crosshair and shows Out of Bounds when off the heatmap
     private fun refreshCrosshairs() {
         val data = rawData ?: return
+
+        // Multipliers for milli strain
+        val isStrain = currentDataIndex > 3
+        val multiplier = if (isStrain) 1000f else 1f
+        val unit = if (isStrain) "mε" else "px"
 
         // 1. Probe Logic
         if (isInspectModeActive) {
@@ -270,8 +272,9 @@ class ResultViewerActivity : AppCompatActivity() {
             if (lastClosestIdx != -1) {
                 val actualX = data[lastClosestIdx].toInt()
                 val actualY = data[lastClosestIdx + 1].toInt()
-                val value = data[lastClosestIdx + currentDataIndex]
-                val unit = if (currentDataIndex > 3) "ε" else "px"
+
+                // 🚀 Convert to milli strain if necessary
+                val value = data[lastClosestIdx + currentDataIndex] * multiplier
 
                 tvInspectorData.text = "Loc: ($actualX, $actualY)\n$currentTypeString: %.5f %s".format(value, unit)
 
@@ -291,8 +294,10 @@ class ResultViewerActivity : AppCompatActivity() {
         if (isMaxMinActive && lastMaxIdx != -1 && lastMinIdx != -1) {
             val maxX = data[lastMaxIdx].toInt(); val maxY = data[lastMaxIdx+1].toInt()
             val minX = data[lastMinIdx].toInt(); val minY = data[lastMinIdx+1].toInt()
-            val maxV = data[lastMaxIdx+currentDataIndex]
-            val minV = data[lastMinIdx+currentDataIndex]
+
+            // 🚀 Convert absolute maximums to milli strain if necessary
+            val maxV = data[lastMaxIdx+currentDataIndex] * multiplier
+            val minV = data[lastMinIdx+currentDataIndex] * multiplier
 
             val ptsMax = floatArrayOf(maxX.toFloat(), maxY.toFloat())
             val ptsMin = floatArrayOf(minX.toFloat(), minY.toFloat())
@@ -301,7 +306,6 @@ class ResultViewerActivity : AppCompatActivity() {
 
             glassShield.updateMaxMinPositions(ptsMax[0], ptsMax[1], ptsMin[0], ptsMin[1])
 
-            val unit = if (currentDataIndex > 3) "ε" else "px"
             tvMaxMinData.text = "🔴 MAX: ($maxX, $maxY) = %.5f $unit\n🔵 MIN: ($minX, $minY) = %.5f $unit".format(maxV, minV)
             cardMaxMinHud.visibility = View.VISIBLE
         } else {
@@ -359,22 +363,27 @@ class ResultViewerActivity : AppCompatActivity() {
             setPadding(64, 32, 64, 32)
         }
 
+        val isStrain = currentDataIndex > 3
+        val multiplier = if (isStrain) 1000f else 1f
+        val unitHint = if (isStrain) " (mε)" else " (px)"
+
         val etMax = EditText(this).apply {
-            hint = "Max Value"
+            hint = "Max Value$unitHint"
             setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
         }
 
         val etMin = EditText(this).apply {
-            hint = "Min Value"
+            hint = "Min Value$unitHint"
             setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
         }
 
+        // Display existing bounds adjusted to the correct unit
         val existing = customBoundsMap[currentDataIndex]
         if (existing != null) {
-            etMin.setText(existing.first.toString())
-            etMax.setText(existing.second.toString())
+            etMin.setText((existing.first * multiplier).toString())
+            etMax.setText((existing.second * multiplier).toString())
         }
 
         dialogView.addView(TextView(this).apply { text = "Maximum Value:"; setTextColor(Color.LTGRAY) })
@@ -390,7 +399,8 @@ class ResultViewerActivity : AppCompatActivity() {
                 val minVal = etMin.text.toString().toFloatOrNull()
 
                 if (maxVal != null && minVal != null && maxVal > minVal) {
-                    customBoundsMap[currentDataIndex] = Pair(minVal, maxVal)
+                    // 🚀 Convert back to base units before storing in the engine map
+                    customBoundsMap[currentDataIndex] = Pair(minVal / multiplier, maxVal / multiplier)
                     updateVisualization(currentDataIndex)
                 } else {
                     Toast.makeText(this, "Invalid inputs.", Toast.LENGTH_LONG).show()
@@ -407,16 +417,43 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun updateVisualization(index: Int) {
         val data = rawData ?: return
         isGeneratingHeatmap = true
-        val customBounds = customBoundsMap[index]
+
+        // Check if the user set manual bounds in the dialog
+        var forceMin = customBoundsMap[index]?.first
+        var forceMax = customBoundsMap[index]?.second
+
+        // 🚀 IF NO CUSTOM BOUNDS: Calculate the absolute exact Max and Min ourselves!
+        if (forceMin == null || forceMax == null) {
+            var absMax = -Float.MAX_VALUE
+            var absMin = Float.MAX_VALUE
+
+            for (i in data.indices step 8) {
+                val corr = data[i + 7]
+                // Only consider valid correlated points
+                if (corr != 0f && corr <= 0.25f) {
+                    val v = data[i + index]
+                    if (v > absMax) absMax = v
+                    if (v < absMin) absMin = v
+                }
+            }
+
+            // Safety fallback if the array was somehow empty
+            if (absMax == -Float.MAX_VALUE) absMax = 1f
+            if (absMin == Float.MAX_VALUE) absMin = 0f
+
+            // Apply these exact absolute bounds
+            forceMin = absMin
+            forceMax = absMax
+        }
 
         Thread {
+            // 🚀 Force the engine to use our absolute bounds by passing them as custom bounds
             val result = VisualizationEngine.generateHeatmap(
                 data, imgW, imgH, index, step,
-                customBounds?.first, customBounds?.second
+                forceMin, forceMax
             )
+
             val heatmap = result.first
-            val minV = result.second
-            val maxV = result.third
 
             runOnUiThread {
                 cachedHeatmap = heatmap
@@ -424,9 +461,14 @@ class ResultViewerActivity : AppCompatActivity() {
                 imgHeatmap.imageMatrix = imgMain.getZoomMatrix()
                 imgHeatmap.invalidate()
 
-                val unit = if (index > 3) " [ε]" else " px"
-                tvScaleMax.text = "Max: %.4f%s".format(maxV, unit)
-                tvScaleMin.text = "Min: %.4f%s".format(minV, unit)
+                // 🚀 Convert exact heatmap limits to milli strain if needed
+                val isStrain = index > 3
+                val multiplier = if (isStrain) 1000f else 1f
+                val unit = if (isStrain) " [mε]" else " px"
+
+                // Display the exact values we forced the engine to use
+                tvScaleMax.text = "Max: %.4f%s".format(forceMax!! * multiplier, unit)
+                tvScaleMin.text = "Min: %.4f%s".format(forceMin!! * multiplier, unit)
                 isGeneratingHeatmap = false
             }
         }.start()
