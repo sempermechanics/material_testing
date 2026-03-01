@@ -6,6 +6,7 @@ import android.graphics.*
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.widget.*
@@ -19,6 +20,10 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var imgMain: TouchImageView
     private lateinit var imgHeatmap: ImageView
     private lateinit var spinnerType: Spinner
+
+    // UI - Batch Controls (Ensure these are in your XML)
+    private lateinit var seekBarFrame: SeekBar
+    private lateinit var tvFrameCounter: TextView
 
     // UI - Scale Bar
     private lateinit var layoutColorScale: LinearLayout
@@ -46,6 +51,15 @@ class ResultViewerActivity : AppCompatActivity() {
     private var currentTypeString: String = "U"
     private var isGeneratingHeatmap = false
 
+    // Batch Data State
+    private var batchFiles: List<File> = emptyList()
+    private var currentFrameIndex = 0
+    private var loadingJob: Thread? = null
+    // ✅ FIX: Version counter replaces the broken Thread.currentThread() == loadingJob guard.
+    // runOnUiThread always runs on the main thread, so that check was ALWAYS FALSE.
+    // Now we track which job version started last; only the latest version applies its results.
+    private var loadVersion = 0
+
     // States
     private var currentDataIndex = 2
     private var isInspectModeActive = false
@@ -68,11 +82,16 @@ class ResultViewerActivity : AppCompatActivity() {
             lastMaxIdx = savedInstanceState.getInt("LAST_MAX_IDX", -1)
             lastMinIdx = savedInstanceState.getInt("LAST_MIN_IDX", -1)
             isMaxMinActive = savedInstanceState.getBoolean("MAX_MIN_ACTIVE", false)
+            currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
         }
 
         imgMain = findViewById(R.id.imgBaseResult)
         imgHeatmap = findViewById(R.id.imgHeatmapOverlay)
         spinnerType = findViewById(R.id.spinnerResultType)
+
+        // Bind Batch Controls (Add these IDs to your XML if not already there)
+        seekBarFrame = findViewById(R.id.seekBarFrame)
+        tvFrameCounter = findViewById(R.id.tvFrameCounter)
 
         layoutColorScale = findViewById(R.id.layoutColorScale)
         tvScaleMax = findViewById(R.id.tvScaleMax)
@@ -95,20 +114,42 @@ class ResultViewerActivity : AppCompatActivity() {
         imgH = intent.getIntExtra("IMG_H", 0)
         step = intent.getIntExtra("STEP", 5)
 
-        val dataPath = intent.getStringExtra("DATA_PATH")
-        if (dataPath != null) {
-            val file = File(dataPath)
-            val bytes = file.readBytes()
-            rawData = FloatArray(bytes.size / 4)
-            ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(rawData)
-        }
-
         val defPath = intent.getStringExtra("DEF_PATH")
         if (defPath != null) {
             cachedBaseImage = BitmapFactory.decodeFile(defPath)
             imgMain.setImageBitmap(cachedBaseImage)
             imgMain.setTrueImageDimensions(imgW, imgH)
         }
+
+        // 🚀 BATCH LOADING LOGIC
+        val batchDirPath = intent.getStringExtra("BATCH_DIR_PATH")
+        if (batchDirPath != null) {
+            val dir = File(batchDirPath)
+            if (dir.exists() && dir.isDirectory) {
+                // Only load the raw float .dat files and sort them chronologically
+                batchFiles = dir.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name } ?: emptyList()
+            }
+        }
+
+        if (batchFiles.isNotEmpty()) {
+            seekBarFrame.max = batchFiles.size - 1
+            seekBarFrame.progress = currentFrameIndex
+            loadFrameData(currentFrameIndex)
+        } else {
+            Toast.makeText(this, "No valid batch data found.", Toast.LENGTH_LONG).show()
+        }
+
+        // BIND TIMELINE SCRUBBER
+        seekBarFrame.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    currentFrameIndex = progress
+                    loadFrameData(currentFrameIndex)
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
 
         // BIND CROSSHAIRS AND STICKY BAR TO ZOOM/PAN MATRIX
         imgMain.onMatrixChangedListener = {
@@ -186,12 +227,69 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        // 🛡️ Cancel any pending rendering threads when closing activity
+        loadingJob?.interrupt()
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt("LAST_CLOSEST_IDX", lastClosestIdx)
         outState.putInt("LAST_MAX_IDX", lastMaxIdx)
         outState.putInt("LAST_MIN_IDX", lastMinIdx)
         outState.putBoolean("MAX_MIN_ACTIVE", isMaxMinActive)
+        outState.putInt("CURRENT_FRAME", currentFrameIndex)
+    }
+
+    // ✅ NEW: SAFE FRAME LOADER FOR BATCH MODE WITH CORRECT CANCELLATION
+    private fun loadFrameData(index: Int) {
+        if (index < 0 || index >= batchFiles.size) return
+
+        // Cancel any previous loading job to prevent thread pile-ups if scrubbing fast
+        loadingJob?.interrupt()
+
+        // Capture version before starting thread; if a newer job starts before this one
+        // posts its runOnUiThread callback, the version will have changed and we discard.
+        loadVersion++
+        val myVersion = loadVersion
+
+        loadingJob = Thread {
+            try {
+                val file = batchFiles[index]
+                if (Thread.currentThread().isInterrupted) return@Thread
+
+                val bytes = file.readBytes()
+
+                // Validate payload — must be multiples of 8 floats (32 bytes)
+                if (bytes.size % 32 != 0) {
+                    Log.e("ResultViewer", "Invalid file size for frame $index: ${bytes.size} bytes")
+                    return@Thread
+                }
+
+                val newData = FloatArray(bytes.size / 4)
+                ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder())
+                    .asFloatBuffer().get(newData)
+
+                runOnUiThread {
+                    // ✅ FIX: Version check (not thread identity — that was always false).
+                    // Only apply results if no newer scrub has started a new load job.
+                    if (myVersion == loadVersion) {
+                        rawData = newData
+                        tvFrameCounter.text = "Frame: ${index + 1} / ${batchFiles.size}"
+                        updateVisualization(currentDataIndex)
+                        if (isMaxMinActive) calculateMaxMin()
+                        if (isInspectModeActive && lastClosestIdx != -1) refreshCrosshairs()
+                    }
+                }
+            } catch (e: InterruptedException) {
+                // Task was safely cancelled by a newer scrub — do nothing
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        loadingJob?.start()
     }
 
     private fun updateStickyScaleBar() {
@@ -269,11 +367,10 @@ class ResultViewerActivity : AppCompatActivity() {
         if (isInspectModeActive) {
             cardInspectorHud.visibility = View.VISIBLE
 
-            if (lastClosestIdx != -1) {
+            if (lastClosestIdx != -1 && lastClosestIdx < data.size) {
                 val actualX = data[lastClosestIdx].toInt()
                 val actualY = data[lastClosestIdx + 1].toInt()
 
-                // 🚀 Convert to milli strain if necessary
                 val value = data[lastClosestIdx + currentDataIndex] * multiplier
 
                 tvInspectorData.text = "Loc: ($actualX, $actualY)\n$currentTypeString: %.5f %s".format(value, unit)
@@ -295,7 +392,6 @@ class ResultViewerActivity : AppCompatActivity() {
             val maxX = data[lastMaxIdx].toInt(); val maxY = data[lastMaxIdx+1].toInt()
             val minX = data[lastMinIdx].toInt(); val minY = data[lastMinIdx+1].toInt()
 
-            // 🚀 Convert absolute maximums to milli strain if necessary
             val maxV = data[lastMaxIdx+currentDataIndex] * multiplier
             val minV = data[lastMinIdx+currentDataIndex] * multiplier
 
@@ -379,7 +475,6 @@ class ResultViewerActivity : AppCompatActivity() {
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
         }
 
-        // Display existing bounds adjusted to the correct unit
         val existing = customBoundsMap[currentDataIndex]
         if (existing != null) {
             etMin.setText((existing.first * multiplier).toString())
@@ -399,7 +494,6 @@ class ResultViewerActivity : AppCompatActivity() {
                 val minVal = etMin.text.toString().toFloatOrNull()
 
                 if (maxVal != null && minVal != null && maxVal > minVal) {
-                    // 🚀 Convert back to base units before storing in the engine map
                     customBoundsMap[currentDataIndex] = Pair(minVal / multiplier, maxVal / multiplier)
                     updateVisualization(currentDataIndex)
                 } else {
@@ -418,18 +512,15 @@ class ResultViewerActivity : AppCompatActivity() {
         val data = rawData ?: return
         isGeneratingHeatmap = true
 
-        // Check if the user set manual bounds in the dialog
         var forceMin = customBoundsMap[index]?.first
         var forceMax = customBoundsMap[index]?.second
 
-        // 🚀 IF NO CUSTOM BOUNDS: Calculate the absolute exact Max and Min ourselves!
         if (forceMin == null || forceMax == null) {
             var absMax = -Float.MAX_VALUE
             var absMin = Float.MAX_VALUE
 
             for (i in data.indices step 8) {
                 val corr = data[i + 7]
-                // Only consider valid correlated points
                 if (corr != 0f && corr <= 0.25f) {
                     val v = data[i + index]
                     if (v > absMax) absMax = v
@@ -437,17 +528,14 @@ class ResultViewerActivity : AppCompatActivity() {
                 }
             }
 
-            // Safety fallback if the array was somehow empty
             if (absMax == -Float.MAX_VALUE) absMax = 1f
             if (absMin == Float.MAX_VALUE) absMin = 0f
 
-            // Apply these exact absolute bounds
             forceMin = absMin
             forceMax = absMax
         }
 
         Thread {
-            // 🚀 Force the engine to use our absolute bounds by passing them as custom bounds
             val result = VisualizationEngine.generateHeatmap(
                 data, imgW, imgH, index, step,
                 forceMin, forceMax
@@ -461,12 +549,10 @@ class ResultViewerActivity : AppCompatActivity() {
                 imgHeatmap.imageMatrix = imgMain.getZoomMatrix()
                 imgHeatmap.invalidate()
 
-                // 🚀 Convert exact heatmap limits to milli strain if needed
                 val isStrain = index > 3
                 val multiplier = if (isStrain) 1000f else 1f
                 val unit = if (isStrain) " [mε]" else " px"
 
-                // Display the exact values we forced the engine to use
                 tvScaleMax.text = "Max: %.4f%s".format(forceMax!! * multiplier, unit)
                 tvScaleMin.text = "Min: %.4f%s".format(forceMin!! * multiplier, unit)
                 isGeneratingHeatmap = false
@@ -484,7 +570,7 @@ class ResultViewerActivity : AppCompatActivity() {
         Toast.makeText(this, "Saving CSV...", Toast.LENGTH_SHORT).show()
 
         Thread {
-            val fileName = "IndicVision_${System.currentTimeMillis()}.csv"
+            val fileName = "IndicVision_Frame${currentFrameIndex}_${System.currentTimeMillis()}.csv"
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
@@ -551,7 +637,7 @@ class ResultViewerActivity : AppCompatActivity() {
                 val alphaPaint = Paint().apply { alpha = 180 }
                 canvas.drawBitmap(overlay, 0f, 0f, alphaPaint)
 
-                val fileName = "IndicVision_${currentTypeString}_${System.currentTimeMillis()}.png"
+                val fileName = "IndicVision_${currentTypeString}_Frame${currentFrameIndex}_${System.currentTimeMillis()}.png"
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "image/png")

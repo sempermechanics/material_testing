@@ -128,10 +128,40 @@
     </RelativeLayout>
 
     <LinearLayout
+        android:id="@+id/layoutScrubber"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:background="#DD1E1E24"
+        android:elevation="8dp">
+
+        <TextView
+            android:id="@+id/tvFrameCounter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Frame: 1 / 1"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:paddingEnd="16dp"/>
+
+        <SeekBar
+            android:id="@+id/seekBarFrame"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:progressTint="#2196F3"
+            android:thumbTint="#2196F3" />
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/layoutExport"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
+        android:layout_above="@id/layoutScrubber"
         android:layout_alignParentEnd="true"
         android:layout_margin="16dp"
         android:orientation="horizontal">

@@ -6,9 +6,14 @@
 namespace IndicVision {
 
     AnalysisResult OptimizationEngine::calculate_deformation(const SubsetData& subset, const Image &def_img, scalar_t guess_u, scalar_t guess_v, InitializationMode init_mode) {
-        if (eval_buffer.size() != subset.x_offsets.size()) {
-            eval_buffer.resize(subset.x_offsets.size());
+        // Guarantee buffers are allocated exactly ONCE per thread when it first starts
+        if (icgn_buffer.size() != subset.x_offsets.size()) {
+            icgn_buffer.resize(subset.x_offsets.size());
         }
+        if (simplex_buffer.size() != subset.x_offsets.size()) {
+            simplex_buffer.resize(subset.x_offsets.size());
+        }
+
         scalar_t u = guess_u;
         scalar_t v = guess_v;
         AnalysisResult res;
@@ -79,7 +84,9 @@ namespace IndicVision {
         W(0, 2) = init_u;
         W(1, 2) = init_v;
 
-        std::vector<float> def_vals(n, 0.0f);
+        // 🚀 FIX: Use the dedicated ICGN buffer
+        std::vector<float>& def_vals = this->icgn_buffer;
+
         float final_score = 1.0f;
 
         for (int iter = 0; iter < 20; ++iter) {
@@ -118,9 +125,6 @@ namespace IndicVision {
             if (valid_pixels == n) {
 
 #if defined(__aarch64__)
-                // ==========================================
-                // 🚀 1A. 32-BIT ARM NEON VECTOR MATH (4 FLOATS PER CYCLE!)
-                // ==========================================
                 float32x4_t sum_sq_vec = vdupq_n_f32(0.0f);
                 float32x4_t mean_vec = vdupq_n_f32(def_mean);
                 size_t i = 0;
@@ -172,9 +176,6 @@ namespace IndicVision {
                     dp_sum += subset.steepest_descent_images[i] * diff;
                 }
 #else
-                // ==========================================
-                // 1B. 32-BIT SCALAR FAST MATH (Fallback)
-                // ==========================================
                 for (size_t i = 0; i < n; ++i) {
                     float diff = def_vals[i] - def_mean;
                     def_sum_sq += diff * diff;
@@ -192,9 +193,6 @@ namespace IndicVision {
 #endif
             }
             else {
-                // ==========================================
-                // 🐌 2. SLOW-PATH (Subset is hitting the edge)
-                // ==========================================
                 for (size_t i = 0; i < n; ++i) {
                     if (def_vals[i] >= 0.0f) {
                         float diff = def_vals[i] - def_mean;
@@ -216,7 +214,6 @@ namespace IndicVision {
 
             final_score = error_sum_sq / valid_pixels;
 
-            // Update step
             Eigen::Matrix<float, 6, 1> delta_p = -subset.H_inv * dp_sum;
             Eigen::Matrix3f dW = Eigen::Matrix3f::Identity();
             dW(0,0) += delta_p(2);
@@ -236,7 +233,6 @@ namespace IndicVision {
         return {W(0,2), W(1,2), W(0,0)-1.0f, W(0,1), W(1,0), W(1,1)-1.0f, 1, final_score};
     }
 
-    // --- HIGH-SPEED ZNSSD FOR SIMPLEX ---
     float OptimizationEngine::evaluate_znssd(const SubsetData& subset, const Image &def_img,
                                              float u, float v, float ux, float uy, float vx, float vy,
                                              std::vector<float>& buffer) {
@@ -267,13 +263,8 @@ namespace IndicVision {
         float def_sum_sq = 0.0f;
         float znssd = 0.0f;
 
-        // 🚀 FAST-PATH: All pixels valid
         if (valid_pixels == n) {
-
 #if defined(__aarch64__)
-            // ==========================================
-            // 🚀 1A. 32-BIT ARM NEON VECTOR MATH
-            // ==========================================
             float32x4_t sum_sq_vec = vdupq_n_f32(0.0f);
             float32x4_t mean_vec = vdupq_n_f32(def_mean);
             size_t i = 0;
@@ -316,9 +307,6 @@ namespace IndicVision {
                 znssd += diff * diff;
             }
 #else
-            // ==========================================
-            // 1B. 32-BIT SCALAR FAST MATH (Fallback)
-            // ==========================================
             for (size_t i = 0; i < n; ++i) {
                 float diff = buffer[i] - def_mean;
                 def_sum_sq += diff * diff;
@@ -333,11 +321,7 @@ namespace IndicVision {
                 znssd += diff * diff;
             }
 #endif
-        }
-        else {
-            // ==========================================
-            // 🐌 2. SLOW-PATH (Edge of image)
-            // ==========================================
+        } else {
             for (size_t i = 0; i < n; ++i) {
                 if (buffer[i] >= 0.0f) {
                     float diff = buffer[i] - def_mean;
@@ -361,70 +345,73 @@ namespace IndicVision {
 
     // --- SIMPLEX RESCUE METHOD ---
     AnalysisResult OptimizationEngine::solve_simplex(const SubsetData& subset, const Image &def_img, AnalysisResult start, bool translation_only) {
-        LOGD("[Simplex] Activated (TransOnly: %d, Start cost: %.4f)", translation_only, start.correlation_score);
 
         const int DIM = translation_only ? 2 : 6;
         int n_pts = DIM + 1;
 
-        std::vector<std::vector<float>> p(n_pts, std::vector<float>(DIM));
-        std::vector<float> y(n_pts);
+        float p[7][6] = {0.0f};
+        float y[7] = {0.0f};
 
-        // WIDENED NET: Look up to 2.0 pixels away to jump out of local traps
         float scale[] = {2.0f, 2.0f, 0.01f, 0.01f, 0.01f, 0.01f};
 
-        std::vector<float> local_eval_buffer(subset.dim * subset.dim, 0.0f);
-
-        auto eval_pt = [&](const std::vector<float>& pt) {
-            if (translation_only) return evaluate_znssd(subset, def_img, pt[0], pt[1], 0.0f, 0.0f, 0.0f, 0.0f, local_eval_buffer);
-            return evaluate_znssd(subset, def_img, pt[0], pt[1], pt[2], pt[3], pt[4], pt[5], local_eval_buffer);
+        // 🚀 FIX: Use the dedicated Simplex buffer
+        auto eval_pt = [&](const float* pt) {
+            if (translation_only) return evaluate_znssd(subset, def_img, pt[0], pt[1], 0.0f, 0.0f, 0.0f, 0.0f, this->simplex_buffer);
+            return evaluate_znssd(subset, def_img, pt[0], pt[1], pt[2], pt[3], pt[4], pt[5], this->simplex_buffer);
         };
 
-        if (translation_only) {
-            p[0] = {start.u, start.v};
-        } else {
-            p[0] = {start.u, start.v, start.ux, start.uy, start.vx, start.vy};
+        p[0][0] = start.u; p[0][1] = start.v;
+        if (!translation_only) {
+            p[0][2] = start.ux; p[0][3] = start.uy;
+            p[0][4] = start.vx; p[0][5] = start.vy;
         }
         y[0] = eval_pt(p[0]);
 
         for (int i = 1; i < n_pts; ++i) {
-            p[i] = p[0];
+            for(int j=0; j<DIM; ++j) p[i][j] = p[0][j]; // copy base
             p[i][i-1] += scale[i-1];
             y[i] = eval_pt(p[i]);
         }
 
         const float alpha=1.0f, gamma=2.0f, rho=0.5f, sigma=0.5f;
         for (int iter = 0; iter < 80; ++iter) {
-            std::vector<int> idx(n_pts);
-            for(int k=0; k<n_pts; ++k) idx[k] = k;
-            std::sort(idx.begin(), idx.end(), [&](int a, int b){ return y[a] < y[b]; });
+            int idx[7] = {0, 1, 2, 3, 4, 5, 6};
+            std::sort(idx, idx + n_pts, [&](int a, int b){ return y[a] < y[b]; });
 
             if (std::abs(y[idx[0]] - y[idx[n_pts-1]]) < 1e-5f) break;
 
-            std::vector<float> p_bar(DIM, 0.0f);
+            float p_bar[6] = {0.0f};
             for (int i = 0; i < DIM; ++i)
                 for (int j = 0; j < DIM; ++j) p_bar[j] += p[idx[i]][j];
             for (int j = 0; j < DIM; ++j) p_bar[j] /= DIM;
 
-            std::vector<float> p_r(DIM);
+            float p_r[6] = {0.0f};
             for (int j = 0; j < DIM; ++j) p_r[j] = p_bar[j] + alpha * (p_bar[j] - p[idx[n_pts-1]][j]);
             float y_r = eval_pt(p_r);
 
             if (y[idx[0]] <= y_r && y_r < y[idx[n_pts-2]]) {
-                p[idx[n_pts-1]] = p_r; y[idx[n_pts-1]] = y_r;
+                for(int j=0; j<DIM; ++j) p[idx[n_pts-1]][j] = p_r[j];
+                y[idx[n_pts-1]] = y_r;
             } else if (y_r < y[idx[0]]) {
-                std::vector<float> p_e(DIM);
+                float p_e[6] = {0.0f};
                 for (int j = 0; j < DIM; ++j) p_e[j] = p_bar[j] + gamma * (p_r[j] - p_bar[j]);
                 float y_e = eval_pt(p_e);
-                if (y_e < y_r) { p[idx[n_pts-1]] = p_e; y[idx[n_pts-1]] = y_e; }
-                else           { p[idx[n_pts-1]] = p_r; y[idx[n_pts-1]] = y_r; }
+                if (y_e < y_r) {
+                    for(int j=0; j<DIM; ++j) p[idx[n_pts-1]][j] = p_e[j];
+                    y[idx[n_pts-1]] = y_e;
+                } else {
+                    for(int j=0; j<DIM; ++j) p[idx[n_pts-1]][j] = p_r[j];
+                    y[idx[n_pts-1]] = y_r;
+                }
             } else {
-                std::vector<float> p_c(DIM);
+                float p_c[6] = {0.0f};
                 bool outside = (y_r < y[idx[n_pts-1]]);
-                std::vector<float>& base_p = outside ? p_r : p[idx[n_pts-1]];
+                float* base_p = outside ? p_r : p[idx[n_pts-1]];
                 for (int j = 0; j < DIM; ++j) p_c[j] = p_bar[j] + rho * (base_p[j] - p_bar[j]);
                 float y_c = eval_pt(p_c);
                 if (y_c < std::min(y_r, y[idx[n_pts-1]])) {
-                    p[idx[n_pts-1]] = p_c; y[idx[n_pts-1]] = y_c;
+                    for(int j=0; j<DIM; ++j) p[idx[n_pts-1]][j] = p_c[j];
+                    y[idx[n_pts-1]] = y_c;
                 } else {
                     for (int i = 1; i < n_pts; ++i) {
                         for (int j = 0; j < DIM; ++j) p[idx[i]][j] = p[idx[0]][j] + sigma * (p[idx[i]][j] - p[idx[0]][j]);
@@ -436,7 +423,6 @@ namespace IndicVision {
 
         int best = 0;
         for(int k=1; k<n_pts; ++k) if(y[k] < y[best]) best = k;
-
         int final_status = (y[best] > 0.1f) ? -2 : 0;
 
         if (translation_only) {

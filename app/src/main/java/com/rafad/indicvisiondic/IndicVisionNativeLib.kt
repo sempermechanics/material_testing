@@ -12,6 +12,10 @@ object IndicVisionNativeLib {
         System.loadLibrary("indicvision_core")
     }
 
+    // 🚀 NEW FIX: Call this ONCE before a batch starts to cache the reference image
+    // This stops the engine from rebuilding it 50 times and crashing the memory!
+    external fun initializeReference(refBytes: ByteArray, applyBlur: Boolean)
+
     external fun analyzeRawBytes(
         refData: ByteArray, defData: ByteArray,
         roiX: Int, roiY: Int, subsetSize: Int,
@@ -32,4 +36,4 @@ object IndicVisionNativeLib {
     external fun getPreviewFromBytes(imageBytes: ByteArray, maxDim: Int): android.graphics.Bitmap?
 
     external fun getImageDimensions(imageBytes: ByteArray): IntArray
-} // <-- Only ONE closing brace here!
+}

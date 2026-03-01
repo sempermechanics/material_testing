@@ -16,8 +16,10 @@ namespace IndicVision {
         int count_icgn = 0;
         int count_simplex = 0;
 
-        // 🚀 Converted evaluation buffer to float
-        std::vector<float> eval_buffer;
+        // 🟡 BUG 3 FIX: Separated Buffers
+        // Prevents memory aliasing and silent data corruption between the two solvers
+        std::vector<float> icgn_buffer;
+        std::vector<float> simplex_buffer;
 
         AnalysisResult calculate_deformation(const SubsetData& subset, const Image& def_img, scalar_t guess_u, scalar_t guess_v, InitializationMode init_mode);
 

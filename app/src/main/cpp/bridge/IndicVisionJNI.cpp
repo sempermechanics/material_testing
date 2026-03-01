@@ -26,10 +26,44 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 // ==========================================
-// 1. UTILITY: AKAZE GLOBAL SHIFT
+// 🔴 BUG 1 FIX: JNI ON LOAD (CRITICAL OPENMP SAFETY)
+// Prevents OpenCV from poisoning the LLVM OpenMP thread pool
+// ==========================================
+JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+    LOGD("IndicVision Native Library Loaded.");
+    // Force OpenCV to run single-threaded internally.
+    // This stops it from hijacking and corrupting the OpenMP TLS pool before our main math block runs.
+    cv::setNumThreads(1);
+    return JNI_VERSION_1_6;
+}
+
+// ==========================================
+// 🟠 BUG 2 FIX: GLOBAL REFERENCE IMAGE CACHE
+// Prevents rebuilding the RefImg on every single frame of a batch
+// ==========================================
+static IndicVision::Image* g_refImg = nullptr;
+static int g_refWidth = 0;
+static int g_refHeight = 0;
+static std::mutex jni_engine_mutex; // Global mutex to prevent concurrent engine calls
+
+// ==========================================
+// UTILITY: BYTES TO MAT (Zero-Copy)
+// ==========================================
+cv::Mat bytesToMat(JNIEnv* env, jbyteArray bytes) {
+    if (bytes == nullptr) return cv::Mat();
+    jsize len = env->GetArrayLength(bytes);
+    jbyte* buf = env->GetByteArrayElements(bytes, nullptr);
+    cv::Mat rawData(1, len, CV_8UC1, (void*)buf);
+    cv::Mat img = cv::imdecode(rawData, cv::IMREAD_GRAYSCALE);
+    env->ReleaseByteArrayElements(bytes, buf, JNI_ABORT);
+    return img;
+}
+
+// ==========================================
+// UTILITY: AKAZE GLOBAL SHIFT
 // ==========================================
 void computeGlobalShift(cv::Mat& ref, cv::Mat& def, float& u, float& v) {
-    double scale = 0.25; // Scale down 4x for extreme speed
+    double scale = 0.25;
     cv::Mat smallRef, smallDef;
     cv::resize(ref, smallRef, cv::Size(), scale, scale, cv::INTER_NEAREST);
     cv::resize(def, smallDef, cv::Size(), scale, scale, cv::INTER_NEAREST);
@@ -70,35 +104,20 @@ void computeGlobalShift(cv::Mat& ref, cv::Mat& def, float& u, float& v) {
     }
 }
 
-// ==========================================
-// 2. UTILITY: BYTES TO MAT
-// ==========================================
-cv::Mat bytesToMat(JNIEnv* env, jbyteArray bytes) {
-    jsize len = env->GetArrayLength(bytes);
-    unsigned char* buf = new unsigned char[len];
-    env->GetByteArrayRegion(bytes, 0, len, reinterpret_cast<jbyte*>(buf));
-    std::vector<unsigned char> data(buf, buf + len);
-
-    cv::Mat img = cv::imdecode(data, cv::IMREAD_GRAYSCALE);
-    delete[] buf;
-    return img;
-}
-
 extern "C" {
 
 // ==========================================
-// 3. UI PREVIEW GENERATOR
+// UI PREVIEW GENERATOR
 // ==========================================
 JNIEXPORT jobject JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getPreviewFromBytes(
         JNIEnv* env, jobject, jbyteArray fileData, jint targetWidth) {
 
     jsize len = env->GetArrayLength(fileData);
-    unsigned char* buf = new unsigned char[len];
-    env->GetByteArrayRegion(fileData, 0, len, reinterpret_cast<jbyte*>(buf));
-    std::vector<unsigned char> data(buf, buf + len);
-    cv::Mat fullImg = cv::imdecode(data, cv::IMREAD_COLOR);
-    delete[] buf;
+    jbyte* buf = env->GetByteArrayElements(fileData, nullptr);
+    cv::Mat rawData(1, len, CV_8UC1, (void*)buf);
+    cv::Mat fullImg = cv::imdecode(rawData, cv::IMREAD_COLOR);
+    env->ReleaseByteArrayElements(fileData, buf, JNI_ABORT);
 
     if (fullImg.empty()) return nullptr;
 
@@ -123,18 +142,17 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getPreviewFromBytes(
 }
 
 // ==========================================
-// 4. IMAGE DIMENSIONS
+// IMAGE DIMENSIONS
 // ==========================================
 JNIEXPORT jintArray JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getImageDimensions(
         JNIEnv* env, jobject, jbyteArray fileData) {
 
     jsize len = env->GetArrayLength(fileData);
-    unsigned char* buf = new unsigned char[len];
-    env->GetByteArrayRegion(fileData, 0, len, reinterpret_cast<jbyte*>(buf));
-    std::vector<unsigned char> data(buf, buf + len);
-    cv::Mat img = cv::imdecode(data, cv::IMREAD_UNCHANGED);
-    delete[] buf;
+    jbyte* buf = env->GetByteArrayElements(fileData, nullptr);
+    cv::Mat rawData(1, len, CV_8UC1, (void*)buf);
+    cv::Mat img = cv::imdecode(rawData, cv::IMREAD_UNCHANGED);
+    env->ReleaseByteArrayElements(fileData, buf, JNI_ABORT);
 
     jintArray result = env->NewIntArray(2);
     if (img.empty()) {
@@ -148,7 +166,43 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getImageDimensions(
 }
 
 // ==========================================
-// 5. ANALYZE SINGLE POINT (1D / LIVE MODE)
+// 🟠 BUG 2 FIX: INITIALIZE REFERENCE ONCE
+// Call this from Kotlin BEFORE the batch loop starts
+// ==========================================
+JNIEXPORT void JNICALL
+Java_com_rafad_indicvisiondic_IndicVisionNativeLib_initializeReference(
+        JNIEnv* env, jobject, jbyteArray refBytes, jboolean applyBlur) {
+
+    std::lock_guard<std::mutex> engine_lock(jni_engine_mutex);
+
+    // Free the old image if it exists
+    if (g_refImg != nullptr) {
+        delete g_refImg;
+        g_refImg = nullptr;
+    }
+
+    if (refBytes == nullptr) return;
+
+    cv::Mat refMat = bytesToMat(env, refBytes);
+    if (refMat.empty()) return;
+
+    if (applyBlur) {
+        cv::GaussianBlur(refMat, refMat, cv::Size(7, 7), 0);
+    }
+
+    g_refWidth = refMat.cols;
+    g_refHeight = refMat.rows;
+
+    // Allocate on the heap and prepare (7-tap Gaussian, Gradients, etc.)
+    g_refImg = new IndicVision::Image(g_refWidth, g_refHeight, refMat.data);
+    g_refImg->prepare_data();
+
+    LOGD("Reference Image Initialized and Cached in Native Memory. [%dx%d]", g_refWidth, g_refHeight);
+}
+
+
+// ==========================================
+// ANALYZE SINGLE POINT (1D / LIVE MODE)
 // ==========================================
 JNIEXPORT jfloatArray JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
@@ -188,70 +242,90 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
 }
 
 // ==========================================
-// 🚀 6. COMPUTE FULL FIELD DIRECT (ZERO-COPY)
+// 🚀 COMPUTE FULL FIELD DIRECT (BATCH OPTIMIZED)
 // ==========================================
 JNIEXPORT jint JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
-        JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray defBytes,
+        JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray defBytes, // Note: refBytes is mostly ignored now
         jbyteArray maskBytes,
         jint rectX, jint rectY, jint rectWidth, jint rectHeight,
         jint step, jint subsetSize, jint strainWindow,
         jboolean useReliabilityGuided, jboolean useFeatureMatching,
         jboolean applyGaussianBlur, jboolean useNlvcStrain,
-        jobject outputBuffer, // 🚀 DirectByteBuffer mapped from Kotlin
+        jobject outputBuffer,
         jobject callbackObj) {
+
+    std::lock_guard<std::mutex> engine_lock(jni_engine_mutex);
 
     auto start_total = std::chrono::high_resolution_clock::now();
 
-    // 🚀 Obtain the direct memory pointer
-    float* output_ptr = (float*)env->GetDirectBufferAddress(outputBuffer);
-    if (!output_ptr) {
-        LOGE("CRITICAL: Failed to access DirectByteBuffer memory!");
+    // 1. SAFETY CHECKS
+    if (env == nullptr || defBytes == nullptr || outputBuffer == nullptr) {
+        LOGE("FATAL: Null JNI parameters passed to engine");
         return 0;
     }
 
-    // --- 1. JNI & DECODING ---
-    cv::Mat refMat = bytesToMat(env, refBytes);
+    if (g_refImg == nullptr) {
+        LOGE("FATAL: Reference image was not initialized before calling computeFullFieldDirect!");
+        return 0;
+    }
+
+    float* output_ptr = (float*)env->GetDirectBufferAddress(outputBuffer);
+    if (!output_ptr) return 0;
+
+    // ==============================================================
+    // 🔍 DIAGNOSTIC: Frame counter + pointer validation
+    // ==============================================================
+    static int s_frame_count = 0;
+    s_frame_count++;
+    LOGD("=== FRAME %d computeFullFieldDirect START ===", s_frame_count);
+    LOGD("  g_refImg ptr = %p  (w=%d h=%d)", (void*)g_refImg, g_refWidth, g_refHeight);
+
+    // 2. LOAD DEFORMED IMAGE ONLY (Memory Saved!)
     cv::Mat defMat = bytesToMat(env, defBytes);
-    if (refMat.empty() || defMat.empty()) return 0;
+    if (defMat.empty()) {
+        LOGE("DIAGNOSTIC FRAME %d: defMat is EMPTY — image decode failed!", s_frame_count);
+        return 0;
+    }
+    LOGD("  defMat size = %dx%d", defMat.cols, defMat.rows);
 
     cv::Mat roiMask;
-    if (maskBytes != nullptr) {
-        jsize maskLen = env->GetArrayLength(maskBytes);
-        if (maskLen > 0) {
-            roiMask = bytesToMat(env, maskBytes);
-            if (!roiMask.empty() && (roiMask.cols != refMat.cols || roiMask.rows != refMat.rows)) {
-                cv::resize(roiMask, roiMask, refMat.size(), 0, 0, cv::INTER_NEAREST);
-            }
+    if (maskBytes != nullptr && env->GetArrayLength(maskBytes) > 0) {
+        roiMask = bytesToMat(env, maskBytes);
+        if (!roiMask.empty() && (roiMask.cols != g_refWidth || roiMask.rows != g_refHeight)) {
+            cv::resize(roiMask, roiMask, cv::Size(g_refWidth, g_refHeight), 0, 0, cv::INTER_NEAREST);
         }
     }
 
     if (applyGaussianBlur) {
-        cv::GaussianBlur(refMat, refMat, cv::Size(7, 7), 0);
         cv::GaussianBlur(defMat, defMat, cv::Size(7, 7), 0);
     }
 
-    IndicVision::Image refImg(refMat.cols, refMat.rows, refMat.data);
     IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
-    refImg.prepare_data();
     defImg.prepare_data();
 
-    // --- 2. GLOBAL AKAZE SHIFT ---
+    // 3. GLOBAL AKAZE SHIFT
     float globalU = 0.0f, globalV = 0.0f;
     if (useFeatureMatching) {
         cv::Rect roi(rectX, rectY, rectWidth, rectHeight);
-        roi = roi & cv::Rect(0, 0, refMat.cols, refMat.rows);
+        roi = roi & cv::Rect(0, 0, g_refWidth, g_refHeight);
         if (roi.width > 32 && roi.height > 32) {
             try {
-                cv::Mat refROI = refMat(roi); cv::Mat defROI = defMat(roi);
-                computeGlobalShift(refROI, defROI, globalU, globalV);
+                // To do AKAZE, we still need the original Reference CV Mat.
+                // We'll quickly reconstruct a lightweight version of it from the cached bytes if needed.
+                cv::Mat refMat = bytesToMat(env, refBytes);
+                if (!refMat.empty()) {
+                    cv::Mat refROI = refMat(roi);
+                    cv::Mat defROI = defMat(roi);
+                    computeGlobalShift(refROI, defROI, globalU, globalV);
+                }
             } catch (const cv::Exception& e) {
                 LOGE("AKAZE Exception. Ignoring shift.");
             }
         }
     }
 
-    // --- 3. GRID ALLOCATION ---
+    // 4. GRID ALLOCATION
     int gridW = rectWidth / step;
     int gridH = rectHeight / step;
     if (gridW <= 0 || gridH <= 0) return 0;
@@ -260,25 +334,19 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     std::vector<std::vector<GridPoint>> resultGrid(gridH, std::vector<GridPoint>(gridW));
 
     int total_valid_points = 0;
-
     for (int y = 0; y < gridH; ++y) {
         for (int x = 0; x < gridW; ++x) {
             int realX = rectX + x * step;
             int realY = rectY + y * step;
-            bool shouldSkip = false;
-
-            if (!roiMask.empty() && roiMask.at<uchar>(realY, realX) < 128) {
-                shouldSkip = true;
-            } else {
-                total_valid_points++;
-            }
+            bool shouldSkip = (!roiMask.empty() && roiMask.at<uchar>(realY, realX) < 128);
+            if (!shouldSkip) total_valid_points++;
             resultGrid[y][x] = {(float)realX, (float)realY, 0.0f, 0.0f, 0.0f, shouldSkip};
         }
     }
 
     if (total_valid_points == 0) return 0;
 
-    // --- 4. PREPARE DYNAMIC SEEDS ---
+    // 5. PREPARE DYNAMIC SEEDS
     std::vector<IndicVision::SeedNode> global_seeds;
     int seedGx = gridW / 2;
     int seedGy = gridH / 2;
@@ -298,7 +366,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
 
     if (global_seeds.empty()) return 0;
 
-    // --- 5. PARALLEL EXECUTION & PROGRESS REPORTING ---
+    // 6. PROGRESS REPORTING SETUP (Safe Threading)
     int total_cores = std::thread::hardware_concurrency();
     int safe_cores = std::max(1, total_cores);
 
@@ -307,7 +375,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
 
     std::atomic<int> seed_index(0);
     std::atomic<int> global_points_solved(0);
-    std::atomic<bool> computation_running(true);
+    std::atomic<bool> progress_thread_should_stop(false);
     std::mutex grid_mutex;
 
     jclass callbackClass = nullptr;
@@ -326,143 +394,186 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         if (jvm == nullptr || globalCallbackObj == nullptr || methodId == nullptr) return;
         JNIEnv* pEnv = nullptr;
         if (jvm->AttachCurrentThread(&pEnv, nullptr) != JNI_OK) return;
+        if (pEnv == nullptr) { jvm->DetachCurrentThread(); return; }
 
-        while (computation_running) {
+        while (!progress_thread_should_stop.load(std::memory_order_acquire)) {
+            if (globalCallbackObj == nullptr) break;
+
             int solved = global_points_solved.load(std::memory_order_relaxed);
             int percentage = (int)((((float)solved / total_valid_points) * 80.0f) + 10.0f);
+            percentage = std::max(0, std::min(100, percentage));
+
+            if (pEnv->ExceptionCheck()) { pEnv->ExceptionClear(); break; }
             pEnv->CallVoidMethod(globalCallbackObj, methodId, (jint)percentage);
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (pEnv->ExceptionCheck()) { pEnv->ExceptionClear(); break; }
+
+            for (int i = 0; i < 10 && !progress_thread_should_stop.load(std::memory_order_acquire); ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
         }
         jvm->DetachCurrentThread();
     });
 
     auto start_track = std::chrono::high_resolution_clock::now();
 
-#pragma omp parallel num_threads(safe_cores)
-    {
-        int tid = omp_get_thread_num();
-        IndicVision::OptimizationEngine local_engine;
-        IndicVision::SubsetData local_subset;
-        std::priority_queue<IndicVision::SeedNode> local_queue;
+    LOGD("DIAGNOSTIC FRAME %d: grid=%dx%d valid_pts=%d, going into OpenMP block...", s_frame_count, gridW, gridH, total_valid_points);
 
-        double local_hessian_ms = 0.0;
-        int local_points_solved = 0;
+    // ✅ FIX: Bypassing the buggy LLVM OpenMP runtime entirely.
+    // The NDK libomp.so has a known bug causing SIGSEGV (SEGV_MAPERR) at
+    // __kmp_invoke_microtask when executing nested parallel regions repeatedly via JNI,
+    // due to corrupted internal TLS/task state. By using pure C++11 std::thread, we bypass
+    // OpenMP's scheduler and use standard POSIX pthreads directly, guaranteeing stability
+    // across thousands of batch frames.
+    
+    std::vector<std::thread> workers;
+    for (int t = 0; t < safe_cores; ++t) {
+        workers.emplace_back([&, t]() {
+            try {
+                int tid = t;
+                IndicVision::OptimizationEngine local_engine;
+                IndicVision::SubsetData local_subset;
+                std::priority_queue<IndicVision::SeedNode> local_queue;
 
-        int dx[] = {1, -1, 0, 0};
-        int dy[] = {0, 0, 1, -1};
+                double local_hessian_ms = 0.0;
+                int local_points_solved = 0;
 
-        while (true) {
-            while (!local_queue.empty()) {
-                IndicVision::SeedNode current = local_queue.top();
-                local_queue.pop();
+                int dx[] = {1, -1, 0, 0};
+                int dy[] = {0, 0, 1, -1};
 
-                for (int k = 0; k < 4; ++k) {
-                    int nx = current.x_idx + dx[k];
-                    int ny = current.y_idx + dy[k];
+                while (true) {
+                    while (!local_queue.empty()) {
+                        IndicVision::SeedNode current = local_queue.top();
+                        local_queue.pop();
 
-                    if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
+                        for (int k = 0; k < 4; ++k) {
+                            int nx = current.x_idx + dx[k];
+                            int ny = current.y_idx + dy[k];
+
+                            if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
+                                bool claimed = false;
+                                {
+                                    std::lock_guard<std::mutex> lock(grid_mutex);
+                                    if (!resultGrid[ny][nx].solved) {
+                                        resultGrid[ny][nx].solved = true;
+                                        claimed = true;
+                                    }
+                                }
+                                if (!claimed) continue;
+
+                                int realX = rectX + nx * step;
+                                int realY = rectY + ny * step;
+
+                                // LOGD("  [PTHREAD %d] neighbor (%d,%d) precompute START", tid, nx, ny);
+                                auto th1 = std::chrono::high_resolution_clock::now();
+                                IndicVision::SubsetPrecomputer::precompute_subset(local_subset, *g_refImg, realX, realY, subsetSize);
+                                auto th2 = std::chrono::high_resolution_clock::now();
+                                local_hessian_ms += std::chrono::duration<double, std::milli>(th2 - th1).count();
+
+                                if (!local_subset.is_initialized) {
+                                    // LOGD("  [PTHREAD %d] neighbor (%d,%d) precompute FAILED", tid, nx, ny);
+                                    continue;
+                                }
+
+                                // LOGD("  [PTHREAD %d] neighbor (%d,%d) calculate_deformation START", tid, nx, ny);
+                                IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, current.u, current.v, IndicVision::INIT_NO_SEARCH);
+                                // LOGD("  [PTHREAD %d] neighbor (%d,%d) calculate_deformation DONE (corr=%f)", tid, nx, ny, res.correlation_score);
+
+                                {
+                                    std::lock_guard<std::mutex> lock(grid_mutex);
+                                    resultGrid[ny][nx] = {(float)realX, (float)realY, res.u, res.v, res.correlation_score, true};
+                                }
+
+                                if (res.status == 0 && res.correlation_score < 0.3f) {
+                                    // LOGD("  [PTHREAD %d] pushing neighbor (%d,%d) to queue", tid, nx, ny);
+                                    local_queue.push(IndicVision::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+                                }
+                                local_points_solved++;
+                                global_points_solved.fetch_add(1, std::memory_order_relaxed);
+                            }
+                        }
+                    }
+
+                    int chunk_size = 64;
+                    int start_idx = seed_index.fetch_add(chunk_size, std::memory_order_relaxed);
+                    if (start_idx >= (int)global_seeds.size()) break;
+
+                    int end_idx = std::min(start_idx + chunk_size, (int)global_seeds.size());
+
+                    for (int current_idx = start_idx; current_idx < end_idx; ++current_idx) {
+                        IndicVision::SeedNode seed = global_seeds[current_idx];
                         bool claimed = false;
 
                         {
                             std::lock_guard<std::mutex> lock(grid_mutex);
-                            if (!resultGrid[ny][nx].solved) {
-                                resultGrid[ny][nx].solved = true;
+                            if (!resultGrid[seed.y_idx][seed.x_idx].solved) {
+                                resultGrid[seed.y_idx][seed.x_idx].solved = true;
                                 claimed = true;
                             }
                         }
-
                         if (!claimed) continue;
 
-                        int realX = rectX + nx * step;
-                        int realY = rectY + ny * step;
+                        int realX = rectX + seed.x_idx * step;
+                        int realY = rectY + seed.y_idx * step;
 
                         auto th1 = std::chrono::high_resolution_clock::now();
-                        IndicVision::SubsetPrecomputer::precompute_subset(local_subset, refImg, realX, realY, subsetSize);
+                        // 🚀 USE THE CACHED GLOBAL REFERENCE IMAGE
+                        IndicVision::SubsetPrecomputer::precompute_subset(local_subset, *g_refImg, realX, realY, subsetSize);
                         auto th2 = std::chrono::high_resolution_clock::now();
                         local_hessian_ms += std::chrono::duration<double, std::milli>(th2 - th1).count();
 
                         if (!local_subset.is_initialized) continue;
 
-                        IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, current.u, current.v, IndicVision::INIT_NO_SEARCH);
+                        IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, globalU, globalV, IndicVision::INIT_AUTO_SEARCH);
 
                         {
                             std::lock_guard<std::mutex> lock(grid_mutex);
-                            resultGrid[ny][nx] = {(float)realX, (float)realY, res.u, res.v, res.correlation_score, true};
+                            resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.correlation_score, true};
                         }
 
-                        if (res.status == 0 && res.correlation_score < 0.3f) {
-                            local_queue.push(IndicVision::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+                        if (res.status == 0 && res.correlation_score < 0.15f) {
+                            local_queue.push(IndicVision::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+                            local_points_solved++;
+                            global_points_solved.fetch_add(1, std::memory_order_relaxed);
                         }
-                        local_points_solved++;
-                        global_points_solved.fetch_add(1, std::memory_order_relaxed);
                     }
                 }
+
+                t_icgn_arr[tid] = local_engine.time_icgn_ms;
+                t_simplex_arr[tid] = local_engine.time_simplex_ms;
+                t_hessian_arr[tid] = local_hessian_ms;
+                c_icgn_arr[tid] = local_engine.count_icgn;
+                c_simplex_arr[tid] = local_engine.count_simplex;
+                c_points_arr[tid] = local_points_solved;
+
+            } catch (const std::exception& e) {
+                LOGE("Native Thread %d Crashed due to memory/math error: %s", t, e.what());
+            } catch (...) {
+                LOGE("Native Thread %d Crashed with unknown error!", t);
             }
+        });
+    }
 
-            int chunk_size = 64;
-            int start_idx = seed_index.fetch_add(chunk_size, std::memory_order_relaxed);
-            if (start_idx >= (int)global_seeds.size()) break;
-
-            int end_idx = std::min(start_idx + chunk_size, (int)global_seeds.size());
-
-            for (int current_idx = start_idx; current_idx < end_idx; ++current_idx) {
-                IndicVision::SeedNode seed = global_seeds[current_idx];
-                bool claimed = false;
-
-                {
-                    std::lock_guard<std::mutex> lock(grid_mutex);
-                    if (!resultGrid[seed.y_idx][seed.x_idx].solved) {
-                        resultGrid[seed.y_idx][seed.x_idx].solved = true;
-                        claimed = true;
-                    }
-                }
-                if (!claimed) continue;
-
-                int realX = rectX + seed.x_idx * step;
-                int realY = rectY + seed.y_idx * step;
-
-                auto th1 = std::chrono::high_resolution_clock::now();
-                IndicVision::SubsetPrecomputer::precompute_subset(local_subset, refImg, realX, realY, subsetSize);
-                auto th2 = std::chrono::high_resolution_clock::now();
-                local_hessian_ms += std::chrono::duration<double, std::milli>(th2 - th1).count();
-
-                if (!local_subset.is_initialized) continue;
-
-                IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, globalU, globalV, IndicVision::INIT_AUTO_SEARCH);
-
-                {
-                    std::lock_guard<std::mutex> lock(grid_mutex);
-                    resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.correlation_score, true};
-                }
-
-                if (res.status == 0 && res.correlation_score < 0.15f) {
-                    local_queue.push(IndicVision::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
-                    local_points_solved++;
-                    global_points_solved.fetch_add(1, std::memory_order_relaxed);
-                }
-            }
-        }
-
-        t_icgn_arr[tid] = local_engine.time_icgn_ms;
-        t_simplex_arr[tid] = local_engine.time_simplex_ms;
-        t_hessian_arr[tid] = local_hessian_ms;
-        c_icgn_arr[tid] = local_engine.count_icgn;
-        c_simplex_arr[tid] = local_engine.count_simplex;
-        c_points_arr[tid] = local_points_solved;
+    // Wait for all worker threads to finish
+    for (auto& worker : workers) {
+        if (worker.joinable()) worker.join();
     }
 
     auto end_track = std::chrono::high_resolution_clock::now();
 
-    computation_running = false;
+    // 8. SAFE THREAD TEARDOWN
+    progress_thread_should_stop.store(true, std::memory_order_release);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
     if (progress_thread.joinable()) {
         progress_thread.join();
     }
 
     if (globalCallbackObj != nullptr) {
         env->DeleteGlobalRef(globalCallbackObj);
+        globalCallbackObj = nullptr;
     }
 
-    // --- 6. STRAIN POST-PROCESSING ---
+    // 9. STRAIN POST-PROCESSING
     IndicVision::DisplacementField dispField;
     dispField.width = gridW;
     dispField.height = gridH;
@@ -489,11 +600,12 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         strainField = IndicVision::StrainCalculator::compute_vsg_strain(dispField, strainWindow);
     }
 
-    if (callbackObj != nullptr && methodId != nullptr) {
+    if (callbackObj != nullptr && methodId != nullptr && !env->ExceptionCheck()) {
         env->CallVoidMethod(callbackObj, methodId, (jint)95);
+        if (env->ExceptionCheck()) env->ExceptionClear();
     }
 
-    // --- 7. 🚀 DIRECT BUFFER FLATTENING (ZERO-COPY) ---
+    // 10. DIRECT BUFFER FLATTENING (ZERO-COPY)
     int valid_count = 0;
     for(int y=0; y<gridH; ++y) {
         for(int x=0; x<gridW; ++x) {
@@ -513,8 +625,9 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         }
     }
 
-    if (callbackObj != nullptr && methodId != nullptr) {
+    if (callbackObj != nullptr && methodId != nullptr && !env->ExceptionCheck()) {
         env->CallVoidMethod(callbackObj, methodId, (jint)100);
+        if (env->ExceptionCheck()) env->ExceptionClear();
     }
 
     auto end_total = std::chrono::high_resolution_clock::now();
@@ -529,7 +642,10 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     LOGD("Total JNI Execution Time : %.2f ms", std::chrono::duration<double, std::milli>(end_total - start_total).count());
     LOGD("========================================");
 
-    // 🚀 Return the exact number of valid points we wrote to the buffer
+    defMat.release();
+    roiMask.release();
+
     return (jint)valid_count;
 }
+
 } // extern "C"

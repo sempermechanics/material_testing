@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <Eigen/Dense>
+#include <Eigen/StdVector> // 🚀 Added for safe Eigen STL vector alignment
 #include <android/log.h>
 
 // Make sure your LOGD macro has a tag defined if it doesn't already!
@@ -62,7 +63,10 @@ namespace IndicVision {
 
         // 🚀 Matrix memory footprint cut in half!
         Eigen::Matrix<float, 6, 6> H_inv;
-        std::vector<Eigen::Matrix<float, 6, 1>> steepest_descent_images;
+
+        // 🟡 BUG 4 FIX: Eigen Aligned Allocator
+        // Prevents ARM64 NEON SIGBUS/SIGSEGV alignment faults during fast vectorized math
+        std::vector<Eigen::Matrix<float, 6, 1>, Eigen::aligned_allocator<Eigen::Matrix<float, 6, 1>>> steepest_descent_images;
 
         bool is_initialized = false; // Flag to skip re-computation
     };

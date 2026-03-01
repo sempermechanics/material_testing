@@ -2,12 +2,9 @@ package com.rafad.indicvisiondic
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
-import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Log
 import android.view.View
@@ -17,12 +14,17 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 
-// --- THE MISSING IMPORTS FOR THE ROI DRAWING ENGINE ---
+// --- ROI DRAWING ENGINE IMPORTS ---
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class StaticAnalysisActivity : AppCompatActivity() {
 
@@ -50,6 +52,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var switchBlur: Switch
     private lateinit var rgStrainMethod: RadioGroup
     private lateinit var btnViewResults: Button
+
+    // State
+    private var isProcessing = false
+    private var processingStartTime: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,11 +87,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
         restoreUiFromViewModel()
 
         val pickRef = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            uri?.let { handleImageSelection(it, isRef = true) }
+            uri?.let { handleReferenceImage(it) }
         }
-        val pickDef = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            uri?.let { handleImageSelection(it, isRef = false) }
+
+        // Multi-image picker for deformed images
+        val pickDefBatch = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+            if (uris.isNotEmpty()) {
+                handleDeformedBatch(uris)
+            } else {
+                Toast.makeText(this, "No images selected", Toast.LENGTH_SHORT).show()
+            }
         }
+
         val pickMask = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let { handleMaskSelection(it) }
         }
@@ -109,26 +122,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         btnLoadRef.setOnClickListener { pickRef.launch("image/*") }
-        btnLoadDef.setOnClickListener { pickDef.launch("image/*") }
+        btnLoadDef.setOnClickListener { pickDefBatch.launch("image/*") }
         btnLoadRoiMask.setOnClickListener { pickMask.launch("image/*") }
 
         btnDefineRoi.setOnClickListener {
             if (viewModel.refBytes != null) {
-                // 🚀 THE FIX: Use the RAW, original bytes from the ViewModel
-                // Do NOT use the downscaled preview from the ImageView!
                 val tempFile = File(cacheDir, "temp_roi_ref.bin")
-
                 try {
-                    // Instantly write the true raw image bytes to disk
                     tempFile.writeBytes(viewModel.refBytes!!)
-
                     val intent = Intent(this, RoiDrawActivity::class.java)
                     intent.putExtra("IMAGE_FILE_PATH", tempFile.absolutePath)
-
-                    // Pass the TRUE original dimensions (e.g., 4000x3000)
                     intent.putExtra("IMAGE_WIDTH", viewModel.realRefWidth)
                     intent.putExtra("IMAGE_HEIGHT", viewModel.realRefHeight)
-
                     roiStudioLauncher.launch(intent)
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -151,135 +156,262 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         btnCalculateFullField.setOnClickListener {
-            if (viewModel.isReadyToCompute()) {
-                val subset = etSubsetSize.text.toString().toIntOrNull() ?: 41
-                val step = etStepSize.text.toString().toIntOrNull() ?: 5
-                val strainWin = etStrainWindow.text.toString().toIntOrNull() ?: 15
+            startBatchAnalysis()
+        }
 
-                var finalRectX: Int
-                var finalRectY: Int
-                var finalRectW: Int
-                var finalRectH: Int
+        btnViewResults.setOnClickListener {
+            openResultViewer()
+        }
+    }
 
-                if (viewModel.hasCustomRoi) {
-                    finalRectX = viewModel.roiX
-                    finalRectY = viewModel.roiY
-                    finalRectW = viewModel.roiW
-                    finalRectH = viewModel.roiH
-                } else {
-                    val margin = (subset / 2) + 10
-                    finalRectX = margin
-                    finalRectY = margin
-                    finalRectW = viewModel.realRefWidth - (2 * margin)
-                    finalRectH = viewModel.realRefHeight - (2 * margin)
+    private fun handleReferenceImage(uri: Uri) {
+        val name = getFileName(uri)
+        try {
+            contentResolver.openInputStream(uri)?.use { stream ->
+                val bytes = stream.readBytes()
+                viewModel.refName = "Ref: $name"
+                viewModel.refBytes = bytes
+                val dims = IndicVisionNativeLib.getImageDimensions(bytes)
+                viewModel.realRefWidth = dims[0]
+                viewModel.realRefHeight = dims[1]
+                imgRef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000))
+                tvRefName.text = viewModel.refName
+
+                if (!viewModel.hasCustomRoi) {
+                    viewModel.roiX = 0
+                    viewModel.roiY = 0
+                    viewModel.roiW = viewModel.realRefWidth
+                    viewModel.roiH = viewModel.realRefHeight
+                }
+                checkReady()
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    private fun handleDeformedBatch(uris: List<Uri>) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val tempDir = File(cacheDir, "temp_deformed")
+                if (!tempDir.exists()) tempDir.mkdirs()
+                tempDir.listFiles()?.forEach { it.delete() }
+
+                // ✅ FIX: Clear OLD result metadata BEFORE building the new selection,
+                // so we start fresh without wiping the paths we are about to set.
+                viewModel.clearPreviousResults()
+
+                val filePaths = mutableListOf<String>()
+
+                withContext(Dispatchers.Main) {
+                    tvResult.text = "Caching images..."
                 }
 
-                if (finalRectW < subset || finalRectH < subset) {
-                    Toast.makeText(this, "ROI is too small! Must be larger than subset.", Toast.LENGTH_LONG).show()
-                    return@setOnClickListener
+                for ((index, uri) in uris.withIndex()) {
+                    val bytes = contentResolver.openInputStream(uri)?.readBytes()
+                    if (bytes == null) continue
+
+                    val filename = String.format("deformed_%04d.jpg", index)
+                    val file = File(tempDir, filename)
+                    file.writeBytes(bytes)
+                    filePaths.add(file.absolutePath)
+
+                    if (index == 0) {
+                        // ✅ FIX: Decode bitmap on IO thread; only the ImageView.set call needs Main.
+                        val previewBitmap = IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000)
+                        withContext(Dispatchers.Main) {
+                            imgDef.setImageBitmap(previewBitmap)
+                        }
+                    }
                 }
 
-                progressBar.visibility = View.VISIBLE
-                progressBar.progress = 0
-                tvTimer.visibility = View.VISIBLE
-                tvTimer.text = "Initializing 2D Scan..."
-                btnCalculateFullField.isEnabled = false
+                // ✅ FIX: Assign defFilePaths AFTER clearPreviousResults() — it is now safe.
+                val sortedPaths = filePaths.sorted()
+                viewModel.defFilePaths = sortedPaths
 
-                val startTime = System.currentTimeMillis()
+                withContext(Dispatchers.Main) {
+                    tvDefName.text = viewModel.getDefDisplayName()
+                    tvResult.text = ""
+                    checkReady()
+                    val message = if (sortedPaths.size == 1) "1 image selected" else "${sortedPaths.size} images selected"
+                    Toast.makeText(this@StaticAnalysisActivity, message, Toast.LENGTH_SHORT).show()
+                }
 
-                Thread {
+            } catch (e: Exception) {
+                Log.e("StaticAnalysis", "Error handling batch", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@StaticAnalysisActivity, "Error loading images: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    // 🚀 CRITICAL: Batch Analysis Execution Pipeline
+    private fun startBatchAnalysis() {
+        if (!viewModel.isReadyToCompute()) return
+
+        val subset = etSubsetSize.text.toString().toIntOrNull() ?: 41
+        val step = etStepSize.text.toString().toIntOrNull() ?: 5
+        val strainWin = etStrainWindow.text.toString().toIntOrNull() ?: 15
+
+        var finalRectX = viewModel.roiX
+        var finalRectY = viewModel.roiY
+        var finalRectW = viewModel.roiW
+        var finalRectH = viewModel.roiH
+
+        if (!viewModel.hasCustomRoi) {
+            val margin = (subset / 2) + 10
+            finalRectX = margin
+            finalRectY = margin
+            finalRectW = viewModel.realRefWidth - (2 * margin)
+            finalRectH = viewModel.realRefHeight - (2 * margin)
+        }
+
+        if (finalRectW < subset || finalRectH < subset) {
+            Toast.makeText(this, "ROI is too small! Must be larger than subset.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        isProcessing = true
+        checkReady()
+        progressBar.visibility = View.VISIBLE
+        progressBar.progress = 0
+        tvTimer.visibility = View.VISIBLE
+        tvTimer.text = "Initializing Engine..."
+
+        processingStartTime = System.currentTimeMillis()
+
+        val batchDir = File(cacheDir, "batch_results")
+        if (!batchDir.exists()) batchDir.mkdirs()
+        batchDir.listFiles()?.forEach { it.delete() }
+
+        viewModel.lastBatchDirPath = batchDir.absolutePath
+        viewModel.lastStep = step
+
+        val applyBlur = switchBlur.isChecked
+        val useNlvc = rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc
+        val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
+
+        // 🚀 LAUNCH ON THE DEDICATED NATIVE THREAD
+        // All JNI calls (initializeReference + computeFullFieldDirect) MUST run on the
+        // same OS thread so that the LLVM OpenMP runtime’s TLS master-thread registration
+        // is always valid. Using Dispatchers.IO would risk Kotlin resuming on a different
+        // worker thread after each suspension point, causing __kmp_invoke_microtask to
+        // dereference a null kmp_thread_t* → SIGSEGV. The ViewModel’s nativeExecutor
+        // is a SingleThreadExecutor: one persistent OS thread, same identity every time.
+        lifecycleScope.launch(viewModel.nativeExecutor.asCoroutineDispatcher()) {
+            try {
+                val totalFrames = viewModel.defFilePaths.size
+                val refBytes = viewModel.refBytes ?: throw IllegalStateException("Reference missing")
+                var firstFrameValidPoints = 0
+
+                // 🟠 BUG 2 FIX: INITIALIZE NATIVE REFERENCE ONCE
+                // This prevents C++ from rebuilding the heavy 48MB reference image on every loop!
+                // ✅ Non-suspending UI update — keeps coroutine on the native thread.
+                runOnUiThread { tvTimer.text = "Caching Reference in Native Engine..." }
+                IndicVisionNativeLib.initializeReference(refBytes, applyBlur)
+
+                val gridW = finalRectW / step
+                val gridH = finalRectH / step
+                val maxPoints = gridW * gridH
+                val byteCapacity = maxPoints * 8 * 4
+                val outputBuffer = java.nio.ByteBuffer.allocateDirect(byteCapacity)
+                outputBuffer.order(java.nio.ByteOrder.nativeOrder())
+
+                for ((frameIndex, defPath) in viewModel.defFilePaths.withIndex()) {
+
+                    // ✅ FIX: Build UI strings on the IO thread BEFORE loading bytes.
+                    // We MUST NOT call withContext(Dispatchers.Main) inside this loop.
+                    // Doing so suspends the coroutine, which Kotlin may then resume on a
+                    // DIFFERENT IO thread. The LLVM OpenMP runtime has thread-local state
+                    // (task scheduler, TLS pool) bound to the original thread — invoking
+                    // #pragma omp parallel from a new thread causes a null-ptr SIGSEGV
+                    // inside __kmp_invoke_microtask. Fix: post UI updates non-suspendingly
+                    // via runOnUiThread (fire-and-forget), keeping the coroutine on one thread.
+                    val frameLabel = "Processing Frame ${frameIndex + 1}/$totalFrames..."
+                    runOnUiThread { tvTimer.text = frameLabel }
+
+                    val defBytes = File(defPath).readBytes()
+
                     val callback = object : ProgressCallback {
                         override fun onProgressUpdate(percentage: Int) {
                             runOnUiThread {
-                                progressBar.progress = percentage
-                                val elapsed = (System.currentTimeMillis() - startTime) / 1000
-                                tvTimer.text = "2D Scanning... ${elapsed}s ($percentage%)"
+                                val frameProgress = (frameIndex.toFloat() / totalFrames) * 100
+                                val overallProgress = frameProgress + (percentage.toFloat() / totalFrames)
+                                progressBar.progress = overallProgress.toInt()
                             }
                         }
                     }
 
-                    val applyBlur = switchBlur.isChecked
-                    val useNlvc = rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc
-                    val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
+                    outputBuffer.clear()
 
-                    // 🚀 1. CALCULATE MAXIMUM POSSIBLE POINTS
-                    val gridW = finalRectW / step
-                    val gridH = finalRectH / step
-                    val maxPoints = gridW * gridH
-
-                    // 🚀 2. ALLOCATE DIRECT SHARED MEMORY
-                    // 8 floats per point, 4 bytes per float
-                    val byteCapacity = maxPoints * 8 * 4
-                    val outputBuffer = java.nio.ByteBuffer.allocateDirect(byteCapacity)
-                    outputBuffer.order(java.nio.ByteOrder.nativeOrder())
-
-                    // 🚀 3. CALL C++ TO WRITE DIRECTLY INTO THE BUFFER
+                    // 🚀 RUN C++ ENGINE — coroutine stays on the same IO thread throughout.
                     val validPointsCount = IndicVisionNativeLib.computeFullFieldDirect(
-                        viewModel.refBytes!!, viewModel.defBytes!!, maskData,
+                        refBytes, defBytes, maskData,
                         finalRectX, finalRectY, finalRectW, finalRectH,
                         step, subset, strainWin, true, true, applyBlur, useNlvc,
                         outputBuffer, callback
                     )
 
-                    val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
+                    if (frameIndex == 0) firstFrameValidPoints = validPointsCount
+                    if (validPointsCount <= 0) continue
 
-                    runOnUiThread {
-                        progressBar.visibility = View.GONE
-
-                        if (validPointsCount <= 0) {
-                            tvTimer.text = "Analysis Failed"
-                            tvResult.text = "❌ Engine returned no data"
-                        } else {
-                            tvTimer.text = "Analysis Done in %.2f s. Points: $validPointsCount".format(totalTime)
-
-                            // 🚀 4. EXTRACT ONLY THE VALID BYTES AND SAVE TO DISK
-                            val dataFile = File(cacheDir, "analysis_results.bin")
-                            val validByteCount = validPointsCount * 8 * 4
-
-                            val exactBytes = ByteArray(validByteCount)
-                            outputBuffer.position(0) // Reset buffer pointer to the start
-                            outputBuffer.get(exactBytes, 0, validByteCount) // Copy exact payload
-
-                            dataFile.writeBytes(exactBytes) // Save instantly
-
-                            val defFile = File(cacheDir, "temp_def_view.png")
-                            viewModel.defBytes?.let { bytes ->
-                                val fullResBitmap = IndicVisionNativeLib.getPreviewFromBytes(bytes, viewModel.realRefWidth)
-                                defFile.outputStream().use { out ->
-                                    fullResBitmap?.compress(Bitmap.CompressFormat.PNG, 100, out)
-                                }
-                            }
-
-                            viewModel.lastStep = step
-                            viewModel.roiX = finalRectX
-                            viewModel.roiY = finalRectY
-                            viewModel.hasCompletedAnalysis = true
-
-                            launchResultViewer(dataFile.absolutePath, defFile.absolutePath)
-                            btnViewResults.visibility = View.VISIBLE
-                        }
-                        btnCalculateFullField.isEnabled = true
+                    val outputFile = File(batchDir, String.format("frame_%04d.dat", frameIndex))
+                    outputFile.outputStream().use { fos ->
+                        val bytes = ByteArray(validPointsCount * 8 * 4)
+                        outputBuffer.position(0)
+                        outputBuffer.get(bytes, 0, bytes.size)
+                        fos.write(bytes)
                     }
-                }.start()
-            }
-        }
 
-        btnViewResults.setOnClickListener {
-            val dataFile = File(cacheDir, "analysis_results.bin")
-            val defFile = File(cacheDir, "temp_def_view.png")
-            if (dataFile.exists() && defFile.exists()) {
-                launchResultViewer(dataFile.absolutePath, defFile.absolutePath)
-            } else {
-                Toast.makeText(this, "No previous results found.", Toast.LENGTH_SHORT).show()
-                btnViewResults.visibility = View.GONE
+                    @Suppress("ExplicitGarbageCollectionCall")
+                    System.gc()
+                }
+
+                val totalTime = (System.currentTimeMillis() - processingStartTime) / 1000.0
+
+                withContext(Dispatchers.Main) {
+                    isProcessing = false
+                    progressBar.visibility = View.GONE
+
+                    if (firstFrameValidPoints <= 0) {
+                        tvTimer.text = "Analysis Failed"
+                        tvResult.text = "❌ Engine returned no data"
+                    } else {
+                        tvTimer.text = "Batch Done in %.2f s".format(totalTime)
+                        tvResult.text = "✅ Computed $totalFrames frames!"
+
+                        val defFile = File(cacheDir, "temp_def_view.png")
+                        val firstDefBytes = File(viewModel.defFilePaths[0]).readBytes()
+                        val fullResBitmap = IndicVisionNativeLib.getPreviewFromBytes(firstDefBytes, viewModel.realRefWidth)
+                        defFile.outputStream().use { out ->
+                            fullResBitmap?.compress(Bitmap.CompressFormat.PNG, 100, out)
+                        }
+                        viewModel.lastDefPath = defFile.absolutePath
+
+                        viewModel.hasCompletedAnalysis = true
+                        checkReady()
+                        openResultViewer()
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e("StaticAnalysis", "Batch processing failed", e)
+                withContext(Dispatchers.Main) {
+                    isProcessing = false
+                    progressBar.visibility = View.GONE
+                    tvTimer.text = "Engine Error"
+                    tvResult.text = "❌ Error: ${e.message}"
+                    checkReady()
+                }
             }
         }
     }
 
-    private fun launchResultViewer(dataPath: String, defPath: String) {
+    private fun openResultViewer() {
+        if (!viewModel.hasCompletedAnalysis) return
+
         val intent = Intent(this, ResultViewerActivity::class.java).apply {
-            putExtra("DATA_PATH", dataPath)
-            putExtra("DEF_PATH", defPath)
+            putExtra("BATCH_DIR_PATH", viewModel.lastBatchDirPath)
+            putExtra("DEF_PATH", viewModel.lastDefPath)
             putExtra("IMG_W", viewModel.realRefWidth)
             putExtra("IMG_H", viewModel.realRefHeight)
             putExtra("STEP", viewModel.lastStep)
@@ -287,43 +419,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             putExtra("ROI_Y", viewModel.roiY)
         }
         startActivity(intent)
-    }
-
-    private fun restoreUiFromViewModel() {
-        tvRefName.text = viewModel.refName
-        tvDefName.text = viewModel.defName
-
-        viewModel.refBytes?.let { imgRef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(it, 1000)) }
-        viewModel.defBytes?.let { imgDef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(it, 1000)) }
-
-        if (viewModel.hasCompletedAnalysis) {
-            btnViewResults.visibility = View.VISIBLE
-        }
-        checkReady()
-    }
-
-    private fun handleImageSelection(uri: Uri, isRef: Boolean) {
-        val name = getFileName(uri)
-        try {
-            contentResolver.openInputStream(uri)?.use { stream ->
-                val bytes = stream.readBytes()
-                if (isRef) {
-                    viewModel.refName = "Ref: $name"
-                    viewModel.refBytes = bytes
-                    val dims = IndicVisionNativeLib.getImageDimensions(bytes)
-                    viewModel.realRefWidth = dims[0]
-                    viewModel.realRefHeight = dims[1]
-                    imgRef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000))
-                    tvRefName.text = viewModel.refName
-                } else {
-                    viewModel.defName = "Def: $name"
-                    viewModel.defBytes = bytes
-                    imgDef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000))
-                    tvDefName.text = viewModel.defName
-                }
-                checkReady()
-            }
-        } catch (e: Exception) { e.printStackTrace() }
     }
 
     private fun handleMaskSelection(uri: Uri) {
@@ -352,18 +447,38 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun checkReady() {
         val ready = viewModel.isReadyToCompute()
-        btnCalculateFullField.isEnabled = ready
-        btnDefineRoi.isEnabled = (viewModel.refBytes != null)
+        btnCalculateFullField.isEnabled = ready && !isProcessing
+        btnDefineRoi.isEnabled = (viewModel.refBytes != null) && !isProcessing
+        btnManualRoi.isEnabled = !isProcessing
+        btnLoadRef.isEnabled = !isProcessing
+        btnLoadDef.isEnabled = !isProcessing
+        btnViewResults.visibility = if (viewModel.hasCompletedAnalysis && !isProcessing) View.VISIBLE else View.GONE
 
-        if (ready) btnCalculateFullField.setBackgroundColor(Color.parseColor("#0000AA"))
+        if (ready && !isProcessing) btnCalculateFullField.setBackgroundColor(Color.parseColor("#0000AA"))
+        else btnCalculateFullField.setBackgroundColor(Color.GRAY)
+
         if (viewModel.refBytes != null) {
             btnDefineRoi.setBackgroundColor(Color.parseColor("#673AB7"))
             btnManualRoi.setBackgroundColor(Color.parseColor("#009688"))
         }
     }
 
+    private fun restoreUiFromViewModel() {
+        tvRefName.text = viewModel.refName
+        tvDefName.text = viewModel.getDefDisplayName()
+
+        viewModel.refBytes?.let { imgRef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(it, 1000)) }
+
+        if (viewModel.defFilePaths.isNotEmpty()) {
+            try {
+                val firstBytes = File(viewModel.defFilePaths[0]).readBytes()
+                imgDef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(firstBytes, 1000))
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+        checkReady()
+    }
+
     private fun showShapeRoiDialog() {
-        // 1. Safety Check
         if (viewModel.refBytes == null) {
             Toast.makeText(this, "Load Reference Image first!", Toast.LENGTH_SHORT).show()
             return
@@ -373,16 +488,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val imgW = viewModel.realRefWidth
         val imgH = viewModel.realRefHeight
 
-        // 2. UI Bindings
         val spinner = dialogView.findViewById<Spinner>(R.id.spinnerShape)
-
-        // Layout containers for visibility toggling
         val layoutRect = dialogView.findViewById<View>(R.id.layoutRect)
         val layoutCircle = dialogView.findViewById<View>(R.id.layoutCircle)
         val layoutEllipse = dialogView.findViewById<View>(R.id.layoutEllipse)
         val layoutTri = dialogView.findViewById<View>(R.id.layoutTri)
 
-        // Rectangle inputs (Pre-fill with current values)
         val etRectX = dialogView.findViewById<EditText>(R.id.etRectX)
         val etRectY = dialogView.findViewById<EditText>(R.id.etRectY)
         val etRectW = dialogView.findViewById<EditText>(R.id.etRectW)
@@ -393,11 +504,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etRectW.setText(if (viewModel.roiW > 0) viewModel.roiW.toString() else imgW.toString())
         etRectH.setText(if (viewModel.roiH > 0) viewModel.roiH.toString() else imgH.toString())
 
-        // Hints to help user
         etRectW.hint = "Max: $imgW"
         etRectH.hint = "Max: $imgH"
 
-        // 3. Setup Spinner
         val shapes = arrayOf("Rectangle / Square", "Circle", "Ellipse", "Triangle")
         spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, shapes)
 
@@ -411,38 +520,33 @@ class StaticAnalysisActivity : AppCompatActivity() {
             override fun onNothingSelected(p0: AdapterView<*>?) {}
         }
 
-        // 4. Create Dialog (But don't set the listener yet!)
         val dialog = android.app.AlertDialog.Builder(this)
             .setTitle("Define Mathematical ROI")
             .setView(dialogView)
-            .setPositiveButton("Apply", null) // Set null here to prevent auto-dismiss
+            .setPositiveButton("Apply", null)
             .setNegativeButton("Cancel", null)
             .create()
 
         dialog.show()
 
-        // 5. Override the Button Logic for Validation
         dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             var finalX = 0; var finalY = 0; var finalW = 0; var finalH = 0
             var requiresMask = false
 
-            // Virtual Canvas for Mask Generation (only used if requiresMask becomes true)
-            // We create it lazily to save memory, or just create it here:
             val maskBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(maskBitmap)
-            canvas.drawColor(Color.BLACK) // Black = ignore
-            val paint = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL } // White = compute
+            canvas.drawColor(Color.BLACK)
+            val paint = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
 
-            // --- CALCULATE BOUNDS BASED ON SHAPE ---
             when (spinner.selectedItemPosition) {
-                0 -> { // Rectangle
+                0 -> {
                     finalX = etRectX.text.toString().toIntOrNull() ?: 0
                     finalY = etRectY.text.toString().toIntOrNull() ?: 0
                     finalW = etRectW.text.toString().toIntOrNull() ?: 0
                     finalH = etRectH.text.toString().toIntOrNull() ?: 0
                     viewModel.roiMaskBytes = null
                 }
-                1 -> { // Circle
+                1 -> {
                     requiresMask = true
                     val cx = dialogView.findViewById<EditText>(R.id.etCircCx).text.toString().toFloatOrNull() ?: (imgW/2f)
                     val cy = dialogView.findViewById<EditText>(R.id.etCircCy).text.toString().toFloatOrNull() ?: (imgH/2f)
@@ -455,7 +559,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     finalW = (r * 2).toInt()
                     finalH = (r * 2).toInt()
                 }
-                2 -> { // Ellipse
+                2 -> {
                     requiresMask = true
                     val cx = dialogView.findViewById<EditText>(R.id.etEllCx).text.toString().toFloatOrNull() ?: (imgW/2f)
                     val cy = dialogView.findViewById<EditText>(R.id.etEllCy).text.toString().toFloatOrNull() ?: (imgH/2f)
@@ -469,7 +573,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     finalW = (rx * 2).toInt()
                     finalH = (ry * 2).toInt()
                 }
-                3 -> { // Triangle
+                3 -> {
                     requiresMask = true
                     val x1 = dialogView.findViewById<EditText>(R.id.etTriX1).text.toString().toFloatOrNull() ?: 0f
                     val y1 = dialogView.findViewById<EditText>(R.id.etTriY1).text.toString().toFloatOrNull() ?: 0f
@@ -488,8 +592,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
             }
 
-            // 🚀 BOUNDARY VALIDATION LOGIC
-            // We check the Bounding Box of whatever shape was drawn
             if (finalX < 0 || finalY < 0 || (finalX + finalW) > imgW || (finalY + finalH) > imgH || finalW <= 0 || finalH <= 0) {
                 val errorMsg = if (finalW <= 0 || finalH <= 0) {
                     "Dimensions must be positive!"
@@ -497,11 +599,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     "Shape is out of bounds!\nMax Size: ${imgW}x${imgH}.\nYour Shape Ends at: ${finalX+finalW}x${finalY+finalH}"
                 }
                 Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
-                // Do NOT dismiss dialog, let user fix it
             } else {
-                // ✅ SUCCESS
-
-                // Generate Mask Bytes if needed
                 if (requiresMask) {
                     val stream = java.io.ByteArrayOutputStream()
                     maskBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
@@ -511,15 +609,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     tvInstruction.text = "✅ Rectangular ROI Set: $finalW x $finalH px"
                 }
 
-                // Save to ViewModel
-                viewModel.roiX = finalX
-                viewModel.roiY = finalY
-                viewModel.roiW = finalW
-                viewModel.roiH = finalH
+                viewModel.roiX = finalX; viewModel.roiY = finalY
+                viewModel.roiW = finalW; viewModel.roiH = finalH
                 viewModel.hasCustomRoi = true
 
                 checkReady()
-                dialog.dismiss() // NOW we dismiss
+                dialog.dismiss()
             }
         }
     }
