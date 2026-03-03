@@ -35,7 +35,7 @@ object VisualizationEngine {
 
         for (i in data.indices step 8) {
             val corr = data[i + 7]
-            if (corr != 0f && corr <= 0.25f) {
+            if (corr != 0f && corr <= 0.15f) { // 🚀 Tighter correlation gate
                 val x = data[i].toInt()
                 val y = data[i+1].toInt()
                 val v = data[i+valIndex]
@@ -52,7 +52,7 @@ object VisualizationEngine {
             return Triple(Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888), 0f, 0f)
         }
 
-        // 🚀 THE SCALING LOGIC: Use Custom Bounds if provided, else Auto-Scale
+        // 🚀 THE SCALING LOGIC: Use Custom Bounds if provided, else robust auto-scale via Zero-Anchored 2%-98% clipping
         val minV: Float
         val maxV: Float
         if (customMin != null && customMax != null) {
@@ -60,8 +60,20 @@ object VisualizationEngine {
             maxV = customMax
         } else {
             validValues.sort()
-            minV = validValues[(validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)]
-            maxV = validValues[(validValues.size * 0.98).toInt().coerceIn(0, validValues.size - 1)]
+            var v02 = validValues[(validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)]
+            var v98 = validValues[(validValues.size * 0.98).toInt().coerceIn(0, validValues.size - 1)]
+
+            // 🚀 ROBUSTNESS FIX: If the range is near-zero (noise floor), 
+            // set a minimum meaningful span so the spectrum doesn't explode on noise.
+            val minSpan = if (valIndex > 3) 0.0001f else 0.01f // 0.1mε or 0.01px
+            if ((v98 - v02) < minSpan) {
+                val mid = (v98 + v02) / 2f
+                v02 = mid - (minSpan / 2f)
+                v98 = mid + (minSpan / 2f)
+            }
+
+            minV = v02
+            maxV = v98
         }
 
         val range = if (maxV - minV == 0f) 0.0001f else maxV - minV
@@ -73,7 +85,7 @@ object VisualizationEngine {
 
         for (i in data.indices step 8) {
             val corr = data[i + 7]
-            if (corr != 0f && corr <= 0.25f) {
+            if (corr != 0f && corr <= 0.15f) { // 🚀 Tighter correlation gate
                 val x = data[i].toInt()
                 val y = data[i+1].toInt()
                 val c = (x - minX) / step

@@ -14,6 +14,8 @@ import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class ResultViewerActivity : AppCompatActivity() {
 
@@ -22,7 +24,8 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var spinnerType: Spinner
 
     // UI - Batch Controls (Ensure these are in your XML)
-    private lateinit var seekBarFrame: SeekBar
+    private lateinit var btnPrevFrame: ImageButton
+    private lateinit var btnNextFrame: ImageButton
     private lateinit var tvFrameCounter: TextView
 
     // UI - Scale Bar
@@ -30,8 +33,8 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var tvScaleMax: TextView
     private lateinit var tvScaleMin: TextView
 
-    private lateinit var btnExportCsv: Button
-    private lateinit var btnExportImage: Button
+    private lateinit var spinnerExportType: Spinner
+    private lateinit var btnExportExecute: ImageButton
     private lateinit var btnInputCoords: Button
     private lateinit var toggleMaxMin: ToggleButton
 
@@ -53,6 +56,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     // Batch Data State
     private var batchFiles: List<File> = emptyList()
+    private var originalDefNames: List<String> = emptyList()
     private var currentFrameIndex = 0
     private var loadingJob: Thread? = null
     // ✅ FIX: Version counter replaces the broken Thread.currentThread() == loadingJob guard.
@@ -90,15 +94,16 @@ class ResultViewerActivity : AppCompatActivity() {
         spinnerType = findViewById(R.id.spinnerResultType)
 
         // Bind Batch Controls (Add these IDs to your XML if not already there)
-        seekBarFrame = findViewById(R.id.seekBarFrame)
+        btnPrevFrame = findViewById(R.id.btnPrevFrame)
+        btnNextFrame = findViewById(R.id.btnNextFrame)
         tvFrameCounter = findViewById(R.id.tvFrameCounter)
 
         layoutColorScale = findViewById(R.id.layoutColorScale)
         tvScaleMax = findViewById(R.id.tvScaleMax)
         tvScaleMin = findViewById(R.id.tvScaleMin)
 
-        btnExportCsv = findViewById(R.id.btnExportCsv)
-        btnExportImage = findViewById(R.id.btnExportImage)
+        spinnerExportType = findViewById(R.id.spinnerExportType)
+        btnExportExecute = findViewById(R.id.btnExportExecute)
 
         toggleInspect = findViewById(R.id.toggleInspect)
         btnInputCoords = findViewById(R.id.btnInputCoords)
@@ -123,6 +128,8 @@ class ResultViewerActivity : AppCompatActivity() {
 
         // 🚀 BATCH LOADING LOGIC
         val batchDirPath = intent.getStringExtra("BATCH_DIR_PATH")
+        originalDefNames = intent.getStringArrayListExtra("DEF_FILE_NAMES") ?: emptyList()
+
         if (batchDirPath != null) {
             val dir = File(batchDirPath)
             if (dir.exists() && dir.isDirectory) {
@@ -132,24 +139,28 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         if (batchFiles.isNotEmpty()) {
-            seekBarFrame.max = batchFiles.size - 1
-            seekBarFrame.progress = currentFrameIndex
             loadFrameData(currentFrameIndex)
+            updateNavButtons()
         } else {
             Toast.makeText(this, "No valid batch data found.", Toast.LENGTH_LONG).show()
         }
 
         // BIND TIMELINE SCRUBBER
-        seekBarFrame.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    currentFrameIndex = progress
-                    loadFrameData(currentFrameIndex)
-                }
+        btnPrevFrame.setOnClickListener {
+            if (currentFrameIndex > 0) {
+                currentFrameIndex--
+                loadFrameData(currentFrameIndex)
+                updateNavButtons()
             }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
+        }
+        
+        btnNextFrame.setOnClickListener {
+            if (currentFrameIndex < batchFiles.size - 1) {
+                currentFrameIndex++
+                loadFrameData(currentFrameIndex)
+                updateNavButtons()
+            }
+        }
 
         // BIND CROSSHAIRS AND STICKY BAR TO ZOOM/PAN MATRIX
         imgMain.onMatrixChangedListener = {
@@ -213,8 +224,19 @@ class ResultViewerActivity : AppCompatActivity() {
             true
         }
 
-        btnExportCsv.setOnClickListener { exportToCSV() }
-        btnExportImage.setOnClickListener { exportMergedImage() }
+        val exportOptions = arrayOf("Export Image (Current)", "Export CSV (Current)", "Export Images (Batch ZIP)", "Export All Data (Single CSV)")
+        val adapter = ArrayAdapter(this, R.layout.spinner_item_white, exportOptions)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerExportType.adapter = adapter
+
+        btnExportExecute.setOnClickListener {
+            when (spinnerExportType.selectedItemPosition) {
+                0 -> exportMergedImage()
+                1 -> exportToCSV()
+                2 -> exportAllImagesZip() 
+                3 -> exportAllDataCsv() 
+            }
+        }
 
         // Initial setup after views have dimensions
         imgMain.post {
@@ -276,7 +298,8 @@ class ResultViewerActivity : AppCompatActivity() {
                     // Only apply results if no newer scrub has started a new load job.
                     if (myVersion == loadVersion) {
                         rawData = newData
-                        tvFrameCounter.text = "Frame: ${index + 1} / ${batchFiles.size}"
+                        val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
+                        tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
                         updateVisualization(currentDataIndex)
                         if (isMaxMinActive) calculateMaxMin()
                         if (isInspectModeActive && lastClosestIdx != -1) refreshCrosshairs()
@@ -319,12 +342,40 @@ class ResultViewerActivity : AppCompatActivity() {
         lastMaxIdx = -1
         lastMinIdx = -1
 
+        val validValues = mutableListOf<Float>()
         for (i in data.indices step 8) {
             val corr = data[i + 7]
-            if (corr != 0f && corr <= 0.25f) {
+            if (corr != 0f && corr <= 0.15f) {
+                validValues.add(data[i + currentDataIndex])
+            }
+        }
+
+        if (validValues.isEmpty()) return
+
+        validValues.sort()
+        val p02 = validValues[(validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)]
+        val p98 = validValues[(validValues.size * 0.98).toInt().coerceIn(0, validValues.size - 1)]
+
+        for (i in data.indices step 8) {
+            val corr = data[i + 7]
+            if (corr != 0f && corr <= 0.15f) { // 🚀 Filter outliers during Max/Min sweep
                 val v = data[i + currentDataIndex]
-                if (v > maxV) { maxV = v; lastMaxIdx = i }
-                if (v < minV) { minV = v; lastMinIdx = i }
+                if (v in p02..p98) {
+                    if (v > maxV) { maxV = v; lastMaxIdx = i }
+                    if (v < minV) { minV = v; lastMinIdx = i }
+                }
+            }
+        }
+
+        // Failsafe in case mathematical precision caused exact boundary drops
+        if (lastMaxIdx == -1 || lastMinIdx == -1) {
+            for (i in data.indices step 8) {
+                val corr = data[i + 7]
+                if (corr != 0f && corr <= 0.15f) {
+                    val v = data[i + currentDataIndex]
+                    if (v > maxV) { maxV = v; lastMaxIdx = i }
+                    if (v < minV) { minV = v; lastMinIdx = i }
+                }
             }
         }
     }
@@ -344,7 +395,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
             if (distSq < minDistSq && distSq <= searchRadiusSq) {
                 val corr = data[i + 7]
-                if (corr != 0f && corr <= 0.25f) {
+                if (corr != 0f && corr <= 0.15f) { // 🚀 Tighter correlation gate for probing
                     minDistSq = distSq
                     closestIdx = i
                 }
@@ -512,36 +563,19 @@ class ResultViewerActivity : AppCompatActivity() {
         val data = rawData ?: return
         isGeneratingHeatmap = true
 
-        var forceMin = customBoundsMap[index]?.first
-        var forceMax = customBoundsMap[index]?.second
-
-        if (forceMin == null || forceMax == null) {
-            var absMax = -Float.MAX_VALUE
-            var absMin = Float.MAX_VALUE
-
-            for (i in data.indices step 8) {
-                val corr = data[i + 7]
-                if (corr != 0f && corr <= 0.25f) {
-                    val v = data[i + index]
-                    if (v > absMax) absMax = v
-                    if (v < absMin) absMin = v
-                }
-            }
-
-            if (absMax == -Float.MAX_VALUE) absMax = 1f
-            if (absMin == Float.MAX_VALUE) absMin = 0f
-
-            forceMin = absMin
-            forceMax = absMax
-        }
+        val forceMin = customBoundsMap[index]?.first
+        val forceMax = customBoundsMap[index]?.second
 
         Thread {
+            // 🚀 Bypasses absolute Min/Max forcing inside Activity so Engine can use robust IQR bounds
             val result = VisualizationEngine.generateHeatmap(
                 data, imgW, imgH, index, step,
                 forceMin, forceMax
             )
 
             val heatmap = result.first
+            val actualMin = result.second
+            val actualMax = result.third
 
             runOnUiThread {
                 cachedHeatmap = heatmap
@@ -553,8 +587,9 @@ class ResultViewerActivity : AppCompatActivity() {
                 val multiplier = if (isStrain) 1000f else 1f
                 val unit = if (isStrain) " [mε]" else " px"
 
-                tvScaleMax.text = "Max: %.4f%s".format(forceMax!! * multiplier, unit)
-                tvScaleMin.text = "Min: %.4f%s".format(forceMin!! * multiplier, unit)
+                // 🚀 Update Text with robust bounds actually used in plotting
+                tvScaleMax.text = "Max: %.5f%s".format(actualMax * multiplier, unit)
+                tvScaleMin.text = "Min: %.5f%s".format(actualMin * multiplier, unit)
                 isGeneratingHeatmap = false
             }
         }.start()
@@ -570,7 +605,8 @@ class ResultViewerActivity : AppCompatActivity() {
         Toast.makeText(this, "Saving CSV...", Toast.LENGTH_SHORT).show()
 
         Thread {
-            val fileName = "IndicVision_Frame${currentFrameIndex}_${System.currentTimeMillis()}.csv"
+            val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
+            val fileName = "IndicVision_${imgName}.csv"
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
@@ -611,6 +647,149 @@ class ResultViewerActivity : AppCompatActivity() {
         }.start()
     }
 
+    private fun updateNavButtons() {
+        btnPrevFrame.isEnabled = currentFrameIndex > 0
+        btnNextFrame.isEnabled = currentFrameIndex < batchFiles.size - 1
+        
+        // Ensure buttons visually show disabled state by lowering alpha
+        btnPrevFrame.alpha = if (btnPrevFrame.isEnabled) 1.0f else 0.5f
+        btnNextFrame.alpha = if (btnNextFrame.isEnabled) 1.0f else 0.5f
+    }
+
+    private fun exportAllImagesZip() {
+        if (batchFiles.isEmpty() || cachedBaseImage == null) {
+            Toast.makeText(this, "No data to save.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Toast.makeText(this, "Generating Images ZIP... Please wait.", Toast.LENGTH_LONG).show()
+
+        Thread {
+            val refName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch"
+            val fileName = "IndicVision_Images_${currentTypeString}_${refName}.zip"
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/IndicVision")
+            }
+
+            val resolver = applicationContext.contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+
+            if (uri != null) {
+                try {
+                    resolver.openOutputStream(uri)?.use { outputStream ->
+                        ZipOutputStream(outputStream).use { zipOut ->
+                            val base = cachedBaseImage!!
+                            val alphaPaint = Paint().apply { alpha = 180 }
+                            
+                            for (index in batchFiles.indices) {
+                                val file = batchFiles[index]
+                                val bytes = file.readBytes()
+                                if (bytes.size % 32 != 0) continue
+
+                                val data = FloatArray(bytes.size / 4)
+                                ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(data)
+                                
+                                // Render heatmap for this frame
+                                val (heatmap, _, _) = VisualizationEngine.generateHeatmap(
+                                    data, imgW, imgH, currentDataIndex, step
+                                )
+                                
+                                // Merge base + heatmap
+                                val mergedBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
+                                val canvas = Canvas(mergedBitmap)
+                                canvas.drawBitmap(base, 0f, 0f, null)
+                                canvas.drawBitmap(heatmap, 0f, 0f, alphaPaint)
+                                
+                                val trueFrameIndex = file.nameWithoutExtension.substringAfterLast("_").toIntOrNull() ?: index
+                                val imgName = originalDefNames.getOrNull(trueFrameIndex) ?: "Frame_${trueFrameIndex + 1}"
+                                val entryName = "IndicVision_${currentTypeString}_${imgName}.png"
+                                
+                                zipOut.putNextEntry(ZipEntry(entryName))
+                                mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, zipOut)
+                                zipOut.closeEntry()
+                                
+                                // Free memory aggressively in batch loop
+                                heatmap.recycle()
+                                mergedBitmap.recycle()
+                            }
+                        }
+                    }
+                    runOnUiThread {
+                        Toast.makeText(this@ResultViewerActivity, "✅ Images ZIP Saved to Downloads/IndicVision", Toast.LENGTH_LONG).show()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save Images ZIP", Toast.LENGTH_SHORT).show() }
+                }
+            }
+        }.start()
+    }
+
+    private fun exportAllDataCsv() {
+        if (batchFiles.isEmpty()) {
+            Toast.makeText(this, "No data to save.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Toast.makeText(this, "Generating Master Batch CSV... This may take a moment.", Toast.LENGTH_LONG).show()
+
+        Thread {
+            val refName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch"
+            val fileName = "IndicVision_BatchData_${refName}.csv"
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/IndicVision")
+            }
+
+            val resolver = applicationContext.contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+
+            if (uri != null) {
+                try {
+                    resolver.openOutputStream(uri)?.use { outputStream ->
+                        outputStream.bufferedWriter().use { writer ->
+                            writer.write("Image_Name,X,Y,U_Displacement,V_Displacement,Exx_Strain,Eyy_Strain,Exy_Shear,Correlation\n")
+
+                            for (index in batchFiles.indices) {
+                                val file = batchFiles[index]
+                                val bytes = file.readBytes()
+                                if (bytes.size % 32 != 0) continue
+
+                                val data = FloatArray(bytes.size / 4)
+                                ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(data)
+                                
+                                val trueFrameIndex = file.nameWithoutExtension.substringAfterLast("_").toIntOrNull() ?: index
+                                val imgName = originalDefNames.getOrNull(trueFrameIndex) ?: "Frame_${trueFrameIndex + 1}"
+
+                                var i = 0
+                                while (i < data.size) {
+                                    val x = data[i]; val y = data[i+1]
+                                    val u = data[i+2]; val v = data[i+3]
+                                    val exx = data[i+4]; val eyy = data[i+5]; val exy = data[i+6]
+                                    val c = data[i+7]
+
+                                    if (c != 0f) {
+                                        writer.write("$imgName,$x,$y,$u,$v,$exx,$eyy,$exy,$c\n")
+                                    }
+                                    i += 8
+                                }
+                            }
+                        }
+                    }
+                    runOnUiThread {
+                        Toast.makeText(this@ResultViewerActivity, "✅ Master CSV Saved to Downloads/IndicVision", Toast.LENGTH_LONG).show()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save Master CSV", Toast.LENGTH_SHORT).show() }
+                }
+            }
+        }.start()
+    }
+
     private fun exportMergedImage() {
         if (isGeneratingHeatmap) {
             Toast.makeText(this, "Please wait, Heatmap is drawing...", Toast.LENGTH_SHORT).show()
@@ -637,7 +816,8 @@ class ResultViewerActivity : AppCompatActivity() {
                 val alphaPaint = Paint().apply { alpha = 180 }
                 canvas.drawBitmap(overlay, 0f, 0f, alphaPaint)
 
-                val fileName = "IndicVision_${currentTypeString}_Frame${currentFrameIndex}_${System.currentTimeMillis()}.png"
+                val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
+                val fileName = "IndicVision_${currentTypeString}_${imgName}.png"
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "image/png")

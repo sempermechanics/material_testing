@@ -47,16 +47,27 @@ static int g_refHeight = 0;
 static std::mutex jni_engine_mutex; // Global mutex to prevent concurrent engine calls
 
 // ==========================================
-// UTILITY: BYTES TO MAT (Zero-Copy)
+// UTILITY: BYTES TO MAT (Zero-Copy or Decode)
 // ==========================================
-cv::Mat bytesToMat(JNIEnv* env, jbyteArray bytes) {
+cv::Mat bytesToMat(JNIEnv* env, jbyteArray bytes, int expectedWidth = 0, int expectedHeight = 0) {
     if (bytes == nullptr) return cv::Mat();
     jsize len = env->GetArrayLength(bytes);
     jbyte* buf = env->GetByteArrayElements(bytes, nullptr);
-    cv::Mat rawData(1, len, CV_8UC1, (void*)buf);
-    cv::Mat img = cv::imdecode(rawData, cv::IMREAD_GRAYSCALE);
+    
+    cv::Mat img;
+    // Heuristic: If it looks exactly like an uncompressed ARGB_8888 buffer (from Kotlin RAW ImageDecoder)
+    if (expectedWidth > 0 && expectedHeight > 0 && len == expectedWidth * expectedHeight * 4) {
+        cv::Mat rawData(expectedHeight, expectedWidth, CV_8UC4, (void*)buf);
+        cv::cvtColor(rawData, img, cv::COLOR_RGBA2GRAY);
+    } else {
+        // Standard encoded stream (JPG/PNG) via cv::imdecode
+        cv::Mat rawData(1, len, CV_8UC1, (void*)buf);
+        img = cv::imdecode(rawData, cv::IMREAD_GRAYSCALE);
+    }
+    
+    cv::Mat result = img.clone();
     env->ReleaseByteArrayElements(bytes, buf, JNI_ABORT);
-    return img;
+    return result;
 }
 
 // ==========================================
@@ -171,7 +182,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getImageDimensions(
 // ==========================================
 JNIEXPORT void JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_initializeReference(
-        JNIEnv* env, jobject, jbyteArray refBytes, jboolean applyBlur) {
+        JNIEnv* env, jobject, jbyteArray refBytes, jint width, jint height, jboolean applyBlur) {
 
     std::lock_guard<std::mutex> engine_lock(jni_engine_mutex);
 
@@ -183,7 +194,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_initializeReference(
 
     if (refBytes == nullptr) return;
 
-    cv::Mat refMat = bytesToMat(env, refBytes);
+    cv::Mat refMat = bytesToMat(env, refBytes, width, height);
     if (refMat.empty()) return;
 
     if (applyBlur) {
@@ -211,8 +222,8 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
         jint roiX, jint roiY, jint subsetSize,
         jint originalWidth, jint originalHeight) {
 
-    cv::Mat refMat = bytesToMat(env, refBytes);
-    cv::Mat defMat = bytesToMat(env, defBytes);
+    cv::Mat refMat = bytesToMat(env, refBytes, originalWidth, originalHeight);
+    cv::Mat defMat = bytesToMat(env, defBytes, originalWidth, originalHeight);
 
     if (refMat.empty() || defMat.empty()) {
         jfloatArray fail = env->NewFloatArray(5);
@@ -282,7 +293,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     LOGD("  g_refImg ptr = %p  (w=%d h=%d)", (void*)g_refImg, g_refWidth, g_refHeight);
 
     // 2. LOAD DEFORMED IMAGE ONLY (Memory Saved!)
-    cv::Mat defMat = bytesToMat(env, defBytes);
+    cv::Mat defMat = bytesToMat(env, defBytes, g_refWidth, g_refHeight);
     if (defMat.empty()) {
         LOGE("DIAGNOSTIC FRAME %d: defMat is EMPTY — image decode failed!", s_frame_count);
         return 0;
@@ -313,7 +324,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
             try {
                 // To do AKAZE, we still need the original Reference CV Mat.
                 // We'll quickly reconstruct a lightweight version of it from the cached bytes if needed.
-                cv::Mat refMat = bytesToMat(env, refBytes);
+                cv::Mat refMat = bytesToMat(env, refBytes, g_refWidth, g_refHeight);
                 if (!refMat.empty()) {
                     cv::Mat refROI = refMat(roi);
                     cv::Mat defROI = defMat(roi);

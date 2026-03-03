@@ -166,15 +166,45 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun handleReferenceImage(uri: Uri) {
         val name = getFileName(uri)
+        
+        if (name.endsWith(".jpg", true) || name.endsWith(".jpeg", true)) {
+            Toast.makeText(this, "⚠️ WARNING: JPEG artifacts severely reduce DIC accuracy. Lossless PNG, TIFF, or RAW formats are recommended!", Toast.LENGTH_LONG).show()
+        }
+        
+        val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
+
         try {
             contentResolver.openInputStream(uri)?.use { stream ->
-                val bytes = stream.readBytes()
+                var bytes: ByteArray
+                var previewBmp: Bitmap? = null
+                
+                if (isRaw) {
+                    val bitmap = android.graphics.BitmapFactory.decodeStream(stream)
+                    if (bitmap != null) {
+                        viewModel.realRefWidth = bitmap.width
+                        viewModel.realRefHeight = bitmap.height
+                        
+                        val buffer = java.nio.ByteBuffer.allocate(bitmap.width * bitmap.height * 4)
+                        bitmap.copyPixelsToBuffer(buffer)
+                        bytes = buffer.array()
+                        
+                        val ratio = 1000f / bitmap.width
+                        previewBmp = android.graphics.Bitmap.createScaledBitmap(bitmap, 1000, (bitmap.height * ratio).toInt(), true)
+                    } else {
+                        Toast.makeText(this, "Failed to decode RAW image.", Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                } else {
+                    bytes = stream.readBytes()
+                    val dims = IndicVisionNativeLib.getImageDimensions(bytes)
+                    viewModel.realRefWidth = dims[0]
+                    viewModel.realRefHeight = dims[1]
+                    previewBmp = IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000)
+                }
+
                 viewModel.refName = "Ref: $name"
                 viewModel.refBytes = bytes
-                val dims = IndicVisionNativeLib.getImageDimensions(bytes)
-                viewModel.realRefWidth = dims[0]
-                viewModel.realRefHeight = dims[1]
-                imgRef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000))
+                imgRef.setImageBitmap(previewBmp)
                 tvRefName.text = viewModel.refName
 
                 if (!viewModel.hasCustomRoi) {
@@ -206,19 +236,51 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
 
                 for ((index, uri) in uris.withIndex()) {
-                    val bytes = contentResolver.openInputStream(uri)?.readBytes()
+                    var bytes: ByteArray? = null
+                    var previewBmp: Bitmap? = null
+                    
+                    val originalName = getFileName(uri)
+                    
+                    if (index == 0 && (originalName.endsWith(".jpg", true) || originalName.endsWith(".jpeg", true))) {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@StaticAnalysisActivity, "⚠️ WARNING: JPEG artifact compression detected in batch. This will reduce accuracy.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    
+                    val isRaw = originalName.endsWith(".dng", true) || originalName.endsWith(".raw", true)
+
+                    contentResolver.openInputStream(uri)?.use { stream ->
+                        if (isRaw) {
+                            val bitmap = android.graphics.BitmapFactory.decodeStream(stream)
+                            if (bitmap != null) {
+                                val buffer = java.nio.ByteBuffer.allocate(bitmap.width * bitmap.height * 4)
+                                bitmap.copyPixelsToBuffer(buffer)
+                                bytes = buffer.array()
+                                
+                                if (index == 0) {
+                                    val ratio = 1000f / bitmap.width
+                                    previewBmp = android.graphics.Bitmap.createScaledBitmap(bitmap, 1000, (bitmap.height * ratio).toInt(), true)
+                                }
+                            }
+                        } else {
+                            bytes = stream.readBytes()
+                            if (index == 0 && bytes != null) {
+                                previewBmp = IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000)
+                            }
+                        }
+                    }
+                    
                     if (bytes == null) continue
 
-                    val filename = String.format("deformed_%04d.jpg", index)
+                    val sanitizedName = originalName.replace(Regex("[^a-zA-Z0-9.-]"), "_")
+                    val filename = String.format("%04d_%s", index, sanitizedName)
                     val file = File(tempDir, filename)
                     file.writeBytes(bytes)
                     filePaths.add(file.absolutePath)
 
                     if (index == 0) {
-                        // ✅ FIX: Decode bitmap on IO thread; only the ImageView.set call needs Main.
-                        val previewBitmap = IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000)
                         withContext(Dispatchers.Main) {
-                            imgDef.setImageBitmap(previewBitmap)
+                            imgDef.setImageBitmap(previewBmp)
                         }
                     }
                 }
@@ -307,7 +369,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 // This prevents C++ from rebuilding the heavy 48MB reference image on every loop!
                 // ✅ Non-suspending UI update — keeps coroutine on the native thread.
                 runOnUiThread { tvTimer.text = "Caching Reference in Native Engine..." }
-                IndicVisionNativeLib.initializeReference(refBytes, applyBlur)
+                IndicVisionNativeLib.initializeReference(refBytes, viewModel.realRefWidth, viewModel.realRefHeight, applyBlur)
 
                 val gridW = finalRectW / step
                 val gridH = finalRectH / step
@@ -380,8 +442,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         tvResult.text = "✅ Computed $totalFrames frames!"
 
                         val defFile = File(cacheDir, "temp_def_view.png")
-                        val firstDefBytes = File(viewModel.defFilePaths[0]).readBytes()
-                        val fullResBitmap = IndicVisionNativeLib.getPreviewFromBytes(firstDefBytes, viewModel.realRefWidth)
+                        // 🚀 Lagrangian Alignment Fix: Plot results on the Reference Image background
+                        // to ensure the (x,y) grid matches the material base exactly.
+                        val refBytes = viewModel.refBytes ?: throw IllegalStateException("Reference missing")
+                        val fullResBitmap = IndicVisionNativeLib.getPreviewFromBytes(refBytes, viewModel.realRefWidth)
                         defFile.outputStream().use { out ->
                             fullResBitmap?.compress(Bitmap.CompressFormat.PNG, 100, out)
                         }
@@ -417,6 +481,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
             putExtra("STEP", viewModel.lastStep)
             putExtra("ROI_X", viewModel.roiX)
             putExtra("ROI_Y", viewModel.roiY)
+            putExtra("REF_NAME", viewModel.refName.removePrefix("Ref: "))
+            
+            // Pass the nice names of the files for the UI to display instead of abstract "Frame 1"
+            val fileNames = viewModel.defFilePaths.map { path ->
+                val fullName = path.substringAfterLast('/')
+                // remove the '0000_' prefix which was added for sorting cache
+                if (fullName.length > 5 && fullName[4] == '_') fullName.substring(5) else fullName
+            }
+            putStringArrayListExtra("DEF_FILE_NAMES", ArrayList(fileNames))
         }
         startActivity(intent)
     }
