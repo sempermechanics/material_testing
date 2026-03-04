@@ -11,6 +11,7 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
+#include <fstream>
 
 // --- ARCHITECTURE HEADERS ---
 #include "../preprocessing/ImageProcessor.h"
@@ -47,13 +48,20 @@ static int g_refHeight = 0;
 static std::mutex jni_engine_mutex; // Global mutex to prevent concurrent engine calls
 
 // ==========================================
+// 🐛 DEBUG SUITE: Global State
+// Set via setDebugOutputDir() from Kotlin before a frame you want to inspect.
+// Automatically cleared after one frame so you don't pay the I/O cost every frame.
+// ==========================================
+static std::string g_debugDir = ""; // Empty = debug disabled
+
+// ==========================================
 // UTILITY: BYTES TO MAT (Zero-Copy or Decode)
 // ==========================================
 cv::Mat bytesToMat(JNIEnv* env, jbyteArray bytes, int expectedWidth = 0, int expectedHeight = 0) {
     if (bytes == nullptr) return cv::Mat();
     jsize len = env->GetArrayLength(bytes);
     jbyte* buf = env->GetByteArrayElements(bytes, nullptr);
-    
+
     cv::Mat img;
     // Heuristic: If it looks exactly like an uncompressed ARGB_8888 buffer (from Kotlin RAW ImageDecoder)
     if (expectedWidth > 0 && expectedHeight > 0 && len == expectedWidth * expectedHeight * 4) {
@@ -64,17 +72,30 @@ cv::Mat bytesToMat(JNIEnv* env, jbyteArray bytes, int expectedWidth = 0, int exp
         cv::Mat rawData(1, len, CV_8UC1, (void*)buf);
         img = cv::imdecode(rawData, cv::IMREAD_GRAYSCALE);
     }
-    
+
     cv::Mat result = img.clone();
     env->ReleaseByteArrayElements(bytes, buf, JNI_ABORT);
     return result;
 }
 
 // ==========================================
-// UTILITY: AKAZE GLOBAL SHIFT
+// UTILITY: TEXT DRAWING HELPER
+// Draws highly readable text with a dark outline
 // ==========================================
-void computeGlobalShift(cv::Mat& ref, cv::Mat& def, float& u, float& v) {
-    double scale = 0.25;
+void drawOutlinedText(cv::Mat& img, const std::string& text, cv::Point pt, double scale = 0.5) {
+    // Black outline
+    cv::putText(img, text, pt, cv::FONT_HERSHEY_SIMPLEX, scale, cv::Scalar(0, 0, 0), 3, cv::LINE_AA);
+    // White text
+    cv::putText(img, text, pt, cv::FONT_HERSHEY_SIMPLEX, scale, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
+}
+
+// ==========================================
+// UTILITY: AKAZE GLOBAL SHIFT
+// debugDir: if non-empty, writes 3 debug images showing feature extraction and matching
+// ==========================================
+void computeGlobalShift(cv::Mat& ref, cv::Mat& def, float& u, float& v,
+                        const std::string& debugDir = "") {
+    const double scale = 0.25;
     cv::Mat smallRef, smallDef;
     cv::resize(ref, smallRef, cv::Size(), scale, scale, cv::INTER_NEAREST);
     cv::resize(def, smallDef, cv::Size(), scale, scale, cv::INTER_NEAREST);
@@ -86,36 +107,111 @@ void computeGlobalShift(cv::Mat& ref, cv::Mat& def, float& u, float& v) {
     detector->detectAndCompute(smallRef, cv::noArray(), kp1, desc1);
     detector->detectAndCompute(smallDef, cv::noArray(), kp2, desc2);
 
+    // ── DEBUG VIZ 1a: Detected Features in Reference Image ───────────────────
+    if (!debugDir.empty() && !smallRef.empty() && !kp1.empty()) {
+        cv::Mat refFeaturesImg;
+        // Draw all found features in Red
+        cv::drawKeypoints(smallRef, kp1, refFeaturesImg, cv::Scalar(0, 0, 255), cv::DrawMatchesFlags::DEFAULT);
+        std::string label = "Detected Ref Features: " + std::to_string(kp1.size());
+        drawOutlinedText(refFeaturesImg, label, cv::Point(10, 20), 0.6);
+        cv::imwrite(debugDir + "/akaze_ref_features.jpg", refFeaturesImg);
+    }
+
     if(kp1.empty() || kp2.empty()) return;
 
     cv::BFMatcher matcher(cv::NORM_HAMMING);
     std::vector<std::vector<cv::DMatch>> matches;
     matcher.knnMatch(desc1, desc2, matches, 2);
 
+    // Lowe's ratio test — keep only good matches
+    std::vector<cv::DMatch> good_matches;
     std::vector<cv::Point2f> p1, p2;
-    for(auto& m : matches) {
-        if(m.size() == 2 && m[0].distance < 0.75f * m[1].distance) {
+    for (auto& m : matches) {
+        if (m.size() == 2 && m[0].distance < 0.75f * m[1].distance) {
+            good_matches.push_back(m[0]);
             p1.push_back(kp1[m[0].queryIdx].pt);
             p2.push_back(kp2[m[0].trainIdx].pt);
         }
     }
 
-    if(p1.size() > 5) {
+    if (p1.size() > 5) {
         std::vector<float> us, vs;
-        for(size_t i=0; i<p1.size(); ++i) {
+        for (size_t i = 0; i < p1.size(); ++i) {
             us.push_back(p2[i].x - p1[i].x);
             vs.push_back(p2[i].y - p1[i].y);
         }
         std::sort(us.begin(), us.end());
         std::sort(vs.begin(), vs.end());
 
-        u = us[us.size()/2] * (1.0f / (float)scale);
-        v = vs[vs.size()/2] * (1.0f / (float)scale);
-        LOGD("Global Feature Match (Scaled): u=%.2f, v=%.2f", u, v);
+        u = us[us.size() / 2] * (1.0f / (float)scale);
+        v = vs[vs.size() / 2] * (1.0f / (float)scale);
+        LOGD("Global Feature Match (Scaled): u=%.2f, v=%.2f  [%zu inliers]", u, v, p1.size());
+
+        if (!debugDir.empty() && !smallRef.empty() && !smallDef.empty()) {
+
+            // ── DEBUG VIZ 1b: Successfully Matched Features in Deformed Image ──
+            std::vector<cv::KeyPoint> matched_kp2;
+            for (auto& m : good_matches) {
+                matched_kp2.push_back(kp2[m.trainIdx]);
+            }
+            cv::Mat defMatchesImg;
+            // Draw matched features in Green
+            cv::drawKeypoints(smallDef, matched_kp2, defMatchesImg, cv::Scalar(0, 255, 0), cv::DrawMatchesFlags::DEFAULT);
+            std::string label_def = "Successfully Matched: " + std::to_string(matched_kp2.size());
+            drawOutlinedText(defMatchesImg, label_def, cv::Point(10, 20), 0.6);
+            cv::imwrite(debugDir + "/akaze_def_matches.jpg", defMatchesImg);
+
+
+            // ── DEBUG VIZ 1c: AKAZE Match Connecting Lines Image ───────────────
+            cv::Mat matchImg;
+            cv::drawMatches(
+                    smallRef, kp1, smallDef, kp2, good_matches, matchImg,
+                    cv::Scalar(0, 255, 0),    // line/match color: green
+                    cv::Scalar(255, 100, 0),  // single-point color: orange
+                    std::vector<char>(),
+                    cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS
+            );
+
+            // Overlay the consensus shift as a large red arrow on the right half
+            float cx = (float)smallRef.cols + (smallDef.cols / 2.0f);
+            float cy = (float)smallDef.rows / 2.0f;
+            cv::arrowedLine(
+                    matchImg,
+                    cv::Point((int)cx, (int)cy),
+                    cv::Point((int)(cx + u * scale), (int)(cy + v * scale)),
+                    cv::Scalar(0, 0, 255), 3, cv::LINE_AA, 0, 0.3
+            );
+            std::string label_match = "Median shift: u=" + std::to_string((int)u)
+                                      + " v=" + std::to_string((int)v)
+                                      + "  (" + std::to_string(good_matches.size()) + " matches)";
+            drawOutlinedText(matchImg, label_match, cv::Point(10, matchImg.rows - 10), 0.55);
+
+            cv::imwrite(debugDir + "/akaze_matches_lines.jpg", matchImg);
+            LOGD("[DEBUG] AKAZE debug images saved to: %s", debugDir.c_str());
+        }
     }
 }
 
 extern "C" {
+
+// ==========================================
+// 🐛 DEBUG: Set output directory for one-shot debug frame
+// Call from Kotlin: IndicVisionNativeLib.setDebugOutputDir(cacheDir + "/dic_debug")
+// Pass empty string "" to disable debug output.
+// ==========================================
+JNIEXPORT void JNICALL
+Java_com_rafad_indicvisiondic_IndicVisionNativeLib_setDebugOutputDir(
+        JNIEnv* env, jobject, jstring debugDir) {
+    if (debugDir == nullptr) {
+        g_debugDir = "";
+        LOGD("[DEBUG] Debug output DISABLED.");
+        return;
+    }
+    const char* dir = env->GetStringUTFChars(debugDir, nullptr);
+    g_debugDir = std::string(dir);
+    env->ReleaseStringUTFChars(debugDir, dir);
+    LOGD("[DEBUG] Debug output dir set to: %s", g_debugDir.c_str());
+}
 
 // ==========================================
 // UI PREVIEW GENERATOR
@@ -257,7 +353,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
 // ==========================================
 JNIEXPORT jint JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
-        JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray defBytes, // Note: refBytes is mostly ignored now
+        JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray defBytes,
         jbyteArray maskBytes,
         jint rectX, jint rectY, jint rectWidth, jint rectHeight,
         jint step, jint subsetSize, jint strainWindow,
@@ -284,9 +380,6 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     float* output_ptr = (float*)env->GetDirectBufferAddress(outputBuffer);
     if (!output_ptr) return 0;
 
-    // ==============================================================
-    // 🔍 DIAGNOSTIC: Frame counter + pointer validation
-    // ==============================================================
     static int s_frame_count = 0;
     s_frame_count++;
     LOGD("=== FRAME %d computeFullFieldDirect START ===", s_frame_count);
@@ -322,13 +415,13 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         roi = roi & cv::Rect(0, 0, g_refWidth, g_refHeight);
         if (roi.width > 32 && roi.height > 32) {
             try {
-                // To do AKAZE, we still need the original Reference CV Mat.
-                // We'll quickly reconstruct a lightweight version of it from the cached bytes if needed.
                 cv::Mat refMat = bytesToMat(env, refBytes, g_refWidth, g_refHeight);
                 if (!refMat.empty()) {
                     cv::Mat refROI = refMat(roi);
                     cv::Mat defROI = defMat(roi);
-                    computeGlobalShift(refROI, defROI, globalU, globalV);
+                    // Pass the whole directory so it can generate multiple images
+                    std::string debugDirStr = g_debugDir.empty() ? "" : g_debugDir;
+                    computeGlobalShift(refROI, defROI, globalU, globalV, debugDirStr);
                 }
             } catch (const cv::Exception& e) {
                 LOGE("AKAZE Exception. Ignoring shift.");
@@ -341,8 +434,15 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     int gridH = rectHeight / step;
     if (gridW <= 0 || gridH <= 0) return 0;
 
-    struct GridPoint { float x, y, u, v, corr; bool solved; };
+    struct GridPoint {
+        float x, y, u, v, corr;
+        bool solved;
+        int thread_id;     // 🐛 DEBUG
+        int compute_order; // 🐛 DEBUG
+    };
     std::vector<std::vector<GridPoint>> resultGrid(gridH, std::vector<GridPoint>(gridW));
+
+    std::atomic<int> compute_order_counter(0);
 
     int total_valid_points = 0;
     for (int y = 0; y < gridH; ++y) {
@@ -351,35 +451,73 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
             int realY = rectY + y * step;
             bool shouldSkip = (!roiMask.empty() && roiMask.at<uchar>(realY, realX) < 128);
             if (!shouldSkip) total_valid_points++;
-            resultGrid[y][x] = {(float)realX, (float)realY, 0.0f, 0.0f, 0.0f, shouldSkip};
+            resultGrid[y][x] = {(float)realX, (float)realY, 0.0f, 0.0f, 0.0f,
+                                shouldSkip, -1, -1};
         }
     }
 
     if (total_valid_points == 0) return 0;
 
-    // 5. PREPARE DYNAMIC SEEDS
-    std::vector<IndicVision::SeedNode> global_seeds;
+    // 5. SEED SELECTION — Deterministic Center of ROI
     int seedGx = gridW / 2;
     int seedGy = gridH / 2;
-    int max_r = std::max(gridW, gridH) / 2;
 
-    for (int r = 0; r <= max_r; ++r) {
-        for (int i = -r; i <= r; ++i) {
-            for (int j = -r; j <= r; ++j) {
-                if (std::abs(i) != r && std::abs(j) != r) continue;
-                int cx = seedGx + i, cy = seedGy + j;
-                if (cx >= 0 && cx < gridW && cy >= 0 && cy < gridH && !resultGrid[cy][cx].solved) {
-                    global_seeds.push_back(IndicVision::SeedNode(cx, cy, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
+    LOGD("Seed: grid=(%d,%d) real=(%d,%d) (Geometric Centre)",
+         seedGx, seedGy,
+         rectX + seedGx * step, rectY + seedGy * step);
+
+    // Build seed list radiating outward from the chosen seed point
+    std::vector<IndicVision::SeedNode> global_seeds;
+    {
+        int max_r = std::max(gridW, gridH) / 2;
+        for (int r = 0; r <= max_r; ++r) {
+            for (int i = -r; i <= r; ++i) {
+                for (int j = -r; j <= r; ++j) {
+                    if (std::abs(i) != r && std::abs(j) != r) continue;
+                    int cx = seedGx + i, cy = seedGy + j;
+                    if (cx >= 0 && cx < gridW && cy >= 0 && cy < gridH
+                        && !resultGrid[cy][cx].solved) {
+                        global_seeds.push_back(
+                                IndicVision::SeedNode(cx,cy,0.f,0.f,0.f,0.f,0.f,0.f,0.f));
+                    }
                 }
             }
         }
     }
-
     if (global_seeds.empty()) return 0;
+
+    // ── DEBUG VIZ 2: Seed Location ──────────────────────────────────────────
+    if (!g_debugDir.empty()) {
+        cv::Mat refGray(g_refHeight, g_refWidth, CV_32FC1,
+                        (void*)g_refImg->intensities.data());
+        cv::Mat refDbg;
+        refGray.convertTo(refDbg, CV_8UC1);
+        cv::cvtColor(refDbg, refDbg, cv::COLOR_GRAY2BGR);
+
+        // All seed ring points — tiny grey dots
+        for (auto& s : global_seeds) {
+            cv::circle(refDbg,
+                       cv::Point(rectX + s.x_idx * step, rectY + s.y_idx * step),
+                       2, cv::Scalar(80,80,80), -1, cv::LINE_AA);
+        }
+        // Chosen geometric center seed — large bright green
+        cv::circle(refDbg,
+                   cv::Point(rectX + seedGx * step, rectY + seedGy * step),
+                   12, cv::Scalar(0,255,0), 2, cv::LINE_AA);
+
+        // ROI boundary
+        cv::rectangle(refDbg, cv::Point(rectX, rectY),
+                      cv::Point(rectX + rectWidth - 1, rectY + rectHeight - 1),
+                      cv::Scalar(0,200,255), 2);
+        drawOutlinedText(refDbg, "Green=Center Seed", cv::Point(rectX + 4, rectY + 20), 0.5);
+
+        cv::imwrite(g_debugDir + "/seed_debug.jpg", refDbg);
+        LOGD("[DEBUG] Seed viz saved.");
+    }
 
     // 6. PROGRESS REPORTING SETUP (Safe Threading)
     int total_cores = std::thread::hardware_concurrency();
-    int safe_cores = std::max(1, total_cores);
+    int safe_cores = std::max(1,total_cores);
 
     std::vector<double> t_icgn_arr(safe_cores, 0.0), t_simplex_arr(safe_cores, 0.0), t_hessian_arr(safe_cores, 0.0);
     std::vector<int> c_icgn_arr(safe_cores, 0), c_simplex_arr(safe_cores, 0), c_points_arr(safe_cores, 0);
@@ -429,13 +567,6 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
 
     LOGD("DIAGNOSTIC FRAME %d: grid=%dx%d valid_pts=%d, going into OpenMP block...", s_frame_count, gridW, gridH, total_valid_points);
 
-    // ✅ FIX: Bypassing the buggy LLVM OpenMP runtime entirely.
-    // The NDK libomp.so has a known bug causing SIGSEGV (SEGV_MAPERR) at
-    // __kmp_invoke_microtask when executing nested parallel regions repeatedly via JNI,
-    // due to corrupted internal TLS/task state. By using pure C++11 std::thread, we bypass
-    // OpenMP's scheduler and use standard POSIX pthreads directly, guaranteeing stability
-    // across thousands of batch frames.
-    
     std::vector<std::thread> workers;
     for (int t = 0; t < safe_cores; ++t) {
         workers.emplace_back([&, t]() {
@@ -474,28 +605,26 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                                 int realX = rectX + nx * step;
                                 int realY = rectY + ny * step;
 
-                                // LOGD("  [PTHREAD %d] neighbor (%d,%d) precompute START", tid, nx, ny);
                                 auto th1 = std::chrono::high_resolution_clock::now();
                                 IndicVision::SubsetPrecomputer::precompute_subset(local_subset, *g_refImg, realX, realY, subsetSize);
                                 auto th2 = std::chrono::high_resolution_clock::now();
                                 local_hessian_ms += std::chrono::duration<double, std::milli>(th2 - th1).count();
 
                                 if (!local_subset.is_initialized) {
-                                    // LOGD("  [PTHREAD %d] neighbor (%d,%d) precompute FAILED", tid, nx, ny);
                                     continue;
                                 }
 
-                                // LOGD("  [PTHREAD %d] neighbor (%d,%d) calculate_deformation START", tid, nx, ny);
                                 IndicVision::AnalysisResult res = local_engine.calculate_deformation(local_subset, defImg, current.u, current.v, IndicVision::INIT_NO_SEARCH);
-                                // LOGD("  [PTHREAD %d] neighbor (%d,%d) calculate_deformation DONE (corr=%f)", tid, nx, ny, res.correlation_score);
 
                                 {
                                     std::lock_guard<std::mutex> lock(grid_mutex);
-                                    resultGrid[ny][nx] = {(float)realX, (float)realY, res.u, res.v, res.correlation_score, true};
+                                    int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
+                                    resultGrid[ny][nx] = {(float)realX, (float)realY,
+                                                          res.u, res.v, res.correlation_score,
+                                                          true, tid, order};
                                 }
 
                                 if (res.status == 0 && res.correlation_score < 0.3f) {
-                                    // LOGD("  [PTHREAD %d] pushing neighbor (%d,%d) to queue", tid, nx, ny);
                                     local_queue.push(IndicVision::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
                                 }
                                 local_points_solved++;
@@ -527,7 +656,6 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                         int realY = rectY + seed.y_idx * step;
 
                         auto th1 = std::chrono::high_resolution_clock::now();
-                        // 🚀 USE THE CACHED GLOBAL REFERENCE IMAGE
                         IndicVision::SubsetPrecomputer::precompute_subset(local_subset, *g_refImg, realX, realY, subsetSize);
                         auto th2 = std::chrono::high_resolution_clock::now();
                         local_hessian_ms += std::chrono::duration<double, std::milli>(th2 - th1).count();
@@ -538,7 +666,10 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
 
                         {
                             std::lock_guard<std::mutex> lock(grid_mutex);
-                            resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.correlation_score, true};
+                            int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
+                            resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY,
+                                                                  res.u, res.v, res.correlation_score,
+                                                                  true, tid, order};
                         }
 
                         if (res.status == 0 && res.correlation_score < 0.15f) {
@@ -652,6 +783,98 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     }
     LOGD("Total JNI Execution Time : %.2f ms", std::chrono::duration<double, std::milli>(end_total - start_total).count());
     LOGD("========================================");
+
+    // ── DEBUG VIZ 3 & 4: Propagation Order Map + Thread Map ────────────────
+    if (!g_debugDir.empty()) {
+        int max_order = 1;
+        for (int y = 0; y < gridH; ++y)
+            for (int x = 0; x < gridW; ++x)
+                if (resultGrid[y][x].compute_order > max_order)
+                    max_order = resultGrid[y][x].compute_order;
+
+        cv::Mat propMap(gridH, gridW, CV_8UC1, cv::Scalar(0));
+        cv::Mat threadMap(gridH, gridW, CV_8UC3, cv::Scalar(30, 30, 30));
+
+        static const cv::Vec3b THREAD_COLORS[12] = {
+                {60,  20,  220}, {20,  200,  20}, {200, 60,   20},
+                {200, 200,  20}, {20,  200, 200}, {200,  20, 200},
+                {100, 180, 255}, {255, 140,  30}, {50,  255, 180},
+                {180,  50, 255}, {255,  50, 130}, {130, 255,  50}
+        };
+
+        for (int y = 0; y < gridH; ++y) {
+            for (int x = 0; x < gridW; ++x) {
+                const auto& gp = resultGrid[y][x];
+                if (!gp.solved || gp.compute_order < 0) continue;
+                propMap.at<uchar>(y, x) =
+                        (uchar)((float)gp.compute_order / max_order * 255.0f);
+                int tid_clamped = std::max(0, std::min(gp.thread_id, 11));
+                threadMap.at<cv::Vec3b>(y, x) = THREAD_COLORS[tid_clamped];
+            }
+        }
+
+        cv::Mat propColor;
+        cv::applyColorMap(propMap, propColor, cv::COLORMAP_JET);
+
+        for (int y = 0; y < gridH; ++y) {
+            for (int x = 0; x < gridW; ++x) {
+                if (!resultGrid[y][x].solved || resultGrid[y][x].compute_order < 0) {
+                    propColor.at<cv::Vec3b>(y, x)  = {0, 0, 0};
+                    threadMap.at<cv::Vec3b>(y, x)  = {30, 30, 30};
+                }
+            }
+        }
+
+        cv::Mat propBig, threadBig;
+        cv::resize(propColor, propBig,   cv::Size(gridW * step, gridH * step),
+                   0, 0, cv::INTER_NEAREST);
+        cv::resize(threadMap, threadBig, cv::Size(gridW * step, gridH * step),
+                   0, 0, cv::INTER_NEAREST);
+
+        for (int tid = 0; tid < safe_cores && tid < 12; ++tid) {
+            cv::Vec3b col = THREAD_COLORS[tid];
+            int ly = 15 + tid * 18;
+            cv::rectangle(threadBig, cv::Point(5, ly - 10), cv::Point(22, ly + 4),
+                          cv::Scalar(col[0], col[1], col[2]), -1);
+
+            std::string label = "T" + std::to_string(tid) + " (" + std::to_string(c_points_arr[tid]) + " pts)";
+            drawOutlinedText(threadBig, label, cv::Point(27, ly + 3), 0.42);
+        }
+
+        drawOutlinedText(propBig, "BLUE = solved first   RED = solved last", cv::Point(6, propBig.rows - 8), 0.5);
+
+        cv::imwrite(g_debugDir + "/propagation_debug.png", propBig);
+        cv::imwrite(g_debugDir + "/thread_debug.png",      threadBig);
+        LOGD("[DEBUG] Propagation map + Thread map saved to %s", g_debugDir.c_str());
+
+        // ── DEBUG VIZ 5: The Ultimate CSV Dump ──────────────────────
+        std::string csvPath = g_debugDir + "/debug_grid_data.csv";
+        std::ofstream csvFile(csvPath);
+        if (csvFile.is_open()) {
+            csvFile << "RealX,RealY,GridX,GridY,ThreadID,ComputeOrder,U,V,Correlation\n";
+            for (int y = 0; y < gridH; ++y) {
+                for (int x = 0; x < gridW; ++x) {
+                    const auto& gp = resultGrid[y][x];
+                    if (gp.solved && gp.compute_order >= 0) {
+                        csvFile << gp.x << ","
+                                << gp.y << ","
+                                << x << ","
+                                << y << ","
+                                << gp.thread_id << ","
+                                << gp.compute_order << ","
+                                << gp.u << ","
+                                << gp.v << ","
+                                << gp.corr << "\n";
+                    }
+                }
+            }
+            csvFile.close();
+            LOGD("[DEBUG] Raw CSV data dumped to %s", csvPath.c_str());
+        } else {
+            LOGE("[DEBUG] Failed to open CSV file for writing!");
+        }
+        g_debugDir = "";
+    }
 
     defMat.release();
     roiMask.release();

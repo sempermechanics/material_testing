@@ -15,7 +15,7 @@ object IndicVisionNativeLib {
     // 🚀 NEW FIX: Call this ONCE before a batch starts to cache the reference image
     // This stops the engine from rebuilding it 50 times and crashing the memory!
     external fun initializeReference(refBytes: ByteArray, width: Int, height: Int, applyBlur: Boolean)
-
+    external fun setDebugOutputDir(debugDir: String?)
     external fun analyzeRawBytes(
         refData: ByteArray, defData: ByteArray,
         roiX: Int, roiY: Int, subsetSize: Int,

@@ -352,6 +352,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val useNlvc = rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc
         val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
 
+        // 🐛 TRIGGER THE DEBUG SUITE FOR THIS BATCH
+        val debugDir = File(cacheDir, "dic_debug")
+        if (!debugDir.exists()) debugDir.mkdirs()
+        IndicVisionNativeLib.setDebugOutputDir(debugDir.absolutePath)
+
         // 🚀 LAUNCH ON THE DEDICATED NATIVE THREAD
         // All JNI calls (initializeReference + computeFullFieldDirect) MUST run on the
         // same OS thread so that the LLVM OpenMP runtime’s TLS master-thread registration
