@@ -448,7 +448,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         struct AffineTriangle {
             cv::Point2f pts[3];
             double u, v, ux, uy, vx, vy;
-            cv::Rect boundingBox;
+            cv::Rect2f boundingBox;
         };
         std::vector<AffineTriangle> affTriangles;
 
@@ -490,7 +490,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
             float maxX = std::max({pt[0].x, pt[1].x, pt[2].x});
             float minY = std::min({pt[0].y, pt[1].y, pt[2].y});
             float maxY = std::max({pt[0].y, pt[1].y, pt[2].y});
-            at.boundingBox = cv::Rect(minX, minY, maxX - minX, maxY - minY);
+            at.boundingBox = cv::Rect2f(minX - 15.0f, minY - 15.0f, (maxX - minX) + 30.0f, (maxY - minY) + 30.0f);
             affTriangles.push_back(at);
         }
 
@@ -507,21 +507,39 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         for (int y = 0; y < gridH; ++y) {
             for (int x = 0; x < gridW; ++x) {
                 cv::Point2f gp(rectX + x * step, rectY + y * step);
+
+                float best_dist = -1e9f;
+                const AffineTriangle* best_tri = nullptr;
+
                 for (const auto& tri : affTriangles) {
                     if (gp.x >= tri.boundingBox.x && gp.x <= tri.boundingBox.x + tri.boundingBox.width &&
                         gp.y >= tri.boundingBox.y && gp.y <= tri.boundingBox.y + tri.boundingBox.height) {
+
                         std::vector<cv::Point2f> contour = {tri.pts[0], tri.pts[1], tri.pts[2]};
-                        if (cv::pointPolygonTest(contour, gp, false) >= 0) {
-                            guessU[y * gridW + x] = tri.ux * gp.x + tri.uy * gp.y + tri.u;
-                            guessV[y * gridW + x] = tri.vx * gp.x + tri.vy * gp.y + tri.v;
-                            guessUx[y * gridW + x] = tri.ux;
-                            guessUy[y * gridW + x] = tri.uy;
-                            guessVx[y * gridW + x] = tri.vx;
-                            guessVy[y * gridW + x] = tri.vy;
-                            inMesh[y * gridW + x] = true;
+
+                        // 🚀 Measure exact pixel distance (true) instead of just inside/outside
+                        double dist = cv::pointPolygonTest(contour, gp, true);
+
+                        if (dist >= 0) {
+                            // Point is strictly INSIDE the triangle. Perfect match!
+                            best_tri = &tri;
                             break;
+                        } else if (dist > best_dist && dist >= -15.0) {
+                            // Point is OUTSIDE, but within a safe 15-pixel extrapolation margin.
+                            best_dist = dist;
+                            best_tri = &tri;
                         }
                     }
+                }
+
+                if (best_tri != nullptr) {
+                    guessU[y * gridW + x] = best_tri->ux * gp.x + best_tri->uy * gp.y + best_tri->u;
+                    guessV[y * gridW + x] = best_tri->vx * gp.x + best_tri->vy * gp.y + best_tri->v;
+                    guessUx[y * gridW + x] = best_tri->ux;
+                    guessUy[y * gridW + x] = best_tri->uy;
+                    guessVx[y * gridW + x] = best_tri->vx;
+                    guessVy[y * gridW + x] = best_tri->vy;
+                    inMesh[y * gridW + x] = true;
                 }
             }
         }
@@ -555,11 +573,12 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
             }
         };
 
-        // 🚀 WE DELETED smoothGrid(guessU) AND smoothGrid(guessV).
-        // Displacement must remain analytically exact to stay in the ICGN convergence basin!
-        // We only apply a light 3x3 blur (radius=1) to the strain to soften the triangle edges.
-        smoothGrid(guessUx, 1); smoothGrid(guessUy, 1);
-        smoothGrid(guessVx, 1); smoothGrid(guessVy, 1);
+        // 🚀 THE FIX: Restore U, V smoothing to absorb AKAZE integer noise!
+        // Because we now have the `inMesh` check, this will flawlessly smooth
+        // the interior without pulling 0.0 zeroes from the blank corners.
+        smoothGrid(guessU, 2); smoothGrid(guessV, 2);
+        smoothGrid(guessUx, 2); smoothGrid(guessUy, 2);
+        smoothGrid(guessVx, 2); smoothGrid(guessVy, 2);
         time_smoothing = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_smooth_start).count();
 
         auto t_pathA_start = std::chrono::high_resolution_clock::now();
@@ -665,7 +684,38 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                 }
             }
         }
+        // ---------------------------------------------------------
+        // 🐛 VISUALIZE SEEDS FOR PATH B (seed_debug.png)
+        // ---------------------------------------------------------
+        if (!g_debugDir.empty()) {
+            cv::Mat seedDebug(gridH, gridW, CV_8UC3, cv::Scalar(0, 0, 0));
 
+            // Draw successfully solved Path A points as a dark gray background
+            for (int y = 0; y < gridH; ++y) {
+                for (int x = 0; x < gridW; ++x) {
+                    if (resultGrid[y][x].solved) {
+                        seedDebug.at<cv::Vec3b>(y, x) = cv::Vec3b(50, 50, 50);
+                    }
+                }
+            }
+            // Draw Path B Boundary Seeds (Bright Green)
+            for (const auto& s : boundary_seeds) {
+                if (s.x_idx >= 0 && s.x_idx < gridW && s.y_idx >= 0 && s.y_idx < gridH)
+                    seedDebug.at<cv::Vec3b>(s.y_idx, s.x_idx) = cv::Vec3b(0, 255, 0);
+            }
+            // Draw Pure RGDIC Spiral Seeds (Bright Red) - if fallback occurred
+            for (const auto& s : global_seeds) {
+                if (s.x_idx >= 0 && s.x_idx < gridW && s.y_idx >= 0 && s.y_idx < gridH)
+                    seedDebug.at<cv::Vec3b>(s.y_idx, s.x_idx) = cv::Vec3b(0, 0, 255);
+            }
+
+            cv::Mat seedBig;
+            cv::resize(seedDebug, seedBig, cv::Size(gridW * step, gridH * step), 0, 0, cv::INTER_NEAREST);
+            drawOutlinedText(seedBig, "Path B Seeds (Green=Boundary, Red=Spiral)", cv::Point(10, 25), 0.6);
+            cv::imwrite(g_debugDir + "/seed_debug.png", seedBig);
+            LOGD("[DEBUG] Saved seed_debug.png");
+        }
+        // ---------------------------------------------------------
         std::atomic<int> seed_index(0);
         std::mutex grid_mutex;
         std::vector<std::thread> workers;
@@ -697,6 +747,9 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                                 int ny = current.y_idx + dy[k];
 
                                 if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
+                                    // 🚀 SPEED HACK: Lock-free quick check to bypass the mutex instantly
+                                    if (resultGrid[ny][nx].solved) continue;
+
                                     bool claimed = false;
                                     {
                                         std::lock_guard<std::mutex> lock(grid_mutex);
@@ -880,8 +933,59 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     LOGD("Precompute (Hessian): %.2f ms", total_hessian);
     LOGD("=======================================");
 
+    // ---------------------------------------------------------
+    // 🐛 EXPORT FINAL DEBUG IMAGES & CSV
+    // ---------------------------------------------------------
+    // ---------------------------------------------------------
+    // 🐛 EXPORT FINAL DEBUG IMAGES & CSV
+    // ---------------------------------------------------------
     if (!g_debugDir.empty()) {
-        // Debug export logic... (omitted for brevity to ensure full block copy is clean)
+        int max_order = 1;
+        for (int y = 0; y < gridH; ++y)
+            for (int x = 0; x < gridW; ++x)
+                if (resultGrid[y][x].compute_order > max_order) max_order = resultGrid[y][x].compute_order;
+
+        cv::Mat propMap(gridH, gridW, CV_8UC1, cv::Scalar(0));
+        cv::Mat threadMap(gridH, gridW, CV_8UC3, cv::Scalar(30, 30, 30));
+
+        // Custom thread colors so we can see the 8 cores working
+        static const cv::Vec3b THREAD_COLORS[12] = {
+                {60, 20, 220}, {20, 200, 20}, {200, 60, 20}, {200, 200, 20},
+                {20, 200, 200}, {200, 20, 200}, {100, 180, 255}, {255, 140, 30},
+                {50, 255, 180}, {180, 50, 255}, {255, 50, 130}, {130, 255, 50}};
+
+        for (int y = 0; y < gridH; ++y) {
+            for (int x = 0; x < gridW; ++x) {
+                const auto &gp = resultGrid[y][x];
+                if (!gp.solved || gp.compute_order < 0) continue;
+                propMap.at<uchar>(y, x) = (uchar)((float)gp.compute_order / max_order * 255.0f);
+                int tid_clamped = std::max(0, std::min(gp.thread_id, 11));
+                threadMap.at<cv::Vec3b>(y, x) = THREAD_COLORS[tid_clamped];
+            }
+        }
+
+        cv::Mat propColor; cv::applyColorMap(propMap, propColor, cv::COLORMAP_JET);
+        for (int y = 0; y < gridH; ++y) {
+            for (int x = 0; x < gridW; ++x) {
+                // Paint unsolved points black
+                if (!resultGrid[y][x].solved || resultGrid[y][x].compute_order < 0) {
+                    propColor.at<cv::Vec3b>(y, x) = {0, 0, 0};
+                    threadMap.at<cv::Vec3b>(y, x) = {30, 30, 30};
+                }
+            }
+        }
+
+        cv::Mat propBig, threadBig;
+        cv::resize(propColor, propBig, cv::Size(gridW * step, gridH * step), 0, 0, cv::INTER_NEAREST);
+        cv::resize(threadMap, threadBig, cv::Size(gridW * step, gridH * step), 0, 0, cv::INTER_NEAREST);
+
+        drawOutlinedText(propBig, "Path B RGDIC Propagation History", cv::Point(10, 25), 0.6);
+        drawOutlinedText(threadBig, "8-Core Thread Execution Map", cv::Point(10, 25), 0.6);
+
+        cv::imwrite(g_debugDir + "/propagation_debug.png", propBig);
+        cv::imwrite(g_debugDir + "/thread_debug.png", threadBig);
+        LOGD("[DEBUG] Saved propagation_debug.png and thread_debug.png");
+
         std::string csvPath = g_debugDir + "/debug_grid_data.csv";
         std::ofstream csvFile(csvPath);
         if (csvFile.is_open()) {
@@ -897,10 +1001,10 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                 }
             }
             csvFile.close();
+            LOGD("[DEBUG] Saved debug_grid_data.csv");
         }
         g_debugDir = "";
     }
-
     defMat.release(); roiMask.release();
     return (jint)valid_count;
 }
