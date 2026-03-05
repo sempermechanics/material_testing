@@ -527,30 +527,39 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         }
 
         auto t_smooth_start = std::chrono::high_resolution_clock::now();
+        // 🚀 FIXED: We ONLY smooth Strain (not Displacement), and we strictly
+        // prevent the blank '0.0' corner pixels from bleeding into the mesh!
         auto smoothGrid = [&](std::vector<float>& grid, int radius) {
             std::vector<float> temp = grid;
             for (int y = 0; y < gridH; ++y) {
                 for (int x = 0; x < gridW; ++x) {
+                    if (!inMesh[y * gridW + x]) continue; // Ignore blank corners
+
                     float sum = 0.0f;
                     int count = 0;
                     for (int dy = -radius; dy <= radius; ++dy) {
                         for (int dx = -radius; dx <= radius; ++dx) {
                             int ny = y + dy;
                             int nx = x + dx;
+                            // Only average if the neighbor is ALSO inside the mesh
                             if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
-                                sum += temp[ny * gridW + nx];
-                                count++;
+                                if (inMesh[ny * gridW + nx]) {
+                                    sum += temp[ny * gridW + nx];
+                                    count++;
+                                }
                             }
                         }
                     }
-                    grid[y * gridW + x] = sum / count;
+                    if (count > 0) grid[y * gridW + x] = sum / count;
                 }
             }
         };
 
-        smoothGrid(guessU, 1); smoothGrid(guessV, 1);
-        smoothGrid(guessUx, 2); smoothGrid(guessUy, 2);
-        smoothGrid(guessVx, 2); smoothGrid(guessVy, 2);
+        // 🚀 WE DELETED smoothGrid(guessU) AND smoothGrid(guessV).
+        // Displacement must remain analytically exact to stay in the ICGN convergence basin!
+        // We only apply a light 3x3 blur (radius=1) to the strain to soften the triangle edges.
+        smoothGrid(guessUx, 1); smoothGrid(guessUy, 1);
+        smoothGrid(guessVx, 1); smoothGrid(guessVy, 1);
         time_smoothing = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_smooth_start).count();
 
         auto t_pathA_start = std::chrono::high_resolution_clock::now();
