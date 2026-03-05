@@ -414,7 +414,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     val validPointsCount = IndicVisionNativeLib.computeFullFieldDirect(
                         refBytes, defBytes, maskData,
                         finalRectX, finalRectY, finalRectW, finalRectH,
-                        step, subset, strainWin, true, true, applyBlur, useNlvc,
+                        step, subset, strainWin,true,true, false, applyBlur, useNlvc,
                         outputBuffer, callback
                     )
 

@@ -25,13 +25,16 @@ object IndicVisionNativeLib {
     // CRITICAL FIX: Ensure maskData is included so it matches C++ exactly
     external fun computeFullFieldDirect(
         refBytes: ByteArray, defBytes: ByteArray, maskBytes: ByteArray?,
-        rectX: Int, rectY: Int, rectW: Int, rectH: Int,
+        rectX: Int, rectY: Int, rectWidth: Int, rectHeight: Int,
         step: Int, subsetSize: Int, strainWindow: Int,
-        useReliabilityGuided: Boolean, useFeatureMatching: Boolean,
-        applyGaussianBlur: Boolean, useNlvcStrain: Boolean,
-        outputBuffer: ByteBuffer, // Passes the shared memory block
-        callbackObj: ProgressCallback?
-    ): Int // Returns the number of valid points solved
+        useDelaunay: Boolean,      // NEW: Controls Path A
+        useFallback: Boolean,      // NEW: Controls safe fallback
+        useRGDIC: Boolean,         // NEW: Forces Path B
+        applyGaussianBlur: Boolean,
+        useNlvcStrain: Boolean,
+        outputBuffer: ByteBuffer,
+        callback: ProgressCallback?
+    ): Int
 
     external fun getPreviewFromBytes(imageBytes: ByteArray, maxDim: Int): android.graphics.Bitmap?
 

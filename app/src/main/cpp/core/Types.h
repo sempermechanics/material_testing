@@ -25,11 +25,16 @@ namespace IndicVision {
 
     // DIC analysis result (6-DOF + status)
     struct AnalysisResult {
-        scalar_t u, v;
-        scalar_t ux, uy;
-        scalar_t vx, vy;
-        int status;
-        float correlation_score; // Changed to float
+        float u;
+        float v;
+        // 🚀 THE MISSING 6-DOF SHAPE GRADIENTS
+        float ux;
+        float uy;
+        float vx;
+        float vy;
+
+        int status; // 0 = success
+        float correlation_score;
     };
 
     // Seed node for reliability-guided propagation
