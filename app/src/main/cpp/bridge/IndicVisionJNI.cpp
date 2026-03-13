@@ -30,6 +30,64 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+<<<<<<< Updated upstream
+=======
+// ==========================================
+// ⏱️ RAII PROFILING INFRASTRUCTURE
+// ==========================================
+struct ThreadStats {
+    double icgn_time_ms = 0.0;
+    int icgn_iters = 0;
+    double simplex_time_ms = 0.0;
+    int simplex_iters = 0;
+    double hessian_time_ms = 0.0;
+    double queue_wait_time_ms = 0.0;
+    int points_solved = 0;
+
+    // Detailed Simplex Telemetry
+    int simplex_calls = 0;
+    int simplex_saved = 0;
+    int simplex_dead = 0;
+
+    // Track WHY it went to Simplex
+    int simplex_from_crash = 0;   // Failed in < 20 iters (Bad guess / out of bounds)
+    int simplex_from_timeout = 0; // Failed at exactly 20 iters (Non-convergence)
+};
+
+struct EngineStatFlusher {
+    IndicVision::OptimizationEngine &engine;
+    ThreadStats &bucket;
+    int &local_points;
+    double &local_hessian;
+    double &local_wait;
+
+    EngineStatFlusher(IndicVision::OptimizationEngine &e, ThreadStats &b, int &lp, double &lh, double &lw)
+            : engine(e), bucket(b), local_points(lp), local_hessian(lh), local_wait(lw) {}
+
+    ~EngineStatFlusher() {
+        bucket.icgn_time_ms += engine.time_icgn_ms;
+        bucket.icgn_iters += engine.count_icgn;
+        bucket.simplex_time_ms += engine.time_simplex_ms;
+        bucket.simplex_iters += engine.count_simplex;
+        bucket.points_solved += local_points;
+        bucket.hessian_time_ms += local_hessian;
+        bucket.queue_wait_time_ms += local_wait;
+    }
+};
+
+struct ScopedTimer {
+    std::chrono::time_point<std::chrono::high_resolution_clock> start;
+    double &out_ms;
+    ScopedTimer(double &out) : out_ms(out) {
+        start = std::chrono::high_resolution_clock::now();
+    }
+    ~ScopedTimer() {
+        out_ms = std::chrono::duration<double, std::milli>(
+                std::chrono::high_resolution_clock::now() - start).count();
+    }
+};
+
+>>>>>>> Stashed changes
 JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     LOGD("IndicVision Native Library Loaded.");
     cv::setNumThreads(1);
@@ -266,7 +324,11 @@ JNIEXPORT jfloatArray JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib
 }
 
 // ==========================================
+<<<<<<< Updated upstream
 // 🚀 PHASE 1 & 2: ROUTING ENGINE (COMPUTE FULL FIELD)
+=======
+// 🚀 ROUTING ENGINE - HYBRID CORE ONLY
+>>>>>>> Stashed changes
 // ==========================================
 JNIEXPORT jint JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
@@ -284,8 +346,12 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     g_debugDir = "";
 
     auto t_total_start = std::chrono::high_resolution_clock::now();
+<<<<<<< Updated upstream
     double time_img_prep = 0, time_akaze = 0, time_ransac = 0;
     double time_delaunay = 0, time_contour_assign = 0, time_extrapolate = 0, time_smoothing = 0;
+=======
+    double time_img_prep = 0, time_akaze = 0, time_ransac = 0, time_delaunay = 0, time_contour_assign = 0, time_extrapolate = 0, time_smoothing = 0;
+>>>>>>> Stashed changes
     double time_prepass = 0, time_pathA = 0, time_pathB = 0, time_strain = 0;
 
     if (env == nullptr || defBytes == nullptr || outputBuffer == nullptr || g_refImg == nullptr) return 0;
@@ -293,7 +359,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     if (!output_ptr) return 0;
 
     static int s_frame_count = 0; s_frame_count++;
-    LOGD("=== FRAME %d computeFullFieldDirect START ===", s_frame_count);
+    LOGD("=== FRAME %d computeFullFieldDirect (HYBRID CORE) START ===", s_frame_count);
 
     auto t_prep_start = std::chrono::high_resolution_clock::now();
     cv::Mat defMat = bytesToMat(env, defBytes, g_refWidth, g_refHeight);
@@ -312,6 +378,14 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     defImg.prepare_data();
     time_img_prep = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_prep_start).count();
 
+<<<<<<< Updated upstream
+=======
+    int safe_cores = std::max(1, (int)std::thread::hardware_concurrency());
+
+    // Toggle Simplex ON or OFF
+    bool ALLOW_SIMPLEX_RESCUE = true;
+
+>>>>>>> Stashed changes
     std::vector<cv::Point2f> akaze_ref_pts;
     std::vector<cv::Point2f> akaze_def_pts;
     float inlier_bb_area_ratio = 0.0f;
@@ -363,6 +437,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
             } catch (const cv::Exception &e) {
                 LOGE("AKAZE Exception: %s", e.what());
             }
+<<<<<<< Updated upstream
         }
     }
 
@@ -389,6 +464,14 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         }
     } else {
         execute_path_B = true;
+=======
+        } catch (...) {}
+    }
+
+    if (!has_good_akaze) {
+        LOGE("ROUTING: AKAZE Failed. Aborting Hybrid Core.");
+        return 0;
+>>>>>>> Stashed changes
     }
 
     int gridW = rectWidth / step;
@@ -400,7 +483,13 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         bool solved;
         int thread_id;
         int compute_order;
+<<<<<<< Updated upstream
         int mesh_assignment_type; // 0=None, 1=Strict Inside, 2=Extrapolated
+=======
+        int mesh_assignment_type;
+        bool used_simplex;
+        int icgn_iters;
+>>>>>>> Stashed changes
     };
     std::vector<std::vector<GridPoint>> resultGrid(gridH, std::vector<GridPoint>(gridW));
     int total_valid_points = 0;
@@ -418,10 +507,17 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     if (total_valid_points == 0) return 0;
 
     std::atomic<int> global_points_solved(0);
+<<<<<<< Updated upstream
     std::atomic<int> compute_order_counter(1); // Start at 1 to easily separate Path A/B logic
     int safe_cores = std::max(1, (int)std::thread::hardware_concurrency());
     std::vector<double> t_icgn_arr(safe_cores, 0.0), t_simplex_arr(safe_cores, 0.0), t_hessian_arr(safe_cores, 0.0);
     std::vector<int> c_icgn_arr(safe_cores, 0), c_simplex_arr(safe_cores, 0), c_points_arr(safe_cores, 0);
+=======
+    std::atomic<int> compute_order_counter(1);
+
+    std::vector<ThreadStats> stats_pathA(safe_cores);
+    std::vector<ThreadStats> stats_pathB(safe_cores);
+>>>>>>> Stashed changes
 
     // =========================================================
     // 🔒 RAII GUARD: Fixes Crash Bug #1 (Leaking references)
@@ -524,11 +620,16 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         }
     };
 
+<<<<<<< Updated upstream
     // 🚀 Instantiated safely immediately after thread spawn
     ThreadJoinGuard progressGuard{
             progress_thread, progress_thread_should_stop,
             progress_cv, progress_cv_mutex, progress_thread_detached
     };
+=======
+    ThreadJoinGuard progressGuard{progress_thread, progress_thread_should_stop,
+                                  progress_cv, progress_cv_mutex, progress_thread_detached};
+>>>>>>> Stashed changes
 
     std::vector<float> guessU(gridW * gridH, globalU);
     std::vector<float> guessV(gridW * gridH, globalV);
@@ -538,10 +639,18 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     std::vector<float> guessVy(gridW * gridH, 0.0f);
     std::vector<bool> inMesh(gridW * gridH, false);
 
+<<<<<<< Updated upstream
     // ==========================================
     // 🚀 PHASE 3: PATH A (DELAUNAY MESH)
+=======
+    struct AffineTriangle { cv::Point2f pts[3]; double u, v, ux, uy, vx, vy; cv::Rect2f boundingBox; };
+    std::vector<AffineTriangle> affTriangles;
+
     // ==========================================
-    if (execute_path_A) {
+    // 🚀 PATH A (DELAUNAY MESH SETUP)
+>>>>>>> Stashed changes
+    // ==========================================
+    {
         auto t_mesh_start = std::chrono::high_resolution_clock::now();
 
         cv::Subdiv2D subdiv(cv::Rect(0, 0, g_refWidth, g_refHeight));
@@ -555,6 +664,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         std::vector<cv::Vec6f> triangleList;
         subdiv.getTriangleList(triangleList);
 
+<<<<<<< Updated upstream
         struct AffineTriangle {
             cv::Point2f pts[3];
             double u, v, ux, uy, vx, vy;
@@ -562,6 +672,8 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         };
         std::vector<AffineTriangle> affTriangles;
 
+=======
+>>>>>>> Stashed changes
         auto getDefPt = [&](cv::Point2f pt) -> cv::Point2f {
             float min_dist = 1e9;
             cv::Point2f best_pt = pt;
@@ -616,6 +728,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                 cv::cvtColor(ref8U, refColor, cv::COLOR_GRAY2BGR);
                 cv::Rect roiRect(rectX, rectY, rectWidth, rectHeight);
                 roiRect = roiRect & cv::Rect(0, 0, g_refWidth, g_refHeight);
+<<<<<<< Updated upstream
                 cv::Mat meshDebug = refColor(roiRect).clone();
                 for (const auto& tri : affTriangles) {
                     cv::Point pt1(tri.pts[0].x - rectX, tri.pts[0].y - rectY);
@@ -630,6 +743,19 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                     cv::circle(meshDebug, local_pt, 4, cv::Scalar(0, 0, 255), -1, cv::LINE_AA);
                 }
                 drawOutlinedText(meshDebug, "Delaunay 6-DOF Mesh (" + std::to_string(affTriangles.size()) + " Triangles)", cv::Point(10, 25), 0.6);
+=======
+                cv::Mat meshDebug = refColor(roiRect) * 0.35; // Reduces opacity/brightness by 65%
+
+                for (const auto &tri : affTriangles) {
+                    cv::Point pt1(tri.pts[0].x - rectX, tri.pts[0].y - rectY);
+                    cv::Point pt2(tri.pts[1].x - rectX, tri.pts[1].y - rectY);
+                    cv::Point pt3(tri.pts[2].x - rectX, tri.pts[2].y - rectY);
+                    cv::line(meshDebug, pt1, pt2, cv::Scalar(255, 255, 0), 2, cv::LINE_AA);
+                    cv::line(meshDebug, pt2, pt3, cv::Scalar(255, 255, 0), 2, cv::LINE_AA);
+                    cv::line(meshDebug, pt3, pt1, cv::Scalar(255, 255, 0), 2, cv::LINE_AA);
+                }
+                drawOutlinedText(meshDebug, "Delaunay 6-DOF Mesh", cv::Point(10, 25), 0.6);
+>>>>>>> Stashed changes
                 cv::imwrite(local_debug_dir + "/delaunay_mesh_debug.jpg", meshDebug);
             } catch (...) {}
         }
@@ -670,7 +796,11 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
 
         // Pass 2: Bounded Extrapolation
         auto t_extrap_start = std::chrono::high_resolution_clock::now();
+<<<<<<< Updated upstream
         constexpr float EXTRAP_LIMIT = -15.0f;
+=======
+        float EXTRAP_LIMIT = -3.0f * step;
+>>>>>>> Stashed changes
         for (int y = 0; y < gridH; ++y) {
             for (int x = 0; x < gridW; ++x) {
                 int idx = y * gridW + x;
@@ -751,6 +881,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     }
     time_prepass = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_prepass_start).count();
 
+<<<<<<< Updated upstream
     if (execute_path_A) {
         auto t_pathA_start = std::chrono::high_resolution_clock::now();
         std::atomic<bool> omp_region_threw(false);
@@ -806,6 +937,78 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         }
         time_pathA = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_pathA_start).count();
     }
+=======
+
+    // ==========================================
+    // 🚀 PATH A (DELAUNAY MESH EXECUTION)
+    // ==========================================
+    {
+        auto t_pathA_start = std::chrono::high_resolution_clock::now();
+        std::atomic<bool> omp_region_threw(false);
+#pragma omp parallel num_threads(safe_cores)
+        {
+            int tid = omp_get_thread_num();
+            IndicVision::OptimizationEngine local_engine; IndicVision::SubsetData local_subset;
+            double local_hessian = 0.0, local_wait = 0.0; int local_pts = 0;
+            EngineStatFlusher flusher(local_engine, stats_pathA[tid], local_pts, local_hessian, local_wait);
+
+#pragma omp for schedule(dynamic, 32)
+            for (int idx = 0; idx < gridW * gridH; ++idx) {
+                if (omp_region_threw.load(std::memory_order_relaxed)) continue;
+                if (!inMesh[idx]) continue;
+                int x = idx % gridW, y = idx / gridW;
+                if (resultGrid[y][x].solved) continue;
+
+                int realX = rectX + x * step, realY = rectY + y * step;
+                auto th1 = std::chrono::high_resolution_clock::now();
+                IndicVision::SubsetPrecomputer::precompute_subset_fast(local_subset, *g_refImg, realX, realY, subsetSize, hessian_pool[idx]);
+                local_hessian += std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - th1).count();
+
+                if (local_subset.is_initialized) {
+                    int simplex_count_before = local_engine.count_simplex;
+                    int icgn_count_before = local_engine.count_icgn;
+
+                    auto search_flag = ALLOW_SIMPLEX_RESCUE ? IndicVision::INIT_NO_SEARCH : IndicVision::INIT_NO_SIMPLEX;
+                    IndicVision::AnalysisResult res = local_engine.calculate_deformation(
+                            local_subset, defImg, guessU[idx], guessV[idx], guessUx[idx], guessUy[idx], guessVx[idx], guessVy[idx], search_flag);
+
+                    bool needed_rescue = (local_engine.count_simplex > simplex_count_before);
+                    int icgn_iters_used = local_engine.count_icgn - icgn_count_before;
+
+                    if (!ALLOW_SIMPLEX_RESCUE && res.status != 0) { res.correlation_score = 1.0f; }
+
+                    if (needed_rescue) {
+                        stats_pathA[tid].simplex_calls++;
+
+                        if (icgn_iters_used >= 20) {
+                            stats_pathA[tid].simplex_from_timeout++;
+                        } else {
+                            stats_pathA[tid].simplex_from_crash++;
+                        }
+
+                        if (res.status == 0 && res.correlation_score <= 0.15f && ALLOW_SIMPLEX_RESCUE) {
+                            stats_pathA[tid].simplex_saved++;
+                        } else {
+                            stats_pathA[tid].simplex_dead++;
+                        }
+                    }
+
+                    if (res.status == 0 && res.correlation_score <= 0.15f) {
+                        int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
+                        resultGrid[y][x] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, tid, order, resultGrid[y][x].mesh_assignment_type, needed_rescue,icgn_iters_used};
+                        global_points_solved.fetch_add(1, std::memory_order_relaxed); local_pts++;
+                    } else {
+                        resultGrid[y][x].solved = false; resultGrid[y][x].corr = 0.0f;
+                        resultGrid[y][x].used_simplex = needed_rescue;
+                        resultGrid[y][x].icgn_iters = icgn_iters_used;
+                    }
+                }
+            }
+        }
+        time_pathA = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_pathA_start).count();
+    }
+
+>>>>>>> Stashed changes
 
     std::unique_ptr<std::atomic<bool>[]> cell_claimed(new std::atomic<bool>[gridW * gridH]);
     for (int i = 0; i < gridW * gridH; ++i) {
@@ -813,6 +1016,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         cell_claimed[i].store(resultGrid[gy][gx].solved, std::memory_order_relaxed);
     }
 
+<<<<<<< Updated upstream
     if (execute_path_B) {
         auto t_pathB_start = std::chrono::high_resolution_clock::now();
         std::vector<IndicVision::SeedNode> boundary_seeds;
@@ -835,8 +1039,28 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                             boundary_seeds.push_back(IndicVision::SeedNode(x, y, resultGrid[y][x].u, resultGrid[y][x].v, resultGrid[y][x].ux, resultGrid[y][x].uy, resultGrid[y][x].vx, resultGrid[y][x].vy, resultGrid[y][x].corr));
                         }
                     }
+=======
+    // ==========================================
+    // 🚀 PATH B (GLOBAL QUEUE EXECUTION)
+    // ==========================================
+    {
+        ScopedTimer pathB_timer(time_pathB);
+        std::vector<IndicVision::SeedNode> boundary_seeds;
+        std::vector<IndicVision::SeedNode> global_seeds;
+
+        const int dx4[] = {1, -1, 0, 0}, dy4[] = {0, 0, 1, -1};
+        for (int y = 0; y < gridH; ++y) {
+            for (int x = 0; x < gridW; ++x) {
+                if (!resultGrid[y][x].solved || resultGrid[y][x].corr <= 0.f) continue;
+                bool touching = false;
+                for (int k = 0; k < 4; ++k) {
+                    int nx = x + dx4[k], ny = y + dy4[k];
+                    if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH && !resultGrid[ny][nx].solved) { touching = true; break; }
+>>>>>>> Stashed changes
                 }
+                if (touching) boundary_seeds.push_back(IndicVision::SeedNode(x, y, resultGrid[y][x].u, resultGrid[y][x].v, resultGrid[y][x].ux, resultGrid[y][x].uy, resultGrid[y][x].vx, resultGrid[y][x].vy, resultGrid[y][x].corr));
             }
+<<<<<<< Updated upstream
         } else {
             int seedGx = gridW / 2, seedGy = gridH / 2;
             int max_r = std::max(gridW, gridH) / 2;
@@ -849,6 +1073,44 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                             global_seeds.push_back(IndicVision::SeedNode(cx, cy, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f));
                         }
                     }
+=======
+        }
+
+        if (boundary_seeds.empty()) {
+            struct SeedCandidate {
+                int ix, iy;
+                float u_init, v_init;
+                float dist_from_center;
+                float displacement_mag;
+            };
+            std::vector<SeedCandidate> candidates;
+            float grid_cx = rectX + (gridW / 2.f) * step, grid_cy = rectY + (gridH / 2.f) * step;
+
+            for (size_t fi = 0; fi < akaze_ref_pts.size(); ++fi) {
+                float fx = akaze_ref_pts[fi].x, fy = akaze_ref_pts[fi].y;
+                int ix = (int)std::round((fx - rectX) / (float)step);
+                int iy = (int)std::round((fy - rectY) / (float)step);
+                if (ix < 0 || ix >= gridW || iy < 0 || iy >= gridH || resultGrid[iy][ix].solved) continue;
+                float du = akaze_def_pts[fi].x - fx, dv = akaze_def_pts[fi].y - fy;
+                float world_x = rectX + ix * step, world_y = rectY + iy * step;
+                float dist_c = std::sqrt((world_x - grid_cx)*(world_x - grid_cx) + (world_y - grid_cy)*(world_y - grid_cy));
+                candidates.push_back({ix, iy, du, dv, dist_c, std::sqrt(du*du + dv*dv)});
+            }
+
+            if (candidates.empty()) {
+                int cx = gridW / 2, cy = gridH / 2;
+                global_seeds.push_back(IndicVision::SeedNode(cx, cy, globalU, globalV, 0.f, 0.f, 0.f, 0.f, 0.f));
+            } else {
+                std::sort(candidates.begin(), candidates.end(), [](const SeedCandidate& a, const SeedCandidate& b) {
+                    if (std::abs(a.displacement_mag - b.displacement_mag) > 1.f) return a.displacement_mag < b.displacement_mag;
+                    return a.dist_from_center < b.dist_from_center;
+                });
+                int seeds_pushed = 0;
+                for (const auto& c : candidates) {
+                    if (seeds_pushed >= 5) break;
+                    global_seeds.push_back(IndicVision::SeedNode(c.ix, c.iy, c.u_init, c.v_init, 0.f, 0.f, 0.f, 0.f, 0.f));
+                    seeds_pushed++;
+>>>>>>> Stashed changes
                 }
             }
         }
@@ -878,6 +1140,73 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
 
         std::atomic<int> seed_index(0);
         std::mutex grid_mutex;
+<<<<<<< Updated upstream
+=======
+        const int cores_to_use = safe_cores;
+
+        for (const auto &s : boundary_seeds) {
+            gq.q.push(s);
+        }
+
+        IndicVision::OptimizationEngine prewarm_engine;
+        IndicVision::SubsetData prewarm_subset;
+
+        while ((int)gq.q.size() < cores_to_use && seed_idx.load() < (int)global_seeds.size()) {
+            int si = seed_idx.fetch_add(1, std::memory_order_relaxed);
+            if (si >= (int)global_seeds.size()) break;
+            const auto &seed = global_seeds[si];
+            int flat = seed.y_idx * gridW + seed.x_idx;
+
+            bool unclaimed = false;
+            if (!cell_claimed[flat].compare_exchange_strong(unclaimed, true, std::memory_order_acq_rel, std::memory_order_relaxed)) continue;
+
+            int realX = rectX + seed.x_idx * step, realY = rectY + seed.y_idx * step;
+            IndicVision::SubsetPrecomputer::precompute_subset_fast(prewarm_subset, *g_refImg, realX, realY, subsetSize, hessian_pool[flat]);
+            if (!prewarm_subset.is_initialized) continue;
+
+            int simplex_count_before = prewarm_engine.count_simplex;
+            int icgn_count_before = prewarm_engine.count_icgn;
+
+            auto search_flag = ALLOW_SIMPLEX_RESCUE ? IndicVision::INIT_NO_SEARCH : IndicVision::INIT_NO_SIMPLEX;
+            IndicVision::AnalysisResult res = prewarm_engine.calculate_deformation(
+                    prewarm_subset, defImg, seed.u, seed.v, 0.f, 0.f, 0.f, 0.f, search_flag);
+            bool needed_rescue = (prewarm_engine.count_simplex > simplex_count_before);
+            int icgn_iters_used = prewarm_engine.count_icgn - icgn_count_before;
+
+            if (!ALLOW_SIMPLEX_RESCUE && res.status != 0) { res.correlation_score = 1.0f; }
+
+            if (needed_rescue) {
+                stats_pathB[0].simplex_calls++;
+
+                if (icgn_iters_used >= 20) {
+                    stats_pathB[0].simplex_from_timeout++;
+                } else {
+                    stats_pathB[0].simplex_from_crash++;
+                }
+
+                if (res.status == 0 && res.correlation_score <= 0.15f && ALLOW_SIMPLEX_RESCUE) {
+                    stats_pathB[0].simplex_saved++;
+                } else {
+                    stats_pathB[0].simplex_dead++;
+                }
+            }
+
+            if (res.status == 0 && res.correlation_score <= 0.15f) {
+                int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
+                resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, -1, order, resultGrid[seed.y_idx][seed.x_idx].mesh_assignment_type, needed_rescue, icgn_iters_used};                global_points_solved.fetch_add(1, std::memory_order_relaxed);
+                gq.q.push(IndicVision::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+            } else {
+                resultGrid[seed.y_idx][seed.x_idx].corr = 0.f;
+                resultGrid[seed.y_idx][seed.x_idx].used_simplex = needed_rescue;
+                resultGrid[seed.y_idx][seed.x_idx].icgn_iters = icgn_iters_used;
+            }
+        }
+
+        if (gq.q.empty() && seed_idx.load() >= (int)global_seeds.size()) {
+            gq.done = true;
+        }
+
+>>>>>>> Stashed changes
         std::vector<std::thread> workers;
 
         // 🔒 Worker Guard to prevent vector destructor crash if exception occurs
@@ -933,11 +1262,17 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                                     auto th2 = std::chrono::high_resolution_clock::now();
                                     local_hessian_ms += std::chrono::duration<double, std::milli>(th2 - th1).count();
 
+<<<<<<< Updated upstream
                                     if (!local_subset.is_initialized) continue;
+=======
+                                        int simplex_count_before = local_engine.count_simplex;
+                                        int icgn_count_before = local_engine.count_icgn;
+>>>>>>> Stashed changes
 
                                     IndicVision::AnalysisResult res = local_engine.calculate_deformation(
                                             local_subset, defImg, current.u, current.v, current.ux, current.uy, current.vx, current.vy, IndicVision::INIT_NO_SEARCH);
 
+<<<<<<< Updated upstream
                                     if (res.status == 0 && res.correlation_score <= 0.15f) {
                                         std::lock_guard<std::mutex> lock(grid_mutex);
                                         int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
@@ -948,6 +1283,40 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                                     } else {
                                         std::lock_guard<std::mutex> lock(grid_mutex);
                                         resultGrid[ny][nx].corr = 0.0f;
+=======
+                                        bool needed_rescue = (local_engine.count_simplex > simplex_count_before);
+                                        int icgn_iters_used = local_engine.count_icgn - icgn_count_before;
+                                        if (!ALLOW_SIMPLEX_RESCUE && res.status != 0) { res.correlation_score = 1.0f; }
+
+                                        if (needed_rescue) {
+                                            stats_pathB[tid].simplex_calls++;
+
+                                            if (icgn_iters_used >= 20) {
+                                                stats_pathB[tid].simplex_from_timeout++;
+                                            } else {
+                                                stats_pathB[tid].simplex_from_crash++;
+                                            }
+
+                                            if (res.status == 0 && res.correlation_score <= 0.15f && ALLOW_SIMPLEX_RESCUE) {
+                                                stats_pathB[tid].simplex_saved++;
+                                            } else {
+                                                stats_pathB[tid].simplex_dead++;
+                                            }
+                                        }
+
+                                        if (res.status == 0 && res.correlation_score <= 0.15f) {
+                                            int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
+                                            { std::lock_guard<std::mutex> lg(grid_mutex); resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, tid, order, 0, needed_rescue,icgn_iters_used}; }
+                                            global_points_solved.fetch_add(1, std::memory_order_relaxed); local_points_solved++;
+                                            { std::lock_guard<std::mutex> lq(gq.mtx); gq.q.push(IndicVision::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score)); gq.cv.notify_one(); }
+                                            seed_pushed = true;
+                                        } else {
+                                            std::lock_guard<std::mutex> lg(grid_mutex);
+                                            resultGrid[seed.y_idx][seed.x_idx].corr = 0.f;
+                                            resultGrid[seed.y_idx][seed.x_idx].used_simplex = needed_rescue;
+                                            resultGrid[seed.y_idx][seed.x_idx].icgn_iters = icgn_iters_used;
+                                        }
+>>>>>>> Stashed changes
                                     }
                                 }
                             }
@@ -984,8 +1353,37 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
 
                             if (!local_subset.is_initialized) continue;
 
+<<<<<<< Updated upstream
                             IndicVision::AnalysisResult res = local_engine.calculate_deformation(
                                     local_subset, defImg, globalU, globalV, 0.0f, 0.0f, 0.0f, 0.0f, IndicVision::INIT_AUTO_SEARCH);
+=======
+                            int simplex_count_before = local_engine.count_simplex;
+                            int icgn_count_before = local_engine.count_icgn;
+
+                            auto search_flag = ALLOW_SIMPLEX_RESCUE ? IndicVision::INIT_NO_SEARCH : IndicVision::INIT_NO_SIMPLEX;
+                            IndicVision::AnalysisResult res = local_engine.calculate_deformation(
+                                    local_subset, defImg, cur.u, cur.v, cur.ux, cur.uy, cur.vx, cur.vy, search_flag);
+
+                            bool needed_rescue = (local_engine.count_simplex > simplex_count_before);
+                            int icgn_iters_used = local_engine.count_icgn - icgn_count_before;
+                            if (!ALLOW_SIMPLEX_RESCUE && res.status != 0) { res.correlation_score = 1.0f; }
+
+                            if (needed_rescue) {
+                                stats_pathB[tid].simplex_calls++;
+
+                                if (icgn_iters_used >= 20) {
+                                    stats_pathB[tid].simplex_from_timeout++;
+                                } else {
+                                    stats_pathB[tid].simplex_from_crash++;
+                                }
+
+                                if (res.status == 0 && res.correlation_score <= 0.15f && ALLOW_SIMPLEX_RESCUE) {
+                                    stats_pathB[tid].simplex_saved++;
+                                } else {
+                                    stats_pathB[tid].simplex_dead++;
+                                }
+                            }
+>>>>>>> Stashed changes
 
                             if (res.status == 0 && res.correlation_score <= 0.15f) {
                                 std::lock_guard<std::mutex> lock(grid_mutex);
@@ -995,8 +1393,15 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                                 local_points_solved++;
                                 global_points_solved.fetch_add(1, std::memory_order_relaxed);
                             } else {
+<<<<<<< Updated upstream
                                 std::lock_guard<std::mutex> lock(grid_mutex);
                                 resultGrid[seed.y_idx][seed.x_idx].corr = 0.0f;
+=======
+                                std::lock_guard<std::mutex> lg(grid_mutex);
+                                resultGrid[ny][nx].corr = 0.f;
+                                resultGrid[ny][nx].used_simplex = needed_rescue;
+                                resultGrid[ny][nx].icgn_iters = icgn_iters_used;
+>>>>>>> Stashed changes
                             }
                         }
                     }
@@ -1061,6 +1466,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         if (env->ExceptionCheck()) env->ExceptionClear();
     }
 
+<<<<<<< Updated upstream
     double total_icgn = 0, total_simplex = 0, total_hessian = 0;
     int total_icgn_iters = 0, total_simplex_iters = 0, pathA_pts = 0, pathB_pts = 0;
     for(int i=0; i<safe_cores; i++) {
@@ -1075,6 +1481,35 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                 else pathB_pts++;
             }
         }
+=======
+    // ==========================================
+    // ⏱️ AGGREGATE PROFILING METRICS
+    // ==========================================
+    double a_icgn = 0, a_simp = 0, b_icgn = 0, b_simp = 0, b_wait = 0;
+    int a_simp_cnt = 0, b_simp_cnt = 0, total_icgn_iters = 0;
+
+    int a_simp_calls = 0, a_simp_saved = 0, a_simp_dead = 0, a_simp_crash = 0, a_simp_timeout = 0;
+    int b_simp_calls = 0, b_simp_saved = 0, b_simp_dead = 0, b_simp_crash = 0, b_simp_timeout = 0;
+
+    double total_hessian = 0;
+    int pathA_pts = 0, pathB_pts = 0;
+
+    for (int i = 0; i < safe_cores; i++) {
+        a_icgn += stats_pathA[i].icgn_time_ms; a_simp += stats_pathA[i].simplex_time_ms; a_simp_cnt += stats_pathA[i].simplex_iters;
+        pathA_pts += stats_pathA[i].points_solved; total_hessian += stats_pathA[i].hessian_time_ms; total_icgn_iters += stats_pathA[i].icgn_iters;
+        a_simp_calls += stats_pathA[i].simplex_calls; a_simp_saved += stats_pathA[i].simplex_saved; a_simp_dead += stats_pathA[i].simplex_dead;
+
+        b_icgn += stats_pathB[i].icgn_time_ms; b_simp += stats_pathB[i].simplex_time_ms; b_simp_cnt += stats_pathB[i].simplex_iters;
+        b_wait += stats_pathB[i].queue_wait_time_ms; pathB_pts += stats_pathB[i].points_solved; total_hessian += stats_pathB[i].hessian_time_ms;
+        total_icgn_iters += stats_pathB[i].icgn_iters;
+        b_simp_calls += stats_pathB[i].simplex_calls; b_simp_saved += stats_pathB[i].simplex_saved; b_simp_dead += stats_pathB[i].simplex_dead;
+
+        a_simp_crash += stats_pathA[i].simplex_from_crash;
+        a_simp_timeout += stats_pathA[i].simplex_from_timeout;
+
+        b_simp_crash += stats_pathB[i].simplex_from_crash;
+        b_simp_timeout += stats_pathB[i].simplex_from_timeout;
+>>>>>>> Stashed changes
     }
 
     double time_total = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_total_start).count();
@@ -1087,6 +1522,7 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     LOGD("Extrapolation Pass:   %.2f ms", time_extrapolate);
     LOGD("Spatial Smoothing:    %.2f ms", time_smoothing);
     LOGD("Hessian Pre-pass:     %.2f ms (One-time Global Math)", time_prepass);
+<<<<<<< Updated upstream
     LOGD("Path A (Mesh Eval):   %.2f ms (Throughput: %.1f pts/ms)", time_pathA, (time_pathA > 0) ? pathA_pts / time_pathA : 0);
     LOGD("Path B (RGDIC Fill):  %.2f ms (Throughput: %.1f pts/ms)", time_pathB, (time_pathB > 0) ? pathB_pts / time_pathB : 0);
     LOGD("Strain Calculation:   %.2f ms", time_strain);
@@ -1096,6 +1532,37 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
     LOGD("Average ICGN Speed:   %.4f iterations / point", (valid_count > 0) ? (float)total_icgn_iters / valid_count : 0.0f);
     LOGD("Residual Precompute:  %.2f ms (Saved ~65%% via Pre-pass)", total_hessian);
     LOGD("Total Simplex Rescue: %.2f ms (%d fails)", total_simplex, total_simplex_iters);
+=======
+
+    LOGD("Delaunay Mesh Setup:  %.2f ms", time_delaunay);
+    LOGD("Contour Assignment:   %.2f ms", time_contour_assign);
+    LOGD("Extrapolation Pass:   %.2f ms", time_extrapolate);
+    LOGD("Spatial Smoothing:    %.2f ms", time_smoothing);
+
+    LOGD("Path A (Mesh Eval):   %.2f ms (Throughput: %.1f pts/ms)", time_pathA, (time_pathA > 0) ? pathA_pts / time_pathA : 0.0);
+    if (pathA_pts > 0) {
+        LOGD("  ↳ Path A ICGN Math: %.2f ms | Simplex: %.2f ms", a_icgn, a_simp);
+        LOGD("      ↳ %d Calls (%d Crashes, %d Timeouts) -> %d Saved, %d Dead",
+             a_simp_calls, a_simp_crash, a_simp_timeout, a_simp_saved, a_simp_dead);
+    }
+
+    if (pathB_pts > 0) {
+        LOGD("  ↳ Path B ICGN Math: %.2f ms | Simplex: %.2f ms", b_icgn, b_simp);
+        LOGD("      ↳ %d Calls (%d Crashes, %d Timeouts) -> %d Saved, %d Dead",
+             b_simp_calls, b_simp_crash, b_simp_timeout, b_simp_saved, b_simp_dead);
+        LOGD("  ↳ Path B Wait Time: %.2f ms (Thread idle/lock contention)", b_wait);
+    }
+
+    LOGD("Strain Calculation:   %.2f ms", time_strain);
+    LOGD("Total JNI Execution:  %.2f ms", time_total);
+    LOGD("--- ENGINE MATH & HARDWARE EFFICIENCY ---");
+    LOGD("Total Points Solved:  %d (A: %d, B: %d)", valid_count, pathA_pts, pathB_pts);
+    LOGD("Average ICGN Speed:   %.4f iterations / point", (valid_count > 0) ? (float)total_icgn_iters / valid_count : 0.0f);
+    int tot_simp_calls = a_simp_calls + b_simp_calls;
+    int tot_simp_saved = a_simp_saved + b_simp_saved;
+    int tot_simp_dead = a_simp_dead + b_simp_dead;
+    LOGD("Total Simplex Rescue: %.2f ms (%d calls -> %d saved, %d dead)", (a_simp + b_simp), tot_simp_calls, tot_simp_saved, tot_simp_dead);
+>>>>>>> Stashed changes
     LOGD("=======================================");
 
     // =========================================================
@@ -1111,6 +1578,10 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
             cv::Mat meshAssignMap(gridH, gridW, CV_8UC3, cv::Scalar(0, 0, 0));
             cv::Mat corrMap(gridH, gridW, CV_8UC1, cv::Scalar(0));
             cv::Mat strainMap(gridH, gridW, CV_8UC1, cv::Scalar(0));
+<<<<<<< Updated upstream
+=======
+            cv::Mat simplexMap(gridH, gridW, CV_8UC3, cv::Scalar(30, 30, 30));
+>>>>>>> Stashed changes
 
             static const cv::Vec3b THREAD_COLORS[12] = {
                     {60, 20, 220}, {20, 200, 20}, {200, 60, 20}, {200, 200, 20},
@@ -1136,11 +1607,61 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
             for (int y = 0; y < gridH; ++y) {
                 for (int x = 0; x < gridW; ++x) {
                     const auto &gp = resultGrid[y][x];
+<<<<<<< Updated upstream
                     if (!gp.solved || gp.compute_order < 0) continue;
 
                     propMap.at<uchar>(y, x) = (uchar)((float)gp.compute_order / max_order * 255.0f);
                     threadMap.at<cv::Vec3b>(y, x) = THREAD_COLORS[std::max(0, std::min(gp.thread_id, 11))];
                     corrMap.at<uchar>(y, x) = (uchar)((gp.corr / max_corr) * 255.0f);
+=======
+
+                    bool is_masked = (!roiMask.empty() &&
+                                      roiMask.at<uchar>(rectY + y * step, rectX + x * step) < 128);
+
+                    if (!is_masked) {
+                        if (gp.solved && gp.corr > 0.0f) {
+                            if (!gp.used_simplex) {
+                                simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 0);
+                            } else if (gp.icgn_iters < 20) {
+                                simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 255);
+                            } else {
+                                simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 255, 0);
+                            }
+                        } else {
+                            if (!gp.used_simplex) {
+                                simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 0, 255);
+                            } else if (gp.icgn_iters < 20) {
+                                simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 165, 255);
+                            } else {
+                                simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 0, 255);
+                            }
+                        }
+                    }
+
+                    if (!is_masked) {
+                        if (gp.mesh_assignment_type == 1) {
+                            meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 0);
+                        } else if (gp.mesh_assignment_type == 2) {
+                            meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 255);
+                        } else if (gp.mesh_assignment_type >= 1000) {
+                            int dist = gp.mesh_assignment_type - 1000;
+                            int r = std::max(0, std::min(255, (dist - 127) * 2));
+                            int g = 255 - std::abs(dist - 127) * 2;
+                            int b = std::max(0, std::min(255, (127 - dist) * 2));
+                            meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(b, g, r);
+                        } else if (gp.mesh_assignment_type == 4) {
+                            meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 165, 255);
+                        } else {
+                            meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(100, 100, 100);
+                        }
+                    }
+
+                    if (!gp.solved || gp.compute_order < 0) continue;
+
+                    propMap.at<uchar>(y, x) = (uchar) ((float) gp.compute_order / max_order * 255.0f);
+                    threadMap.at<cv::Vec3b>(y, x) = THREAD_COLORS[std::max(0, std::min(gp.thread_id, 11))];
+                    corrMap.at<uchar>(y, x) = (uchar) ((gp.corr / max_corr) * 255.0f);
+>>>>>>> Stashed changes
 
                     int idx = y * gridW + x;
                     strainMap.at<uchar>(y, x) = (uchar)(((strainField.exx[idx] - min_exx) / (max_exx - min_exx)) * 255.0f);
@@ -1177,7 +1698,11 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
 
             drawOutlinedText(outProp, "Path B RGDIC Propagation", cv::Point(10, 25), 0.6);
             drawOutlinedText(outThread, "8-Core Thread Execution Map", cv::Point(10, 25), 0.6);
+<<<<<<< Updated upstream
             drawOutlinedText(outMesh, "Mesh Assign (Green=In, Yel=Extrap, Gry=PathB)", cv::Point(10, 25), 0.6);
+=======
+            drawOutlinedText(outMesh, "Mesh Assign (Grn=In, Yel=Ex, Gry=PathB)", cv::Point(10, 25), 0.6);
+>>>>>>> Stashed changes
             drawOutlinedText(outCorr, "ZNSSD Quality (Blue=Perfect, Red=Marginal)", cv::Point(10, 25), 0.6);
             drawOutlinedText(outStrain, "Exx Strain (Raw Plot)", cv::Point(10, 25), 0.6);
 
@@ -1186,10 +1711,29 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
             cv::imwrite(local_debug_dir + "/mesh_assignment_map.png", outMesh);
             cv::imwrite(local_debug_dir + "/correlation_heatmap.png", outCorr);
             cv::imwrite(local_debug_dir + "/strain_exx_debug.png", outStrain);
+<<<<<<< Updated upstream
+=======
+            cv::imwrite(local_debug_dir + "/simplex_health_map.png", outSimplex);
+
+            cv::Mat outSimplexOverlap = outSimplex.clone();
+
+            for (const auto &tri : affTriangles) {
+                cv::Point pt1(tri.pts[0].x - rectX, tri.pts[0].y - rectY);
+                cv::Point pt2(tri.pts[1].x - rectX, tri.pts[1].y - rectY);
+                cv::Point pt3(tri.pts[2].x - rectX, tri.pts[2].y - rectY);
+
+                cv::line(outSimplexOverlap, pt1, pt2, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
+                cv::line(outSimplexOverlap, pt2, pt3, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
+                cv::line(outSimplexOverlap, pt3, pt1, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
+            }
+            drawOutlinedText(outSimplexOverlap, "Simplex Health + Delaunay Overlap", cv::Point(10, 45), 0.4);
+            cv::imwrite(local_debug_dir + "/simplex_mesh_overlap.png", outSimplexOverlap);
+>>>>>>> Stashed changes
 
             std::string csvPath = local_debug_dir + "/debug_grid_data.csv";
             std::ofstream csvFile(csvPath);
             if (csvFile.is_open()) {
+<<<<<<< Updated upstream
                 csvFile << "RealX,RealY,GridX,GridY,ThreadID,ComputeOrder,U,V,Correlation,MeshType\n";
                 for (int y = 0; y < gridH; ++y) {
                     for (int x = 0; x < gridW; ++x) {
@@ -1199,15 +1743,155 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
                                     << gp.thread_id << "," << gp.compute_order << "," << gp.u
                                     << "," << gp.v << "," << gp.corr << "," << gp.mesh_assignment_type << "\n";
                         }
+=======
+                csvFile << "# PIPELINE=2_HYBRID_CORE\n";
+                csvFile << "RealX,RealY,GridX,GridY,ThreadID,ComputeOrder,U,V,Correlation,MeshType,UsedSimplex,ItersICGN,SolverState\n";
+
+                for (int y = 0; y < gridH; ++y) {
+                    for (int x = 0; x < gridW; ++x) {
+                        const auto &gp = resultGrid[y][x];
+
+                        bool is_masked = (!roiMask.empty() && roiMask.at<uchar>(rectY + y * step, rectX + x * step) < 128);
+                        if (is_masked) continue;
+
+                        int solver_state = 0;
+                        if (gp.solved && gp.corr > 0.0f) {
+                            if (!gp.used_simplex) solver_state = 0;
+                            else if (gp.icgn_iters < 20) solver_state = 1;
+                            else solver_state = 2;
+                        } else {
+                            if (!gp.used_simplex) solver_state = 5;
+                            else if (gp.icgn_iters < 20) solver_state = 3;
+                            else solver_state = 4;
+                        }
+
+                        csvFile << gp.x << "," << gp.y << "," << x << "," << y << ","
+                                << gp.thread_id << "," << gp.compute_order << "," << gp.u
+                                << "," << gp.v << "," << gp.corr << ","
+                                << gp.mesh_assignment_type << ","
+                                << (gp.used_simplex ? 1 : 0) << ","
+                                << gp.icgn_iters << ","
+                                << solver_state << "\n";
+>>>>>>> Stashed changes
                     }
                 }
                 csvFile.close();
             }
+<<<<<<< Updated upstream
         } catch (const std::exception& e) {
             LOGE("OOM or Exception during Debug Export: %s", e.what());
         } catch (...) {
             LOGE("Unknown Exception during Debug Export");
         }
+=======
+
+            if (!affTriangles.empty()) {
+                std::string meshCsvPath = local_debug_dir + "/delaunay_mesh_data.csv";
+                std::ofstream meshCsvFile(meshCsvPath);
+                if (meshCsvFile.is_open()) {
+                    meshCsvFile << "TriangleID,Pt1_X,Pt1_Y,Pt2_X,Pt2_Y,Pt3_X,Pt3_Y\n";
+                    for (size_t i = 0; i < affTriangles.size(); ++i) {
+                        const auto &tri = affTriangles[i];
+                        meshCsvFile << i << ","
+                                    << tri.pts[0].x << "," << tri.pts[0].y << ","
+                                    << tri.pts[1].x << "," << tri.pts[1].y << ","
+                                    << tri.pts[2].x << "," << tri.pts[2].y << "\n";
+                    }
+                    meshCsvFile.close();
+                }
+            }
+
+            try {
+                cv::Mat refFloat(g_refHeight, g_refWidth, CV_32FC1, (void *)g_refImg->intensities.data());
+                cv::Mat ref8U, refColor;
+                refFloat.convertTo(ref8U, CV_8UC1);
+                cv::cvtColor(ref8U, refColor, cv::COLOR_GRAY2BGR);
+
+                cv::Rect roiRect(rectX, rectY, rectWidth, rectHeight);
+                roiRect = roiRect & cv::Rect(0, 0, g_refWidth, g_refHeight);
+
+                cv::Mat imgAll = refColor(roiRect).clone();
+                cv::Mat imgDead = imgAll.clone();
+
+                int shiftX = roiRect.x;
+                int shiftY = roiRect.y;
+
+                cv::Scalar meshColor(214, 174, 107);
+                for (const auto &tri : affTriangles) {
+                    cv::Point pt1(tri.pts[0].x - shiftX, tri.pts[0].y - shiftY);
+                    cv::Point pt2(tri.pts[1].x - shiftX, tri.pts[1].y - shiftY);
+                    cv::Point pt3(tri.pts[2].x - shiftX, tri.pts[2].y - shiftY);
+
+                    cv::line(imgAll, pt1, pt2, meshColor, 1, cv::LINE_AA);
+                    cv::line(imgAll, pt2, pt3, meshColor, 1, cv::LINE_AA);
+                    cv::line(imgAll, pt3, pt1, meshColor, 1, cv::LINE_AA);
+
+                    cv::line(imgDead, pt1, pt2, meshColor, 1, cv::LINE_AA);
+                    cv::line(imgDead, pt2, pt3, meshColor, 1, cv::LINE_AA);
+                    cv::line(imgDead, pt3, pt1, meshColor, 1, cv::LINE_AA);
+                }
+
+                for (int y = 0; y < gridH; ++y) {
+                    for (int x = 0; x < gridW; ++x) {
+                        const auto &gp = resultGrid[y][x];
+                        bool is_masked = (!roiMask.empty() && roiMask.at<uchar>(rectY + y * step, rectX + x * step) < 128);
+                        if (is_masked) continue;
+
+                        int solver_state = 0;
+                        if (gp.solved && gp.corr > 0.0f) {
+                            if (!gp.used_simplex) solver_state = 0;
+                            else if (gp.icgn_iters < 20) solver_state = 1;
+                            else solver_state = 2;
+                        } else {
+                            if (!gp.used_simplex) solver_state = 5;
+                            else if (gp.icgn_iters < 20) solver_state = 3;
+                            else solver_state = 4;
+                        }
+
+                        if (solver_state == 0) continue;
+
+                        cv::Point pt(gp.x - shiftX, gp.y - shiftY);
+                        int radius = 4;
+                        int markerSize = 10;
+                        int thickness = 2;
+
+                        if (solver_state == 1) {
+                            cv::circle(imgAll, pt, radius, cv::Scalar(0, 255, 255), -1, cv::LINE_AA);
+                            cv::circle(imgAll, pt, radius, cv::Scalar(0, 0, 0), 1, cv::LINE_AA);
+                        }
+                        else if (solver_state == 2) {
+                            cv::circle(imgAll, pt, radius, cv::Scalar(255, 255, 0), -1, cv::LINE_AA);
+                            cv::circle(imgAll, pt, radius, cv::Scalar(0, 0, 0), 1, cv::LINE_AA);
+                        }
+                        else if (solver_state == 3) {
+                            cv::Scalar col(0, 165, 255);
+                            cv::drawMarker(imgAll, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                            cv::drawMarker(imgDead, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                        }
+                        else if (solver_state == 4) {
+                            cv::Scalar col(255, 0, 255);
+                            cv::drawMarker(imgAll, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                            cv::drawMarker(imgDead, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                        }
+                        else if (solver_state == 5) {
+                            cv::Scalar col(0, 0, 255);
+                            cv::drawMarker(imgAll, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                            cv::drawMarker(imgDead, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                        }
+                    }
+                }
+
+                drawOutlinedText(imgAll, "ALL Simplex Interventions vs. Mesh", cv::Point(10, 25), 0.6);
+                drawOutlinedText(imgDead, "ONLY Dead Points vs. Mesh", cv::Point(10, 25), 0.6);
+
+                cv::imwrite(local_debug_dir + "/mesh_overlap_ALL_simplex.jpg", imgAll);
+                cv::imwrite(local_debug_dir + "/mesh_overlap_ONLY_dead.jpg", imgDead);
+
+            } catch (...) {
+                LOGE("Failed to generate C++ Mesh Overlap plots");
+            }
+        } catch (...) { LOGE("Unknown Exception during Debug Export"); }
+>>>>>>> Stashed changes
     }
 
     defMat.release(); roiMask.release();
