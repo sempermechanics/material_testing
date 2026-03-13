@@ -47,9 +47,9 @@ namespace IndicVision {
             // 🚀 Pass the PERFECT Delaunay 6-DOF guess directly into ICGN!
             res = run_icgn(guess_u, guess_v, guess_ux, guess_uy, guess_vx, guess_vy);
 
-            if (res.status != 0 || res.correlation_score > 0.4f) {
+            // 🚀 THE KILL SWITCH: Only run Simplex if the mode IS NOT INIT_NO_SIMPLEX!
+            if ((res.status != 0 || res.correlation_score > 0.4f) && init_mode != INIT_NO_SIMPLEX) {
                 AnalysisResult start_guess = {guess_u, guess_v, guess_ux, guess_uy, guess_vx, guess_vy, 0, 1.0f};
-                // 🚀 CRITICAL FIX: 'false' allows Simplex to rescue the edges using full 6-DOF search!
                 AnalysisResult rescue_res = run_simplex(start_guess, false);
                 res = run_icgn(rescue_res.u, rescue_res.v, rescue_res.ux, rescue_res.uy, rescue_res.vx, rescue_res.vy);
             }
@@ -403,7 +403,7 @@ namespace IndicVision {
         }
 
         const float alpha = 1.0f, gamma = 2.0f, rho = 0.5f, sigma = 0.5f;
-        for (int iter = 0; iter < 80; ++iter) {
+        for (int iter = 0; iter < 20; ++iter) {
             int idx[7] = {0, 1, 2, 3, 4, 5, 6};
             std::sort(idx, idx + n_pts, [&](int a, int b) { return y[a] < y[b]; });
 
