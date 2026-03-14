@@ -103,7 +103,9 @@ namespace IndicVision {
         } else {
             data.H_inv = H.inverse();
         }
-
+        // ── LM ADDITION ─────────────────────────────────────────────────────────
+        data.H = H;   // preserve raw Hessian for LM damping in solve_icgn
+        // ────────────────────────────────────────────────────────────────────────
         data.is_initialized = true;
     }
 
@@ -183,6 +185,9 @@ namespace IndicVision {
                 H(r, c) = H(c, r);
 
         const float det = H.determinant();
+        // ── LM ADDITION ─────────────────────────────────────────────────────────
+        result.H = H;   // preserve raw Hessian before it is inverted
+        // ────────────────────────────────────────────────────────────────────────
 
         // 🚀 FIX: Standard if/else prevents Eigen expression template type mismatch
         if (std::abs(det) < 1e-6f) {
@@ -285,6 +290,9 @@ namespace IndicVision {
 
         // 🚀 THE KEY SKIP: use pre-built inverse Hessian
         data.H_inv = cached.H_inv;
+        // ── LM ADDITION ─────────────────────────────────────────────────────────
+        data.H = cached.H;   // propagate raw Hessian for LM damping
+        // ────────────────────────────────────────────────────────────────────────
         data.is_initialized = true;
     }
 

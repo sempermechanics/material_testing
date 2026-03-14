@@ -64,7 +64,7 @@ struct EngineStatFlusher {
 
     ~EngineStatFlusher() {
         bucket.icgn_time_ms += engine.time_icgn_ms;
-        bucket.icgn_iters += engine.count_icgn;
+        //bucket.icgn_iters += engine.count_icgn;
         bucket.simplex_time_ms += engine.time_simplex_ms;
         bucket.simplex_iters += engine.count_simplex;
         bucket.points_solved += local_points;
@@ -394,6 +394,7 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
         int mesh_assignment_type;
         bool used_simplex;
         int icgn_iters;
+        float guess_u, guess_v, guess_ux, guess_uy, guess_vx, guess_vy;
     };
     std::vector<std::vector<GridPoint>> resultGrid(gridH, std::vector<GridPoint>(gridW));
     int total_valid_points = 0;
@@ -677,6 +678,9 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
         {
             int tid = omp_get_thread_num();
             IndicVision::OptimizationEngine local_engine; IndicVision::SubsetData local_subset;
+            // 🚀 ENABLE LEVENBERG-MARQUARDT (TIKHONOV REGULARIZATION) - PATH A
+            local_engine.lm_enabled = true;
+            local_engine.lm_alpha = 0.05f; // <--- TUNE THIS VALUE
             double local_hessian = 0.0, local_wait = 0.0; int local_pts = 0;
             EngineStatFlusher flusher(local_engine, stats_pathA[tid], local_pts, local_hessian, local_wait);
 
@@ -693,22 +697,29 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                 local_hessian += std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - th1).count();
 
                 if (local_subset.is_initialized) {
+                    // Save the exact guess before we run
+                    resultGrid[y][x].guess_u = guessU[idx];
+                    resultGrid[y][x].guess_v = guessV[idx];
+                    resultGrid[y][x].guess_ux = guessUx[idx];
+                    resultGrid[y][x].guess_uy = guessUy[idx];
+                    resultGrid[y][x].guess_vx = guessVx[idx];
+                    resultGrid[y][x].guess_vy = guessVy[idx];
+
                     int simplex_count_before = local_engine.count_simplex;
-                    int icgn_count_before = local_engine.count_icgn;
 
                     auto search_flag = ALLOW_SIMPLEX_RESCUE ? IndicVision::INIT_NO_SEARCH : IndicVision::INIT_NO_SIMPLEX;
                     IndicVision::AnalysisResult res = local_engine.calculate_deformation(
                             local_subset, defImg, guessU[idx], guessV[idx], guessUx[idx], guessUy[idx], guessVx[idx], guessVy[idx], search_flag);
-
+                    stats_pathA[tid].icgn_iters += res.iters;
                     bool needed_rescue = (local_engine.count_simplex > simplex_count_before);
-                    int icgn_iters_used = local_engine.count_icgn - icgn_count_before;
 
                     if (!ALLOW_SIMPLEX_RESCUE && res.status != 0) { res.correlation_score = 1.0f; }
 
                     if (needed_rescue) {
                         stats_pathA[tid].simplex_calls++;
 
-                        if (icgn_iters_used >= 20) {
+                        // 🚀 FIX: Now correctly checks the REAL iterations for timeout!
+                        if (res.iters >= 20) {
                             stats_pathA[tid].simplex_from_timeout++;
                         } else {
                             stats_pathA[tid].simplex_from_crash++;
@@ -723,12 +734,17 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
 
                     if (res.status == 0 && res.correlation_score <= 0.15f) {
                         int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
-                        resultGrid[y][x] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, tid, order, resultGrid[y][x].mesh_assignment_type, needed_rescue,icgn_iters_used};
+                        // 🚀 FIX: Passed res.iters at the end instead of icgn_iters_used
+                        resultGrid[y][x] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy,
+                                            res.correlation_score, true, tid, order, resultGrid[y][x].mesh_assignment_type,
+                                            needed_rescue, res.iters};
                         global_points_solved.fetch_add(1, std::memory_order_relaxed); local_pts++;
                     } else {
-                        resultGrid[y][x].solved = false; resultGrid[y][x].corr = 0.0f;
+                        resultGrid[y][x].solved = false;
+                        resultGrid[y][x].corr = 0.0f;
                         resultGrid[y][x].used_simplex = needed_rescue;
-                        resultGrid[y][x].icgn_iters = icgn_iters_used;
+                        // 🚀 FIX: Assign the real iterations on failure
+                        resultGrid[y][x].icgn_iters = res.iters;
                     }
                 }
             }
@@ -816,6 +832,10 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
         }
 
         IndicVision::OptimizationEngine prewarm_engine;
+        // 🚀 ENABLE LEVENBERG-MARQUARDT - PATH B (PREWARM)
+        prewarm_engine.lm_enabled = true;
+        prewarm_engine.lm_alpha = 0.05f; // <--- TUNE THIS VALUE
+
         IndicVision::SubsetData prewarm_subset;
 
         while ((int)gq.q.size() < cores_to_use && seed_idx.load() < (int)global_seeds.size()) {
@@ -837,6 +857,7 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
             auto search_flag = ALLOW_SIMPLEX_RESCUE ? IndicVision::INIT_NO_SEARCH : IndicVision::INIT_NO_SIMPLEX;
             IndicVision::AnalysisResult res = prewarm_engine.calculate_deformation(
                     prewarm_subset, defImg, seed.u, seed.v, 0.f, 0.f, 0.f, 0.f, search_flag);
+            stats_pathB[0].icgn_iters += res.iters;
             bool needed_rescue = (prewarm_engine.count_simplex > simplex_count_before);
             int icgn_iters_used = prewarm_engine.count_icgn - icgn_count_before;
 
@@ -882,6 +903,9 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                     const int tid = t;
                     const int DX[] = {1, -1, 0, 0}, DY[] = {0, 0, 1, -1};
                     IndicVision::OptimizationEngine local_engine;
+                    // 🚀 ENABLE LEVENBERG-MARQUARDT - PATH B (WORKERS)
+                    local_engine.lm_enabled = true;
+                    local_engine.lm_alpha = .05f; // <--- TUNE THIS VALUE
                     IndicVision::SubsetData local_subset;
                     double local_hessian_ms = 0.0, local_wait_ms = 0.0;
                     int local_points_solved = 0;
@@ -914,19 +938,19 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                                     if (local_subset.is_initialized) {
 
                                         int simplex_count_before = local_engine.count_simplex;
-                                        int icgn_count_before = local_engine.count_icgn;
 
                                         IndicVision::AnalysisResult res = local_engine.calculate_deformation(
                                                 local_subset, defImg, seed.u, seed.v, 0.f, 0.f, 0.f, 0.f, IndicVision::INIT_NO_SEARCH);
 
                                         bool needed_rescue = (local_engine.count_simplex > simplex_count_before);
-                                        int icgn_iters_used = local_engine.count_icgn - icgn_count_before;
+
                                         if (!ALLOW_SIMPLEX_RESCUE && res.status != 0) { res.correlation_score = 1.0f; }
 
                                         if (needed_rescue) {
                                             stats_pathB[tid].simplex_calls++;
 
-                                            if (icgn_iters_used >= 20) {
+                                            // 🚀 FIX: Use res.iters
+                                            if (res.iters >= 20) {
                                                 stats_pathB[tid].simplex_from_timeout++;
                                             } else {
                                                 stats_pathB[tid].simplex_from_crash++;
@@ -941,7 +965,12 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
 
                                         if (res.status == 0 && res.correlation_score <= 0.15f) {
                                             int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
-                                            { std::lock_guard<std::mutex> lg(grid_mutex); resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, tid, order, 0, needed_rescue,icgn_iters_used}; }
+                                            {
+                                                std::lock_guard<std::mutex> lg(grid_mutex);
+                                                // 🚀 FIX: Use res.iters at the end
+                                                resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy,
+                                                                                      res.correlation_score, true, tid, order, 0, needed_rescue, res.iters};
+                                            }
                                             global_points_solved.fetch_add(1, std::memory_order_relaxed); local_points_solved++;
                                             { std::lock_guard<std::mutex> lq(gq.mtx); gq.q.push(IndicVision::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score)); gq.cv.notify_one(); }
                                             seed_pushed = true;
@@ -949,7 +978,8 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                                             std::lock_guard<std::mutex> lg(grid_mutex);
                                             resultGrid[seed.y_idx][seed.x_idx].corr = 0.f;
                                             resultGrid[seed.y_idx][seed.x_idx].used_simplex = needed_rescue;
-                                            resultGrid[seed.y_idx][seed.x_idx].icgn_iters = icgn_iters_used;
+                                            // 🚀 FIX: Assign the real iterations
+                                            resultGrid[seed.y_idx][seed.x_idx].icgn_iters = res.iters;
                                         }
                                     }
                                 }
@@ -974,20 +1004,20 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                             if (!local_subset.is_initialized) continue;
 
                             int simplex_count_before = local_engine.count_simplex;
-                            int icgn_count_before = local_engine.count_icgn;
 
                             auto search_flag = ALLOW_SIMPLEX_RESCUE ? IndicVision::INIT_NO_SEARCH : IndicVision::INIT_NO_SIMPLEX;
                             IndicVision::AnalysisResult res = local_engine.calculate_deformation(
                                     local_subset, defImg, cur.u, cur.v, cur.ux, cur.uy, cur.vx, cur.vy, search_flag);
-
+                            stats_pathB[tid].icgn_iters += res.iters; // 🚀 ADD THIS
                             bool needed_rescue = (local_engine.count_simplex > simplex_count_before);
-                            int icgn_iters_used = local_engine.count_icgn - icgn_count_before;
+
                             if (!ALLOW_SIMPLEX_RESCUE && res.status != 0) { res.correlation_score = 1.0f; }
 
                             if (needed_rescue) {
                                 stats_pathB[tid].simplex_calls++;
 
-                                if (icgn_iters_used >= 20) {
+                                // 🚀 FIX: Use res.iters
+                                if (res.iters >= 20) {
                                     stats_pathB[tid].simplex_from_timeout++;
                                 } else {
                                     stats_pathB[tid].simplex_from_crash++;
@@ -1002,13 +1032,21 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
 
                             if (res.status == 0 && res.correlation_score <= 0.15f) {
                                 const int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
-                                { std::lock_guard<std::mutex> lg(grid_mutex); resultGrid[ny][nx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, tid, order, resultGrid[ny][nx].mesh_assignment_type, needed_rescue, icgn_iters_used}; }                                global_points_solved.fetch_add(1, std::memory_order_relaxed); local_points_solved++;
+                                {
+                                    std::lock_guard<std::mutex> lg(grid_mutex);
+                                    // 🚀 FIX: Use res.iters at the end
+                                    resultGrid[ny][nx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy,
+                                                          res.correlation_score, true, tid, order, resultGrid[ny][nx].mesh_assignment_type,
+                                                          needed_rescue, res.iters};
+                                }
+                                global_points_solved.fetch_add(1, std::memory_order_relaxed); local_points_solved++;
                                 pending_pushes.push_back(IndicVision::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
                             } else {
                                 std::lock_guard<std::mutex> lg(grid_mutex);
                                 resultGrid[ny][nx].corr = 0.f;
                                 resultGrid[ny][nx].used_simplex = needed_rescue;
-                                resultGrid[ny][nx].icgn_iters = icgn_iters_used;
+                                // 🚀 FIX: Assign the real iterations
+                                resultGrid[ny][nx].icgn_iters = res.iters;
                             }
                         }
                         if (!pending_pushes.empty()) { std::lock_guard<std::mutex> lq(gq.mtx); for (auto &node : pending_pushes) { gq.q.push(std::move(node)); gq.cv.notify_one(); } }
@@ -1280,8 +1318,7 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
             std::ofstream csvFile(csvPath);
             if (csvFile.is_open()) {
                 csvFile << "# PIPELINE=2_HYBRID_CORE\n";
-                csvFile << "RealX,RealY,GridX,GridY,ThreadID,ComputeOrder,U,V,Correlation,MeshType,UsedSimplex,ItersICGN,SolverState\n";
-
+                csvFile << "RealX,RealY,GridX,GridY,ThreadID,ComputeOrder,U,V,Correlation,MeshType,UsedSimplex,ItersICGN,SolverState,GuessU,GuessV,GuessUx,GuessUy,GuessVx,GuessVy\n";
                 for (int y = 0; y < gridH; ++y) {
                     for (int x = 0; x < gridW; ++x) {
                         const auto &gp = resultGrid[y][x];
@@ -1300,13 +1337,17 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                             else solver_state = 4;
                         }
 
+                        // 🚀 UPDATE THE EXPORT LINE
                         csvFile << gp.x << "," << gp.y << "," << x << "," << y << ","
                                 << gp.thread_id << "," << gp.compute_order << "," << gp.u
                                 << "," << gp.v << "," << gp.corr << ","
                                 << gp.mesh_assignment_type << ","
                                 << (gp.used_simplex ? 1 : 0) << ","
                                 << gp.icgn_iters << ","
-                                << solver_state << "\n";
+                                << solver_state << ","
+                                << gp.guess_u << "," << gp.guess_v << ","
+                                << gp.guess_ux << "," << gp.guess_uy << ","
+                                << gp.guess_vx << "," << gp.guess_vy << "\n";
                     }
                 }
                 csvFile.close();

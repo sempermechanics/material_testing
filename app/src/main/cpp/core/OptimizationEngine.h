@@ -16,6 +16,22 @@ namespace IndicVision {
         double time_simplex_ms = 0.0;
         int count_icgn = 0;
         int count_simplex = 0;
+        // ── LM ADDITION ─────────────────────────────────────────────────────────
+        // Matches DICe schema parameters:
+        //   use_objective_regularization()           → lm_enabled
+        //   levenberg_marquardt_regularization_factor() → lm_alpha
+        //
+        // DICe adds lm_alpha to H(0,0) and H(1,1) only — the two translation
+        // DOFs — leaving the four strain-gradient diagonal entries unmodified.
+        // Default off (lm_alpha = 0.0f) preserves existing behaviour exactly.
+        //
+        // Tuning: start at lm_alpha = 1e-3f and increase until timeouts drop.
+        // Typical H diagonal values for a 41×41 subset with good speckle are
+        // in the range [1e3, 1e5], so alpha should be 1–3 orders of magnitude
+        // smaller than H(0,0) to regularise without over-damping.
+        bool  lm_enabled = false;
+        float lm_alpha   = 0.0f;
+        // ────────────────────────────────────────────────────────────────────────
 
         // 🟡 BUG 3 FIX: Separated Buffers
         // Prevents memory aliasing and silent data corruption between the two solvers

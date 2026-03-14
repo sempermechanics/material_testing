@@ -20,7 +20,8 @@ namespace IndicVision {
     // Initialization modes
     enum InitializationMode {
         INIT_AUTO_SEARCH = 0,
-        INIT_NO_SEARCH = 1
+        INIT_NO_SEARCH = 1,
+        INIT_NO_SIMPLEX = 2
     };
 
     // DIC analysis result (6-DOF + status)
@@ -35,6 +36,7 @@ namespace IndicVision {
 
         int status; // 0 = success
         float correlation_score;
+        int iters = 0;
     };
 
     // Seed node for reliability-guided propagation
@@ -69,11 +71,19 @@ namespace IndicVision {
         // 🚀 Matrix memory footprint cut in half!
         Eigen::Matrix<float, 6, 6> H_inv;
 
-        // 🟡 BUG 4 FIX: Eigen Aligned Allocator
-        // Prevents ARM64 NEON SIGBUS/SIGSEGV alignment faults during fast vectorized math
-        std::vector<Eigen::Matrix<float, 6, 1>, Eigen::aligned_allocator<Eigen::Matrix<float, 6, 1>>> steepest_descent_images;
+        // ── LM ADDITION ─────────────────────────────────────────────────────────
+        // Raw (undamped) Hessian. Stored so solve_icgn can apply
+        // α-damping to H(0,0) and H(1,1) once before the iteration loop
+        // without re-accumulating from steepest_descent_images each time.
+        // Memory cost: 144 bytes per SubsetData (one per OMP thread — negligible).
+        Eigen::Matrix<float, 6, 6> H;
+        // ────────────────────────────────────────────────────────────────────────
 
-        bool is_initialized = false; // Flag to skip re-computation
+        std::vector<Eigen::Matrix<float, 6, 1>,
+                Eigen::aligned_allocator<Eigen::Matrix<float, 6, 1>>>
+                steepest_descent_images;
+
+        bool is_initialized = false;
     };
 }
 #endif

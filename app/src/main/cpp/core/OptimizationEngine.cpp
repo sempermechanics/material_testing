@@ -83,7 +83,7 @@ namespace IndicVision {
         }
     }
 
-// --- PURE ICGN SOLVER ---
+    // --- PURE ICGN SOLVER ---
     AnalysisResult OptimizationEngine::solve_icgn(const SubsetData &subset,
                                                   const Image &def_img,
                                                   float init_u, float init_v,
@@ -99,11 +99,57 @@ namespace IndicVision {
         W(1, 0) = init_vx;
         W(1, 1) = 1.0f + init_vy;
         W(1, 2) = init_v;
+        // ── LM ADDITION ─────────────────────────────────────────────────────────
+        // Precompute the matrix to use for the Newton step ONCE, before the loop.
+        //
+        // When LM is disabled (lm_enabled == false OR lm_alpha == 0):
+        //   H_solve = subset.H_inv   ← identical to the original code path.
+        //
+        // When LM is enabled:
+        //   H_solve = (H + diag([α, α, 0, 0, 0, 0]))⁻¹
+        //   This exactly replicates DICe's computeUpdateFast:
+        //     H(0,0) += alpha;   // u translation DOF
+        //     H(1,1) += alpha;   // v translation DOF
+        //   The four strain-gradient diagonal entries are NOT damped.
+        //
+        // Because α is a fixed scalar (not adaptive), this inversion is valid
+        // for all iterations of this call. Cost: one 6×6 inversion per
+        // calculate_deformation call, not per iteration.
+        // ────────────────────────────────────────────────────────────────────────
+        Eigen::Matrix<float, 6, 6> H_solve;
 
+        if (lm_enabled && lm_alpha > 0.0f) {
+            // Copy the raw (undamped) Hessian stored at precompute time.
+            Eigen::Matrix<float, 6, 6> H_damped = subset.H;
+
+            // Apply DICe-style selective damping: translation DOFs only.
+            H_damped(0, 0) += lm_alpha;
+            H_damped(1, 1) += lm_alpha;
+
+            const float det = H_damped.determinant();
+            if (std::abs(det) < 1e-6f) {
+                // Damped matrix is still singular — fall back to the
+                // pre-inverted H_inv so the point at least attempts a step.
+                H_solve = subset.H_inv;
+            } else {
+                H_solve = H_damped.inverse();
+            }
+        } else {
+            // LM disabled: identical to original behaviour.
+            H_solve = subset.H_inv;
+        }
+        // ── END LM ADDITION ─────────────────────────────────────────────────────
+        // TEMPORARY DEBUG PRINT FOR TUNING (Android Logcat)
+        if (subset.cx == 1421 && subset.cy == 591) {
+            __android_log_print(ANDROID_LOG_DEBUG, "IndicVisionLM",
+                                "[LM TUNE] Raw H(0,0): %f | Raw H(1,1): %f",
+                                subset.H(0,0), subset.H(1,1));
+        }
         std::vector<float> &def_vals = this->icgn_buffer;
         float final_score = 1.0f;
+        int max_iter = 50;
 
-        for (int iter = 0; iter < 20; ++iter) {
+        for (int iter = 0; iter < max_iter; ++iter) {
             float def_sum = 0.0f;
             int valid_pixels = 0;
 
@@ -127,7 +173,8 @@ namespace IndicVision {
             }
 
             if (valid_pixels < n * 0.90f) {
-                return {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f};
+                // Return the current 'iter' so we know exactly when it fell off the image
+                return {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter};
             }
 
             float def_mean = def_sum / valid_pixels;
@@ -229,7 +276,7 @@ namespace IndicVision {
 
             final_score = error_sum_sq / valid_pixels;
 
-            Eigen::Matrix<float, 6, 1> delta_p = -subset.H_inv * dp_sum;
+            Eigen::Matrix<float, 6, 1> delta_p = -H_solve     * dp_sum;
             Eigen::Matrix3f dW = Eigen::Matrix3f::Identity();
             dW(0, 0) += delta_p(2);
             dW(0, 1) += delta_p(3);
@@ -241,11 +288,13 @@ namespace IndicVision {
             W = W * dW.inverse();
 
             if (delta_p.norm() < 0.001f) {
-                return {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 0, final_score};
+                // Add 1 because 'iter' starts at 0 (e.g., stopping on iter 0 means 1 step was taken)
+                return {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 0, final_score, iter + 1};
             }
         }
 
-        return {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, final_score};
+        // If the loop finishes all 20 iterations without converging:
+        return {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, final_score, max_iter};
     }
 
     float OptimizationEngine::evaluate_znssd(const SubsetData &subset,

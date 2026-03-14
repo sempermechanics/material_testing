@@ -18,6 +18,13 @@ namespace IndicVision {
         float mean_intensity = 0.0f;
         float std_dev = 1.0f;
         bool valid = false;
+        // ── LM ADDITION ─────────────────────────────────────────────────────────
+        // Raw Hessian before inversion. Stored so the hessian pool entry
+        // can supply both H_inv (for standard ICGN) and H (for LM ICGN)
+        // to precompute_subset_fast without any recomputation.
+        // Memory cost: 144 bytes × 78k pool entries ≈ 11 MB. One-time allocation.
+        Eigen::Matrix<float, 6, 6> H;
+        // ────────────────────────────────────────────────────────────────────────
     };
 
     class SubsetPrecomputer {
