@@ -1,5 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
+    // If using build.gradle.kts
+    kotlin("plugin.serialization") version "1.9.22" // Match this to your project's Kotlin version
+
 }
 
 android {
@@ -60,4 +63,17 @@ dependencies {
     implementation("androidx.camera:camera-view:${camerax_version}")
     implementation("androidx.camera:camera-extensions:${camerax_version}")
     implementation("androidx.activity:activity-ktx:1.8.2")
+    // 1. The Supabase BOM (Bill of Materials) - Keeps all module versions perfectly matched
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.0.3"))
+
+    // 2. The Core Modules we are using
+    implementation("io.github.jan-tennert.supabase:auth-kt")      // For Login
+    implementation("io.github.jan-tennert.supabase:postgrest-kt") // For Database
+    implementation("io.github.jan-tennert.supabase:storage-kt")   // For File Uploads
+
+    // 3. The Ktor Network Engine (Supabase relies on this to send the actual HTTP requests)
+    implementation("io.ktor:ktor-client-okhttp:3.0.0")
+
+    // 4. Kotlin Serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }
