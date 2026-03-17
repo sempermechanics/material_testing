@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">IndicVisionDIC</string>
+    <string name="app_name">inDIC</string>
     <string-array name="interpolator_options">
         <item>Bicubic (Fast)</item>
         <item>Lanczos-6 (High Acc.)</item>

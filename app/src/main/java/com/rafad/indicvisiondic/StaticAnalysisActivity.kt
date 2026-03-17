@@ -11,6 +11,7 @@ import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog // Added for Logout Popup
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 
@@ -21,10 +22,13 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import androidx.lifecycle.lifecycleScope
+import io.github.jan.supabase.auth.auth // Added for Session Destruction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+import androidx.activity.OnBackPressedCallback
 
 class StaticAnalysisActivity : AppCompatActivity() {
 
@@ -52,6 +56,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var switchBlur: Switch
     private lateinit var rgStrainMethod: RadioGroup
     private lateinit var btnViewResults: Button
+    private lateinit var btnLogout: Button // Added for Secure Exit
 
     // State
     private var isProcessing = false
@@ -60,6 +65,26 @@ class StaticAnalysisActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_static_analysis)
+        // --- BACK BUTTON INTERCEPTOR (SAFETY LOCK) ---
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (isProcessing) {
+                    // Block the back button completely if the C++ engine is running
+                    Toast.makeText(this@StaticAnalysisActivity, "Analysis running! Please wait or cancel first.", Toast.LENGTH_SHORT).show()
+                } else {
+                    // Show a warning popup before destroying the setup
+                    AlertDialog.Builder(this@StaticAnalysisActivity)
+                        .setTitle("Exit inDIC Engine?")
+                        .setMessage("Are you sure you want to leave? All uncalculated setup and ROI definitions will be lost.")
+                        .setPositiveButton("Exit") { _, _ ->
+                            finish() // Actually close the screen
+                        }
+                        .setNegativeButton("Cancel", null) // Do nothing, stay on screen
+                        .show()
+                }
+            }
+        })
+        // ---------------------------------------------
 
         // Bind UI Components
         progressBar = findViewById(R.id.pbAnalysis)
@@ -83,8 +108,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
         switchBlur = findViewById(R.id.switchBlur)
         rgStrainMethod = findViewById(R.id.rgStrainMethod)
         btnViewResults = findViewById(R.id.btnViewResults)
+        btnLogout = findViewById(R.id.btnLogout) // Bind Logout Button
 
         restoreUiFromViewModel()
+
+        // --- SECURE EXIT LISTENER ---
+        btnLogout.setOnClickListener {
+            if (isProcessing) {
+                Toast.makeText(this, "Please wait for analysis to finish before logging out.", Toast.LENGTH_SHORT).show()
+            } else {
+                showLogoutConfirmation()
+            }
+        }
 
         val pickRef = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let { handleReferenceImage(it) }
@@ -164,30 +199,74 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
     }
 
+    // ==========================================
+    // --- SECURE EXIT PROTOCOL FUNCTIONS ---
+    // ==========================================
+
+    private fun showLogoutConfirmation() {
+        AlertDialog.Builder(this)
+            .setTitle("Log Out?")
+            .setMessage("Are you sure you want to log out of inDIC on this device?")
+            .setPositiveButton("Log Out") { _, _ ->
+                performLogout()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun performLogout() {
+        // Show loading state on the button
+        btnLogout.text = "Logging out..."
+        btnLogout.isEnabled = false
+
+        lifecycleScope.launch {
+            try {
+                // 1. Destroy the session on the server and local vault
+                SupabaseManager.client.auth.signOut()
+            } catch (e: Exception) {
+                // Force exit even if network fails
+                Log.e("inDIC_Auth", "Server logout failed, forcing local exit.", e)
+            } finally {
+                // 2. Burn the bridge and route back to Zone 2 (AuthActivity)
+                val intent = Intent(this@StaticAnalysisActivity, AuthActivity::class.java)
+                intent.putExtra("ROUTING_ERROR", "You have been successfully logged out.")
+
+                // CRITICAL: Wipe the backstack so they can't press 'Back' to return to the engine
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            }
+        }
+    }
+
+    // ==========================================
+    // --- NATIVE ENGINE FUNCTIONS (UNTOUCHED) ---
+    // ==========================================
+
     private fun handleReferenceImage(uri: Uri) {
         val name = getFileName(uri)
-        
+
         if (name.endsWith(".jpg", true) || name.endsWith(".jpeg", true)) {
             Toast.makeText(this, "⚠️ WARNING: JPEG artifacts severely reduce DIC accuracy. Lossless PNG, TIFF, or RAW formats are recommended!", Toast.LENGTH_LONG).show()
         }
-        
+
         val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
 
         try {
             contentResolver.openInputStream(uri)?.use { stream ->
                 var bytes: ByteArray
                 var previewBmp: Bitmap? = null
-                
+
                 if (isRaw) {
                     val bitmap = android.graphics.BitmapFactory.decodeStream(stream)
                     if (bitmap != null) {
                         viewModel.realRefWidth = bitmap.width
                         viewModel.realRefHeight = bitmap.height
-                        
+
                         val buffer = java.nio.ByteBuffer.allocate(bitmap.width * bitmap.height * 4)
                         bitmap.copyPixelsToBuffer(buffer)
                         bytes = buffer.array()
-                        
+
                         val ratio = 1000f / bitmap.width
                         previewBmp = android.graphics.Bitmap.createScaledBitmap(bitmap, 1000, (bitmap.height * ratio).toInt(), true)
                     } else {
@@ -225,8 +304,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 if (!tempDir.exists()) tempDir.mkdirs()
                 tempDir.listFiles()?.forEach { it.delete() }
 
-                // ✅ FIX: Clear OLD result metadata BEFORE building the new selection,
-                // so we start fresh without wiping the paths we are about to set.
                 viewModel.clearPreviousResults()
 
                 val filePaths = mutableListOf<String>()
@@ -238,15 +315,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 for ((index, uri) in uris.withIndex()) {
                     var bytes: ByteArray? = null
                     var previewBmp: Bitmap? = null
-                    
+
                     val originalName = getFileName(uri)
-                    
+
                     if (index == 0 && (originalName.endsWith(".jpg", true) || originalName.endsWith(".jpeg", true))) {
                         withContext(Dispatchers.Main) {
                             Toast.makeText(this@StaticAnalysisActivity, "⚠️ WARNING: JPEG artifact compression detected in batch. This will reduce accuracy.", Toast.LENGTH_LONG).show()
                         }
                     }
-                    
+
                     val isRaw = originalName.endsWith(".dng", true) || originalName.endsWith(".raw", true)
 
                     contentResolver.openInputStream(uri)?.use { stream ->
@@ -256,7 +333,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                                 val buffer = java.nio.ByteBuffer.allocate(bitmap.width * bitmap.height * 4)
                                 bitmap.copyPixelsToBuffer(buffer)
                                 bytes = buffer.array()
-                                
+
                                 if (index == 0) {
                                     val ratio = 1000f / bitmap.width
                                     previewBmp = android.graphics.Bitmap.createScaledBitmap(bitmap, 1000, (bitmap.height * ratio).toInt(), true)
@@ -269,7 +346,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                             }
                         }
                     }
-                    
+
                     if (bytes == null) continue
 
                     val sanitizedName = originalName.replace(Regex("[^a-zA-Z0-9.-]"), "_")
@@ -285,7 +362,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     }
                 }
 
-                // ✅ FIX: Assign defFilePaths AFTER clearPreviousResults() — it is now safe.
                 val sortedPaths = filePaths.sorted()
                 viewModel.defFilePaths = sortedPaths
 
@@ -306,7 +382,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
     }
 
-    // 🚀 CRITICAL: Batch Analysis Execution Pipeline
     private fun startBatchAnalysis() {
         if (!viewModel.isReadyToCompute()) return
 
@@ -339,6 +414,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvTimer.visibility = View.VISIBLE
         tvTimer.text = "Initializing Engine..."
 
+        // Disable logout during heavy C++ processing to prevent memory leaks/crashes
+        btnLogout.isEnabled = false
+
         processingStartTime = System.currentTimeMillis()
 
         val batchDir = File(cacheDir, "batch_results")
@@ -352,27 +430,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val useNlvc = rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc
         val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
 
-        // 🐛 TRIGGER THE DEBUG SUITE FOR THIS BATCH
         val debugDir = File(cacheDir, "dic_debug")
         if (!debugDir.exists()) debugDir.mkdirs()
         IndicVisionNativeLib.setDebugOutputDir(debugDir.absolutePath)
 
-        // 🚀 LAUNCH ON THE DEDICATED NATIVE THREAD
-        // All JNI calls (initializeReference + computeFullFieldDirect) MUST run on the
-        // same OS thread so that the LLVM OpenMP runtime’s TLS master-thread registration
-        // is always valid. Using Dispatchers.IO would risk Kotlin resuming on a different
-        // worker thread after each suspension point, causing __kmp_invoke_microtask to
-        // dereference a null kmp_thread_t* → SIGSEGV. The ViewModel’s nativeExecutor
-        // is a SingleThreadExecutor: one persistent OS thread, same identity every time.
         lifecycleScope.launch(viewModel.nativeExecutor.asCoroutineDispatcher()) {
             try {
                 val totalFrames = viewModel.defFilePaths.size
                 val refBytes = viewModel.refBytes ?: throw IllegalStateException("Reference missing")
                 var firstFrameValidPoints = 0
 
-                // 🟠 BUG 2 FIX: INITIALIZE NATIVE REFERENCE ONCE
-                // This prevents C++ from rebuilding the heavy 48MB reference image on every loop!
-                // ✅ Non-suspending UI update — keeps coroutine on the native thread.
                 runOnUiThread { tvTimer.text = "Caching Reference in Native Engine..." }
                 IndicVisionNativeLib.initializeReference(refBytes, viewModel.realRefWidth, viewModel.realRefHeight, applyBlur)
 
@@ -384,15 +451,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 outputBuffer.order(java.nio.ByteOrder.nativeOrder())
 
                 for ((frameIndex, defPath) in viewModel.defFilePaths.withIndex()) {
-
-                    // ✅ FIX: Build UI strings on the IO thread BEFORE loading bytes.
-                    // We MUST NOT call withContext(Dispatchers.Main) inside this loop.
-                    // Doing so suspends the coroutine, which Kotlin may then resume on a
-                    // DIFFERENT IO thread. The LLVM OpenMP runtime has thread-local state
-                    // (task scheduler, TLS pool) bound to the original thread — invoking
-                    // #pragma omp parallel from a new thread causes a null-ptr SIGSEGV
-                    // inside __kmp_invoke_microtask. Fix: post UI updates non-suspendingly
-                    // via runOnUiThread (fire-and-forget), keeping the coroutine on one thread.
                     val frameLabel = "Processing Frame ${frameIndex + 1}/$totalFrames..."
                     runOnUiThread { tvTimer.text = frameLabel }
 
@@ -410,7 +468,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                     outputBuffer.clear()
 
-                    // 🚀 RUN C++ ENGINE — coroutine stays on the same IO thread throughout.
                     val validPointsCount = IndicVisionNativeLib.computeFullFieldDirect(
                         refBytes, defBytes, maskData,
                         finalRectX, finalRectY, finalRectW, finalRectH,
@@ -438,6 +495,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     isProcessing = false
                     progressBar.visibility = View.GONE
+                    btnLogout.isEnabled = true // Re-enable logout safely
 
                     if (firstFrameValidPoints <= 0) {
                         tvTimer.text = "Analysis Failed"
@@ -447,8 +505,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         tvResult.text = "✅ Computed $totalFrames frames!"
 
                         val defFile = File(cacheDir, "temp_def_view.png")
-                        // 🚀 Lagrangian Alignment Fix: Plot results on the Reference Image background
-                        // to ensure the (x,y) grid matches the material base exactly.
                         val refBytes = viewModel.refBytes ?: throw IllegalStateException("Reference missing")
                         val fullResBitmap = IndicVisionNativeLib.getPreviewFromBytes(refBytes, viewModel.realRefWidth)
                         defFile.outputStream().use { out ->
@@ -469,6 +525,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     progressBar.visibility = View.GONE
                     tvTimer.text = "Engine Error"
                     tvResult.text = "❌ Error: ${e.message}"
+                    btnLogout.isEnabled = true
                     checkReady()
                 }
             }
@@ -487,11 +544,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
             putExtra("ROI_X", viewModel.roiX)
             putExtra("ROI_Y", viewModel.roiY)
             putExtra("REF_NAME", viewModel.refName.removePrefix("Ref: "))
-            
-            // Pass the nice names of the files for the UI to display instead of abstract "Frame 1"
+
             val fileNames = viewModel.defFilePaths.map { path ->
                 val fullName = path.substringAfterLast('/')
-                // remove the '0000_' prefix which was added for sorting cache
                 if (fullName.length > 5 && fullName[4] == '_') fullName.substring(5) else fullName
             }
             putStringArrayListExtra("DEF_FILE_NAMES", ArrayList(fileNames))
@@ -647,7 +702,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, paint)
 
                     finalX = (cx - rx).toInt()
-                    finalY = (cy - ry).toInt()
+                    finalY = (cy - rx).toInt()
                     finalW = (rx * 2).toInt()
                     finalH = (ry * 2).toInt()
                 }

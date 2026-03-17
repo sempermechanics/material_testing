@@ -1,5 +1,6 @@
 package com.rafad.indicvisiondic
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
@@ -8,7 +9,7 @@ import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.cardview.widget.CardView
+import com.google.android.material.snackbar.Snackbar // Added for modern error messages
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -25,8 +26,6 @@ class AuthActivity : AppCompatActivity() {
     private lateinit var tvToggleMode: TextView
     private lateinit var tvForgotPassword: TextView
     private lateinit var tvSubtitle: TextView
-    private lateinit var cardStatus: CardView
-    private lateinit var tvStatusMessage: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var layoutConfirmPassword: View
     private lateinit var etConfirmPassword: EditText
@@ -42,8 +41,6 @@ class AuthActivity : AppCompatActivity() {
         tvToggleMode = findViewById(R.id.tvToggleMode)
         tvForgotPassword = findViewById(R.id.tvForgotPassword)
         tvSubtitle = findViewById(R.id.tvSubtitle)
-        cardStatus = findViewById(R.id.cardStatus)
-        tvStatusMessage = findViewById(R.id.tvStatusMessage)
         progressBar = findViewById(R.id.progressBar)
         layoutConfirmPassword = findViewById(R.id.layoutConfirmPassword)
         etConfirmPassword = findViewById(R.id.etConfirmPassword)
@@ -54,7 +51,6 @@ class AuthActivity : AppCompatActivity() {
         tvToggleMode.setOnClickListener {
             isLoginMode = !isLoginMode // Flip the mode
             setupUIForCurrentMode()
-            hideStatus() // Clear any old errors
         }
 
         tvForgotPassword.setOnClickListener {
@@ -67,28 +63,31 @@ class AuthActivity : AppCompatActivity() {
             val confirmPassword = etConfirmPassword.text.toString().trim()
 
             if (email.isEmpty() || password.isEmpty()) {
-                showStatus("Please enter both email and password.", isError = true)
+                showSnackbar("Please enter both email and password.", isError = true)
                 return@setOnClickListener
             }
 
             if (password.length < 6) {
-                showStatus("Password must be at least 6 characters.", isError = true)
+                showSnackbar("Password must be at least 6 characters.", isError = true)
                 return@setOnClickListener
             }
 
-            // ONLY check confirm password if we are in Registration Mode
-            if (!isLoginMode) {
-                if (password != confirmPassword) {
-                    showStatus("Passwords do not match!", isError = true)
-                    return@setOnClickListener
-                }
+            if (!isLoginMode && password != confirmPassword) {
+                showSnackbar("Passwords do not match!", isError = true)
+                return@setOnClickListener
             }
 
             executeAuthAction(email, password)
         }
-    }
 
-    // --- LOGIC FUNCTIONS ---
+        // Check if the Gatekeeper (SplashActivity) routed us here with an error
+        val routingError = intent.getStringExtra("ROUTING_ERROR")
+        if (routingError != null) {
+            // Check if it's a successful logout message vs a real error
+            val isError = !routingError.contains("successfully logged out")
+            showSnackbar(routingError, isError = isError)
+        }
+    }
 
     private fun setupUIForCurrentMode() {
         if (isLoginMode) {
@@ -96,42 +95,51 @@ class AuthActivity : AppCompatActivity() {
             btnMainAction.text = "SECURE LOGIN"
             tvToggleMode.text = "Need access? Request an account"
             tvForgotPassword.visibility = View.VISIBLE
-            layoutConfirmPassword.visibility = View.GONE // Hide confirm box
+            layoutConfirmPassword.visibility = View.GONE
         } else {
             tvSubtitle.text = "Beta Registration Request"
             btnMainAction.text = "SUBMIT REQUEST"
             tvToggleMode.text = "Already have an account? Login here"
             tvForgotPassword.visibility = View.GONE
-            layoutConfirmPassword.visibility = View.VISIBLE // Show confirm box
+            layoutConfirmPassword.visibility = View.VISIBLE
         }
     }
 
     private fun executeAuthAction(email: String, pass: String) {
         setLoadingState(true)
 
+        val keyManager = DeviceKeyManager(this)
+        val myDeviceId = keyManager.getDeviceId()
+        val myPublicKey = keyManager.getPublicKeyBase64()
+
         CoroutineScope(Dispatchers.Main).launch {
-            // Explicitly tell the compiler this is a Kotlin Result<String>
             val result: Result<String> = if (isLoginMode) {
-                authRepo.loginUser(email, pass)
+                authRepo.loginUser(email, pass, myDeviceId)
             } else {
-                authRepo.registerUser(email, pass)
+                authRepo.registerUser(email, pass, myDeviceId, myPublicKey)
             }
 
             setLoadingState(false)
 
-            // Fold automatically splits into Success and Failure paths!
             result.fold(
-                onSuccess = { message ->
-                    showStatus(message, isError = false)
-                    if (isLoginMode) {
-                        // The user is fully approved and logged in!
-                        val intent = android.content.Intent(this@AuthActivity, StaticAnalysisActivity::class.java)
-                        startActivity(intent)
-                        finish()
-                    }
+                onSuccess = {
+                    // Success! Let the Gatekeeper handle the routing.
+                    val intent = Intent(this@AuthActivity, SplashActivity::class.java)
+                    startActivity(intent)
+                    finish()
                 },
                 onFailure = { exception ->
-                    showStatus(exception.message ?: "An unknown error occurred", isError = true)
+                    val errorMsg = exception.message ?: "An unknown error occurred"
+
+                    // If the user logged in successfully but they are just PENDING,
+                    // the AuthRepo throws this specific exception. We catch it and route them to the Waiting Room.
+                    if (errorMsg.contains("pending", ignoreCase = true)) {
+                        val intent = Intent(this@AuthActivity, PendingApprovalActivity::class.java)
+                        startActivity(intent)
+                        finish()
+                    } else {
+                        showSnackbar(errorMsg, isError = true)
+                    }
                 }
             )
         }
@@ -140,7 +148,7 @@ class AuthActivity : AppCompatActivity() {
     private fun handleForgotPassword() {
         val email = etEmail.text.toString().trim()
         if (email.isEmpty()) {
-            showStatus("Please enter your email address to reset password.", isError = true)
+            showSnackbar("Please enter your email address to reset password.", isError = true)
             return
         }
 
@@ -150,24 +158,17 @@ class AuthActivity : AppCompatActivity() {
             setLoadingState(false)
 
             result.fold(
-                onSuccess = { message ->
-                    showStatus(message, isError = false)
-                },
-                onFailure = { exception ->
-                    showStatus(exception.message ?: "Failed to send reset email.", isError = true)
-                }
+                onSuccess = { message -> showSnackbar(message, isError = false) },
+                onFailure = { exception -> showSnackbar(exception.message ?: "Failed to send reset email.", isError = true) }
             )
         }
     }
-
-    // --- UI HELPER FUNCTIONS ---
 
     private fun setLoadingState(isLoading: Boolean) {
         if (isLoading) {
             btnMainAction.text = ""
             btnMainAction.isEnabled = false
             progressBar.visibility = View.VISIBLE
-            hideStatus()
         } else {
             btnMainAction.isEnabled = true
             progressBar.visibility = View.GONE
@@ -175,19 +176,19 @@ class AuthActivity : AppCompatActivity() {
         }
     }
 
-    private fun showStatus(message: String, isError: Boolean) {
-        cardStatus.visibility = View.VISIBLE
-        tvStatusMessage.text = message
-        if (isError) {
-            cardStatus.setCardBackgroundColor(Color.parseColor("#44FF0000")) // Faded Red
-            tvStatusMessage.setTextColor(Color.parseColor("#FF6B6B"))
-        } else {
-            cardStatus.setCardBackgroundColor(Color.parseColor("#4400FF00")) // Faded Green
-            tvStatusMessage.setTextColor(Color.parseColor("#4CAF50"))
-        }
-    }
+    // --- NEW SNACKBAR FUNCTION ---
+    private fun showSnackbar(message: String, isError: Boolean) {
+        // This natively grabs the screen root, making it 100% crash-proof
+        val rootView = findViewById<View>(android.R.id.content)
+        val snackbar = Snackbar.make(rootView, message, Snackbar.LENGTH_LONG)
 
-    private fun hideStatus() {
-        cardStatus.visibility = View.GONE
+        if (isError) {
+            snackbar.setBackgroundTint(Color.parseColor("#D32F2F")) // Material Red
+        } else {
+            snackbar.setBackgroundTint(Color.parseColor("#388E3C")) // Material Green
+        }
+
+        snackbar.setTextColor(Color.WHITE)
+        snackbar.show()
     }
 }
