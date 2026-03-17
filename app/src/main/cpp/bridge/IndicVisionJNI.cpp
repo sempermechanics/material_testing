@@ -1461,15 +1461,47 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
         } catch (...) { LOGE("Unknown Exception during Debug Export"); }
     }
 
-    // 🚀 NEW: Calculate Average Iterations and pass to Kotlin
+    // ==========================================
+    // 🚀 NEW: FULL ENGINE TELEMETRY EXPORT TO KOTLIN
+    // ==========================================
     float avg_iters = 0.0f;
     if (valid_count > 0) {
         avg_iters = (float)total_icgn_iters / (float)valid_count;
     }
 
     if (out_metrics != nullptr) {
-        jfloat metrics_data[1] = { avg_iters };
-        env->SetFloatArrayRegion(out_metrics, 0, 1, metrics_data);
+        // Ensure the array from Kotlin is large enough (we need 16 slots)
+        if (env->GetArrayLength(out_metrics) >= 16) {
+            jfloat metrics_data[16];
+
+            // 0-4: Point Counts
+            metrics_data[0] = (float)total_valid_points;      // Total Attempted
+            metrics_data[1] = (float)valid_count;             // Total Solved
+            metrics_data[2] = (float)(total_valid_points - valid_count); // Total Rejected
+            metrics_data[3] = (float)pathA_pts;               // Solved via Mesh
+            metrics_data[4] = (float)pathB_pts;               // Solved via Flood Fill
+
+            // 5-8: Simplex Stats
+            metrics_data[5] = (float)tot_simp_calls;          // Total Simplex Rescues
+            metrics_data[6] = (float)tot_simp_saved;          // Rescues that Succeeded
+            metrics_data[7] = (float)tot_simp_dead;           // Rescues that Failed
+            metrics_data[8] = avg_iters;                      // Mean ICGN Iterations
+
+            // 9-13: Timestamps & Performance (ms)
+            metrics_data[9]  = (float)time_total;             // Total Wall Time
+            metrics_data[10] = (float)(time_akaze + time_ransac); // AKAZE/RANSAC Time
+            metrics_data[11] = (float)time_prepass;           // Hessian Pre-Pass Time
+            metrics_data[12] = (float)time_delaunay;          // Mesh Setup Time
+            metrics_data[13] = (float)time_strain;            // Strain Calc Time
+
+            // 14-15: Ratios
+            metrics_data[14] = (time_pathA > 0) ? (float)(pathA_pts / time_pathA) : 0.0f; // Throughput Pts/ms
+            metrics_data[15] = (total_valid_points > 0) ? ((float)valid_count / total_valid_points) * 100.0f : 0.0f; // Convergence %
+
+            env->SetFloatArrayRegion(out_metrics, 0, 16, metrics_data);
+        } else {
+            LOGE("out_metrics array from Kotlin is too small! Expected 16, got %d", env->GetArrayLength(out_metrics));
+        }
     }
 
     defMat.release(); roiMask.release();

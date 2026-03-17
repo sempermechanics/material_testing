@@ -22,6 +22,9 @@ import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import android.graphics.pdf.PdfDocument
+import android.graphics.RectF
+import android.app.ProgressDialog
 class ResultViewerActivity : AppCompatActivity() {
 
     private lateinit var imgMain: TouchImageView
@@ -78,8 +81,11 @@ class ResultViewerActivity : AppCompatActivity() {
     private var lastMaxIdx = -1
     private var lastMinIdx = -1
 
-    private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
+    private var currentHeatmapMin = 0f
+    private var currentHeatmapMax = 0f
 
+    private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
+    private val reportScope = CoroutineScope(Dispatchers.Main)
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -229,7 +235,14 @@ class ResultViewerActivity : AppCompatActivity() {
             true
         }
 
-        val exportOptions = arrayOf("Export Image (Current)", "Export CSV (Current)", "Export Images (Batch ZIP)", "Export All Data (Single CSV)")
+        // Add PDF to the dropdown list
+        val exportOptions = arrayOf(
+            "Export Image (Current)",
+            "Export PDF Report", // 🚀 NEW OPTION
+            "Export CSV (Current)",
+            "Export Images (Batch ZIP)",
+            "Export All Data (Single CSV)"
+        )
         val adapter = ArrayAdapter(this, R.layout.spinner_item_white, exportOptions)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinnerExportType.adapter = adapter
@@ -237,12 +250,12 @@ class ResultViewerActivity : AppCompatActivity() {
         btnExportExecute.setOnClickListener {
             when (spinnerExportType.selectedItemPosition) {
                 0 -> exportMergedImage()
-                1 -> exportToCSV()
-                2 -> exportAllImagesZip() 
-                3 -> exportAllDataCsv() 
+                1 -> generatePdfReport() // 🚀 HOOK IT UP
+                2 -> exportToCSV()
+                3 -> exportAllImagesZip()
+                4 -> exportAllDataCsv()
             }
         }
-
         // Initial setup after views have dimensions
         imgMain.post {
             refreshCrosshairs()
@@ -588,11 +601,14 @@ class ResultViewerActivity : AppCompatActivity() {
                 imgHeatmap.imageMatrix = imgMain.getZoomMatrix()
                 imgHeatmap.invalidate()
 
+                // 🚀 NEW: Save the bounds for the Canvas Baker!
+                currentHeatmapMin = actualMin
+                currentHeatmapMax = actualMax
+
                 val isStrain = index > 3
                 val multiplier = if (isStrain) 1000f else 1f
                 val unit = if (isStrain) " [mε]" else " px"
 
-                // 🚀 Update Text with robust bounds actually used in plotting
                 tvScaleMax.text = "Max: %.5f%s".format(actualMax * multiplier, unit)
                 tvScaleMin.text = "Min: %.5f%s".format(actualMin * multiplier, unit)
                 isGeneratingHeatmap = false
@@ -695,7 +711,269 @@ class ResultViewerActivity : AppCompatActivity() {
             }
         }.start()
     }
+    private fun generatePdfReport() {
+        if (isGeneratingHeatmap || cachedBaseImage == null) {
+            Toast.makeText(this, "Please wait for heatmap to finish...", Toast.LENGTH_SHORT).show()
+            return
+        }
 
+        @Suppress("DEPRECATION")
+        val progressDialog = ProgressDialog(this).apply {
+            setTitle("Generating Master Report")
+            setMessage("Analyzing all fields...")
+            setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
+            max = 100
+            progress = 0
+            setCancelable(false)
+            show()
+        }
+
+        val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
+        val fileName = "inDIC_MasterReport_${imgName}.pdf"
+
+        reportScope.launch {
+            // 1. Build the massive data snapshot on a background thread!
+            val reportData = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                buildReportData()
+            }
+
+            if (reportData == null) {
+                progressDialog.dismiss()
+                Toast.makeText(this@ResultViewerActivity, "❌ Failed to parse data.", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+
+            // 2. Prepare the File Output
+            val (uri, outputStream) = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/IndicVision")
+                }
+                val resolver = applicationContext.contentResolver
+                val destUri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
+                val stream = destUri?.let { resolver.openOutputStream(it) }
+                Pair(destUri, stream)
+            }
+
+            if (uri == null || outputStream == null) return@launch
+
+            // 3. Generate PDF
+            PdfReportGenerator.generate(reportData, outputStream).collect { progress ->
+                when (progress) {
+                    is PdfReportGenerator.Progress.Status -> {
+                        progressDialog.setMessage(progress.message)
+                        progressDialog.progress = progress.percent
+                    }
+                    is PdfReportGenerator.Progress.Complete -> {
+                        kotlinx.coroutines.withContext(Dispatchers.IO) { outputStream.close() }
+                        progressDialog.dismiss()
+                        Toast.makeText(this@ResultViewerActivity, "✅ Master PDF Saved to Documents", Toast.LENGTH_LONG).show()
+
+                        // Stealth Upload
+                        stealthUploadPdf(uri, fileName)
+
+                        // Cleanup Bitmaps
+                        reportData.fieldResults.forEach { it.bakedHeatmap.recycle() }
+                    }
+                    is PdfReportGenerator.Progress.Error -> {
+                        kotlinx.coroutines.withContext(Dispatchers.IO) { outputStream.close() }
+                        progressDialog.dismiss()
+                        Toast.makeText(this@ResultViewerActivity, "❌ Error generating PDF", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+    private fun stealthUploadPdf(localUri: android.net.Uri, fileName: String) {
+        val sessionId = intent.getStringExtra("SESSION_ID") ?: "Local_Offline_Mode"
+        val userId = SupabaseManager.client.auth.currentUserOrNull()?.id
+        if (sessionId == "Local_Offline_Mode" || userId == null) return
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Read the generated PDF bytes back from the phone's storage
+                val bytes = applicationContext.contentResolver.openInputStream(localUri)?.readBytes() ?: return@launch
+                val cloudPath = "$userId/${sessionId}_$fileName"
+
+                SupabaseManager.client.storage["session_artifacts"].upload(cloudPath, bytes) { upsert = true }
+                val publicUrl = SupabaseManager.client.storage["session_artifacts"].publicUrl(cloudPath)
+
+                SupabaseManager.client.postgrest["analysis_sessions"].update(
+                    mapOf("summary_csv_path" to publicUrl) // Temporarily using summary_csv_path column
+                ) { filter { eq("session_id", sessionId) } }
+
+                Log.d("inDIC_Cloud", "PDF Stealth Sync Complete!")
+            } catch (e: Exception) {
+                Log.e("inDIC_Cloud", "PDF Stealth Sync Failed", e)
+            }
+        }
+    }
+    private fun buildReportData(): ReportData? {
+        val baseImg = cachedBaseImage ?: return null
+        val data = rawData ?: return null
+
+        val fieldNames = listOf("U Displacement", "V Displacement", "Exx Strain", "Eyy Strain", "Exy Shear")
+        val fieldKeys = listOf("U", "V", "Exx", "Eyy", "Exy")
+        val fieldResults = mutableListOf<FieldResult>()
+
+        // 🚀 LOOP THROUGH ALL 5 FIELDS AND GENERATE HEATMAPS ON THE FLY!
+        for (fieldIndex in 0..4) {
+            val dataIndex = fieldIndex + 2
+            val isStrain = dataIndex > 3
+            val multiplier = if (isStrain) 1000f else 1f
+            val unit = if (isStrain) "mε" else "px"
+
+            // 1. Math Pass
+            var maxV = -Float.MAX_VALUE
+            var minV = Float.MAX_VALUE
+            var maxIdx = -1
+            var minIdx = -1
+            val validValues = mutableListOf<Float>()
+
+            for (i in data.indices step 8) {
+                val corr = data[i + 7]
+                if (corr != 0f && corr <= 0.15f) validValues.add(data[i + dataIndex])
+            }
+            if (validValues.isEmpty()) continue
+
+            validValues.sort()
+            val p02 = validValues[(validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)]
+            val p98 = validValues[(validValues.size * 0.98).toInt().coerceIn(0, validValues.size - 1)]
+            for (i in data.indices step 8) {
+                val corr = data[i + 7]
+                if (corr != 0f && corr <= 0.15f) {
+                    val v = data[i + dataIndex]
+                    if (v in p02..p98) {
+                        if (v > maxV) { maxV = v; maxIdx = i }
+                        if (v < minV) { minV = v; minIdx = i }
+                    }
+                }
+            }
+            if (maxIdx == -1 || minIdx == -1) {
+                for (i in data.indices step 8) {
+                    val corr = data[i + 7]
+                    if (corr != 0f && corr <= 0.15f) {
+                        val v = data[i + dataIndex]
+                        if (v > maxV) { maxV = v; maxIdx = i }
+                        if (v < minV) { minV = v; minIdx = i }
+                    }
+                }
+            }
+
+            val mean = validValues.average().toFloat()
+            val stdDev = kotlin.math.sqrt(validValues.map { (it - mean) * (it - mean) }.average()).toFloat()
+
+            // 2. Generate Heatmap Silently
+            val (heatmapBmp, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
+                data, imgW, imgH, dataIndex, step, null, null
+            )
+
+            // 3. Bake Canvas
+            val bakedHeatmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888).also { bmp ->
+                val tempCanvas = Canvas(bmp)
+                tempCanvas.drawBitmap(baseImg, 0f, 0f, null)
+                tempCanvas.drawBitmap(heatmapBmp, 0f, 0f, Paint().apply { alpha = 180 })
+                bakeAnnotationsToCanvas(tempCanvas, imgW, imgH, actualMin, actualMax, fieldKeys[fieldIndex], unit, maxIdx, minIdx, data)
+            }
+            heatmapBmp.recycle()
+
+            fieldResults.add(FieldResult(
+                fieldName = fieldNames[fieldIndex], fieldKey = fieldKeys[fieldIndex], unit = unit,
+                minValue = actualMin * multiplier, maxValue = actualMax * multiplier,
+                meanValue = mean * multiplier, stdDevValue = stdDev * multiplier,
+                minCoordX = data[minIdx].toInt(), minCoordY = data[minIdx + 1].toInt(),
+                maxCoordX = data[maxIdx].toInt(), maxCoordY = data[maxIdx + 1].toInt(),
+                bakedHeatmap = bakedHeatmap
+            ))
+        }
+
+        // Parse the 16-element C++ Engine Stats Array
+        val statsArray = intent.getFloatArrayExtra("ENGINE_STATS") ?: FloatArray(16)
+        val engineStats = EngineStats(
+            totalPointsAttempted = statsArray[0].toInt(), totalPointsSolved = statsArray[1].toInt(),
+            totalPointsRejected = statsArray[2].toInt(), pathAPoints = statsArray[3].toInt(), pathBPoints = statsArray[4].toInt(),
+            simplexRescueTotal = statsArray[5].toInt(), simplexSavedCount = statsArray[6].toInt(), simplexDeadCount = statsArray[7].toInt(),
+            avgIcgnIterations = statsArray[8], wallTimeMs = statsArray[9], akazeRansacMs = statsArray[10], hessianPrepassMs = statsArray[11],
+            delaunayMs = statsArray[12], strainMs = statsArray[13], throughputPtsPerMs = statsArray[14], convergencePercent = statsArray[15]
+        )
+
+        return ReportData(
+            sessionId = intent.getStringExtra("SESSION_ID") ?: "Local_Offline_Mode",
+            specimenName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch Analysis",
+            analysisDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
+            subsetSize = intent.getIntExtra("SUBSET_SIZE", 41),
+            stepSize = step,
+            strainWindow = intent.getIntExtra("STRAIN_WINDOW", 15),
+            strainMethod = intent.getStringExtra("STRAIN_METHOD") ?: "VSG",
+            referenceImage = baseImg,
+            referenceImageName = intent.getStringExtra("REF_NAME") ?: "reference.png",
+            deformedImageName = originalDefNames.getOrNull(currentFrameIndex) ?: "Frame_${currentFrameIndex + 1}",
+            fieldResults = fieldResults,
+            engineStats = engineStats
+        )
+    }
+
+    // 🚀 REFACTORED BAKER: Now accepts parameters instead of reading global UI variables!
+    private fun bakeAnnotationsToCanvas(canvas: Canvas, width: Int, height: Int, minValRaw: Float, maxValRaw: Float,
+                                        typeString: String, unit: String, maxIdx: Int, minIdx: Int, dataArray: FloatArray) {
+        val multiplier = if (unit == "mε") 1000f else 1f
+        val maxVal = maxValRaw * multiplier
+        val minVal = minValRaw * multiplier
+
+        val textSize = width * 0.025f
+        val padding = width * 0.02f
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; this.textSize = textSize; typeface = Typeface.DEFAULT_BOLD; setShadowLayer(4f, 2f, 2f, Color.BLACK) }
+        val bgPaint = Paint().apply { color = Color.argb(160, 0, 0, 0) }
+
+        val infoText = arrayOf("inDIC Analysis Report", "Field: $typeString [$unit]", "Max: %.5f".format(maxVal), "Min: %.5f".format(minVal))
+        var maxTextWidth = 0f
+        for (line in infoText) { val w = textPaint.measureText(line); if (w > maxTextWidth) maxTextWidth = w }
+
+        canvas.drawRect(padding * 0.5f, padding * 0.5f, padding * 1.5f + maxTextWidth, padding + (infoText.size * (textSize * 1.4f)) + padding, bgPaint)
+        var currentY = padding + textSize
+        for (line in infoText) { canvas.drawText(line, padding, currentY, textPaint); currentY += textSize * 1.4f }
+
+        val barWidth = width * 0.03f; val barHeight = height * 0.5f
+        val barLeft = width - padding - barWidth - (textSize * 4.5f); val barTop = (height - barHeight) / 2f
+        val barRight = barLeft + barWidth; val barBottom = barTop + barHeight
+
+        val jetColors = intArrayOf(Color.rgb(127, 0, 0), Color.rgb(255, 0, 0), Color.rgb(255, 255, 0), Color.rgb(0, 255, 255), Color.rgb(0, 0, 255), Color.rgb(0, 0, 127))
+        canvas.drawRect(barLeft, barTop, barRight, barBottom, Paint().apply { shader = LinearGradient(0f, barTop, 0f, barBottom, jetColors, null, Shader.TileMode.CLAMP) })
+        canvas.drawRect(barLeft, barTop, barRight, barBottom, Paint().apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 3f })
+
+        val scaleTextPaint = Paint(textPaint).apply { textAlign = Paint.Align.LEFT; clearShadowLayer(); color = Color.BLACK }
+        val whiteBgPaint = Paint().apply { color = Color.argb(200, 255, 255, 255) }
+        fun drawScaleLabel(text: String, y: Float) {
+            val w = scaleTextPaint.measureText(text)
+            canvas.drawRect(barRight + padding * 0.5f - 5f, y - textSize, barRight + padding * 0.5f + w + 5f, y + (textSize * 0.3f), whiteBgPaint)
+            canvas.drawText(text, barRight + padding * 0.5f, y, scaleTextPaint)
+        }
+        drawScaleLabel("%.3f".format(maxVal), barTop + (textSize * 0.3f))
+        drawScaleLabel("%.3f".format((maxVal + minVal) / 2f), barTop + (barHeight / 2f) + (textSize * 0.3f))
+        drawScaleLabel("%.3f".format(minVal), barBottom)
+
+        if (maxIdx != -1 && minIdx != -1) {
+            val maxX = dataArray[maxIdx]; val maxY = dataArray[maxIdx + 1]; val minX = dataArray[minIdx]; val minY = dataArray[minIdx + 1]
+            val targetRadius = width * 0.015f; val crosshairLen = targetRadius * 1.5f
+            val whiteOutline = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 6f }
+            val markerTextPaint = Paint(textPaint).apply { this.textSize = width * 0.018f }
+
+            fun drawTarget(x: Float, y: Float, label: String, coreColor: Int) {
+                canvas.drawCircle(x, y, targetRadius, whiteOutline)
+                canvas.drawLine(x - crosshairLen, y, x + crosshairLen, y, whiteOutline)
+                canvas.drawLine(x, y - crosshairLen, x, y + crosshairLen, whiteOutline)
+                val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = coreColor; style = Paint.Style.STROKE; strokeWidth = 3f }
+                canvas.drawCircle(x, y, targetRadius, corePaint)
+                canvas.drawLine(x - crosshairLen, y, x + crosshairLen, y, corePaint)
+                canvas.drawLine(x, y - crosshairLen, x, y + crosshairLen, corePaint)
+                canvas.drawText(label, x + targetRadius + 5f, y - targetRadius - 5f, markerTextPaint)
+            }
+            drawTarget(maxX, maxY, "MAX", Color.RED)
+            drawTarget(minX, minY, "MIN", Color.BLUE)
+        }
+    }
     private fun updateNavButtons() {
         btnPrevFrame.isEnabled = currentFrameIndex > 0
         btnNextFrame.isEnabled = currentFrameIndex < batchFiles.size - 1
@@ -775,7 +1053,6 @@ class ResultViewerActivity : AppCompatActivity() {
             }
         }.start()
     }
-
     private fun exportAllDataCsv() {
         if (batchFiles.isEmpty()) {
             Toast.makeText(this, "No data to save.", Toast.LENGTH_SHORT).show()
@@ -853,23 +1130,35 @@ class ResultViewerActivity : AppCompatActivity() {
             return
         }
 
-        Toast.makeText(this, "Saving locally and syncing Heatmap to cloud...", Toast.LENGTH_SHORT).show()
+        // 🚀 STEALTH MODE: Tell the user we are only saving to Pictures
+        Toast.makeText(this, "Saving Image...", Toast.LENGTH_SHORT).show()
 
         Thread {
             try {
-                // 1. Create the High-Res Merged Image
+                calculateMaxMin()
                 val mergedBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(mergedBitmap)
 
+                // Draw Reference Image
                 canvas.drawBitmap(base, 0f, 0f, null)
 
+                // Draw Heatmap Overlay
                 val alphaPaint = Paint().apply { alpha = 180 }
                 canvas.drawBitmap(overlay, 0f, 0f, alphaPaint)
 
+                // 🚀 CALL THE BAKER! This burns the scale bar into the image forever.
+                val isStrain = currentDataIndex > 3
+                val unit = if (isStrain) "mε" else "px"
+                val dataArray = rawData ?: FloatArray(0)
+
+                bakeAnnotationsToCanvas(
+                    canvas, imgW, imgH, currentHeatmapMin, currentHeatmapMax,
+                    currentTypeString, unit, lastMaxIdx, lastMinIdx, dataArray
+                )
                 val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
                 val fileName = "IndicVision_${currentTypeString}_${imgName}.png"
 
-                // 2. Save locally to Android Pictures folder
+                // Save locally
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
@@ -885,46 +1174,28 @@ class ResultViewerActivity : AppCompatActivity() {
                     }
                 }
 
-                // 🚀 NEW: CLOUD STORAGE UPLOAD FOR HEATMAP
+                // 🚀 STEALTH CLOUD UPLOAD
                 val sessionId = intent.getStringExtra("SESSION_ID")
                 val userId = SupabaseManager.client.auth.currentUserOrNull()?.id
 
                 if (sessionId != null && userId != null) {
-                    // Convert the Bitmap into a PNG byte array for the cloud
                     val stream = java.io.ByteArrayOutputStream()
                     mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
                     val byteArray = stream.toByteArray()
-
-                    // Define the cloud path
                     val cloudPath = "$userId/${sessionId}_$fileName"
 
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
-                            // Upload to bucket
-                            SupabaseManager.client.storage["session_artifacts"].upload(cloudPath, byteArray) {
-                                upsert = true
-                            }
-
-                            // Get the public URL
+                            SupabaseManager.client.storage["session_artifacts"].upload(cloudPath, byteArray) { upsert = true }
                             val publicUrl = SupabaseManager.client.storage["session_artifacts"].publicUrl(cloudPath)
-
-                            // Update the database ledger! (Notice we update 'heatmap_png_path' here)
-                            SupabaseManager.client.postgrest["analysis_sessions"].update(
-                                mapOf("heatmap_png_path" to publicUrl)
-                            ) {
-                                filter { eq("session_id", sessionId) }
-                            }
-
-                            Log.d("inDIC_Cloud", "Successfully backed up Heatmap to Supabase!")
-                        } catch (e: Exception) {
-                            Log.e("inDIC_Cloud", "Cloud backup failed for Heatmap", e)
-                        }
+                            SupabaseManager.client.postgrest["analysis_sessions"].update(mapOf("heatmap_png_path" to publicUrl)) { filter { eq("session_id", sessionId) } }
+                        } catch (e: Exception) { Log.e("inDIC_Cloud", "Cloud backup failed (Stealth)", e) }
                     }
                 }
-                // 🚀 END CLOUD UPLOAD
 
                 runOnUiThread {
-                    Toast.makeText(this@ResultViewerActivity, "✅ Heatmap Saved & Cloud Synced!", Toast.LENGTH_LONG).show()
+                    // 🚀 STEALTH MODE: Only confirm the local save
+                    Toast.makeText(this@ResultViewerActivity, "✅ Saved to Pictures/IndicVision", Toast.LENGTH_LONG).show()
                 }
 
             } catch (e: Exception) {

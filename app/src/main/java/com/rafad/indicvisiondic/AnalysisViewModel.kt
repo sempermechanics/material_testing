@@ -55,6 +55,8 @@ class AnalysisViewModel : ViewModel() {
     var hasCompletedAnalysis: Boolean = false
 
     var currentSessionId: String? = null
+    // 🚀 NEW: Holds the 16 telemetry metrics from the C++ Engine
+    var engineStatsArray: FloatArray? = null
 
     // 🚀 UPDATED: UI Helpers
     fun isReadyToCompute(): Boolean {

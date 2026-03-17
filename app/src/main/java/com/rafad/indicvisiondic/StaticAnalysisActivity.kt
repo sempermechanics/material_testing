@@ -490,21 +490,26 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                     outputBuffer.clear()
 
-                    // 🚀 NEW: Create the array to catch the data from C++
-                    val metricsCatcher = FloatArray(1)
+                    // 🚀 UPGRADE: Create a 16-slot array to catch the full telemetry
+                    val metricsCatcher = FloatArray(16)
 
-                    // 🚀 NEW: Pass metricsCatcher as the final argument
                     val validPointsCount = IndicVisionNativeLib.computeFullFieldDirect(
                         refBytes, defBytes, maskData,
                         finalRectX, finalRectY, finalRectW, finalRectH,
-                        step, subset, strainWin,true,true, false, applyBlur, useNlvc,
+                        step, subset, strainWin, true, true, false, applyBlur, useNlvc,
                         outputBuffer, callback,
                         metricsCatcher
                     )
 
                     if (frameIndex == 0) {
                         firstFrameValidPoints = validPointsCount
-                        firstFrameAvgIters = metricsCatcher[0] // 🚀 NEW: Grab the iteration average!
+
+                        // 🚀 UPGRADE: Extract all 16 metrics into the ViewModel!
+                        // (You will need to add an 'engineStatsArray' property to your ViewModel)
+                        viewModel.engineStatsArray = metricsCatcher.clone()
+
+                        // For the cloud upload, we still just need the average iterations (index 8)
+                        firstFrameAvgIters = metricsCatcher[8]
                     }
 
                     if (validPointsCount <= 0) continue
@@ -594,25 +599,21 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun openResultViewer() {
-        if (!viewModel.hasCompletedAnalysis) return
-
         val intent = Intent(this, ResultViewerActivity::class.java).apply {
-            putExtra("BATCH_DIR_PATH", viewModel.lastBatchDirPath)
-            putExtra("DEF_PATH", viewModel.lastDefPath)
             putExtra("IMG_W", viewModel.realRefWidth)
             putExtra("IMG_H", viewModel.realRefHeight)
             putExtra("STEP", viewModel.lastStep)
-            putExtra("ROI_X", viewModel.roiX)
-            putExtra("ROI_Y", viewModel.roiY)
-            // Add this inside the Intent apply block:
-            putExtra("SESSION_ID", viewModel.currentSessionId)
             putExtra("REF_NAME", viewModel.refName.removePrefix("Ref: "))
+            putExtra("DEF_PATH", viewModel.lastDefPath)
+            putExtra("BATCH_DIR_PATH", viewModel.lastBatchDirPath)
+            putStringArrayListExtra("DEF_FILE_NAMES", ArrayList(viewModel.defFilePaths.map { it.substringAfterLast('/') }))
 
-            val fileNames = viewModel.defFilePaths.map { path ->
-                val fullName = path.substringAfterLast('/')
-                if (fullName.length > 5 && fullName[4] == '_') fullName.substring(5) else fullName
-            }
-            putStringArrayListExtra("DEF_FILE_NAMES", ArrayList(fileNames))
+            // 🚀 ADD THESE LINES SO THE PDF GENERATOR GETS THE DATA!
+            putExtra("SESSION_ID", viewModel.currentSessionId)
+            putExtra("SUBSET_SIZE", etSubsetSize.text.toString().toIntOrNull() ?: 41)
+            putExtra("STRAIN_WINDOW", etStrainWindow.text.toString().toIntOrNull() ?: 15)
+            putExtra("STRAIN_METHOD", if (rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc) "NLVC" else "VSG")
+            putExtra("ENGINE_STATS", viewModel.engineStatsArray)
         }
         startActivity(intent)
     }
