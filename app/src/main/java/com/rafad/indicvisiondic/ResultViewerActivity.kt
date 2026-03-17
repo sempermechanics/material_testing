@@ -16,7 +16,12 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
-
+import io.github.jan.supabase.storage.storage
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.auth.auth
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 class ResultViewerActivity : AppCompatActivity() {
 
     private lateinit var imgMain: TouchImageView
@@ -636,6 +641,50 @@ class ResultViewerActivity : AppCompatActivity() {
                         }
                         writer.flush()
                     }
+                    // 🚀 NEW: CLOUD STORAGE UPLOAD
+                    val sessionId = intent.getStringExtra("SESSION_ID")
+                    val userId = SupabaseManager.client.auth.currentUserOrNull()?.id
+
+                    if (sessionId != null && userId != null) {
+                        // Generate the exact CSV bytes in memory to upload
+                        val csvContent = StringBuilder("X,Y,U_Displacement,V_Displacement,Exx_Strain,Eyy_Strain,Exy_Shear,Correlation\n")
+                        var i = 0
+                        while (i < data.size) {
+                            val c = data[i+7]
+                            if (c != 0f) {
+                                csvContent.append("${data[i]},${data[i+1]},${data[i+2]},${data[i+3]},${data[i+4]},${data[i+5]},${data[i+6]},$c\n")
+                            }
+                            i += 8
+                        }
+                        val byteArray = csvContent.toString().toByteArray()
+
+                        // Define the cloud path: /userID/sessionId_filename.csv
+                        val cloudPath = "$userId/${sessionId}_$fileName"
+
+                        CoroutineScope(Dispatchers.IO).launch {
+                            try {
+                                // 1. Upload the file to the bucket
+                                SupabaseManager.client.storage["session_artifacts"].upload(cloudPath, byteArray) {
+                                    upsert = true // Overwrite if they export again
+                                }
+
+                                // 2. Get the public/signed URL
+                                val publicUrl = SupabaseManager.client.storage["session_artifacts"].publicUrl(cloudPath)
+
+                                // 3. Update the database ledger to link the file!
+                                SupabaseManager.client.postgrest["analysis_sessions"].update(
+                                    mapOf("summary_csv_path" to publicUrl)
+                                ) {
+                                    filter { eq("session_id", sessionId) }
+                                }
+
+                                Log.d("inDIC_Cloud", "Successfully backed up CSV to Supabase!")
+                            } catch (e: Exception) {
+                                Log.e("inDIC_Cloud", "Cloud backup failed", e)
+                            }
+                        }
+                    }
+                    // 🚀 END CLOUD UPLOAD
                     runOnUiThread {
                         Toast.makeText(this@ResultViewerActivity, "✅ CSV Saved to Downloads/IndicVision", Toast.LENGTH_LONG).show()
                     }
@@ -804,10 +853,11 @@ class ResultViewerActivity : AppCompatActivity() {
             return
         }
 
-        Toast.makeText(this, "Merging High-Res Image...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Saving locally and syncing Heatmap to cloud...", Toast.LENGTH_SHORT).show()
 
         Thread {
             try {
+                // 1. Create the High-Res Merged Image
                 val mergedBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(mergedBitmap)
 
@@ -818,6 +868,8 @@ class ResultViewerActivity : AppCompatActivity() {
 
                 val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
                 val fileName = "IndicVision_${currentTypeString}_${imgName}.png"
+
+                // 2. Save locally to Android Pictures folder
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
@@ -831,10 +883,50 @@ class ResultViewerActivity : AppCompatActivity() {
                     resolver.openOutputStream(uri)?.use { outputStream ->
                         mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
                     }
-                    runOnUiThread {
-                        Toast.makeText(this@ResultViewerActivity, "✅ Image Saved to Pictures/IndicVision", Toast.LENGTH_LONG).show()
+                }
+
+                // 🚀 NEW: CLOUD STORAGE UPLOAD FOR HEATMAP
+                val sessionId = intent.getStringExtra("SESSION_ID")
+                val userId = SupabaseManager.client.auth.currentUserOrNull()?.id
+
+                if (sessionId != null && userId != null) {
+                    // Convert the Bitmap into a PNG byte array for the cloud
+                    val stream = java.io.ByteArrayOutputStream()
+                    mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                    val byteArray = stream.toByteArray()
+
+                    // Define the cloud path
+                    val cloudPath = "$userId/${sessionId}_$fileName"
+
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            // Upload to bucket
+                            SupabaseManager.client.storage["session_artifacts"].upload(cloudPath, byteArray) {
+                                upsert = true
+                            }
+
+                            // Get the public URL
+                            val publicUrl = SupabaseManager.client.storage["session_artifacts"].publicUrl(cloudPath)
+
+                            // Update the database ledger! (Notice we update 'heatmap_png_path' here)
+                            SupabaseManager.client.postgrest["analysis_sessions"].update(
+                                mapOf("heatmap_png_path" to publicUrl)
+                            ) {
+                                filter { eq("session_id", sessionId) }
+                            }
+
+                            Log.d("inDIC_Cloud", "Successfully backed up Heatmap to Supabase!")
+                        } catch (e: Exception) {
+                            Log.e("inDIC_Cloud", "Cloud backup failed for Heatmap", e)
+                        }
                     }
                 }
+                // 🚀 END CLOUD UPLOAD
+
+                runOnUiThread {
+                    Toast.makeText(this@ResultViewerActivity, "✅ Heatmap Saved & Cloud Synced!", Toast.LENGTH_LONG).show()
+                }
+
             } catch (e: Exception) {
                 e.printStackTrace()
                 runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save Image", Toast.LENGTH_SHORT).show() }

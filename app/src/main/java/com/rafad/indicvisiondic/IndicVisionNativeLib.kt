@@ -22,18 +22,13 @@ object IndicVisionNativeLib {
         originalWidth: Int, originalHeight: Int
     ): FloatArray
 
-    // CRITICAL FIX: Ensure maskData is included so it matches C++ exactly
     external fun computeFullFieldDirect(
-        refBytes: ByteArray, defBytes: ByteArray, maskBytes: ByteArray?,
-        rectX: Int, rectY: Int, rectWidth: Int, rectHeight: Int,
-        step: Int, subsetSize: Int, strainWindow: Int,
-        useDelaunay: Boolean,      // NEW: Controls Path A
-        useFallback: Boolean,      // NEW: Controls safe fallback
-        useRGDIC: Boolean,         // NEW: Forces Path B
-        applyGaussianBlur: Boolean,
-        useNlvcStrain: Boolean,
-        outputBuffer: ByteBuffer,
-        callback: ProgressCallback?
+        refBytes: ByteArray, defBytes: ByteArray, maskData: ByteArray,
+        roiX: Int, roiY: Int, roiW: Int, roiH: Int,
+        step: Int, subset: Int, strainWin: Int,
+        useZNCC: Boolean, useICGN: Boolean, useSpline: Boolean, applyBlur: Boolean, useNlvc: Boolean,
+        outputBuffer: ByteBuffer, callback: ProgressCallback,
+        outMetrics: FloatArray // <-- This must be here!
     ): Int
 
     external fun getPreviewFromBytes(imageBytes: ByteArray, maxDim: Int): android.graphics.Bitmap?

@@ -287,7 +287,7 @@ JNIEXPORT jfloatArray JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib
 JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_computeFullFieldDirect(
         JNIEnv *env, jobject, jbyteArray refBytes, jbyteArray defBytes, jbyteArray maskBytes, jint rectX, jint rectY, jint rectWidth,
         jint rectHeight, jint step, jint subsetSize, jint strainWindow, jboolean useDelaunay, jboolean useFallback, jboolean useRGDIC,
-        jboolean applyGaussianBlur, jboolean useNlvcStrain, jobject outputBuffer, jobject callbackObj) {
+        jboolean applyGaussianBlur, jboolean useNlvcStrain, jobject outputBuffer, jobject callbackObj, jfloatArray out_metrics) {
 
     std::lock_guard<std::mutex> engine_lock(jni_engine_mutex);
     std::string local_debug_dir = g_debugDir; g_debugDir = "";
@@ -1459,6 +1459,17 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                 LOGE("Failed to generate C++ Mesh Overlap plots");
             }
         } catch (...) { LOGE("Unknown Exception during Debug Export"); }
+    }
+
+    // 🚀 NEW: Calculate Average Iterations and pass to Kotlin
+    float avg_iters = 0.0f;
+    if (valid_count > 0) {
+        avg_iters = (float)total_icgn_iters / (float)valid_count;
+    }
+
+    if (out_metrics != nullptr) {
+        jfloat metrics_data[1] = { avg_iters };
+        env->SetFloatArrayRegion(out_metrics, 0, 1, metrics_data);
     }
 
     defMat.release(); roiMask.release();

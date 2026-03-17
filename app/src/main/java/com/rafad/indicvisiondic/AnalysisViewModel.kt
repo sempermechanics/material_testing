@@ -54,6 +54,8 @@ class AnalysisViewModel : ViewModel() {
     var lastDefPath: String? = null       // 🚀 Used for the result viewer background
     var hasCompletedAnalysis: Boolean = false
 
+    var currentSessionId: String? = null
+
     // 🚀 UPDATED: UI Helpers
     fun isReadyToCompute(): Boolean {
         // Ready if we have a reference image AND at least one deformed image path

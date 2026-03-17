@@ -29,7 +29,26 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 import androidx.activity.OnBackPressedCallback
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.auth.auth
 
+// Payload for Supabase 'analysis_sessions' table
+@Serializable
+data class AnalysisSessionInsert(
+    @SerialName("user_id") val userId: String,
+    @SerialName("specimen_identifier") val specimenIdentifier: String,
+    @SerialName("points_converged") val pointsConverged: Int,
+    @SerialName("avg_iterations") val avgIterations: Float,
+    @SerialName("execution_time_ms") val executionTimeMs: Int
+    // Note: We are leaving out the cloud storage paths for now
+    // until we implement the Cloud Storage bucket uploads!
+)
+@Serializable
+data class AnalysisSessionResponse(
+    @SerialName("session_id") val sessionId: String
+)
 class StaticAnalysisActivity : AppCompatActivity() {
 
     private val viewModel: AnalysisViewModel by viewModels()
@@ -438,7 +457,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             try {
                 val totalFrames = viewModel.defFilePaths.size
                 val refBytes = viewModel.refBytes ?: throw IllegalStateException("Reference missing")
+
+                // Trackers for the cloud
                 var firstFrameValidPoints = 0
+                var firstFrameAvgIters = 0.0f // 🚀 NEW: Tracker for C++ metrics
 
                 runOnUiThread { tvTimer.text = "Caching Reference in Native Engine..." }
                 IndicVisionNativeLib.initializeReference(refBytes, viewModel.realRefWidth, viewModel.realRefHeight, applyBlur)
@@ -468,14 +490,23 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                     outputBuffer.clear()
 
+                    // 🚀 NEW: Create the array to catch the data from C++
+                    val metricsCatcher = FloatArray(1)
+
+                    // 🚀 NEW: Pass metricsCatcher as the final argument
                     val validPointsCount = IndicVisionNativeLib.computeFullFieldDirect(
                         refBytes, defBytes, maskData,
                         finalRectX, finalRectY, finalRectW, finalRectH,
                         step, subset, strainWin,true,true, false, applyBlur, useNlvc,
-                        outputBuffer, callback
+                        outputBuffer, callback,
+                        metricsCatcher
                     )
 
-                    if (frameIndex == 0) firstFrameValidPoints = validPointsCount
+                    if (frameIndex == 0) {
+                        firstFrameValidPoints = validPointsCount
+                        firstFrameAvgIters = metricsCatcher[0] // 🚀 NEW: Grab the iteration average!
+                    }
+
                     if (validPointsCount <= 0) continue
 
                     val outputFile = File(batchDir, String.format("frame_%04d.dat", frameIndex))
@@ -490,7 +521,37 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     System.gc()
                 }
 
-                val totalTime = (System.currentTimeMillis() - processingStartTime) / 1000.0
+                val executionTimeMs = (System.currentTimeMillis() - processingStartTime).toInt()
+                val totalTime = executionTimeMs / 1000.0
+
+                // 🚀 NEW: THE CLOUD UPLOAD PIPELINE
+                if (firstFrameValidPoints > 0) {
+                    withContext(Dispatchers.IO) {
+                        try {
+                            val currentUser = SupabaseManager.client.auth.currentUserOrNull()
+                            if (currentUser != null) {
+                                val sessionData = AnalysisSessionInsert(
+                                    userId = currentUser.id,
+                                    specimenIdentifier = viewModel.refName.removePrefix("Ref: "),
+                                    pointsConverged = firstFrameValidPoints,
+                                    avgIterations = firstFrameAvgIters, // 🚀 NEW: Using the real data!
+                                    executionTimeMs = executionTimeMs
+                                )
+
+                                // Insert AND return the generated row so we can get the session_id!
+                                val insertedRow = SupabaseManager.client.postgrest["analysis_sessions"]
+                                    .insert(sessionData) { select() }
+                                    .decodeSingle<AnalysisSessionResponse>()
+
+                                viewModel.currentSessionId = insertedRow.sessionId
+                                Log.d("inDIC_Cloud", "Synced session! ID: ${insertedRow.sessionId}")
+                            }
+                        } catch (e: Exception) {
+                            Log.e("inDIC_Cloud", "Failed to sync analysis to cloud.", e)
+                        }
+                    }
+                }
+                // 🚀 END CLOUD UPLOAD
 
                 withContext(Dispatchers.Main) {
                     isProcessing = false
@@ -543,6 +604,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
             putExtra("STEP", viewModel.lastStep)
             putExtra("ROI_X", viewModel.roiX)
             putExtra("ROI_Y", viewModel.roiY)
+            // Add this inside the Intent apply block:
+            putExtra("SESSION_ID", viewModel.currentSessionId)
             putExtra("REF_NAME", viewModel.refName.removePrefix("Ref: "))
 
             val fileNames = viewModel.defFilePaths.map { path ->
