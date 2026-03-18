@@ -11,6 +11,9 @@ data class ReportData(
     val strainWindow: Int,
     val strainMethod: String,
 
+    // 🚀 NEW: Region of Interest Details
+    val roiData: RoiData,
+
     // DOWN-SCALED IMAGES (300 DPI max)
     val referenceImage: Bitmap,
     val deformedImage: Bitmap,
@@ -22,8 +25,16 @@ data class ReportData(
 
     // NEW DIAGNOSTIC MAPS
     val znssdHeatmap: Bitmap,
-    val solverPathMap: Bitmap,
+    val solverPathMap: Bitmap, // Future-proofing for path scatter plot
     val globalAvgZnssd: Float
+)
+
+// 🚀 NEW: Dedicated Data Class for ROI
+data class RoiData(
+    val startX: Int,
+    val startY: Int,
+    val width: Int,
+    val height: Int
 )
 
 data class FieldResult(
@@ -32,7 +43,8 @@ data class FieldResult(
     val unit: String,
     val minValue: Float,
     val maxValue: Float,
-    val meanValue: Float, // Simple Mean for Displacements, Mean Absolute for Strains
+    val meanValue: Float,
+    val meanType: String, // 🚀 NEW: "Simple Mean" or "Mean Absolute"
     val stdDevValue: Float,
     val minCoordX: Int,
     val minCoordY: Int,

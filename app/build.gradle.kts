@@ -76,4 +76,6 @@ dependencies {
 
     // 4. Kotlin Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 }

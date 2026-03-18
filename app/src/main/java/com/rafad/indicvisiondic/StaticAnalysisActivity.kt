@@ -458,9 +458,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 val totalFrames = viewModel.defFilePaths.size
                 val refBytes = viewModel.refBytes ?: throw IllegalStateException("Reference missing")
 
-                // Trackers for the cloud
                 var firstFrameValidPoints = 0
-                var firstFrameAvgIters = 0.0f // 🚀 NEW: Tracker for C++ metrics
+                var firstFrameAvgIters = 0.0f
 
                 runOnUiThread { tvTimer.text = "Caching Reference in Native Engine..." }
                 IndicVisionNativeLib.initializeReference(refBytes, viewModel.realRefWidth, viewModel.realRefHeight, applyBlur)
@@ -489,8 +488,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     }
 
                     outputBuffer.clear()
-
-                    // 🚀 UPGRADE: Create a 16-slot array to catch the full telemetry
                     val metricsCatcher = FloatArray(16)
 
                     val validPointsCount = IndicVisionNativeLib.computeFullFieldDirect(
@@ -503,12 +500,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                     if (frameIndex == 0) {
                         firstFrameValidPoints = validPointsCount
-
-                        // 🚀 UPGRADE: Extract all 16 metrics into the ViewModel!
-                        // (You will need to add an 'engineStatsArray' property to your ViewModel)
                         viewModel.engineStatsArray = metricsCatcher.clone()
-
-                        // For the cloud upload, we still just need the average iterations (index 8)
                         firstFrameAvgIters = metricsCatcher[8]
                     }
 
@@ -529,39 +521,102 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 val executionTimeMs = (System.currentTimeMillis() - processingStartTime).toInt()
                 val totalTime = executionTimeMs / 1000.0
 
-                // 🚀 NEW: THE CLOUD UPLOAD PIPELINE
+                // 🚀 THE TRUE ADMIN STEALTH QUEUE & DIAGNOSTICS
+                var generatedRefPath = "" // 🚀 Fix for the Image Mix-up
+
                 if (firstFrameValidPoints > 0) {
                     withContext(Dispatchers.IO) {
+                        Log.d("inDIC_Diag", "========================================")
+                        Log.d("inDIC_Diag", "1. ENGINE FINISHED. STARTING CLOUD SYNC.")
+
                         try {
-                            val currentUser = SupabaseManager.client.auth.currentUserOrNull()
-                            if (currentUser != null) {
-                                val sessionData = AnalysisSessionInsert(
-                                    userId = currentUser.id,
-                                    specimenIdentifier = viewModel.refName.removePrefix("Ref: "),
-                                    pointsConverged = firstFrameValidPoints,
-                                    avgIterations = firstFrameAvgIters, // 🚀 NEW: Using the real data!
-                                    executionTimeMs = executionTimeMs
-                                )
-
-                                // Insert AND return the generated row so we can get the session_id!
-                                val insertedRow = SupabaseManager.client.postgrest["analysis_sessions"]
-                                    .insert(sessionData) { select() }
-                                    .decodeSingle<AnalysisSessionResponse>()
-
-                                viewModel.currentSessionId = insertedRow.sessionId
-                                Log.d("inDIC_Cloud", "Synced session! ID: ${insertedRow.sessionId}")
+                            // 🚀 FIX: Write the Reference Image to a PNG so ResultViewer can use it!
+                            val refBmp = IndicVisionNativeLib.getPreviewFromBytes(refBytes, viewModel.realRefWidth)
+                            val refPngFile = File(cacheDir, "temp_ref_view.png")
+                            refPngFile.outputStream().use { out ->
+                                refBmp?.compress(Bitmap.CompressFormat.PNG, 100, out)
                             }
+                            generatedRefPath = refPngFile.absolutePath
+                            Log.d("inDIC_Diag", "-> Reference Image Saved: $generatedRefPath")
+
+                            val currentUser = SupabaseManager.client.auth.currentUserOrNull()
+                            if (currentUser == null) {
+                                Log.e("inDIC_Diag", "-> ERROR: User is NULL. Not logged in!")
+                                return@withContext
+                            }
+
+                            val userEmail = currentUser.email ?: currentUser.id
+                            Log.d("inDIC_Diag", "-> Auth Confirmed. User: $userEmail")
+
+                            val sessionData = AnalysisSessionInsert(
+                                userId = currentUser.id,
+                                specimenIdentifier = viewModel.refName.removePrefix("Ref: "),
+                                pointsConverged = firstFrameValidPoints,
+                                avgIterations = firstFrameAvgIters,
+                                executionTimeMs = executionTimeMs
+                            )
+
+                            Log.d("inDIC_Diag", "2. ATTEMPTING DATABASE INSERT...")
+                            val insertedRow = SupabaseManager.client.postgrest["analysis_sessions"]
+                                .insert(sessionData) { select() }
+                                .decodeSingle<AnalysisSessionResponse>()
+
+                            viewModel.currentSessionId = insertedRow.sessionId
+                            Log.d("inDIC_Diag", "-> SUCCESS! Database Row Created. Session ID: ${insertedRow.sessionId}")
+
+                            Log.d("inDIC_Diag", "3. PREPARING WORKER PAYLOAD...")
+                            val datFile = File(batchDir, String.format("frame_%04d.dat", 0))
+                            val defPath = viewModel.defFilePaths.firstOrNull() ?: ""
+
+                            Log.d("inDIC_Diag", "-> REF Path: $generatedRefPath")
+                            Log.d("inDIC_Diag", "-> DEF Path: $defPath")
+                            Log.d("inDIC_Diag", "-> DAT Path: ${datFile.absolutePath}")
+
+                            val uploadData = androidx.work.Data.Builder()
+                                .putString("SESSION_ID", insertedRow.sessionId)
+                                .putString("USER_EMAIL", userEmail)
+                                .putString("REF_PATH", generatedRefPath) // 🚀 Passing the real PNG!
+                                .putString("DEF_PATH", defPath)
+                                .putString("DAT_PATH", datFile.absolutePath)
+                                .putString("FRAME_NAME", "Frame_1")
+                                .putString("REF_NAME", viewModel.refName.removePrefix("Ref: "))
+                                .putInt("IMG_W", viewModel.realRefWidth)
+                                .putInt("IMG_H", viewModel.realRefHeight)
+                                .putInt("STEP", step)
+                                .putInt("SUBSET", subset)
+                                .putInt("STRAIN_WIN", strainWin)
+                                .putString("STRAIN_METHOD", if (useNlvc) "NLVC" else "VSG")
+                                .putInt("ROI_X", finalRectX)
+                                .putInt("ROI_Y", finalRectY)
+                                .putInt("ROI_W", finalRectW)
+                                .putInt("ROI_H", finalRectH)
+                                .putFloatArray("ENGINE_STATS", viewModel.engineStatsArray ?: FloatArray(16))
+                                .build()
+
+                            Log.d("inDIC_Diag", "4. ENQUEUING BACKGROUND WORKER...")
+                            val uploadWork = androidx.work.OneTimeWorkRequestBuilder<DicUploadWorker>()
+                                .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+                                .setInputData(uploadData)
+                                .build()
+
+                            androidx.work.WorkManager.getInstance(applicationContext).enqueue(uploadWork)
+                            Log.d("inDIC_Diag", "-> SUCCESS! Worker Enqueued with ID: ${uploadWork.id}")
+                            Log.d("inDIC_Diag", "========================================")
+
                         } catch (e: Exception) {
-                            Log.e("inDIC_Cloud", "Failed to sync analysis to cloud.", e)
+                            Log.e("inDIC_Diag", "========================================")
+                            Log.e("inDIC_Diag", "❌ CRITICAL SUPABASE ERROR IN STATIC ANALYSIS")
+                            Log.e("inDIC_Diag", "Error Message: ${e.message}")
+                            Log.e("inDIC_Diag", "Stacktrace:", e)
+                            Log.e("inDIC_Diag", "========================================")
                         }
                     }
                 }
-                // 🚀 END CLOUD UPLOAD
 
                 withContext(Dispatchers.Main) {
                     isProcessing = false
                     progressBar.visibility = View.GONE
-                    btnLogout.isEnabled = true // Re-enable logout safely
+                    btnLogout.isEnabled = true
 
                     if (firstFrameValidPoints <= 0) {
                         tvTimer.text = "Analysis Failed"
@@ -570,16 +625,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         tvTimer.text = "Batch Done in %.2f s".format(totalTime)
                         tvResult.text = "✅ Computed $totalFrames frames!"
 
-                        val defFile = File(cacheDir, "temp_def_view.png")
-                        val refBytes = viewModel.refBytes ?: throw IllegalStateException("Reference missing")
-                        val fullResBitmap = IndicVisionNativeLib.getPreviewFromBytes(refBytes, viewModel.realRefWidth)
-                        defFile.outputStream().use { out ->
-                            fullResBitmap?.compress(Bitmap.CompressFormat.PNG, 100, out)
-                        }
-                        viewModel.lastDefPath = defFile.absolutePath
+                        viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
+                        viewModel.lastBatchDirPath = batchDir.absolutePath
 
                         viewModel.hasCompletedAnalysis = true
                         checkReady()
+
+                        // 🚀 FIRING EXACTLY ONCE!
                         openResultViewer()
                     }
                 }
@@ -604,16 +656,27 @@ class StaticAnalysisActivity : AppCompatActivity() {
             putExtra("IMG_H", viewModel.realRefHeight)
             putExtra("STEP", viewModel.lastStep)
             putExtra("REF_NAME", viewModel.refName.removePrefix("Ref: "))
+
+            // 🚀 THE FIX: Tell the Result Viewer where the Reference Image is!
+            val refFile = File(cacheDir, "temp_ref_view.png")
+            putExtra("REF_PATH", refFile.absolutePath)
+
             putExtra("DEF_PATH", viewModel.lastDefPath)
             putExtra("BATCH_DIR_PATH", viewModel.lastBatchDirPath)
             putStringArrayListExtra("DEF_FILE_NAMES", ArrayList(viewModel.defFilePaths.map { it.substringAfterLast('/') }))
 
-            // 🚀 ADD THESE LINES SO THE PDF GENERATOR GETS THE DATA!
+            // 🚀 PDF GENERATOR DATA
             putExtra("SESSION_ID", viewModel.currentSessionId)
             putExtra("SUBSET_SIZE", etSubsetSize.text.toString().toIntOrNull() ?: 41)
             putExtra("STRAIN_WINDOW", etStrainWindow.text.toString().toIntOrNull() ?: 15)
             putExtra("STRAIN_METHOD", if (rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc) "NLVC" else "VSG")
             putExtra("ENGINE_STATS", viewModel.engineStatsArray)
+
+            // 🚀 NEW: PASSING ROI DATA FOR THE PDF REPORT
+            putExtra("ROI_X", viewModel.roiX)
+            putExtra("ROI_Y", viewModel.roiY)
+            putExtra("ROI_W", viewModel.roiW)
+            putExtra("ROI_H", viewModel.roiH)
         }
         startActivity(intent)
     }

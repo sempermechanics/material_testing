@@ -32,6 +32,16 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
     // Smooth Upscaling Paint for our tiny Bitmaps
     private val upscalerPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
+    // 🚀 NEW: Smart Mathematical Formatter for PDF Tables!
+    private fun formatMetric(value: Float): String {
+        val absVal = kotlin.math.abs(value)
+        return if (absVal > 0f && (absVal < 0.001f || absVal >= 10000f)) {
+            String.format("%.2e", value)
+        } else {
+            String.format("%.5f", value)
+        }
+    }
+
     fun newPage(): Canvas {
         currentPage?.let { pdfDocument.finishPage(it) }
         pageNumber++
@@ -68,7 +78,6 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         cursorY += 100f
     }
 
-    // Modern Elegant Key-Value
     fun drawKeyValue(key: String, value: String) {
         canvas?.drawText(key, margin, cursorY + 40f, bodyPaintLeft)
         canvas?.drawText(value, pageWidth - margin, cursorY + 40f, bodyPaintRight)
@@ -77,17 +86,14 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         cursorY += 20f
     }
 
-    // 🚀 FIXED: advanceY is now safely inside the class
     fun advanceY(amount: Float) {
         cursorY += amount
     }
 
-    // Modern Zebra-Striped Table
     fun drawTable(headers: List<String>, rows: List<List<String>>, colWeights: List<Float>) {
         val rowHeight = 80f
         val colWidths = colWeights.map { it * contentWidth }
 
-        // Solid Header Background
         canvas?.drawRect(margin, cursorY, pageWidth - margin, cursorY + rowHeight, Paint().apply { color = colorPrimary })
 
         var currentX = margin
@@ -99,7 +105,6 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         }
         cursorY += rowHeight
 
-        // Alternating Rows
         val rowBgZebra = Paint().apply { color = colorZebra }
         for ((rowIndex, row) in rows.withIndex()) {
             if (rowIndex % 2 == 1) canvas?.drawRect(margin, cursorY, pageWidth - margin, cursorY + rowHeight, rowBgZebra)
@@ -113,12 +118,10 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
             }
             cursorY += rowHeight
         }
-        // Bottom border
         canvas?.drawLine(margin, cursorY, pageWidth - margin, cursorY, Paint().apply { color = colorPrimary; strokeWidth = 4f })
         cursorY += 60f
     }
 
-    // Side-by-Side Images in a bounded Card
     fun drawInputVerificationCard(refBmp: Bitmap, refName: String, defBmp: Bitmap, defName: String) {
         val imgWidth = (contentWidth - 60f) / 2f
         val startY = cursorY + 40f
@@ -145,26 +148,25 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         cursorY += maxImgHeight + 160f
     }
 
-    // The strict 2-Per-Page mathematical constraint
     fun drawFieldBlock(field: FieldResult, blockHeight: Float) {
         val startY = cursorY
 
-        // 1. Header
         canvas?.drawText("${field.fieldName}  [${field.unit}]", margin, cursorY + 60f, h2Paint)
         cursorY += 100f
 
-        // 2. Extrema Table
+        // 🚀 UPGRADED: Dynamic Scientific Notation applied here!
         drawTable(
-            headers = listOf("Metric", "Peak Value", "Location (X,Y)"),
+            headers = listOf("Metric", "Value", "Location (X,Y)"),
             rows = listOf(
-                listOf("Maximum (+)", "%.5f".format(field.maxValue), "(${field.maxCoordX}, ${field.maxCoordY})"),
-                listOf("Minimum (-)", "%.5f".format(field.minValue), "(${field.minCoordX}, ${field.minCoordY})")
+                listOf("Maximum (+)", formatMetric(field.maxValue), "(${field.maxCoordX}, ${field.maxCoordY})"),
+                listOf("Minimum (-)", formatMetric(field.minValue), "(${field.minCoordX}, ${field.minCoordY})"),
+                listOf(field.meanType, formatMetric(field.meanValue), "—"),
+                listOf("Standard Dev.", formatMetric(field.stdDevValue), "—")
             ),
             colWeights = listOf(0.4f, 0.3f, 0.3f)
         )
 
-        // 3. Upscaled Heatmap constraint to exactly fill remaining block space
-        val remainingSpace = blockHeight - (cursorY - startY) - 40f // Leave 40px buffer
+        val remainingSpace = blockHeight - (cursorY - startY) - 40f
         val scale = contentWidth / field.bakedHeatmap.width
         var drawH = field.bakedHeatmap.height * scale
         var drawW = contentWidth
@@ -177,11 +179,34 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         val centerOffset = (contentWidth - drawW) / 2f
         val destRect = RectF(margin + centerOffset, cursorY, margin + centerOffset + drawW, cursorY + drawH)
 
-        // Draw with Vector Upscaling
         canvas?.drawBitmap(field.bakedHeatmap, null, destRect, upscalerPaint)
         canvas?.drawRect(destRect, Paint().apply { color = colorBorder; style = Paint.Style.STROKE; strokeWidth = 3f })
 
-        // Force the cursor to exactly the end of this block
+        cursorY = startY + blockHeight
+    }
+
+    fun drawDiagnosticBlock(title: String, bitmap: Bitmap, blockHeight: Float) {
+        val startY = cursorY
+
+        canvas?.drawText(title, margin, cursorY + 60f, h2Paint)
+        cursorY += 100f
+
+        val remainingSpace = blockHeight - (cursorY - startY) - 40f
+        val scale = contentWidth / bitmap.width
+        var drawH = bitmap.height * scale
+        var drawW = contentWidth
+
+        if (drawH > remainingSpace) {
+            drawH = remainingSpace
+            drawW = bitmap.width * (remainingSpace / bitmap.height)
+        }
+
+        val centerOffset = (contentWidth - drawW) / 2f
+        val destRect = RectF(margin + centerOffset, cursorY, margin + centerOffset + drawW, cursorY + drawH)
+
+        canvas?.drawBitmap(bitmap, null, destRect, upscalerPaint)
+        canvas?.drawRect(destRect, Paint().apply { color = colorBorder; style = Paint.Style.STROKE; strokeWidth = 3f })
+
         cursorY = startY + blockHeight
     }
 }

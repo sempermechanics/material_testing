@@ -38,8 +38,13 @@ object PdfReportGenerator {
             layout.drawKeyValue("Strain Window:", "${data.strainWindow} subsets")
             layout.advanceY(40f)
 
-            layout.drawSectionHeader("Input Verification")
+            // 🚀 NEW: Add the ROI information explicitly to the first page!
+            layout.drawSectionHeader("Analysis Region (ROI)")
+            layout.drawKeyValue("Origin (X, Y):", "(${data.roiData.startX}, ${data.roiData.startY})")
+            layout.drawKeyValue("Dimensions:", "${data.roiData.width} x ${data.roiData.height} px")
+            layout.advanceY(40f)
 
+            layout.drawSectionHeader("Input Verification")
             layout.drawInputVerificationCard(
                 data.referenceImage, data.referenceImageName,
                 data.deformedImage, data.deformedImageName
@@ -48,17 +53,25 @@ object PdfReportGenerator {
             // PAGES 2+: FIELD VISUALIZATIONS (Strictly 2 Per Page!)
             emit(Progress.Status("Rendering Visualization Maps...", 30))
 
-            // Usable height = 3508 (A4) - 300 (Margins) = 3208. Divide by 2 = 1604px per field block.
             val blockHeight = 1604f
 
+            // Chunking the 5 fields:
+            // Chunk 1 = U, V (Page 2)
+            // Chunk 2 = Exx, Eyy (Page 3)
+            // Chunk 3 = Exy (Page 4, top slot)
             data.fieldResults.chunked(2).forEachIndexed { pageIndex, fieldsChunk ->
-                layout.newPage() // Start a fresh page for every 2 fields
+                layout.newPage()
 
                 fieldsChunk.forEachIndexed { index, field ->
                     emit(Progress.Status("Rendering ${field.fieldName}...", 30 + (pageIndex * 2 + index) * 10))
-
-                    // Hand it to the mathematical constraint block
                     layout.drawFieldBlock(field, blockHeight)
+                }
+
+                // 🚀 NEW: Fill the empty slot! If this chunk only has 1 item (Exy Shear),
+                // we have exactly enough space left on the page to print the ZNSSD Heatmap.
+                if (fieldsChunk.size == 1) {
+                    emit(Progress.Status("Rendering Diagnostic ZNSSD Map...", 85))
+                    layout.drawDiagnosticBlock("ZNSSD Correlation Quality", data.znssdHeatmap, blockHeight)
                 }
             }
 
@@ -69,7 +82,6 @@ object PdfReportGenerator {
 
             val stats = data.engineStats
 
-            // 🚀 1. The Sequential Pipeline (Telling the correct RGDIC story)
             layout.drawSectionHeader("1. Solver Pipeline (2-Pass Architecture)")
             layout.drawTable(
                 headers = listOf("Pipeline Stage", "Points"),
@@ -82,7 +94,6 @@ object PdfReportGenerator {
                 colWeights = listOf(0.7f, 0.3f)
             )
 
-            // 🚀 2. The Quality Metrics
             layout.drawSectionHeader("2. Optimization & Quality")
             layout.drawTable(
                 headers = listOf("Metric", "Value"),
@@ -94,7 +105,6 @@ object PdfReportGenerator {
                 colWeights = listOf(0.7f, 0.3f)
             )
 
-            // 3. Simplex Stats
             layout.drawSectionHeader("3. Simplex Rescue Subsystem")
             layout.drawTable(
                 headers = listOf("Intervention", "Triggered", "Saved"),
@@ -104,7 +114,6 @@ object PdfReportGenerator {
                 colWeights = listOf(0.5f, 0.25f, 0.25f)
             )
 
-            // 4. Timings
             layout.drawSectionHeader("4. Hardware Profiling (Wall Time)")
             layout.drawTable(
                 headers = listOf("Execution Phase", "Time (ms)"),
