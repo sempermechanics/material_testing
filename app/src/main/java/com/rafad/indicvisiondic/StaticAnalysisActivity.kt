@@ -521,61 +521,38 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 val executionTimeMs = (System.currentTimeMillis() - processingStartTime).toInt()
                 val totalTime = executionTimeMs / 1000.0
 
-                // 🚀 THE TRUE ADMIN STEALTH QUEUE & DIAGNOSTICS
-                var generatedRefPath = "" // 🚀 Fix for the Image Mix-up
+                // 🚀 THE TRUE ADMIN STEALTH QUEUE (OFFLINE-FIRST)
+                var generatedRefPath = ""
 
                 if (firstFrameValidPoints > 0) {
                     withContext(Dispatchers.IO) {
                         Log.d("inDIC_Diag", "========================================")
-                        Log.d("inDIC_Diag", "1. ENGINE FINISHED. STARTING CLOUD SYNC.")
+                        Log.d("inDIC_Diag", "1. ENGINE FINISHED. PREPARING OFFLINE QUEUE.")
 
                         try {
-                            // 🚀 FIX: Write the Reference Image to a PNG so ResultViewer can use it!
                             val refBmp = IndicVisionNativeLib.getPreviewFromBytes(refBytes, viewModel.realRefWidth)
                             val refPngFile = File(cacheDir, "temp_ref_view.png")
                             refPngFile.outputStream().use { out ->
                                 refBmp?.compress(Bitmap.CompressFormat.PNG, 100, out)
                             }
                             generatedRefPath = refPngFile.absolutePath
-                            Log.d("inDIC_Diag", "-> Reference Image Saved: $generatedRefPath")
 
+                            // 🚀 SAFE OFFLINE AUTH CHECK (No Database Calls Here!)
                             val currentUser = SupabaseManager.client.auth.currentUserOrNull()
-                            if (currentUser == null) {
-                                Log.e("inDIC_Diag", "-> ERROR: User is NULL. Not logged in!")
-                                return@withContext
-                            }
+                            val userEmail = currentUser?.email ?: "Offline_User"
+                            val userId = currentUser?.id ?: "Offline_ID"
 
-                            val userEmail = currentUser.email ?: currentUser.id
-                            Log.d("inDIC_Diag", "-> Auth Confirmed. User: $userEmail")
+                            // Generate a temporary offline ID so the PDF UI doesn't crash locally
+                            viewModel.currentSessionId = "Pending_Cloud_Sync_" + java.util.UUID.randomUUID().toString().take(8)
 
-                            val sessionData = AnalysisSessionInsert(
-                                userId = currentUser.id,
-                                specimenIdentifier = viewModel.refName.removePrefix("Ref: "),
-                                pointsConverged = firstFrameValidPoints,
-                                avgIterations = firstFrameAvgIters,
-                                executionTimeMs = executionTimeMs
-                            )
-
-                            Log.d("inDIC_Diag", "2. ATTEMPTING DATABASE INSERT...")
-                            val insertedRow = SupabaseManager.client.postgrest["analysis_sessions"]
-                                .insert(sessionData) { select() }
-                                .decodeSingle<AnalysisSessionResponse>()
-
-                            viewModel.currentSessionId = insertedRow.sessionId
-                            Log.d("inDIC_Diag", "-> SUCCESS! Database Row Created. Session ID: ${insertedRow.sessionId}")
-
-                            Log.d("inDIC_Diag", "3. PREPARING WORKER PAYLOAD...")
                             val datFile = File(batchDir, String.format("frame_%04d.dat", 0))
                             val defPath = viewModel.defFilePaths.firstOrNull() ?: ""
 
-                            Log.d("inDIC_Diag", "-> REF Path: $generatedRefPath")
-                            Log.d("inDIC_Diag", "-> DEF Path: $defPath")
-                            Log.d("inDIC_Diag", "-> DAT Path: ${datFile.absolutePath}")
-
+                            // 🚀 WE PACK EVERYTHING (EVEN THE DB MATH) INTO THE WORKER!
                             val uploadData = androidx.work.Data.Builder()
-                                .putString("SESSION_ID", insertedRow.sessionId)
+                                .putString("USER_ID", userId)
                                 .putString("USER_EMAIL", userEmail)
-                                .putString("REF_PATH", generatedRefPath) // 🚀 Passing the real PNG!
+                                .putString("REF_PATH", generatedRefPath)
                                 .putString("DEF_PATH", defPath)
                                 .putString("DAT_PATH", datFile.absolutePath)
                                 .putString("FRAME_NAME", "Frame_1")
@@ -591,24 +568,24 @@ class StaticAnalysisActivity : AppCompatActivity() {
                                 .putInt("ROI_W", finalRectW)
                                 .putInt("ROI_H", finalRectH)
                                 .putFloatArray("ENGINE_STATS", viewModel.engineStatsArray ?: FloatArray(16))
+                                // 🚀 PASS THE DATABASE INSERT METRICS
+                                .putInt("POINTS_CONVERGED", firstFrameValidPoints)
+                                .putFloat("AVG_ITERS", firstFrameAvgIters)
+                                .putInt("EXEC_TIME", executionTimeMs)
                                 .build()
 
-                            Log.d("inDIC_Diag", "4. ENQUEUING BACKGROUND WORKER...")
+                            Log.d("inDIC_Diag", "2. ENQUEUING BACKGROUND WORKER...")
                             val uploadWork = androidx.work.OneTimeWorkRequestBuilder<DicUploadWorker>()
                                 .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
                                 .setInputData(uploadData)
                                 .build()
 
                             androidx.work.WorkManager.getInstance(applicationContext).enqueue(uploadWork)
-                            Log.d("inDIC_Diag", "-> SUCCESS! Worker Enqueued with ID: ${uploadWork.id}")
+                            Log.d("inDIC_Diag", "-> SUCCESS! Worker safely queued in local SQLite.")
                             Log.d("inDIC_Diag", "========================================")
 
                         } catch (e: Exception) {
-                            Log.e("inDIC_Diag", "========================================")
-                            Log.e("inDIC_Diag", "❌ CRITICAL SUPABASE ERROR IN STATIC ANALYSIS")
-                            Log.e("inDIC_Diag", "Error Message: ${e.message}")
-                            Log.e("inDIC_Diag", "Stacktrace:", e)
-                            Log.e("inDIC_Diag", "========================================")
+                            Log.e("inDIC_Diag", "❌ LOCAL CATCH: Failed to enqueue worker", e)
                         }
                     }
                 }

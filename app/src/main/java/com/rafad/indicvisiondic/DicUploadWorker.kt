@@ -16,43 +16,56 @@ import java.nio.ByteOrder
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val sessionId = inputData.getString("SESSION_ID") ?: return@withContext Result.failure()
         val userEmail = inputData.getString("USER_EMAIL") ?: "Unknown_User"
-        val cloudFolder = "$userEmail/Session_$sessionId"
+        val userId = inputData.getString("USER_ID") ?: return@withContext Result.failure()
+
+        val refPath = inputData.getString("REF_PATH") ?: return@withContext Result.failure()
+        val defPath = inputData.getString("DEF_PATH") ?: return@withContext Result.failure()
+        val datPath = inputData.getString("DAT_PATH") ?: return@withContext Result.failure()
+        val frameName = inputData.getString("FRAME_NAME") ?: "Frame"
 
         Log.d("inDIC_Diag", "========================================")
-        Log.d("inDIC_Diag", "👻 GHOST WORKER WOKE UP!")
-        Log.d("inDIC_Diag", "-> Target Folder: $cloudFolder")
+        Log.d("inDIC_Diag", "👻 GHOST WORKER WOKE UP (NETWORK DETECTED)!")
 
         try {
+            // 🚀 STEP 1: CREATE THE DATABASE ROW FIRST
+            Log.d("inDIC_Diag", "-> Step 1: Connecting to Supabase Database...")
+            val sessionData = AnalysisSessionInsert(
+                userId = userId,
+                specimenIdentifier = inputData.getString("REF_NAME") ?: "Target",
+                pointsConverged = inputData.getInt("POINTS_CONVERGED", 0),
+                avgIterations = inputData.getFloat("AVG_ITERS", 0f),
+                executionTimeMs = inputData.getInt("EXEC_TIME", 0)
+            )
+
+            val insertedRow = SupabaseManager.client.postgrest["analysis_sessions"]
+                .insert(sessionData) { select() }
+                .decodeSingle<AnalysisSessionResponse>()
+
+            val trueSessionId = insertedRow.sessionId
+            val cloudFolder = "$userEmail/Session_$trueSessionId"
+            Log.d("inDIC_Diag", "   ✅ Row Created! Target Folder: $cloudFolder")
+
             val storageBucket = SupabaseManager.client.storage["session_artifacts"]
 
-            // 1. UPLOAD REFERENCE
-            Log.d("inDIC_Diag", "-> Step 1: Uploading Reference Image...")
-            val refPath = inputData.getString("REF_PATH") ?: ""
+            // 🚀 STEP 2: UPLOAD REFERENCE
+            Log.d("inDIC_Diag", "-> Step 2: Uploading Reference Image...")
             val refFile = File(refPath)
             if (refFile.exists()) {
                 storageBucket.upload("$cloudFolder/Reference.png", refFile.readBytes()) { upsert = true }
                 Log.d("inDIC_Diag", "   ✅ Reference Uploaded.")
-            } else {
-                Log.e("inDIC_Diag", "   ❌ Reference File Missing on Disk!")
             }
 
-            // 2. UPLOAD DEFORMED
-            Log.d("inDIC_Diag", "-> Step 2: Uploading Deformed Image...")
-            val defPath = inputData.getString("DEF_PATH") ?: ""
+            // 🚀 STEP 3: UPLOAD DEFORMED
+            Log.d("inDIC_Diag", "-> Step 3: Uploading Deformed Image...")
             val defFile = File(defPath)
-            val frameName = inputData.getString("FRAME_NAME") ?: "Frame"
             if (defFile.exists()) {
                 storageBucket.upload("$cloudFolder/Deformed_$frameName.png", defFile.readBytes()) { upsert = true }
                 Log.d("inDIC_Diag", "   ✅ Deformed Uploaded.")
-            } else {
-                Log.e("inDIC_Diag", "   ❌ Deformed File Missing on Disk!")
             }
 
-            // 3. GENERATE & UPLOAD CSV
-            Log.d("inDIC_Diag", "-> Step 3: Generating CSV...")
-            val datPath = inputData.getString("DAT_PATH") ?: ""
+            // 🚀 STEP 4: GENERATE & UPLOAD CSV
+            Log.d("inDIC_Diag", "-> Step 4: Generating CSV...")
             val datFile = File(datPath)
             var publicCsvUrl = ""
             var rawFloatData: FloatArray? = null
@@ -73,30 +86,27 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 val csvCloudPath = "$cloudFolder/Data_$frameName.csv"
                 storageBucket.upload(csvCloudPath, csvContent.toString().toByteArray()) { upsert = true }
                 publicCsvUrl = storageBucket.publicUrl(csvCloudPath)
-                Log.d("inDIC_Diag", "   ✅ CSV Uploaded: $publicCsvUrl")
-            } else {
-                Log.e("inDIC_Diag", "   ❌ DAT File Missing on Disk!")
+                Log.d("inDIC_Diag", "   ✅ CSV Uploaded.")
             }
 
-            // 4. HEADLESS PDF GENERATOR
-            Log.d("inDIC_Diag", "-> Step 4: Generating PDF in Background...")
+            // 🚀 STEP 5: HEADLESS PDF GENERATOR
+            Log.d("inDIC_Diag", "-> Step 5: Generating PDF in Background...")
             var publicPdfUrl = ""
             if (rawFloatData != null && refFile.exists() && defFile.exists()) {
-                publicPdfUrl = generateHeadlessPdfAndUpload(rawFloatData, refFile, defFile, cloudFolder, storageBucket, frameName)
-                Log.d("inDIC_Diag", "   ✅ PDF Uploaded: $publicPdfUrl")
-            } else {
-                Log.e("inDIC_Diag", "   ❌ PDF Generation Skipped due to missing files.")
+                // IMPORTANT: We pass the TRUE Session ID to the PDF generator so it prints the real ID on the report!
+                publicPdfUrl = generateHeadlessPdfAndUpload(rawFloatData, refFile, defFile, cloudFolder, storageBucket, frameName, trueSessionId)
+                Log.d("inDIC_Diag", "   ✅ PDF Uploaded.")
             }
 
-            // 5. UPDATE DATABASE
-            Log.d("inDIC_Diag", "-> Step 5: Updating Database Ledger...")
+            // 🚀 STEP 6: UPDATE DATABASE LEDGER
+            Log.d("inDIC_Diag", "-> Step 6: Updating Database Ledger...")
             if (publicCsvUrl.isNotEmpty() || publicPdfUrl.isNotEmpty()) {
                 val updateMap = mutableMapOf<String, String>()
                 if (publicCsvUrl.isNotEmpty()) updateMap["summary_csv_path"] = publicCsvUrl
                 if (publicPdfUrl.isNotEmpty()) updateMap["heatmap_png_path"] = publicPdfUrl
 
                 SupabaseManager.client.postgrest["analysis_sessions"].update(updateMap) {
-                    filter { eq("session_id", sessionId) }
+                    filter { eq("session_id", trueSessionId) }
                 }
                 Log.d("inDIC_Diag", "   ✅ Ledger Updated.")
             }
@@ -109,9 +119,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             Log.e("inDIC_Diag", "========================================")
             Log.e("inDIC_Diag", "❌ CRITICAL ERROR IN GHOST WORKER")
             Log.e("inDIC_Diag", "Error Message: ${e.message}")
-            Log.e("inDIC_Diag", "Stacktrace:", e)
             Log.e("inDIC_Diag", "========================================")
-            return@withContext Result.retry()
+            return@withContext Result.retry() // OS will automatically backoff and retry later!
         }
     }
 
@@ -120,15 +129,20 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     // =========================================================================
     private suspend fun generateHeadlessPdfAndUpload(
         data: FloatArray, refFile: File, defFile: File, cloudFolder: String,
-        storageBucket: io.github.jan.supabase.storage.BucketApi, frameName: String
+        storageBucket: io.github.jan.supabase.storage.BucketApi, frameName: String, trueSessionId: String
     ): String = withContext(Dispatchers.Default) {
 
         val imgW = inputData.getInt("IMG_W", 1000)
         val imgH = inputData.getInt("IMG_H", 1000)
         val step = inputData.getInt("STEP", 5)
 
-        val baseImg = BitmapFactory.decodeFile(refFile.absolutePath)?.compressForPdf() ?: return@withContext ""
-        val defImg = BitmapFactory.decodeFile(defFile.absolutePath)?.compressForPdf() ?: baseImg
+        // 🚀 THE FIX: Load at FULL RESOLUTION to match the Heatmap Matrix perfectly!
+        val originalBaseImg = BitmapFactory.decodeFile(refFile.absolutePath) ?: return@withContext ""
+        val originalDefImg = BitmapFactory.decodeFile(defFile.absolutePath) ?: originalBaseImg
+
+        // Force them to exactly match the Engine's dimensions
+        val baseImg = Bitmap.createScaledBitmap(originalBaseImg, imgW, imgH, true)
+        val defImg = Bitmap.createScaledBitmap(originalDefImg, imgW, imgH, true)
 
         val fieldNames = listOf("U Displacement", "V Displacement", "Exx Strain", "Eyy Strain", "Exy Shear", "ZNSSD (Correlation Quality)")
         val fieldKeys = listOf("U", "V", "Exx", "Eyy", "Exy", "ZNSSD")
@@ -187,6 +201,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
             val (heatmapBmp, actualMin, actualMax) = VisualizationEngine.generateHeatmap(data, imgW, imgH, dataIndex, step, null, null)
 
+            // 🚀 Bake them at FULL resolution, then compress for the PDF
             val bakedHeatmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888).also { bmp ->
                 val tempCanvas = Canvas(bmp)
                 tempCanvas.drawBitmap(baseImg, 0f, 0f, null)
@@ -219,7 +234,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
         val statsArray = inputData.getFloatArray("ENGINE_STATS") ?: FloatArray(16)
         val reportData = ReportData(
-            sessionId = inputData.getString("SESSION_ID") ?: "Unknown",
+            sessionId = trueSessionId,
             specimenName = inputData.getString("REF_NAME") ?: "Target",
             analysisDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
             subsetSize = inputData.getInt("SUBSET", 41),
@@ -230,8 +245,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 inputData.getInt("ROI_X", 0), inputData.getInt("ROI_Y", 0),
                 inputData.getInt("ROI_W", imgW), inputData.getInt("ROI_H", imgH)
             ),
-            referenceImage = baseImg,
-            deformedImage = defImg,
+            // 🚀 Compress the cover images strictly for Page 1
+            referenceImage = baseImg.compressForPdf(),
+            deformedImage = defImg.compressForPdf(),
             referenceImageName = "Baseline",
             deformedImageName = frameName,
             fieldResults = fieldResults,
@@ -250,7 +266,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         storageBucket.upload(pdfCloudPath, tempPdfFile.readBytes()) { upsert = true }
 
         fieldResults.forEach { it.bakedHeatmap.recycle() }
-        correlationHeatmap?.recycle(); baseImg.recycle(); defImg.recycle()
+        correlationHeatmap?.recycle(); baseImg.recycle(); defImg.recycle(); originalBaseImg.recycle(); originalDefImg.recycle()
         tempPdfFile.delete()
 
         return@withContext storageBucket.publicUrl(pdfCloudPath)

@@ -28,7 +28,6 @@ class SplashActivity : AppCompatActivity() {
             val session = SupabaseManager.client.auth.currentSessionOrNull()
 
             if (session == null) {
-                // No session = User is fully logged out. Send to Auth Zone.
                 navigateTo(AuthActivity::class.java)
                 return
             }
@@ -44,20 +43,21 @@ class SplashActivity : AppCompatActivity() {
                 onSuccess = { status ->
                     when (status) {
                         "APPROVED" -> navigateTo(StaticAnalysisActivity::class.java)
+                        "OFFLINE_CACHE_APPROVED" -> {
+                            // 🚀 THE OFFLINE BYPASS: They have a token but no Wi-Fi. Let them work!
+                            android.widget.Toast.makeText(this, "Offline Mode", android.widget.Toast.LENGTH_LONG).show()
+                            navigateTo(StaticAnalysisActivity::class.java)
+                        }
                         "PENDING" -> navigateTo(PendingApprovalActivity::class.java)
                         else -> navigateTo(AuthActivity::class.java, "System error: Unknown account status.")
                     }
                 },
                 onFailure = { exception ->
-                    // Network timeout, hardware mismatch, or revoked access.
-                    // The AuthRepo has already wiped the session if it was a security breach.
                     navigateTo(AuthActivity::class.java, exception.message ?: "Could not verify account securely.")
                 }
             )
 
         } catch (e: Exception) {
-            // THE ULTIMATE SAFETY NET: If anything randomly crashes (e.g. out of memory),
-            // we catch it here and route them safely to login rather than crashing the app.
             navigateTo(AuthActivity::class.java, "A critical system error occurred during startup.")
         }
     }

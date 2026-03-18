@@ -82,21 +82,15 @@ class AuthRepository {
                 val userId = supabase.auth.currentUserOrNull()?.id
                     ?: throw Exception("Login failed: User session not established.")
 
-                // Fetch from auth_profiles using 'user_id'
                 val profile = supabase.postgrest["auth_profiles"]
                     .select { filter { eq("user_id", userId) } }
                     .decodeSingle<AuthProfile>()
 
-                // Gate 1: Admin Approval
                 when (profile.accessStatus) {
-                    "APPROVED" -> { /* Proceed to next gate */ }
-                    "PENDING" -> {
-                        // REMOVED: supabase.auth.signOut()
-                        // Keep their session alive so we remember who they are!
-                        return@withContext Result.failure(Exception("Account is pending Admin approval."))
-                    }
+                    "APPROVED" -> { /* Proceed */ }
+                    "PENDING" -> return@withContext Result.failure(Exception("Account is pending Admin approval."))
                     "REVOKED" -> {
-                        supabase.auth.signOut() // DO sign out revoked users
+                        supabase.auth.signOut()
                         return@withContext Result.failure(Exception("Account access has been revoked."))
                     }
                     else -> {
@@ -105,8 +99,6 @@ class AuthRepository {
                     }
                 }
 
-                // Gate 2: The Hardware Lock
-                // We only trigger the lock if the database has an ID saved AND it doesn't match the phone.
                 if (profile.deviceFingerprint != null && profile.deviceFingerprint != currentDeviceId) {
                     supabase.auth.signOut()
                     return@withContext Result.failure(Exception("UNAUTHORIZED HARDWARE: Account locked to a different device."))
@@ -114,8 +106,12 @@ class AuthRepository {
 
                 Result.success("Secure Login Successful!")
 
+            } catch (e: io.github.jan.supabase.exceptions.HttpRequestException) {
+                // 🚀 CATCH NO INTERNET DURING LOGIN
+                Result.failure(Exception("No Internet Connection. Please connect to Wi-Fi to log in."))
             } catch (e: Exception) {
-                supabase.auth.signOut()
+                // 🚀 Catch all other errors without crashing
+                try { supabase.auth.signOut() } catch (ex: Exception) {}
                 Result.failure(Exception(e.message ?: "Invalid Email or Password."))
             }
         }
@@ -143,13 +139,11 @@ class AuthRepository {
                     .select { filter { eq("user_id", userId) } }
                     .decodeSingle<AuthProfile>()
 
-                // Gate 1: Hardware Lock
                 if (profile.deviceFingerprint != currentDeviceId && profile.deviceFingerprint != null) {
                     supabase.auth.signOut()
                     return@withContext Result.failure(Exception("UNAUTHORIZED HARDWARE"))
                 }
 
-                // Gate 2: Admin Status
                 when (profile.accessStatus) {
                     "APPROVED" -> Result.success("APPROVED")
                     "PENDING" -> Result.success("PENDING")
@@ -159,6 +153,9 @@ class AuthRepository {
                     }
                     else -> Result.failure(Exception("Unknown status."))
                 }
+            } catch (e: io.github.jan.supabase.exceptions.HttpRequestException) {
+                // 🚀 THE MAGIC BULLET: If we have no internet, we return a special OFFLINE code!
+                Result.success("OFFLINE_CACHE_APPROVED")
             } catch (e: Exception) {
                 Result.failure(Exception("Could not verify account status."))
             }
