@@ -38,29 +38,28 @@ object PdfReportGenerator {
             layout.drawKeyValue("Strain Window:", "${data.strainWindow} subsets")
             layout.advanceY(40f)
 
-            layout.drawSectionHeader("Reference Image Baseline")
-            data.referenceImage?.let { layout.drawImage(it) }
+            layout.drawSectionHeader("Input Verification")
 
-            // PAGE 2 to 6: FIELD VISUALIZATIONS
+            layout.drawInputVerificationCard(
+                data.referenceImage, data.referenceImageName,
+                data.deformedImage, data.deformedImageName
+            )
+
+            // PAGES 2+: FIELD VISUALIZATIONS (Strictly 2 Per Page!)
             emit(Progress.Status("Rendering Visualization Maps...", 30))
-            data.fieldResults.forEachIndexed { index, field ->
-                emit(Progress.Status("Rendering ${field.fieldName}...", 30 + (index * 10)))
-                layout.newPage()
-                layout.drawTitle(field.fieldName)
 
-                layout.drawTable(
-                    headers = listOf("Metric", "Peak Value", "Location (X,Y)"),
-                    rows = listOf(
-                        listOf("Maximum (+)", "%.5f %s".format(field.maxValue, field.unit), "(${field.maxCoordX}, ${field.maxCoordY})"),
-                        listOf("Minimum (-)", "%.5f %s".format(field.minValue, field.unit), "(${field.minCoordX}, ${field.minCoordY})"),
-                        listOf("Mean", "%.5f %s".format(field.meanValue, field.unit), "—"),
-                        listOf("Standard Dev.", "%.5f %s".format(field.stdDevValue, field.unit), "—")
-                    ),
-                    colWeights = listOf(0.3f, 0.35f, 0.35f)
-                )
+            // Usable height = 3508 (A4) - 300 (Margins) = 3208. Divide by 2 = 1604px per field block.
+            val blockHeight = 1604f
 
-                layout.drawSectionHeader("Visualization Map")
-                layout.drawImage(field.bakedHeatmap)
+            data.fieldResults.chunked(2).forEachIndexed { pageIndex, fieldsChunk ->
+                layout.newPage() // Start a fresh page for every 2 fields
+
+                fieldsChunk.forEachIndexed { index, field ->
+                    emit(Progress.Status("Rendering ${field.fieldName}...", 30 + (pageIndex * 2 + index) * 10))
+
+                    // Hand it to the mathematical constraint block
+                    layout.drawFieldBlock(field, blockHeight)
+                }
             }
 
             // FINAL PAGE: TELEMETRY & HARDWARE LOG
@@ -69,32 +68,44 @@ object PdfReportGenerator {
             layout.drawTitle("Engine Performance Log")
 
             val stats = data.engineStats
-            layout.drawSectionHeader("Optimization Metrics")
+
+            // 🚀 1. The Sequential Pipeline (Telling the correct RGDIC story)
+            layout.drawSectionHeader("1. Solver Pipeline (2-Pass Architecture)")
+            layout.drawTable(
+                headers = listOf("Pipeline Stage", "Points"),
+                rows = listOf(
+                    listOf("Total Target Grid Points", "${stats.totalPointsAttempted}"),
+                    listOf("Phase 1: Solved by Delaunay Mesh", "${stats.pathAPoints}"),
+                    listOf("Phase 2: Saved by RGDIC Propagation", "${stats.pathBPoints}"),
+                    listOf("Final Unsolvable (Dead Points)", "${stats.totalPointsRejected}")
+                ),
+                colWeights = listOf(0.7f, 0.3f)
+            )
+
+            // 🚀 2. The Quality Metrics
+            layout.drawSectionHeader("2. Optimization & Quality")
             layout.drawTable(
                 headers = listOf("Metric", "Value"),
                 rows = listOf(
-                    listOf("Total Points Attempted", "${stats.totalPointsAttempted}"),
-                    listOf("Points Solved (Mesh)", "${stats.pathAPoints}"),
-                    listOf("Points Solved (Flood Fill)", "${stats.pathBPoints}"),
-                    listOf("Points Rejected (Failed)", "${stats.totalPointsRejected}"),
-                    listOf("Convergence Rate", "%.2f %%".format(stats.convergencePercent)),
-                    listOf("Avg ICGN Iterations", "%.2f".format(stats.avgIcgnIterations))
+                    listOf("Global Average ZNSSD (Correlation)", "%.5f".format(data.globalAvgZnssd)),
+                    listOf("Overall Convergence Rate", "%.2f %%".format(stats.convergencePercent)),
+                    listOf("Average ICGN Iterations", "%.2f".format(stats.avgIcgnIterations))
                 ),
-                colWeights = listOf(0.6f, 0.4f)
+                colWeights = listOf(0.7f, 0.3f)
             )
 
-            layout.drawSectionHeader("Simplex Rescue Subsystem")
+            // 3. Simplex Stats
+            layout.drawSectionHeader("3. Simplex Rescue Subsystem")
             layout.drawTable(
-                headers = listOf("Intervention", "Count"),
+                headers = listOf("Intervention", "Triggered", "Saved"),
                 rows = listOf(
-                    listOf("Total Rescues Attempted", "${stats.simplexRescueTotal}"),
-                    listOf("Rescues Succeeded", "${stats.simplexSavedCount}"),
-                    listOf("Rescues Failed", "${stats.simplexDeadCount}")
+                    listOf("Simplex Interventions", "${stats.simplexCalls}", "${stats.simplexSaved}")
                 ),
-                colWeights = listOf(0.6f, 0.4f)
+                colWeights = listOf(0.5f, 0.25f, 0.25f)
             )
 
-            layout.drawSectionHeader("Hardware Profiling (Wall Time)")
+            // 4. Timings
+            layout.drawSectionHeader("4. Hardware Profiling (Wall Time)")
             layout.drawTable(
                 headers = listOf("Execution Phase", "Time (ms)"),
                 rows = listOf(
@@ -103,7 +114,7 @@ object PdfReportGenerator {
                     listOf("Delaunay Mesh Phase", "%.1f ms".format(stats.delaunayMs)),
                     listOf("Strain Calculation Phase", "%.1f ms".format(stats.strainMs)),
                     listOf("TOTAL WALL TIME", "%.1f ms".format(stats.wallTimeMs)),
-                    listOf("Peak Throughput", "%.2f pts/ms".format(stats.throughputPtsPerMs))
+                    listOf("Average Throughput", "%.2f pts/ms".format(stats.avgThroughputPtsPerMs))
                 ),
                 colWeights = listOf(0.6f, 0.4f)
             )

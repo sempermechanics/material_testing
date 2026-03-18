@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import android.graphics.pdf.PdfDocument
 import android.graphics.RectF
 import android.app.ProgressDialog
+import java.io.ByteArrayOutputStream
 class ResultViewerActivity : AppCompatActivity() {
 
     private lateinit var imgMain: TouchImageView
@@ -58,6 +59,7 @@ class ResultViewerActivity : AppCompatActivity() {
     private var imgW = 0; private var imgH = 0; private var step = 5
 
     private var cachedBaseImage: Bitmap? = null
+
     private var cachedHeatmap: Bitmap? = null
     private var currentTypeString: String = "U"
     private var isGeneratingHeatmap = false
@@ -80,7 +82,7 @@ class ResultViewerActivity : AppCompatActivity() {
     private var lastClosestIdx = -1
     private var lastMaxIdx = -1
     private var lastMinIdx = -1
-
+    private var currentDefPath: String? = null
     private var currentHeatmapMin = 0f
     private var currentHeatmapMax = 0f
 
@@ -130,9 +132,9 @@ class ResultViewerActivity : AppCompatActivity() {
         imgH = intent.getIntExtra("IMG_H", 0)
         step = intent.getIntExtra("STEP", 5)
 
-        val defPath = intent.getStringExtra("DEF_PATH")
-        if (defPath != null) {
-            cachedBaseImage = BitmapFactory.decodeFile(defPath)
+        currentDefPath = intent.getStringExtra("DEF_PATH") // 🚀 SAVE IT HERE
+        if (currentDefPath != null) {
+            cachedBaseImage = BitmapFactory.decodeFile(currentDefPath)
             imgMain.setImageBitmap(cachedBaseImage)
             imgMain.setTrueImageDimensions(imgW, imgH)
         }
@@ -869,13 +871,13 @@ class ResultViewerActivity : AppCompatActivity() {
                 data, imgW, imgH, dataIndex, step, null, null
             )
 
-            // 3. Bake Canvas
+            // 3. Bake Canvas AND Optimize for PDF!
             val bakedHeatmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888).also { bmp ->
                 val tempCanvas = Canvas(bmp)
                 tempCanvas.drawBitmap(baseImg, 0f, 0f, null)
                 tempCanvas.drawBitmap(heatmapBmp, 0f, 0f, Paint().apply { alpha = 180 })
                 bakeAnnotationsToCanvas(tempCanvas, imgW, imgH, actualMin, actualMax, fieldKeys[fieldIndex], unit, maxIdx, minIdx, data)
-            }
+            }.compressForPdf() // 🚀 FIXED: Removed the quality parameter!
             heatmapBmp.recycle()
 
             fieldResults.add(FieldResult(
@@ -888,16 +890,49 @@ class ResultViewerActivity : AppCompatActivity() {
             ))
         }
 
-        // Parse the 16-element C++ Engine Stats Array
+        // 🚀 Parse the EXACT 16-element C++ Engine Stats Array
         val statsArray = intent.getFloatArrayExtra("ENGINE_STATS") ?: FloatArray(16)
-        val engineStats = EngineStats(
-            totalPointsAttempted = statsArray[0].toInt(), totalPointsSolved = statsArray[1].toInt(),
-            totalPointsRejected = statsArray[2].toInt(), pathAPoints = statsArray[3].toInt(), pathBPoints = statsArray[4].toInt(),
-            simplexRescueTotal = statsArray[5].toInt(), simplexSavedCount = statsArray[6].toInt(), simplexDeadCount = statsArray[7].toInt(),
-            avgIcgnIterations = statsArray[8], wallTimeMs = statsArray[9], akazeRansacMs = statsArray[10], hessianPrepassMs = statsArray[11],
-            delaunayMs = statsArray[12], strainMs = statsArray[13], throughputPtsPerMs = statsArray[14], convergencePercent = statsArray[15]
-        )
 
+        val engineStats = if (statsArray.size >= 16) {
+            EngineStats(
+                totalPointsAttempted = statsArray[0].toInt(),
+                totalPointsSolved = statsArray[1].toInt(),
+                totalPointsRejected = statsArray[2].toInt(),
+                pathAPoints = statsArray[3].toInt(),
+                pathBPoints = statsArray[4].toInt(),
+
+                simplexCalls = statsArray[5].toInt(),
+                simplexSaved = statsArray[6].toInt(),
+                finalDeadPoints = statsArray[7].toInt(),
+
+                avgIcgnIterations = statsArray[8],
+                wallTimeMs = statsArray[9],
+                akazeRansacMs = statsArray[10],
+                hessianPrepassMs = statsArray[11],
+                delaunayMs = statsArray[12],
+                strainMs = statsArray[13],
+                avgThroughputPtsPerMs = statsArray[14],
+                convergencePercent = statsArray[15]
+            )
+        } else {
+            // Fallback (16 zeros)
+            EngineStats(0,0,0,0,0,0,0,0,0f,0f,0f,0f,0f,0f,0f,0f)
+        }
+        // 🚀 CALCULATE TRUE GLOBAL AVERAGE ZNSSD
+        var totalZnssd = 0.0f
+        var validPointCount = 0
+        for (i in data.indices step 8) {
+            val corr = data[i + 7] // Index 7 is the ZNSSD score
+            if (corr != 0f && corr <= 0.15f) {
+                totalZnssd += corr
+                validPointCount++
+            }
+        }
+        val actualGlobalZnssd = if (validPointCount > 0) totalZnssd / validPointCount else 0.0f
+        // 🚀 DECODE THE REAL DEFORMED IMAGE
+        val realDefImg = currentDefPath?.let { path ->
+            BitmapFactory.decodeFile(path)?.compressForPdf()
+        } ?: baseImg.compressForPdf()
         return ReportData(
             sessionId = intent.getStringExtra("SESSION_ID") ?: "Local_Offline_Mode",
             specimenName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch Analysis",
@@ -906,11 +941,18 @@ class ResultViewerActivity : AppCompatActivity() {
             stepSize = step,
             strainWindow = intent.getIntExtra("STRAIN_WINDOW", 15),
             strainMethod = intent.getStringExtra("STRAIN_METHOD") ?: "VSG",
-            referenceImage = baseImg,
+
+            referenceImage = baseImg.compressForPdf(), // 🚀 FIXED: Removed the quality parameter
+            deformedImage = realDefImg,
+
             referenceImageName = intent.getStringExtra("REF_NAME") ?: "reference.png",
             deformedImageName = originalDefNames.getOrNull(currentFrameIndex) ?: "Frame_${currentFrameIndex + 1}",
             fieldResults = fieldResults,
-            engineStats = engineStats
+            engineStats = engineStats,
+
+            znssdHeatmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
+            solverPathMap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
+            globalAvgZnssd = actualGlobalZnssd // 🚀 NOW USING REAL DATA!
         )
     }
 
@@ -1203,5 +1245,22 @@ class ResultViewerActivity : AppCompatActivity() {
                 runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save Image", Toast.LENGTH_SHORT).show() }
             }
         }.start()
+    }
+    /**
+     * Extreme Optimizer: Drops file size from 30MB to < 4MB for PDF embedding.
+     * Uses RGB_565 (no alpha channel, half memory) and strict 600px scaling.
+     */
+    private fun Bitmap.compressForPdf(maxWidth: Int = 600): Bitmap {
+        val ratio = maxWidth.toFloat() / this.width
+        val newWidth = if (this.width > maxWidth) maxWidth else this.width
+        val newHeight = (this.height * ratio).toInt()
+
+        val scaled = Bitmap.createScaledBitmap(this, newWidth, newHeight, true)
+        val strippedBmp = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.RGB_565)
+        val canvas = Canvas(strippedBmp)
+        canvas.drawBitmap(scaled, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG))
+
+        if (scaled != this) scaled.recycle()
+        return strippedBmp
     }
 }

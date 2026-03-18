@@ -1,11 +1,6 @@
 package com.rafad.indicvisiondic
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.Typeface
+import android.graphics.*
 import android.graphics.pdf.PdfDocument
 
 class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
@@ -21,13 +16,21 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         private set
     private var pageNumber = 0
 
+    // Design System Colors
+    private val colorPrimary = Color.parseColor("#1A237E") // Navy Blue
+    private val colorText = Color.parseColor("#37474F")    // Slate Gray
+    private val colorBorder = Color.parseColor("#CFD8DC")  // Light Gray
+    private val colorZebra = Color.parseColor("#F8F9FA")   // Faint Gray
+
     // Typography
-    private val h1Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(26, 35, 126); textSize = 100f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
-    private val h2Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.DKGRAY; textSize = 60f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
-    private val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 40f }
-    private val boldBodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 40f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
-    private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.LTGRAY; strokeWidth = 4f }
-    private val tableHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 38f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+    private val h1Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorPrimary; textSize = 90f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD) }
+    private val h2Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorText; textSize = 55f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD) }
+    private val bodyPaintLeft = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorText; textSize = 38f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL) }
+    private val bodyPaintRight = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorText; textSize = 38f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD); textAlign = Paint.Align.RIGHT }
+    private val tableHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 35f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD) }
+
+    // Smooth Upscaling Paint for our tiny Bitmaps
+    private val upscalerPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
     fun newPage(): Canvas {
         currentPage?.let { pdfDocument.finishPage(it) }
@@ -36,7 +39,8 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         val page = pdfDocument.startPage(pageInfo)
         currentPage = page
         canvas = page.canvas
-        cursorY = margin + 100f
+        cursorY = margin
+        drawFooter()
         return page.canvas
     }
 
@@ -46,76 +50,138 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         canvas = null
     }
 
-    fun ensureSpace(requiredHeight: Float) {
-        if (cursorY + requiredHeight > pageHeight - margin) newPage()
+    private fun drawFooter() {
+        val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorBorder; textSize = 30f; textAlign = Paint.Align.CENTER }
+        canvas?.drawLine(margin, pageHeight - margin, pageWidth - margin, pageHeight - margin, Paint().apply { color = colorBorder; strokeWidth = 2f })
+        canvas?.drawText("inDIC Metrology Report • Page $pageNumber", pageWidth / 2f, pageHeight - (margin / 2f), footerPaint)
     }
 
     fun drawTitle(title: String) {
-        ensureSpace(150f)
-        canvas?.drawText(title, margin, cursorY, h1Paint)
-        cursorY += 80f
-        canvas?.drawLine(margin, cursorY, pageWidth - margin, cursorY, linePaint)
-        cursorY += 80f
-    }
-
-    fun drawSectionHeader(title: String) {
-        ensureSpace(120f)
-        canvas?.drawText(title, margin, cursorY, h2Paint)
-        cursorY += 80f
-    }
-
-    fun drawKeyValue(key: String, value: String) {
-        ensureSpace(60f)
-        canvas?.drawText(key, margin, cursorY, boldBodyPaint)
-        canvas?.drawText(value, margin + 650f, cursorY, bodyPaint)
+        canvas?.drawText(title, margin, cursorY + 80f, h1Paint)
+        cursorY += 120f
+        canvas?.drawLine(margin, cursorY, pageWidth - margin, cursorY, Paint().apply { color = colorPrimary; strokeWidth = 6f })
         cursorY += 60f
     }
 
-    fun drawImage(bitmap: Bitmap) {
-        val availableHeight = pageHeight - cursorY - margin
-        val scale = contentWidth / bitmap.width
-        var drawHeight = bitmap.height * scale
-
-        if (drawHeight > availableHeight) {
-            newPage()
-            drawHeight = bitmap.height * scale
-        }
-
-        val destRect = RectF(margin, cursorY, margin + contentWidth, cursorY + drawHeight)
-        canvas?.drawBitmap(bitmap, null, destRect, null)
-        canvas?.drawRect(destRect, Paint().apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 6f })
-        cursorY += drawHeight + 80f
+    fun drawSectionHeader(title: String) {
+        canvas?.drawText(title, margin, cursorY + 60f, h2Paint)
+        cursorY += 100f
     }
 
+    // Modern Elegant Key-Value
+    fun drawKeyValue(key: String, value: String) {
+        canvas?.drawText(key, margin, cursorY + 40f, bodyPaintLeft)
+        canvas?.drawText(value, pageWidth - margin, cursorY + 40f, bodyPaintRight)
+        cursorY += 60f
+        canvas?.drawLine(margin, cursorY, pageWidth - margin, cursorY, Paint().apply { color = colorZebra; strokeWidth = 2f })
+        cursorY += 20f
+    }
+
+    // 🚀 FIXED: advanceY is now safely inside the class
+    fun advanceY(amount: Float) {
+        cursorY += amount
+    }
+
+    // Modern Zebra-Striped Table
     fun drawTable(headers: List<String>, rows: List<List<String>>, colWeights: List<Float>) {
         val rowHeight = 80f
-        ensureSpace(rowHeight * (rows.size + 1))
-
         val colWidths = colWeights.map { it * contentWidth }
-        var currentX = margin
 
-        // Draw Header
-        canvas?.drawRect(margin, cursorY - 60f, pageWidth - margin, cursorY + 20f, Paint().apply { color = Color.rgb(26, 35, 126) })
+        // Solid Header Background
+        canvas?.drawRect(margin, cursorY, pageWidth - margin, cursorY + rowHeight, Paint().apply { color = colorPrimary })
+
+        var currentX = margin
         for ((i, header) in headers.withIndex()) {
-            canvas?.drawText(header, currentX + 20f, cursorY - 10f, tableHeaderPaint)
+            val alignX = if (i == 0) currentX + 20f else currentX + colWidths[i] - 20f
+            val paint = if (i == 0) tableHeaderPaint else Paint(tableHeaderPaint).apply { textAlign = Paint.Align.RIGHT }
+            canvas?.drawText(header, alignX, cursorY + 55f, paint)
             currentX += colWidths[i]
         }
-        cursorY += 40f
+        cursorY += rowHeight
 
-        // Draw Rows
-        val rowBgPaint = Paint().apply { color = Color.rgb(245, 245, 250) }
+        // Alternating Rows
+        val rowBgZebra = Paint().apply { color = colorZebra }
         for ((rowIndex, row) in rows.withIndex()) {
-            currentX = margin
-            if (rowIndex % 2 == 0) canvas?.drawRect(margin, cursorY - 40f, pageWidth - margin, cursorY + 40f, rowBgPaint)
+            if (rowIndex % 2 == 1) canvas?.drawRect(margin, cursorY, pageWidth - margin, cursorY + rowHeight, rowBgZebra)
 
+            currentX = margin
             for ((colIndex, cell) in row.withIndex()) {
-                canvas?.drawText(cell, currentX + 20f, cursorY + 15f, bodyPaint)
+                val alignX = if (colIndex == 0) currentX + 20f else currentX + colWidths[colIndex] - 20f
+                val paint = if (colIndex == 0) bodyPaintLeft else bodyPaintRight
+                canvas?.drawText(cell, alignX, cursorY + 55f, paint)
                 currentX += colWidths[colIndex]
             }
             cursorY += rowHeight
         }
-        cursorY += 40f
+        // Bottom border
+        canvas?.drawLine(margin, cursorY, pageWidth - margin, cursorY, Paint().apply { color = colorPrimary; strokeWidth = 4f })
+        cursorY += 60f
     }
 
-    fun advanceY(amount: Float) { cursorY += amount }
+    // Side-by-Side Images in a bounded Card
+    fun drawInputVerificationCard(refBmp: Bitmap, refName: String, defBmp: Bitmap, defName: String) {
+        val imgWidth = (contentWidth - 60f) / 2f
+        val startY = cursorY + 40f
+
+        val refRatio = imgWidth / refBmp.width
+        val refHeight = refBmp.height * refRatio
+
+        val defRatio = imgWidth / defBmp.width
+        val defHeight = defBmp.height * defRatio
+
+        val maxImgHeight = maxOf(refHeight, defHeight)
+
+        val cardRect = RectF(margin, cursorY, pageWidth - margin, startY + maxImgHeight + 100f)
+        canvas?.drawRoundRect(cardRect, 20f, 20f, Paint().apply { color = Color.WHITE })
+        canvas?.drawRoundRect(cardRect, 20f, 20f, Paint().apply { color = colorBorder; style = Paint.Style.STROKE; strokeWidth = 4f })
+
+        canvas?.drawBitmap(refBmp, null, RectF(margin + 20f, startY, margin + 20f + imgWidth, startY + refHeight), upscalerPaint)
+        canvas?.drawBitmap(defBmp, null, RectF(margin + 40f + imgWidth, startY, margin + 40f + imgWidth * 2f, startY + defHeight), upscalerPaint)
+
+        val labelPaint = Paint(bodyPaintLeft).apply { textAlign = Paint.Align.CENTER; textSize = 32f }
+        canvas?.drawText("Ref: $refName", margin + 20f + (imgWidth/2f), startY + maxImgHeight + 60f, labelPaint)
+        canvas?.drawText("Def: $defName", margin + 40f + imgWidth + (imgWidth/2f), startY + maxImgHeight + 60f, labelPaint)
+
+        cursorY += maxImgHeight + 160f
+    }
+
+    // The strict 2-Per-Page mathematical constraint
+    fun drawFieldBlock(field: FieldResult, blockHeight: Float) {
+        val startY = cursorY
+
+        // 1. Header
+        canvas?.drawText("${field.fieldName}  [${field.unit}]", margin, cursorY + 60f, h2Paint)
+        cursorY += 100f
+
+        // 2. Extrema Table
+        drawTable(
+            headers = listOf("Metric", "Peak Value", "Location (X,Y)"),
+            rows = listOf(
+                listOf("Maximum (+)", "%.5f".format(field.maxValue), "(${field.maxCoordX}, ${field.maxCoordY})"),
+                listOf("Minimum (-)", "%.5f".format(field.minValue), "(${field.minCoordX}, ${field.minCoordY})")
+            ),
+            colWeights = listOf(0.4f, 0.3f, 0.3f)
+        )
+
+        // 3. Upscaled Heatmap constraint to exactly fill remaining block space
+        val remainingSpace = blockHeight - (cursorY - startY) - 40f // Leave 40px buffer
+        val scale = contentWidth / field.bakedHeatmap.width
+        var drawH = field.bakedHeatmap.height * scale
+        var drawW = contentWidth
+
+        if (drawH > remainingSpace) {
+            drawH = remainingSpace
+            drawW = field.bakedHeatmap.width * (remainingSpace / field.bakedHeatmap.height)
+        }
+
+        val centerOffset = (contentWidth - drawW) / 2f
+        val destRect = RectF(margin + centerOffset, cursorY, margin + centerOffset + drawW, cursorY + drawH)
+
+        // Draw with Vector Upscaling
+        canvas?.drawBitmap(field.bakedHeatmap, null, destRect, upscalerPaint)
+        canvas?.drawRect(destRect, Paint().apply { color = colorBorder; style = Paint.Style.STROKE; strokeWidth = 3f })
+
+        // Force the cursor to exactly the end of this block
+        cursorY = startY + blockHeight
+    }
 }
