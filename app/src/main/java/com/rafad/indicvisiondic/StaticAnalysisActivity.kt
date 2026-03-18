@@ -38,12 +38,11 @@ import io.github.jan.supabase.auth.auth
 @Serializable
 data class AnalysisSessionInsert(
     @SerialName("user_id") val userId: String,
+    @SerialName("user_email") val userEmail: String, // 🚀 NEW!
     @SerialName("specimen_identifier") val specimenIdentifier: String,
     @SerialName("points_converged") val pointsConverged: Int,
     @SerialName("avg_iterations") val avgIterations: Float,
     @SerialName("execution_time_ms") val executionTimeMs: Int
-    // Note: We are leaving out the cloud storage paths for now
-    // until we implement the Cloud Storage bucket uploads!
 )
 @Serializable
 data class AnalysisSessionResponse(

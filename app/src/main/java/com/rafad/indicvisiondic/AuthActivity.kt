@@ -114,7 +114,8 @@ class AuthActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.Main).launch {
             val result: Result<String> = if (isLoginMode) {
-                authRepo.loginUser(email, pass, myDeviceId)
+                // 🚀 FIX: Pass the public key during login so it can self-heal!
+                authRepo.loginUser(email, pass, myDeviceId, myPublicKey)
             } else {
                 authRepo.registerUser(email, pass, myDeviceId, myPublicKey)
             }
@@ -131,8 +132,6 @@ class AuthActivity : AppCompatActivity() {
                 onFailure = { exception ->
                     val errorMsg = exception.message ?: "An unknown error occurred"
 
-                    // If the user logged in successfully but they are just PENDING,
-                    // the AuthRepo throws this specific exception. We catch it and route them to the Waiting Room.
                     if (errorMsg.contains("pending", ignoreCase = true)) {
                         val intent = Intent(this@AuthActivity, PendingApprovalActivity::class.java)
                         startActivity(intent)

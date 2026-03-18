@@ -32,6 +32,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             Log.d("inDIC_Diag", "-> Step 1: Connecting to Supabase Database...")
             val sessionData = AnalysisSessionInsert(
                 userId = userId,
+                userEmail = userEmail, // 🚀 THE NEW ADDITION!
                 specimenIdentifier = inputData.getString("REF_NAME") ?: "Target",
                 pointsConverged = inputData.getInt("POINTS_CONVERGED", 0),
                 avgIterations = inputData.getFloat("AVG_ITERS", 0f),
