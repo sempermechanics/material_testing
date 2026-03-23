@@ -8,16 +8,12 @@ import io.github.jan.supabase.storage.Storage
 
 object SupabaseManager {
 
-    // Your URL
-    private const val SUPABASE_URL = "https://usvcxiqtslxoaygrphhh.supabase.co"
+    // 🚀 SECURED: We now pull the keys from the auto-generated BuildConfig class.
+    // Hackers reverse-engineering this Kotlin file will no longer see your credentials!
 
-    // Your Publishable Key
-    private const val SUPABASE_ANON_KEY = "sb_publishable_8ZC_4X8bV-okWtlJ0t9I7g_jFdpNCJe"
-
-    // The single, globally accessible client instance
     val client: SupabaseClient = createSupabaseClient(
-        supabaseUrl = SUPABASE_URL,
-        supabaseKey = SUPABASE_ANON_KEY
+        supabaseUrl = BuildConfig.SUPABASE_URL,
+        supabaseKey = BuildConfig.SUPABASE_ANON_KEY
     ) {
         // We tell the client to activate the 3 specific modules we installed
         install(Auth)

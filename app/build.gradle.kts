@@ -1,15 +1,20 @@
 plugins {
     alias(libs.plugins.android.application)
-    // If using build.gradle.kts
-    kotlin("plugin.serialization") version "1.9.22" // Match this to your project's Kotlin version
-
+    kotlin("plugin.serialization") version "1.9.22"
 }
+
+// 🚀 PURE KOTLIN BYPASS: Reads the file without needing 'java.util'
+val localPropertiesFile = rootProject.file("local.properties")
+val supabaseUrl = if (localPropertiesFile.exists()) {
+    localPropertiesFile.readLines().find { it.startsWith("SUPABASE_URL=") }?.substringAfter("=")?.trim() ?: ""
+} else ""
+val supabaseAnonKey = if (localPropertiesFile.exists()) {
+    localPropertiesFile.readLines().find { it.startsWith("SUPABASE_ANON_KEY=") }?.substringAfter("=")?.trim() ?: ""
+} else ""
 
 android {
     namespace = "com.rafad.indicvisiondic"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.rafad.indicvisiondic"
@@ -17,33 +22,50 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        // 🚀 SECURE INJECTION: Uses our pure Kotlin variables
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
+
         ndk {
-            abiFilters.add("arm64-v8a") // Forces compilation of the 64-bit NEON code
+            abiFilters.add("arm64-v8a")
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    buildFeatures {
+        buildConfig = true
+        viewBinding = true
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true // 🚀 THE SHREDDER IS NOW ON
+            isShrinkResources = true // 🚀 Destroys unused files
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
     }
+
+    // 🚀 NEW: Ensures C++ debug symbols are physically stripped from the final APK
+    packaging {
+        jniLibs {
+            keepDebugSymbols.clear()
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
         }
-    }
-    buildFeatures {
-        viewBinding = true
     }
 }
 
@@ -56,26 +78,20 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    val camerax_version = "1.3.0-alpha04" // Or latest stable
+
+    val camerax_version = "1.3.0-alpha04"
     implementation("androidx.camera:camera-core:${camerax_version}")
     implementation("androidx.camera:camera-camera2:${camerax_version}")
     implementation("androidx.camera:camera-lifecycle:${camerax_version}")
     implementation("androidx.camera:camera-view:${camerax_version}")
     implementation("androidx.camera:camera-extensions:${camerax_version}")
     implementation("androidx.activity:activity-ktx:1.8.2")
-    // 1. The Supabase BOM (Bill of Materials) - Keeps all module versions perfectly matched
+
     implementation(platform("io.github.jan-tennert.supabase:bom:3.0.3"))
-
-    // 2. The Core Modules we are using
-    implementation("io.github.jan-tennert.supabase:auth-kt")      // For Login
-    implementation("io.github.jan-tennert.supabase:postgrest-kt") // For Database
-    implementation("io.github.jan-tennert.supabase:storage-kt")   // For File Uploads
-
-    // 3. The Ktor Network Engine (Supabase relies on this to send the actual HTTP requests)
+    implementation("io.github.jan-tennert.supabase:auth-kt")
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.github.jan-tennert.supabase:storage-kt")
     implementation("io.ktor:ktor-client-okhttp:3.0.0")
-
-    // 4. Kotlin Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 }

@@ -8,12 +8,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(OpenCV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/opencv/sdk/native/jni")
 find_package(OpenCV REQUIRED)
 
-# --- THE ULTIMATE SPEED OPTIMIZATION FLAGS ---
-# -O3: Maximum compiler optimization
-# -flto: Link-time optimization (cross-file inlining)
-# -ffast-math: Aggressive floating point math vectorization (MASSIVE speedup for DIC)
-# -fvisibility=hidden: Strips unused symbols, making the .so file smaller and faster to load
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -flto -ffast-math -Wno-nan-infinity-disabled -fexceptions -fvisibility=hidden -fvisibility-inlines-hidden -fopenmp -O3 -fno-limit-debug-info -fPIC")
+# --- THE ULTIMATE SECURITY & SPEED FLAGS ---
+# Removed -fno-limit-debug-info!
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -flto -ffast-math -Wno-nan-infinity-disabled -fexceptions -fvisibility=hidden -fvisibility-inlines-hidden -fopenmp -fPIC")
+
+# 🚀 NEW: The '-s' flag forcefully strips the Symbol Table from the compiled binary.
+# This makes it nearly impossible for a disassembler to map your C++ logic.
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -s -flto")
+
 add_library(
         indicvision_core
         SHARED
