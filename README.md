@@ -1,20 +1,16 @@
-<div align="center">
 
-<img src="(https://drive.google.com/file/d/1UWvPFau1KlLAR7p0_2ZX_qOMAekKHCzL/view?usp=sharing)" alt="inDIC Logo" width="120"/>
+<div style="text-align: center;">
+
+<p align="center">
+  <img src="images/inDIC readme Images/Gemini_Generated_Image_kr4qadkr4qadkr4q.png" width="300" alt="Main Analysis Interface">
+</p>
 
 # inDIC
-### *Desktop-Grade 2D Digital Image Correlation. Natively on Android.*
+### *2D Digital Image Correlation. Natively on Android.*
 
-[![Build](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)](https://github.com/your-repo)
-[![Platform](https://img.shields.io/badge/platform-Android%20ARM64-blue?style=flat-square&logo=android)](https://developer.android.com)
-[![Language](https://img.shields.io/badge/language-Kotlin%20%7C%20C%2B%2B17-orange?style=flat-square)](https://kotlinlang.org)
-[![NDK](https://img.shields.io/badge/NDK-C%2B%2B%20Engine-red?style=flat-square)](https://developer.android.com/ndk)
-[![Eigen](https://img.shields.io/badge/math-Eigen%203.4-purple?style=flat-square)](https://eigen.tuxfamily.org)
-[![OpenCV](https://img.shields.io/badge/vision-OpenCV%204.x-green?style=flat-square)](https://opencv.org)
-[![License](https://img.shields.io/badge/license-Proprietary-lightgrey?style=flat-square)](LICENSE)
-[![RMSE](https://img.shields.io/badge/RMSE-0.0078%20px-brightgreen?style=flat-square)](##performance--validation)
+<img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build"> <img src="https://img.shields.io/badge/platform-Android%20ARM64-blue?style=flat-square&logo=android" alt="Platform"> <img src="https://img.shields.io/badge/language-Kotlin%20%7C%20C%2B%2B17-orange?style=flat-square" alt="Language"> <img src="https://img.shields.io/badge/NDK-C%2B%2B%20Engine-red?style=flat-square" alt="NDK"> <img src="https://img.shields.io/badge/math-Eigen%203.4-purple?style=flat-square" alt="Eigen"> <img src="https://img.shields.io/badge/vision-OpenCV%204.x-green?style=flat-square" alt="OpenCV"> <img src="https://img.shields.io/badge/license-Proprietary-lightgrey?style=flat-square" alt="License"> <img src="https://img.shields.io/badge/RMSE-0.0078%20px-brightgreen?style=flat-square" alt="RMSE">
 
-> **inDIC** is the first offline-first, full-field 2D Digital Image Correlation platform engineered natively for Android ARM64 — delivering sub-pixel displacement and Green–Lagrange strain metrology in under 5 seconds, entirely on-device, without any cloud dependency.
+> **inDIC** is the first offline-first, full-field 2D Digital Image Correlation platform engineered natively for Android — delivering sub-pixel displacement and Green–Lagrange strain metrology entirely on-device, without any cloud dependency.
 
 </div>
 
@@ -59,10 +55,8 @@ Beyond that, the **Trilinos** solver library that powers DICe's domain-decomposi
 
 inDIC conquers the HPC Wall through three interlocking innovations:
 
-1. **Pre-inverted Hessian Pool** — The expensive 6×6 Hessian matrix is computed and inverted *once* for the entire ROI in a parallel pre-pass, then reused across all solver calls. This converts a per-iteration $\mathcal{O}(N \cdot 36)$ operation into a $\mathcal{O}(1)$ lookup.
-
+1. **Pre-inverted Hessian Pool** — The expensive 6×6 Hessian matrix is computed and inverted *once* for the entire ROI in a parallel pre-pass, then reused across all solver calls. This converts a per-iteration \\(\mathcal{O}(N \cdot 36)\\) operation into a \\(\mathcal{O}(1)\\) lookup.
 2. **Hybrid Delaunay-ICGN Architecture** — A sparse AKAZE feature mesh provides exact 6-DOF affine initial guesses, collapsing ICGN convergence from 20–50 iterations to 3–7 iterations per subset on average.
-
 3. **ARM64-Native NEON SIMD** — The inner ICGN loop uses hand-vectorised ARM NEON intrinsics to process 4 floating-point values per clock cycle during the ZNSSD error accumulation step.
 
 The result: **78,000 point full-field DIC in 4.6 seconds** on a consumer Android smartphone, with RMSE accuracy of 0.0078 px — matching Sandia National Labs' desktop software (DICe) on the standard DIC Challenge benchmark.
@@ -74,7 +68,7 @@ The result: **78,000 point full-field DIC in 4.6 seconds** on a consumer Android
 ### 2.1 Hybrid Delaunay 6-DOF Mesh Seeding
 **Files:** `IndicVisionJNI.cpp` (PATH A block), `RoiDrawActivity.kt`
 
-Most mobile DIC attempts fail because they seed ICGN with a zero initial guess, forcing the solver to explore the entire 6-DOF parameter space from scratch. inDIC instead uses **AKAZE + RANSAC feature matching** to extract a sparse set of geometrically verified correspondences, then builds a **Bowyer-Watson Delaunay triangulation** over those points. Each triangle carries an exact affine warp computed via `cv::getAffineTransform` — giving every grid point a 6-DOF initial guess $[u, v, u_x, u_y, v_x, v_y]$ before a single ICGN iteration begins.
+Most mobile DIC attempts fail because they seed ICGN with a zero initial guess, forcing the solver to explore the entire 6-DOF parameter space from scratch. inDIC instead uses **AKAZE + RANSAC feature matching** to extract a sparse set of geometrically verified correspondences, then builds a **Bowyer-Watson Delaunay triangulation** over those points. Each triangle carries an exact affine warp computed via `cv::getAffineTransform` — giving every grid point a 6-DOF initial guess \\([u, v, u_x, u_y, v_x, v_y]\\) before a single ICGN iteration begins.
 
 This reduces mean iteration count from ~35 to **3–7 iterations per point** — the single largest performance improvement in the entire pipeline.
 
@@ -88,30 +82,29 @@ Points not covered by the Delaunay mesh (boundary regions, feature-sparse zones)
 
 The ICGN Hessian:
 
-$$\mathbf{H} = \sum_{i=0}^{N-1} \mathbf{s}_i \mathbf{s}_i^T$$
+$$\mathbf{H}=\sum_{i=0}^{N-1}\mathbf{s}_i\mathbf{s}_i^T$$
 
 depends *only* on the reference image and is constant across all deformed frames. inDIC pre-computes and caches $\mathbf{H}$ and $\mathbf{H}^{-1}$ for every grid point across all CPU cores in a single `#pragma omp parallel for` pass before any solver is dispatched. The fast path `precompute_subset_fast()` then skips the Hessian accumulation entirely (saving ~65% of precompute FP work per call), using `memcpy` block transfers for intensity/gradient data and a fused single-pass loop for SDI construction and intensity normalization.
 
 ### 2.4 Keys' 4th-Order Bicubic Interpolation
 **Files:** `ImageProcessor.cpp` (`get_keys_weights`, `Image::interpolate_bicubic`)
 
-Sub-pixel intensity sampling uses the **Keys cubic convolution kernel** ($a = -0.5$), which achieves 4th-order approximation accuracy — the highest commonly used in DIC literature. The implementation is fully separable (row-then-column), branch-free, and operates on a 4×4 pixel neighbourhood. The preceding gradient map uses a **4th-order central difference stencil** ($\mathcal{O}(h^4)$) rather than the standard 2nd-order stencil, improving gradient accuracy at the cost of a 2-pixel boundary guard.
+Sub-pixel intensity sampling uses the **Keys cubic convolution kernel** (\\(a=-0.5\\)), which achieves 4th-order approximation accuracy — the highest commonly used in DIC literature. The implementation is fully separable (row-then-column), branch-free, and operates on a 4×4 pixel neighbourhood. The preceding gradient map uses a **4th-order central difference stencil** (\\(\mathcal{O}(h^4)\\)) rather than the standard 2nd-order stencil, improving gradient accuracy at the cost of a 2-pixel boundary guard.
 
 ### 2.5 Levenberg-Marquardt Regularisation (Selective Damping)
 **Files:** `OptimizationEngine.cpp` (`solve_icgn`), `OptimizationEngine.h`
 
-For subsets with poor texture or large initial displacement errors, a **Levenberg-Marquardt damping** scheme can be enabled per-analysis. Following DICe's `computeUpdateFast` strategy, only the two translation DOF diagonal entries $H_{00}$ and $H_{11}$ are damped — the four strain-gradient DOFs are left undamped. This preserves the IC-GN convergence rate on well-textured regions while regularising translation-degenerate cases. Because $\alpha_{LM}$ is a fixed scalar, the damped inversion is performed once per solver call, not per iteration.
+For subsets with poor texture or large initial displacement errors, a **Levenberg-Marquardt damping** scheme can be enabled per-analysis. Following DICe's `computeUpdateFast` strategy, only the two translation DOF diagonal entries \\(H_{00}\\) and \\(H_{11}\\) are damped — the four strain-gradient DOFs are left undamped. This preserves the IC-GN convergence rate on well-textured regions while regularising translation-degenerate cases. Because \\(\alpha_{LM}\\) is a fixed scalar, the damped inversion is performed once per solver call, not per iteration.
 
 ### 2.6 Green–Lagrange Finite Strain Tensor + Dual Strain Engines
 **Files:** `StrainCalculator.cpp`
 
 Both strain calculation methods compute the full Green–Lagrange tensor — not the small-strain engineering approximation:
 
-$$E_{xx} = u_{,x} + \tfrac{1}{2}(u_{,x}^2 + v_{,x}^2)$$
+$$E_{xx}=u_{,x}+\frac{1}{2}(u_{,x}^2+v_{,x}^2)$$
 
-**VSG (Virtual Strain Gauge):** Fits a linear displacement plane to all neighbours within a circular window via LDLT least-squares. Equivalent to DICe's standard method.
-
-**NLVC (Non-Local Virtual Compressor):** Uses a Gaussian derivative kernel over a circular horizon, providing smooth, noise-robust strain estimates with configurable spatial localisation.
+- **VSG (Virtual Strain Gauge):** Fits a linear displacement plane to all neighbours within a circular window via LDLT least-squares. Equivalent to DICe's standard method.
+- **NLVC (Non-Local Virtual Compressor):** Uses a Gaussian derivative kernel over a circular horizon, providing smooth, noise-robust strain estimates with configurable spatial localisation.
 
 ### 2.7 ARM64 NEON SIMD Vectorisation
 **Files:** `OptimizationEngine.cpp` (fast-path in `solve_icgn`)
@@ -156,7 +149,7 @@ Result heatmaps are rendered using a **pre-computed 256-entry Jet LUT** (built o
 
 ### 🚀 Analysis Engine
 - Two-pass Hybrid Core: Delaunay Mesh (PATH A) + RGDIC Flood-Fill (PATH B)
-- Full 6-DOF shape function: translation, stretch, and shear ($u, v, u_x, u_y, v_x, v_y$)
+- Full 6-DOF shape function: translation, stretch, and shear (\\(u, v, u_x, u_y, v_x, v_y\\))
 - Levenberg-Marquardt regularisation (configurable $\alpha$)
 - Nelder-Mead Simplex rescue for diverged subsets
 - Multi-core parallel execution via OpenMP
@@ -191,21 +184,36 @@ Result heatmaps are rendered using a **pre-computed 256-entry Jet LUT** (built o
 
 ---
 
+<div style="page-break-inside: avoid;">
+
 ### Step 1 — Launch & Authentication
 
 On first launch, inDIC presents the secure login portal. Enter your registered email and password to authenticate.
 
 > **Note for new users:** Tap *"Need access? Request an account"* to submit a registration request. Your account will be in `PENDING` status until an administrator approves it. You will see the Pending Approval screen (Step 1b) until approval is granted.
 
-**What to add here:**
+<table>
+  <tr>
+    <td align="center">
+      <b>Secure Login</b><br>
+      <img src="images/inDIC readme Images/login_screen.jpg" width="250" alt="Login Screen">
+    </td>
+    <td align="center">
+      <b>Account Request</b><br>
+      <img src="images/inDIC readme Images/registration_screen.jpg" width="250" alt="Registration Screen">
+    </td>
+    <td align="center">
+      <b>Hardware Lock Status</b><br>
+      <img src="images/inDIC readme Images/pending_approval.jpg" width="250" alt="Pending Approval">
+    </td>
+  </tr>
+</table>
 
-> `![Insert Image: Login screen — showing the "inDIC" title at the top, email and password fields, the "SECURE LOGIN" button, and the "Need access? Request an account" toggle link at the bottom. Dark navy theme.]`
-
-> `![Insert Image: Registration screen — same layout but with an additional "Confirm Password" field visible, and the main button now reads "SUBMIT REQUEST".]`
-
-> `![Insert Image: Pending Approval screen — showing the user's email address, a masked hardware ID (e.g. "A3F9B2...C41D"), a "CHECK STATUS" button, and a "Log Out" text link at the bottom.]`
+</div>
 
 ---
+
+<div style="page-break-inside: avoid;">
 
 ### Step 2 — Main Analysis Interface
 
@@ -216,11 +224,15 @@ The screen is divided into three zones:
 - **ROI & Control Panel (middle):** Image selection buttons, ROI definition tools, and algorithm parameter fields
 - **Action Bar (bottom):** Run Analysis button, View Results button, and progress/timer display
 
-**What to add here:**
+<p align="center">
+  <img src="images/inDIC readme Images/main_analysis_interface.jpg" width="300" alt="Main Analysis Interface">
+</p>
 
-> `![Insert Image: Main Analysis Interface (StaticAnalysisActivity) — fully loaded state. Left card shows the reference speckle image thumbnail with filename label below it. Right card shows the deformed image thumbnail. Middle section shows "Subset Size", "Step Size", "Strain Window" EditText fields with example values (41, 5, 100). The "Draw ROI" and "Manual ROI" and "Full Image" buttons are visible. The "RUN ANALYSIS" button is at the bottom in a prominent colour. The Gaussian blur toggle Switch is visible. The strain method Radio Group (VSG / NLVC) is visible.]`
+</div>
 
 ---
+
+<div style="page-break-inside: avoid;">
 
 ### Step 3 — Loading Your Images
 
@@ -236,11 +248,15 @@ The screen is divided into three zones:
 
 **Supported formats:** PNG, TIFF, BMP, DNG, JPEG (with warning)
 
-**What to add here:**
+<p align="center">
+  <img src="images/inDIC readme Images/file_picker.jpg" width="300" alt="File Picker">
+</p>
 
-> `![Insert Image: File picker open — system image picker showing a gallery of speckle pattern images. Multiple images are ticked (multi-select mode for batch). The status bar at the top shows the inDIC app name.]`
+</div>
 
 ---
+
+<div style="page-break-inside: avoid;">
 
 ### Step 4 — Defining Your Region of Interest (ROI)
 
@@ -257,11 +273,22 @@ You have three ways to define the analysis region:
 
 > **Tip:** Always leave at least half a subset-width of clearance from the image boundary. The engine will skip subsets that would overlap the image edge.
 
-**What to add here:**
+<table>
+  <tr>
+    <td align="center">
+      <b>Standard Rectangular ROI</b><br>
+      <img src="images/inDIC readme Images/roi_rectangle.png" width="350" alt="Rectangular ROI">
+    </td>
+    <td align="center">
+      <b>Freeform Boundary Tracing</b><br>
+      <img src="images/inDIC readme Images/roi_freeform.png" width="350" alt="Freeform ROI">
+    </td>
+  </tr>
+</table>
 
-> `![Insert Image: ROI Draw screen (RoiDrawActivity) — full-screen with a speckle pattern image. A green rectangle ROI is drawn over the central region of the image. White circular handles are visible at each corner. The HUD bar at the top reads "ROI: 1024 x 768 px | Pos: (200, 150)". The toolbar at the bottom shows the five shape mode radio buttons (Rect, Square, Circle, Ellipse, Freeform). "SAVE ROI", "RESET", and "CANCEL" buttons are visible.]`
+</div>
 
-> `![Insert Image: ROI Draw screen showing the Freeform mode — a green freehand path is drawn around an irregular specimen boundary, clipping out the background. The path closes back on itself with the dimmed overlay visible outside the drawn region.]`
+<div style="page-break-inside: avoid;">
 
 #### Option B: Manual ROI Entry
 
@@ -269,14 +296,18 @@ You have three ways to define the analysis region:
 2. Enter the origin coordinates (X, Y) and dimensions (Width, Height) in pixels directly.
 3. Tap **APPLY** to confirm.
 
-**What to add here:**
-
-> `![Insert Image: Manual ROI dialog (dialog_manual_roi.xml) — a modal dialog with four numeric input fields labelled "X Origin (px)", "Y Origin (px)", "Width (px)", "Height (px)", with example values entered (e.g., 200, 150, 1024, 768). "APPLY" and "CANCEL" buttons at the bottom.]`
+<p align="center">
+  <img src="images/inDIC readme Images/manual_roi_dialog.jpg" width="300" alt="Manual ROI Dialog">
+</p>
 
 #### Option C: Full Image
 Tap **FULL IMAGE** to use the entire image frame as the analysis region. The status label updates to "✅ Using Full Image".
 
+</div>
+
 ---
+
+<div style="page-break-inside: avoid;">
 
 ### Step 5 — Configuring Analysis Parameters
 
@@ -295,7 +326,11 @@ Adjust the three core parameters in the text fields:
 **Gaussian Blur Toggle:**
 Enable the pre-filter switch if your images have sensor noise or compression artifacts. Disable for high-quality optical images to preserve sharp speckle boundaries.
 
+</div>
+
 ---
+
+<div style="page-break-inside: avoid;">
 
 ### Step 6 — Running the Analysis
 
@@ -307,21 +342,29 @@ Enable the pre-filter switch if your images have sensor noise or compression art
 
 > **During processing:** The back button is intercepted. Pressing it shows a warning dialog rather than killing the thread mid-computation, preventing memory corruption.
 
-**What to add here:**
+<p align="center">
+  <img src="images/inDIC readme Images/analysis_running.jpg" width="300" alt="Analysis Running Progress">
+</p>
 
-> `![Insert Image: Analysis running state — the main interface with the progress bar visible (approximately 60% filled), the elapsed timer showing "4.2 s", the "RUN ANALYSIS" button greyed out and disabled, and a status text below the progress bar showing something like "Solving 47,000 / 78,107 points…".]`
+</div>
 
 ---
+
+<div style="page-break-inside: avoid;">
 
 ### Step 7 — The Results Viewer
 
 After tapping **VIEW RESULTS**, the Results Viewer opens. This is the primary analysis output screen.
 
-**What to add here:**
+<p align="center">
+  <img src="images/inDIC readme Images/results_viewer_main.jpg" width="300" alt="Full Results Viewer Interface">
+</p>
 
-> `![Insert Image: Results Viewer — full interface overview. The main area shows the reference image as a base layer. A Jet colourmap heatmap overlay is rendered on top showing the U (horizontal displacement) field. The colour scale bar is on the right side with max/min labels. The top toolbar shows the field selector spinner (currently "U"), the Inspect toggle button, the Max/Min toggle button, and the Coordinate Input button. The bottom area shows the Export spinner and Execute button. The previous/next frame navigation arrows and frame counter are visible for batch mode.]`
+</div>
 
 ---
+
+<div style="page-break-inside: avoid;">
 
 #### Feature A: Switching Field Maps
 
@@ -337,17 +380,19 @@ Use the **field selector spinner** at the top to switch between the five availab
 
 The heatmap re-renders immediately on selection. The colour scale bar updates to the new field's bounds.
 
-**What to add here:**
+<p align="center">
+  <img src="images/inDIC readme Images/results_exx_strain.jpg" width="300" alt="Exx Strain Heatmap">
+</p>
 
-> `![Insert Image: Results Viewer showing the Exx strain field — the heatmap is now showing the strain distribution, with blue/cyan regions indicating low strain and red/yellow regions indicating high strain concentration. The spinner at top reads "Exx".]`
+</div>
 
 ---
+
+<div style="page-break-inside: avoid;">
 
 #### Feature B: Pinch-to-Zoom and Pan
 
 The base image and heatmap overlay are fully zoomable and pannable via standard pinch and drag gestures. The heatmap overlay matrix is synchronised to the base image zoom matrix in real time — both layers remain perfectly aligned at all zoom levels.
-
----
 
 #### Feature C: Inspect Probe
 
@@ -360,11 +405,15 @@ The base image and heatmap overlay are fully zoomable and pannable via standard 
    - ZNSSD correlation score (e.g., `ZNSSD = 0.0042`)
    - A green crosshair reticle marks the exact measurement point on the image
 
-**What to add here:**
+<p align="center">
+  <img src="images/inDIC readme Images/inspect_probe.jpg" width="300" alt="Inspect Probe HUD">
+</p>
 
-> `![Insert Image: Inspect Probe active — the green crosshair reticle is visible on the heatmap over a region of interest. The Inspector HUD card in the top-left corner shows "X: 512, Y: 384 | U: -0.3142 px | ZNSSD: 0.0042". The INSPECT toggle button is shown in its active/checked state.]`
+</div>
 
 ---
+
+<div style="page-break-inside: avoid;">
 
 #### Feature D: Max/Min Global Markers
 
@@ -375,19 +424,21 @@ The base image and heatmap overlay are fully zoomable and pannable via standard 
    - **Cyan reticle** — Global minimum location
 4. A **Max/Min HUD card** shows both values with their pixel coordinates.
 
-**What to add here:**
+<p align="center">
+  <img src="images/inDIC readme Images/max_min_markers.jpg" width="300" alt="Max and Min Markers">
+</p>
 
-> `![Insert Image: Max/Min markers active — a red crosshair reticle is placed on the brightest (highest value) region of the heatmap. A cyan crosshair reticle is placed on the darkest (lowest value) region. The Max/Min HUD card shows "Max: +0.8821 px @ (1024, 512) | Min: -0.8934 px @ (312, 744)".]`
+</div>
 
 ---
+
+<div style="page-break-inside: avoid;">
 
 #### Feature E: Coordinate Input (Go-To Point)
 
 1. Tap the **XY** button (coordinate input).
 2. Enter the image pixel coordinates of a specific point.
 3. The Inspect probe jumps directly to the nearest solved grid point at those coordinates and displays its data.
-
----
 
 #### Feature F: Custom Scale Bar
 
@@ -397,11 +448,15 @@ The base image and heatmap overlay are fully zoomable and pannable via standard 
 4. Tap **APPLY**. The heatmap immediately re-renders with the new bounds.
 5. To revert to auto-scaling, clear the fields and apply.
 
-**What to add here:**
+<p align="center">
+  <img src="images/inDIC readme Images/custom_scale_dialog.jpg" width="300" alt="Custom Scale Bounds Dialog">
+</p>
 
-> `![Insert Image: Custom scale dialog — a small dialog over the results viewer with "Min Value" and "Max Value" numeric input fields pre-filled with the current auto-bounds, and "APPLY" / "RESET TO AUTO" buttons.]`
+</div>
 
 ---
+
+<div style="page-break-inside: avoid;">
 
 #### Feature G: Batch Frame Navigation
 
@@ -410,11 +465,15 @@ When a batch of multiple deformed images was processed:
 - The **frame counter** (e.g., "Frame 3 / 12") updates with each step.
 - All viewer features (Inspect, Max/Min, export) operate on the currently displayed frame.
 
-**What to add here:**
+<p align="center">
+  <img src="images/inDIC readme Images/batch_navigation.jpg" width="300" alt="Batch Navigation Controls">
+</p>
 
-> `![Insert Image: Results Viewer in batch mode — the bottom navigation row is visible with the left arrow (◀, greyed out at frame 1), the frame counter label "Frame 1 / 8", and the right arrow (▶). The main heatmap shows the first frame's displacement field.]`
+</div>
 
 ---
+
+<div style="page-break-inside: avoid;">
 
 ### Step 8 — Exporting Results
 
@@ -430,30 +489,42 @@ The report generates in the background and is saved to your device's Documents f
 - **Diagnostic Page:** ZNSSD quality heatmap
 - **Engine Telemetry Page:** Complete profiling breakdown (AKAZE/RANSAC time, Hessian pre-pass, Delaunay mesh, Path A/B point counts, Simplex rescue statistics, total wall time, average ICGN iterations)
 
-**What to add here:**
+<table>
+  <tr>
+    <td align="center">
+      <b>Cover & Specimen Data</b><br>
+      <img src="images/inDIC readme Images/pdf_cover.jpg" width="250" alt="PDF Cover Page">
+    </td>
+    <td align="center">
+      <b>Strain Fields & Statistics</b><br>
+      <img src="images/inDIC readme Images/pdf_field_page.jpg" width="250" alt="PDF Field Page">
+    </td>
+    <td align="center">
+      <b>Engine Telemetry Log</b><br>
+      <img src="images/inDIC readme Images/pdf_telemetry.jpg" width="250" alt="PDF Telemetry Page">
+    </td>
+  </tr>
+</table>
 
-> `![Insert Image: PDF report — Cover page showing the "Master DIC Analysis Report" title, the session details table (Session ID, Date, Subset Size, etc.), ROI dimensions table, and the input verification card with the reference and deformed image thumbnails side by side at the bottom of the page.]`
-
-> `![Insert Image: PDF report — Field page for Exx strain showing the section header "Exx Strain [με]", the statistics table with Max/Min/Mean/StdDev rows with their coordinates, and the full-width Exx heatmap render below it.]`
-
-> `![Insert Image: PDF report — Engine Telemetry page showing the four section tables: Solver Pipeline (path A/B points), Optimization & Quality (ZNSSD, convergence rate, avg ICGN iterations), Simplex Rescue Subsystem, and Hardware Profiling (AKAZE time, Hessian time, strain time, total wall time).]`
+</div>
 
 #### CSV Export
 Select **"Export CSV (Current)"** to export a tab-separated data file with columns:
 
-```
+```text
 X, Y, U, V, Exx, Eyy, Exy, ZNSSD
-```
+````
 
 One row per solved grid point. Invalid/failed points are omitted.
 
 #### Batch Exports (Batch Mode Only)
-- **Export Images (Batch ZIP):** All frame heatmaps packaged as a ZIP archive in Downloads
-- **Export Master Batch CSV:** All frames concatenated in a single CSV with a `Frame` index column
 
----
+  - **Export Images (Batch ZIP):** All frame heatmaps packaged as a ZIP archive in Downloads
+  - **Export Master Batch CSV:** All frames concatenated in a single CSV with a `Frame` index column
 
-## 5. Installation & Build Instructions
+-----
+
+## 5\. Installation & Build Instructions
 
 ### Prerequisites
 
@@ -467,24 +538,23 @@ One row per solved grid point. Invalid/failed points are omitted.
 | OpenCV Android SDK | 4.8.x or 4.9.x | Download from opencv.org → Android releases |
 | Eigen | 3.4.0 | Header-only, included in `cpp/third_party/eigen/` |
 
----
+-----
 
-### Step 1 — Clone the Repository
+### Step 1 — Extract the Source Code
 
-```bash
-git clone https://github.com/your-username/inDIC.git
-cd inDIC
-```
+Extract the provided `inDIC_source.zip` repository to a local folder on your machine.
 
----
+-----
 
 ### Step 2 — Download and Place the OpenCV Android SDK
 
-1. Download the OpenCV Android SDK from [https://opencv.org/releases/](https://opencv.org/releases/) (choose the "Android" variant).
-2. Unzip the archive. You will get a folder named `OpenCV-android-sdk/`.
-3. Place it at the following path inside the project:
+1.  Download the OpenCV Android SDK from https://opencv.org/releases/ (choose the "Android" variant).
+2.  Unzip the archive. You will get a folder named `OpenCV-android-sdk/`.
+3.  Place it at the following path inside the project:
 
-```
+<!-- end list -->
+
+```text
 inDIC/
 ├── app/
 │   └── src/
@@ -494,11 +564,11 @@ inDIC/
 │                   └── OpenCV-android-sdk/   ← place here
 ```
 
-4. Verify that the path `third_party/OpenCV-android-sdk/sdk/native/jni/include/opencv2/opencv.hpp` exists.
+4.  Verify that the path `third_party/OpenCV-android-sdk/sdk/native/jni/include/opencv2/opencv.hpp` exists.
 
-> **Important:** The OpenCV SDK is not committed to this repository due to its size (~200 MB). It must be downloaded and placed manually. The `CMakeLists.txt` references it at the relative path above.
+> **Important:** The OpenCV SDK is not packaged with the source due to its size (\~200 MB). It must be downloaded and placed manually. The `CMakeLists.txt` references it at the relative path above.
 
----
+-----
 
 ### Step 3 — Configure Supabase Credentials
 
@@ -507,7 +577,7 @@ The app's authentication backend uses Supabase. Credentials are injected via `Bu
 Add the following to `local.properties` in the project root:
 
 ```properties
-SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_URL=[https://your-project-id.supabase.co](https://your-project-id.supabase.co)
 SUPABASE_ANON_KEY=your-supabase-anon-key-here
 ```
 
@@ -515,7 +585,7 @@ These values are read in `app/build.gradle` and exposed as `BuildConfig.SUPABASE
 
 > **For contributors building a standalone version:** You can substitute a self-hosted Supabase instance or replace `AuthRepository.kt` with a simple stub that returns `Result.success("APPROVED")` to bypass authentication during development.
 
----
+-----
 
 ### Step 4 — Verify CMakeLists.txt NDK Path
 
@@ -526,19 +596,19 @@ set(OpenCV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/OpenCV-android-sdk/sdk/n
 find_package(OpenCV REQUIRED)
 ```
 
----
+-----
 
 ### Step 5 — Build & Run
 
-1. Open the project root in Android Studio.
-2. Let Gradle sync complete (this will download Kotlin/Java dependencies via Maven).
-3. Connect an ARM64 Android device (API 26+) or create an AVD with `arm64-v8a` ABI.
-4. Select the `debug` build variant.
-5. Click **Run ▶**.
+1.  Open the project root in Android Studio.
+2.  Let Gradle sync complete (this will download Kotlin/Java dependencies via Maven).
+3.  Connect an ARM64 Android device (API 26+) or create an AVD with `arm64-v8a` ABI.
+4.  Select the `debug` build variant.
+5.  Click **Run ▶**.
 
-> **Build time note:** The first CMake build compiles the full C++ engine (~15 files including OpenCV + Eigen headers). Expect 3–8 minutes on first build. Subsequent incremental builds are <30 seconds.
+> **Build time note:** The first CMake build compiles the full C++ engine (\~15 files including OpenCV + Eigen headers). Expect 3–8 minutes on first build. Subsequent incremental builds are \<30 seconds.
 
----
+-----
 
 ### Build Variants
 
@@ -547,24 +617,25 @@ find_package(OpenCV REQUIRED)
 | `debug` | Full logcat output, LM damping diagnostics, debug image exports to `/sdcard/inDIC_debug/` |
 | `release` | ProGuard enabled, debug logging stripped, production Supabase credentials |
 
----
+-----
 
 ### Common Build Issues
 
-**`OpenCV_DIR not found`** — Verify the OpenCV SDK is placed at exactly `cpp/third_party/OpenCV-android-sdk/`. The path is case-sensitive on Linux/macOS.
+  - **`OpenCV_DIR not found`** — Verify the OpenCV SDK is placed at exactly `cpp/third_party/OpenCV-android-sdk/`. The path is case-sensitive on Linux/macOS.
+  - **`ANDROID_NDK not set`** — Open SDK Manager → SDK Tools → Install NDK (Side by side). Then set the NDK path in `local.properties`:
 
-**`ANDROID_NDK not set`** — Open SDK Manager → SDK Tools → Install NDK (Side by side). Then set the NDK path in `local.properties`:
+<!-- end list -->
+
 ```properties
 ndk.dir=/path/to/sdk/ndk/25.2.9519653
 ```
 
-**`arm_neon.h not found`** — Ensure ABI filter in `build.gradle` includes only `arm64-v8a`. The NEON header is not available for `x86` or `armeabi-v7a` targets.
+  - **`arm_neon.h not found`** — Ensure ABI filter in `build.gradle` includes only `arm64-v8a`. The NEON header is not available for `x86` or `armeabi-v7a` targets.
+  - **`SIGSEGV on first OpenMP call`** — This means the JNI call is being made from a new OS thread each time. Verify `AnalysisViewModel.nativeExecutor` is being used for all `IndicVisionNativeLib` calls in `StaticAnalysisActivity`.
 
-**`SIGSEGV on first OpenMP call`** — This means the JNI call is being made from a new OS thread each time. Verify `AnalysisViewModel.nativeExecutor` is being used for all `IndicVisionNativeLib` calls in `StaticAnalysisActivity`.
+-----
 
----
-
-## 6. Performance & Validation
+## 6\. Performance & Validation
 
 ### Validation 1 — Sub-Pixel Accuracy vs. Sandia DICe (Sample 14)
 
@@ -577,7 +648,7 @@ ndk.dir=/path/to/sdk/ndk/25.2.9519653
 
 > inDIC matches and marginally outperforms Sandia National Labs' desktop software on every metric, including a **12% improvement in spatial resolution cutoff** — running natively on a smartphone CPU.
 
----
+-----
 
 ### Validation 2 — Extreme Affine Distortion (25° Rotation)
 
@@ -592,7 +663,7 @@ ndk.dir=/path/to/sdk/ndk/25.2.9519653
 
 > **Direct ports of PC DIC algorithms catastrophically fail extreme rotations on mobile ARM64.** DICe's KD-Tree pipeline diverges with a 208× RMSE increase (0.590 px vs 0.003 px). inDIC's Hybrid Core maintains sub-pixel accuracy and 100% convergence across all 78,107 points.
 
----
+-----
 
 ### Engine Throughput
 
@@ -605,13 +676,15 @@ ndk.dir=/path/to/sdk/ndk/25.2.9519653
 | Path A (Delaunay) | 1.4 s |
 | Path B (RGDIC) | 1.6 s |
 | Strain calculation | 0.5 s |
-| Peak throughput | ~17,000 pts/s |
+| Peak throughput | \~17,000 pts/s |
 
----
+-----
 
-## 7. Architecture Overview
+<div style="page-break-inside: avoid;"\>
 
-```
+## 7\. Architecture Overview
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        KOTLIN LAYER                             │
 │                                                                 │
@@ -651,22 +724,26 @@ ndk.dir=/path/to/sdk/ndk/25.2.9519653
 ┌─────────────────────────────▼───────────────────────────────────┐
 │                     BACKEND (Supabase)                          │
 │                                                                 │
-│  auth_profiles table: user_id, device_fingerprint,             │
-│  hardware_public_key, access_status (APPROVED/PENDING/REVOKED) │
+│  auth_profiles table: user_id, device_fingerprint,              │
+│  hardware_public_key, access_status (APPROVED/PENDING/REVOKED)  │
 │                                                                 │
-│  analysis_sessions table: session telemetry logging            │
+│  analysis_sessions table: session telemetry logging             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
----
+</div>
 
-## 8. Security Model
+-----
+
+## 8\. Security Model
 
 inDIC implements a **two-factor hardware lock** to prevent licence sharing and ensure that each approved account can only operate on the specific physical device it was registered from.
 
+<div style="page-break-inside: avoid;"\>
+
 ### Authentication Flow
 
-```
+```text
 Device Boot
     │
     ▼
@@ -683,58 +760,58 @@ SplashActivity — checks local Supabase session token
             └── access_status == "APPROVED" + fingerprint match → StaticAnalysisActivity
 ```
 
+</div>
+
 ### Hardware Lock Components
 
 **`DeviceKeyManager.kt`** manages two independent hardware-bound identifiers:
 
-1. **`ANDROID_ID`** — A permanent 64-bit hardware identifier (`Settings.Secure.ANDROID_ID`) that survives app uninstalls and data clears, but changes on factory reset. This is stored as `device_fingerprint` in Supabase and checked on every login.
-
-2. **RSA Key Pair (Android Keystore)** — An un-extractable 2048-bit RSA key pair generated inside the hardware-backed Android Keystore TEE. The public key is stored in Supabase as `hardware_public_key`. On login, if the public key in the vault differs from the device's current key (indicating a Keystore wipe after OS update), the key is silently self-healed via a database update — without requiring re-approval.
+1.  **`ANDROID_ID`** — A permanent 64-bit hardware identifier (`Settings.Secure.ANDROID_ID`) that survives app uninstalls and data clears, but changes on factory reset. This is stored as `device_fingerprint` in Supabase and checked on every login.
+2.  **RSA Key Pair (Android Keystore)** — An un-extractable 2048-bit RSA key pair generated inside the hardware-backed Android Keystore TEE. The public key is stored in Supabase as `hardware_public_key`. On login, if the public key in the vault differs from the device's current key (indicating a Keystore wipe after OS update), the key is silently self-healed via a database update — without requiring re-approval.
 
 ### Offline Mode
 
 If the Supabase server is unreachable (no internet), `AuthRepository.checkUserAccessStatus()` catches `HttpRequestException` and returns the special status `"OFFLINE_CACHE_APPROVED"`. The app proceeds to the analysis engine using the locally cached JWT token, allowing field engineers to operate without connectivity after their first successful online login.
 
----
+-----
 
-## 9. Roadmap
+## 9\. Roadmap
 
-- [ ] **Adaptive Subset Sizing** — Automatically vary subset size based on local speckle density (feature count from AKAZE within neighbourhood radius)
-- [ ] **Dynamic Iteration Budget** — Throttle ICGN `max_iter` based on per-device ARM64 benchmark score, preventing CPU timeout on lower-end devices
-- [ ] **Real-World Specimen Validation** — Transition from synthetic DIC Challenge datasets to physically deformed test coupons (tensile specimens, beam bending)
-- [ ] **3D Stereo DIC** — Dual-phone stereo acquisition mode using Wi-Fi-Direct synchronisation for out-of-plane displacement measurement
-- [ ] **Project Persistence** — Save and reload complete analysis sessions (images + results + parameters) to device storage
-- [ ] **UI/UX Enhancements** — Results history gallery, annotation layer on heatmaps, shareable report links
-- [ ] **Pure RGDIC Path** — An optional pipeline for ROIs with no AKAZE features (e.g. uniform-texture specimens with small deformations)
+  - [ ] **Adaptive Subset Sizing** — Automatically vary subset size based on local speckle density (feature count from AKAZE within neighbourhood radius)
+  - [ ] **Dynamic Iteration Budget** — Throttle ICGN `max_iter` based on per-device ARM64 benchmark score, preventing CPU timeout on lower-end devices
+  - [ ] **Real-World Specimen Validation** — Transition from synthetic DIC Challenge datasets to physically deformed test coupons (tensile specimens, beam bending)
+  - [ ] **3D Stereo DIC** — Dual-phone stereo acquisition mode using Wi-Fi-Direct synchronisation for out-of-plane displacement measurement
+  - [ ] **Project Persistence** — Save and reload complete analysis sessions (images + results + parameters) to device storage
+  - [ ] **UI/UX Enhancements** — Results history gallery, annotation layer on heatmaps, shareable report links
+  - [ ] **Pure RGDIC Path** — An optional pipeline for ROIs with no AKAZE features (e.g. uniform-texture specimens with small deformations)
 
----
+-----
 
-## 10. Acknowledgements
+## 10\. Acknowledgements
 
 **Academic Supervision:**
-Dr. Sankara J. Subramanian, Department of Engineering Design, IIT Madras
+Dr. Sankara J. Subramanian, IndicVision
 
 **Reference Implementations:**
-- [DICe](https://github.com/dicengine/dice) — Sandia National Laboratories (Baker & Bruck, 2014) — algorithmic reference for ICGN formulation, Hessian structure, and VSG strain
-- [Ncorr](http://www.ncorr.com) — Blaber et al. (2015) — reference for FA-NR architecture comparison
-- [ALDIC](https://github.com/FranckLab/ALDIC) — Yang & Franck (2019) — reference for Augmented Lagrangian global DIC
+
+  - [DICe](https://github.com/dicengine/dice) — Sandia National Laboratories (Baker & Bruck, 2014) — algorithmic reference for ICGN formulation, Hessian structure, and VSG strain
+  - [Ncorr](http://www.ncorr.com) — Blaber et al. (2015) — reference for FA-NR architecture comparison
+  - [ALDIC](https://github.com/FranckLab/ALDIC) — Yang & Franck (2019) — reference for Augmented Lagrangian global DIC
 
 **Benchmarking Dataset:**
 [DIC Challenge 2D 1.0](https://sem.org/dicchallenge) — Society for Experimental Mechanics (Reu et al., 2018)
 
 **Libraries Used:**
-- [Eigen 3.4](https://eigen.tuxfamily.org) — Linear algebra (MIT License)
-- [OpenCV 4.x](https://opencv.org) — AKAZE, Delaunay, image I/O (Apache 2.0)
-- [Supabase](https://supabase.com) — Auth + database backend (Apache 2.0)
-- [Kotlin Coroutines](https://github.com/Kotlin/kotlinx.coroutines) — Async execution
-- ARM NEON Intrinsics — AArch64 SIMD vectorisation
 
----
+  - [Eigen 3.4](https://eigen.tuxfamily.org) — Linear algebra (MIT License)
+  - [OpenCV 4.x](https://opencv.org) — AKAZE, Delaunay, image I/O (Apache 2.0)
+  - [Supabase](https://supabase.com) — Auth + database backend (Apache 2.0)
+  - [Kotlin Coroutines](https://github.com/Kotlin/kotlinx.coroutines) — Async execution
+  - ARM NEON Intrinsics — AArch64 SIMD vectorisation
 
-<div align="center">
+-----
 
-**inDIC** — Built at IIT Madras · Department of Engineering Design
+
+**inDIC** — Built at IndicVision
 
 *Bringing precision metrology to the field, one phone at a time.*
-
-</div>

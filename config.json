@@ -1,0 +1,10 @@
+{
+  "pdf_options": {
+    "format": "A4",
+    "margin": "20mm"
+  },
+  "css": "pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; }",
+  "script": [
+    { "url": "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML" }
+  ]
+}
