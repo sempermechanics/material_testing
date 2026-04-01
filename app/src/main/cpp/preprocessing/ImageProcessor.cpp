@@ -22,10 +22,11 @@ namespace IndicVision {
             3.60000000e-05f,3.63600000e-04f,1.45080000e-03f,2.29860000e-03f,1.45080000e-03f,3.63600000e-04f,3.60000000e-05f
     };
 
-    void Image::prepare_data() {
-        bool use_gaussian_blur = true; // KEEP FALSE for high-quality images
+    // 🚀 FIXED: The function now takes the JNI boolean as an argument
+    void Image::prepare_data(bool apply_dice_blur) {
 
-        if (use_gaussian_blur) {
+        // Use the passed-in UI flag to trigger the specialized DICe filter
+        if (apply_dice_blur) {
             std::vector<scalar_t> temp = intensities;
             int half_mask = 3;
             for (int y = half_mask; y < height - half_mask; ++y) {

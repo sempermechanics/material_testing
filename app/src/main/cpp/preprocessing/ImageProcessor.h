@@ -16,7 +16,8 @@ namespace IndicVision {
 
         Image(int_t w, int_t h, const uint8_t* raw_pixels);
 
-        void prepare_data();
+        // 🚀 ADDED: Accept the UI toggle flag directly
+        void prepare_data(bool apply_dice_blur);
 
         // Fast, branchless Keys 4th Order Bicubic
         scalar_t interpolate_bicubic(scalar_t x, scalar_t y) const;

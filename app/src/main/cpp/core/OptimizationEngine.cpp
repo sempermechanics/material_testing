@@ -139,12 +139,6 @@ namespace IndicVision {
             H_solve = subset.H_inv;
         }
         // ── END LM ADDITION ─────────────────────────────────────────────────────
-        // TEMPORARY DEBUG PRINT FOR TUNING (Android Logcat)
-        if (subset.cx == 1421 && subset.cy == 591) {
-            __android_log_print(ANDROID_LOG_DEBUG, "IndicVisionLM",
-                                "[LM TUNE] Raw H(0,0): %f | Raw H(1,1): %f",
-                                subset.H(0,0), subset.H(1,1));
-        }
         std::vector<float> &def_vals = this->icgn_buffer;
         float final_score = 1.0f;
         int max_iter = 50;

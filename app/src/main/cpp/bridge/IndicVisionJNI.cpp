@@ -87,15 +87,18 @@ struct ScopedTimer {
 
 JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     LOGD("IndicVision Native Library Loaded.");
-    cv::setNumThreads(0);
+    // 🚀 FIXED: Prevent OpenCV from spawning zombie thread pools that fight OpenMP
+    cv::setNumThreads(1);
     return JNI_VERSION_1_6;
 }
-
 static IndicVision::Image *g_refImg = nullptr;
 static int g_refWidth = 0;
 static int g_refHeight = 0;
 static std::mutex jni_engine_mutex;
 static std::string g_debugDir = "";
+// 🚀 ADDED: Bulletproof AKAZE Reference Caching
+static std::vector<cv::KeyPoint> g_cached_ref_kp;
+static cv::Mat g_cached_ref_desc;
 
 cv::Mat bytesToMat(JNIEnv *env, jbyteArray bytes, int expectedWidth = 0, int expectedHeight = 0) {
     if (bytes == nullptr) return cv::Mat();
@@ -124,34 +127,41 @@ void drawOutlinedText(cv::Mat &img, const std::string &text, cv::Point pt, doubl
 // ==========================================
 bool extractAkazeFeatures(cv::Mat &ref, cv::Mat &def, std::vector<cv::Point2f> &out_ref_pts,
                           std::vector<cv::Point2f> &out_def_pts, float &out_bounding_box_area_ratio,
-                          double &out_akaze_ms, double &out_ransac_ms, const std::string &debugDir = "") {
+                          double &out_akaze_ms, double &out_ransac_ms,
+                          std::vector<cv::KeyPoint>& cached_kp, cv::Mat& cached_desc,
+                          const std::string &debugDir = "") {
 
     auto t_start_akaze = std::chrono::high_resolution_clock::now();
     const double scale = 0.25;
     cv::Mat smallRef, smallDef;
-    cv::resize(ref, smallRef, cv::Size(), scale, scale, cv::INTER_NEAREST);
-    cv::resize(def, smallDef, cv::Size(), scale, scale, cv::INTER_NEAREST);
+    // 🚀 FIX 0c: INTER_AREA correctly averages pixels to prevent severe aliasing
+    cv::resize(ref, smallRef, cv::Size(), scale, scale, cv::INTER_AREA);
+    cv::resize(def, smallDef, cv::Size(), scale, scale, cv::INTER_AREA);
 
     auto detector = cv::AKAZE::create();
-    std::vector<cv::KeyPoint> kp1, kp2;
-    cv::Mat desc1, desc2;
-    detector->detectAndCompute(smallRef, cv::noArray(), kp1, desc1);
+    std::vector<cv::KeyPoint> kp2;
+    cv::Mat desc2;
+
+    // 🚀 FIX 0d: Only run AKAZE on Reference if the cache is empty
+    if (cached_kp.empty() || cached_desc.empty()) {
+        detector->detectAndCompute(smallRef, cv::noArray(), cached_kp, cached_desc);
+    }
     detector->detectAndCompute(smallDef, cv::noArray(), kp2, desc2);
 
-    if (kp1.empty() || kp2.empty()) {
+    if (cached_kp.empty() || kp2.empty()) {
         out_akaze_ms = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_start_akaze).count();
         return false;
     }
 
     cv::BFMatcher matcher(cv::NORM_HAMMING);
     std::vector<std::vector<cv::DMatch>> matches;
-    matcher.knnMatch(desc1, desc2, matches, 2);
+    matcher.knnMatch(cached_desc, desc2, matches, 2);
 
     std::vector<cv::Point2f> p1, p2;
     std::vector<cv::DMatch> good_matches;
     for (auto &m : matches) {
         if (m.size() == 2 && m[0].distance < 0.75f * m[1].distance) {
-            p1.push_back(kp1[m[0].queryIdx].pt);
+            p1.push_back(cached_kp[m[0].queryIdx].pt);
             p2.push_back(kp2[m[0].trainIdx].pt);
             good_matches.push_back(m[0]);
         }
@@ -248,10 +258,15 @@ JNIEXPORT void JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_initia
     if (refBytes == nullptr) return;
     cv::Mat refMat = bytesToMat(env, refBytes, width, height);
     if (refMat.empty()) return;
-    if (applyBlur) cv::GaussianBlur(refMat, refMat, cv::Size(7, 7), 0);
+    // 🚀 DELETED cv::GaussianBlur. We do not want generic OpenCV blurring.
     g_refWidth = refMat.cols; g_refHeight = refMat.rows;
     g_refImg = new IndicVision::Image(g_refWidth, g_refHeight, refMat.data);
-    g_refImg->prepare_data();
+    // 🚀 PASSED the UI toggle down to the C++ engine
+    g_refImg->prepare_data(applyBlur);
+
+    // 🚀 FIX 0d: Clear the AKAZE cache whenever a NEW reference image is loaded
+    g_cached_ref_kp.clear();
+    g_cached_ref_desc.release();
 }
 
 JNIEXPORT jfloatArray JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
@@ -267,8 +282,8 @@ JNIEXPORT jfloatArray JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib
     }
     IndicVision::Image refImg(refMat.cols, refMat.rows, refMat.data);
     IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
-    refImg.prepare_data();
-    defImg.prepare_data();
+    refImg.prepare_data(false); // Default to false for raw byte analysis
+    defImg.prepare_data(false);
     IndicVision::SubsetData subset;
     IndicVision::SubsetPrecomputer::precompute_subset(subset, refImg, roiX, roiY, subsetSize);
     IndicVision::OptimizationEngine engine;
@@ -315,9 +330,10 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
         }
     }
 
-    if (applyGaussianBlur) cv::GaussianBlur(defMat, defMat, cv::Size(7, 7), 0);
+    // 🚀 DELETED cv::GaussianBlur.
     IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
-    defImg.prepare_data();
+    // 🚀 PASSED the UI toggle down to the C++ engine
+    defImg.prepare_data(applyGaussianBlur);
     time_img_prep = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_prep_start).count();
 
     int safe_cores = std::max(1, (int)std::thread::hardware_concurrency());
@@ -340,7 +356,7 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
             cv::Mat refMat = bytesToMat(env, refBytes, g_refWidth, g_refHeight);
             if (!refMat.empty()) {
                 cv::Mat refROI = refMat(padded_roi); cv::Mat defROI = defMat(padded_roi);
-                bool success = extractAkazeFeatures(refROI, defROI, akaze_ref_pts, akaze_def_pts, inlier_bb_area_ratio, time_akaze, time_ransac, local_debug_dir);
+                bool success = extractAkazeFeatures(refROI, defROI, akaze_ref_pts, akaze_def_pts, inlier_bb_area_ratio, time_akaze, time_ransac, g_cached_ref_kp, g_cached_ref_desc, local_debug_dir);
 
                 if (success) {
                     if (!local_debug_dir.empty()) {
