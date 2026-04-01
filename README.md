@@ -795,7 +795,7 @@ Dr. Sankara J. Subramanian, IndicVision
 **Reference Implementations:**
 
   - [DICe](https://github.com/dicengine/dice) — Sandia National Laboratories (Baker & Bruck, 2014) — algorithmic reference for ICGN formulation, Hessian structure, and VSG strain
-  - [Ncorr](http://www.ncorr.com) — Blaber et al. (2015) — reference for FA-NR architecture comparison
+  - [Ncorr](http://www.ncorr.com) — Blaber et al. (2015) — reference for IC-GN architecture comparison
   - [ALDIC](https://github.com/FranckLab/ALDIC) — Yang & Franck (2019) — reference for Augmented Lagrangian global DIC
 
 **Benchmarking Dataset:**
