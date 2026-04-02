@@ -149,8 +149,9 @@ namespace IndicVision {
 
             // 1. Unrolled Affine Warp & Interpolation
             for (size_t i = 0; i < n; ++i) {
-                float x = subset.x_offsets[i];
-                float y = subset.y_offsets[i];
+                // 🚀 OPTIMIZATION T1.1: Use pre-converted floats. Eliminates SCVTF latency.
+                float x = subset.x_offsets_f[i];
+                float y = subset.y_offsets_f[i];
 
                 float final_x = subset.cx + W(0, 0) * x + W(0, 1) * y + W(0, 2);
                 float final_y = subset.cy + W(1, 0) * x + W(1, 1) * y + W(1, 2);
@@ -300,8 +301,9 @@ namespace IndicVision {
         int valid_pixels = 0;
 
         for (size_t i = 0; i < n; ++i) {
-            float dx = subset.x_offsets[i];
-            float dy = subset.y_offsets[i];
+            // 🚀 OPTIMIZATION T1.1: Use pre-converted floats.
+            float dx = subset.x_offsets_f[i];
+            float dy = subset.y_offsets_f[i];
 
             float final_x = subset.cx + u + (1.0f + ux) * dx + uy * dy;
             float final_y = subset.cy + v + vx * dx + (1.0f + vy) * dy;

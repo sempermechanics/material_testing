@@ -62,6 +62,8 @@ namespace IndicVision {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         int_t cx, cy, dim;
         std::vector<int_t> x_offsets, y_offsets;
+        // 🚀 OPTIMIZATION T1.1: Pre-converted float offsets to eliminate 4-cycle SCVTF latency in the ICGN hot loop
+        std::vector<float> x_offsets_f, y_offsets_f;
         std::vector<scalar_t> ref_intensities;
         std::vector<scalar_t> norm_ref_intensities;
         std::vector<scalar_t> gx_vec, gy_vec; // Pre-sampled gradients

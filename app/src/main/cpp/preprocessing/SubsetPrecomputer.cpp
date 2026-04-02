@@ -14,6 +14,9 @@ namespace IndicVision {
             data.dim = dim;
             data.x_offsets.resize(n);
             data.y_offsets.resize(n);
+            // 🚀 Resize the new float arrays
+            data.x_offsets_f.resize(n);
+            data.y_offsets_f.resize(n);
             data.ref_intensities.resize(n);
             data.norm_ref_intensities.resize(n);
             data.gx_vec.resize(n);
@@ -25,6 +28,9 @@ namespace IndicVision {
                 for (int x = -half; x <= half; ++x) {
                     data.x_offsets[idx] = x;
                     data.y_offsets[idx] = y;
+                    // 🚀 Cast and store the float versions once
+                    data.x_offsets_f[idx] = static_cast<float>(x);
+                    data.y_offsets_f[idx] = static_cast<float>(y);
                     idx++;
                 }
             }
@@ -227,6 +233,9 @@ namespace IndicVision {
             data.dim = dim;
             data.x_offsets.resize(n);
             data.y_offsets.resize(n);
+            // 🚀 Resize the new float arrays
+            data.x_offsets_f.resize(n);
+            data.y_offsets_f.resize(n);
             data.ref_intensities.resize(n);
             data.norm_ref_intensities.resize(n);
             data.gx_vec.resize(n);
@@ -238,6 +247,9 @@ namespace IndicVision {
                 for (int x = -half; x <= half; ++x) {
                     data.x_offsets[oi] = x;
                     data.y_offsets[oi] = y;
+                    // 🚀 Cast and store the float versions once
+                    data.x_offsets_f[oi] = static_cast<float>(x);
+                    data.y_offsets_f[oi] = static_cast<float>(y);
                     oi++;
                 }
         }
