@@ -459,6 +459,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                 var firstFrameValidPoints = 0
                 var firstFrameAvgIters = 0.0f
+                var engineErrorCode = 0 // 🚀 PRIORITY 3: Track the negative return codes
 
                 runOnUiThread { tvTimer.text = "Caching Reference in Native Engine..." }
                 IndicVisionNativeLib.initializeReference(refBytes, viewModel.realRefWidth, viewModel.realRefHeight, applyBlur)
@@ -497,13 +498,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         metricsCatcher
                     )
 
+                    // 🚀 PRIORITY 3: Catch the fatal error and abort the batch loop immediately
+                    if (validPointsCount < 0) {
+                        engineErrorCode = validPointsCount
+                        break
+                    }
+
                     if (frameIndex == 0) {
                         firstFrameValidPoints = validPointsCount
                         viewModel.engineStatsArray = metricsCatcher.clone()
                         firstFrameAvgIters = metricsCatcher[8]
                     }
 
-                    if (validPointsCount <= 0) continue
+                    if (validPointsCount == 0) continue
 
                     val outputFile = File(batchDir, String.format("frame_%04d.dat", frameIndex))
                     outputFile.outputStream().use { fos ->
@@ -594,7 +601,24 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     progressBar.visibility = View.GONE
                     btnLogout.isEnabled = true
 
-                    if (firstFrameValidPoints <= 0) {
+                    // 🚀 PRIORITY 3: Handle the UI Contract based on the specific error
+                    if (engineErrorCode < 0) {
+                        val errorMsg = when(engineErrorCode) {
+                            -1 -> "Feature Extraction Failed (AKAZE). The speckle pattern might be too fine, out of focus, or destroyed by scaling."
+                            -2 -> "Invalid ROI. The mask excluded the entire specimen (0 valid points)."
+                            -3 -> "Engine Initialization Failed (Null Pointers or Corrupt Image)."
+                            else -> "Unknown Engine Error ($engineErrorCode)"
+                        }
+                        tvTimer.text = "Analysis Aborted"
+                        tvResult.text = "❌ Error: $errorMsg"
+
+                        android.app.AlertDialog.Builder(this@StaticAnalysisActivity)
+                            .setTitle("Analysis Failed")
+                            .setMessage(errorMsg)
+                            .setPositiveButton("OK", null)
+                            .show()
+
+                    } else if (firstFrameValidPoints <= 0) {
                         tvTimer.text = "Analysis Failed"
                         tvResult.text = "❌ Engine returned no data"
                     } else {

@@ -99,6 +99,8 @@ static std::string g_debugDir = "";
 // 🚀 ADDED: Bulletproof AKAZE Reference Caching
 static std::vector<cv::KeyPoint> g_cached_ref_kp;
 static cv::Mat g_cached_ref_desc;
+// 🚀 PRIORITY 2: Track the active scale so we don't invalidate the cache unnecessarily between frames
+static double g_current_akaze_scale = 0.25;
 
 cv::Mat bytesToMat(JNIEnv *env, jbyteArray bytes, int expectedWidth = 0, int expectedHeight = 0) {
     if (bytes == nullptr) return cv::Mat();
@@ -125,14 +127,15 @@ void drawOutlinedText(cv::Mat &img, const std::string &text, cv::Point pt, doubl
 // ==========================================
 // 🚀 PHASE 2: AKAZE RANSAC EXTRACTION
 // ==========================================
-bool extractAkazeFeatures(cv::Mat &ref, cv::Mat &def, std::vector<cv::Point2f> &out_ref_pts,
+// 🚀 PRIORITY 1 & 2: Pass roiMask AND dynamic scale
+bool extractAkazeFeatures(cv::Mat &ref, cv::Mat &def, cv::Mat &roiMask, double scale, std::vector<cv::Point2f> &out_ref_pts,
                           std::vector<cv::Point2f> &out_def_pts, float &out_bounding_box_area_ratio,
                           double &out_akaze_ms, double &out_ransac_ms,
                           std::vector<cv::KeyPoint>& cached_kp, cv::Mat& cached_desc,
                           const std::string &debugDir = "") {
 
     auto t_start_akaze = std::chrono::high_resolution_clock::now();
-    const double scale = 0.25;
+    // 🚀 PRIORITY 2: Removed hardcoded scale
     cv::Mat smallRef, smallDef;
     // 🚀 FIX 0c: INTER_AREA correctly averages pixels to prevent severe aliasing
     cv::resize(ref, smallRef, cv::Size(), scale, scale, cv::INTER_AREA);
@@ -161,9 +164,27 @@ bool extractAkazeFeatures(cv::Mat &ref, cv::Mat &def, std::vector<cv::Point2f> &
     std::vector<cv::DMatch> good_matches;
     for (auto &m : matches) {
         if (m.size() == 2 && m[0].distance < 0.75f * m[1].distance) {
-            p1.push_back(cached_kp[m[0].queryIdx].pt);
-            p2.push_back(kp2[m[0].trainIdx].pt);
-            good_matches.push_back(m[0]);
+            // 🚀 PRIORITY 1: Mask Filtering. Delete points outside the green bounding box or in masked holes.
+            float full_x = cached_kp[m[0].queryIdx].pt.x / scale;
+            float full_y = cached_kp[m[0].queryIdx].pt.y / scale;
+
+            bool is_valid = true;
+            if (!roiMask.empty()) {
+                // Ensure bounds checking before reading mask
+                if (full_x >= 0 && full_x < roiMask.cols && full_y >= 0 && full_y < roiMask.rows) {
+                    if (roiMask.at<uchar>((int)full_y, (int)full_x) < 128) {
+                        is_valid = false;
+                    }
+                } else {
+                    is_valid = false;
+                }
+            }
+
+            if (is_valid) {
+                p1.push_back(cached_kp[m[0].queryIdx].pt);
+                p2.push_back(kp2[m[0].trainIdx].pt);
+                good_matches.push_back(m[0]);
+            }
         }
     }
 
@@ -267,6 +288,7 @@ JNIEXPORT void JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_initia
     // 🚀 FIX 0d: Clear the AKAZE cache whenever a NEW reference image is loaded
     g_cached_ref_kp.clear();
     g_cached_ref_desc.release();
+    g_current_akaze_scale = 0.25; // 🚀 PRIORITY 2: Reset the pyramid for the new specimen
 }
 
 JNIEXPORT jfloatArray JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
@@ -311,16 +333,17 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
     double time_img_prep = 0, time_akaze = 0, time_ransac = 0, time_delaunay = 0, time_contour_assign = 0, time_extrapolate = 0, time_smoothing = 0;
     double time_prepass = 0, time_pathA = 0, time_pathB = 0, time_strain = 0;
 
-    if (env == nullptr || defBytes == nullptr || outputBuffer == nullptr || g_refImg == nullptr) return 0;
+    // 🚀 PRIORITY 3: Return -3 for memory/init errors
+    if (env == nullptr || defBytes == nullptr || outputBuffer == nullptr || g_refImg == nullptr) return -3;
     float *output_ptr = (float *)env->GetDirectBufferAddress(outputBuffer);
-    if (!output_ptr) return 0;
+    if (!output_ptr) return -3;
 
     static int s_frame_count = 0; s_frame_count++;
     LOGD("=== FRAME %d computeFullFieldDirect (HYBRID CORE) START ===", s_frame_count);
 
     auto t_prep_start = std::chrono::high_resolution_clock::now();
     cv::Mat defMat = bytesToMat(env, defBytes, g_refWidth, g_refHeight);
-    if (defMat.empty()) return 0;
+    if (defMat.empty()) return -3;
 
     cv::Mat roiMask;
     if (maskBytes != nullptr && env->GetArrayLength(maskBytes) > 0) {
@@ -356,9 +379,38 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
             cv::Mat refMat = bytesToMat(env, refBytes, g_refWidth, g_refHeight);
             if (!refMat.empty()) {
                 cv::Mat refROI = refMat(padded_roi); cv::Mat defROI = defMat(padded_roi);
-                bool success = extractAkazeFeatures(refROI, defROI, akaze_ref_pts, akaze_def_pts, inlier_bb_area_ratio, time_akaze, time_ransac, g_cached_ref_kp, g_cached_ref_desc, local_debug_dir);
 
-                if (success) {
+                // 🚀 PRIORITY 2: ADAPTIVE SCALE PYRAMID
+                // Build the scale list based on the globally established baseline for this specimen
+                std::vector<double> scales_to_try;
+                if (g_current_akaze_scale <= 0.25) scales_to_try = {0.25, 0.5, 1.0};
+                else if (g_current_akaze_scale <= 0.5) scales_to_try = {0.5, 1.0};
+                else scales_to_try = {1.0};
+
+                for (double current_scale : scales_to_try) {
+                    // If escalating, we must clear the cache so it re-computes at the higher resolution
+                    if (current_scale != g_current_akaze_scale) {
+                        g_cached_ref_kp.clear();
+                        g_cached_ref_desc.release();
+                        g_current_akaze_scale = current_scale;
+                    }
+
+                    double iter_akaze = 0, iter_ransac = 0;
+                    bool success = extractAkazeFeatures(refROI, defROI, roiMask, current_scale, akaze_ref_pts, akaze_def_pts, inlier_bb_area_ratio, iter_akaze, iter_ransac, g_cached_ref_kp, g_cached_ref_desc, local_debug_dir);
+
+                    time_akaze += iter_akaze;
+                    time_ransac += iter_ransac;
+
+                    if (success && akaze_ref_pts.size() >= 25 && inlier_bb_area_ratio > 0.3f) {
+                        has_good_akaze = true;
+                        LOGD("ROUTING: AKAZE Succeeded at scale %.2fx with %d points", current_scale, (int)akaze_ref_pts.size());
+                        break; // Mesh is good! Stop escalating.
+                    } else {
+                        LOGD("ROUTING: AKAZE Insufficient at scale %.2fx (Points: %d, Ratio: %.2f). Escalating...", current_scale, (int)akaze_ref_pts.size(), inlier_bb_area_ratio);
+                    }
+                }
+
+                if (has_good_akaze) {
                     if (!local_debug_dir.empty()) {
                         cv::Mat akazeRefDraw, akazeDefDraw;
                         cv::cvtColor(refROI, akazeRefDraw, cv::COLOR_GRAY2BGR);
@@ -387,7 +439,6 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                     }
                     std::sort(us.begin(), us.end()); std::sort(vs.begin(), vs.end());
                     globalU = us[us.size() / 2]; globalV = vs[vs.size() / 2];
-                    if (akaze_ref_pts.size() >= 25 && inlier_bb_area_ratio > 0.3f) has_good_akaze = true;
                 }
             }
         } catch (...) {}
@@ -395,12 +446,12 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
 
     if (!has_good_akaze) {
         LOGE("ROUTING: AKAZE Failed. Aborting Hybrid Core.");
-        return 0;
+        return -1; // 🚀 PRIORITY 3: Return -1 for Feature Extraction Failure
     }
 
     int gridW = rectWidth / step;
     int gridH = rectHeight / step;
-    if (gridW <= 0 || gridH <= 0) return 0;
+    if (gridW <= 0 || gridH <= 0) return -2; // 🚀 PRIORITY 3: Return -2 for ROI Errors
 
     struct GridPoint {
         float x, y, u, v, ux, uy, vx, vy, corr;
@@ -424,7 +475,7 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
         }
     }
 
-    if (total_valid_points == 0) return 0;
+    if (total_valid_points == 0) return -2; // 🚀 PRIORITY 3: Return -2 for Empty Mask
 
     std::atomic<int> global_points_solved(0);
     std::atomic<int> compute_order_counter(1);
@@ -668,10 +719,15 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
     }
 
     // =========================================================
-    // 🚀 GLOBAL HESSIAN PRE-PASS
+    // 🚀 GLOBAL HESSIAN PRE-PASS & CONTRAST THRESHOLDING
     // =========================================================
     auto t_prepass_start = std::chrono::high_resolution_clock::now();
     std::vector<IndicVision::CachedHessianData, Eigen::aligned_allocator<IndicVision::CachedHessianData>> hessian_pool(gridW * gridH);
+
+    // Track standard deviations to build an adaptive threshold
+    double sum_std_dev = 0.0;
+    int valid_std_count = 0;
+    std::mutex std_mutex;
 
 #pragma omp parallel for schedule(static) num_threads(safe_cores)
     for (int pool_idx = 0; pool_idx < gridW * gridH; ++pool_idx) {
@@ -679,10 +735,31 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
         if (!resultGrid[gy][gx].solved) {
             int realX = rectX + gx * step, realY = rectY + gy * step;
             hessian_pool[pool_idx] = IndicVision::SubsetPrecomputer::compute_hessian_only(*g_refImg, realX, realY, subsetSize);
+
+            if (hessian_pool[pool_idx].valid) {
+                std::lock_guard<std::mutex> lock(std_mutex);
+                sum_std_dev += hessian_pool[pool_idx].std_dev;
+                valid_std_count++;
+            }
+        }
+    }
+
+    // 🚀 SIMPLIFIED CONTRAST THRESHOLD: Absolute Minimum Floor
+    // We abandon the adaptive curve because it unfairly penalizes valid, lower-contrast regions of the speckle.
+    float min_allowed_std = 3.0f; // Hard floor. Anything below 3.0 is pure sensor noise / empty void.
+
+    for (int pool_idx = 0; pool_idx < gridW * gridH; ++pool_idx) {
+        int gx = pool_idx % gridW, gy = pool_idx / gridW;
+        if (!resultGrid[gy][gx].solved && hessian_pool[pool_idx].valid) {
+            if (hessian_pool[pool_idx].std_dev < min_allowed_std) {
+                // Automatically declare this point as dead/unsolvable space
+                resultGrid[gy][gx].solved = true;
+                resultGrid[gy][gx].corr = 0.0f;
+                total_valid_points--;
+            }
         }
     }
     time_prepass = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_prepass_start).count();
-
 
     // ==========================================
     // 🚀 PATH A (DELAUNAY MESH EXECUTION)
@@ -1021,9 +1098,18 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
 
                             int simplex_count_before = local_engine.count_simplex;
 
+                            // 🚀 FIRST-ORDER KINEMATIC EXPANSION (The Path B Fix)
+                            // Calculate the physical distance from the solved point to the new neighbor
+                            float dx = (nx - cur.x_idx) * step;
+                            float dy = (ny - cur.y_idx) * step;
+
+                            // Project the initial guess using the solved point's strain gradients
+                            float guess_u = cur.u + cur.ux * dx + cur.uy * dy;
+                            float guess_v = cur.v + cur.vx * dx + cur.vy * dy;
+
                             auto search_flag = ALLOW_SIMPLEX_RESCUE ? IndicVision::INIT_NO_SEARCH : IndicVision::INIT_NO_SIMPLEX;
                             IndicVision::AnalysisResult res = local_engine.calculate_deformation(
-                                    local_subset, defImg, cur.u, cur.v, cur.ux, cur.uy, cur.vx, cur.vy, search_flag);
+                                    local_subset, defImg, guess_u, guess_v, cur.ux, cur.uy, cur.vx, cur.vy, search_flag);
                             stats_pathB[tid].icgn_iters += res.iters; // 🚀 ADD THIS
                             bool needed_rescue = (local_engine.count_simplex > simplex_count_before);
 
