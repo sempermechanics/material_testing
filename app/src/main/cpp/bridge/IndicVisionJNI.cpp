@@ -127,17 +127,15 @@ void drawOutlinedText(cv::Mat &img, const std::string &text, cv::Point pt, doubl
 // ==========================================
 // 🚀 PHASE 2: AKAZE RANSAC EXTRACTION
 // ==========================================
-// 🚀 PRIORITY 1 & 2: Pass roiMask AND dynamic scale
 bool extractAkazeFeatures(cv::Mat &ref, cv::Mat &def, cv::Mat &roiMask, double scale, std::vector<cv::Point2f> &out_ref_pts,
                           std::vector<cv::Point2f> &out_def_pts, float &out_bounding_box_area_ratio,
                           double &out_akaze_ms, double &out_ransac_ms,
                           std::vector<cv::KeyPoint>& cached_kp, cv::Mat& cached_desc,
+                          int offsetX, int offsetY, // 🚀 ADDED OFFSETS HERE
                           const std::string &debugDir = "") {
 
     auto t_start_akaze = std::chrono::high_resolution_clock::now();
-    // 🚀 PRIORITY 2: Removed hardcoded scale
     cv::Mat smallRef, smallDef;
-    // 🚀 FIX 0c: INTER_AREA correctly averages pixels to prevent severe aliasing
     cv::resize(ref, smallRef, cv::Size(), scale, scale, cv::INTER_AREA);
     cv::resize(def, smallDef, cv::Size(), scale, scale, cv::INTER_AREA);
 
@@ -145,7 +143,6 @@ bool extractAkazeFeatures(cv::Mat &ref, cv::Mat &def, cv::Mat &roiMask, double s
     std::vector<cv::KeyPoint> kp2;
     cv::Mat desc2;
 
-    // 🚀 FIX 0d: Only run AKAZE on Reference if the cache is empty
     if (cached_kp.empty() || cached_desc.empty()) {
         detector->detectAndCompute(smallRef, cv::noArray(), cached_kp, cached_desc);
     }
@@ -164,15 +161,16 @@ bool extractAkazeFeatures(cv::Mat &ref, cv::Mat &def, cv::Mat &roiMask, double s
     std::vector<cv::DMatch> good_matches;
     for (auto &m : matches) {
         if (m.size() == 2 && m[0].distance < 0.75f * m[1].distance) {
-            // 🚀 PRIORITY 1: Mask Filtering. Delete points outside the green bounding box or in masked holes.
             float full_x = cached_kp[m[0].queryIdx].pt.x / scale;
             float full_y = cached_kp[m[0].queryIdx].pt.y / scale;
 
             bool is_valid = true;
             if (!roiMask.empty()) {
-                // Ensure bounds checking before reading mask
-                if (full_x >= 0 && full_x < roiMask.cols && full_y >= 0 && full_y < roiMask.rows) {
-                    if (roiMask.at<uchar>((int)full_y, (int)full_x) < 128) {
+                // 🚀 FIX: Apply offsets to check the correct global mask location!
+                int mask_x = (int)(full_x + offsetX);
+                int mask_y = (int)(full_y + offsetY);
+                if (mask_x >= 0 && mask_x < roiMask.cols && mask_y >= 0 && mask_y < roiMask.rows) {
+                    if (roiMask.at<uchar>(mask_y, mask_x) < 128) {
                         is_valid = false;
                     }
                 } else {
@@ -205,11 +203,14 @@ bool extractAkazeFeatures(cv::Mat &ref, cv::Mat &def, cv::Mat &roiMask, double s
         }
     }
 
-    if (!out_ref_pts.empty()) {
-        cv::Rect bb = cv::boundingRect(out_ref_pts);
-        float bb_area = bb.width * bb.height;
-        float total_area = ref.cols * ref.rows;
-        out_bounding_box_area_ratio = bb_area / total_area;
+    if (out_ref_pts.size() >= 3) {
+        std::vector<cv::Point2f> hull;
+        cv::convexHull(out_ref_pts, hull);
+        float hull_area = (float)cv::contourArea(hull);
+        float total_area = (float)(ref.cols * ref.rows);
+        out_bounding_box_area_ratio = hull_area / total_area;
+    } else {
+        out_bounding_box_area_ratio = 0.0f;
     }
 
     out_ransac_ms = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_start_ransac).count();
@@ -367,18 +368,24 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
     std::vector<cv::Point2f> akaze_ref_pts;
     std::vector<cv::Point2f> akaze_def_pts;
     float inlier_bb_area_ratio = 0.0f;
-    bool has_good_akaze = false;
+    bool has_good_akaze = false; // 🚀 RESTORED
+
+    // 🚀 IMPLEMENTATION: Priority 6 & 4 States
+    enum class MeshQuality { NONE, SPARSE, FULL };
+    MeshQuality mesh_quality = MeshQuality::NONE;
     float globalU = 0.0f, globalV = 0.0f;
 
-    int padding = 160;
-    cv::Rect padded_roi(rectX - padding, rectY - padding, rectWidth + 2 * padding, rectHeight + 2 * padding);
-    padded_roi = padded_roi & cv::Rect(0, 0, g_refWidth, g_refHeight);
+    // Declare Path C variables here so they exist for the entire function
+    bool execute_path_c = false;
+    int path_c_seed_x = -1;
+    int path_c_seed_y = -1;
 
-    if (padded_roi.width > 32 && padded_roi.height > 32) {
+    // 🚀 ADAPTIVE PADDING: Removed hardcoded padding from outside the loop
+
+    if (rectWidth > 32 && rectHeight > 32) {
         try {
             cv::Mat refMat = bytesToMat(env, refBytes, g_refWidth, g_refHeight);
             if (!refMat.empty()) {
-                cv::Mat refROI = refMat(padded_roi); cv::Mat defROI = defMat(padded_roi);
 
                 // 🚀 PRIORITY 2: ADAPTIVE SCALE PYRAMID
                 // Build the scale list based on the globally established baseline for this specimen
@@ -387,8 +394,18 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                 else if (g_current_akaze_scale <= 0.5) scales_to_try = {0.5, 1.0};
                 else scales_to_try = {1.0};
 
+                cv::Rect winning_padded_roi; // 🚀 Keep track of the offsets used for the winning scale
+
                 for (double current_scale : scales_to_try) {
-                    // If escalating, we must clear the cache so it re-computes at the higher resolution
+
+                    int adaptive_padding = (int)(40.0 / current_scale);
+                    cv::Rect padded_roi(rectX - adaptive_padding, rectY - adaptive_padding, rectWidth + 2 * adaptive_padding, rectHeight + 2 * adaptive_padding);
+                    padded_roi = padded_roi & cv::Rect(0, 0, g_refWidth, g_refHeight);
+
+                    // 🚀 FIX: Must use padded_roi here, not winning_padded_roi!
+                    cv::Mat refROI = refMat(padded_roi);
+                    cv::Mat defROI = defMat(padded_roi);
+
                     if (current_scale != g_current_akaze_scale) {
                         g_cached_ref_kp.clear();
                         g_cached_ref_desc.release();
@@ -396,23 +413,41 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                     }
 
                     double iter_akaze = 0, iter_ransac = 0;
-                    bool success = extractAkazeFeatures(refROI, defROI, roiMask, current_scale, akaze_ref_pts, akaze_def_pts, inlier_bb_area_ratio, iter_akaze, iter_ransac, g_cached_ref_kp, g_cached_ref_desc, local_debug_dir);
-
+                    // 🚀 FIX: Pass padded_roi.x and padded_roi.y into the function!
+                    bool success = extractAkazeFeatures(refROI, defROI, roiMask, current_scale, akaze_ref_pts, akaze_def_pts, inlier_bb_area_ratio, iter_akaze, iter_ransac, g_cached_ref_kp, g_cached_ref_desc, padded_roi.x, padded_roi.y, local_debug_dir);
                     time_akaze += iter_akaze;
                     time_ransac += iter_ransac;
 
-                    if (success && akaze_ref_pts.size() >= 25 && inlier_bb_area_ratio > 0.3f) {
+                    // 🚀 THE FIX: Separate Scale Escalation from Quality Routing
+                    if (success && akaze_ref_pts.size() >= 25) {
+                        // We found enough features! Zooming in further won't change the physical coverage area.
                         has_good_akaze = true;
-                        LOGD("ROUTING: AKAZE Succeeded at scale %.2fx with %d points", current_scale, (int)akaze_ref_pts.size());
-                        break; // Mesh is good! Stop escalating.
+                        winning_padded_roi = padded_roi; // 🚀 SAVE OFFSETS
+
+                        // Now, evaluate the structural integrity of the mesh
+                        if (inlier_bb_area_ratio >= 0.30f) {
+                            mesh_quality = MeshQuality::FULL;
+                            LOGD("ROUTING: FULL Mesh at scale %.2fx (Pts: %d, Cov: %.2f)", current_scale, (int)akaze_ref_pts.size(), inlier_bb_area_ratio);
+                        } else if (inlier_bb_area_ratio >= 0.05f) {
+                            mesh_quality = MeshQuality::SPARSE;
+                            LOGD("ROUTING: SPARSE Mesh at scale %.2fx (Pts: %d, Cov: %.2f)", current_scale, (int)akaze_ref_pts.size(), inlier_bb_area_ratio);
+                        } else {
+                            mesh_quality = MeshQuality::NONE; // Too clustered, drop to Path C
+                            LOGD("ROUTING: Features too clustered (Cov: %.2f). Forcing Path C.", inlier_bb_area_ratio);
+                        }
+
+                        break; // 🚀 CRITICAL: Stop escalating the scale! We have enough points.
+
                     } else {
-                        LOGD("ROUTING: AKAZE Insufficient at scale %.2fx (Points: %d, Ratio: %.2f). Escalating...", current_scale, (int)akaze_ref_pts.size(), inlier_bb_area_ratio);
+                        LOGD("ROUTING: AKAZE Insufficient at scale %.2fx (Points: %d, Cov: %.2f). Escalating...", current_scale, (int)akaze_ref_pts.size(), inlier_bb_area_ratio);
                     }
-                }
+                } // <--- END OF SCALE LOOP
 
                 if (has_good_akaze) {
                     if (!local_debug_dir.empty()) {
                         cv::Mat akazeRefDraw, akazeDefDraw;
+                        cv::Mat refROI = refMat(winning_padded_roi); // 🚀 Re-extract just for drawing
+                        cv::Mat defROI = defMat(winning_padded_roi);
                         cv::cvtColor(refROI, akazeRefDraw, cv::COLOR_GRAY2BGR);
                         cv::cvtColor(defROI, akazeDefDraw, cv::COLOR_GRAY2BGR);
 
@@ -429,8 +464,11 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                     }
 
                     for (size_t i = 0; i < akaze_ref_pts.size(); ++i) {
-                        akaze_ref_pts[i].x += padded_roi.x; akaze_ref_pts[i].y += padded_roi.y;
-                        akaze_def_pts[i].x += padded_roi.x; akaze_def_pts[i].y += padded_roi.y;
+                        // 🚀 Apply the exact offset used during the successful extraction
+                        akaze_ref_pts[i].x += winning_padded_roi.x;
+                        akaze_ref_pts[i].y += winning_padded_roi.y;
+                        akaze_def_pts[i].x += winning_padded_roi.x;
+                        akaze_def_pts[i].y += winning_padded_roi.y;
                     }
                     std::vector<float> us, vs;
                     for (size_t i = 0; i < akaze_ref_pts.size(); i++) {
@@ -444,14 +482,19 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
         } catch (...) {}
     }
 
-    if (!has_good_akaze) {
-        LOGE("ROUTING: AKAZE Failed. Aborting Hybrid Core.");
-        return -1; // 🚀 PRIORITY 3: Return -1 for Feature Extraction Failure
-    }
+    // 🚀 PRIORITY 4 & 6: Path C Smart Seed Fallback
+    // If AKAZE found too few points, or they are too clustered (<30% convex hull coverage),
+    // trigger the Path C Seed Hunter instead of aborting.
+    // 🚀 IMPLEMENTATION: If we didn't even get a SPARSE mesh, trigger Path C
+    execute_path_c = (mesh_quality == MeshQuality::NONE);
 
     int gridW = rectWidth / step;
     int gridH = rectHeight / step;
     if (gridW <= 0 || gridH <= 0) return -2; // 🚀 PRIORITY 3: Return -2 for ROI Errors
+
+    // Now that gridW and gridH exist, we can set their default fallbacks
+    path_c_seed_x = gridW / 2;
+    path_c_seed_y = gridH / 2;
 
     struct GridPoint {
         float x, y, u, v, ux, uy, vx, vy, corr;
@@ -614,12 +657,39 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
                 cv::Vec6f t = triangleList[i]; cv::Point2f pt[3];
                 pt[0] = cv::Point2f(t[0], t[1]); pt[1] = cv::Point2f(t[2], t[3]); pt[2] = cv::Point2f(t[4], t[5]);
                 if (pt[0].x < 0 || pt[0].x >= g_refWidth || pt[1].x < 0 || pt[1].x >= g_refWidth || pt[2].x < 0 || pt[2].x >= g_refWidth) continue;
-                cv::Point2f dst[3]; dst[0] = getDefPt(pt[0]); dst[1] = getDefPt(pt[1]); dst[2] = getDefPt(pt[2]);
+                cv::Point2f dst[3];
+                dst[0] = getDefPt(pt[0]);
+                dst[1] = getDefPt(pt[1]);
+                dst[2] = getDefPt(pt[2]);
+
+                // OpenCV returns: [ x_def ] = [ M00 M01 M02 ] * [ x_ref ]
+                //                 [ y_def ]   [ M10 M11 M12 ]   [ y_ref ]
+                //                                               [   1   ]
                 cv::Mat warp_mat = cv::getAffineTransform(pt, dst);
-                AffineTriangle at; at.pts[0] = pt[0]; at.pts[1] = pt[1]; at.pts[2] = pt[2];
-                at.u = warp_mat.at<double>(0, 2); at.v = warp_mat.at<double>(1, 2);
-                at.ux = warp_mat.at<double>(0, 0) - 1.0; at.uy = warp_mat.at<double>(0, 1);
-                at.vx = warp_mat.at<double>(1, 0); at.vy = warp_mat.at<double>(1, 1) - 1.0;
+
+                AffineTriangle at;
+                at.pts[0] = pt[0]; at.pts[1] = pt[1]; at.pts[2] = pt[2];
+
+                // ICGN Engine Expects: U(dx, dy) = U0 + Ux*dx + Uy*dy
+                // Where dx, dy is relative to the Grid Point (0,0)
+
+                double M00 = warp_mat.at<double>(0, 0);
+                double M01 = warp_mat.at<double>(0, 1);
+                double M02 = warp_mat.at<double>(0, 2);
+                double M10 = warp_mat.at<double>(1, 0);
+                double M11 = warp_mat.at<double>(1, 1);
+                double M12 = warp_mat.at<double>(1, 2);
+
+                // Strain/Shear derivatives (Ux = du/dx)
+                at.ux = M00 - 1.0;
+                at.uy = M01;
+                at.vx = M10;
+                at.vy = M11 - 1.0;
+
+                // The Translation (U0, V0) evaluated at Coordinate (0,0) of the image!
+                // Because OpenCV's matrix is global, the intercept M02 is the translation at absolute pixel (0,0).
+                at.u = M02;
+                at.v = M12;
                 float minX = std::min({pt[0].x, pt[1].x, pt[2].x}); float maxX = std::max({pt[0].x, pt[1].x, pt[2].x});
                 float minY = std::min({pt[0].y, pt[1].y, pt[2].y}); float maxY = std::max({pt[0].y, pt[1].y, pt[2].y});
                 at.boundingBox = cv::Rect2f(minX - 15.0f, minY - 15.0f, (maxX - minX) + 30.0f, (maxY - minY) + 30.0f);
@@ -674,29 +744,33 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
         time_contour_assign = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_assign_start).count();
 
         auto t_extrap_start = std::chrono::high_resolution_clock::now();
-        float EXTRAP_LIMIT = -3.0f * step;
-        for (int y = 0; y < gridH; ++y) {
-            for (int x = 0; x < gridW; ++x) {
-                int idx = y * gridW + x;
-                if (inMesh[idx] || resultGrid[y][x].solved) continue;
-                cv::Point2f gp(rectX + x * step, rectY + y * step);
-                float best_dist = EXTRAP_LIMIT - 1.0f; int best_ti = -1;
-                for (size_t ti = 0; ti < affTriangles.size(); ++ti) {
-                    const auto &tri = affTriangles[ti];
-                    if (gp.x < tri.boundingBox.x + EXTRAP_LIMIT || gp.x > tri.boundingBox.x + tri.boundingBox.width - EXTRAP_LIMIT || gp.y < tri.boundingBox.y + EXTRAP_LIMIT || gp.y > tri.boundingBox.y + tri.boundingBox.height - EXTRAP_LIMIT) continue;
-                    double dist = cv::pointPolygonTest(triContours[ti], gp, true);
-                    if (dist >= EXTRAP_LIMIT && (float)dist > best_dist) { best_dist = (float)dist; best_ti = (int)ti; }
-                }
-                if (best_ti >= 0) {
-                    const auto &tri = affTriangles[best_ti];
-                    guessU[idx] = (float)(tri.ux * gp.x + tri.uy * gp.y + tri.u); guessV[idx] = (float)(tri.vx * gp.x + tri.vy * gp.y + tri.v);
-                    guessUx[idx] = (float)tri.ux; guessUy[idx] = (float)tri.uy; guessVx[idx] = (float)tri.vx; guessVy[idx] = (float)tri.vy;
-                    inMesh[idx] = true; resultGrid[y][x].mesh_assignment_type = 2;
+        // 🚀 IMPLEMENTATION: Priority 4 (Only extrapolate if the mesh is fully distributed)
+        if (mesh_quality == MeshQuality::FULL) {
+            float EXTRAP_LIMIT = -3.0f * step;
+            for (int y = 0; y < gridH; ++y) {
+                for (int x = 0; x < gridW; ++x) {
+                    int idx = y * gridW + x;
+                    if (inMesh[idx] || resultGrid[y][x].solved) continue;
+                    cv::Point2f gp(rectX + x * step, rectY + y * step);
+                    float best_dist = EXTRAP_LIMIT - 1.0f; int best_ti = -1;
+                    for (size_t ti = 0; ti < affTriangles.size(); ++ti) {
+                        const auto &tri = affTriangles[ti];
+                        if (gp.x < tri.boundingBox.x + EXTRAP_LIMIT || gp.x > tri.boundingBox.x + tri.boundingBox.width - EXTRAP_LIMIT || gp.y < tri.boundingBox.y + EXTRAP_LIMIT || gp.y > tri.boundingBox.y + tri.boundingBox.height - EXTRAP_LIMIT) continue;
+                        double dist = cv::pointPolygonTest(triContours[ti], gp, true);
+                        if (dist >= EXTRAP_LIMIT && (float)dist > best_dist) { best_dist = (float)dist; best_ti = (int)ti; }
+                    }
+                    if (best_ti >= 0) {
+                        const auto &tri = affTriangles[best_ti];
+                        guessU[idx] = (float)(tri.ux * gp.x + tri.uy * gp.y + tri.u); guessV[idx] = (float)(tri.vx * gp.x + tri.vy * gp.y + tri.v);
+                        guessUx[idx] = (float)tri.ux; guessUy[idx] = (float)tri.uy; guessVx[idx] = (float)tri.vx; guessVy[idx] = (float)tri.vy;
+                        inMesh[idx] = true; resultGrid[y][x].mesh_assignment_type = 2;
+                    }
                 }
             }
+        } else {
+            LOGD("ROUTING: Mesh is SPARSE. Disabling extrapolation to prevent bad guesses.");
         }
         time_extrapolate = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_extrap_start).count();
-
         auto t_smooth_start = std::chrono::high_resolution_clock::now();
         auto smoothGrid = [&](std::vector<float> &grid, int radius) {
             std::vector<float> temp = grid;
@@ -760,7 +834,54 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
         }
     }
     time_prepass = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_prepass_start).count();
+    // =========================================================
+    // 🚀 PATH C: SMART SEED HUNTER (Runs only if Mesh failed)
+    // =========================================================
+    if (execute_path_c) {
+        LOGD("ROUTING: Coverage Insufficient. Switching to Path C (Seed Hunter).");
+        float max_texture = -1.0f;
+        int best_idx = -1;
 
+        // Find the single grid point with the absolute highest gradient energy
+        for (int i = 0; i < gridW * gridH; ++i) {
+            int gx = i % gridW, gy = i / gridW;
+            if (!resultGrid[gy][gx].solved && hessian_pool[i].valid) {
+                float texture = hessian_pool[i].H(0,0) + hessian_pool[i].H(1,1);
+                if (texture > max_texture) {
+                    max_texture = texture;
+                    best_idx = i;
+                }
+            }
+        }
+
+        if (best_idx >= 0) {
+            path_c_seed_x = best_idx % gridW;
+            path_c_seed_y = best_idx / gridW;
+            int realX = rectX + path_c_seed_x * step;
+            int realY = rectY + path_c_seed_y * step;
+
+            IndicVision::SubsetData seed_subset;
+            IndicVision::SubsetPrecomputer::precompute_subset_fast(seed_subset, *g_refImg, realX, realY, subsetSize, hessian_pool[best_idx]);
+
+            if (seed_subset.is_initialized) {
+                IndicVision::OptimizationEngine seed_engine;
+                // Brute-force template match for the single best point
+                auto res = seed_engine.calculate_deformation(seed_subset, defImg, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, IndicVision::INIT_AUTO_SEARCH);
+
+                if (res.status == 0 && res.correlation_score <= 0.15f) {
+                    globalU = res.u; globalV = res.v;
+                    LOGD("PATH C SUCCESS: Seed found at [%d, %d] u=%.2f, v=%.2f", realX, realY, globalU, globalV);
+                } else {
+                    LOGE("PATH C FAILED: Global anchor search diverged.");
+                    return -1;
+                }
+            } else { return -1; }
+        } else { return -1; }
+
+        // Clear AKAZE points to ensure Path A (Mesh Execution) is safely skipped
+        akaze_ref_pts.clear();
+        akaze_def_pts.clear();
+    }
     // ==========================================
     // 🚀 PATH A (DELAUNAY MESH EXECUTION)
     // ==========================================
@@ -895,8 +1016,8 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
             }
 
             if (candidates.empty()) {
-                int cx = gridW / 2, cy = gridH / 2;
-                global_seeds.push_back(IndicVision::SeedNode(cx, cy, globalU, globalV, 0.f, 0.f, 0.f, 0.f, 0.f));
+                // 🚀 PRIORITY 4: Use the intelligently found Smart Seed from Path C
+                global_seeds.push_back(IndicVision::SeedNode(path_c_seed_x, path_c_seed_y, globalU, globalV, 0.f, 0.f, 0.f, 0.f, 0.f));
             } else {
                 std::sort(candidates.begin(), candidates.end(), [](const SeedCandidate& a, const SeedCandidate& b) {
                     if (std::abs(a.displacement_mag - b.displacement_mag) > 1.f) return a.displacement_mag < b.displacement_mag;
