@@ -15,23 +15,30 @@ object VisualizationEngine {
     }
 
     private fun clamp(v: Float) = v.coerceIn(0f, 1f)
-    // 🚀 NEW: Robust ±3σ statistical calculation
-    private fun computeSigmaClampedRange(values: List<Float>, valIndex: Int): Pair<Float, Float> {
+    // 🚀 NEW: Robust Percentile Clamping (Aligns perfectly with the Max/Min Button)
+    private fun computeSigmaClampedRange(values: MutableList<Float>, valIndex: Int): Pair<Float, Float> {
         if (values.isEmpty()) return Pair(0f, 1f)
 
-        val mean = values.average().toFloat()
-        var sumSq = 0.0
-        for (v in values) {
-            val d = v - mean
-            sumSq += d * d
-        }
-        val sigma = kotlin.math.sqrt(sumSq / values.size).toFloat()
+        // 1. Sort the array to find the true data distribution
+        values.sort()
 
-        // ±3σ with a minimum span floor to prevent collapse on near-uniform fields
+        // 2. Extract the exact 2% and 98% bounds used by your Max/Min UI Button!
+        // This ignores wild single-pixel outliers that stretch the color scale.
+        val p02 = values[(values.size * 0.02).toInt().coerceIn(0, values.size - 1)]
+        val p98 = values[(values.size * 0.98).toInt().coerceIn(0, values.size - 1)]
+
+        var finalMin = p02
+        var finalMax = p98
+
+        // 3. Minimum span floor to prevent the colors from glitching on completely flat/zero fields
         val minSpan = if (valIndex > 3) 0.0001f else 0.01f // 0.1mε or 0.01px
-        val span = maxOf(sigma * 3f, kotlin.math.abs(mean) * 0.01f, minSpan)
+        if ((finalMax - finalMin) < minSpan) {
+            val mid = (finalMax + finalMin) / 2f
+            finalMin = mid - (minSpan / 2f)
+            finalMax = mid + (minSpan / 2f)
+        }
 
-        return Pair(mean - span, mean + span)
+        return Pair(finalMin, finalMax)
     }
 
     fun generateHeatmap(
