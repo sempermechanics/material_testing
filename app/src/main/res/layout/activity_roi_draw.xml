@@ -86,7 +86,14 @@
                 <RadioButton android:id="@+id/rbEllipse" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ellipse " android:textColor="#FFF"/>
                 <RadioButton android:id="@+id/rbFreeform" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Draw " android:textColor="#FFF"/>
             </RadioGroup>
-
+            <Switch
+                android:id="@+id/switchSubtractMode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Erase (Holes) "
+                android:textColor="#FFFFFF"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="8dp" />
             <Button
                 android:id="@+id/btnSaveRoi"
                 android:layout_width="wrap_content"

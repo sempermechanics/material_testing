@@ -50,8 +50,6 @@ class StudioOverlayView @JvmOverloads constructor(
 
         // If we survived a screen rotation, restore the box now that bounds are ready
         applyPendingRestore()
-
-        if (roiRect.isEmpty && !hasValidRoi) roiRect.set(imageBounds)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -91,18 +89,34 @@ class StudioOverlayView @JvmOverloads constructor(
         isDrawing = false
         roiRect.setEmpty()
         freeformPath.reset()
+        holes.clear()
         touchState = TouchState.NONE
+        activeHoleIndex = -1 // 🚀 FIX: Prevent stale index crash!
         invalidate()
         onRoiChangedListener?.invoke(RectF())
+        mainFreeformPath.reset()
     }
 
     enum class RoiMode { RECTANGLE, SQUARE, CIRCLE, ELLIPSE, FREEFORM }
     var currentMode = RoiMode.RECTANGLE
+    // 🚀 NEW: Hole Tracking Variables
+    var isSubtractMode = false
+    data class Hole(val mode: RoiMode, val path: Path, val rect: RectF)
+    val holes = mutableListOf<Hole>()
+
+    private val holeFillPaint = Paint().apply { color = Color.parseColor("#88FF0000"); style = Paint.Style.FILL }
+    private val holeBorderPaint = Paint().apply { color = Color.RED; style = Paint.Style.STROKE; strokeWidth = 5f }
     var hasValidRoi = false
         private set
 
     private var roiRect = RectF()
     private val minSize = 50f
+
+    // 🚀 FIX: Permanently remember the Main ROI's shape and path!
+    private var mainRoiMode = RoiMode.RECTANGLE
+    private val mainFreeformPath = Path()
+
+    // Drawing variables
 
     // Drawing variables
     private var startX = 0f; private var startY = 0f
@@ -124,26 +138,19 @@ class StudioOverlayView @JvmOverloads constructor(
     }
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val bounds = if (imageBounds.isEmpty) RectF(0f, 0f, width.toFloat(), height.toFloat()) else imageBounds
-
-        // 🚀 THE SAFETY RAIL: Clamp touch exactly to the image boundaries
         val x = event.x.coerceIn(bounds.left, bounds.right)
         val y = event.y.coerceIn(bounds.top, bounds.bottom)
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                if (hasValidRoi && currentMode != RoiMode.FREEFORM) {
-                    touchState = getTouchState(x, y)
-                    if (touchState != TouchState.NONE) {
-                        lastX = x; lastY = y
-                        return true
-                    }
-                }
+                touchState = getTouchState(x, y)
+                if (touchState != TouchState.NONE) { lastX = x; lastY = y; return true }
 
-                reset()
-                isDrawing = true
-                startX = x; startY = y
-                endX = x; endY = y
-                if (currentMode == RoiMode.FREEFORM) freeformPath.moveTo(startX, startY)
+                if (!isSubtractMode) { holes.clear(); roiRect.setEmpty(); hasValidRoi = false }
+
+                isDrawing = true; startX = x; startY = y; endX = x; endY = y
+                freeformPath.reset()
+                if (currentMode == RoiMode.FREEFORM) freeformPath.moveTo(x, y)
                 invalidate()
                 return true
             }
@@ -151,57 +158,25 @@ class StudioOverlayView @JvmOverloads constructor(
                 if (touchState != TouchState.NONE) {
                     val dx = x - lastX
                     val dy = y - lastY
+                    // 🚀 DYNAMIC TARGET: Modifies either the grabbed hole OR the main ROI
+                    val target = if (activeHoleIndex >= 0) holes[activeHoleIndex].rect else roiRect
 
                     when (touchState) {
                         TouchState.CENTER -> {
-                            // 🚀 Safe clamping inside the image
-                            val maxLeft = bounds.right - roiRect.width()
-                            val maxTop = bounds.bottom - roiRect.height()
-                            // 🚀 Clamp dragging inside the image
-                            val newLeft = (roiRect.left + dx).coerceIn(bounds.left, bounds.right - roiRect.width())
-                            val newTop = (roiRect.top + dy).coerceIn(bounds.top, bounds.bottom - roiRect.height())
-                            roiRect.offsetTo(newLeft, newTop)
+                            val newLeft = safeCoerce(target.left + dx, bounds.left, bounds.right - target.width())
+                            val newTop = safeCoerce(target.top + dy, bounds.top, bounds.bottom - target.height())
+                            target.offsetTo(newLeft, newTop)
                         }
-                        TouchState.TOP_LEFT -> {
-                            roiRect.left = (roiRect.left + dx).coerceIn(bounds.left, roiRect.right - minSize)
-                            roiRect.top = (roiRect.top + dy).coerceIn(bounds.top, roiRect.bottom - minSize)
-                            if (isSquareMode()) makeSquare(pivotX = roiRect.right, pivotY = roiRect.bottom, bounds)
-                        }
-                        TouchState.TOP_RIGHT -> {
-                            roiRect.right = (roiRect.right + dx).coerceIn(roiRect.left + minSize, bounds.right)
-                            roiRect.top = (roiRect.top + dy).coerceIn(bounds.top, roiRect.bottom - minSize)
-                            if (isSquareMode()) makeSquare(pivotX = roiRect.left, pivotY = roiRect.bottom, bounds)
-                        }
-                        TouchState.BOTTOM_LEFT -> {
-                            roiRect.left = (roiRect.left + dx).coerceIn(bounds.left, roiRect.right - minSize)
-                            roiRect.bottom = (roiRect.bottom + dy).coerceIn(roiRect.top + minSize, bounds.bottom)
-                            if (isSquareMode()) makeSquare(pivotX = roiRect.right, pivotY = roiRect.top, bounds)
-                        }
-                        TouchState.BOTTOM_RIGHT -> {
-                            roiRect.right = (roiRect.right + dx).coerceIn(roiRect.left + minSize, bounds.right)
-                            roiRect.bottom = (roiRect.bottom + dy).coerceIn(roiRect.top + minSize, bounds.bottom)
-                            if (isSquareMode()) makeSquare(pivotX = roiRect.left, pivotY = roiRect.top, bounds)
-                        }
+                        TouchState.TOP_LEFT -> { target.left = safeCoerce(target.left + dx, bounds.left, target.right - minSize); target.top = safeCoerce(target.top + dy, bounds.top, target.bottom - minSize); if (isSquareMode()) makeSquare(target.right, target.bottom, bounds, target) }
+                        TouchState.TOP_RIGHT -> { target.right = safeCoerce(target.right + dx, target.left + minSize, bounds.right); target.top = safeCoerce(target.top + dy, bounds.top, target.bottom - minSize); if (isSquareMode()) makeSquare(target.left, target.bottom, bounds, target) }
+                        TouchState.BOTTOM_LEFT -> { target.left = safeCoerce(target.left + dx, bounds.left, target.right - minSize); target.bottom = safeCoerce(target.bottom + dy, target.top + minSize, bounds.bottom); if (isSquareMode()) makeSquare(target.right, target.top, bounds, target) }
+                        TouchState.BOTTOM_RIGHT -> { target.right = safeCoerce(target.right + dx, target.left + minSize, bounds.right); target.bottom = safeCoerce(target.bottom + dy, target.top + minSize, bounds.bottom); if (isSquareMode()) makeSquare(target.left, target.top, bounds, target) }
                         else -> {}
                     }
                     lastX = x; lastY = y
-                } else {
-                    if (currentMode == RoiMode.FREEFORM) {
-                        endX = x; endY = y
-                        freeformPath.lineTo(endX, endY)
-                    } else {
-                        endX = x; endY = y
-                        if (isSquareMode()) {
-                            val w = endX - startX
-                            val h = endY - startY
-                            val side = max(abs(w), abs(h))
-                            val maxSideX = if (w > 0) bounds.right - startX else startX - bounds.left
-                            val maxSideY = if (h > 0) bounds.bottom - startY else startY - bounds.top
-                            val constrainedSide = min(side, min(abs(maxSideX), abs(maxSideY)))
-                            endX = startX + sign(w) * constrainedSide
-                            endY = startY + sign(h) * constrainedSide
-                        }
-                    }
+                } else if (isDrawing) {
+                    endX = x; endY = y
+                    if (currentMode == RoiMode.FREEFORM) freeformPath.lineTo(x, y)
                 }
                 invalidate()
                 onRoiChangedListener?.invoke(getRelativeRoi())
@@ -209,17 +184,26 @@ class StudioOverlayView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP -> {
                 if (isDrawing) {
-                    if (currentMode == RoiMode.FREEFORM) {
-                        freeformPath.close()
+                    if (currentMode == RoiMode.FREEFORM) freeformPath.close()
+                    val rect = RectF(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
+
+                    if (isSubtractMode) {
+                        // 🚀 ARCHITECTURE FIX: Removed 'hasValidRoi' so you can punch holes in the Full Image
+                        if (rect.width() > 50f || rect.height() > 50f || currentMode == RoiMode.FREEFORM) {
+                            holes.add(Hole(currentMode, Path(freeformPath), rect))
+                        }
                     } else {
-                        roiRect.set(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
+                        if (rect.width() > 50f || rect.height() > 50f) {
+                            roiRect.set(rect)
+                            hasValidRoi = true
+                            mainRoiMode = currentMode
+                            if (currentMode == RoiMode.FREEFORM) mainFreeformPath.set(freeformPath)
+                        }
                     }
                     isDrawing = false
                 }
-                touchState = TouchState.NONE
-                hasValidRoi = true
-                invalidate()
-                onRoiChangedListener?.invoke(getRelativeRoi())
+                touchState = TouchState.NONE; activeHoleIndex = -1
+                invalidate(); onRoiChangedListener?.invoke(getRelativeRoi())
                 return true
             }
         }
@@ -228,15 +212,17 @@ class StudioOverlayView @JvmOverloads constructor(
 
     private fun isSquareMode() = (currentMode == RoiMode.SQUARE || currentMode == RoiMode.CIRCLE)
 
-    private fun makeSquare(pivotX: Float, pivotY: Float, bounds: RectF) {
-        val currentW = abs(roiRect.right - roiRect.left)
-        val currentH = abs(roiRect.bottom - roiRect.top)
+    private var activeHoleIndex = -1 // 🚀 NEW: Tracks which hole you grabbed
+
+    private fun makeSquare(pivotX: Float, pivotY: Float, bounds: RectF, targetRect: RectF) {
+        val currentW = abs(targetRect.right - targetRect.left)
+        val currentH = abs(targetRect.bottom - targetRect.top)
         val desiredSide = max(currentW, currentH)
 
-        val growLeft = roiRect.left != pivotX && roiRect.left < pivotX
-        val growRight = roiRect.right != pivotX && roiRect.right > pivotX
-        val growTop = roiRect.top != pivotY && roiRect.top < pivotY
-        val growBottom = roiRect.bottom != pivotY && roiRect.bottom > pivotY
+        val growLeft = targetRect.left != pivotX && targetRect.left < pivotX
+        val growRight = targetRect.right != pivotX && targetRect.right > pivotX
+        val growTop = targetRect.top != pivotY && targetRect.top < pivotY
+        val growBottom = targetRect.bottom != pivotY && targetRect.bottom > pivotY
 
         var maxSide = desiredSide
         if (growLeft) maxSide = min(maxSide, pivotX - bounds.left)
@@ -250,7 +236,7 @@ class StudioOverlayView @JvmOverloads constructor(
         val newTop = if (growTop) pivotY - finalSide else pivotY
         val newBottom = if (growBottom) pivotY + finalSide else pivotY
 
-        roiRect.set(
+        targetRect.set(
             newLeft.coerceIn(bounds.left, bounds.right),
             newTop.coerceIn(bounds.top, bounds.bottom),
             newRight.coerceIn(bounds.left, bounds.right),
@@ -259,47 +245,105 @@ class StudioOverlayView @JvmOverloads constructor(
     }
 
     private fun getTouchState(x: Float, y: Float): TouchState {
-        val slop = 60f
-        if (abs(x - roiRect.left) < slop && abs(y - roiRect.top) < slop) return TouchState.TOP_LEFT
-        if (abs(x - roiRect.right) < slop && abs(y - roiRect.top) < slop) return TouchState.TOP_RIGHT
-        if (abs(x - roiRect.left) < slop && abs(y - roiRect.bottom) < slop) return TouchState.BOTTOM_LEFT
-        if (abs(x - roiRect.right) < slop && abs(y - roiRect.bottom) < slop) return TouchState.BOTTOM_RIGHT
-        if (roiRect.contains(x, y)) return TouchState.CENTER
+        val slop = 45f // 🚀 Massive hitboxes for precision resizing
+        activeHoleIndex = -1
+
+        // 1. Check Holes First (allows resizing holes drawn over the main ROI)
+        if (isSubtractMode) {
+            for (i in holes.indices.reversed()) {
+                val hr = holes[i].rect
+                if (abs(x - hr.left) < slop && abs(y - hr.top) < slop) { activeHoleIndex = i; return TouchState.TOP_LEFT }
+                if (abs(x - hr.right) < slop && abs(y - hr.top) < slop) { activeHoleIndex = i; return TouchState.TOP_RIGHT }
+                if (abs(x - hr.left) < slop && abs(y - hr.bottom) < slop) { activeHoleIndex = i; return TouchState.BOTTOM_LEFT }
+                if (abs(x - hr.right) < slop && abs(y - hr.bottom) < slop) { activeHoleIndex = i; return TouchState.BOTTOM_RIGHT }
+                if (hr.contains(x, y)) { activeHoleIndex = i; return TouchState.CENTER }
+            }
+        }
+
+        // 2. Check Main ROI Second
+        if (hasValidRoi && !isSubtractMode) {
+            if (abs(x - roiRect.left) < slop && abs(y - roiRect.top) < slop) return TouchState.TOP_LEFT
+            if (abs(x - roiRect.right) < slop && abs(y - roiRect.top) < slop) return TouchState.TOP_RIGHT
+            if (abs(x - roiRect.left) < slop && abs(y - roiRect.bottom) < slop) return TouchState.BOTTOM_LEFT
+            if (abs(x - roiRect.right) < slop && abs(y - roiRect.bottom) < slop) return TouchState.BOTTOM_RIGHT
+            if (roiRect.contains(x, y)) return TouchState.CENTER
+        }
+
         return TouchState.NONE
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (!isDrawing && !hasValidRoi) return
+        // 🚀 BUG FIX: Don't return early if we have holes but no main ROI!
+        if (!isDrawing && !hasValidRoi && holes.isEmpty()) return
 
         val layerId = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
 
-        val useRoiRect = (hasValidRoi && !isDrawing)
-        val drawRect = if (useRoiRect) roiRect else RectF(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
+        // --- 1. DRAW THE MAIN ROI ---
+        if (hasValidRoi || (!isSubtractMode && isDrawing)) {
+            val drawMainRect = if (!isSubtractMode && isDrawing) {
+                RectF(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
+            } else {
+                roiRect
+            }
 
-        when (currentMode) {
-            RoiMode.RECTANGLE, RoiMode.SQUARE -> {
-                canvas.drawRect(drawRect, clearPaint)
-                canvas.drawRect(drawRect, borderPaint)
+            // Use current mode if actively drawing, otherwise use the saved mode
+            val modeToUse = if (!isSubtractMode && isDrawing) currentMode else mainRoiMode
+            val pathToUse = if (!isSubtractMode && isDrawing) freeformPath else mainFreeformPath
+
+            when (modeToUse) {
+                RoiMode.RECTANGLE, RoiMode.SQUARE -> {
+                    canvas.drawRect(drawMainRect, clearPaint)
+                    canvas.drawRect(drawMainRect, borderPaint)
+                }
+                RoiMode.CIRCLE, RoiMode.ELLIPSE -> {
+                    canvas.drawOval(drawMainRect, clearPaint)
+                    canvas.drawOval(drawMainRect, borderPaint)
+                }
+                RoiMode.FREEFORM -> {
+                    canvas.drawPath(pathToUse, clearPaint)
+                    canvas.drawPath(pathToUse, borderPaint)
+                }
             }
-            RoiMode.CIRCLE, RoiMode.ELLIPSE -> {
-                canvas.drawOval(drawRect, clearPaint)
-                canvas.drawOval(drawRect, borderPaint)
-            }
-            RoiMode.FREEFORM -> {
-                canvas.drawPath(freeformPath, clearPaint)
-                canvas.drawPath(freeformPath, borderPaint)
+
+            // Draw Main ROI Handles (Only in Add Mode)
+            if (!isSubtractMode && modeToUse != RoiMode.FREEFORM) {
+                val r = 20f
+                canvas.drawCircle(drawMainRect.left, drawMainRect.top, r, handlePaint)
+                canvas.drawCircle(drawMainRect.right, drawMainRect.top, r, handlePaint)
+                canvas.drawCircle(drawMainRect.left, drawMainRect.bottom, r, handlePaint)
+                canvas.drawCircle(drawMainRect.right, drawMainRect.bottom, r, handlePaint)
             }
         }
 
-        if ((hasValidRoi || isDrawing) && currentMode != RoiMode.FREEFORM) {
-            val r = 20f
-            canvas.drawCircle(drawRect.left, drawRect.top, r, handlePaint)
-            canvas.drawCircle(drawRect.right, drawRect.top, r, handlePaint)
-            canvas.drawCircle(drawRect.left, drawRect.bottom, r, handlePaint)
-            canvas.drawCircle(drawRect.right, drawRect.bottom, r, handlePaint)
+        // --- 2. DRAW SAVED HOLES ---
+        for (hole in holes) {
+            when (hole.mode) {
+                RoiMode.RECTANGLE, RoiMode.SQUARE -> { canvas.drawRect(hole.rect, holeFillPaint); canvas.drawRect(hole.rect, holeBorderPaint) }
+                RoiMode.CIRCLE, RoiMode.ELLIPSE -> { canvas.drawOval(hole.rect, holeFillPaint); canvas.drawOval(hole.rect, holeBorderPaint) }
+                RoiMode.FREEFORM -> { canvas.drawPath(hole.path, holeFillPaint); canvas.drawPath(hole.path, holeBorderPaint) }
+            }
+            // Draw handles for holes if we are in Erase mode to show they are editable
+            if (isSubtractMode && !isDrawing && hole.mode != RoiMode.FREEFORM) {
+                val r = 15f
+                canvas.drawCircle(hole.rect.left, hole.rect.top, r, handlePaint)
+                canvas.drawCircle(hole.rect.right, hole.rect.top, r, handlePaint)
+                canvas.drawCircle(hole.rect.left, hole.rect.bottom, r, handlePaint)
+                canvas.drawCircle(hole.rect.right, hole.rect.bottom, r, handlePaint)
+            }
         }
+
+        // --- 3. DRAW ACTIVE HOLE BEING DRAGGED ---
+        if (isDrawing && isSubtractMode) {
+            val activeHoleRect = RectF(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
+            when (currentMode) {
+                RoiMode.RECTANGLE, RoiMode.SQUARE -> { canvas.drawRect(activeHoleRect, holeFillPaint); canvas.drawRect(activeHoleRect, holeBorderPaint) }
+                RoiMode.CIRCLE, RoiMode.ELLIPSE -> { canvas.drawOval(activeHoleRect, holeFillPaint); canvas.drawOval(activeHoleRect, holeBorderPaint) }
+                RoiMode.FREEFORM -> { canvas.drawPath(freeformPath, holeFillPaint); canvas.drawPath(freeformPath, holeBorderPaint) }
+            }
+        }
+
         canvas.restoreToCount(layerId)
     }
 
@@ -316,5 +360,72 @@ class StudioOverlayView @JvmOverloads constructor(
             (roiRect.right - imageBounds.left) * scale,
             (roiRect.bottom - imageBounds.top) * scale
         )
+    }
+    // 🚀 OOM FIX: Generate Raw ALPHA_8 bytes
+    fun generateMaskBytes(): ByteArray {
+        if (realImageWidth <= 0 || realImageHeight <= 0) return ByteArray(0)
+
+        // 1. ALPHA_8 uses 1 byte per pixel. Massive memory savings. NO OOM CRASH.
+        val maskBitmap = Bitmap.createBitmap(realImageWidth, realImageHeight, Bitmap.Config.ALPHA_8)
+        val maskCanvas = Canvas(maskBitmap)
+
+        maskCanvas.drawColor(Color.BLACK) // Black = Ignored
+
+        val scaleX = realImageWidth.toFloat() / imageBounds.width()
+        val scaleY = realImageHeight.toFloat() / imageBounds.height()
+
+        // 🚀 METROLOGY FIX: White writes 255 (Correlate). CLEAR destroys the alpha to 0 (Void).
+        val paintAdd = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL; isAntiAlias = false }
+        val paintSub = Paint().apply { color = Color.TRANSPARENT; xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR); style = Paint.Style.FILL; isAntiAlias = false }
+
+        // 1. Draw Main ROI (Material = 255)
+        if (hasValidRoi) {
+            val mappedMainRect = RectF(
+                (roiRect.left - imageBounds.left) * scaleX, (roiRect.top - imageBounds.top) * scaleY,
+                (roiRect.right - imageBounds.left) * scaleX, (roiRect.bottom - imageBounds.top) * scaleY
+            )
+            when (mainRoiMode) {
+                RoiMode.RECTANGLE, RoiMode.SQUARE -> maskCanvas.drawRect(mappedMainRect, paintAdd)
+                RoiMode.CIRCLE, RoiMode.ELLIPSE -> maskCanvas.drawOval(mappedMainRect, paintAdd)
+                RoiMode.FREEFORM -> {
+                    val scaledPath = Path(mainFreeformPath)
+                    val matrix = Matrix()
+                    matrix.postTranslate(-imageBounds.left, -imageBounds.top)
+                    matrix.postScale(scaleX, scaleY)
+                    scaledPath.transform(matrix)
+                    maskCanvas.drawPath(scaledPath, paintAdd)
+                }
+            }
+        } else {
+            // 🚀 ARCHITECTURE FIX: If no ADD shape was drawn, fill the entire image with White!
+            maskCanvas.drawRect(0f, 0f, realImageWidth.toFloat(), realImageHeight.toFloat(), paintAdd)
+        }
+        // Draw Holes
+        for (hole in holes) {
+            val mappedHole = RectF(
+                (hole.rect.left - imageBounds.left) * scaleX, (hole.rect.top - imageBounds.top) * scaleY,
+                (hole.rect.right - imageBounds.left) * scaleX, (hole.rect.bottom - imageBounds.top) * scaleY
+            )
+            when (hole.mode) {
+                RoiMode.RECTANGLE, RoiMode.SQUARE -> maskCanvas.drawRect(mappedHole, paintSub)
+                RoiMode.CIRCLE, RoiMode.ELLIPSE -> maskCanvas.drawOval(mappedHole, paintSub)
+                RoiMode.FREEFORM -> {
+                    val scaledPath = Path(hole.path)
+                    val matrix = Matrix()
+                    matrix.postTranslate(-imageBounds.left, -imageBounds.top)
+                    matrix.postScale(scaleX, scaleY)
+                    scaledPath.transform(matrix)
+                    maskCanvas.drawPath(scaledPath, paintSub)
+                }
+            }
+        }
+
+        // 2. Extract RAW BYTES instantly. No PNG compression on the main thread!
+        val size = maskBitmap.rowBytes * maskBitmap.height
+        val byteBuffer = java.nio.ByteBuffer.allocate(size)
+        maskBitmap.copyPixelsToBuffer(byteBuffer)
+        maskBitmap.recycle() // 🚀 Free JVM memory instantly
+
+        return byteBuffer.array()
     }
 }

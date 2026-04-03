@@ -21,6 +21,7 @@ class RoiDrawActivity : AppCompatActivity() {
 
     private var realImageWidth = 0
     private var realImageHeight = 0
+    private lateinit var switchSubtractMode: Switch // 🚀 NEW: Subtract Toggle
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +35,7 @@ class RoiDrawActivity : AppCompatActivity() {
         btnSaveRoi = findViewById(R.id.btnSaveRoi)
         btnCancelRoi = findViewById(R.id.btnCancelRoi)
         btnResetRoi = findViewById(R.id.btnResetRoi)
+        switchSubtractMode = findViewById(R.id.switchSubtractMode) // 🚀 NEW
 
         // 2. Get Intent Data
         val imageFilePath = intent.getStringExtra("IMAGE_FILE_PATH")
@@ -93,7 +95,11 @@ class RoiDrawActivity : AppCompatActivity() {
         if (savedInstanceState != null) {
             rgDrawMode.check(savedInstanceState.getInt("DRAW_MODE", R.id.rbRect))
         }
-
+        // 🚀 NEW: Connect the Subtract Mode Switch
+        switchSubtractMode.setOnCheckedChangeListener { _, isChecked ->
+            overlayRoi.isSubtractMode = isChecked
+            tvHud.text = if (isChecked) "Mode: ERASE (Holes)" else "Mode: DRAW (Material)"
+        }
         // 5. Manual Reset Button Logic
         btnResetRoi.setOnClickListener {
             overlayRoi.reset()
@@ -115,34 +121,46 @@ class RoiDrawActivity : AppCompatActivity() {
 
         // 7. Save Button Logic
         btnSaveRoi.setOnClickListener {
-            if (!overlayRoi.hasValidRoi) {
-                Toast.makeText(this, "Draw a shape first!", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            val rectX: Int; val rectY: Int; val rectW: Int; val rectH: Int
+            val maskBytes: ByteArray
+
+            if (!overlayRoi.hasValidRoi && overlayRoi.holes.isEmpty()) {
+                // 🚀 SCENARIO 1: Absolutely empty canvas. Pure Full Image.
+                rectX = 0; rectY = 0; rectW = realImageWidth; rectH = realImageHeight
+                maskBytes = ByteArray(realImageWidth * realImageHeight) { 255.toByte() }
+                Toast.makeText(this, "Full Image Selected", Toast.LENGTH_SHORT).show()
+            } else {
+                // 🚀 SCENARIO 2: Custom Mask (Either an ADD shape exists, OR Holes exist on the Full Image)
+                if (overlayRoi.hasValidRoi) {
+                    val finalRoi = overlayRoi.getRelativeRoi()
+                    rectX = finalRoi.left.toInt().coerceAtLeast(0)
+                    rectY = finalRoi.top.toInt().coerceAtLeast(0)
+                    rectW = finalRoi.width().toInt().coerceAtMost(realImageWidth - rectX)
+                    rectH = finalRoi.height().toInt().coerceAtMost(realImageHeight - rectY)
+                } else {
+                    // Full image bounds because they only drew holes
+                    rectX = 0; rectY = 0; rectW = realImageWidth; rectH = realImageHeight
+                }
+
+                if (rectW <= 0 || rectH <= 0) {
+                    Toast.makeText(this, "Invalid ROI size", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                maskBytes = overlayRoi.generateMaskBytes()
             }
 
-            val finalRoi = overlayRoi.getRelativeRoi()
-            val rectX = finalRoi.left.toInt().coerceAtLeast(0)
-            val rectY = finalRoi.top.toInt().coerceAtLeast(0)
-            val rectW = finalRoi.width().toInt().coerceAtMost(realImageWidth - rectX)
-            val rectH = finalRoi.height().toInt().coerceAtMost(realImageHeight - rectY)
-
-            if (rectW <= 0 || rectH <= 0) {
-                Toast.makeText(this, "Invalid ROI size", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
+            // Save to cache and return Intent
+            val maskFile = File(cacheDir, "roi_mask_cache.bin")
+            java.io.FileOutputStream(maskFile).use { it.write(maskBytes) }
 
             val resultIntent = Intent()
             resultIntent.putExtra("ROI_X", rectX)
             resultIntent.putExtra("ROI_Y", rectY)
             resultIntent.putExtra("ROI_W", rectW)
             resultIntent.putExtra("ROI_H", rectH)
+            resultIntent.putExtra("MASK_FILE_PATH", maskFile.absolutePath)
 
             setResult(Activity.RESULT_OK, resultIntent)
-            finish()
-        }
-
-        btnCancelRoi.setOnClickListener {
-            setResult(Activity.RESULT_CANCELED)
             finish()
         }
     }

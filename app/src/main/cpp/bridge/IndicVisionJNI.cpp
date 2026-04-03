@@ -107,13 +107,26 @@ cv::Mat bytesToMat(JNIEnv *env, jbyteArray bytes, int expectedWidth = 0, int exp
     jsize len = env->GetArrayLength(bytes);
     jbyte *buf = env->GetByteArrayElements(bytes, nullptr);
     cv::Mat img;
-    if (expectedWidth > 0 && expectedHeight > 0 && len == expectedWidth * expectedHeight * 4) {
-        cv::Mat rawData(expectedHeight, expectedWidth, CV_8UC4, (void *)buf);
-        cv::cvtColor(rawData, img, cv::COLOR_RGBA2GRAY);
+
+    if (expectedWidth > 0 && expectedHeight > 0) {
+        if (len == expectedWidth * expectedHeight * 4) {
+            // RGBA_8888 Raw Image
+            cv::Mat rawData(expectedHeight, expectedWidth, CV_8UC4, (void *)buf);
+            cv::cvtColor(rawData, img, cv::COLOR_RGBA2GRAY);
+        } else if (len == expectedWidth * expectedHeight) {
+            // 🚀 NEW: RAW ALPHA_8 MASK BYTES! Instant load, zero decode overhead.
+            cv::Mat rawData(expectedHeight, expectedWidth, CV_8UC1, (void *)buf);
+            img = rawData.clone(); // Clone to persist after JNI release
+        } else {
+            // Encoded image fallback
+            cv::Mat rawData(1, len, CV_8UC1, (void *)buf);
+            img = cv::imdecode(rawData, cv::IMREAD_GRAYSCALE);
+        }
     } else {
         cv::Mat rawData(1, len, CV_8UC1, (void *)buf);
         img = cv::imdecode(rawData, cv::IMREAD_GRAYSCALE);
     }
+
     cv::Mat result = img.clone();
     env->ReleaseByteArrayElements(bytes, buf, JNI_ABORT);
     return result;
@@ -348,7 +361,9 @@ JNIEXPORT jint JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_comput
 
     cv::Mat roiMask;
     if (maskBytes != nullptr && env->GetArrayLength(maskBytes) > 0) {
-        roiMask = bytesToMat(env, maskBytes);
+        // 🚀 FIX: Pass width/height so bytesToMat knows it's a raw ALPHA_8 array!
+        roiMask = bytesToMat(env, maskBytes, g_refWidth, g_refHeight);
+
         if (!roiMask.empty() && (roiMask.cols != g_refWidth || roiMask.rows != g_refHeight)) {
             cv::resize(roiMask, roiMask, cv::Size(g_refWidth, g_refHeight), 0, 0, cv::INTER_NEAREST);
         }

@@ -15,6 +15,24 @@ object VisualizationEngine {
     }
 
     private fun clamp(v: Float) = v.coerceIn(0f, 1f)
+    // 🚀 NEW: Robust ±3σ statistical calculation
+    private fun computeSigmaClampedRange(values: List<Float>, valIndex: Int): Pair<Float, Float> {
+        if (values.isEmpty()) return Pair(0f, 1f)
+
+        val mean = values.average().toFloat()
+        var sumSq = 0.0
+        for (v in values) {
+            val d = v - mean
+            sumSq += d * d
+        }
+        val sigma = kotlin.math.sqrt(sumSq / values.size).toFloat()
+
+        // ±3σ with a minimum span floor to prevent collapse on near-uniform fields
+        val minSpan = if (valIndex > 3) 0.0001f else 0.01f // 0.1mε or 0.01px
+        val span = maxOf(sigma * 3f, kotlin.math.abs(mean) * 0.01f, minSpan)
+
+        return Pair(mean - span, mean + span)
+    }
 
     fun generateHeatmap(
         data: FloatArray,
@@ -52,28 +70,16 @@ object VisualizationEngine {
             return Triple(Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888), 0f, 0f)
         }
 
-        // 🚀 THE SCALING LOGIC: Use Custom Bounds if provided, else robust auto-scale via Zero-Anchored 2%-98% clipping
+        // 🚀 THE SCALING LOGIC: Use Custom Bounds if provided, else use Mean ± 3σ Statistical Clamping
         val minV: Float
         val maxV: Float
         if (customMin != null && customMax != null) {
             minV = customMin
             maxV = customMax
         } else {
-            validValues.sort()
-            var v02 = validValues[(validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)]
-            var v98 = validValues[(validValues.size * 0.98).toInt().coerceIn(0, validValues.size - 1)]
-
-            // 🚀 ROBUSTNESS FIX: If the range is near-zero (noise floor), 
-            // set a minimum meaningful span so the spectrum doesn't explode on noise.
-            val minSpan = if (valIndex > 3) 0.0001f else 0.01f // 0.1mε or 0.01px
-            if ((v98 - v02) < minSpan) {
-                val mid = (v98 + v02) / 2f
-                v02 = mid - (minSpan / 2f)
-                v98 = mid + (minSpan / 2f)
-            }
-
-            minV = v02
-            maxV = v98
+            val bounds = computeSigmaClampedRange(validValues, valIndex)
+            minV = bounds.first
+            maxV = bounds.second
         }
 
         val range = if (maxV - minV == 0f) 0.0001f else maxV - minV

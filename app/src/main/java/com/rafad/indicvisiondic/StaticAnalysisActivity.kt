@@ -164,9 +164,25 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     viewModel.roiY = data.getIntExtra("ROI_Y", 0)
                     viewModel.roiW = data.getIntExtra("ROI_W", viewModel.realRefWidth)
                     viewModel.roiH = data.getIntExtra("ROI_H", viewModel.realRefHeight)
-                    viewModel.hasCustomRoi = true
-                    viewModel.roiMaskBytes = null // Clear any complex mask if drawing a box
-                    tvInstruction.text = "✅ ROI Set: ${viewModel.roiW} x ${viewModel.roiH} px"
+
+                    // 🚀 PIPELINE FIX: Actually read the mask file sent by RoiDrawActivity!
+                    val maskPath = data.getStringExtra("MASK_FILE_PATH")
+                    if (maskPath != null) {
+                        val file = File(maskPath)
+                        if (file.exists()) {
+                            viewModel.roiMaskBytes = file.readBytes()
+                        }
+                    }
+
+                    // 🚀 FIX FULL IMAGE OVERRIDE: If it's exactly the image bounds, unset custom ROI
+                    if (viewModel.roiW == viewModel.realRefWidth && viewModel.roiH == viewModel.realRefHeight) {
+                        viewModel.hasCustomRoi = false
+                        tvInstruction.text = "✅ Full Image Analysis Set"
+                    } else {
+                        viewModel.hasCustomRoi = true
+                        tvInstruction.text = "✅ ROI Set: ${viewModel.roiW} x ${viewModel.roiH} px"
+                    }
+
                     checkReady()
                 }
             } else {
