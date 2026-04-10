@@ -264,7 +264,35 @@
                     android:layout_height="wrap_content"
                     android:text="NLVC (Fractures)"/>
             </RadioGroup>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Sub-pixel Interpolation Kernel:"
+                android:textStyle="bold"
+                android:paddingHorizontal="8dp"/>
 
+            <RadioGroup
+                android:id="@+id/rgInterpolator"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="10dp"
+                android:paddingHorizontal="8dp">
+
+                <RadioButton
+                    android:id="@+id/rbBicubic"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="4x4 Bicubic (Fast)"
+                    android:checked="true"
+                    android:layout_marginEnd="16dp"/>
+
+                <RadioButton
+                    android:id="@+id/rbKeys"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="6x6 Keys (DICe Parity)"/>
+            </RadioGroup>
             <Button
                 android:id="@+id/btnLoadRoiMask"
                 android:layout_width="match_parent"

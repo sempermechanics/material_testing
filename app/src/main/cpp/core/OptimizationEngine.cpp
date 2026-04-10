@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <arm_neon.h>
 #include <chrono>
+#include <android/log.h>
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "IndicVisionEngine", __VA_ARGS__)
 
 namespace IndicVision {
 
@@ -70,7 +72,9 @@ namespace IndicVision {
                 for (size_t i = 0; i < subset.x_offsets.size(); i += 9) {
                     float x = subset.cx + subset.x_offsets[i];
                     float y = subset.cy + subset.y_offsets[i];
-                    float def_val = def_img.interpolate_bicubic(x + (float)u, y + (float)v);
+                    float def_val = use_6x6_interpolator ?
+                                    def_img.interpolate_keys_fourth(x + (float)u, y + (float)v) :
+                                    def_img.interpolate_bicubic(x + (float)u, y + (float)v);
                     float diff = subset.ref_intensities[i] - def_val;
                     sum_sq_diff += diff * diff;
                 }
@@ -143,6 +147,19 @@ namespace IndicVision {
         float final_score = 1.0f;
         int max_iter = 50;
 
+        // DICe LAYER 2: Identify explicitly invalid reference pixels based on Ghost Wall masking
+        std::vector<bool> ref_valid(n, true);
+        for(size_t i = 0; i < n; ++i) {
+            // 🚀 DICe PARITY: A pixel is ghost-wall-sterilized based purely on 0.0 intensity
+            if (subset.ref_intensities[i] < 1e-6f) {
+                ref_valid[i] = false;
+            }
+        }
+        if (std::abs(subset.cx - 185) < 2 && std::abs(subset.cy - 617) < 2) {
+            int invalid_ref_count = 0;
+            for (size_t i = 0; i < n; ++i) { if (!ref_valid[i]) invalid_ref_count++; }
+            LOGD("DIAGNOSTIC 2: At Exploding Pixel (185,617), ref_valid marked %d out of %zu pixels as DEAD.", invalid_ref_count, n);
+        }
         for (int iter = 0; iter < max_iter; ++iter) {
             float def_sum = 0.0f;
             int valid_pixels = 0;
@@ -156,9 +173,20 @@ namespace IndicVision {
                 float final_x = subset.cx + W(0, 0) * x + W(0, 1) * y + W(0, 2);
                 float final_y = subset.cy + W(1, 0) * x + W(1, 1) * y + W(1, 2);
 
-                float val = def_img.interpolate_bicubic(final_x, final_y);
+                // DICe LAYER 1B: Explicit 4-Pixel Deactivation Guard
+                if (final_x < 4.0f || final_x >= def_img.width - 4.0f ||
+                    final_y < 4.0f || final_y >= def_img.height - 4.0f) {
+                    def_vals[i] = -1.0f; // Instantly deactivate
+                    continue;
+                }
 
-                if (val > 0.0f) {
+                float val = use_6x6_interpolator ?
+                            def_img.interpolate_keys_fourth(final_x, final_y) :
+                            def_img.interpolate_bicubic(final_x, final_y);
+
+                // DICe LAYER 2: The Mask-Aware Drop
+                // Only accept pixels that are physically valid in BOTH the reference mask and the deformed image
+                if (val > 0.0f && ref_valid[i]) {
                     def_vals[i] = val;
                     def_sum += val;
                     valid_pixels++;
@@ -173,6 +201,21 @@ namespace IndicVision {
             }
 
             float def_mean = def_sum / valid_pixels;
+
+            // 🚀 DIAGNOSTIC 5: The Mean Mismatch Check
+            if (std::abs(subset.cx - 185) < 2 && std::abs(subset.cy - 617) < 2 && iter == 0) {
+                // We recreate the reference mean here just to log it
+                float ref_sum = 0.0f;
+                for (size_t k = 0; k < n; ++k) { ref_sum += subset.ref_intensities[k]; }
+                float naive_ref_mean = ref_sum / n;
+
+                float valid_ref_sum = 0.0f;
+                for (size_t k = 0; k < n; ++k) { if(ref_valid[k]) valid_ref_sum += subset.ref_intensities[k]; }
+                float true_ref_mean = valid_ref_sum / valid_pixels;
+
+                LOGD("DIAGNOSTIC 5: At (185,617) Iter 0 | Naive Ref Mean (N=%zu): %.2f | True Ref Mean (N=%d): %.2f | Def Mean: %.2f",
+                     n, naive_ref_mean, valid_pixels, true_ref_mean, def_mean);
+            }
             float def_sum_sq = 0.0f;
             Eigen::Matrix<float, 6, 1> dp_sum = Eigen::Matrix<float, 6, 1>::Zero();
             float error_sum_sq = 0.0f;
@@ -249,6 +292,7 @@ namespace IndicVision {
       }
 #endif
             } else {
+                Eigen::Matrix<float, 6, 6> H_dynamic = Eigen::Matrix<float, 6, 6>::Zero();
                 for (size_t i = 0; i < n; ++i) {
                     if (def_vals[i] >= 0.0f) {
                         float diff = def_vals[i] - def_mean;
@@ -258,15 +302,32 @@ namespace IndicVision {
                 float def_std = std::sqrt(def_sum_sq / valid_pixels);
                 if (def_std < 1e-5f)
                     def_std = 1.0f;
+                float inv_std = 1.0f / def_std;
 
                 for (size_t i = 0; i < n; ++i) {
                     if (def_vals[i] >= 0.0f) {
-                        float norm_def = (def_vals[i] - def_mean) / def_std;
+                        float norm_def = (def_vals[i] - def_mean) * inv_std;
                         float diff = subset.norm_ref_intensities[i] - norm_def;
                         error_sum_sq += diff * diff;
                         dp_sum += subset.steepest_descent_images[i] * diff;
+                        H_dynamic.noalias() += subset.steepest_descent_images[i] * subset.steepest_descent_images[i].transpose();
                     }
                 }
+
+                // DICe LAYER 3: 2x2 Sub-block Hessian Condition Number Guard
+                float det_2x2 = H_dynamic(0,0)*H_dynamic(1,1) - H_dynamic(1,0)*H_dynamic(0,1);
+                float norm_2x2 = H_dynamic(0,0)*H_dynamic(0,0) + H_dynamic(0,1)*H_dynamic(0,1) + H_dynamic(1,0)*H_dynamic(1,0) + H_dynamic(1,1)*H_dynamic(1,1);
+                float cond_2x2 = (std::abs(det_2x2) > 1e-12f) ? (norm_2x2 / std::abs(det_2x2)) : 1.0e13f;
+
+                if (cond_2x2 > 1.0e12f) {
+                    return {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter};
+                }
+
+                if (lm_enabled && lm_alpha > 0.0f) {
+                    H_dynamic(0, 0) += lm_alpha;
+                    H_dynamic(1, 1) += lm_alpha;
+                }
+                H_solve = H_dynamic.inverse();
             }
 
             final_score = error_sum_sq / valid_pixels;
@@ -283,33 +344,50 @@ namespace IndicVision {
             W = W * dW.inverse();
 
             if (delta_p.norm() < 0.001f) {
-                // Add 1 because 'iter' starts at 0 (e.g., stopping on iter 0 means 1 step was taken)
-                return {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 0, final_score, iter + 1};
+                AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 0, final_score, iter + 1};
+                for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                return res;
             }
         }
 
-        // If the loop finishes all 20 iterations without converging:
-        return {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, final_score, max_iter};
+        AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, final_score, max_iter};
+        for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+        return res;
     }
 
     float OptimizationEngine::evaluate_znssd(const SubsetData &subset,
                                              const Image &def_img, float u, float v,
                                              float ux, float uy, float vx, float vy,
-                                             std::vector<float> &buffer) {
+                                             std::vector<float> &buffer,
+                                             const std::vector<bool> *ref_valid_mask) {
         size_t n = subset.x_offsets.size();
         float def_mean = 0.0f;
         int valid_pixels = 0;
 
         for (size_t i = 0; i < n; ++i) {
-            // 🚀 OPTIMIZATION T1.1: Use pre-converted floats.
+            // 🚀 Ghost Wall exclusion: skip pixels that are void in reference
+            if (ref_valid_mask && !(*ref_valid_mask)[i]) {
+                buffer[i] = -1.0f;
+                continue;
+            }
+
             float dx = subset.x_offsets_f[i];
             float dy = subset.y_offsets_f[i];
 
             float final_x = subset.cx + u + (1.0f + ux) * dx + uy * dy;
             float final_y = subset.cy + v + vx * dx + (1.0f + vy) * dy;
 
-            float val = def_img.interpolate_bicubic(final_x, final_y);
-            if (val > 0.0f) {
+            // 🚀 DICe LAYER 1B: Explicit 4-Pixel Deactivation Guard for Simplex
+            if (final_x < 4.0f || final_x >= def_img.width - 4.0f ||
+                final_y < 4.0f || final_y >= def_img.height - 4.0f) {
+                buffer[i] = -1.0f;
+                continue;
+            }
+
+            float val = use_6x6_interpolator ?
+                        def_img.interpolate_keys_fourth(final_x, final_y) :
+                        def_img.interpolate_bicubic(final_x, final_y);
+            if (val >= 0.0f) {
                 buffer[i] = val;
                 def_mean += val;
                 valid_pixels++;
@@ -318,7 +396,8 @@ namespace IndicVision {
             }
         }
 
-        if (valid_pixels < n * 0.90f)
+        // 🚀 tightened to 50% to match Precomputer survival rate
+        if (valid_pixels < n * 0.50f)
             return 2.0f;
 
         def_mean /= valid_pixels;
@@ -421,13 +500,26 @@ namespace IndicVision {
         float y[7] = {0.0f};
 
         float scale[] = {2.0f, 2.0f, 0.01f, 0.01f, 0.01f, 0.01f};
+        // 🚀 DIAGNOSTIC 1: Check if Simplex is seeing a poisoned ZNSSD
+        // We will evaluate the exact start guess before Simplex touches it.
+        if (std::abs(subset.cx - 185) < 2 && std::abs(subset.cy - 617) < 2) {
+            float initial_znssd = evaluate_znssd(subset, def_img, start.u, start.v, start.ux, start.uy, start.vx, start.vy, this->simplex_buffer);
+            LOGD("DIAGNOSTIC 1: Simplex triggered at (185,617). Initial ZNSSD seen by Simplex = %.4f", initial_znssd);
+        }
+        // 🚀 Build the mask so Simplex knows about the Ghost Wall
+        std::vector<bool> ref_valid(subset.x_offsets.size(), true);
+        for(size_t i = 0; i < subset.x_offsets.size(); ++i) {
+            if (subset.ref_intensities[i] < 1e-6f) {
+                ref_valid[i] = false;
+            }
+        }
 
         auto eval_pt = [&](const float *pt) {
             if (translation_only)
                 return evaluate_znssd(subset, def_img, pt[0], pt[1], 0.0f, 0.0f, 0.0f,
-                                      0.0f, this->simplex_buffer);
+                                      0.0f, this->simplex_buffer, &ref_valid);
             return evaluate_znssd(subset, def_img, pt[0], pt[1], pt[2], pt[3], pt[4],
-                                  pt[5], this->simplex_buffer);
+                                  pt[5], this->simplex_buffer, &ref_valid);
         };
 
         p[0][0] = start.u;
@@ -448,7 +540,7 @@ namespace IndicVision {
         }
 
         const float alpha = 1.0f, gamma = 2.0f, rho = 0.5f, sigma = 0.5f;
-        for (int iter = 0; iter < 20; ++iter) {
+        for (int iter = 0; iter < 100; ++iter) { // 🚀 Increased to 100
             int idx[7] = {0, 1, 2, 3, 4, 5, 6};
             std::sort(idx, idx + n_pts, [&](int a, int b) { return y[a] < y[b]; });
 

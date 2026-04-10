@@ -14,7 +14,7 @@ object IndicVisionNativeLib {
 
     // 🚀 NEW FIX: Call this ONCE before a batch starts to cache the reference image
     // This stops the engine from rebuilding it 50 times and crashing the memory!
-    external fun initializeReference(refBytes: ByteArray, width: Int, height: Int, applyBlur: Boolean)
+    external fun initializeReference(refBytes: ByteArray, maskBytes: ByteArray?, width: Int, height: Int, applyBlur: Boolean)
     external fun setDebugOutputDir(debugDir: String?)
     external fun analyzeRawBytes(
         refData: ByteArray, defData: ByteArray,
@@ -27,6 +27,7 @@ object IndicVisionNativeLib {
         roiX: Int, roiY: Int, roiW: Int, roiH: Int,
         step: Int, subset: Int, strainWin: Int,
         useZNCC: Boolean, useICGN: Boolean, useSpline: Boolean, applyBlur: Boolean, useNlvc: Boolean,
+        use6x6Interpolator: Boolean, // 🚀 NEW FIX: UI Toggle for the kernel
         outputBuffer: ByteBuffer, callback: ProgressCallback,
         outMetrics: FloatArray // <-- This must be here!
     ): Int

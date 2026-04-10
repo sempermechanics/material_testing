@@ -73,6 +73,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var btnCalculateFullField: Button
     private lateinit var switchBlur: Switch
     private lateinit var rgStrainMethod: RadioGroup
+    private lateinit var rgInterpolator: RadioGroup // 🚀 ADDED
     private lateinit var btnViewResults: Button
     private lateinit var btnLogout: Button // Added for Secure Exit
 
@@ -125,6 +126,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnCalculateFullField = findViewById(R.id.btnCalculateFullField)
         switchBlur = findViewById(R.id.switchBlur)
         rgStrainMethod = findViewById(R.id.rgStrainMethod)
+        rgInterpolator = findViewById(R.id.rgInterpolator) // 🚀 BOUND
         btnViewResults = findViewById(R.id.btnViewResults)
         btnLogout = findViewById(R.id.btnLogout) // Bind Logout Button
 
@@ -462,6 +464,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         val applyBlur = switchBlur.isChecked
         val useNlvc = rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc
+        val use6x6 = rgInterpolator.checkedRadioButtonId == R.id.rbKeys // 🚀 READ TOGGLE
         val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
 
         val debugDir = File(cacheDir, "dic_debug")
@@ -478,7 +481,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 var engineErrorCode = 0 // 🚀 PRIORITY 3: Track the negative return codes
 
                 runOnUiThread { tvTimer.text = "Caching Reference in Native Engine..." }
-                IndicVisionNativeLib.initializeReference(refBytes, viewModel.realRefWidth, viewModel.realRefHeight, applyBlur)
+                // 🚀 DICe PARITY: Pass the maskData (or empty array) to build the Ghost Wall globally!
+                val safeMaskData = viewModel.roiMaskBytes ?: ByteArray(0)
+                IndicVisionNativeLib.initializeReference(refBytes, safeMaskData, viewModel.realRefWidth, viewModel.realRefHeight, applyBlur)
 
                 val gridW = finalRectW / step
                 val gridH = finalRectH / step
@@ -510,6 +515,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         refBytes, defBytes, maskData,
                         finalRectX, finalRectY, finalRectW, finalRectH,
                         step, subset, strainWin, true, true, false, applyBlur, useNlvc,
+                        use6x6, // 🚀 PASS TOGGLE TO JNI
                         outputBuffer, callback,
                         metricsCatcher
                     )
@@ -753,7 +759,36 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
         checkReady()
     }
+    private fun loadHardcodedDebugImage() {
+        try {
+            // LOAD THE LOSSLESS PNG!
+            val inputStream = assets.open("oht_cfrp_00.png")
+            val bytes = inputStream.readBytes()
+            inputStream.close()
 
+            // ==========================================
+            // 🛑 KOTLIN INTERCEPT DUMP
+            // ==========================================
+            val sb = java.lang.StringBuilder("KOTLIN BYTE DUMP: ")
+            for (i in 0 until 10) {
+                // Convert signed byte to unsigned int (0-255) for accurate printing
+                val unsignedVal = bytes[i].toInt() and 0xFF
+                sb.append("$unsignedVal ")
+            }
+            Log.d("IndicVisionJNI", sb.toString())
+            // ==========================================
+
+            viewModel.realRefWidth = 400
+            viewModel.realRefHeight = 1040
+            viewModel.refBytes = bytes
+            viewModel.refName = "Ref: oht_cfrp_00.png"
+
+            IndicVisionNativeLib.initializeReference(bytes, ByteArray(0), 400, 1040, false)
+            Toast.makeText(this, "Raw PNG Loaded", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
     private fun showShapeRoiDialog() {
         if (viewModel.refBytes == null) {
             Toast.makeText(this, "Load Reference Image first!", Toast.LENGTH_SHORT).show()

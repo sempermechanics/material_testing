@@ -32,7 +32,7 @@ namespace IndicVision {
         bool  lm_enabled = false;
         float lm_alpha   = 0.0f;
         // ────────────────────────────────────────────────────────────────────────
-
+        bool use_6x6_interpolator = false;
         // 🟡 BUG 3 FIX: Separated Buffers
         // Prevents memory aliasing and silent data corruption between the two solvers
         std::vector<float> icgn_buffer;
@@ -59,7 +59,7 @@ namespace IndicVision {
 
         float evaluate_znssd(const SubsetData &subset, const Image &def_img, float u,
                              float v, float ux, float uy, float vx, float vy,
-                             std::vector<float> &buffer);
+                             std::vector<float> &buffer, const std::vector<bool> *ref_valid_mask = nullptr);
     };
 
 } // namespace IndicVision

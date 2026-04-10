@@ -47,6 +47,7 @@ namespace IndicVision {
 
         // 🚀 Float conversion
         float sum = 0.0f;
+        int valid_pixels = 0;
         int idx = 0;
 
         // ==========================================
@@ -64,19 +65,32 @@ namespace IndicVision {
                 data.ref_intensities[idx] = int_row[x];
                 data.gx_vec[idx] = gx_row[x];
                 data.gy_vec[idx] = gy_row[x];
-                sum += int_row[x];
+
+                // 🚀 DICe PARITY: Intensity-only Ghost Wall detection
+                if (int_row[x] >= 1e-6f) {
+                    sum += int_row[x];
+                    valid_pixels++;
+                }
                 idx++;
             }
         }
 
-        data.mean_intensity = sum / n;
+        // Abort if subset is mostly hanging off into the void
+        if (valid_pixels < n * 0.5f) {
+            data.is_initialized = false;
+            return;
+        }
+
+        data.mean_intensity = sum / static_cast<float>(valid_pixels);
         float sum_sq_diff = 0.0f;
 
         for (int i = 0; i < n; ++i) {
+            // 🚀 DICe PARITY: Intensity-only check
+            if (data.ref_intensities[i] < 1e-6f) continue;
             float diff = data.ref_intensities[i] - data.mean_intensity;
             sum_sq_diff += diff * diff;
         }
-        data.std_dev = std::sqrt(sum_sq_diff / n);
+        data.std_dev = std::sqrt(sum_sq_diff / static_cast<float>(valid_pixels));
         if (data.std_dev < 1e-5f) data.std_dev = 1.0f;
 
         for (int i = 0; i < n; ++i) {
@@ -97,15 +111,24 @@ namespace IndicVision {
                 sd << gx, gy, gx * (float)x, gx * (float)y, gy * (float)x, gy * (float)y;
 
                 data.steepest_descent_images[idx] = sd;
-                H.noalias() += sd * sd.transpose();
+
+                // 🚀 DICe PARITY: Intensity-only check
+                if (data.ref_intensities[idx] >= 1e-6f) {
+                    H.noalias() += sd * sd.transpose();
+                }
                 idx++;
             }
         }
 
         float det = H.determinant();
+        float det_2x2 = H(0,0)*H(1,1) - H(1,0)*H(0,1);
+        float norm_2x2 = H(0,0)*H(0,0) + H(0,1)*H(0,1) + H(1,0)*H(1,0) + H(1,1)*H(1,1);
+        float cond_2x2 = (std::abs(det_2x2) > 1e-12f) ? (norm_2x2 / std::abs(det_2x2)) : 1.0e13f;
 
-        if (std::abs(det) < 1e-6f) {
+        if (std::abs(det) < 1e-6f || cond_2x2 > 1.0e12f) {
             data.H_inv = Eigen::Matrix<float, 6, 6>::Zero();
+            data.is_initialized = false;
+            return;
         } else {
             data.H_inv = H.inverse();
         }
@@ -136,22 +159,46 @@ namespace IndicVision {
 
         // ── Pass 1: Mean intensity ───────────────────────────────
         float sum = 0.0f;
+        int valid_pixels = 0;
         for (int oy = -half; oy <= half; ++oy) {
-            const float* row = &ref_img.intensities[(cy + oy) * ref_img.width + cx - half];
-            for (int ox = 0; ox < dim; ++ox) sum += row[ox];
+            const float* int_row = &ref_img.intensities[(cy + oy) * ref_img.width + cx - half];
+            const float* gx_row = &ref_img.grad_x[(cy + oy) * ref_img.width + cx - half];
+            const float* gy_row = &ref_img.grad_y[(cy + oy) * ref_img.width + cx - half];
+            for (int ox = 0; ox < dim; ++ox) {
+                // 🚀 DICe PARITY: Intensity-only check
+                if (int_row[ox] < 1e-6f) continue;
+                sum += int_row[ox];
+                valid_pixels++;
+            }
         }
-        const float mean = sum / static_cast<float>(n);
+
+        // 🚀 DIAGNOSTIC 3: Check if the Precomputer is hallucinating valid pixels in the hole
+        // Placed BEFORE the early return so we actually see it fire!
+        if (std::abs(cx - 197) < 5 && std::abs(cy - 498) < 5) {
+            LOGD("DIAGNOSTIC 3: Precomputer at HOLE CENTER (%d, %d). Valid Pixels Found = %d out of %d.", (int)cx, (int)cy, valid_pixels, n);
+        }
+
+        // Abort if subset is mostly hanging off into the void
+        if (valid_pixels < n * 0.5f) {
+            return result; // Invalid
+        }
+
+        const float mean = sum / static_cast<float>(valid_pixels);
 
         // ── Pass 2: Std dev ──────────────────────────────────────
         float sum_sq = 0.0f;
         for (int oy = -half; oy <= half; ++oy) {
-            const float* row = &ref_img.intensities[(cy + oy) * ref_img.width + cx - half];
+            const float* int_row = &ref_img.intensities[(cy + oy) * ref_img.width + cx - half];
+            const float* gx_row = &ref_img.grad_x[(cy + oy) * ref_img.width + cx - half];
+            const float* gy_row = &ref_img.grad_y[(cy + oy) * ref_img.width + cx - half];
             for (int ox = 0; ox < dim; ++ox) {
-                float d = row[ox] - mean;
+                // 🚀 DICe PARITY: Intensity-only check
+                if (int_row[ox] < 1e-6f) continue;
+                float d = int_row[ox] - mean;
                 sum_sq += d * d;
             }
         }
-        float std_dev = std::sqrt(sum_sq / static_cast<float>(n));
+        float std_dev = std::sqrt(sum_sq / static_cast<float>(valid_pixels));
         if (std_dev < 1e-5f) std_dev = 1.0f;
         const float inv_std = 1.0f / std_dev;
 
@@ -162,11 +209,15 @@ namespace IndicVision {
         Eigen::Matrix<float, 6, 6> H = Eigen::Matrix<float, 6, 6>::Zero();
 
         for (int oy = -half; oy <= half; ++oy) {
+            const float* int_row = &ref_img.intensities[(cy + oy) * ref_img.width + cx - half];
             const float* gx_row = &ref_img.grad_x[(cy + oy) * ref_img.width + cx - half];
             const float* gy_row = &ref_img.grad_y[(cy + oy) * ref_img.width + cx - half];
             const float fy = static_cast<float>(oy);
 
             for (int ox = -half; ox <= half; ++ox) {
+                // 🚀 DICe PARITY: Intensity-only check
+                if (int_row[ox + half] < 1e-6f) continue;
+
                 const float gx = gx_row[ox + half] * inv_std;
                 const float gy = gy_row[ox + half] * inv_std;
                 const float fx = static_cast<float>(ox);
@@ -175,7 +226,7 @@ namespace IndicVision {
                 const float s2 = gx * fx, s3 = gx * fy;
                 const float s4 = gy * fx, s5 = gy * fy;
 
-                // 21-op upper-triangle accumulation (compiler unrolls this perfectly)
+                // 21-op upper-triangle accumulation
                 H(0,0)+=s0*s0; H(0,1)+=s0*s1; H(0,2)+=s0*s2; H(0,3)+=s0*s3; H(0,4)+=s0*s4; H(0,5)+=s0*s5;
                 H(1,1)+=s1*s1; H(1,2)+=s1*s2; H(1,3)+=s1*s3; H(1,4)+=s1*s4; H(1,5)+=s1*s5;
                 H(2,2)+=s2*s2; H(2,3)+=s2*s3; H(2,4)+=s2*s4; H(2,5)+=s2*s5;
@@ -191,13 +242,18 @@ namespace IndicVision {
                 H(r, c) = H(c, r);
 
         const float det = H.determinant();
+        float det_2x2 = H(0,0)*H(1,1) - H(1,0)*H(0,1);
+        float norm_2x2 = H(0,0)*H(0,0) + H(0,1)*H(0,1) + H(1,0)*H(1,0) + H(1,1)*H(1,1);
+        float cond_2x2 = (std::abs(det_2x2) > 1e-12f) ? (norm_2x2 / std::abs(det_2x2)) : 1.0e13f;
+
         // ── LM ADDITION ─────────────────────────────────────────────────────────
         result.H = H;   // preserve raw Hessian before it is inverted
         // ────────────────────────────────────────────────────────────────────────
 
-        // 🚀 FIX: Standard if/else prevents Eigen expression template type mismatch
-        if (std::abs(det) < 1e-6f) {
+        if (std::abs(det) < 1e-6f || cond_2x2 > 1.0e12f) {
             result.H_inv = Eigen::Matrix<float, 6, 6>::Zero();
+            result.valid = false;
+            return result;
         } else {
             result.H_inv = H.inverse();
         }

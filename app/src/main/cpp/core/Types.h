@@ -28,15 +28,15 @@ namespace IndicVision {
     struct AnalysisResult {
         float u;
         float v;
-        // 🚀 THE MISSING 6-DOF SHAPE GRADIENTS
         float ux;
         float uy;
         float vx;
         float vy;
 
-        int status; // 0 = success
+        int status;
         float correlation_score;
         int iters = 0;
+        int invalid_ref_pixels = 0; // 🚀 NEW: Tracks Ghost Wall overlap
     };
 
     // Seed node for reliability-guided propagation
