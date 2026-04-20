@@ -9,23 +9,53 @@ namespace IndicVision {
     StrainField StrainCalculator::compute_vsg_strain(const DisplacementField& disp, int window_pixels) {
         StrainField strain;
         int total_pts = disp.width * disp.height;
-        strain.exx.assign(total_pts, 0.0f);
-        strain.eyy.assign(total_pts, 0.0f);
-        strain.exy.assign(total_pts, 0.0f);
+
+        // === 🚀 COMPILER-SAFE SENTINEL FIX ===
+        // Android NDK fast-math strips out std::isnan checks.
+        // Instead, we initialize with an impossible physical strain (-1000.0f).
+        // If the VSG window fails the 90% symmetry check, it leaves this sentinel.
+        float sentinel = -1000.0f;
+        strain.exx.assign(total_pts, sentinel);
+        strain.eyy.assign(total_pts, sentinel);
+        strain.exy.assign(total_pts, sentinel);
+        // ======================================
 
         float radius = window_pixels / 2.0f;
         float radius_sq = radius * radius;
         int grid_rad = std::ceil(radius / disp.step);
+
+        // === 🚀 100% STRICT RULE: CALCULATE PERFECT CIRCLE ===
+        // Before we process any pixels, calculate EXACTLY how many points
+        // belong in a 100% mathematically full circular window.
+        const double tiny = 1.0e-5;
+        double d_radius_sq = static_cast<double>(radius_sq) + tiny;
+        int expected_full_window_pts = 0;
+
+        for (int dy = -grid_rad; dy <= grid_rad; ++dy) {
+            for (int dx = -grid_rad; dx <= grid_rad; ++dx) {
+                double d_phys_dx = static_cast<double>(dx * disp.step);
+                double d_phys_dy = static_cast<double>(dy * disp.step);
+                if ((d_phys_dx * d_phys_dx + d_phys_dy * d_phys_dy) <= d_radius_sq) {
+                    expected_full_window_pts++;
+                }
+            }
+        }
+        // =====================================================
 
         for (int y = 0; y < disp.height; ++y) {
             for (int x = 0; x < disp.width; ++x) {
                 int idx = y * disp.width + x;
                 if (!disp.valid[idx]) continue;
 
+                // 🚀 DICe PARITY: 64-bit precision for Least Squares Matrices
                 Eigen::Matrix3d AtA = Eigen::Matrix3d::Zero();
                 Eigen::Vector3d AtU = Eigen::Vector3d::Zero();
                 Eigen::Vector3d AtV = Eigen::Vector3d::Zero();
                 int valid_pts = 0;
+
+                // 🚀 DICe PARITY: Floating-point truncation buffer (tiny)
+                const double tiny = 1.0e-5;
+                double d_radius_sq = static_cast<double>(radius_sq) + tiny;
 
                 for (int dy = -grid_rad; dy <= grid_rad; ++dy) {
                     for (int dx = -grid_rad; dx <= grid_rad; ++dx) {
@@ -36,13 +66,10 @@ namespace IndicVision {
                         int nidx = ny * disp.width + nx;
                         if (!disp.valid[nidx]) continue;
 
-                        float phys_dx = dx * disp.step;
-                        float phys_dy = dy * disp.step;
+                        double d_phys_dx = static_cast<double>(dx * disp.step);
+                        double d_phys_dy = static_cast<double>(dy * disp.step);
 
-                        if ((phys_dx * phys_dx + phys_dy * phys_dy) <= radius_sq) {
-                            // STRICT DICe PARITY: Nominal geometry ONLY. No centroid shifting!
-                            double d_phys_dx = static_cast<double>(phys_dx);
-                            double d_phys_dy = static_cast<double>(phys_dy);
+                        if ((d_phys_dx * d_phys_dx + d_phys_dy * d_phys_dy) <= d_radius_sq) {
                             double d_u = static_cast<double>(disp.u[nidx]);
                             double d_v = static_cast<double>(disp.v[nidx]);
 
@@ -55,46 +82,45 @@ namespace IndicVision {
                         }
                     }
                 }
-                // 🚀 DIAGNOSTIC 3: Check Strain Erosion Guard inputs
-                if (x == 185 && y == 617) {
-                    // Note: expected_pts is approx (2*grid_rad+1)^2. For a 15px window (rad=2), expected is ~25.
-                    // We'll just log valid_pts to see if it's artificially full.
-                    LOGD("DIAGNOSTIC 3: VSG at (185,617) has valid_pts = %d", valid_pts);
-                }
-                // 🚀 DIAGNOSTIC 2: Measure the Asymmetry of the VSG Window
-                if (x == 185 && y == 617) {
-                    float sum_x = 0.0f, sum_y = 0.0f;
-                    for (int dy = -grid_rad; dy <= grid_rad; ++dy) {
-                        for (int dx = -grid_rad; dx <= grid_rad; ++dx) {
-                            int nx = x + dx; int ny = y + dy;
-                            if (nx < 0 || nx >= disp.width || ny < 0 || ny >= disp.height) continue;
-                            if (!disp.valid[ny * disp.width + nx]) continue;
-                            if ((dx * disp.step * dx * disp.step + dy * disp.step * dy * disp.step) <= radius_sq) {
-                                sum_x += dx * disp.step; sum_y += dy * disp.step;
-                            }
-                        }
-                    }
-                    float centroid_x = (valid_pts > 0) ? (sum_x / valid_pts) : 0.0f;
-                    float centroid_y = (valid_pts > 0) ? (sum_y / valid_pts) : 0.0f;
-                    LOGD("DIAGNOSTIC 2: VSG at (185,617). Valid Pts = %d. Centroid Shift = (%.2f, %.2f) pixels.", valid_pts, centroid_x, centroid_y);
-                }
-                // DICe LAYER 3 GUARD: Evaluate GECON / Reciprocal Condition Number
-                if (valid_pts >= 3) {
-                    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(AtA);
-                    double lambda_min = eig.eigenvalues()(0);
-                    double lambda_max = eig.eigenvalues()(2);
-                    double rcond = (lambda_max > 0.0) ? (lambda_min / lambda_max) : 0.0;
-                    if (x == 185 && y == 617) {
-                        LOGD("DIAGNOSTIC 4: VSG at (185,617) Matrix rcond = %.2e", rcond);
+
+                // === 🚀 90% STRUCTURAL SUPPORT RULE ===
+                // DICe allows slightly truncated windows near complex boundaries,
+                // relying on 'rcond' to catch instability. However, to prevent the
+                // massive edge-explosions (which are exactly 50% half-circles),
+                // we enforce a strict 90% structural fill ratio.
+                // This guarantees the centroid is never severely shifted.
+                double fill_ratio = static_cast<double>(valid_pts) / static_cast<double>(expected_full_window_pts);
+
+                if (fill_ratio >= 0.90 && valid_pts >= 3) {
+
+                    // 🚀 DICe PARITY: LAPACK GECON '1' (L1-Norm) Condition Number Estimation
+                    double anorm = 0.0;
+                    for (int col = 0; col < 3; ++col) {
+                        double col_sum = std::abs(AtA(0, col)) + std::abs(AtA(1, col)) + std::abs(AtA(2, col));
+                        if (col_sum > anorm) anorm = col_sum;
                     }
 
-                    // DICe EXACT THRESHOLD: Abort if condition number > 10^12
-                    if (rcond < 1e-12) {
-                        continue; // Safely abort and leave strain at 0.0f
+                    // Compute Inverse safely
+                    Eigen::Matrix3d AtA_inv;
+                    bool invertible;
+                    double det;
+                    AtA.computeInverseAndDetWithCheck(AtA_inv, det, invertible);
+
+                    if (!invertible) continue;
+
+                    // Calculate L1 Norm of the Inverse to find 'rcond' exactly like LAPACK
+                    double inv_anorm = 0.0;
+                    for (int col = 0; col < 3; ++col) {
+                        double col_sum = std::abs(AtA_inv(0, col)) + std::abs(AtA_inv(1, col)) + std::abs(AtA_inv(2, col));
+                        if (col_sum > inv_anorm) inv_anorm = col_sum;
                     }
 
-                    // DICe ROBUST SOLVER: LU Inverse (GETRI Equivalent)
-                    Eigen::Matrix3d AtA_inv = AtA.inverse();
+                    double rcond = (anorm * inv_anorm > 0.0) ? (1.0 / (anorm * inv_anorm)) : 0.0;
+
+                    // 🚀 DICe EXACT THRESHOLD: Abort if reciprocal condition number < 10^-12
+                    if (rcond < 1e-12) continue;
+
+                    // Solve for coefficients
                     Eigen::Vector3d Cu = AtA_inv * AtU;
                     Eigen::Vector3d Cv = AtA_inv * AtV;
 
@@ -103,6 +129,7 @@ namespace IndicVision {
                     double dvdx = Cv(1);
                     double dvdy = Cv(2);
 
+                    // 🚀 DICe PARITY: Large-Deformation Green-Lagrange Strain Formula
                     strain.exx[idx] = static_cast<float>(0.5 * (2.0 * dudx + dudx * dudx + dvdx * dvdx));
                     strain.eyy[idx] = static_cast<float>(0.5 * (2.0 * dvdy + dudy * dudy + dvdy * dvdy));
                     strain.exy[idx] = static_cast<float>(0.5 * (dudy + dvdx + dudx * dudy + dvdx * dvdy));

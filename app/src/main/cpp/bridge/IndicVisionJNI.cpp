@@ -299,52 +299,42 @@
         if (refBytes == nullptr) return;
         cv::Mat refMat = bytesToMat(env, refBytes, width, height);
         if (refMat.empty()) return;
-        // 🚀 DELETED cv::GaussianBlur. We do not want generic OpenCV blurring.
+
         g_refWidth = refMat.cols; g_refHeight = refMat.rows;
         g_refImg = new IndicVision::Image(g_refWidth, g_refHeight, refMat.data);
 
         // 🚀 DICe BOUNDARY PARITY: "THE GHOST WALL"
-        // Sterilize the reference image ONCE before gradients are calculated
+        bool hasMask = false;
+        cv::Mat roiMask;
         if (maskBytes != nullptr && env->GetArrayLength(maskBytes) > 0) {
-            cv::Mat roiMask = bytesToMat(env, maskBytes, g_refWidth, g_refHeight);
+            roiMask = bytesToMat(env, maskBytes, g_refWidth, g_refHeight);
             if (!roiMask.empty()) {
                 if (roiMask.cols != g_refWidth || roiMask.rows != g_refHeight) {
                     cv::resize(roiMask, roiMask, cv::Size(g_refWidth, g_refHeight), 0, 0, cv::INTER_NEAREST);
                 }
-                for (int y = 0; y < g_refHeight; ++y) {
-                    for (int x = 0; x < g_refWidth; ++x) {
-                        if (roiMask.at<uchar>(y, x) < 128) {
-                            g_refImg->intensities[y * g_refWidth + x] = 0.0f;
-                        }
+                hasMask = true;
+            }
+        }
+
+        g_refImg->prepare_data(applyBlur);
+
+        // 🚀 STAGE 2 BURN: INJECT NEGATIVE SIGNATURE
+        int sterilized_count = 0;
+        if (hasMask) {
+            for (int y = 0; y < g_refHeight; ++y) {
+                for (int x = 0; x < g_refWidth; ++x) {
+                    if (roiMask.at<uchar>(y, x) < 128) {
+                        g_refImg->intensities[y * g_refWidth + x] = -10.0f; // Stage 2: Negative Signature
+                        sterilized_count++;
                     }
                 }
             }
         }
-        int sterilized_count = 0;
-        for (int i = 0; i < g_refWidth * g_refHeight; ++i) {
-            if (g_refImg->intensities[i] == 0.0f) sterilized_count++;
-        }
-        LOGD("DIAGNOSTIC 1: Ghost Wall Sterilized %d pixels out of %d", sterilized_count, g_refWidth * g_refHeight);
-        // Gradients will now be computed using the poisoned intensity array
-        g_refImg->prepare_data(applyBlur);
-        // =========================================================================
-        // 🛑 DEBUG STAGE 0.1: DUMP RAW INTENSITIES TO LOGCAT
-        // =========================================================================
-        LOGD("STAGE 0.1: RAW INTENSITY DUMP (Top-Left 10x10)");
-        for (int y = 0; y < 10; ++y) {
-            std::string row_str = "Row " + std::to_string(y) + ": ";
-            for (int x = 0; x < 10; ++x) {
-                // Access the 1D intensity array directly
-                float val = g_refImg->intensities[y * g_refWidth + x];
-                row_str += std::to_string(val) + " ";
-            }
-            LOGD("%s", row_str.c_str());
-        }
-        // =========================================================================
-        // 🚀 FIX 0d: Clear the AKAZE cache whenever a NEW reference image is loaded
+        LOGD("DIAGNOSTIC 1: Ghost Wall Signature Injected into %d pixels", sterilized_count);
+
         g_cached_ref_kp.clear();
         g_cached_ref_desc.release();
-        g_current_akaze_scale = 0.25; // 🚀 PRIORITY 2: Reset the pyramid for the new specimen
+        g_current_akaze_scale = 0.25;
     }
 
     JNIEXPORT jfloatArray JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
@@ -565,11 +555,55 @@
         std::vector<std::vector<GridPoint>> resultGrid(gridH, std::vector<GridPoint>(gridW));
         int total_valid_points = 0;
 
+        // === 🚀 100% STRICT RULE: PURE SUBSETS ONLY ===
+        // We scan the ENTIRE subset bounding box before allowing a grid point to exist.
+        // If a single pixel of the subset touches the void, the image boundary, or the mask,
+        // the point is discarded. This guarantees pure tracking and prevents Ghost Displacements.
+
+        int half_subset = subsetSize / 2;
+        // DICe's required 4-pixel interpolation buffer, plus a ~15-pixel deformation buffer
+        int absolute_boundary_buffer = half_subset + 4 + 15;
+
         for (int y = 0; y < gridH; ++y) {
             for (int x = 0; x < gridW; ++x) {
-                int realX = rectX + x * step; int realY = rectY + y * step;
-                bool shouldSkip = (!roiMask.empty() && roiMask.at<uchar>(realY, realX) < 128);
+                int realX = rectX + x * step;
+                int realY = rectY + y * step;
+                bool shouldSkip = false;
+
+                // 1. DICe Absolute Boundary Force Field (Maps exactly to DICe's ~40px edge buffer)
+                if (realX - absolute_boundary_buffer < 0 || realX + absolute_boundary_buffer >= g_refWidth ||
+                    realY - absolute_boundary_buffer < 0 || realY + absolute_boundary_buffer >= g_refHeight) {
+                    shouldSkip = true;
+                }
+
+                // 2. The 100% ROI Strict Scan
+                if (!shouldSkip) {
+                    // Scan EVERY SINGLE PIXEL the subset bounding box will touch.
+                    for (int dy = -half_subset; dy <= half_subset; dy += 1) {
+                        for (int dx = -half_subset; dx <= half_subset; dx += 1) {
+                            int checkY = realY + dy;
+                            int checkX = realX + dx;
+
+                            // Failsafe bounds check (should be caught by the absolute buffer above)
+                            if (checkX < 0 || checkX >= g_refWidth || checkY < 0 || checkY >= g_refHeight) {
+                                shouldSkip = true;
+                                break;
+                            }
+
+                            // If ANY pixel in the subset hits the mask, kill the whole point
+                            if (!roiMask.empty() && roiMask.at<uchar>(checkY, checkX) < 128) {
+                                shouldSkip = true;
+                                break;
+                            }
+                        }
+                        if (shouldSkip) break;
+                    }
+                }
+
                 if (!shouldSkip) total_valid_points++;
+
+                // Note: If shouldSkip is true, the point is marked as 'solved' so the OpenMP
+                // workers will ignore it entirely, just like DICe's kd-tree ignores it.
                 resultGrid[y][x] = {(float)realX, (float)realY, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, shouldSkip, -1, -1, 0, false, 0};
             }
         }
@@ -874,21 +908,6 @@
             }
         }
 
-        // 🚀 SIMPLIFIED CONTRAST THRESHOLD: Absolute Minimum Floor
-        // We abandon the adaptive curve because it unfairly penalizes valid, lower-contrast regions of the speckle.
-        float min_allowed_std = 3.0f; // Hard floor. Anything below 3.0 is pure sensor noise / empty void.
-
-        for (int pool_idx = 0; pool_idx < gridW * gridH; ++pool_idx) {
-            int gx = pool_idx % gridW, gy = pool_idx / gridW;
-            if (!resultGrid[gy][gx].solved && hessian_pool[pool_idx].valid) {
-                if (hessian_pool[pool_idx].std_dev < min_allowed_std) {
-                    // Automatically declare this point as dead/unsolvable space
-                    resultGrid[gy][gx].solved = true;
-                    resultGrid[gy][gx].corr = 0.0f;
-                    total_valid_points--;
-                }
-            }
-        }
         time_prepass = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_prepass_start).count();
         // =========================================================
         // 🚀 PATH C: CENTRAL SEEDING (Industry Standard Fallback)
@@ -1419,10 +1438,28 @@
         else strainField = IndicVision::StrainCalculator::compute_vsg_strain(dispField, strainWindow);
 
         int valid_count = 0;
+        int dropped_by_post_filter = 0; // 🚀 NEW: Track dropped points
+
         for (int y = 0; y < gridH; ++y) {
             for (int x = 0; x < gridW; ++x) {
                 int idx = y * gridW + x;
+
                 if (dispField.valid[idx]) {
+
+                    // === 🚀 ROBUST STRAIN FILTER (FAST-MATH SAFE) ===
+                    // Since the compiler strips NaN, we check for our hard sentinel.
+                    // Any value <= -999.0f means the Strain Calculator refused to solve it.
+                    // We completely drop the point to protect the Android UI and Python analysis.
+                    if (strainField.exx[idx] <= -999.0f) {
+                        dropped_by_post_filter++;
+                        resultGrid[y][x].solved = false; // Mark dead for debug map
+                        continue;
+                    }
+                    // =================================================
+
+                    float point_corr = resultGrid[y][x].corr;
+                    float point_std = hessian_pool[idx].std_dev;
+
                     int out_idx = valid_count * 8;
                     output_ptr[out_idx + 0] = resultGrid[y][x].x;
                     output_ptr[out_idx + 1] = resultGrid[y][x].y;
@@ -1436,7 +1473,11 @@
                 }
             }
         }
+
         time_strain = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_strain_start).count();
+
+        // 🚀 DIAGNOSTIC: Print exactly how many points the filter caught
+        LOGD("DIAGNOSTIC POST-FILTER: Dropped %d noisy points. Final Valid Output: %d", dropped_by_post_filter, valid_count);
 
         if (callbackObj != nullptr && methodId != nullptr && !env->ExceptionCheck()) {
             env->CallVoidMethod(callbackObj, methodId, (jint)100);

@@ -67,7 +67,7 @@ namespace IndicVision {
                 data.gy_vec[idx] = gy_row[x];
 
                 // 🚀 DICe PARITY: Intensity-only Ghost Wall detection
-                if (int_row[x] >= 1e-6f) {
+                if (int_row[x] >= -5.0f) {
                     sum += int_row[x];
                     valid_pixels++;
                 }
@@ -86,7 +86,7 @@ namespace IndicVision {
 
         for (int i = 0; i < n; ++i) {
             // 🚀 DICe PARITY: Intensity-only check
-            if (data.ref_intensities[i] < 1e-6f) continue;
+            if (data.ref_intensities[i] < -5.0f) continue;
             float diff = data.ref_intensities[i] - data.mean_intensity;
             sum_sq_diff += diff * diff;
         }
@@ -113,7 +113,7 @@ namespace IndicVision {
                 data.steepest_descent_images[idx] = sd;
 
                 // 🚀 DICe PARITY: Intensity-only check
-                if (data.ref_intensities[idx] >= 1e-6f) {
+                if (data.ref_intensities[idx] >= -5.0f) {
                     H.noalias() += sd * sd.transpose();
                 }
                 idx++;
@@ -162,11 +162,13 @@ namespace IndicVision {
         int valid_pixels = 0;
         for (int oy = -half; oy <= half; ++oy) {
             const float* int_row = &ref_img.intensities[(cy + oy) * ref_img.width + cx - half];
-            const float* gx_row = &ref_img.grad_x[(cy + oy) * ref_img.width + cx - half];
-            const float* gy_row = &ref_img.grad_y[(cy + oy) * ref_img.width + cx - half];
+            // gx_row and gy_row unused in Pass 1, removed for clarity/speed
             for (int ox = 0; ox < dim; ++ox) {
-                // 🚀 DICe PARITY: Intensity-only check
-                if (int_row[ox] < 1e-6f) continue;
+                // === 🚀 PHASE 2 FIX: UNIFIED GHOST WALL THRESHOLD ===
+                // Previously < 1e-6f, which killed natural black speckles.
+                // The Ghost Wall uses -10.0f. The safe threshold is -5.0f.
+                if (int_row[ox] < -5.0f) continue;
+                // ====================================================
                 sum += int_row[ox];
                 valid_pixels++;
             }
@@ -189,11 +191,9 @@ namespace IndicVision {
         float sum_sq = 0.0f;
         for (int oy = -half; oy <= half; ++oy) {
             const float* int_row = &ref_img.intensities[(cy + oy) * ref_img.width + cx - half];
-            const float* gx_row = &ref_img.grad_x[(cy + oy) * ref_img.width + cx - half];
-            const float* gy_row = &ref_img.grad_y[(cy + oy) * ref_img.width + cx - half];
             for (int ox = 0; ox < dim; ++ox) {
-                // 🚀 DICe PARITY: Intensity-only check
-                if (int_row[ox] < 1e-6f) continue;
+                // 🚀 DICe PARITY: Negative Signature check for the Mask
+                if (int_row[ox] < -5.0f) continue;
                 float d = int_row[ox] - mean;
                 sum_sq += d * d;
             }
@@ -204,6 +204,7 @@ namespace IndicVision {
 
         result.mean_intensity = mean;
         result.std_dev        = std_dev;
+        // 🚀 REMOVED: result.sssig
 
         // ── Pass 3: Hessian accumulation (upper triangle only → 21 muls instead of 36) ──
         Eigen::Matrix<float, 6, 6> H = Eigen::Matrix<float, 6, 6>::Zero();
@@ -215,8 +216,10 @@ namespace IndicVision {
             const float fy = static_cast<float>(oy);
 
             for (int ox = -half; ox <= half; ++ox) {
-                // 🚀 DICe PARITY: Intensity-only check
-                if (int_row[ox + half] < 1e-6f) continue;
+                // === 🚀 PHASE 2 FIX: UNIFIED GHOST WALL THRESHOLD ===
+                // Allow valid black speckles (intensity 0.0) into the Hessian gradients.
+                if (int_row[ox + half] < -5.0f) continue;
+                // ====================================================
 
                 const float gx = gx_row[ox + half] * inv_std;
                 const float gy = gy_row[ox + half] * inv_std;

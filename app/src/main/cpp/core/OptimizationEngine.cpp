@@ -147,14 +147,8 @@ namespace IndicVision {
         float final_score = 1.0f;
         int max_iter = 50;
 
-        // DICe LAYER 2: Identify explicitly invalid reference pixels based on Ghost Wall masking
-        std::vector<bool> ref_valid(n, true);
-        for(size_t i = 0; i < n; ++i) {
-            // 🚀 DICe PARITY: A pixel is ghost-wall-sterilized based purely on 0.0 intensity
-            if (subset.ref_intensities[i] < 1e-6f) {
-                ref_valid[i] = false;
-            }
-        }
+        // 🚀 Use the centralized builder
+        std::vector<bool> ref_valid = build_ref_valid(subset);
         if (std::abs(subset.cx - 185) < 2 && std::abs(subset.cy - 617) < 2) {
             int invalid_ref_count = 0;
             for (size_t i = 0; i < n; ++i) { if (!ref_valid[i]) invalid_ref_count++; }
@@ -173,10 +167,12 @@ namespace IndicVision {
                 float final_x = subset.cx + W(0, 0) * x + W(0, 1) * y + W(0, 2);
                 float final_y = subset.cy + W(1, 0) * x + W(1, 1) * y + W(1, 2);
 
-                // DICe LAYER 1B: Explicit 4-Pixel Deactivation Guard
-                if (final_x < 4.0f || final_x >= def_img.width - 4.0f ||
-                    final_y < 4.0f || final_y >= def_img.height - 4.0f) {
-                    def_vals[i] = -1.0f; // Instantly deactivate
+                // 🚀 DICe PARITY: Explicit 4-Pixel Guard (WITH ROUNDING)
+                int px = ((int)(final_x + 0.5f) == (int)(final_x)) ? (int)(final_x) : (int)(final_x) + 1;
+                int py = ((int)(final_y + 0.5f) == (int)(final_y)) ? (int)(final_y) : (int)(final_y) + 1;
+                if (px < 4 || px >= def_img.width - 4 ||
+                    py < 4 || py >= def_img.height - 4) {
+                    def_vals[i] = -1.0f;
                     continue;
                 }
 
@@ -195,12 +191,19 @@ namespace IndicVision {
                 }
             }
 
-            if (valid_pixels < n * 0.90f) {
-                // Return the current 'iter' so we know exactly when it fell off the image
-                return {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter};
+            // === 🚀 PHASE 3 FIX: GUARD DIVISION BY ZERO ===
+            // If the entire subset is dragged off the image (e.g., at high strain),
+            // valid_pixels becomes 0. We must abort BEFORE the division to prevent
+            // a NaN injection that destroys the Newton-Raphson matrix.
+            // DICe PARITY: 90% survival threshold.
+            if (valid_pixels < static_cast<int>(n * 0.90f)) {
+                AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter};
+                for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                return res;
             }
 
-            float def_mean = def_sum / valid_pixels;
+            float def_mean = def_sum / static_cast<float>(valid_pixels);
+            // ==============================================
 
             // 🚀 DIAGNOSTIC 5: The Mean Mismatch Check
             if (std::abs(subset.cx - 185) < 2 && std::abs(subset.cy - 617) < 2 && iter == 0) {
@@ -344,6 +347,38 @@ namespace IndicVision {
             W = W * dW.inverse();
 
             if (delta_p.norm() < 0.001f) {
+                // 🚀 DICe PARITY: Post-Match Sigma (Texture) Check
+                // Compute sum of squared gradients over surviving active pixels
+                float sum_gx_sq = 0.0f, sum_gy_sq = 0.0f;
+                int valid_survivors = 0;
+
+                for (size_t k = 0; k < n; ++k) {
+                    // Skip pixels that hit the Ghost Wall (mask) OR the Out-of-Bounds guard
+                    if (!ref_valid[k] || def_vals[k] < 0.0f) continue;
+
+                    // Access the un-normalized gradients stored during pre-computation
+                    sum_gx_sq += subset.gx_vec[k] * subset.gx_vec[k];
+                    sum_gy_sq += subset.gy_vec[k] * subset.gy_vec[k];
+                    valid_survivors++;
+                }
+
+                // 🚀 DICe 100% Deactivation Check
+                if (valid_survivors == 0) {
+                    AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter + 1};
+                    for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                    return res;
+                }
+
+                // 🚀 DICe Minimum Gradient Check (The Barcode Killer)
+                float sum_grad = std::min(sum_gx_sq, sum_gy_sq);
+
+                if (sum_grad <= 0.0f) {
+                    // Reject: Surviving pixels lack 2D physical texture (sigma returns -1.0 in DICe)
+                    AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter + 1};
+                    for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                    return res;
+                }
+
                 AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 0, final_score, iter + 1};
                 for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
                 return res;
@@ -377,9 +412,11 @@ namespace IndicVision {
             float final_x = subset.cx + u + (1.0f + ux) * dx + uy * dy;
             float final_y = subset.cy + v + vx * dx + (1.0f + vy) * dy;
 
-            // 🚀 DICe LAYER 1B: Explicit 4-Pixel Deactivation Guard for Simplex
-            if (final_x < 4.0f || final_x >= def_img.width - 4.0f ||
-                final_y < 4.0f || final_y >= def_img.height - 4.0f) {
+            // 🚀 DICe PARITY: Explicit 4-Pixel Guard (WITH ROUNDING)
+            int px = ((int)(final_x + 0.5f) == (int)(final_x)) ? (int)(final_x) : (int)(final_x) + 1;
+            int py = ((int)(final_y + 0.5f) == (int)(final_y)) ? (int)(final_y) : (int)(final_y) + 1;
+            if (px < 4 || px >= def_img.width - 4 ||
+                py < 4 || py >= def_img.height - 4) {
                 buffer[i] = -1.0f;
                 continue;
             }
@@ -396,11 +433,12 @@ namespace IndicVision {
             }
         }
 
-        // 🚀 tightened to 50% to match Precomputer survival rate
-        if (valid_pixels < n * 0.50f)
-            return 2.0f;
+        // === 🚀 PHASE 3 FIX: GUARD ZNSSD DIVISION BY ZERO ===
+        if (valid_pixels == 0) {
+            return 2.0f; // Return a terrible score so Simplex immediately rejects this guess
+        }
 
-        def_mean /= valid_pixels;
+        def_mean /= static_cast<float>(valid_pixels);
         float def_sum_sq = 0.0f;
         float znssd = 0.0f;
 
@@ -506,13 +544,8 @@ namespace IndicVision {
             float initial_znssd = evaluate_znssd(subset, def_img, start.u, start.v, start.ux, start.uy, start.vx, start.vy, this->simplex_buffer);
             LOGD("DIAGNOSTIC 1: Simplex triggered at (185,617). Initial ZNSSD seen by Simplex = %.4f", initial_znssd);
         }
-        // 🚀 Build the mask so Simplex knows about the Ghost Wall
-        std::vector<bool> ref_valid(subset.x_offsets.size(), true);
-        for(size_t i = 0; i < subset.x_offsets.size(); ++i) {
-            if (subset.ref_intensities[i] < 1e-6f) {
-                ref_valid[i] = false;
-            }
-        }
+        // 🚀 Use the centralized builder
+        std::vector<bool> ref_valid = build_ref_valid(subset);
 
         auto eval_pt = [&](const float *pt) {
             if (translation_only)

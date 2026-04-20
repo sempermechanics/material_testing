@@ -69,9 +69,9 @@ namespace IndicVision {
     }
 
     scalar_t Image::interpolate_keys_fourth(scalar_t x, scalar_t y) const {
-        // DICe LAYER 1: Explicit demotion boundary for 6x6 kernel
+        // 🚀 DICe LAYER 1: Explicit demotion boundary for 6x6 kernel
         if (x <= 2.5f || x >= width - 3.5f || y <= 2.5f || y >= height - 3.5f) {
-            return interpolate_bicubic(x, y);
+            return interpolate_bilinear(x, y); // 🚀 Demotes to Bilinear directly!
         }
 
         int xi = static_cast<int>(x);

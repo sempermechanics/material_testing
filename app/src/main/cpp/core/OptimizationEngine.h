@@ -60,6 +60,15 @@ namespace IndicVision {
         float evaluate_znssd(const SubsetData &subset, const Image &def_img, float u,
                              float v, float ux, float uy, float vx, float vy,
                              std::vector<float> &buffer, const std::vector<bool> *ref_valid_mask = nullptr);
+        // 🚀 NEW: Centralized mask builder
+        std::vector<bool> build_ref_valid(const SubsetData& subset) const {
+            const size_t n = subset.x_offsets.size();
+            std::vector<bool> rv(n, true);
+            for (size_t i = 0; i < n; ++i) {
+                if (subset.ref_intensities[i] < -5.0f) rv[i] = false;
+            }
+            return rv;
+        }
     };
 
 } // namespace IndicVision
