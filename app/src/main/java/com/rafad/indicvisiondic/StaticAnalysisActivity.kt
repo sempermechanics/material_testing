@@ -551,69 +551,103 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                 // 🚀 THE TRUE ADMIN STEALTH QUEUE (OFFLINE-FIRST)
                 var generatedRefPath = ""
+                var generatedDefPath = "" // 🚀 ADDED THIS
 
                 if (firstFrameValidPoints > 0) {
                     withContext(Dispatchers.IO) {
                         Log.d("inDIC_Diag", "========================================")
-                        Log.d("inDIC_Diag", "1. ENGINE FINISHED. PREPARING OFFLINE QUEUE.")
+                        Log.d("inDIC_Diag", "1. ENGINE FINISHED. PREPARING BATCH OFFLINE QUEUE.")
+
+                        var generatedRefPath = ""
+                        var refBmp: Bitmap? = null
 
                         try {
-                            val refBmp = IndicVisionNativeLib.getPreviewFromBytes(refBytes, viewModel.realRefWidth)
-                            val refPngFile = File(cacheDir, "temp_ref_view.png")
+                            // 🚀 1. PROCESS THE REFERENCE IMAGE ONCE
+                            refBmp = IndicVisionNativeLib.getPreviewFromBytes(refBytes, viewModel.realRefWidth)
+                            val refPngFile = File(cacheDir, "temp_ref_${System.currentTimeMillis()}.png")
                             refPngFile.outputStream().use { out ->
                                 refBmp?.compress(Bitmap.CompressFormat.PNG, 100, out)
                             }
                             generatedRefPath = refPngFile.absolutePath
 
-                            // 🚀 SAFE OFFLINE AUTH CHECK (No Database Calls Here!)
+                            // 🚀 THE FIX: Save this dynamic path so the Result Viewer knows where it is!
+                            viewModel.lastRefPath = generatedRefPath
+
+                            // 🚀 SAFE OFFLINE AUTH CHECK (Runs once for the batch)
                             val currentUser = SupabaseManager.client.auth.currentUserOrNull()
                             val userEmail = currentUser?.email ?: "Offline_User"
                             val userId = currentUser?.id ?: "Offline_ID"
 
-                            // Generate a temporary offline ID so the PDF UI doesn't crash locally
-                            viewModel.currentSessionId = "Pending_Cloud_Sync_" + java.util.UUID.randomUUID().toString().take(8)
+                            // 🚀 2. LOOP THROUGH EVERY DEFORMED IMAGE IN THE BATCH
+                            for ((frameIndex, rawDefPath) in viewModel.defFilePaths.withIndex()) {
 
-                            val datFile = File(batchDir, String.format("frame_%04d.dat", 0))
-                            val defPath = viewModel.defFilePaths.firstOrNull() ?: ""
+                                var generatedDefPath = ""
+                                var defBmp: Bitmap? = null
 
-                            // 🚀 WE PACK EVERYTHING (EVEN THE DB MATH) INTO THE WORKER!
-                            val uploadData = androidx.work.Data.Builder()
-                                .putString("USER_ID", userId)
-                                .putString("USER_EMAIL", userEmail)
-                                .putString("REF_PATH", generatedRefPath)
-                                .putString("DEF_PATH", defPath)
-                                .putString("DAT_PATH", datFile.absolutePath)
-                                .putString("FRAME_NAME", "Frame_1")
-                                .putString("REF_NAME", viewModel.refName.removePrefix("Ref: "))
-                                .putInt("IMG_W", viewModel.realRefWidth)
-                                .putInt("IMG_H", viewModel.realRefHeight)
-                                .putInt("STEP", step)
-                                .putInt("SUBSET", subset)
-                                .putInt("STRAIN_WIN", strainWin)
-                                .putString("STRAIN_METHOD", if (useNlvc) "NLVC" else "VSG")
-                                .putInt("ROI_X", finalRectX)
-                                .putInt("ROI_Y", finalRectY)
-                                .putInt("ROI_W", finalRectW)
-                                .putInt("ROI_H", finalRectH)
-                                .putFloatArray("ENGINE_STATS", viewModel.engineStatsArray ?: FloatArray(16))
-                                // 🚀 PASS THE DATABASE INSERT METRICS
-                                .putInt("POINTS_CONVERGED", firstFrameValidPoints)
-                                .putFloat("AVG_ITERS", firstFrameAvgIters)
-                                .putInt("EXEC_TIME", executionTimeMs)
-                                .build()
+                                try {
+                                    // 🛡️ MEMORY SHIELD: Process this specific frame
+                                    val rawFile = File(rawDefPath)
+                                    if (rawFile.exists() && rawFile.length() < 50_000_000) {
+                                        val defBytes = rawFile.readBytes()
+                                        defBmp = IndicVisionNativeLib.getPreviewFromBytes(defBytes, viewModel.realRefWidth)
 
-                            Log.d("inDIC_Diag", "2. ENQUEUING BACKGROUND WORKER...")
-                            val uploadWork = androidx.work.OneTimeWorkRequestBuilder<DicUploadWorker>()
-                                .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
-                                .setInputData(uploadData)
-                                .build()
+                                        val defPngFile = File(cacheDir, "temp_def_${System.currentTimeMillis()}_frame_$frameIndex.png")
+                                        defPngFile.outputStream().use { out ->
+                                            defBmp?.compress(Bitmap.CompressFormat.PNG, 100, out)
+                                        }
+                                        generatedDefPath = defPngFile.absolutePath
+                                    }
 
-                            androidx.work.WorkManager.getInstance(applicationContext).enqueue(uploadWork)
-                            Log.d("inDIC_Diag", "-> SUCCESS! Worker safely queued in local SQLite.")
-                            Log.d("inDIC_Diag", "========================================")
+                                    // Grab the correct math data for THIS specific frame
+                                    val datFile = File(batchDir, String.format("frame_%04d.dat", frameIndex))
 
+                                    // Assign a unique session ID for this specific frame
+                                    viewModel.currentSessionId = "Pending_Cloud_Sync_" + java.util.UUID.randomUUID().toString().take(8)
+
+                                    // 🚀 QUEUE THE WORKER FOR THIS SPECIFIC FRAME
+                                    val uploadData = androidx.work.Data.Builder()
+                                        .putString("USER_ID", userId)
+                                        .putString("USER_EMAIL", userEmail)
+                                        .putString("REF_PATH", generatedRefPath)
+                                        .putString("DEF_PATH", generatedDefPath)
+                                        .putString("DAT_PATH", datFile.absolutePath)
+                                        .putString("FRAME_NAME", "Frame_${frameIndex + 1}") // e.g., Frame_1, Frame_2...
+                                        .putString("REF_NAME", viewModel.refName.removePrefix("Ref: "))
+                                        .putInt("IMG_W", viewModel.realRefWidth)
+                                        .putInt("IMG_H", viewModel.realRefHeight)
+                                        .putInt("STEP", step)
+                                        .putInt("SUBSET", subset)
+                                        .putInt("STRAIN_WIN", strainWin)
+                                        .putString("STRAIN_METHOD", if (useNlvc) "NLVC" else "VSG")
+                                        .putInt("ROI_X", finalRectX)
+                                        .putInt("ROI_Y", finalRectY)
+                                        .putInt("ROI_W", finalRectW)
+                                        .putInt("ROI_H", finalRectH)
+                                        .putFloatArray("ENGINE_STATS", viewModel.engineStatsArray ?: FloatArray(16))
+                                        .putInt("POINTS_CONVERGED", firstFrameValidPoints)
+                                        .putFloat("AVG_ITERS", firstFrameAvgIters)
+                                        .putInt("EXEC_TIME", executionTimeMs)
+                                        .build()
+
+                                    val uploadWork = androidx.work.OneTimeWorkRequestBuilder<DicUploadWorker>()
+                                        .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+                                        .setInputData(uploadData)
+                                        .build()
+
+                                    androidx.work.WorkManager.getInstance(applicationContext).enqueue(uploadWork)
+                                    Log.d("inDIC_Diag", "-> SUCCESS! Worker queued for Frame ${frameIndex + 1}.")
+
+                                } finally {
+                                    // EXTREMELY CRITICAL: Recycle the deformed image RAM immediately before the loop moves to the next frame
+                                    defBmp?.recycle()
+                                }
+                            }
                         } catch (e: Exception) {
-                            Log.e("inDIC_Diag", "❌ LOCAL CATCH: Failed to enqueue worker", e)
+                            Log.e("inDIC_Diag", "❌ LOCAL CATCH: Failed to enqueue batch workers", e)
+                        } finally {
+                            // Recycle the reference image once the entire loop is finished
+                            refBmp?.recycle()
+                            Log.d("inDIC_Diag", "========================================")
                         }
                     }
                 }
@@ -679,9 +713,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
             putExtra("STEP", viewModel.lastStep)
             putExtra("REF_NAME", viewModel.refName.removePrefix("Ref: "))
 
-            // 🚀 THE FIX: Tell the Result Viewer where the Reference Image is!
-            val refFile = File(cacheDir, "temp_ref_view.png")
-            putExtra("REF_PATH", refFile.absolutePath)
+            // 🚀 THE FIX: Pass the dynamic timestamped path stored in the ViewModel
+            putExtra("REF_PATH", viewModel.lastRefPath ?: "")
 
             putExtra("DEF_PATH", viewModel.lastDefPath)
             putExtra("BATCH_DIR_PATH", viewModel.lastBatchDirPath)

@@ -50,21 +50,18 @@ class AnalysisViewModel : ViewModel() {
 
     // Store Last Results State
     var lastStep: Int = 5
-    var lastBatchDirPath: String? = null  // 🚀 Changed from lastDataPath to support folders
-    var lastDefPath: String? = null       // 🚀 Used for the result viewer background
+    var lastBatchDirPath: String? = null
+    var lastRefPath: String? = null       // 🚀 ADDED: Tracks the dynamic Reference Image path
+    var lastDefPath: String? = null
     var hasCompletedAnalysis: Boolean = false
 
     var currentSessionId: String? = null
-    // 🚀 NEW: Holds the 16 telemetry metrics from the C++ Engine
     var engineStatsArray: FloatArray? = null
 
-    // 🚀 UPDATED: UI Helpers
     fun isReadyToCompute(): Boolean {
-        // Ready if we have a reference image AND at least one deformed image path
         return refBytes != null && defFilePaths.isNotEmpty()
     }
 
-    // 🚀 NEW: Get deformed image name for UI display
     fun getDefDisplayName(): String {
         return when {
             defFilePaths.isEmpty() -> "No images selected"
@@ -73,10 +70,11 @@ class AnalysisViewModel : ViewModel() {
         }
     }
 
-    // 🚀 NEW: Clear stale result metadata when a new selection is made.
-    // IMPORTANT: Does NOT touch defFilePaths — that is set by the caller AFTER this call.
+    // 🚀 UPDATED: Clear stale result metadata when a new selection is made.
     fun clearPreviousResults() {
         lastBatchDirPath = null
+        lastRefPath = null // 🚀 Clears the old ghost reference
+        lastDefPath = null
         hasCompletedAnalysis = false
     }
 }
