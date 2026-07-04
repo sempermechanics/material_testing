@@ -1,6 +1,6 @@
 #include "OptimizationEngine.h"
+#include "SimdKernels.h" // 🚀 Portable SIMD (NEON/SSE via OpenCV universal intrinsics)
 #include <algorithm>
-#include <arm_neon.h>
 #include <chrono>
 #include <android/log.h>
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "IndicVisionEngine", __VA_ARGS__)
@@ -223,77 +223,26 @@ namespace IndicVision {
             Eigen::Matrix<float, 6, 1> dp_sum = Eigen::Matrix<float, 6, 1>::Zero();
             float error_sum_sq = 0.0f;
 
-            // 🚀 FAST-PATH: All pixels are safely inside the image boundaries
+            // 🚀 FAST-PATH: All pixels are safely inside the image boundaries.
+            // Portable SIMD kernels — one codepath compiled to NEON on ARM
+            // and SSE on x86, replacing the old #if __aarch64__ fork.
             if (valid_pixels == n) {
-#if defined(__aarch64__)
-                float32x4_t sum_sq_vec = vdupq_n_f32(0.0f);
-                float32x4_t mean_vec = vdupq_n_f32(def_mean);
-                size_t i = 0;
-
-                for (; i + 3 < n; i += 4) {
-                    float32x4_t vals = vld1q_f32(&def_vals[i]);
-                    float32x4_t diff = vsubq_f32(vals, mean_vec);
-                    sum_sq_vec = vaddq_f32(sum_sq_vec, vmulq_f32(diff, diff));
-                }
-                float lane_sums[4];
-                vst1q_f32(lane_sums, sum_sq_vec);
-                def_sum_sq = lane_sums[0] + lane_sums[1] + lane_sums[2] + lane_sums[3];
-
-                for (; i < n; ++i) {
-                    float diff = def_vals[i] - def_mean;
-                    def_sum_sq += diff * diff;
-                }
+                def_sum_sq = simd::sum_sq_diff(def_vals.data(), n, def_mean);
 
                 float def_std = std::sqrt(def_sum_sq / valid_pixels);
                 if (def_std < 1e-5f)
                     def_std = 1.0f;
                 float inv_std = 1.0f / def_std;
 
-                float32x4_t err_sum_vec = vdupq_n_f32(0.0f);
-                float32x4_t inv_std_vec = vdupq_n_f32(inv_std);
-                i = 0;
-
-                for (; i + 3 < n; i += 4) {
-                    float32x4_t def_v = vld1q_f32(&def_vals[i]);
-                    float32x4_t norm_def = vmulq_f32(vsubq_f32(def_v, mean_vec), inv_std_vec);
-                    float32x4_t ref_v = vld1q_f32(&subset.norm_ref_intensities[i]);
-                    float32x4_t diff = vsubq_f32(ref_v, norm_def);
-                    err_sum_vec = vaddq_f32(err_sum_vec, vmulq_f32(diff, diff));
-
-                    float diff_arr[4];
-                    vst1q_f32(diff_arr, diff);
-                    dp_sum += subset.steepest_descent_images[i] * diff_arr[0];
-                    dp_sum += subset.steepest_descent_images[i + 1] * diff_arr[1];
-                    dp_sum += subset.steepest_descent_images[i + 2] * diff_arr[2];
-                    dp_sum += subset.steepest_descent_images[i + 3] * diff_arr[3];
-                }
-
-                vst1q_f32(lane_sums, err_sum_vec);
-                error_sum_sq = lane_sums[0] + lane_sums[1] + lane_sums[2] + lane_sums[3];
-
-                for (; i < n; ++i) {
-                    float norm_def = (def_vals[i] - def_mean) * inv_std;
-                    float diff = subset.norm_ref_intensities[i] - norm_def;
-                    error_sum_sq += diff * diff;
-                    dp_sum += subset.steepest_descent_images[i] * diff;
-                }
-#else
-                for (size_t i = 0; i < n; ++i) {
-        float diff = def_vals[i] - def_mean;
-        def_sum_sq += diff * diff;
-      }
-      float def_std = std::sqrt(def_sum_sq / valid_pixels);
-      if (def_std < 1e-5f)
-        def_std = 1.0f;
-      float inv_std = 1.0f / def_std;
-
-      for (size_t i = 0; i < n; ++i) {
-        float norm_def = (def_vals[i] - def_mean) * inv_std;
-        float diff = subset.norm_ref_intensities[i] - norm_def;
-        error_sum_sq += diff * diff;
-        dp_sum += subset.steepest_descent_images[i] * diff;
-      }
-#endif
+                // Fused error + 6-DOF gradient accumulation over the SoA
+                // sdi_planes — fully vectorized, unlike the old per-pixel
+                // Eigen axpy which even the NEON path ran scalar.
+                float dp_out[6];
+                error_sum_sq = simd::znssd_error_and_gradient(
+                        def_vals.data(), subset.norm_ref_intensities.data(),
+                        subset.sdi_planes.data(), n, def_mean, inv_std, dp_out);
+                for (int k = 0; k < 6; ++k)
+                    dp_sum(k) += dp_out[k];
             } else {
                 Eigen::Matrix<float, 6, 6> H_dynamic = Eigen::Matrix<float, 6, 6>::Zero();
                 for (size_t i = 0; i < n; ++i) {
@@ -443,65 +392,16 @@ namespace IndicVision {
         float znssd = 0.0f;
 
         if (valid_pixels == n) {
-#if defined(__aarch64__)
-            float32x4_t sum_sq_vec = vdupq_n_f32(0.0f);
-            float32x4_t mean_vec = vdupq_n_f32(def_mean);
-            size_t i = 0;
-
-            for (; i + 3 < n; i += 4) {
-                float32x4_t vals = vld1q_f32(&buffer[i]);
-                float32x4_t diff = vsubq_f32(vals, mean_vec);
-                sum_sq_vec = vaddq_f32(sum_sq_vec, vmulq_f32(diff, diff));
-            }
-            float lane_sums[4];
-            vst1q_f32(lane_sums, sum_sq_vec);
-            def_sum_sq = lane_sums[0] + lane_sums[1] + lane_sums[2] + lane_sums[3];
-
-            for (; i < n; ++i) {
-                float diff = buffer[i] - def_mean;
-                def_sum_sq += diff * diff;
-            }
+            // 🚀 Portable SIMD kernels (NEON/SSE via one codepath) — see SimdKernels.h
+            def_sum_sq = simd::sum_sq_diff(buffer.data(), n, def_mean);
 
             float def_std = std::sqrt(def_sum_sq / valid_pixels);
             if (def_std < 1e-5f)
                 def_std = 1.0f;
             float inv_std = 1.0f / def_std;
 
-            float32x4_t znssd_vec = vdupq_n_f32(0.0f);
-            float32x4_t inv_std_vec = vdupq_n_f32(inv_std);
-            i = 0;
-
-            for (; i + 3 < n; i += 4) {
-                float32x4_t def_v = vld1q_f32(&buffer[i]);
-                float32x4_t norm_def = vmulq_f32(vsubq_f32(def_v, mean_vec), inv_std_vec);
-                float32x4_t ref_v = vld1q_f32(&subset.norm_ref_intensities[i]);
-                float32x4_t diff = vsubq_f32(ref_v, norm_def);
-                znssd_vec = vaddq_f32(znssd_vec, vmulq_f32(diff, diff));
-            }
-            vst1q_f32(lane_sums, znssd_vec);
-            znssd = lane_sums[0] + lane_sums[1] + lane_sums[2] + lane_sums[3];
-
-            for (; i < n; ++i) {
-                float norm_def = (buffer[i] - def_mean) * inv_std;
-                float diff = subset.norm_ref_intensities[i] - norm_def;
-                znssd += diff * diff;
-            }
-#else
-            for (size_t i = 0; i < n; ++i) {
-      float diff = buffer[i] - def_mean;
-      def_sum_sq += diff * diff;
-    }
-    float def_std = std::sqrt(def_sum_sq / valid_pixels);
-    if (def_std < 1e-5f)
-      def_std = 1.0f;
-    float inv_std = 1.0f / def_std;
-
-    for (size_t i = 0; i < n; ++i) {
-      float norm_def = (buffer[i] - def_mean) * inv_std;
-      float diff = subset.norm_ref_intensities[i] - norm_def;
-      znssd += diff * diff;
-    }
-#endif
+            znssd = simd::znssd_sum(buffer.data(), subset.norm_ref_intensities.data(),
+                                    n, def_mean, inv_std);
         } else {
             for (size_t i = 0; i < n; ++i) {
                 if (buffer[i] >= 0.0f) {

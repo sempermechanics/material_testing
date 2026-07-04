@@ -85,6 +85,13 @@ namespace IndicVision {
                 Eigen::aligned_allocator<Eigen::Matrix<float, 6, 1>>>
                 steepest_descent_images;
 
+        // 🚀 SIMD SoA MIRROR: steepest_descent_images transposed into 6
+        // contiguous planes (plane k at [k*n, (k+1)*n)). The Structure-of-Arrays
+        // layout lets the portable SIMD kernel (SimdKernels.h) vectorize the
+        // dp_sum gradient accumulation, which the strided AoS layout blocks.
+        // Kept in sync with steepest_descent_images by SubsetPrecomputer.
+        std::vector<float> sdi_planes;
+
         bool is_initialized = false;
     };
 }
