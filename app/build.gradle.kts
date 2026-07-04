@@ -27,9 +27,12 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
 
-        ndk {
-            abiFilters.add("arm64-v8a")
-        }
+        // 🚀 ARCHITECTURE-ADAPTIVE: No hardcoded abiFilters here.
+        // The native C++/OpenCV code is compiled for every supported ABI
+        // (arm64-v8a, armeabi-v7a, x86, x86_64) so the app runs natively on
+        // any physical device AND any emulator without changing the build.
+        // At install time Android extracts only the matching architecture's
+        // .so, so each device transparently uses its own native code.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -46,6 +49,19 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+
+    // 🚀 ADAPTIVE DELIVERY: Build one optimized APK per architecture so each
+    // device gets only the native code it can actually run (smaller, faster),
+    // plus a universal APK that runs anywhere. `installDebug` / Android Studio
+    // automatically install the APK matching the connected device's ABI.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = true
         }
     }
 

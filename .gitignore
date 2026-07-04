@@ -1,3 +1,28 @@
-# Default ignored files
-/shelf/
-/workspace.xml
+# === Gradle ===
+.gradle/
+build/
+gradle/gradle-daemon-jvm.properties
+
+# === Local config (contains SDK path + Supabase secrets — NEVER commit) ===
+local.properties
+
+# === Android Studio / IntelliJ ===
+.idea/
+*.iml
+captures/
+.navigation/
+
+# === Native build output (CMake/NDK intermediates, regenerated per machine) ===
+app/.cxx/
+.externalNativeBuild/
+
+# === APK / bundle outputs ===
+*.apk
+*.aab
+*.ap_
+output-metadata.json
+
+# === Misc ===
+.DS_Store
+*.log
+*.hprof

@@ -101,6 +101,10 @@ namespace IndicVision {
         Eigen::Matrix<float, 6, 6> H = Eigen::Matrix<float, 6, 6>::Zero();
         idx = 0;
 
+        // 🚀 SIMD SoA mirror must track n (see Types.h / SimdKernels.h)
+        if (data.sdi_planes.size() != static_cast<size_t>(n) * 6)
+            data.sdi_planes.resize(static_cast<size_t>(n) * 6);
+
         // Exact Hessian Computation using direct relative coordinates
         for (int y = -half; y <= half; ++y) {
             for (int x = -half; x <= half; ++x) {
@@ -111,6 +115,14 @@ namespace IndicVision {
                 sd << gx, gy, gx * (float)x, gx * (float)y, gy * (float)x, gy * (float)y;
 
                 data.steepest_descent_images[idx] = sd;
+
+                // 🚀 SoA mirror for the portable SIMD hot loop
+                data.sdi_planes[idx]         = sd(0);
+                data.sdi_planes[n + idx]     = sd(1);
+                data.sdi_planes[2 * n + idx] = sd(2);
+                data.sdi_planes[3 * n + idx] = sd(3);
+                data.sdi_planes[4 * n + idx] = sd(4);
+                data.sdi_planes[5 * n + idx] = sd(5);
 
                 // 🚀 DICe PARITY: Intensity-only check
                 if (data.ref_intensities[idx] >= -5.0f) {
@@ -340,6 +352,11 @@ namespace IndicVision {
 
         // ── Normalize + build steepest_descent_images in one fused loop ──
         //    (SD images are needed for the ICGN Newton step — can't skip these)
+
+        // 🚀 SIMD SoA mirror must track n (see Types.h / SimdKernels.h)
+        if (data.sdi_planes.size() != static_cast<size_t>(n) * 6)
+            data.sdi_planes.resize(static_cast<size_t>(n) * 6);
+
         idx = 0;
         for (int oy = -half; oy <= half; ++oy) {
             const float fy = static_cast<float>(oy);
@@ -355,6 +372,14 @@ namespace IndicVision {
                 sd(0) = gx;      sd(1) = gy;
                 sd(2) = gx * fx; sd(3) = gx * fy;
                 sd(4) = gy * fx; sd(5) = gy * fy;
+
+                // 🚀 SoA mirror for the portable SIMD hot loop
+                data.sdi_planes[idx]         = gx;
+                data.sdi_planes[n + idx]     = gy;
+                data.sdi_planes[2 * n + idx] = gx * fx;
+                data.sdi_planes[3 * n + idx] = gx * fy;
+                data.sdi_planes[4 * n + idx] = gy * fx;
+                data.sdi_planes[5 * n + idx] = gy * fy;
                 idx++;
             }
         }
