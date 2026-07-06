@@ -1,10 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
+    <!-- ============================================================= -->
+    <!--  IndicVision Design System — "Deep Sky Blue & White"          -->
+    <!--  Single source of truth for color. Prefer theme attributes    -->
+    <!--  (?attr/colorPrimary, ?attr/colorSurface) in new layouts;     -->
+    <!--  reference these names only when an attr doesn't fit.          -->
+    <!-- ============================================================= -->
+
+    <!-- Brand: deep sky blue ramp -->
+    <color name="sky_primary">#0288D1</color>          <!-- primary actions, headers -->
+    <color name="sky_primary_dark">#0277BD</color>     <!-- status bar / pressed -->
+    <color name="sky_bright">#00BFFF</color>           <!-- accent, active states -->
+    <color name="sky_container">#E1F5FE</color>        <!-- tonal surfaces, chips -->
+    <color name="sky_on_container">#014A72</color>     <!-- text on sky_container -->
+
+    <!-- Neutrals / surfaces -->
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_muted">#F4F9FC</color>        <!-- app background (blue-tinted white) -->
+    <color name="surface_outline">#D6E4EC</color>      <!-- card strokes, dividers -->
+
+    <!-- Text -->
+    <color name="text_primary">#152430</color>         <!-- slate near-black -->
+    <color name="text_secondary">#5B6B7A</color>       <!-- captions, hints -->
+    <color name="text_on_primary">#FFFFFF</color>
+
+    <!-- Semantic -->
+    <color name="semantic_success">#2E9E5B</color>
+    <color name="semantic_danger">#E53935</color>
+    <color name="semantic_warning">#F5A623</color>
+
+    <!-- Result viewer: dark canvas so heatmaps stay vivid, with translucent
+         glass controls on top -->
+    <color name="viewer_canvas">#12181F</color>
+    <color name="viewer_glass">#CC1B2530</color>       <!-- translucent control panels -->
+    <color name="viewer_glass_soft">#991B2530</color>
+    <color name="viewer_chip_off">#33FFFFFF</color>    <!-- unselected chip fill -->
+    <color name="viewer_on_dark">#FFFFFF</color>
+
+    <!-- Legacy names remapped to the new palette so any lingering
+         references stay on-brand during migration. -->
+    <color name="purple_200">#7FD3F4</color>
+    <color name="purple_500">#0288D1</color>
+    <color name="purple_700">#0277BD</color>
+    <color name="teal_200">#00BFFF</color>
+    <color name="teal_700">#0277BD</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 </resources>

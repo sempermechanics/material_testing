@@ -8,10 +8,12 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar // Added for modern error messages
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import com.rafad.indicvisiondic.ui.Motion
+import com.rafad.indicvisiondic.ui.Insets
 import kotlinx.coroutines.launch
 
 class AuthActivity : AppCompatActivity() {
@@ -47,9 +49,19 @@ class AuthActivity : AppCompatActivity() {
 
         setupUIForCurrentMode()
 
+        // Edge-to-edge: keep the form clear of the status bar and nav bar
+        Insets.padVertical(findViewById(R.id.authColumn))
+
+        // Gentle entrance on first show
+        if (savedInstanceState == null) {
+            Motion.enterStaggered(findViewById(R.id.authColumn))
+        }
+
         // Setup Listeners
         tvToggleMode.setOnClickListener {
             isLoginMode = !isLoginMode // Flip the mode
+            // Animate the confirm-password field sliding in/out instead of snapping
+            Motion.animateExpandCollapse(findViewById<ViewGroup>(R.id.authColumn))
             setupUIForCurrentMode()
         }
 
@@ -92,13 +104,13 @@ class AuthActivity : AppCompatActivity() {
     private fun setupUIForCurrentMode() {
         if (isLoginMode) {
             tvSubtitle.text = "Secure Access Portal"
-            btnMainAction.text = "SECURE LOGIN"
+            btnMainAction.text = "Secure Login"
             tvToggleMode.text = "Need access? Request an account"
             tvForgotPassword.visibility = View.VISIBLE
             layoutConfirmPassword.visibility = View.GONE
         } else {
             tvSubtitle.text = "Beta Registration Request"
-            btnMainAction.text = "SUBMIT REQUEST"
+            btnMainAction.text = "Submit Request"
             tvToggleMode.text = "Already have an account? Login here"
             tvForgotPassword.visibility = View.GONE
             layoutConfirmPassword.visibility = View.VISIBLE
@@ -112,7 +124,7 @@ class AuthActivity : AppCompatActivity() {
         val myDeviceId = keyManager.getDeviceId()
         val myPublicKey = keyManager.getPublicKeyBase64()
 
-        CoroutineScope(Dispatchers.Main).launch {
+        lifecycleScope.launch {
             val result: Result<String> = if (isLoginMode) {
                 // 🚀 FIX: Pass the public key during login so it can self-heal!
                 authRepo.loginUser(email, pass, myDeviceId, myPublicKey)
@@ -152,7 +164,7 @@ class AuthActivity : AppCompatActivity() {
         }
 
         setLoadingState(true)
-        CoroutineScope(Dispatchers.Main).launch {
+        lifecycleScope.launch {
             val result: Result<String> = authRepo.resetPassword(email)
             setLoadingState(false)
 

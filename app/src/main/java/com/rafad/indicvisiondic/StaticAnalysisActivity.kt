@@ -34,6 +34,14 @@ import kotlinx.serialization.Serializable
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.auth.auth
 
+// --- Material controls + motion for the redesigned UI ---
+import com.google.android.material.slider.Slider
+import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.button.MaterialButtonToggleGroup
+import com.rafad.indicvisiondic.ui.Motion
+import com.rafad.indicvisiondic.ui.Insets
+
+
 // Payload for Supabase 'analysis_sessions' table
 @Serializable
 data class AnalysisSessionInsert(
@@ -65,17 +73,28 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var tvInstruction: TextView
     private lateinit var tvRefName: TextView
     private lateinit var tvDefName: TextView
-    private lateinit var etSubsetSize: EditText
-    private lateinit var etStepSize: EditText
-    private lateinit var etStrainWindow: EditText
+    private lateinit var etSubsetSize: Slider
+    private lateinit var etStepSize: Slider
+    private lateinit var etStrainWindow: Slider
     private lateinit var progressBar: ProgressBar
     private lateinit var tvTimer: TextView
     private lateinit var btnCalculateFullField: Button
-    private lateinit var switchBlur: Switch
-    private lateinit var rgStrainMethod: RadioGroup
-    private lateinit var rgInterpolator: RadioGroup // 🚀 ADDED
+    private lateinit var switchBlur: SwitchMaterial
+    private lateinit var rgStrainMethod: MaterialButtonToggleGroup
+    private lateinit var rgInterpolator: MaterialButtonToggleGroup // 🚀 ADDED
     private lateinit var btnViewResults: Button
     private lateinit var btnLogout: Button // Added for Secure Exit
+
+    // Live value labels + collapsible parameters card
+    private lateinit var tvSubsetValue: TextView
+    private lateinit var tvStepValue: TextView
+    private lateinit var tvStrainValue: TextView
+    private lateinit var tvParamsSummary: TextView
+    private lateinit var advancedCard: android.view.ViewGroup
+    private lateinit var advancedHeader: View
+    private lateinit var advancedContent: View
+    private lateinit var ivAdvancedChevron: ImageView
+    private var advancedExpanded = false
 
     // State
     private var isProcessing = false
@@ -129,6 +148,28 @@ class StaticAnalysisActivity : AppCompatActivity() {
         rgInterpolator = findViewById(R.id.rgInterpolator) // 🚀 BOUND
         btnViewResults = findViewById(R.id.btnViewResults)
         btnLogout = findViewById(R.id.btnLogout) // Bind Logout Button
+
+        // --- Redesigned parameter panel: live labels + collapsible card ---
+        tvSubsetValue = findViewById(R.id.tvSubsetValue)
+        tvStepValue = findViewById(R.id.tvStepValue)
+        tvStrainValue = findViewById(R.id.tvStrainValue)
+        tvParamsSummary = findViewById(R.id.tvParamsSummary)
+        advancedCard = findViewById(R.id.advancedCard)
+        advancedHeader = findViewById(R.id.advancedHeader)
+        advancedContent = findViewById(R.id.advancedContent)
+        ivAdvancedChevron = findViewById(R.id.ivAdvancedChevron)
+        setupParameterControls()
+
+        // Edge-to-edge (targetSdk 36): push the app bar below the status bar
+        // and lift the scrollable content above the nav-bar gesture area so
+        // the top controls aren't in the system swipe-down zone.
+        Insets.padTop(findViewById(R.id.toolbar))
+        Insets.padBottom(findViewById(R.id.contentColumn))
+
+        // Gentle entrance: cards cascade in on first show only (not on rotation)
+        if (savedInstanceState == null) {
+            Motion.enterStaggered(findViewById(R.id.contentColumn))
+        }
 
         restoreUiFromViewModel()
 
@@ -418,12 +459,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
     }
 
+    private fun currentSubsetSize(): Int = etSubsetSize.value.toInt()
+    private fun currentStepSize(): Int = etStepSize.value.toInt()
+    private fun currentStrainWindow(): Int = etStrainWindow.value.toInt()
+    private fun currentUseNlvc(): Boolean = rgStrainMethod.checkedButtonId == R.id.rbNlvc
+    private fun currentUseKeysInterpolator(): Boolean = rgInterpolator.checkedButtonId == R.id.rbKeys
+
     private fun startBatchAnalysis() {
         if (!viewModel.isReadyToCompute()) return
 
-        val subset = etSubsetSize.text.toString().toIntOrNull() ?: 41
-        val step = etStepSize.text.toString().toIntOrNull() ?: 5
-        val strainWin = etStrainWindow.text.toString().toIntOrNull() ?: 15
+        val subset = currentSubsetSize()
+        val step = currentStepSize()
+        val strainWin = currentStrainWindow()
 
         var finalRectX = viewModel.roiX
         var finalRectY = viewModel.roiY
@@ -463,8 +510,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         viewModel.lastStep = step
 
         val applyBlur = switchBlur.isChecked
-        val useNlvc = rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc
-        val use6x6 = rgInterpolator.checkedRadioButtonId == R.id.rbKeys // 🚀 READ TOGGLE
+        val useNlvc = currentUseNlvc()
+        val use6x6 = currentUseKeysInterpolator()
         val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
 
         val debugDir = File(cacheDir, "dic_debug")
@@ -722,9 +769,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
             // 🚀 PDF GENERATOR DATA
             putExtra("SESSION_ID", viewModel.currentSessionId)
-            putExtra("SUBSET_SIZE", etSubsetSize.text.toString().toIntOrNull() ?: 41)
-            putExtra("STRAIN_WINDOW", etStrainWindow.text.toString().toIntOrNull() ?: 15)
-            putExtra("STRAIN_METHOD", if (rgStrainMethod.checkedRadioButtonId == R.id.rbNlvc) "NLVC" else "VSG")
+            putExtra("SUBSET_SIZE", currentSubsetSize())
+            putExtra("STRAIN_WINDOW", currentStrainWindow())
+            putExtra("STRAIN_METHOD", if (currentUseNlvc()) "NLVC" else "VSG")
             putExtra("ENGINE_STATS", viewModel.engineStatsArray)
 
             // 🚀 NEW: PASSING ROI DATA FOR THE PDF REPORT
@@ -742,7 +789,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 viewModel.roiMaskBytes = stream.readBytes()
                 Toast.makeText(this, "Custom ROI Mask Uploaded!", Toast.LENGTH_SHORT).show()
                 btnLoadRoiMask.text = "Mask Uploaded ✅"
-                btnLoadRoiMask.setBackgroundColor(Color.parseColor("#00AA00"))
+                // Success state via the design-system color, keeping the
+                // outlined Material shape intact.
+                (btnLoadRoiMask as? com.google.android.material.button.MaterialButton)?.let {
+                    it.setStrokeColorResource(R.color.semantic_success)
+                    it.setTextColor(getColor(R.color.semantic_success))
+                }
                 viewModel.hasCustomRoi = true
                 checkReady()
             }
@@ -760,6 +812,42 @@ class StaticAnalysisActivity : AppCompatActivity() {
         return result ?: "Image_File"
     }
 
+    // ------------------------------------------------------------------
+    // Redesigned parameter panel: sliders with live labels + a
+    // collapsible "Analysis Parameters" card. Values are read via
+    // slider.value everywhere the old EditTexts were parsed.
+    // ------------------------------------------------------------------
+    private fun setupParameterControls() {
+        advancedHeader.setOnClickListener { toggleAdvanced() }
+
+        val updateLabels = {
+            val subset = etSubsetSize.value.toInt()
+            val step = etStepSize.value.toInt()
+            val win = etStrainWindow.value.toInt()
+            tvSubsetValue.text = "$subset px"
+            tvStepValue.text = "$step px"
+            tvStrainValue.text = "$win px"
+            // Collapsed-state summary so users see settings at a glance
+            tvParamsSummary.text = "Subset $subset · Step $step · Window $win"
+        }
+        updateLabels()
+
+        etSubsetSize.addOnChangeListener { _, _, _ -> updateLabels() }
+        etStepSize.addOnChangeListener { _, _, _ -> updateLabels() }
+        etStrainWindow.addOnChangeListener { _, _, _ -> updateLabels() }
+    }
+
+    private fun toggleAdvanced() {
+        advancedExpanded = !advancedExpanded
+        // Tween the card's bounds while the content fades in/out
+        Motion.animateExpandCollapse(advancedCard)
+        advancedContent.visibility = if (advancedExpanded) View.VISIBLE else View.GONE
+        ivAdvancedChevron.animate()
+            .rotation(if (advancedExpanded) 180f else 0f)
+            .setDuration(240)
+            .start()
+    }
+
     private fun checkReady() {
         val ready = viewModel.isReadyToCompute()
         btnCalculateFullField.isEnabled = ready && !isProcessing
@@ -768,14 +856,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnLoadRef.isEnabled = !isProcessing
         btnLoadDef.isEnabled = !isProcessing
         btnViewResults.visibility = if (viewModel.hasCompletedAnalysis && !isProcessing) View.VISIBLE else View.GONE
-
-        if (ready && !isProcessing) btnCalculateFullField.setBackgroundColor(Color.parseColor("#0000AA"))
-        else btnCalculateFullField.setBackgroundColor(Color.GRAY)
-
-        if (viewModel.refBytes != null) {
-            btnDefineRoi.setBackgroundColor(Color.parseColor("#673AB7"))
-            btnManualRoi.setBackgroundColor(Color.parseColor("#009688"))
-        }
+        // Enabled/disabled visuals are handled by the Material theme —
+        // no more hand-painted setBackgroundColor state juggling.
     }
 
     private fun restoreUiFromViewModel() {

@@ -14,7 +14,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -flto -ffast-math -Wno-nan-infinity-
 
 # 🚀 NEW: The '-s' flag forcefully strips the Symbol Table from the compiled binary.
 # This makes it nearly impossible for a disassembler to map your C++ logic.
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -s -flto")
+#
+# 🚀 16 KB PAGE SUPPORT: force 16 KB-aligned ELF LOAD segments so the library
+# maps cleanly on Android 15+ 16 KB-page devices. NDK r27+ already defaults to
+# this; the explicit flag guarantees it even if built with an older NDK.
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -s -flto -Wl,-z,max-page-size=16384")
 
 add_library(
         indicvision_core

@@ -5,8 +5,8 @@
     android:layout_height="wrap_content"
     android:textColor="#FFFFFF"
     android:textSize="14sp"
-    android:padding="8dp"
-    android:gravity="start|center_vertical"
+    android:paddingHorizontal="4dp"
+    android:gravity="center"
     android:ellipsize="end"
     android:singleLine="true"
     android:fontFamily="sans-serif-medium"/>

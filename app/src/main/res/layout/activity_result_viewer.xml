@@ -3,64 +3,134 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#1E1E24">
+    android:background="@color/viewer_canvas">
 
     <HorizontalScrollView
         android:id="@+id/topScroll"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentTop="true"
-        android:scrollbars="none">
+        android:scrollbars="none"
+        android:clipToPadding="false">
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:padding="8dp">
+            android:background="@drawable/bg_viewer_panel"
+            android:layout_margin="10dp"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="8dp">
 
             <Spinner
                 android:id="@+id/spinnerResultType"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@android:drawable/btn_dropdown"
-                android:layout_marginEnd="8dp" />
+                android:layout_height="44dp"
+                android:background="@drawable/bg_spinner_glass"
+                android:paddingHorizontal="12dp"
+                android:popupBackground="@color/viewer_glass"
+                android:layout_marginEnd="10dp" />
 
             <ToggleButton
                 android:id="@+id/toggleInspect"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textOn="INSPECT: ON"
-                android:textOff="INSPECT: OFF"
-                android:textColor="#FFFFFF"
-                android:backgroundTint="#4CAF50"
-                android:layout_marginEnd="8dp" />
+                android:layout_height="44dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="16dp"
+                android:textOn="Inspect"
+                android:textOff="Inspect"
+                android:textAllCaps="false"
+                android:textStyle="bold"
+                android:textColor="@color/viewer_on_dark"
+                android:background="@drawable/bg_chip_toggle"
+                android:layout_marginEnd="10dp" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnInputCoords"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="📍 X,Y"
-                android:backgroundTint="#FF9800"
-                android:textColor="#FFFFFF"
-                android:layout_marginEnd="8dp"/>
+                android:layout_height="44dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="18dp"
+                android:text="X, Y"
+                android:textAllCaps="false"
+                android:textStyle="bold"
+                android:textColor="@color/viewer_on_dark"
+                app:backgroundTint="@color/sky_primary"
+                app:cornerRadius="22dp"
+                app:rippleColor="#33FFFFFF"
+                android:layout_marginEnd="10dp"/>
 
             <ToggleButton
                 android:id="@+id/toggleMaxMin"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textOn="🔥 MAX/MIN"
-                android:textOff="🔥 MAX/MIN"
-                android:textColor="#FFFFFF"
-                android:backgroundTint="#E91E63" />
+                android:layout_height="44dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="16dp"
+                android:textOn="Max/Min"
+                android:textOff="Max/Min"
+                android:textAllCaps="false"
+                android:textStyle="bold"
+                android:textColor="@color/viewer_on_dark"
+                android:background="@drawable/bg_chip_toggle" />
         </LinearLayout>
     </HorizontalScrollView>
 
+    <!-- Fixed color-scale legend band: sits between the top controls and the
+         image so it never overlaps the heatmap. -->
+    <LinearLayout
+        android:id="@+id/layoutColorScale"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/topScroll"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginTop="2dp"
+        android:orientation="horizontal"
+        android:background="@drawable/bg_viewer_panel"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="10dp"
+        android:gravity="center_vertical"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground">
+
+        <TextView
+            android:id="@+id/tvScaleMin"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Min: 0.0"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:layout_marginEnd="12dp"/>
+
+        <View
+            android:id="@+id/viewColorScale"
+            android:layout_width="0dp"
+            android:layout_height="16dp"
+            android:layout_weight="1"
+            android:background="@drawable/jet_gradient_horizontal"/>
+
+        <TextView
+            android:id="@+id/tvScaleMax"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Max: 0.0"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:layout_marginStart="12dp"/>
+    </LinearLayout>
+
+    <!-- Image area: fills the space between the legend band and the scrubber. -->
     <RelativeLayout
         android:id="@+id/zoomContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/topScroll">
+        android:layout_below="@id/layoutColorScale"
+        android:layout_above="@id/layoutScrubber">
 
         <com.rafad.indicvisiondic.TouchImageView
             android:id="@+id/imgBaseResult"
@@ -82,49 +152,6 @@
             android:clickable="true"
             android:focusable="true"
             android:visibility="gone" />
-
-        <LinearLayout
-            android:id="@+id/layoutColorScale"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_alignParentTop="true"
-            android:layout_marginHorizontal="32dp"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal"
-            android:background="#CC1E1E24"
-            android:padding="8dp"
-            android:gravity="center_vertical"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?attr/selectableItemBackground">
-
-            <TextView
-                android:id="@+id/tvScaleMin"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Min: 0.0"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:layout_marginEnd="12dp"/>
-
-            <View
-                android:id="@+id/viewColorScale"
-                android:layout_width="0dp"
-                android:layout_height="16dp"
-                android:layout_weight="1"
-                android:background="@drawable/jet_gradient_horizontal"/>
-
-            <TextView
-                android:id="@+id/tvScaleMax"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Max: 0.0"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:layout_marginStart="12dp"/>
-        </LinearLayout>
     </RelativeLayout>
 
     <LinearLayout
@@ -134,8 +161,9 @@
         android:layout_alignParentBottom="true"
         android:orientation="horizontal"
         android:gravity="center"
-        android:padding="8dp"
-        android:background="#DD1E1E24"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="10dp"
+        android:background="@color/viewer_glass"
         android:elevation="8dp">
 
         <ImageButton
@@ -172,19 +200,22 @@
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:layout_alignParentEnd="true"
-        android:layout_marginBottom="50dp"
+        android:layout_marginBottom="86dp"
         android:layout_marginEnd="16dp"
-        android:background="#CC1E1E24"
+        android:background="@drawable/bg_viewer_panel"
         android:elevation="4dp"
-        android:padding="8dp"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
         <Spinner
             android:id="@+id/spinnerExportType"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:backgroundTint="#FFFFFF"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_spinner_glass"
+            android:paddingHorizontal="12dp"
+            android:popupBackground="@color/viewer_glass"
             android:layout_marginEnd="8dp"/>
 
         <ImageButton
@@ -192,8 +223,9 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:src="@android:drawable/ic_menu_save"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            app:tint="#00FF00"/>
+            android:background="@drawable/bg_pill_accent"
+            android:contentDescription="Export"
+            app:tint="@color/viewer_on_dark"/>
     </LinearLayout>
 
     <androidx.cardview.widget.CardView
@@ -204,8 +236,8 @@
         android:layout_alignParentStart="true"
         android:layout_marginStart="16dp"
         android:layout_marginBottom="8dp"
-        app:cardBackgroundColor="#CC1E1E24"
-        app:cardCornerRadius="8dp"
+        app:cardBackgroundColor="@color/viewer_glass"
+        app:cardCornerRadius="14dp"
         app:cardElevation="6dp"
         android:visibility="gone">
 
@@ -215,7 +247,7 @@
             android:layout_height="wrap_content"
             android:padding="12dp"
             android:text="Tap image to inspect"
-            android:textColor="#00FF00"
+            android:textColor="@color/sky_bright"
             android:textSize="14sp"
             android:textStyle="bold"
             android:fontFamily="monospace"/>
@@ -229,8 +261,8 @@
         android:layout_alignParentStart="true"
         android:layout_marginStart="16dp"
         android:layout_marginBottom="2dp"
-        app:cardBackgroundColor="#CC1E1E24"
-        app:cardCornerRadius="8dp"
+        app:cardBackgroundColor="@color/viewer_glass"
+        app:cardCornerRadius="14dp"
         app:cardElevation="6dp"
         android:visibility="gone">
 

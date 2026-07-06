@@ -4,22 +4,24 @@
     android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#1E1E24"
+    android:background="@color/surface_muted"
     android:fillViewport="true">
 
     <LinearLayout
+        android:id="@+id/authColumn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="32dp"
+        android:padding="24dp"
         android:gravity="center_vertical">
 
+        <!-- Brand -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="inDIC"
-            android:textColor="#FFFFFF"
-            android:textSize="40sp"
+            android:textColor="@color/sky_primary"
+            android:textSize="42sp"
             android:textStyle="bold"
             android:textAlignment="center"
             android:layout_marginBottom="4dp" />
@@ -29,115 +31,107 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Secure Access Portal"
-            android:textColor="#888888"
+            android:textColor="@color/text_secondary"
             android:textSize="16sp"
             android:textAlignment="center"
-            android:layout_marginBottom="40dp" />
+            android:layout_marginBottom="28dp" />
 
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox"
+        <!-- Credentials card -->
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:boxBackgroundColor="#333333"
-            app:boxStrokeWidth="0dp"
-            app:boxStrokeWidthFocused="1dp"
-            app:boxStrokeColor="#2196F3"
-            app:hintEnabled="false">
+            android:layout_height="wrap_content">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etEmail"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="55dp"
-                android:hint="Email Address"
-                android:textColorHint="#888888"
-                android:textColor="#FFFFFF"
-                android:inputType="textEmailAddress"
-                android:paddingHorizontal="16dp"
-                android:background="@android:color/transparent" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="4dp">
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/layoutPassword"
-            style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            app:boxBackgroundColor="#333333"
-            app:boxStrokeWidth="0dp"
-            app:boxStrokeWidthFocused="1dp"
-            app:boxStrokeColor="#2196F3"
-            app:endIconMode="password_toggle"
-            app:endIconTint="#888888"
-            app:hintEnabled="false">
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:hint="Email Address"
+                    app:boxStrokeColor="@color/sky_primary"
+                    app:hintTextColor="@color/sky_primary">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etPassword"
-                android:layout_width="match_parent"
-                android:layout_height="55dp"
-                android:hint="Password (Min 6 chars)"
-                android:textColorHint="#888888"
-                android:textColor="#FFFFFF"
-                android:inputType="textPassword"
-                android:paddingHorizontal="16dp"
-                android:background="@android:color/transparent" />
-        </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etEmail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary"
+                        android:inputType="textEmailAddress" />
+                </com.google.android.material.textfield.TextInputLayout>
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/layoutConfirmPassword"
-            style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:visibility="gone"
-            app:boxBackgroundColor="#333333"
-            app:boxStrokeWidth="0dp"
-            app:boxStrokeWidthFocused="1dp"
-            app:boxStrokeColor="#2196F3"
-            app:endIconMode="password_toggle"
-            app:endIconTint="#888888"
-            app:hintEnabled="false">
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutPassword"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:hint="Password (min 6 characters)"
+                    app:boxStrokeColor="@color/sky_primary"
+                    app:hintTextColor="@color/sky_primary"
+                    app:endIconMode="password_toggle"
+                    app:endIconTint="@color/text_secondary">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etConfirmPassword"
-                android:layout_width="match_parent"
-                android:layout_height="55dp"
-                android:hint="Confirm Password"
-                android:textColorHint="#888888"
-                android:textColor="#FFFFFF"
-                android:inputType="textPassword"
-                android:paddingHorizontal="16dp"
-                android:background="@android:color/transparent" />
-        </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etPassword"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary"
+                        android:inputType="textPassword" />
+                </com.google.android.material.textfield.TextInputLayout>
 
-        <TextView
-            android:id="@+id/tvForgotPassword"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:text="Forgot Password?"
-            android:textColor="#2196F3"
-            android:textSize="14sp"
-            android:padding="8dp"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:layout_marginBottom="24dp" />
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutConfirmPassword"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:visibility="gone"
+                    android:hint="Confirm Password"
+                    app:boxStrokeColor="@color/sky_primary"
+                    app:hintTextColor="@color/sky_primary"
+                    app:endIconMode="password_toggle"
+                    app:endIconTint="@color/text_secondary">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etConfirmPassword"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary"
+                        android:inputType="textPassword" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:id="@+id/tvForgotPassword"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:text="Forgot Password?"
+                    android:textColor="@color/sky_primary"
+                    android:textSize="14sp"
+                    android:padding="8dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp">
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="12dp">
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnMainAction"
+                style="@style/Widget.IndicVision.Button.Cta"
                 android:layout_width="match_parent"
                 android:layout_height="55dp"
-                android:text="SECURE LOGIN"
-                android:backgroundTint="#2196F3"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold"
-                android:textSize="16sp"/>
+                android:text="Secure Login" />
 
             <ProgressBar
                 android:id="@+id/progressBar"
@@ -145,7 +139,7 @@
                 android:layout_height="30dp"
                 android:layout_gravity="center"
                 android:elevation="10dp"
-                android:indeterminateTint="#FFFFFF"
+                android:indeterminateTint="@color/text_on_primary"
                 android:visibility="gone" />
         </FrameLayout>
 
@@ -154,13 +148,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Request an account"
-            android:textColor="#AAAAAA"
+            android:textColor="@color/text_secondary"
             android:textAlignment="center"
-            android:textSize="16sp"
+            android:textSize="15sp"
             android:padding="16dp"
             android:background="?attr/selectableItemBackground"
             android:clickable="true"
             android:focusable="true" />
-
     </LinearLayout>
 </ScrollView>

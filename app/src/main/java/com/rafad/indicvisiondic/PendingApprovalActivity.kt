@@ -31,6 +31,8 @@ class PendingApprovalActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_pending_approval)
 
+        com.rafad.indicvisiondic.ui.Insets.padVertical(findViewById(R.id.pendingRoot))
+
         keyManager = DeviceKeyManager(this)
 
         // Bind UI

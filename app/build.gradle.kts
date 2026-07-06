@@ -91,11 +91,16 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.activity)
+    // AndroidX transitions power the shared-element / expand-collapse motion in ui/Motion.kt
+    implementation("androidx.transition:transition:1.5.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    val camerax_version = "1.3.0-alpha04"
+    // 1.4.x ships 16 KB page-aligned native libs (libimage_processing_util_jni.so);
+    // the old 1.3.0-alpha04 was 4 KB-aligned and triggered Android 15's
+    // "not 16 KB compatible" warning.
+    val camerax_version = "1.4.2"
     implementation("androidx.camera:camera-core:${camerax_version}")
     implementation("androidx.camera:camera-camera2:${camerax_version}")
     implementation("androidx.camera:camera-lifecycle:${camerax_version}")

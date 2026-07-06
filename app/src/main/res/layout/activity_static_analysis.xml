@@ -1,359 +1,529 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#FFFFFF">
+    android:background="@color/surface_muted">
 
-    <RelativeLayout
+    <!-- ===================== App bar ===================== -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="12dp"
-        android:background="#FAFAFA"
-        android:elevation="4dp"> <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="inDIC Engine"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:textColor="#333333"
-        android:layout_alignParentStart="true"
-        android:layout_centerVertical="true"/>
+        android:minHeight="?attr/actionBarSize"
+        android:background="@color/sky_primary"
+        app:title="inDIC Engine"
+        app:titleTextColor="@color/text_on_primary"
+        app:titleCentered="false"
+        android:elevation="4dp">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnLogout"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginEnd="6dp"
             android:text="Log Out"
-            android:textColor="#FF5252"
-            android:backgroundTint="#22FF5252"
-            android:layout_alignParentEnd="true"
-            android:layout_centerVertical="true"
-            android:elevation="0dp"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:stateListAnimator="@null"/> </RelativeLayout>
+            android:textColor="@color/text_on_primary"
+            android:textAllCaps="false"
+            app:rippleColor="#33FFFFFF" />
+    </com.google.android.material.appbar.MaterialToolbar>
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fillViewport="true">
+        android:fillViewport="true"
+        android:scrollbars="none">
 
         <LinearLayout
+            android:id="@+id/contentColumn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp"
-            android:gravity="center_horizontal">
+            android:padding="14dp">
 
-            <TextView
-                android:id="@+id/tvGuideStep1"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="1. Load Reference Image"
-                android:textStyle="bold"
-                android:textSize="18sp"
-                android:layout_marginBottom="8dp"/>
-
-            <Button
-                android:id="@+id/btnLoadRef"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Select Reference Image"/>
-
-            <TextView
-                android:id="@+id/tvRefName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="No file selected"
-                android:textColor="#555555"
-                android:textSize="12sp"
-                android:layout_marginBottom="5dp"/>
-
-            <TextView
-                android:id="@+id/tvInstruction"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Instruction: Load images to begin"
-                android:textColor="#CC0000"
-                android:textStyle="bold"
-                android:layout_marginTop="5dp"
-                android:layout_marginBottom="5dp"/>
-
-            <FrameLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:background="#333333">
-
-                <ImageView
-                    android:id="@+id/imgRef"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:maxWidth="350dp"
-                    android:maxHeight="400dp"
-                    android:adjustViewBounds="true"
-                    android:scaleType="fitCenter" />
-            </FrameLayout>
-
-            <LinearLayout
+            <!-- ============ Card 1: Reference image ============ -->
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:layout_marginTop="8dp">
+                android:layout_height="wrap_content">
 
-                <Button
-                    android:id="@+id/btnDefineRoi"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Draw ROI"
-                    android:backgroundTint="#673AB7"
-                    android:textColor="#FFFFFF"
-                    android:layout_marginEnd="4dp"/>
+                    android:orientation="vertical">
 
-                <Button
-                    android:id="@+id/btnManualRoi"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="Manual ROI"
-                    android:backgroundTint="#009688"
-                    android:textColor="#FFFFFF"
-                    android:layout_marginStart="4dp"/>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
 
-            </LinearLayout>
+                        <TextView
+                            style="@style/Widget.IndicVision.StepBadge"
+                            android:text="1" />
 
-            <Button
-                android:id="@+id/btnFullImage"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Use Full Image (No ROI)"
-                android:backgroundTint="#555555"
-                android:textColor="#FFFFFF"
-                android:layout_marginBottom="20dp"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:text="Reference Image"
+                            android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                    </LinearLayout>
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="2. Load Deformed Image"
-                android:textStyle="bold"
-                android:textSize="18sp"
-                android:layout_marginBottom="8dp"/>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLoadRef"
+                        style="@style/Widget.IndicVision.Button.Tonal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        
+                        app:iconGravity="textStart"
+                        android:text="Select Reference Image" />
 
-            <Button
-                android:id="@+id/btnLoadDef"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Select Deformed Image"/>
+                    <TextView
+                        android:id="@+id/tvRefName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="No file selected"
+                        android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
 
-            <TextView
-                android:id="@+id/tvDefName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="No file selected"
-                android:textColor="#555555"
-                android:textSize="12sp"
-                android:layout_marginBottom="5dp"/>
+                    <TextView
+                        android:id="@+id/tvInstruction"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Load images to begin"
+                        android:textColor="@color/sky_on_container"
+                        android:textStyle="bold"
+                        android:background="@color/sky_container"
+                        android:padding="10dp" />
 
-            <ImageView
-                android:id="@+id/imgDef"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:maxWidth="200dp"
-                android:maxHeight="200dp"
-                android:adjustViewBounds="true"
-                android:scaleType="fitCenter"
-                android:background="#EEEEEE"
-                android:layout_marginTop="5dp"
-                android:layout_marginBottom="20dp"/>
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="@color/text_primary"
+                        android:minHeight="120dp">
 
-            <LinearLayout
+                        <ImageView
+                            android:id="@+id/imgRef"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:maxHeight="400dp"
+                            android:adjustViewBounds="true"
+                            android:scaleType="fitCenter"
+                            android:contentDescription="Reference image preview" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="12dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnDefineRoi"
+                            style="@style/Widget.IndicVision.Button.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="5dp"
+                            android:text="Draw ROI" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnManualRoi"
+                            style="@style/Widget.IndicVision.Button.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="5dp"
+                            android:text="Manual ROI" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFullImage"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="@color/text_secondary"
+                        android:textAllCaps="false"
+                        android:text="Use Full Image (No ROI)" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ============ Card 2: Deformed image ============ -->
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="4dp">
-                <TextView android:layout_width="0dp" android:layout_weight="1"
-                    android:layout_height="wrap_content" android:text="Subset Size"
-                    android:textStyle="bold" android:textSize="11sp" android:gravity="center"/>
-                <TextView android:layout_width="0dp" android:layout_weight="1"
-                    android:layout_height="wrap_content" android:text="Step Size"
-                    android:textStyle="bold" android:textSize="11sp" android:gravity="center"/>
-                <TextView android:layout_width="0dp" android:layout_weight="1"
-                    android:layout_height="wrap_content" android:text="Strain Window"
-                    android:textStyle="bold" android:textSize="11sp" android:gravity="center"/>
-            </LinearLayout>
+                android:layout_height="wrap_content">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="8dp">
-
-                <EditText
-                    android:id="@+id/etSubsetSize"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="number"
-                    android:hint="SS"
-                    android:text="41"
-                    android:gravity="center"/>
+                    android:orientation="vertical">
 
-                <EditText
-                    android:id="@+id/etStepSize"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:inputType="number"
-                    android:hint="Step"
-                    android:text="5"
-                    android:gravity="center"/>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
 
-                <EditText
-                    android:id="@+id/etStrainWindow"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:inputType="number"
-                    android:hint="Win"
-                    android:text="15"
-                    android:gravity="center"
-                    android:backgroundTint="#FF9800"/>
-            </LinearLayout>
+                        <TextView
+                            style="@style/Widget.IndicVision.StepBadge"
+                            android:text="2" />
 
-            <Switch
-                android:id="@+id/switchBlur"
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:text="Deformed Image(s)"
+                            android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLoadDef"
+                        style="@style/Widget.IndicVision.Button.Tonal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Select Deformed Image(s)" />
+
+                    <TextView
+                        android:id="@+id/tvDefName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="No file selected"
+                        android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
+
+                    <ImageView
+                        android:id="@+id/imgDef"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxHeight="200dp"
+                        android:adjustViewBounds="true"
+                        android:scaleType="fitCenter"
+                        android:background="@color/surface_muted"
+                        android:layout_marginTop="10dp"
+                        android:contentDescription="Deformed image preview" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ============ Card 3: Advanced parameters (collapsible) ============ -->
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Apply Gaussian Blur (Noise Reduction)"
-                android:layout_marginBottom="8dp"
-                android:paddingHorizontal="8dp"/>
+                android:layout_height="wrap_content">
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Strain Calculation Method:"
-                android:textStyle="bold"
-                android:paddingHorizontal="8dp"/>
-
-            <RadioGroup
-                android:id="@+id/rgStrainMethod"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="10dp"
-                android:paddingHorizontal="8dp">
-
-                <RadioButton
-                    android:id="@+id/rbVsg"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:id="@+id/advancedCard"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="VSG (Smooth)"
-                    android:checked="true"
-                    android:layout_marginEnd="16dp"/>
+                    android:orientation="vertical">
 
-                <RadioButton
-                    android:id="@+id/rbNlvc"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="NLVC (Fractures)"/>
-            </RadioGroup>
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Sub-pixel Interpolation Kernel:"
-                android:textStyle="bold"
-                android:paddingHorizontal="8dp"/>
+                    <!-- Header row (tap target toggles the section) -->
+                    <LinearLayout
+                        android:id="@+id/advancedHeader"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:background="?attr/selectableItemBackground"
+                        android:paddingVertical="4dp"
+                        android:clickable="true"
+                        android:focusable="true">
 
-            <RadioGroup
-                android:id="@+id/rgInterpolator"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="10dp"
-                android:paddingHorizontal="8dp">
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_tune"
+                            android:contentDescription="Parameters" />
 
-                <RadioButton
-                    android:id="@+id/rbBicubic"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="4x4 Bicubic (Fast)"
-                    android:checked="true"
-                    android:layout_marginEnd="16dp"/>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:layout_marginStart="10dp">
 
-                <RadioButton
-                    android:id="@+id/rbKeys"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="6x6 Keys (DICe Parity)"/>
-            </RadioGroup>
-            <Button
-                android:id="@+id/btnLoadRoiMask"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Optional: Upload Custom ROI Mask (PNG)"
-                android:backgroundTint="#FF9800"
-                android:textColor="#FFFFFF"
-                android:layout_marginBottom="10dp"/>
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Analysis Parameters"
+                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
 
-            <Button
+                            <TextView
+                                android:id="@+id/tvParamsSummary"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Subset 41 · Step 5 · Window 15"
+                                android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
+                        </LinearLayout>
+
+                        <ImageView
+                            android:id="@+id/ivAdvancedChevron"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_chevron_down"
+                            android:contentDescription="Expand parameters" />
+                    </LinearLayout>
+
+                    <!-- Collapsible content (hidden by default; presets cover most runs) -->
+                    <LinearLayout
+                        android:id="@+id/advancedContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone"
+                        android:paddingTop="8dp">
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginBottom="12dp"
+                            android:background="@color/surface_outline" />
+
+                        <!-- Subset size slider -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_weight="1"
+                                android:layout_height="wrap_content"
+                                android:text="Subset size"
+                                android:textColor="@color/text_primary"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:id="@+id/tvSubsetValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="41 px"
+                                android:textColor="@color/sky_primary"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/etSubsetSize"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="15"
+                            android:valueTo="101"
+                            android:stepSize="2"
+                            android:value="41" />
+
+                        <!-- Step size slider -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:layout_marginTop="4dp">
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_weight="1"
+                                android:layout_height="wrap_content"
+                                android:text="Step size (density)"
+                                android:textColor="@color/text_primary"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:id="@+id/tvStepValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="5 px"
+                                android:textColor="@color/sky_primary"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/etStepSize"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="1"
+                            android:valueTo="30"
+                            android:stepSize="1"
+                            android:value="5" />
+
+                        <!-- Strain window slider -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:layout_marginTop="4dp">
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_weight="1"
+                                android:layout_height="wrap_content"
+                                android:text="Strain window"
+                                android:textColor="@color/text_primary"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:id="@+id/tvStrainValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="15 px"
+                                android:textColor="@color/sky_primary"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/etStrainWindow"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:valueFrom="5"
+                            android:valueTo="51"
+                            android:stepSize="2"
+                            android:value="15" />
+
+                        <!-- Noise reduction -->
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchBlur"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="Apply Gaussian blur (noise reduction)"
+                            android:textColor="@color/text_primary"
+                            app:thumbTint="@color/sky_primary"
+                            app:trackTint="@color/sky_container" />
+
+                        <!-- Strain method segmented toggle -->
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:text="Strain calculation method"
+                            android:textColor="@color/text_primary"
+                            android:textStyle="bold" />
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/rgStrainMethod"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            app:singleSelection="true"
+                            app:selectionRequired="true"
+                            app:checkedButton="@+id/rbVsg">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/rbVsg"
+                                style="@style/Widget.IndicVision.SegmentedButton"
+                                android:layout_width="0dp"
+                                android:layout_weight="1"
+                                android:layout_height="wrap_content"
+                                android:text="VSG (Smooth)" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/rbNlvc"
+                                style="@style/Widget.IndicVision.SegmentedButton"
+                                android:layout_width="0dp"
+                                android:layout_weight="1"
+                                android:layout_height="wrap_content"
+                                android:text="NLVC (Fractures)" />
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <!-- Interpolation kernel segmented toggle -->
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:text="Sub-pixel interpolation kernel"
+                            android:textColor="@color/text_primary"
+                            android:textStyle="bold" />
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/rgInterpolator"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            app:singleSelection="true"
+                            app:selectionRequired="true"
+                            app:checkedButton="@+id/rbBicubic">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/rbBicubic"
+                                style="@style/Widget.IndicVision.SegmentedButton"
+                                android:layout_width="0dp"
+                                android:layout_weight="1"
+                                android:layout_height="wrap_content"
+                                android:text="4×4 Bicubic" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/rbKeys"
+                                style="@style/Widget.IndicVision.SegmentedButton"
+                                android:layout_width="0dp"
+                                android:layout_weight="1"
+                                android:layout_height="wrap_content"
+                                android:text="6×6 Keys" />
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnLoadRoiMask"
+                            style="@style/Widget.IndicVision.Button.Outlined"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:text="Optional: Upload Custom ROI Mask (PNG)" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ============ Compute + results ============ -->
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCalculateFullField"
+                style="@style/Widget.IndicVision.Button.Cta"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Compute Full Field 2D Strain"
-                android:backgroundTint="#008800"
-                android:textColor="#FFFFFF"
-                android:enabled="false"
-                android:layout_marginTop="8dp"/>
+                android:layout_marginTop="4dp"
+                android:text="Compute Full-Field 2D Strain"
+                android:enabled="false" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnViewResults"
+                style="@style/Widget.IndicVision.Button.Tonal"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="📊 View Last Results"
-                android:backgroundTint="#2196F3"
-                android:visibility="gone"
-                android:layout_marginTop="8dp"/>
+                android:layout_marginTop="10dp"
+                android:text="View Last Results"
+                android:visibility="gone" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnViewLastResult"
+                style="@style/Widget.IndicVision.Button.Tonal"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="👁️ View Last Results"
-                android:backgroundTint="#2196F3"
-                android:textColor="#FFFFFF"
-                android:visibility="gone"
-                android:layout_marginTop="8dp"/>
+                android:layout_marginTop="10dp"
+                android:text="View Last Results"
+                android:visibility="gone" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="8dp"
+                android:paddingTop="14dp"
                 android:gravity="center">
 
-                <ProgressBar
+                <com.google.android.material.progressindicator.LinearProgressIndicator
                     android:id="@+id/pbAnalysis"
-                    style="?android:attr/progressBarStyleHorizontal"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:visibility="gone"
-                    android:max="100"/>
+                    app:trackColor="@color/sky_container"
+                    app:indicatorColor="@color/sky_primary"
+                    app:trackCornerRadius="4dp"
+                    android:max="100" />
 
                 <TextView
                     android:id="@+id/tvTimer"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
                     android:text="Elapsed Time: 0s"
                     android:visibility="gone"
-                    android:textColor="#000000"
-                    android:textStyle="italic"/>
+                    android:textColor="@color/text_secondary"
+                    android:textStyle="italic" />
             </LinearLayout>
 
             <TextView
@@ -363,10 +533,10 @@
                 android:text="Result: --"
                 android:textSize="18sp"
                 android:textStyle="bold"
+                android:textColor="@color/text_primary"
                 android:textAlignment="center"
-                android:layout_marginTop="10dp"
-                android:paddingBottom="50dp"/>
-
+                android:layout_marginTop="12dp"
+                android:paddingBottom="40dp" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

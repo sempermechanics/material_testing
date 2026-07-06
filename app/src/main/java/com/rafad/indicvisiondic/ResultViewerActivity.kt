@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import com.rafad.indicvisiondic.ui.Insets
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -106,6 +107,11 @@ class ResultViewerActivity : AppCompatActivity() {
         layoutColorScale = findViewById(R.id.layoutColorScale)
         tvScaleMax = findViewById(R.id.tvScaleMax)
         tvScaleMin = findViewById(R.id.tvScaleMin)
+
+        // Edge-to-edge: keep the top control bar out from under the status bar
+        // and lift the frame scrubber above the nav-bar gesture area.
+        Insets.padTop(findViewById(R.id.topScroll))
+        Insets.padBottom(findViewById(R.id.layoutScrubber))
 
         spinnerExportType = findViewById(R.id.spinnerExportType)
         btnExportExecute = findViewById(R.id.btnExportExecute)
