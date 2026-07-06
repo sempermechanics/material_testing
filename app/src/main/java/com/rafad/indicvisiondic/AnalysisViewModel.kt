@@ -58,6 +58,12 @@ class AnalysisViewModel : ViewModel() {
     var currentSessionId: String? = null
     var engineStatsArray: FloatArray? = null
 
+    // 🚀 WIZARD STATE: survives rotation.
+    // settingsReviewed gates the Compute button — true once the user has
+    // opened the parameters card or explicitly accepted the defaults.
+    var wizardStep: Int = 1
+    var settingsReviewed: Boolean = false
+
     fun isReadyToCompute(): Boolean {
         return refBytes != null && defFilePaths.isNotEmpty()
     }

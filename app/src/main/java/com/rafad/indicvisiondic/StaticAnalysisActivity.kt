@@ -85,16 +85,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var btnViewResults: Button
     private lateinit var btnLogout: Button // Added for Secure Exit
 
-    // Live value labels + collapsible parameters card
+    // Live value labels for the parameter sliders
     private lateinit var tvSubsetValue: TextView
     private lateinit var tvStepValue: TextView
     private lateinit var tvStrainValue: TextView
-    private lateinit var tvParamsSummary: TextView
-    private lateinit var advancedCard: android.view.ViewGroup
-    private lateinit var advancedHeader: View
-    private lateinit var advancedContent: View
-    private lateinit var ivAdvancedChevron: ImageView
-    private var advancedExpanded = false
+
+    // Two-step wizard: page 1 = load images, page 2 = settings + run
+    private lateinit var scrollStepImages: View
+    private lateinit var scrollStepSettings: View
+    private lateinit var tvStepChip1: TextView
+    private lateinit var tvStepChip2: TextView
+    private lateinit var btnNext: Button
+    private lateinit var btnBack: Button
 
     // State
     private var isProcessing = false
@@ -109,6 +111,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 if (isProcessing) {
                     // Block the back button completely if the C++ engine is running
                     Toast.makeText(this@StaticAnalysisActivity, "Analysis running! Please wait or cancel first.", Toast.LENGTH_SHORT).show()
+                } else if (viewModel.wizardStep == 2) {
+                    // On the settings page, back returns to the images page
+                    goToStep(1, animate = true)
                 } else {
                     // Show a warning popup before destroying the setup
                     AlertDialog.Builder(this@StaticAnalysisActivity)
@@ -149,22 +154,29 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnViewResults = findViewById(R.id.btnViewResults)
         btnLogout = findViewById(R.id.btnLogout) // Bind Logout Button
 
-        // --- Redesigned parameter panel: live labels + collapsible card ---
+        // --- Parameter sliders: live value labels ---
         tvSubsetValue = findViewById(R.id.tvSubsetValue)
         tvStepValue = findViewById(R.id.tvStepValue)
         tvStrainValue = findViewById(R.id.tvStrainValue)
-        tvParamsSummary = findViewById(R.id.tvParamsSummary)
-        advancedCard = findViewById(R.id.advancedCard)
-        advancedHeader = findViewById(R.id.advancedHeader)
-        advancedContent = findViewById(R.id.advancedContent)
-        ivAdvancedChevron = findViewById(R.id.ivAdvancedChevron)
         setupParameterControls()
 
+        // --- Two-step wizard wiring ---
+        scrollStepImages = findViewById(R.id.scrollStepImages)
+        scrollStepSettings = findViewById(R.id.scrollStepSettings)
+        tvStepChip1 = findViewById(R.id.tvStepChip1)
+        tvStepChip2 = findViewById(R.id.tvStepChip2)
+        btnNext = findViewById(R.id.btnNext)
+        btnBack = findViewById(R.id.btnBack)
+
+        btnNext.setOnClickListener { goToStep(2, animate = true) }
+        btnBack.setOnClickListener { goToStep(1, animate = true) }
+        goToStep(viewModel.wizardStep, animate = false)
+
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
-        // and lift the scrollable content above the nav-bar gesture area so
-        // the top controls aren't in the system swipe-down zone.
+        // and keep the wizard nav above the nav-bar gesture area so the top
+        // controls aren't in the system swipe-down zone.
         Insets.padTop(findViewById(R.id.toolbar))
-        Insets.padBottom(findViewById(R.id.contentColumn))
+        Insets.padBottom(findViewById(R.id.bottomNav))
 
         // Gentle entrance: cards cascade in on first show only (not on rotation)
         if (savedInstanceState == null) {
@@ -813,22 +825,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Redesigned parameter panel: sliders with live labels + a
-    // collapsible "Analysis Parameters" card. Values are read via
-    // slider.value everywhere the old EditTexts were parsed.
+    // Parameter sliders: keep the live "N px" labels in sync. Values are
+    // read via slider.value everywhere the old EditTexts were parsed.
     // ------------------------------------------------------------------
     private fun setupParameterControls() {
-        advancedHeader.setOnClickListener { toggleAdvanced() }
-
         val updateLabels = {
-            val subset = etSubsetSize.value.toInt()
-            val step = etStepSize.value.toInt()
-            val win = etStrainWindow.value.toInt()
-            tvSubsetValue.text = "$subset px"
-            tvStepValue.text = "$step px"
-            tvStrainValue.text = "$win px"
-            // Collapsed-state summary so users see settings at a glance
-            tvParamsSummary.text = "Subset $subset · Step $step · Window $win"
+            tvSubsetValue.text = "${etSubsetSize.value.toInt()} px"
+            tvStepValue.text = "${etStepSize.value.toInt()} px"
+            tvStrainValue.text = "${etStrainWindow.value.toInt()} px"
         }
         updateLabels()
 
@@ -837,24 +841,65 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etStrainWindow.addOnChangeListener { _, _, _ -> updateLabels() }
     }
 
-    private fun toggleAdvanced() {
-        advancedExpanded = !advancedExpanded
-        // Tween the card's bounds while the content fades in/out
-        Motion.animateExpandCollapse(advancedCard)
-        advancedContent.visibility = if (advancedExpanded) View.VISIBLE else View.GONE
-        ivAdvancedChevron.animate()
-            .rotation(if (advancedExpanded) 180f else 0f)
-            .setDuration(240)
-            .start()
+    // ------------------------------------------------------------------
+    // Wizard navigation: page 1 (images) ⇄ page 2 (settings + run)
+    // ------------------------------------------------------------------
+    private fun goToStep(step: Int, animate: Boolean) {
+        val forward = step == 2
+        viewModel.wizardStep = step
+
+        // Reaching the settings page counts as reviewing the parameters —
+        // they are all visible here — which satisfies the Compute gate.
+        if (forward) viewModel.settingsReviewed = true
+
+        val showing = if (forward) scrollStepSettings else scrollStepImages
+        val hiding = if (forward) scrollStepImages else scrollStepSettings
+
+        hiding.visibility = View.GONE
+        showing.visibility = View.VISIBLE
+        if (animate) {
+            showing.startAnimation(
+                android.view.animation.AnimationUtils.loadAnimation(
+                    this, if (forward) R.anim.slide_in_right else R.anim.slide_in_left
+                )
+            )
+        }
+
+        // Step indicator chips
+        tvStepChip1.setBackgroundResource(
+            if (forward) R.drawable.bg_chip_step_inactive else R.drawable.bg_pill_accent)
+        tvStepChip1.setTextColor(getColor(
+            if (forward) R.color.sky_on_container else R.color.text_on_primary))
+        tvStepChip2.setBackgroundResource(
+            if (forward) R.drawable.bg_pill_accent else R.drawable.bg_chip_step_inactive)
+        tvStepChip2.setTextColor(getColor(
+            if (forward) R.color.text_on_primary else R.color.sky_on_container))
+
+        // Bottom nav: Next drives page 1, Back appears on page 2
+        btnNext.visibility = if (forward) View.GONE else View.VISIBLE
+        btnBack.visibility = if (forward) View.VISIBLE else View.GONE
+
+        checkReady()
     }
 
     private fun checkReady() {
         val ready = viewModel.isReadyToCompute()
-        btnCalculateFullField.isEnabled = ready && !isProcessing
+
+        // Page-1 gate: Next stays disabled + visibly faded until both images are set
+        val nextEnabled = ready && !isProcessing
+        btnNext.isEnabled = nextEnabled
+        btnNext.alpha = if (nextEnabled) 1.0f else 0.4f
+
+        // Page-2 gate: Compute needs images AND the settings page visited
+        val computeEnabled = ready && viewModel.settingsReviewed && !isProcessing
+        btnCalculateFullField.isEnabled = computeEnabled
+        btnCalculateFullField.alpha = if (computeEnabled) 1.0f else 0.4f
+
         btnDefineRoi.isEnabled = (viewModel.refBytes != null) && !isProcessing
         btnManualRoi.isEnabled = !isProcessing
         btnLoadRef.isEnabled = !isProcessing
         btnLoadDef.isEnabled = !isProcessing
+        btnBack.isEnabled = !isProcessing
         btnViewResults.visibility = if (viewModel.hasCompletedAnalysis && !isProcessing) View.VISIBLE else View.GONE
         // Enabled/disabled visuals are handled by the Material theme —
         // no more hand-painted setBackgroundColor state juggling.
