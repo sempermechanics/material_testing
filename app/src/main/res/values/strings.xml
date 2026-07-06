@@ -1,5 +1,7 @@
 <resources>
     <string name="app_name">inDIC</string>
+    <string name="prev_frame">Previous frame</string>
+    <string name="next_frame">Next frame</string>
     <string-array name="interpolator_options">
         <item>Bicubic (Fast)</item>
         <item>Lanczos-6 (High Acc.)</item>

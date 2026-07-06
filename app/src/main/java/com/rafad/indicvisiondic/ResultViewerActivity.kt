@@ -110,7 +110,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         // Edge-to-edge: keep the top control bar out from under the status bar
         // and lift the frame scrubber above the nav-bar gesture area.
-        Insets.padTop(findViewById(R.id.topScroll))
+        Insets.padTop(findViewById(R.id.topBarHost))
         Insets.padBottom(findViewById(R.id.layoutScrubber))
 
         spinnerExportType = findViewById(R.id.spinnerExportType)
@@ -187,7 +187,10 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         val options = arrayOf("U", "V", "Exx", "Eyy", "Exy")
-        spinnerType.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
+        // White text for both the selected value and the (dark) dropdown popup
+        spinnerType.adapter = ArrayAdapter(this, R.layout.spinner_item_white, options).apply {
+            setDropDownViewResource(R.layout.spinner_dropdown_white)
+        }
         spinnerType.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p0: AdapterView<*>?, p1: View?, position: Int, p3: Long) {
                 currentTypeString = options[position]
@@ -246,7 +249,8 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         val adapter = ArrayAdapter(this, R.layout.spinner_item_white, exportOptions)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        // Dark popup background → white dropdown rows (was dark-on-dark before)
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown_white)
         spinnerExportType.adapter = adapter
 
         btnExportExecute.setOnClickListener {

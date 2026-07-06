@@ -160,6 +160,7 @@
                                 android:id="@+id/imgRef"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
+                                android:layout_gravity="center"
                                 android:maxHeight="400dp"
                                 android:adjustViewBounds="true"
                                 android:scaleType="fitCenter"
@@ -193,11 +194,10 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnFullImage"
-                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            style="@style/Widget.IndicVision.Button.Outlined"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
-                            android:textColor="@color/text_secondary"
                             android:textAllCaps="false"
                             android:text="Use Full Image (No ROI)" />
                     </LinearLayout>
@@ -247,16 +247,23 @@
                             android:text="No file selected"
                             android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
 
-                        <ImageView
-                            android:id="@+id/imgDef"
+                        <FrameLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:maxHeight="200dp"
-                            android:adjustViewBounds="true"
-                            android:scaleType="fitCenter"
-                            android:background="@color/surface_muted"
-                            android:layout_marginTop="10dp"
-                            android:contentDescription="Deformed image preview" />
+                            android:layout_marginTop="12dp"
+                            android:background="@color/text_primary"
+                            android:minHeight="120dp">
+
+                            <ImageView
+                                android:id="@+id/imgDef"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center"
+                                android:maxHeight="400dp"
+                                android:adjustViewBounds="true"
+                                android:scaleType="fitCenter"
+                                android:contentDescription="Deformed image preview" />
+                        </FrameLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
