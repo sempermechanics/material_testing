@@ -255,7 +255,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="@drawable/bg_pill_accent"
-            android:contentDescription="Export"
+            android:contentDescription="@string/export_execute"
             android:src="@android:drawable/ic_menu_save"
             app:tint="@color/viewer_on_dark" />
     </LinearLayout>

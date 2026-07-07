@@ -20,7 +20,9 @@ import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import android.app.ProgressDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.google.android.material.textfield.TextInputEditText
 
 class ResultViewerActivity : AppCompatActivity() {
 
@@ -82,6 +84,8 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
     private val reportScope = CoroutineScope(Dispatchers.Main)
+    private var pdfProgressDialog: androidx.appcompat.app.AlertDialog? = null
+    private val exportActions = mutableListOf<() -> Unit>()
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -160,7 +164,7 @@ class ResultViewerActivity : AppCompatActivity() {
             loadFrameData(currentFrameIndex)
             updateNavButtons()
         } else {
-            Toast.makeText(this, "No valid batch data found.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, R.string.no_batch_data, Toast.LENGTH_LONG).show()
         }
 
         btnPrevFrame.setOnClickListener {
@@ -237,30 +241,29 @@ class ResultViewerActivity : AppCompatActivity() {
             true
         }
 
-        val exportOptions = mutableListOf(
-            "Export Image (Current)",
-            "Export PDF Report",
-            "Export CSV (Current)"
-        )
+        val exportOptions = mutableListOf<String>()
+        exportActions.clear()
+        val exportLabels = resources.getStringArray(R.array.export_options)
+        exportOptions.add(exportLabels[0])
+        exportActions.add { exportMergedImage() }
+        exportOptions.add(exportLabels[1])
+        exportActions.add { generatePdfReport() }
+        exportOptions.add(exportLabels[2])
+        exportActions.add { exportToCSV() }
 
         if (batchFiles.size > 1) {
-            exportOptions.add("Export Images (Batch ZIP)")
-            exportOptions.add("Export Master Batch (CSV)")
+            exportOptions.add(exportLabels[3])
+            exportActions.add { exportAllImagesZip() }
+            exportOptions.add(exportLabels[4])
+            exportActions.add { exportAllDataCsv() }
         }
 
         val adapter = ArrayAdapter(this, R.layout.spinner_item_white, exportOptions)
-        // Dark popup background → white dropdown rows (was dark-on-dark before)
         adapter.setDropDownViewResource(R.layout.spinner_dropdown_white)
         spinnerExportType.adapter = adapter
 
         btnExportExecute.setOnClickListener {
-            when (spinnerExportType.selectedItem.toString()) {
-                "Export Image (Current)" -> exportMergedImage()
-                "Export PDF Report" -> generatePdfReport()
-                "Export CSV (Current)" -> exportToCSV()
-                "Export Images (Batch ZIP)" -> exportAllImagesZip()
-                "Export Master Batch (CSV)" -> exportAllDataCsv()
-            }
+            exportActions.getOrNull(spinnerExportType.selectedItemPosition)?.invoke()
         }
 
         imgMain.post {
@@ -490,69 +493,49 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     private fun showCoordinateInputDialog() {
-        val dialogView = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(64, 32, 64, 32)
-        }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_coordinate_input, null)
+        val etX = dialogView.findViewById<TextInputEditText>(R.id.etCoordX)
+        val etY = dialogView.findViewById<TextInputEditText>(R.id.etCoordY)
+        dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilCoordX).hint =
+            getString(R.string.coord_hint_x, imgW)
+        dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilCoordY).hint =
+            getString(R.string.coord_hint_y, imgH)
 
-        val etX = EditText(this).apply {
-            hint = "X Coordinate (0 to $imgW)"
-            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-        }
-
-        val etY = EditText(this).apply {
-            hint = "Y Coordinate (0 to $imgH)"
-            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-        }
-
-        dialogView.addView(etX)
-        dialogView.addView(etY)
-
-        android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Go to Pixel Coordinate")
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.coord_dialog_title)
             .setView(dialogView)
-            .setPositiveButton("Find") { _, _ ->
-                val x = etX.text.toString().toFloatOrNull()
-                val y = etY.text.toString().toFloatOrNull()
+            .setPositiveButton(R.string.find) { _, _ ->
+                val x = etX.text?.toString()?.toFloatOrNull()
+                val y = etY.text?.toString()?.toFloatOrNull()
 
                 if (x != null && y != null) {
                     if (x < 0 || x > imgW || y < 0 || y > imgH) {
-                        Toast.makeText(this, "Error: Coordinates out of bounds.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, R.string.coord_out_of_bounds, Toast.LENGTH_LONG).show()
                     } else {
                         if (!isInspectModeActive) toggleInspect.isChecked = true
                         findNearestDataPoint(x, y)
                     }
                 } else {
-                    Toast.makeText(this, "Invalid input.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.invalid_input, Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
     private fun showCustomScaleDialog() {
-        val dialogView = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(64, 32, 64, 32)
-        }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_custom_scale, null)
+        val etMax = dialogView.findViewById<TextInputEditText>(R.id.etScaleMax)
+        val etMin = dialogView.findViewById<TextInputEditText>(R.id.etScaleMin)
 
         val isStrain = currentDataIndex > 3
         val multiplier = if (isStrain) 1000f else 1f
-        val unitHint = if (isStrain) " (mε)" else " (px)"
+        val unit = getString(if (isStrain) R.string.scale_unit_strain else R.string.scale_unit_px)
 
-        val etMax = EditText(this).apply {
-            hint = "Max Value$unitHint"
-            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
-        }
-
-        val etMin = EditText(this).apply {
-            hint = "Min Value$unitHint"
-            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
-        }
+        dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilScaleMax).hint =
+            getString(R.string.scale_max_value, unit)
+        dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilScaleMin).hint =
+            getString(R.string.scale_min_value, unit)
 
         val existing = customBoundsMap[currentDataIndex]
         if (existing != null) {
@@ -560,30 +543,25 @@ class ResultViewerActivity : AppCompatActivity() {
             etMax.setText((existing.second * multiplier).toString())
         }
 
-        dialogView.addView(TextView(this).apply { text = "Maximum Value:"; setTextColor(Color.LTGRAY) })
-        dialogView.addView(etMax)
-        dialogView.addView(TextView(this).apply { text = "Minimum Value:"; setTextColor(Color.LTGRAY); setPadding(0, 32, 0, 0) })
-        dialogView.addView(etMin)
-
-        android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Custom Scale: $currentTypeString")
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.scale_dialog_title, currentTypeString))
             .setView(dialogView)
-            .setPositiveButton("Apply") { _, _ ->
-                val maxVal = etMax.text.toString().toFloatOrNull()
-                val minVal = etMin.text.toString().toFloatOrNull()
+            .setPositiveButton(R.string.apply) { _, _ ->
+                val maxVal = etMax.text?.toString()?.toFloatOrNull()
+                val minVal = etMin.text?.toString()?.toFloatOrNull()
 
                 if (maxVal != null && minVal != null && maxVal > minVal) {
                     customBoundsMap[currentDataIndex] = Pair(minVal / multiplier, maxVal / multiplier)
                     updateVisualization(currentDataIndex)
                 } else {
-                    Toast.makeText(this, "Invalid inputs.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, R.string.invalid_scale_inputs, Toast.LENGTH_LONG).show()
                 }
             }
-            .setNeutralButton("Auto-Scale") { _, _ ->
+            .setNeutralButton(R.string.auto_scale) { _, _ ->
                 customBoundsMap.remove(currentDataIndex)
                 updateVisualization(currentDataIndex)
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
@@ -626,11 +604,11 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun exportToCSV() {
         val data = rawData
         if (data == null) {
-            Toast.makeText(this, "No data to save.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.no_data_to_save, Toast.LENGTH_SHORT).show()
             return
         }
 
-        Toast.makeText(this, "Saving CSV locally...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.saving_csv, Toast.LENGTH_SHORT).show()
 
         Thread {
             val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
@@ -666,11 +644,11 @@ class ResultViewerActivity : AppCompatActivity() {
                     }
 
                     runOnUiThread {
-                        Toast.makeText(this@ResultViewerActivity, "✅ CSV Saved to Downloads/IndicVision", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@ResultViewerActivity, R.string.csv_saved, Toast.LENGTH_LONG).show()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save CSV", Toast.LENGTH_SHORT).show() }
+                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, R.string.csv_save_failed, Toast.LENGTH_SHORT).show() }
                 }
             }
         }.start()
@@ -678,20 +656,20 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun generatePdfReport() {
         if (isGeneratingHeatmap || cachedBaseImage == null) {
-            Toast.makeText(this, "Please wait for heatmap to finish...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.wait_for_heatmap, Toast.LENGTH_SHORT).show()
             return
         }
 
-        @Suppress("DEPRECATION")
-        val progressDialog = ProgressDialog(this).apply {
-            setTitle("Generating Master Report")
-            setMessage("Analyzing all fields...")
-            setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
-            max = 100
-            progress = 0
-            setCancelable(false)
-            show()
-        }
+        val progressView = layoutInflater.inflate(R.layout.dialog_pdf_progress, null)
+        val tvMessage = progressView.findViewById<TextView>(R.id.tvPdfProgressMessage)
+        val progressIndicator = progressView.findViewById<LinearProgressIndicator>(R.id.pdfProgressIndicator)
+
+        pdfProgressDialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.pdf_generating_title)
+            .setView(progressView)
+            .setCancelable(false)
+            .create()
+        pdfProgressDialog?.show()
 
         val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
         val fileName = "inDIC_MasterReport_${imgName}.pdf"
@@ -702,8 +680,8 @@ class ResultViewerActivity : AppCompatActivity() {
             }
 
             if (reportData == null) {
-                progressDialog.dismiss()
-                Toast.makeText(this@ResultViewerActivity, "❌ Failed to parse data.", Toast.LENGTH_SHORT).show()
+                pdfProgressDialog?.dismiss()
+                Toast.makeText(this@ResultViewerActivity, R.string.pdf_parse_failed, Toast.LENGTH_SHORT).show()
                 return@launch
             }
 
@@ -724,21 +702,22 @@ class ResultViewerActivity : AppCompatActivity() {
             PdfReportGenerator.generate(reportData, outputStream).collect { progress ->
                 when (progress) {
                     is PdfReportGenerator.Progress.Status -> {
-                        progressDialog.setMessage(progress.message)
-                        progressDialog.progress = progress.percent
+                        runOnUiThread {
+                            tvMessage.text = progress.message
+                            progressIndicator.progress = progress.percent
+                        }
                     }
                     is PdfReportGenerator.Progress.Complete -> {
                         kotlinx.coroutines.withContext(Dispatchers.IO) { outputStream.close() }
-                        progressDialog.dismiss()
-                        Toast.makeText(this@ResultViewerActivity, "✅ Master PDF Saved to Documents", Toast.LENGTH_LONG).show()
+                        pdfProgressDialog?.dismiss()
+                        Toast.makeText(this@ResultViewerActivity, R.string.pdf_saved, Toast.LENGTH_LONG).show()
 
-                        // Cleanup Bitmaps
                         reportData.fieldResults.forEach { it.bakedHeatmap.recycle() }
                     }
                     is PdfReportGenerator.Progress.Error -> {
                         kotlinx.coroutines.withContext(Dispatchers.IO) { outputStream.close() }
-                        progressDialog.dismiss()
-                        Toast.makeText(this@ResultViewerActivity, "❌ Error generating PDF", Toast.LENGTH_LONG).show()
+                        pdfProgressDialog?.dismiss()
+                        Toast.makeText(this@ResultViewerActivity, R.string.pdf_error, Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -956,11 +935,11 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun exportAllImagesZip() {
         if (batchFiles.isEmpty() || cachedBaseImage == null) {
-            Toast.makeText(this, "No data to save.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.no_data_to_save, Toast.LENGTH_SHORT).show()
             return
         }
 
-        Toast.makeText(this, "Generating Images ZIP locally... Please wait.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, R.string.saving_images_zip, Toast.LENGTH_LONG).show()
 
         Thread {
             val refName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch"
@@ -1012,22 +991,22 @@ class ResultViewerActivity : AppCompatActivity() {
                         }
                     }
                     runOnUiThread {
-                        Toast.makeText(this@ResultViewerActivity, "✅ Images ZIP Saved to Downloads/IndicVision", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@ResultViewerActivity, R.string.images_zip_saved, Toast.LENGTH_LONG).show()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save Images ZIP", Toast.LENGTH_SHORT).show() }
+                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, R.string.images_zip_failed, Toast.LENGTH_SHORT).show() }
                 }
             }
         }.start()
     }
     private fun exportAllDataCsv() {
         if (batchFiles.isEmpty()) {
-            Toast.makeText(this, "No data to save.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.no_data_to_save, Toast.LENGTH_SHORT).show()
             return
         }
 
-        Toast.makeText(this, "Generating Master Batch CSV locally... This may take a moment.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, R.string.saving_master_csv, Toast.LENGTH_LONG).show()
 
         Thread {
             val refName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch"
@@ -1074,11 +1053,11 @@ class ResultViewerActivity : AppCompatActivity() {
                         }
                     }
                     runOnUiThread {
-                        Toast.makeText(this@ResultViewerActivity, "✅ Master CSV Saved to Downloads/IndicVision", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@ResultViewerActivity, R.string.master_csv_saved, Toast.LENGTH_LONG).show()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save Master CSV", Toast.LENGTH_SHORT).show() }
+                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, R.string.master_csv_failed, Toast.LENGTH_SHORT).show() }
                 }
             }
         }.start()
@@ -1086,7 +1065,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun exportMergedImage() {
         if (isGeneratingHeatmap) {
-            Toast.makeText(this, "Please wait, Heatmap is drawing...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.heatmap_drawing_wait, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -1094,11 +1073,11 @@ class ResultViewerActivity : AppCompatActivity() {
         val overlay = cachedHeatmap
 
         if (base == null || overlay == null) {
-            Toast.makeText(this, "Error: Images missing from memory.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.export_images_missing, Toast.LENGTH_SHORT).show()
             return
         }
 
-        Toast.makeText(this, "Saving Image locally...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.saving_image, Toast.LENGTH_SHORT).show()
 
         Thread {
             try {
@@ -1138,12 +1117,12 @@ class ResultViewerActivity : AppCompatActivity() {
                 }
 
                 runOnUiThread {
-                    Toast.makeText(this@ResultViewerActivity, "✅ Saved to Pictures/IndicVision", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@ResultViewerActivity, R.string.image_saved, Toast.LENGTH_LONG).show()
                 }
 
             } catch (e: Exception) {
                 e.printStackTrace()
-                runOnUiThread { Toast.makeText(this@ResultViewerActivity, "❌ Failed to save Image", Toast.LENGTH_SHORT).show() }
+                runOnUiThread { Toast.makeText(this@ResultViewerActivity, R.string.image_save_failed, Toast.LENGTH_SHORT).show() }
             }
         }.start()
     }

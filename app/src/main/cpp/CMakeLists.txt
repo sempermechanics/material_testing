@@ -51,6 +51,16 @@ endforeach()
 # `python3` shims that otherwise abort OpenCV's configure step.
 set(OPENCV_PYTHON_SKIP_DETECTION ON CACHE BOOL "" FORCE)
 
+# Android APK native libs live inside a zip (base.apk!/lib/<abi>) — not a real
+# directory. OpenCV 4.5+ parallel/imgcodecs/videoio plugins try cv::glob() there
+# at runtime and log "could not open directory … glob_rec" on every call that
+# touches the parallel registry (even cv::resize). We link OpenMP statically
+# below, so disable all runtime plugin discovery.
+set(PARALLEL_ENABLE_PLUGINS OFF CACHE BOOL "" FORCE)
+set(VIDEOIO_ENABLE_PLUGINS OFF CACHE BOOL "" FORCE)
+set(IMGCODECS_ENABLE_PLUGINS OFF CACHE BOOL "" FORCE)
+set(HIGHGUI_ENABLE_PLUGINS OFF CACHE BOOL "" FORCE)
+
 # Build OpenCV with its OWN default flags (added before our aggressive flags).
 add_subdirectory(${OPENCV_SRC_DIR} ${CMAKE_BINARY_DIR}/opencv_build EXCLUDE_FROM_ALL)
 

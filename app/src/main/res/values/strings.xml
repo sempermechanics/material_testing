@@ -1,9 +1,156 @@
 <resources>
     <string name="app_name">inDIC</string>
+
+    <!-- Accessibility -->
     <string name="prev_frame">Previous frame</string>
     <string name="next_frame">Next frame</string>
+    <string name="export_execute">Export selected format</string>
+
+    <!-- Common actions -->
+    <string name="cancel">Cancel</string>
+    <string name="reset">Reset</string>
+    <string name="apply">Apply</string>
+    <string name="exit">Exit</string>
+    <string name="find">Find</string>
+    <string name="auto_scale">Auto-Scale</string>
+
+    <!-- ROI draw studio -->
+    <string name="roi_canvas_image">Reference image for ROI drawing</string>
+    <string name="roi_hud_select_tool">Select tool and draw</string>
+    <string name="roi_mode_rect">Rect</string>
+    <string name="roi_mode_square">Square</string>
+    <string name="roi_mode_circle">Circle</string>
+    <string name="roi_mode_ellipse">Ellipse</string>
+    <string name="roi_mode_freeform">Draw</string>
+    <string name="roi_erase_holes">Erase (holes)</string>
+    <string name="save_roi">Save ROI</string>
+    <string name="roi_decode_failed">Failed to decode image.</string>
+    <string name="roi_image_not_found">Image file not found.</string>
+    <string name="roi_hud_mode_switched">Switched to %1$s mode</string>
+    <string name="roi_hud_mode_erase">Mode: ERASE (holes)</string>
+    <string name="roi_hud_mode_draw">Mode: DRAW (material)</string>
+    <string name="roi_hud_canvas_cleared">Canvas cleared</string>
+    <string name="roi_hud_dimensions">ROI: %1$d × %2$d px  |  Pos: (%3$d, %4$d)</string>
+    <string name="roi_full_image_selected">Full image selected</string>
+    <string name="roi_invalid_size">Invalid ROI size</string>
+
+    <!-- Manual / mathematical ROI dialog -->
+    <string name="manual_roi_title">Define mathematical ROI</string>
+    <string name="manual_roi_select_shape">Select ROI shape</string>
+    <string name="manual_roi_x_offset">X offset (left)</string>
+    <string name="manual_roi_y_offset">Y offset (top)</string>
+    <string name="manual_roi_width">Width</string>
+    <string name="manual_roi_height">Height</string>
+    <string name="manual_roi_center_x">Center X</string>
+    <string name="manual_roi_center_y">Center Y</string>
+    <string name="manual_roi_radius">Radius</string>
+    <string name="manual_roi_radius_x">Radius X (horizontal)</string>
+    <string name="manual_roi_radius_y">Radius Y (vertical)</string>
+    <string name="manual_roi_point_1">Point 1 (top usually)</string>
+    <string name="manual_roi_point_2">Point 2 (bottom left)</string>
+    <string name="manual_roi_point_3">Point 3 (bottom right)</string>
+    <string name="manual_roi_x1">X1</string>
+    <string name="manual_roi_y1">Y1</string>
+    <string name="manual_roi_x2">X2</string>
+    <string name="manual_roi_y2">Y2</string>
+    <string name="manual_roi_x3">X3</string>
+    <string name="manual_roi_y3">Y3</string>
+    <string name="manual_roi_max_width">Max: %1$d</string>
+    <string name="manual_roi_max_height">Max: %1$d</string>
+    <string name="manual_roi_dims_positive">Dimensions must be positive.</string>
+    <string name="manual_roi_out_of_bounds">Shape is out of bounds.\nMax size: %1$d×%2$d.\nYour shape ends at: %3$d×%4$d</string>
+    <string name="manual_roi_complex_applied">Complex shape ROI applied</string>
+    <string name="manual_roi_rect_set">Rectangular ROI set: %1$d × %2$d px</string>
+    <string name="manual_roi_load_ref_first">Load a reference image first.</string>
+
+    <string-array name="manual_roi_shapes">
+        <item>Rectangle / square</item>
+        <item>Circle</item>
+        <item>Ellipse</item>
+        <item>Triangle</item>
+    </string-array>
+
+    <!-- Static analysis -->
+    <string name="analysis_running_back_blocked">Analysis running. Please wait or cancel first.</string>
+    <string name="exit_indic_title">Exit inDIC engine?</string>
+    <string name="exit_indic_message">Are you sure you want to leave? All uncalculated setup and ROI definitions will be lost.</string>
+    <string name="logout_wait_analysis">Please wait for analysis to finish before logging out.</string>
+    <string name="no_images_selected">No images selected</string>
+    <string name="failed_save_temp_file">Failed to save temporary file</string>
+    <string name="load_image_first">Load an image first.</string>
+    <string name="logout_title">Log out?</string>
+    <string name="logout_message">Are you sure you want to log out of inDIC on this device?</string>
+    <string name="jpeg_warning_ref">JPEG artifacts severely reduce DIC accuracy. Lossless PNG, TIFF, or RAW formats are recommended.</string>
+    <string name="jpeg_warning_batch">JPEG artifact compression detected in batch. This will reduce accuracy.</string>
+    <string name="failed_decode_raw">Failed to decode RAW image.</string>
+    <string name="failed_load_reference">Failed to load reference image. Please try another file.</string>
+    <string name="failed_load_mask">Failed to load ROI mask. Please try another file.</string>
+    <string name="mask_uploaded">Custom ROI mask uploaded</string>
+    <string name="mask_uploaded_button">Mask uploaded</string>
+    <string name="roi_too_small">ROI is too small. It must be larger than the subset size.</string>
+    <string name="analysis_failed_title">Analysis failed</string>
+    <string name="raw_png_loaded">Raw PNG loaded</string>
+    <string name="video_sampling_title">Video sampling</string>
+    <string name="video_read_failed">Could not read this video.</string>
+    <string name="video_extract_insufficient">Could not extract enough frames from this segment.</string>
+    <string name="video_read_error">Failed to read video: %1$s</string>
+    <string name="error_loading_images">Error loading images: %1$s</string>
+    <string name="video_loaded_frames">Video loaded: 1 reference + %1$d deformed frames</string>
+
+    <!-- Result viewer -->
+    <string name="no_batch_data">No valid batch data found.</string>
+    <string name="coord_dialog_title">Go to pixel coordinate</string>
+    <string name="coord_hint_x">X coordinate (0 to %1$d)</string>
+    <string name="coord_hint_y">Y coordinate (0 to %1$d)</string>
+    <string name="coord_out_of_bounds">Coordinates are out of bounds.</string>
+    <string name="invalid_input">Invalid input.</string>
+    <string name="scale_dialog_title">Custom scale: %1$s</string>
+    <string name="scale_max_value">Maximum value (%1$s)</string>
+    <string name="scale_min_value">Minimum value (%1$s)</string>
+    <string name="scale_unit_px">px</string>
+    <string name="scale_unit_strain">mε</string>
+    <string name="invalid_scale_inputs">Invalid scale inputs.</string>
+    <string name="no_data_to_save">No data to save.</string>
+    <string name="saving_csv">Saving CSV locally…</string>
+    <string name="csv_saved">CSV saved to Downloads/IndicVision</string>
+    <string name="csv_save_failed">Failed to save CSV</string>
+    <string name="wait_for_heatmap">Please wait for the heatmap to finish.</string>
+    <string name="pdf_generating_title">Generating master report</string>
+    <string name="pdf_analyzing_fields">Analyzing all fields…</string>
+    <string name="pdf_parse_failed">Failed to parse data.</string>
+    <string name="pdf_saved">Master PDF saved to Documents</string>
+    <string name="pdf_error">Error generating PDF</string>
+    <string name="saving_images_zip">Generating images ZIP locally. Please wait.</string>
+    <string name="images_zip_saved">Images ZIP saved to Downloads/IndicVision</string>
+    <string name="images_zip_failed">Failed to save images ZIP</string>
+    <string name="saving_master_csv">Generating master batch CSV locally. This may take a moment.</string>
+    <string name="master_csv_saved">Master CSV saved to Downloads/IndicVision</string>
+    <string name="master_csv_failed">Failed to save master CSV</string>
+    <string name="heatmap_drawing_wait">Please wait, heatmap is drawing…</string>
+    <string name="export_images_missing">Images missing from memory.</string>
+    <string name="saving_image">Saving image locally…</string>
+    <string name="image_saved">Saved to Pictures/IndicVision</string>
+    <string name="image_save_failed">Failed to save image</string>
+    <string name="frame_counter">Frame: %1$d / %2$d</string>
+
     <string-array name="interpolator_options">
-        <item>Bicubic (Fast)</item>
-        <item>Lanczos-6 (High Acc.)</item>
+        <item>Bicubic (fast)</item>
+        <item>Lanczos-6 (high acc.)</item>
+    </string-array>
+
+    <string-array name="result_field_options">
+        <item>U Displacement</item>
+        <item>V Displacement</item>
+        <item>Exx Strain</item>
+        <item>Eyy Strain</item>
+        <item>Exy Shear</item>
+    </string-array>
+
+    <string-array name="export_options">
+        <item>Export image (current)</item>
+        <item>Export PDF report</item>
+        <item>Export CSV (current)</item>
+        <item>Export images (batch ZIP)</item>
+        <item>Export master batch CSV</item>
     </string-array>
 </resources>

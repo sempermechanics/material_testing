@@ -28,6 +28,10 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
+
 import androidx.activity.OnBackPressedCallback
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -126,20 +130,21 @@ class StaticAnalysisActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 if (isProcessing) {
                     // Block the back button completely if the C++ engine is running
-                    Toast.makeText(this@StaticAnalysisActivity, "Analysis running! Please wait or cancel first.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@StaticAnalysisActivity, R.string.analysis_running_back_blocked, Toast.LENGTH_SHORT).show()
                 } else if (viewModel.wizardStep == 2) {
                     // On the settings page, back returns to the images page
                     goToStep(1, animate = true)
-                } else {
-                    // Show a warning popup before destroying the setup
+                } else if (viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty()) {
                     AlertDialog.Builder(this@StaticAnalysisActivity)
-                        .setTitle("Exit inDIC Engine?")
-                        .setMessage("Are you sure you want to leave? All uncalculated setup and ROI definitions will be lost.")
-                        .setPositiveButton("Exit") { _, _ ->
-                            finish() // Actually close the screen
+                        .setTitle(R.string.exit_indic_title)
+                        .setMessage(R.string.exit_indic_message)
+                        .setPositiveButton(R.string.exit) { _, _ ->
+                            finish()
                         }
-                        .setNegativeButton("Cancel", null) // Do nothing, stay on screen
+                        .setNegativeButton(R.string.cancel, null)
                         .show()
+                } else {
+                    finish()
                 }
             }
         })
@@ -210,7 +215,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // --- SECURE EXIT LISTENER ---
         btnLogout.setOnClickListener {
             if (isProcessing) {
-                Toast.makeText(this, "Please wait for analysis to finish before logging out.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.logout_wait_analysis, Toast.LENGTH_SHORT).show()
             } else {
                 showLogoutConfirmation()
             }
@@ -225,7 +230,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (uris.isNotEmpty()) {
                 handleDeformedBatch(uris)
             } else {
-                Toast.makeText(this, "No images selected", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.no_images_selected, Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -289,10 +294,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     roiStudioLauncher.launch(intent)
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    Toast.makeText(this, "Failed to save temp file", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.failed_save_temp_file, Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Toast.makeText(this, "Load an image first!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.load_image_first, Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -322,8 +327,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun showLogoutConfirmation() {
         AlertDialog.Builder(this)
-            .setTitle("Log Out?")
-            .setMessage("Are you sure you want to log out of inDIC on this device?")
+            .setTitle(R.string.logout_title)
+            .setMessage(R.string.logout_message)
             .setPositiveButton("Log Out") { _, _ ->
                 performLogout()
             }
@@ -364,7 +369,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val name = getFileName(uri)
 
         if (name.endsWith(".jpg", true) || name.endsWith(".jpeg", true)) {
-            Toast.makeText(this, "⚠️ WARNING: JPEG artifacts severely reduce DIC accuracy. Lossless PNG, TIFF, or RAW formats are recommended!", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, R.string.jpeg_warning_ref, Toast.LENGTH_LONG).show()
         }
 
         val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
@@ -387,7 +392,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         val ratio = 1000f / bitmap.width
                         previewBmp = android.graphics.Bitmap.createScaledBitmap(bitmap, 1000, (bitmap.height * ratio).toInt(), true)
                     } else {
-                        Toast.makeText(this, "Failed to decode RAW image.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, R.string.failed_decode_raw, Toast.LENGTH_SHORT).show()
                         return
                     }
                 } else {
@@ -413,7 +418,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             Log.e("StaticAnalysisActivity", "Failed to load reference image", e)
-            Toast.makeText(this, "Failed to load reference image. Please try another file.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, R.string.failed_load_reference, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -440,7 +445,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                     if (index == 0 && (originalName.endsWith(".jpg", true) || originalName.endsWith(".jpeg", true))) {
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(this@StaticAnalysisActivity, "⚠️ WARNING: JPEG artifact compression detected in batch. This will reduce accuracy.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(this@StaticAnalysisActivity, R.string.jpeg_warning_batch, Toast.LENGTH_LONG).show()
                         }
                     }
 
@@ -496,7 +501,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e("StaticAnalysis", "Error handling batch", e)
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@StaticAnalysisActivity, "Error loading images: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@StaticAnalysisActivity, getString(R.string.error_loading_images, e.message), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -551,7 +556,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
             if (meta.durationMs <= 0L) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@StaticAnalysisActivity, "Could not read this video.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@StaticAnalysisActivity, R.string.video_read_failed, Toast.LENGTH_LONG).show()
                 }
                 return@launch
             }
@@ -613,7 +618,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         refreshEstimate()
 
         AlertDialog.Builder(this)
-            .setTitle("Video Sampling")
+            .setTitle(R.string.video_sampling_title)
             .setView(view)
             .setPositiveButton("Extract") { _, _ ->
                 val fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1)
@@ -685,7 +690,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 if (viewModel.refBytes == null || defPaths.isEmpty()) {
                     withContext(Dispatchers.Main) {
                         hideComputeOverlay()
-                        Toast.makeText(this@StaticAnalysisActivity, "Couldn't extract enough frames from this segment.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@StaticAnalysisActivity, R.string.video_extract_insufficient, Toast.LENGTH_LONG).show()
                     }
                     return@launch
                 }
@@ -701,7 +706,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     checkReady()
                     Toast.makeText(
                         this@StaticAnalysisActivity,
-                        "Video loaded: 1 reference + ${defPaths.size} deformed frames",
+                        getString(R.string.video_loaded_frames, defPaths.size),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -709,7 +714,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 Log.e("StaticAnalysis", "Error extracting video frames", e)
                 withContext(Dispatchers.Main) {
                     hideComputeOverlay()
-                    Toast.makeText(this@StaticAnalysisActivity, "Failed to read video: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@StaticAnalysisActivity, getString(R.string.video_read_error, e.message), Toast.LENGTH_LONG).show()
                 }
             } finally {
                 try { retriever.release() } catch (_: Exception) {}
@@ -744,7 +749,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         if (finalRectW < subset || finalRectH < subset) {
-            Toast.makeText(this, "ROI is too small! Must be larger than subset.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, R.string.roi_too_small, Toast.LENGTH_LONG).show()
             return
         }
 
@@ -976,7 +981,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         tvResult.text = "❌ Error: $errorMsg"
 
                         android.app.AlertDialog.Builder(this@StaticAnalysisActivity)
-                            .setTitle("Analysis Failed")
+                            .setTitle(R.string.analysis_failed_title)
                             .setMessage(errorMsg)
                             .setPositiveButton("OK", null)
                             .show()
@@ -1048,8 +1053,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         try {
             contentResolver.openInputStream(uri)?.use { stream ->
                 viewModel.roiMaskBytes = stream.readBytes()
-                Toast.makeText(this, "Custom ROI Mask Uploaded!", Toast.LENGTH_SHORT).show()
-                btnLoadRoiMask.text = "Mask Uploaded ✅"
+                Toast.makeText(this, R.string.mask_uploaded, Toast.LENGTH_SHORT).show()
+                btnLoadRoiMask.text = getString(R.string.mask_uploaded_button)
                 // Success state via the design-system color, keeping the
                 // outlined Material shape intact.
                 (btnLoadRoiMask as? com.google.android.material.button.MaterialButton)?.let {
@@ -1061,7 +1066,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             Log.e("StaticAnalysisActivity", "Failed to load ROI mask", e)
-            Toast.makeText(this, "Failed to load ROI mask. Please try another file.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, R.string.failed_load_mask, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -1232,14 +1237,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
             viewModel.refName = "Ref: oht_cfrp_00.png"
 
             IndicVisionNativeLib.initializeReference(bytes, ByteArray(0), 400, 1040, false)
-            Toast.makeText(this, "Raw PNG Loaded", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.raw_png_loaded, Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
     private fun showShapeRoiDialog() {
         if (viewModel.refBytes == null) {
-            Toast.makeText(this, "Load Reference Image first!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.manual_roi_load_ref_first, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -1253,21 +1258,25 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val layoutEllipse = dialogView.findViewById<View>(R.id.layoutEllipse)
         val layoutTri = dialogView.findViewById<View>(R.id.layoutTri)
 
-        val etRectX = dialogView.findViewById<EditText>(R.id.etRectX)
-        val etRectY = dialogView.findViewById<EditText>(R.id.etRectY)
-        val etRectW = dialogView.findViewById<EditText>(R.id.etRectW)
-        val etRectH = dialogView.findViewById<EditText>(R.id.etRectH)
+        val etRectX = dialogView.findViewById<TextInputEditText>(R.id.etRectX)
+        val etRectY = dialogView.findViewById<TextInputEditText>(R.id.etRectY)
+        val etRectW = dialogView.findViewById<TextInputEditText>(R.id.etRectW)
+        val etRectH = dialogView.findViewById<TextInputEditText>(R.id.etRectH)
 
         etRectX.setText(viewModel.roiX.toString())
         etRectY.setText(viewModel.roiY.toString())
         etRectW.setText(if (viewModel.roiW > 0) viewModel.roiW.toString() else imgW.toString())
         etRectH.setText(if (viewModel.roiH > 0) viewModel.roiH.toString() else imgH.toString())
 
-        etRectW.hint = "Max: $imgW"
-        etRectH.hint = "Max: $imgH"
+        dialogView.findViewById<TextInputLayout>(R.id.tilRectW).helperText =
+            getString(R.string.manual_roi_max_width, imgW)
+        dialogView.findViewById<TextInputLayout>(R.id.tilRectH).helperText =
+            getString(R.string.manual_roi_max_height, imgH)
 
-        val shapes = arrayOf("Rectangle / Square", "Circle", "Ellipse", "Triangle")
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, shapes)
+        val shapes = resources.getStringArray(R.array.manual_roi_shapes)
+        spinner.adapter = ArrayAdapter(this, R.layout.spinner_item_white, shapes).apply {
+            setDropDownViewResource(R.layout.spinner_dropdown_white)
+        }
 
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p0: AdapterView<*>?, p1: View?, pos: Int, p3: Long) {
@@ -1279,11 +1288,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             override fun onNothingSelected(p0: AdapterView<*>?) {}
         }
 
-        val dialog = android.app.AlertDialog.Builder(this)
-            .setTitle("Define Mathematical ROI")
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.manual_roi_title)
             .setView(dialogView)
-            .setPositiveButton("Apply", null)
-            .setNegativeButton("Cancel", null)
+            .setPositiveButton(R.string.apply, null)
+            .setNegativeButton(R.string.cancel, null)
             .create()
 
         dialog.show()
@@ -1307,9 +1316,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
                 1 -> {
                     requiresMask = true
-                    val cx = dialogView.findViewById<EditText>(R.id.etCircCx).text.toString().toFloatOrNull() ?: (imgW/2f)
-                    val cy = dialogView.findViewById<EditText>(R.id.etCircCy).text.toString().toFloatOrNull() ?: (imgH/2f)
-                    val r = dialogView.findViewById<EditText>(R.id.etCircR).text.toString().toFloatOrNull() ?: 100f
+                    val cx = dialogView.findViewById<TextInputEditText>(R.id.etCircCx).text.toString().toFloatOrNull() ?: (imgW/2f)
+                    val cy = dialogView.findViewById<TextInputEditText>(R.id.etCircCy).text.toString().toFloatOrNull() ?: (imgH/2f)
+                    val r = dialogView.findViewById<TextInputEditText>(R.id.etCircR).text.toString().toFloatOrNull() ?: 100f
 
                     canvas.drawCircle(cx, cy, r, paint)
 
@@ -1320,10 +1329,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
                 2 -> {
                     requiresMask = true
-                    val cx = dialogView.findViewById<EditText>(R.id.etEllCx).text.toString().toFloatOrNull() ?: (imgW/2f)
-                    val cy = dialogView.findViewById<EditText>(R.id.etEllCy).text.toString().toFloatOrNull() ?: (imgH/2f)
-                    val rx = dialogView.findViewById<EditText>(R.id.etEllRx).text.toString().toFloatOrNull() ?: 150f
-                    val ry = dialogView.findViewById<EditText>(R.id.etEllRy).text.toString().toFloatOrNull() ?: 100f
+                    val cx = dialogView.findViewById<TextInputEditText>(R.id.etEllCx).text.toString().toFloatOrNull() ?: (imgW/2f)
+                    val cy = dialogView.findViewById<TextInputEditText>(R.id.etEllCy).text.toString().toFloatOrNull() ?: (imgH/2f)
+                    val rx = dialogView.findViewById<TextInputEditText>(R.id.etEllRx).text.toString().toFloatOrNull() ?: 150f
+                    val ry = dialogView.findViewById<TextInputEditText>(R.id.etEllRy).text.toString().toFloatOrNull() ?: 100f
 
                     canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, paint)
 
@@ -1334,12 +1343,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
                 3 -> {
                     requiresMask = true
-                    val x1 = dialogView.findViewById<EditText>(R.id.etTriX1).text.toString().toFloatOrNull() ?: 0f
-                    val y1 = dialogView.findViewById<EditText>(R.id.etTriY1).text.toString().toFloatOrNull() ?: 0f
-                    val x2 = dialogView.findViewById<EditText>(R.id.etTriX2).text.toString().toFloatOrNull() ?: 0f
-                    val y2 = dialogView.findViewById<EditText>(R.id.etTriY2).text.toString().toFloatOrNull() ?: 0f
-                    val x3 = dialogView.findViewById<EditText>(R.id.etTriX3).text.toString().toFloatOrNull() ?: 0f
-                    val y3 = dialogView.findViewById<EditText>(R.id.etTriY3).text.toString().toFloatOrNull() ?: 0f
+                    val x1 = dialogView.findViewById<TextInputEditText>(R.id.etTriX1).text.toString().toFloatOrNull() ?: 0f
+                    val y1 = dialogView.findViewById<TextInputEditText>(R.id.etTriY1).text.toString().toFloatOrNull() ?: 0f
+                    val x2 = dialogView.findViewById<TextInputEditText>(R.id.etTriX2).text.toString().toFloatOrNull() ?: 0f
+                    val y2 = dialogView.findViewById<TextInputEditText>(R.id.etTriY2).text.toString().toFloatOrNull() ?: 0f
+                    val x3 = dialogView.findViewById<TextInputEditText>(R.id.etTriX3).text.toString().toFloatOrNull() ?: 0f
+                    val y3 = dialogView.findViewById<TextInputEditText>(R.id.etTriY3).text.toString().toFloatOrNull() ?: 0f
 
                     val path = Path().apply { moveTo(x1, y1); lineTo(x2, y2); lineTo(x3, y3); close() }
                     canvas.drawPath(path, paint)
@@ -1353,9 +1362,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
             if (finalX < 0 || finalY < 0 || (finalX + finalW) > imgW || (finalY + finalH) > imgH || finalW <= 0 || finalH <= 0) {
                 val errorMsg = if (finalW <= 0 || finalH <= 0) {
-                    "Dimensions must be positive!"
+                    getString(R.string.manual_roi_dims_positive)
                 } else {
-                    "Shape is out of bounds!\nMax Size: ${imgW}x${imgH}.\nYour Shape Ends at: ${finalX+finalW}x${finalY+finalH}"
+                    getString(
+                        R.string.manual_roi_out_of_bounds,
+                        imgW, imgH, finalX + finalW, finalY + finalH
+                    )
                 }
                 Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
             } else {
@@ -1363,9 +1375,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     val stream = java.io.ByteArrayOutputStream()
                     maskBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
                     viewModel.roiMaskBytes = stream.toByteArray()
-                    tvInstruction.text = "✅ Complex Shape ROI Applied!"
+                    tvInstruction.text = getString(R.string.manual_roi_complex_applied)
                 } else {
-                    tvInstruction.text = "✅ Rectangular ROI Set: $finalW x $finalH px"
+                    tvInstruction.text = getString(R.string.manual_roi_rect_set, finalW, finalH)
                 }
 
                 viewModel.roiX = finalX; viewModel.roiY = finalY
