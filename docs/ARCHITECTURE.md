@@ -241,6 +241,43 @@ thread**; `SubsetData` buffers are reused across grid points via the
 
 ---
 
+## Native dependencies (git submodules, built from source)
+
+Both native libraries are **git submodules pinned to release tags**, not vendored
+binaries. Run `git submodule update --init --recursive` after cloning.
+
+| Dependency | Path | Version | How it's used |
+|---|---|---|---|
+| **Eigen** | `third_party/eigen` | 3.4.0 | header-only; added via `include_directories` |
+| **OpenCV** | `third_party/opencv` | 4.12.0 | **compiled from source** in the native build |
+
+**OpenCV from-source integration** (`app/src/main/cpp/CMakeLists.txt`):
+
+- `add_subdirectory(third_party/opencv …)` builds OpenCV as part of the app's
+  CMake project. A curated `BUILD_LIST` compiles only the modules the engine
+  uses — `core, imgproc, imgcodecs, features2d, calib3d, flann` — which keeps the
+  build to a few minutes per ABI instead of tens.
+- `BUILD_SHARED_LIBS OFF` → OpenCV is **statically linked** into
+  `libindicvision_core.so` (which is why it is ~10–22 MB per ABI). We link the
+  in-tree targets directly: `opencv_core opencv_imgproc opencv_imgcodecs
+  opencv_features2d opencv_calib3d opencv_flann`.
+- OpenCV's bundled 3rd-party image codecs (`zlib/png/jpeg/tiff/webp`) are built
+  in-tree, so `cv::imdecode` / `cv::imwrite` work with **no system libraries**.
+- OpenCV's in-tree targets don't export their header dirs, so the module
+  `include/` paths and the generated-header dir (`opencv_modules.hpp`,
+  `cvconfig.h` in `CMAKE_BINARY_DIR`) are added explicitly.
+- `OPENCV_PYTHON_SKIP_DETECTION ON` disables OpenCV's host-Python detection —
+  we build no bindings, so **no Python is required** (and it avoids broken
+  Windows `python3` shims aborting configure).
+- OpenCV compiles with its **own** default flags: `add_subdirectory` runs before
+  the engine's aggressive `-O3 -flto -ffast-math` flags are set, so those apply
+  to the DIC code only, not to OpenCV.
+
+The host test build ([TESTING.md](TESTING.md)) consumes OpenCV's universal-intrinsics
+header from the submodule source; the two generated headers it needs are
+committed under `app/src/test/cpp/shim/opencv2/` so host builds need no OpenCV
+configure.
+
 ## Build & ABI strategy
 
 - `app/build.gradle.kts`: no `abiFilters` — all four ABIs
@@ -252,3 +289,5 @@ thread**; `SubsetData` buffers are reused across grid points via the
 - Production flags: `-O3 -flto -ffast-math -fopenmp` — note `-ffast-math`
   disables NaN semantics; the code uses explicit sentinels (`-1.0f`, `-1000.0f`)
   instead of `std::isnan`. Preserve this convention.
+- 16 KB page alignment: `-Wl,-z,max-page-size=16384` on the shared lib for
+  Android 15+ devices.

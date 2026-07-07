@@ -46,15 +46,10 @@ foreach(_flag
     set(${_flag} OFF CACHE BOOL "" FORCE)
 endforeach()
 
-# OpenCV's CMake insists on detecting a host Python interpreter even when all
-# bindings are disabled. Point it at a working one to avoid broken Windows
-# `python3` shims (which report an empty version and abort configure).
-find_program(OPENCV_HOST_PYTHON NAMES python python3)
-if(OPENCV_HOST_PYTHON)
-    set(PYTHON_DEFAULT_EXECUTABLE "${OPENCV_HOST_PYTHON}" CACHE FILEPATH "" FORCE)
-    set(PYTHON_EXECUTABLE         "${OPENCV_HOST_PYTHON}" CACHE FILEPATH "" FORCE)
-    set(PYTHON3_EXECUTABLE        "${OPENCV_HOST_PYTHON}" CACHE FILEPATH "" FORCE)
-endif()
+# We build no Python bindings, so skip OpenCV's host-Python detection entirely.
+# This removes any Python dependency from the build and sidesteps broken Windows
+# `python3` shims that otherwise abort OpenCV's configure step.
+set(OPENCV_PYTHON_SKIP_DETECTION ON CACHE BOOL "" FORCE)
 
 # Build OpenCV with its OWN default flags (added before our aggressive flags).
 add_subdirectory(${OPENCV_SRC_DIR} ${CMAKE_BINARY_DIR}/opencv_build EXCLUDE_FROM_ALL)

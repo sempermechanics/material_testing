@@ -564,7 +564,7 @@ Both native dependencies are **git submodules pinned to release tags**:
 - **Eigen** → `app/src/main/cpp/third_party/eigen` @ **3.4.0** (header-only)
 - **OpenCV** → `app/src/main/cpp/third_party/opencv` @ **4.12.0**, **compiled from source** as part of the native build (only the modules the engine uses: core, imgproc, imgcodecs, features2d, calib3d, flann; its bundled 3rd-party image codecs are built in-tree, so no system libraries are required).
 
-> **Build-time note:** Because OpenCV is built from source, the **first** native build compiles OpenCV once per ABI and is slow (tens of minutes, ×4 ABIs). Subsequent builds are incremental (ninja caches the OpenCV objects). Building OpenCV also requires a working host **Python 3** on `PATH` (used only by OpenCV's CMake).
+> **Build-time note:** Because OpenCV is built from source, the **first** native build compiles OpenCV once per ABI and is slower than a prebuilt SDK (a few minutes per ABI with the curated module list). Subsequent builds are incremental (ninja caches the OpenCV objects). No Python is required — OpenCV's Python detection is disabled in `CMakeLists.txt` since no bindings are built.
 
 -----
 
@@ -617,8 +617,7 @@ To enable **Continue with Google**, complete the Google Cloud + Supabase setup i
 ### Common Build Issues
 
   - **OpenCV headers not found / submodule empty** — run `git submodule update --init --recursive`. OpenCV is built from source at `app/src/main/cpp/third_party/opencv` via `add_subdirectory` in `CMakeLists.txt`.
-  - **OpenCV configure fails on Python detection** (`find_package called with invalid argument OFF`) — a broken `python3` shim was found. Ensure a real **Python 3** is on `PATH`; `CMakeLists.txt` points OpenCV at it via `find_program`.
-  - **First native build is very slow** — expected: OpenCV compiles from source once per ABI. Subsequent builds are cached by ninja.
+  - **First native build is slow** — expected: OpenCV compiles from source once per ABI. Subsequent builds are cached by ninja. (No Python is needed; `OPENCV_PYTHON_SKIP_DETECTION` is set.)
   - **`ANDROID_NDK not set`** — Open SDK Manager → SDK Tools → Install NDK (Side by side, r27+). Gradle picks it up automatically; you can pin it via `ndkVersion` in `app/build.gradle.kts`.
   - **`arm_neon.h not found`** — Should not occur: the engine no longer includes `arm_neon.h` unconditionally. SIMD goes through OpenCV universal intrinsics (`core/SimdKernels.h`), which compile for every ABI. If you reintroduce raw NEON, guard the include with `#if defined(__aarch64__)`.
   - **App crashes only on the emulator (native)** — Ensure you're on the current build: all ABIs are compiled, so x86/x86_64 emulators run the native engine natively. (Historically this was an `arm64-v8a`-only `abiFilter` — now removed.)

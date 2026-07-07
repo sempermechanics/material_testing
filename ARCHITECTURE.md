@@ -43,10 +43,19 @@
 |-------|-----------|---------|
 | **UI** | Kotlin + MVVM | State management, lifecycle safety |
 | **Bridge** | JNI (C-API) | Zero-copy image passing |
-| **Math Engine** | C++17 + Eigen | ICGN optimization, linear algebra |
-| **Image Processing** | OpenCV 4.x | Decoding, gradients, interpolation |
+| **Math Engine** | C++17 + Eigen 3.4.0 | ICGN optimization, linear algebra |
+| **Image Processing** | OpenCV 4.12.0 | Decoding, gradients, interpolation |
 | **Parallelism** | OpenMP 4.5 | Multi-core CPU utilization |
-| **Build System** | CMake 3.18+ | Cross-platform native compilation |
+| **Build System** | CMake 3.22 + NDK r27+ | Cross-platform native compilation, all ABIs |
+
+> **Native dependencies are git submodules built from source**, not vendored
+> binaries. **Eigen** (`third_party/eigen` @ 3.4.0) is header-only; **OpenCV**
+> (`third_party/opencv` @ 4.12.0) is compiled from source in the native build
+> via CMake `add_subdirectory` with a curated module list (core, imgproc,
+> imgcodecs, features2d, calib3d, flann) and statically linked into
+> `libindicvision_core.so`. Run `git submodule update --init --recursive` after
+> cloning. See [docs/ARCHITECTURE.md → Native dependencies](docs/ARCHITECTURE.md#native-dependencies-git-submodules-built-from-source)
+> for the full CMake integration.
 
 ---
 
