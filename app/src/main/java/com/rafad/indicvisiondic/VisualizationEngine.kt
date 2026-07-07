@@ -58,9 +58,9 @@ object VisualizationEngine {
 
         val validValues = mutableListOf<Float>()
 
-        for (i in data.indices step 8) {
-            val corr = data[i + 7]
-            if (corr != 0f && corr <= 0.15f) { // 🚀 Tighter correlation gate
+        for (i in data.indices step DicResult.STRIDE) {
+            val corr = data[i + DicResult.IDX_ZNSSD]
+            if (DicResult.isAcceptedPoint(corr)) {
                 val x = data[i].toInt()
                 val y = data[i+1].toInt()
                 val v = data[i+valIndex]
@@ -96,9 +96,9 @@ object VisualizationEngine {
         val rows = ((maxY - minY) / step) + 1
         val grid = FloatArray(cols * rows) { Float.NaN }
 
-        for (i in data.indices step 8) {
-            val corr = data[i + 7]
-            if (corr != 0f && corr <= 0.15f) { // 🚀 Tighter correlation gate
+        for (i in data.indices step DicResult.STRIDE) {
+            val corr = data[i + DicResult.IDX_ZNSSD]
+            if (DicResult.isAcceptedPoint(corr)) {
                 val x = data[i].toInt()
                 val y = data[i+1].toInt()
                 val c = (x - minX) / step

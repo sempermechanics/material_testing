@@ -11,15 +11,15 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.rafad.indicvisiondic.ui.Insets
 import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.android.material.textfield.TextInputEditText
@@ -67,8 +67,8 @@ class ResultViewerActivity : AppCompatActivity() {
     private var batchFiles: List<File> = emptyList()
     private var originalDefNames: List<String> = emptyList()
     private var currentFrameIndex = 0
-    private var loadingJob: Thread? = null
-    private var loadVersion = 0
+    private var loadFrameJob: Job? = null
+    private var visualizationJob: Job? = null
 
     // States
     private var currentDataIndex = 2
@@ -83,7 +83,6 @@ class ResultViewerActivity : AppCompatActivity() {
     private var currentHeatmapMax = 0f
 
     private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
-    private val reportScope = CoroutineScope(Dispatchers.Main)
     private var pdfProgressDialog: androidx.appcompat.app.AlertDialog? = null
     private val exportActions = mutableListOf<() -> Unit>()
 
@@ -278,7 +277,9 @@ class ResultViewerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        loadingJob?.interrupt()
+        loadFrameJob?.cancel()
+        visualizationJob?.cancel()
+        pdfProgressDialog?.dismiss()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -290,57 +291,39 @@ class ResultViewerActivity : AppCompatActivity() {
         outState.putInt("CURRENT_FRAME", currentFrameIndex)
     }
 
-    // 🚀 NEW: Smart Mathematical Formatter
-    private fun formatMetric(value: Float): String {
-        val absVal = kotlin.math.abs(value)
-        return if (absVal > 0f && (absVal < 0.001f || absVal >= 10000f)) {
-            String.format("%.2e", value)
-        } else {
-            String.format("%.5f", value)
-        }
+    private fun computeMaxMinIndices(): Pair<Int, Int> {
+        val data = rawData ?: return -1 to -1
+        val extrema = ReportBuilder.computeFieldExtrema(data, currentDataIndex, absoluteStrainValues = false)
+        return extrema.maxIdx to extrema.minIdx
     }
 
     private fun loadFrameData(index: Int) {
         if (index < 0 || index >= batchFiles.size) return
 
-        loadingJob?.interrupt()
-        loadVersion++
-        val myVersion = loadVersion
-
-        loadingJob = Thread {
+        loadFrameJob?.cancel()
+        loadFrameJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val file = batchFiles[index]
-                if (Thread.currentThread().isInterrupted) return@Thread
-
-                val bytes = file.readBytes()
-
-                if (bytes.size % 32 != 0) {
-                    Log.e("ResultViewer", "Invalid file size for frame $index: ${bytes.size} bytes")
-                    return@Thread
+                val data = DicResult.decodeDatBytes(file.readBytes())
+                if (data == null) {
+                    Log.e("ResultViewer", "Invalid file size for frame $index")
+                    return@launch
                 }
 
-                val newData = FloatArray(bytes.size / 4)
-                ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder())
-                    .asFloatBuffer().get(newData)
-
-                runOnUiThread {
-                    if (myVersion == loadVersion) {
-                        rawData = newData
-                        val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
-                        tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
-                        updateVisualization(currentDataIndex)
-                        if (isMaxMinActive) calculateMaxMin()
-                        if (isInspectModeActive && lastClosestIdx != -1) refreshCrosshairs()
-                    }
+                withContext(Dispatchers.Main) {
+                    rawData = data
+                    val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
+                    tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
+                    updateVisualization(currentDataIndex)
+                    if (isMaxMinActive) calculateMaxMin()
+                    if (isInspectModeActive && lastClosestIdx != -1) refreshCrosshairs()
                 }
-            } catch (e: InterruptedException) {
-                // Task cancelled
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    Log.e("ResultViewer", "Failed to load frame $index", e)
+                }
             }
         }
-
-        loadingJob?.start()
     }
 
     private fun updateStickyScaleBar() {
@@ -363,52 +346,6 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    private fun computeMaxMinIndices(): Pair<Int, Int> {
-        val data = rawData ?: return -1 to -1
-        var maxV = -Float.MAX_VALUE
-        var minV = Float.MAX_VALUE
-        var maxIdx = -1
-        var minIdx = -1
-
-        val validValues = mutableListOf<Float>()
-        for (i in data.indices step 8) {
-            val corr = data[i + 7]
-            if (corr != 0f && corr <= 0.15f) {
-                validValues.add(data[i + currentDataIndex])
-            }
-        }
-
-        if (validValues.isEmpty()) return -1 to -1
-
-        validValues.sort()
-        val p02 = validValues[(validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)]
-        val p98 = validValues[(validValues.size * 0.98).toInt().coerceIn(0, validValues.size - 1)]
-
-        for (i in data.indices step 8) {
-            val corr = data[i + 7]
-            if (corr != 0f && corr <= 0.15f) {
-                val v = data[i + currentDataIndex]
-                if (v in p02..p98) {
-                    if (v > maxV) { maxV = v; maxIdx = i }
-                    if (v < minV) { minV = v; minIdx = i }
-                }
-            }
-        }
-
-        if (maxIdx == -1 || minIdx == -1) {
-            for (i in data.indices step 8) {
-                val corr = data[i + 7]
-                if (corr != 0f && corr <= 0.15f) {
-                    val v = data[i + currentDataIndex]
-                    if (v > maxV) { maxV = v; maxIdx = i }
-                    if (v < minV) { minV = v; minIdx = i }
-                }
-            }
-        }
-
-        return maxIdx to minIdx
-    }
-
     private fun calculateMaxMin() {
         val (maxIdx, minIdx) = computeMaxMinIndices()
         lastMaxIdx = maxIdx
@@ -423,14 +360,14 @@ class ResultViewerActivity : AppCompatActivity() {
         val searchRadius = step * 1.5f
         val searchRadiusSq = searchRadius * searchRadius
 
-        for (i in data.indices step 8) {
+        for (i in data.indices step DicResult.STRIDE) {
             val dx = data[i] - physX
-            val dy = data[i+1] - physY
+            val dy = data[i + 1] - physY
             val distSq = dx * dx + dy * dy
 
             if (distSq < minDistSq && distSq <= searchRadiusSq) {
-                val corr = data[i + 7]
-                if (corr != 0f && corr <= 0.15f) {
+                val corr = data[i + DicResult.IDX_ZNSSD]
+                if (DicResult.isAcceptedPoint(corr)) {
                     minDistSq = distSq
                     closestIdx = i
                 }
@@ -444,8 +381,8 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun refreshCrosshairs() {
         val data = rawData ?: return
 
-        val isStrain = currentDataIndex > 3
-        val multiplier = if (isStrain) 1000f else 1f
+        val isStrain = DicResult.isStrainFieldIndex(currentDataIndex)
+        val multiplier = DicResult.strainMultiplier(currentDataIndex)
         val unit = if (isStrain) "mε" else "px"
 
         if (isInspectModeActive) {
@@ -456,7 +393,7 @@ class ResultViewerActivity : AppCompatActivity() {
                 val actualY = data[lastClosestIdx + 1].toInt()
                 val value = data[lastClosestIdx + currentDataIndex] * multiplier
 
-                tvInspectorData.text = "Loc: ($actualX, $actualY)\n$currentTypeString: ${formatMetric(value)} $unit"
+                tvInspectorData.text = "Loc: ($actualX, $actualY)\n$currentTypeString: ${ReportBuilder.formatMetric(value)} $unit"
 
                 val pts = floatArrayOf(actualX.toFloat(), actualY.toFloat())
                 imgMain.imageMatrix.mapPoints(pts)
@@ -484,7 +421,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
             glassShield.updateMaxMinPositions(ptsMax[0], ptsMax[1], ptsMin[0], ptsMin[1])
 
-            tvMaxMinData.text = "🔴 MAX: ($maxX, $maxY) = ${formatMetric(maxV)} $unit\n🔵 MIN: ($minX, $minY) = ${formatMetric(minV)} $unit"
+            tvMaxMinData.text = "🔴 MAX: ($maxX, $maxY) = ${ReportBuilder.formatMetric(maxV)} $unit\n🔵 MIN: ($minX, $minY) = ${ReportBuilder.formatMetric(minV)} $unit"
             cardMaxMinHud.visibility = View.VISIBLE
         } else {
             glassShield.hideMaxMin()
@@ -528,8 +465,8 @@ class ResultViewerActivity : AppCompatActivity() {
         val etMax = dialogView.findViewById<TextInputEditText>(R.id.etScaleMax)
         val etMin = dialogView.findViewById<TextInputEditText>(R.id.etScaleMin)
 
-        val isStrain = currentDataIndex > 3
-        val multiplier = if (isStrain) 1000f else 1f
+        val isStrain = DicResult.isStrainFieldIndex(currentDataIndex)
+        val multiplier = DicResult.strainMultiplier(currentDataIndex)
         val unit = getString(if (isStrain) R.string.scale_unit_strain else R.string.scale_unit_px)
 
         dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilScaleMax).hint =
@@ -572,7 +509,8 @@ class ResultViewerActivity : AppCompatActivity() {
         val forceMin = customBoundsMap[index]?.first
         val forceMax = customBoundsMap[index]?.second
 
-        Thread {
+        visualizationJob?.cancel()
+        visualizationJob = lifecycleScope.launch(Dispatchers.Default) {
             val result = VisualizationEngine.generateHeatmap(
                 data, imgW, imgH, index, step, forceMin, forceMax
             )
@@ -581,7 +519,11 @@ class ResultViewerActivity : AppCompatActivity() {
             val actualMin = result.second
             val actualMax = result.third
 
-            runOnUiThread {
+            val isStrain = DicResult.isStrainFieldIndex(index)
+            val multiplier = DicResult.strainMultiplier(index)
+            val unit = if (isStrain) " [mε]" else " px"
+
+            withContext(Dispatchers.Main) {
                 cachedHeatmap = heatmap
                 imgHeatmap.setImageBitmap(heatmap)
                 imgHeatmap.imageMatrix = imgMain.getZoomMatrix()
@@ -590,15 +532,11 @@ class ResultViewerActivity : AppCompatActivity() {
                 currentHeatmapMin = actualMin
                 currentHeatmapMax = actualMax
 
-                val isStrain = index > 3
-                val multiplier = if (isStrain) 1000f else 1f
-                val unit = if (isStrain) " [mε]" else " px"
-
-                tvScaleMax.text = "Max: ${formatMetric(actualMax * multiplier)}$unit"
-                tvScaleMin.text = "Min: ${formatMetric(actualMin * multiplier)}$unit"
+                tvScaleMax.text = "Max: ${ReportBuilder.formatMetric(actualMax * multiplier)}$unit"
+                tvScaleMin.text = "Min: ${ReportBuilder.formatMetric(actualMin * multiplier)}$unit"
                 isGeneratingHeatmap = false
             }
-        }.start()
+        }
     }
 
     private fun exportToCSV() {
@@ -610,7 +548,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         Toast.makeText(this, R.string.saving_csv, Toast.LENGTH_SHORT).show()
 
-        Thread {
+        lifecycleScope.launch(Dispatchers.IO) {
             val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
             val fileName = "IndicVision_${imgName}.csv"
             val contentValues = ContentValues().apply {
@@ -630,28 +568,34 @@ class ResultViewerActivity : AppCompatActivity() {
 
                         var i = 0
                         while (i < data.size) {
-                            val x = data[i]; val y = data[i+1]
-                            val u = data[i+2]; val v = data[i+3]
-                            val exx = data[i+4]; val eyy = data[i+5]; val exy = data[i+6]
-                            val c = data[i+7]
+                            val x = data[i]
+                            val y = data[i + 1]
+                            val u = data[i + DicResult.IDX_U]
+                            val v = data[i + DicResult.IDX_V]
+                            val exx = data[i + DicResult.IDX_EXX]
+                            val eyy = data[i + DicResult.IDX_EYY]
+                            val exy = data[i + DicResult.IDX_EXY]
+                            val c = data[i + DicResult.IDX_ZNSSD]
 
                             if (c != 0f) {
                                 writer.write("$x,$y,$u,$v,$exx,$eyy,$exy,$c\n")
                             }
-                            i += 8
+                            i += DicResult.STRIDE
                         }
                         writer.flush()
                     }
 
-                    runOnUiThread {
+                    withContext(Dispatchers.Main) {
                         Toast.makeText(this@ResultViewerActivity, R.string.csv_saved, Toast.LENGTH_LONG).show()
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
-                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, R.string.csv_save_failed, Toast.LENGTH_SHORT).show() }
+                    Log.e("ResultViewer", "CSV export failed", e)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ResultViewerActivity, R.string.csv_save_failed, Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
-        }.start()
+        }
     }
 
     private fun generatePdfReport() {
@@ -674,8 +618,8 @@ class ResultViewerActivity : AppCompatActivity() {
         val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
         val fileName = "inDIC_MasterReport_${imgName}.pdf"
 
-        reportScope.launch {
-            val reportData = kotlinx.coroutines.withContext(Dispatchers.Default) {
+        lifecycleScope.launch {
+            val reportData = withContext(Dispatchers.Default) {
                 buildReportData()
             }
 
@@ -685,7 +629,7 @@ class ResultViewerActivity : AppCompatActivity() {
                 return@launch
             }
 
-            val (uri, outputStream) = kotlinx.coroutines.withContext(Dispatchers.IO) {
+            val (uri, outputStream) = withContext(Dispatchers.IO) {
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
@@ -708,14 +652,14 @@ class ResultViewerActivity : AppCompatActivity() {
                         }
                     }
                     is PdfReportGenerator.Progress.Complete -> {
-                        kotlinx.coroutines.withContext(Dispatchers.IO) { outputStream.close() }
+                        withContext(Dispatchers.IO) { outputStream.close() }
                         pdfProgressDialog?.dismiss()
                         Toast.makeText(this@ResultViewerActivity, R.string.pdf_saved, Toast.LENGTH_LONG).show()
 
                         reportData.fieldResults.forEach { it.bakedHeatmap.recycle() }
                     }
                     is PdfReportGenerator.Progress.Error -> {
-                        kotlinx.coroutines.withContext(Dispatchers.IO) { outputStream.close() }
+                        withContext(Dispatchers.IO) { outputStream.close() }
                         pdfProgressDialog?.dismiss()
                         Toast.makeText(this@ResultViewerActivity, R.string.pdf_error, Toast.LENGTH_LONG).show()
                     }
@@ -728,203 +672,37 @@ class ResultViewerActivity : AppCompatActivity() {
         val baseImg = cachedBaseImage ?: return null
         val data = rawData ?: return null
 
-        val fieldNames = listOf("U Displacement", "V Displacement", "Exx Strain", "Eyy Strain", "Exy Shear", "ZNSSD (Correlation Quality)")
-        val fieldKeys = listOf("U", "V", "Exx", "Eyy", "Exy", "ZNSSD")
-        val fieldResults = mutableListOf<FieldResult>()
-        var correlationHeatmap: Bitmap? = null
-
-        for (fieldIndex in 0..5) {
-            val dataIndex = fieldIndex + 2
-            val isStrain = dataIndex in 4..6
-            val isCorrelation = dataIndex == 7
-
-            val multiplier = if (isStrain) 1000f else 1f
-            val unit = if (isStrain) "mε" else if (isCorrelation) "" else "px"
-            val meanTypeString = if (isStrain) "Mean Absolute" else "Simple Mean"
-
-            var maxV = -Float.MAX_VALUE
-            var minV = Float.MAX_VALUE
-            var maxIdx = -1
-            var minIdx = -1
-            val validValues = mutableListOf<Float>()
-
-            for (i in data.indices step 8) {
-                val corr = data[i + 7]
-                if (isCorrelation || (corr != 0f && corr <= 0.15f)) {
-                    val rawVal = data[i + dataIndex]
-                    val valToAvg = if (isStrain) kotlin.math.abs(rawVal) else rawVal
-                    validValues.add(valToAvg)
-                }
-            }
-            if (validValues.isEmpty()) continue
-
-            validValues.sort()
-            val p02 = validValues[(validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)]
-            val p98 = validValues[(validValues.size * 0.98).toInt().coerceIn(0, validValues.size - 1)]
-
-            for (i in data.indices step 8) {
-                val corr = data[i + 7]
-                if (isCorrelation || (corr != 0f && corr <= 0.15f)) {
-                    val rawVal = data[i + dataIndex]
-                    val valToCheck = if (isStrain) kotlin.math.abs(rawVal) else rawVal
-
-                    if (valToCheck in p02..p98) {
-                        if (valToCheck > maxV) { maxV = valToCheck; maxIdx = i }
-                        if (valToCheck < minV) { minV = valToCheck; minIdx = i }
-                    }
-                }
-            }
-
-            if (maxIdx == -1 || minIdx == -1) {
-                for (i in data.indices step 8) {
-                    val corr = data[i + 7]
-                    if (isCorrelation || (corr != 0f && corr <= 0.15f)) {
-                        val rawVal = data[i + dataIndex]
-                        val valToCheck = if (isStrain) kotlin.math.abs(rawVal) else rawVal
-                        if (valToCheck > maxV) { maxV = valToCheck; maxIdx = i }
-                        if (valToCheck < minV) { minV = valToCheck; minIdx = i }
-                    }
-                }
-            }
-
-            val mean = validValues.average().toFloat()
-            val stdDev = kotlin.math.sqrt(validValues.map { (it - mean) * (it - mean) }.average()).toFloat()
-
-            val (heatmapBmp, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
-                data, imgW, imgH, dataIndex, step, null, null
-            )
-
-            val bakedHeatmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888).also { bmp ->
-                val tempCanvas = Canvas(bmp)
-                tempCanvas.drawBitmap(baseImg, 0f, 0f, null)
-                tempCanvas.drawBitmap(heatmapBmp, 0f, 0f, Paint().apply { alpha = 180 })
-                bakeAnnotationsToCanvas(tempCanvas, imgW, imgH, actualMin, actualMax, fieldKeys[fieldIndex], unit, maxIdx, minIdx, data)
-            }.compressForPdf()
-
-            heatmapBmp.recycle()
-
-            if (isCorrelation) {
-                correlationHeatmap = bakedHeatmap
-            } else {
-                fieldResults.add(FieldResult(
-                    fieldName = fieldNames[fieldIndex], fieldKey = fieldKeys[fieldIndex], unit = unit,
-                    minValue = actualMin * multiplier, maxValue = actualMax * multiplier,
-                    meanValue = mean * multiplier, stdDevValue = stdDev * multiplier,
-                    meanType = meanTypeString,
-                    minCoordX = data[minIdx].toInt(), minCoordY = data[minIdx + 1].toInt(),
-                    maxCoordX = data[maxIdx].toInt(), maxCoordY = data[maxIdx + 1].toInt(),
-                    bakedHeatmap = bakedHeatmap
-                ))
-            }
-        }
-
         val statsArray = intent.getFloatArrayExtra("ENGINE_STATS") ?: FloatArray(16)
         val engineStats = if (statsArray.size >= 16) {
             EngineStats.fromArray(statsArray)
         } else {
-            EngineStats(0,0,0,0,0,0,0,0,0f,0f,0f,0f,0f,0f,0f,0f)
+            EngineStats(0, 0, 0, 0, 0, 0, 0, 0, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
         }
 
-        var totalZnssd = 0.0f
-        var validPointCount = 0
-        for (i in data.indices step 8) {
-            val corr = data[i + 7]
-            if (corr != 0f && corr <= 0.15f) {
-                totalZnssd += corr
-                validPointCount++
-            }
-        }
-        val actualGlobalZnssd = if (validPointCount > 0) totalZnssd / validPointCount else 0.0f
+        val realDefImg = currentDefPath?.let { BitmapFactory.decodeFile(it) } ?: baseImg
 
-        val realDefImg = currentDefPath?.let { path ->
-            BitmapFactory.decodeFile(path)?.compressForPdf()
-        } ?: baseImg.compressForPdf()
-
-        return ReportData(
-            sessionId = intent.getStringExtra("SESSION_ID") ?: "Local_Offline_Mode",
-            specimenName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch Analysis",
-            analysisDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
-            subsetSize = intent.getIntExtra("SUBSET_SIZE", 41),
-            stepSize = step,
-            strainWindow = intent.getIntExtra("STRAIN_WINDOW", 15),
-            strainMethod = intent.getStringExtra("STRAIN_METHOD") ?: "VSG",
-
-            roiData = RoiData(roiX, roiY, roiW, roiH),
-            referenceImage = baseImg.compressForPdf(),
-            deformedImage = realDefImg,
-
-            referenceImageName = intent.getStringExtra("REF_NAME") ?: "reference.png",
-            deformedImageName = originalDefNames.getOrNull(currentFrameIndex) ?: "Frame_${currentFrameIndex + 1}",
-
-            fieldResults = fieldResults,
-            engineStats = engineStats,
-
-            znssdHeatmap = correlationHeatmap ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
-            solverPathMap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
-            globalAvgZnssd = actualGlobalZnssd
+        return ReportBuilder.buildReport(
+            ReportBuilder.ReportBuildParams(
+                data = data,
+                baseImg = baseImg,
+                defImgForCover = realDefImg,
+                imgW = imgW,
+                imgH = imgH,
+                step = step,
+                sessionId = intent.getStringExtra("SESSION_ID") ?: "Local_Offline_Mode",
+                specimenName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch Analysis",
+                analysisDate = ReportBuilder.currentAnalysisDate(),
+                subsetSize = intent.getIntExtra("SUBSET_SIZE", 41),
+                strainWindow = intent.getIntExtra("STRAIN_WINDOW", 15),
+                strainMethod = intent.getStringExtra("STRAIN_METHOD") ?: "VSG",
+                roiData = RoiData(roiX, roiY, roiW, roiH),
+                engineStats = engineStats,
+                referenceImageName = intent.getStringExtra("REF_NAME") ?: "reference.png",
+                deformedImageName = originalDefNames.getOrNull(currentFrameIndex) ?: "Frame_${currentFrameIndex + 1}",
+            )
         )
     }
 
-    private fun bakeAnnotationsToCanvas(canvas: Canvas, width: Int, height: Int, minValRaw: Float, maxValRaw: Float,
-                                        typeString: String, unit: String, maxIdx: Int, minIdx: Int, dataArray: FloatArray) {
-        val multiplier = if (unit == "mε") 1000f else 1f
-        val maxVal = maxValRaw * multiplier
-        val minVal = minValRaw * multiplier
-
-        val textSize = width * 0.025f
-        val padding = width * 0.02f
-
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; this.textSize = textSize; typeface = Typeface.DEFAULT_BOLD; setShadowLayer(4f, 2f, 2f, Color.BLACK) }
-        val bgPaint = Paint().apply { color = Color.argb(160, 0, 0, 0) }
-
-        val infoText = arrayOf("inDIC Analysis Report", "Field: $typeString [$unit]", "Max: ${formatMetric(maxVal)}", "Min: ${formatMetric(minVal)}")
-        var maxTextWidth = 0f
-        for (line in infoText) { val w = textPaint.measureText(line); if (w > maxTextWidth) maxTextWidth = w }
-
-        canvas.drawRect(padding * 0.5f, padding * 0.5f, padding * 1.5f + maxTextWidth, padding + (infoText.size * (textSize * 1.4f)) + padding, bgPaint)
-        var currentY = padding + textSize
-        for (line in infoText) { canvas.drawText(line, padding, currentY, textPaint); currentY += textSize * 1.4f }
-
-        val barWidth = width * 0.03f; val barHeight = height * 0.5f
-        val barLeft = width - padding - barWidth - (textSize * 4.5f); val barTop = (height - barHeight) / 2f
-        val barRight = barLeft + barWidth; val barBottom = barTop + barHeight
-
-        val jetColors = intArrayOf(Color.rgb(127, 0, 0), Color.rgb(255, 0, 0), Color.rgb(255, 255, 0), Color.rgb(0, 255, 255), Color.rgb(0, 0, 255), Color.rgb(0, 0, 127))
-        canvas.drawRect(barLeft, barTop, barRight, barBottom, Paint().apply { shader = LinearGradient(0f, barTop, 0f, barBottom, jetColors, null, Shader.TileMode.CLAMP) })
-        canvas.drawRect(barLeft, barTop, barRight, barBottom, Paint().apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 3f })
-
-        val scaleTextPaint = Paint(textPaint).apply { textAlign = Paint.Align.LEFT; clearShadowLayer(); color = Color.BLACK }
-        val whiteBgPaint = Paint().apply { color = Color.argb(200, 255, 255, 255) }
-        fun drawScaleLabel(text: String, y: Float) {
-            val w = scaleTextPaint.measureText(text)
-            canvas.drawRect(barRight + padding * 0.5f - 5f, y - textSize, barRight + padding * 0.5f + w + 5f, y + (textSize * 0.3f), whiteBgPaint)
-            canvas.drawText(text, barRight + padding * 0.5f, y, scaleTextPaint)
-        }
-
-        drawScaleLabel(formatMetric(maxVal), barTop + (textSize * 0.3f))
-        drawScaleLabel(formatMetric((maxVal + minVal) / 2f), barTop + (barHeight / 2f) + (textSize * 0.3f))
-        drawScaleLabel(formatMetric(minVal), barBottom)
-
-        if (maxIdx != -1 && minIdx != -1) {
-            val maxX = dataArray[maxIdx]; val maxY = dataArray[maxIdx + 1]; val minX = dataArray[minIdx]; val minY = dataArray[minIdx + 1]
-            val targetRadius = width * 0.015f; val crosshairLen = targetRadius * 1.5f
-            val whiteOutline = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 6f }
-            val markerTextPaint = Paint(textPaint).apply { this.textSize = width * 0.018f }
-
-            fun drawTarget(x: Float, y: Float, label: String, coreColor: Int) {
-                canvas.drawCircle(x, y, targetRadius, whiteOutline)
-                canvas.drawLine(x - crosshairLen, y, x + crosshairLen, y, whiteOutline)
-                canvas.drawLine(x, y - crosshairLen, x, y + crosshairLen, whiteOutline)
-                val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = coreColor; style = Paint.Style.STROKE; strokeWidth = 3f }
-                canvas.drawCircle(x, y, targetRadius, corePaint)
-                canvas.drawLine(x - crosshairLen, y, x + crosshairLen, y, corePaint)
-                canvas.drawLine(x, y - crosshairLen, x, y + crosshairLen, corePaint)
-                canvas.drawText(label, x + targetRadius + 5f, y - targetRadius - 5f, markerTextPaint)
-            }
-            drawTarget(maxX, maxY, "MAX", Color.RED)
-            drawTarget(minX, minY, "MIN", Color.BLUE)
-        }
-    }
     private fun updateNavButtons() {
         btnPrevFrame.isEnabled = currentFrameIndex > 0
         btnNextFrame.isEnabled = currentFrameIndex < batchFiles.size - 1
@@ -941,7 +719,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         Toast.makeText(this, R.string.saving_images_zip, Toast.LENGTH_LONG).show()
 
-        Thread {
+        lifecycleScope.launch(Dispatchers.IO) {
             val refName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch"
             val fileName = "IndicVision_Images_${currentTypeString}_${refName}.zip"
             val contentValues = ContentValues().apply {
@@ -962,11 +740,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
                             for (index in batchFiles.indices) {
                                 val file = batchFiles[index]
-                                val bytes = file.readBytes()
-                                if (bytes.size % 32 != 0) continue
-
-                                val data = FloatArray(bytes.size / 4)
-                                ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(data)
+                                val data = DicResult.decodeDatBytes(file.readBytes()) ?: continue
 
                                 val (heatmap, _, _) = VisualizationEngine.generateHeatmap(
                                     data, imgW, imgH, currentDataIndex, step
@@ -990,16 +764,19 @@ class ResultViewerActivity : AppCompatActivity() {
                             }
                         }
                     }
-                    runOnUiThread {
+                    withContext(Dispatchers.Main) {
                         Toast.makeText(this@ResultViewerActivity, R.string.images_zip_saved, Toast.LENGTH_LONG).show()
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
-                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, R.string.images_zip_failed, Toast.LENGTH_SHORT).show() }
+                    Log.e("ResultViewer", "ZIP export failed", e)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ResultViewerActivity, R.string.images_zip_failed, Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
-        }.start()
+        }
     }
+
     private fun exportAllDataCsv() {
         if (batchFiles.isEmpty()) {
             Toast.makeText(this, R.string.no_data_to_save, Toast.LENGTH_SHORT).show()
@@ -1008,7 +785,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         Toast.makeText(this, R.string.saving_master_csv, Toast.LENGTH_LONG).show()
 
-        Thread {
+        lifecycleScope.launch(Dispatchers.IO) {
             val refName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch"
             val fileName = "IndicVision_BatchData_${refName}.csv"
             val contentValues = ContentValues().apply {
@@ -1028,39 +805,41 @@ class ResultViewerActivity : AppCompatActivity() {
 
                             for (index in batchFiles.indices) {
                                 val file = batchFiles[index]
-                                val bytes = file.readBytes()
-                                if (bytes.size % 32 != 0) continue
-
-                                val data = FloatArray(bytes.size / 4)
-                                ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(data)
+                                val data = DicResult.decodeDatBytes(file.readBytes()) ?: continue
 
                                 val trueFrameIndex = file.nameWithoutExtension.substringAfterLast("_").toIntOrNull() ?: index
                                 val imgName = originalDefNames.getOrNull(trueFrameIndex) ?: "Frame_${trueFrameIndex + 1}"
 
                                 var i = 0
                                 while (i < data.size) {
-                                    val x = data[i]; val y = data[i+1]
-                                    val u = data[i+2]; val v = data[i+3]
-                                    val exx = data[i+4]; val eyy = data[i+5]; val exy = data[i+6]
-                                    val c = data[i+7]
+                                    val x = data[i]
+                                    val y = data[i + 1]
+                                    val u = data[i + DicResult.IDX_U]
+                                    val v = data[i + DicResult.IDX_V]
+                                    val exx = data[i + DicResult.IDX_EXX]
+                                    val eyy = data[i + DicResult.IDX_EYY]
+                                    val exy = data[i + DicResult.IDX_EXY]
+                                    val c = data[i + DicResult.IDX_ZNSSD]
 
                                     if (c != 0f) {
                                         writer.write("$imgName,$x,$y,$u,$v,$exx,$eyy,$exy,$c\n")
                                     }
-                                    i += 8
+                                    i += DicResult.STRIDE
                                 }
                             }
                         }
                     }
-                    runOnUiThread {
+                    withContext(Dispatchers.Main) {
                         Toast.makeText(this@ResultViewerActivity, R.string.master_csv_saved, Toast.LENGTH_LONG).show()
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
-                    runOnUiThread { Toast.makeText(this@ResultViewerActivity, R.string.master_csv_failed, Toast.LENGTH_SHORT).show() }
+                    Log.e("ResultViewer", "Master CSV export failed", e)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ResultViewerActivity, R.string.master_csv_failed, Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
-        }.start()
+        }
     }
 
     private fun exportMergedImage() {
@@ -1079,7 +858,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         Toast.makeText(this, R.string.saving_image, Toast.LENGTH_SHORT).show()
 
-        Thread {
+        lifecycleScope.launch(Dispatchers.Default) {
             try {
                 val (maxIdx, minIdx) = computeMaxMinIndices()
                 val mergedBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
@@ -1090,11 +869,11 @@ class ResultViewerActivity : AppCompatActivity() {
                 val alphaPaint = Paint().apply { alpha = 180 }
                 canvas.drawBitmap(overlay, 0f, 0f, alphaPaint)
 
-                val isStrain = currentDataIndex > 3
+                val isStrain = DicResult.isStrainFieldIndex(currentDataIndex)
                 val unit = if (isStrain) "mε" else "px"
                 val dataArray = rawData ?: FloatArray(0)
 
-                bakeAnnotationsToCanvas(
+                ReportBuilder.bakeAnnotationsToCanvas(
                     canvas, imgW, imgH, currentHeatmapMin, currentHeatmapMax,
                     currentTypeString, unit, maxIdx, minIdx, dataArray
                 )
@@ -1107,41 +886,27 @@ class ResultViewerActivity : AppCompatActivity() {
                     put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/IndicVision")
                 }
 
-                val resolver = applicationContext.contentResolver
-                val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                withContext(Dispatchers.IO) {
+                    val resolver = applicationContext.contentResolver
+                    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
 
-                if (uri != null) {
-                    resolver.openOutputStream(uri)?.use { outputStream ->
-                        mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                    if (uri != null) {
+                        resolver.openOutputStream(uri)?.use { outputStream ->
+                            mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                        }
                     }
+                    mergedBitmap.recycle()
                 }
 
-                runOnUiThread {
+                withContext(Dispatchers.Main) {
                     Toast.makeText(this@ResultViewerActivity, R.string.image_saved, Toast.LENGTH_LONG).show()
                 }
-
             } catch (e: Exception) {
-                e.printStackTrace()
-                runOnUiThread { Toast.makeText(this@ResultViewerActivity, R.string.image_save_failed, Toast.LENGTH_SHORT).show() }
+                Log.e("ResultViewer", "Image export failed", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@ResultViewerActivity, R.string.image_save_failed, Toast.LENGTH_SHORT).show()
+                }
             }
-        }.start()
-    }
-
-    /**
-     * Extreme Optimizer: Drops file size from 30MB to < 4MB for PDF embedding.
-     * Uses RGB_565 (no alpha channel, half memory) and strict 600px scaling.
-     */
-    private fun Bitmap.compressForPdf(maxWidth: Int = 600): Bitmap {
-        val ratio = maxWidth.toFloat() / this.width
-        val newWidth = if (this.width > maxWidth) maxWidth else this.width
-        val newHeight = (this.height * ratio).toInt()
-
-        val scaled = Bitmap.createScaledBitmap(this, newWidth, newHeight, true)
-        val strippedBmp = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.RGB_565)
-        val canvas = Canvas(strippedBmp)
-        canvas.drawBitmap(scaled, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG))
-
-        if (scaled != this) scaled.recycle()
-        return strippedBmp
+        }
     }
 }

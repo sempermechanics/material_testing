@@ -22,7 +22,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import androidx.lifecycle.lifecycleScope
-import io.github.jan.supabase.auth.auth // Added for Session Destruction
+import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
@@ -33,12 +33,6 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 
 import androidx.activity.OnBackPressedCallback
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.auth.auth
-
-// --- Material controls + motion for the redesigned UI ---
 import com.google.android.material.slider.Slider
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.button.MaterialButtonToggleGroup
@@ -46,20 +40,6 @@ import com.rafad.indicvisiondic.ui.Motion
 import com.rafad.indicvisiondic.ui.Insets
 
 
-// Payload for Supabase 'analysis_sessions' table
-@Serializable
-data class AnalysisSessionInsert(
-    @SerialName("user_id") val userId: String,
-    @SerialName("user_email") val userEmail: String, // 🚀 NEW!
-    @SerialName("specimen_identifier") val specimenIdentifier: String,
-    @SerialName("points_converged") val pointsConverged: Int,
-    @SerialName("avg_iterations") val avgIterations: Float,
-    @SerialName("execution_time_ms") val executionTimeMs: Int
-)
-@Serializable
-data class AnalysisSessionResponse(
-    @SerialName("session_id") val sessionId: String
-)
 class StaticAnalysisActivity : AppCompatActivity() {
 
     private val viewModel: AnalysisViewModel by viewModels()
@@ -766,13 +746,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // Disable logout during heavy C++ processing to prevent memory leaks/crashes
         btnLogout.isEnabled = false
 
-        val batchDir = File(cacheDir, "batch_results")
-        if (!batchDir.exists()) batchDir.mkdirs()
-        batchDir.listFiles()?.forEach { it.delete() }
-
-        viewModel.lastBatchDirPath = batchDir.absolutePath
-        viewModel.lastStep = step
-
         val applyBlur = switchBlur.isChecked
         val useNlvc = currentUseNlvc()
         val use6x6 = currentUseKeysInterpolator()
@@ -784,184 +757,33 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         lifecycleScope.launch(viewModel.nativeExecutor.asCoroutineDispatcher()) {
             try {
-                val totalFrames = viewModel.defFilePaths.size
-                val refBytes = viewModel.refBytes ?: throw IllegalStateException("Reference missing")
+                val params = AnalysisViewModel.BatchAnalysisParams(
+                    cacheDir = cacheDir,
+                    subset = subset,
+                    step = step,
+                    strainWin = strainWin,
+                    finalRectX = finalRectX,
+                    finalRectY = finalRectY,
+                    finalRectW = finalRectW,
+                    finalRectH = finalRectH,
+                    applyBlur = applyBlur,
+                    useNlvc = useNlvc,
+                    use6x6 = use6x6,
+                    maskData = maskData,
+                    debugDir = debugDir,
+                    processingStartTime = processingStartTime
+                )
 
-                var firstFrameValidPoints = 0
-                var firstFrameAvgIters = 0.0f
-                var engineErrorCode = 0 // 🚀 PRIORITY 3: Track the negative return codes
-
-                setComputeStatus("Caching reference in engine…")
-                runOnUiThread { tvTimer.text = "Caching Reference in Native Engine..." }
-                // 🚀 DICe PARITY: Pass the maskData (or empty array) to build the Ghost Wall globally!
-                val safeMaskData = viewModel.roiMaskBytes ?: ByteArray(0)
-                IndicVisionNativeLib.initializeReference(refBytes, safeMaskData, viewModel.realRefWidth, viewModel.realRefHeight, applyBlur)
-
-                val gridW = finalRectW / step
-                val gridH = finalRectH / step
-                val maxPoints = gridW * gridH
-                val byteCapacity = maxPoints * 8 * 4
-                val outputBuffer = java.nio.ByteBuffer.allocateDirect(byteCapacity)
-                outputBuffer.order(java.nio.ByteOrder.nativeOrder())
-
-                for ((frameIndex, defPath) in viewModel.defFilePaths.withIndex()) {
-                    val frameLabel = "Processing Frame ${frameIndex + 1}/$totalFrames..."
-                    setComputeStatus(
-                        if (totalFrames > 1) "Processing frame ${frameIndex + 1} of $totalFrames"
-                        else "Correlating & solving…"
-                    )
-                    runOnUiThread { tvTimer.text = frameLabel }
-
-                    val defBytes = File(defPath).readBytes()
-
-                    val callback = object : ProgressCallback {
-                        override fun onProgressUpdate(percentage: Int) {
-                            val frameProgress = (frameIndex.toFloat() / totalFrames) * 100
-                            val overallProgress = frameProgress + (percentage.toFloat() / totalFrames)
-                            setComputeProgress(overallProgress.toInt())
-                            runOnUiThread { progressBar.progress = overallProgress.toInt() }
-                        }
-                    }
-
-                    outputBuffer.clear()
-                    val metricsCatcher = FloatArray(16)
-
-                    val validPointsCount = IndicVisionNativeLib.computeFullFieldDirect(
-                        refBytes, defBytes, maskData,
-                        finalRectX, finalRectY, finalRectW, finalRectH,
-                        step, subset, strainWin, true, true, false, applyBlur, useNlvc,
-                        use6x6, // 🚀 PASS TOGGLE TO JNI
-                        outputBuffer, callback,
-                        metricsCatcher
-                    )
-
-                    // 🚀 PRIORITY 3: Catch the fatal error and abort the batch loop immediately
-                    if (validPointsCount < 0) {
-                        engineErrorCode = validPointsCount
-                        break
-                    }
-
-                    if (frameIndex == 0) {
-                        firstFrameValidPoints = validPointsCount
-                        viewModel.engineStatsArray = metricsCatcher.clone()
-                        firstFrameAvgIters = metricsCatcher[8]
-                    }
-
-                    if (validPointsCount == 0) continue
-
-                    val outputFile = File(batchDir, String.format("frame_%04d.dat", frameIndex))
-                    outputFile.outputStream().use { fos ->
-                        val bytes = ByteArray(validPointsCount * 8 * 4)
-                        outputBuffer.position(0)
-                        outputBuffer.get(bytes, 0, bytes.size)
-                        fos.write(bytes)
-                    }
-
-                    @Suppress("ExplicitGarbageCollectionCall")
-                    System.gc()
-                }
-
-                val executionTimeMs = (System.currentTimeMillis() - processingStartTime).toInt()
-                val totalTime = executionTimeMs / 1000.0
-
-                // 🚀 THE TRUE ADMIN STEALTH QUEUE (OFFLINE-FIRST)
-                if (firstFrameValidPoints > 0) {
-                    viewModel.currentSessionId = "Pending_Cloud_Sync_" + java.util.UUID.randomUUID().toString().take(8)
-
-                    withContext(Dispatchers.IO) {
-                        Log.d("inDIC_Diag", "========================================")
-                        Log.d("inDIC_Diag", "1. ENGINE FINISHED. PREPARING BATCH OFFLINE QUEUE.")
-
-                        var generatedRefPath = ""
-                        var refBmp: Bitmap? = null
-
-                        try {
-                            // 🚀 1. PROCESS THE REFERENCE IMAGE ONCE
-                            refBmp = IndicVisionNativeLib.getPreviewFromBytes(refBytes, viewModel.realRefWidth)
-                            val refPngFile = File(cacheDir, "temp_ref_${System.currentTimeMillis()}.png")
-                            refPngFile.outputStream().use { out ->
-                                refBmp?.compress(Bitmap.CompressFormat.PNG, 100, out)
-                            }
-                            generatedRefPath = refPngFile.absolutePath
-
-                            // 🚀 THE FIX: Save this dynamic path so the Result Viewer knows where it is!
-                            viewModel.lastRefPath = generatedRefPath
-
-                            // 🚀 SAFE OFFLINE AUTH CHECK (Runs once for the batch)
-                            val currentUser = SupabaseManager.client.auth.currentUserOrNull()
-                            val userEmail = currentUser?.email ?: "Offline_User"
-                            val userId = currentUser?.id ?: "Offline_ID"
-
-                            // 🚀 2. LOOP THROUGH EVERY DEFORMED IMAGE IN THE BATCH
-                            for ((frameIndex, rawDefPath) in viewModel.defFilePaths.withIndex()) {
-
-                                var generatedDefPath = ""
-                                var defBmp: Bitmap? = null
-
-                                try {
-                                    // 🛡️ MEMORY SHIELD: Process this specific frame
-                                    val rawFile = File(rawDefPath)
-                                    if (rawFile.exists() && rawFile.length() < 50_000_000) {
-                                        val defBytes = rawFile.readBytes()
-                                        defBmp = IndicVisionNativeLib.getPreviewFromBytes(defBytes, viewModel.realRefWidth)
-
-                                        val defPngFile = File(cacheDir, "temp_def_${System.currentTimeMillis()}_frame_$frameIndex.png")
-                                        defPngFile.outputStream().use { out ->
-                                            defBmp?.compress(Bitmap.CompressFormat.PNG, 100, out)
-                                        }
-                                        generatedDefPath = defPngFile.absolutePath
-                                    }
-
-                                    // Grab the correct math data for THIS specific frame
-                                    val datFile = File(batchDir, String.format("frame_%04d.dat", frameIndex))
-
-                                    // 🚀 QUEUE THE WORKER FOR THIS SPECIFIC FRAME
-                                    val uploadData = androidx.work.Data.Builder()
-                                        .putString("USER_ID", userId)
-                                        .putString("USER_EMAIL", userEmail)
-                                        .putString("REF_PATH", generatedRefPath)
-                                        .putString("DEF_PATH", generatedDefPath)
-                                        .putString("DAT_PATH", datFile.absolutePath)
-                                        .putString("FRAME_NAME", "Frame_${frameIndex + 1}") // e.g., Frame_1, Frame_2...
-                                        .putString("REF_NAME", viewModel.refName.removePrefix("Ref: "))
-                                        .putInt("IMG_W", viewModel.realRefWidth)
-                                        .putInt("IMG_H", viewModel.realRefHeight)
-                                        .putInt("STEP", step)
-                                        .putInt("SUBSET", subset)
-                                        .putInt("STRAIN_WIN", strainWin)
-                                        .putString("STRAIN_METHOD", if (useNlvc) "NLVC" else "VSG")
-                                        .putInt("ROI_X", finalRectX)
-                                        .putInt("ROI_Y", finalRectY)
-                                        .putInt("ROI_W", finalRectW)
-                                        .putInt("ROI_H", finalRectH)
-                                        .putFloatArray("ENGINE_STATS", viewModel.engineStatsArray ?: FloatArray(16))
-                                        .putInt("POINTS_CONVERGED", firstFrameValidPoints)
-                                        .putFloat("AVG_ITERS", firstFrameAvgIters)
-                                        .putInt("EXEC_TIME", executionTimeMs)
-                                        .build()
-
-                                    val uploadWork = androidx.work.OneTimeWorkRequestBuilder<DicUploadWorker>()
-                                        .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
-                                        .setInputData(uploadData)
-                                        .build()
-
-                                    androidx.work.WorkManager.getInstance(applicationContext).enqueue(uploadWork)
-                                    Log.d("inDIC_Diag", "-> SUCCESS! Worker queued for Frame ${frameIndex + 1}.")
-
-                                } finally {
-                                    // EXTREMELY CRITICAL: Recycle the deformed image RAM immediately before the loop moves to the next frame
-                                    defBmp?.recycle()
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.e("inDIC_Diag", "❌ LOCAL CATCH: Failed to enqueue batch workers", e)
-                        } finally {
-                            // Recycle the reference image once the entire loop is finished
-                            refBmp?.recycle()
-                            Log.d("inDIC_Diag", "========================================")
-                        }
+                val outcome = viewModel.runBatchAnalysis(applicationContext, params) { progress ->
+                    setComputeProgress(progress.percent)
+                    setComputeStatus(progress.status)
+                    runOnUiThread {
+                        progressBar.progress = progress.percent
+                        tvTimer.text = progress.timerText
                     }
                 }
+
+                val totalTime = outcome.executionTimeMs / 1000.0
 
                 withContext(Dispatchers.Main) {
                     isProcessing = false
@@ -969,13 +791,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     progressBar.visibility = View.GONE
                     btnLogout.isEnabled = true
 
-                    // 🚀 PRIORITY 3: Handle the UI Contract based on the specific error
-                    if (engineErrorCode < 0) {
-                        val errorMsg = when(engineErrorCode) {
+                    if (outcome.engineErrorCode < 0) {
+                        val errorMsg = when (outcome.engineErrorCode) {
                             -1 -> "Feature Extraction Failed (AKAZE). The speckle pattern might be too fine, out of focus, or destroyed by scaling."
                             -2 -> "Invalid ROI. The mask excluded the entire specimen (0 valid points)."
                             -3 -> "Engine Initialization Failed (Null Pointers or Corrupt Image)."
-                            else -> "Unknown Engine Error ($engineErrorCode)"
+                            else -> "Unknown Engine Error (${outcome.engineErrorCode})"
                         }
                         tvTimer.text = "Analysis Aborted"
                         tvResult.text = "❌ Error: $errorMsg"
@@ -985,25 +806,20 @@ class StaticAnalysisActivity : AppCompatActivity() {
                             .setMessage(errorMsg)
                             .setPositiveButton("OK", null)
                             .show()
-
-                    } else if (firstFrameValidPoints <= 0) {
+                    } else if (outcome.firstFrameValidPoints <= 0) {
                         tvTimer.text = "Analysis Failed"
                         tvResult.text = "❌ Engine returned no data"
                     } else {
                         tvTimer.text = "Batch Done in %.2f s".format(totalTime)
-                        tvResult.text = "✅ Computed $totalFrames frames!"
+                        tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
 
                         viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
-                        viewModel.lastBatchDirPath = batchDir.absolutePath
-
+                        viewModel.lastBatchDirPath = outcome.batchDirPath
                         viewModel.hasCompletedAnalysis = true
                         checkReady()
-
-                        // 🚀 FIRING EXACTLY ONCE!
                         openResultViewer()
                     }
                 }
-
             } catch (e: Exception) {
                 Log.e("StaticAnalysis", "Batch processing failed", e)
                 withContext(Dispatchers.Main) {
@@ -1211,36 +1027,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             } catch (e: Exception) { e.printStackTrace() }
         }
         checkReady()
-    }
-    private fun loadHardcodedDebugImage() {
-        try {
-            // LOAD THE LOSSLESS PNG!
-            val inputStream = assets.open("oht_cfrp_00.png")
-            val bytes = inputStream.readBytes()
-            inputStream.close()
-
-            // ==========================================
-            // 🛑 KOTLIN INTERCEPT DUMP
-            // ==========================================
-            val sb = java.lang.StringBuilder("KOTLIN BYTE DUMP: ")
-            for (i in 0 until 10) {
-                // Convert signed byte to unsigned int (0-255) for accurate printing
-                val unsignedVal = bytes[i].toInt() and 0xFF
-                sb.append("$unsignedVal ")
-            }
-            Log.d("IndicVisionJNI", sb.toString())
-            // ==========================================
-
-            viewModel.realRefWidth = 400
-            viewModel.realRefHeight = 1040
-            viewModel.refBytes = bytes
-            viewModel.refName = "Ref: oht_cfrp_00.png"
-
-            IndicVisionNativeLib.initializeReference(bytes, ByteArray(0), 400, 1040, false)
-            Toast.makeText(this, R.string.raw_png_loaded, Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
     private fun showShapeRoiDialog() {
         if (viewModel.refBytes == null) {
