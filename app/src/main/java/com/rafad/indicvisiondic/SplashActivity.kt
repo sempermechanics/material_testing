@@ -24,14 +24,13 @@ class SplashActivity : AppCompatActivity() {
 
     private suspend fun performRoutingCheck() {
         try {
+            // 1. SILENT VAULT CHECK: Is there a session saved on the device?
+            val session = SupabaseManager.client.auth.currentSessionOrNull()
 
             if (BuildConfig.DEBUG) {
                 navigateTo(StaticAnalysisActivity::class.java)
                 return
             }
-
-            // 1. SILENT VAULT CHECK: Is there a session saved on the device?
-            val session = SupabaseManager.client.auth.currentSessionOrNull()
 
             if (session == null) {
                 navigateTo(AuthActivity::class.java)

@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar // Added for modern error messages
 import com.rafad.indicvisiondic.ui.Motion
 import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.GoogleSignInHelper
 import kotlinx.coroutines.launch
 
 class AuthActivity : AppCompatActivity() {
@@ -31,6 +32,7 @@ class AuthActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var layoutConfirmPassword: View
     private lateinit var etConfirmPassword: EditText
+    private lateinit var btnGoogleSignIn: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +48,8 @@ class AuthActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.progressBar)
         layoutConfirmPassword = findViewById(R.id.layoutConfirmPassword)
         etConfirmPassword = findViewById(R.id.etConfirmPassword)
+        btnGoogleSignIn = findViewById(R.id.btnGoogleSignIn)
+        btnGoogleSignIn.setOnClickListener { handleGoogleSignIn() }
 
         setupUIForCurrentMode()
 
@@ -114,6 +118,42 @@ class AuthActivity : AppCompatActivity() {
             tvToggleMode.text = "Already have an account? Login here"
             tvForgotPassword.visibility = View.GONE
             layoutConfirmPassword.visibility = View.VISIBLE
+        }
+    }
+
+    private fun handleGoogleSignIn() {
+        setLoadingState(true)
+        val keyManager = DeviceKeyManager(this)
+        val deviceId = keyManager.getDeviceId()
+        val publicKey = keyManager.getPublicKeyBase64()
+
+        lifecycleScope.launch {
+            try {
+                val idToken = GoogleSignInHelper.getIdToken(
+                    this@AuthActivity, BuildConfig.GOOGLE_WEB_CLIENT_ID
+                )
+                val result = authRepo.loginWithGoogle(idToken, deviceId, publicKey)
+                setLoadingState(false)
+                result.fold(
+                    onSuccess = {
+                        // Gatekeeper routes APPROVED → analysis, PENDING → pending page
+                        startActivity(Intent(this@AuthActivity, SplashActivity::class.java))
+                        finish()
+                    },
+                    onFailure = { showSnackbar(it.message ?: "Google sign-in failed.", isError = true) }
+                )
+            } catch (e: GoogleSignInHelper.NotConfigured) {
+                setLoadingState(false)
+                showSnackbar("Google sign-in isn't set up yet (see GOOGLE_SSO_SETUP.md).", isError = true)
+            } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+                setLoadingState(false) // user dismissed the sheet — not an error
+            } catch (e: androidx.credentials.exceptions.NoCredentialException) {
+                setLoadingState(false)
+                showSnackbar("No Google account available on this device.", isError = true)
+            } catch (e: Exception) {
+                setLoadingState(false)
+                showSnackbar(e.message ?: "Google sign-in failed.", isError = true)
+            }
         }
     }
 

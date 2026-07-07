@@ -11,6 +11,12 @@ val supabaseUrl = if (localPropertiesFile.exists()) {
 val supabaseAnonKey = if (localPropertiesFile.exists()) {
     localPropertiesFile.readLines().find { it.startsWith("SUPABASE_ANON_KEY=") }?.substringAfter("=")?.trim() ?: ""
 } else ""
+// Google OAuth *Web* client ID (from Google Cloud console). Used by the
+// Credential Manager one-tap flow to obtain a Google ID token that Supabase
+// verifies. See docs/GOOGLE_SSO_SETUP.md. Empty = SSO button shows a setup hint.
+val googleWebClientId = if (localPropertiesFile.exists()) {
+    localPropertiesFile.readLines().find { it.startsWith("GOOGLE_WEB_CLIENT_ID=") }?.substringAfter("=")?.trim() ?: ""
+} else ""
 
 android {
     namespace = "com.rafad.indicvisiondic"
@@ -26,6 +32,7 @@ android {
         // 🚀 SECURE INJECTION: Uses our pure Kotlin variables
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
 
         // 🚀 ARCHITECTURE-ADAPTIVE: No hardcoded abiFilters here.
         // The native C++/OpenCV code is compiled for every supported ABI
@@ -107,6 +114,11 @@ dependencies {
     implementation("androidx.camera:camera-view:${camerax_version}")
     implementation("androidx.camera:camera-extensions:${camerax_version}")
     implementation("androidx.activity:activity-ktx:1.8.2")
+
+    // 🚀 Google SSO via Credential Manager (native one-tap) + Supabase ID token
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     implementation(platform("io.github.jan-tennert.supabase:bom:3.0.3"))
     implementation("io.github.jan-tennert.supabase:auth-kt")

@@ -184,33 +184,29 @@ class AnalysisViewModel : ViewModel() {
 
 #### StaticAnalysisActivity (Main Workflow)
 
+Presented as a **two-step wizard**: page 1 loads images **or a video** (frames auto-extracted at a chosen frame rate / time segment), page 2 hosts the parameter settings page and the Compute action. `Next`/`Compute` are gated until inputs and settings are ready.
+
 **Responsibilities:**
-1. **Image Selection** via Android Storage Access Framework (SAF)
+1. **Input Selection** — images via the Storage Access Framework, or a video via `MediaMetadataRetriever` frame extraction
 2. **ROI Definition** via launching `RoiDrawActivity`
-3. **Parameter Validation** (subset size, step, strain window)
-4. **Background Computation** with progress updates
+3. **Parameter capture** from sliders (`etSubsetSize.value` etc.) + segmented toggles
+4. **Background Computation** driven from `nativeExecutor`, with a full-screen progress overlay
 5. **Result Handoff** to `ResultViewerActivity`
 
-**Critical Code Section: JNI Invocation**
+**Critical Code Section: JNI Invocation** (parameters read from sliders; progress drives the overlay)
 
 ```kotlin
 btnCalculateFullField.setOnClickListener {
-    val subset = etSubsetSize.text.toString().toIntOrNull() ?: 41
-    val step = etStepSize.text.toString().toIntOrNull() ?: 5
-    val strainWin = etStrainWindow.text.toString().toIntOrNull() ?: 15
-    
-    // Validation (prevents C++ crashes)
-    if (subset < 21 || subset > 101 || subset % 2 == 0) {
-        Toast.makeText(this, "Subset must be odd (21-101)", Toast.LENGTH_LONG).show()
-        return@setOnClickListener
-    }
-    
-    Thread {
+    val subset = etSubsetSize.value.toInt()   // Slider, not EditText
+    val step = etStepSize.value.toInt()
+    val strainWin = etStrainWindow.value.toInt()
+
+    showComputeOverlay()  // full-screen ring + %, frame counter, elapsed time
+
+    lifecycleScope.launch(viewModel.nativeExecutor.asCoroutineDispatcher()) {
         val callback = object : ProgressCallback {
             override fun onProgressUpdate(percentage: Int) {
-                runOnUiThread {
-                    progressBar.progress = percentage
-                }
+                setComputeProgress(percentage)  // updates the overlay ring + %
             }
         }
         
@@ -226,8 +222,8 @@ btnCalculateFullField.setOnClickListener {
             callback = callback
         )
         
-        // Result handling...
-    }.start()
+        // Result handling... then hideComputeOverlay()
+    }
 }
 ```
 
@@ -1272,6 +1268,22 @@ imgMain.onMatrixChangedListener = {
 
 ---
 
+### 10.2b Why Portable SIMD + All-ABI Builds?
+
+**Question:** The engine used hand-written ARM NEON with `#ifdef __aarch64__`, and the app shipped `arm64-v8a` only. Why change it?
+
+**Answer:**
+
+1. **Emulators and non-ARM devices** couldn't run the native engine — an `arm64-v8a`-only `abiFilter` meant x86/x86_64 emulators had no matching library and crashed the moment native code ran.
+
+2. **Single source of truth:** the hot loops are now written once with **OpenCV universal intrinsics** (`cv::v_float32`) in `core/SimdKernels.h`. The compiler maps them to NEON on ARM and SSE on x86, so there is no duplicated NEON/scalar code to drift out of sync.
+
+3. **The gradient loop actually got faster on ARM.** The old NEON path fell back to scalar Eigen for the 6-DOF steepest-descent accumulation; the new Structure-of-Arrays layout (`sdi_planes`) lets that loop vectorise too.
+
+The Gradle config drops `abiFilters` entirely (all four ABIs build) and adds ABI splits + a universal APK, plus `-Wl,-z,max-page-size=16384` for 16 KB-page devices. Correctness across ABIs is guarded by the native `SimdKernels` and `Engine` synthetic-deformation tests (see `docs/TESTING.md`).
+
+---
+
 ### 10.3 Why ByteArray Instead of Bitmap?
 
 **Bitmap Approach (Bad):**
@@ -1507,22 +1519,26 @@ if (use_max_shear) {
 **Step 3: Add UI Option**
 
 ```kotlin
-// StaticAnalysisActivity.kt
-<RadioButton
+// activity_static_analysis.xml — the strain method is a MaterialButtonToggleGroup
+// (segmented toggle), not a RadioGroup:
+<com.google.android.material.button.MaterialButton
     android:id="@+id/rbMaxShear"
-    android:text="Max Shear Strain"/>
+    style="@style/Widget.IndicVision.SegmentedButton"
+    android:text="Max Shear"/>
 
-// In computation:
-val useMaxShear = rgStrainMethod.checkedRadioButtonId == R.id.rbMaxShear
+// In computation (StaticAnalysisActivity.kt):
+val useMaxShear = rgStrainMethod.checkedButtonId == R.id.rbMaxShear
 ```
 
 **Step 4: Update Visualization**
 
 ```kotlin
-// ResultViewerActivity.kt
-spinnerType.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
-    arrayOf("U Displacement", "V Displacement", "Exx Strain", "Eyy Strain", "Exy Shear", "Max Shear")
-)
+// ResultViewerActivity.kt — the result-type spinner uses the white-on-dark
+// item/dropdown layouts so text is legible on the dark viewer canvas:
+spinnerType.adapter = ArrayAdapter(
+    this, R.layout.spinner_item_white,
+    arrayOf("U", "V", "Exx", "Eyy", "Exy", "Max Shear")
+).apply { setDropDownViewResource(R.layout.spinner_dropdown_white) }
 ```
 
 ---

@@ -1,7 +1,9 @@
 package com.rafad.indicvisiondic
 
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -151,6 +153,59 @@ class AuthRepository {
                     } else {
                         Result.failure(Exception(errorMsg))
                     }
+                }
+            }
+        }
+    }
+
+    // 2b. GOOGLE SSO (native one-tap → Supabase ID-token exchange)
+    // Verifies the Google ID token with Supabase, then ensures an
+    // auth_profiles row exists (first-time SSO users are created PENDING,
+    // so an admin still approves them exactly like email registrations).
+    // Routing (APPROVED / PENDING / hardware-lock) is then handled by the
+    // SplashActivity gatekeeper, identical to the email path.
+    suspend fun loginWithGoogle(idToken: String, deviceId: String, publicKey: String): Result<String> {
+        return withContext(Dispatchers.IO) {
+            try {
+                supabase.auth.signInWith(IDToken) {
+                    this.idToken = idToken
+                    provider = Google
+                }
+
+                val user = supabase.auth.currentUserOrNull()
+                    ?: throw Exception("Google sign-in failed: session not established.")
+                val userId = user.id
+                val email = user.email ?: "unknown@google"
+
+                Log.d("inDIC_Auth_Diag", "🔓 Google sign-in OK for $email")
+
+                // Create the profile on first login so the gatekeeper has a row.
+                val existing = supabase.postgrest["auth_profiles"]
+                    .select { filter { eq("user_id", userId) } }
+                    .decodeSingleOrNull<AuthProfile>()
+
+                if (existing == null) {
+                    supabase.postgrest["auth_profiles"].insert(
+                        UserProfileInsert(
+                            userId = userId,
+                            emailAddress = email,
+                            deviceFingerprint = deviceId,
+                            hardwarePublicKey = publicKey
+                        )
+                    )
+                    Log.d("inDIC_Auth_Diag", "🆕 Created PENDING profile for new Google user")
+                }
+
+                Result.success("Google sign-in successful!")
+            } catch (e: Exception) {
+                val errorMsg = e.message ?: ""
+                if (errorMsg.contains("UnknownHostException", ignoreCase = true) ||
+                    errorMsg.contains("resolve host", ignoreCase = true) ||
+                    errorMsg.contains("Failed to connect", ignoreCase = true)) {
+                    Result.failure(Exception("No internet connection. Please connect to a network to sign in."))
+                } else {
+                    try { supabase.auth.signOut() } catch (_: Exception) {}
+                    Result.failure(Exception("Google sign-in failed: $errorMsg"))
                 }
             }
         }

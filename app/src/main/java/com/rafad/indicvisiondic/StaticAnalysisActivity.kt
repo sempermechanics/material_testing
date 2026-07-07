@@ -79,6 +79,22 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var tvTimer: TextView
     private lateinit var btnCalculateFullField: Button
+
+    // Prominent progress overlay (compute + video extraction)
+    private lateinit var computeOverlay: View
+    private lateinit var overlayTitle: TextView
+    private lateinit var overlayProgress: ProgressBar
+    private lateinit var overlayPercent: TextView
+    private lateinit var overlayStatus: TextView
+    private lateinit var overlayElapsed: TextView
+    private val elapsedHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val elapsedTicker = object : Runnable {
+        override fun run() {
+            val secs = (System.currentTimeMillis() - processingStartTime) / 1000
+            overlayElapsed.text = "Elapsed ${secs}s"
+            elapsedHandler.postDelayed(this, 1000)
+        }
+    }
     private lateinit var switchBlur: SwitchMaterial
     private lateinit var rgStrainMethod: MaterialButtonToggleGroup
     private lateinit var rgInterpolator: MaterialButtonToggleGroup // 🚀 ADDED
@@ -132,6 +148,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // Bind UI Components
         progressBar = findViewById(R.id.pbAnalysis)
         tvTimer = findViewById(R.id.tvTimer)
+        computeOverlay = findViewById(R.id.computeOverlay)
+        overlayTitle = findViewById(R.id.overlayTitle)
+        overlayProgress = findViewById(R.id.overlayProgress)
+        overlayPercent = findViewById(R.id.overlayPercent)
+        overlayStatus = findViewById(R.id.overlayStatus)
+        overlayElapsed = findViewById(R.id.overlayElapsed)
         imgRef = findViewById(R.id.imgRef)
         imgDef = findViewById(R.id.imgDef)
         btnLoadRef = findViewById(R.id.btnLoadRef)
@@ -211,6 +233,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             uri?.let { handleMaskSelection(it) }
         }
 
+        // Video picker: frame 0 → reference, remaining sampled frames → deformed
+        val pickVideo = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let { handleVideo(it) }
+        }
+
         val roiStudioLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
                 val data = result.data
@@ -248,6 +275,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnLoadRef.setOnClickListener { pickRef.launch("image/*") }
         btnLoadDef.setOnClickListener { pickDefBatch.launch("image/*") }
         btnLoadRoiMask.setOnClickListener { pickMask.launch("image/*") }
+        findViewById<Button>(R.id.btnLoadVideo).setOnClickListener { pickVideo.launch("video/*") }
 
         btnDefineRoi.setOnClickListener {
             if (viewModel.refBytes != null) {
@@ -471,6 +499,221 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Video input. Frame 0 of the chosen segment becomes the reference;
+    // the rest become the deformed sequence, feeding the exact same
+    // refBytes / defFilePaths state as the image flow.
+    //
+    // Step 1: read metadata → show resolution/fps/length + sampling options.
+    // Step 2: extract at the chosen frame rate over the chosen time segment.
+    // ------------------------------------------------------------------
+    private data class VideoMeta(
+        val durationMs: Long,
+        val fps: Double,
+        val fpsKnown: Boolean,
+        val width: Int,
+        val height: Int
+    )
+
+    private fun formatClock(ms: Long): String {
+        val totalSec = (ms / 1000).toInt()
+        return "%d:%02d".format(totalSec / 60, totalSec % 60)
+    }
+
+    private fun handleVideo(uri: Uri) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            var meta = VideoMeta(0L, 30.0, false, 0, 0)
+            val retriever = android.media.MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(this@StaticAnalysisActivity, uri)
+                fun m(key: Int) = retriever.extractMetadata(key)
+                val durationMs = m(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                var w = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                var h = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                val rot = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                if (rot == 90 || rot == 270) { val t = w; w = h; h = t } // display orientation
+                val frameCountMeta = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull()
+                var fps = 30.0
+                var fpsKnown = false
+                if (frameCountMeta != null && frameCountMeta > 0 && durationMs > 0) {
+                    fps = frameCountMeta / (durationMs / 1000.0)
+                    fpsKnown = true
+                }
+                meta = VideoMeta(durationMs, fps, fpsKnown, w, h)
+            } catch (e: Exception) {
+                Log.e("StaticAnalysis", "Video metadata read failed", e)
+            } finally {
+                try { retriever.release() } catch (_: Exception) {}
+            }
+
+            if (meta.durationMs <= 0L) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@StaticAnalysisActivity, "Could not read this video.", Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) { showVideoSamplingDialog(uri, meta) }
+        }
+    }
+
+    /** Sampling by extraction frame rate + time segment, with a metadata summary. */
+    private fun showVideoSamplingDialog(uri: Uri, meta: VideoMeta) {
+        val view = layoutInflater.inflate(R.layout.dialog_video_sampling, null)
+        val tvInfo = view.findViewById<TextView>(R.id.tvVideoInfo)
+        val sliderFps = view.findViewById<com.google.android.material.slider.Slider>(R.id.sliderFps)
+        val tvFps = view.findViewById<TextView>(R.id.tvFpsValue)
+        val range = view.findViewById<com.google.android.material.slider.RangeSlider>(R.id.rangeSegment)
+        val tvSegment = view.findViewById<TextView>(R.id.tvSegmentValue)
+        val tvEstimate = view.findViewById<TextView>(R.id.tvEstimate)
+
+        // --- Metadata summary: only show parts the file actually reported ---
+        val info = mutableListOf<String>()
+        if (meta.width > 0 && meta.height > 0) info.add("${meta.width}×${meta.height}")
+        if (meta.fpsKnown) info.add("%.0f fps".format(meta.fps))
+        info.add(formatClock(meta.durationMs))
+        tvInfo.text = info.joinToString("   ·   ")
+
+        // --- Frame-rate selector (capped at the source rate when known) ---
+        val maxFps = (if (meta.fpsKnown) Math.ceil(meta.fps).toInt() else 30).coerceIn(2, 60)
+        sliderFps.valueFrom = 1f
+        sliderFps.valueTo = maxFps.toFloat()
+        sliderFps.value = minOf(10, maxFps).toFloat()
+        tvFps.text = "${sliderFps.value.toInt()} fps"
+
+        // --- Time-segment selector (seconds) ---
+        val durationSec = (meta.durationMs / 1000.0).toFloat().coerceAtLeast(0.1f)
+        range.valueFrom = 0f
+        range.valueTo = durationSec
+        range.values = listOf(0f, durationSec)
+        tvSegment.text = "${formatClock(0)} – ${formatClock(meta.durationMs)}"
+
+        val maxFrames = 300
+        fun estimate(): Int {
+            val startS = range.values.first()
+            val endS = range.values.last()
+            val segSec = (endS - startS).coerceAtLeast(0f)
+            return (segSec * sliderFps.value + 1f).toInt().coerceIn(1, maxFrames)
+        }
+        fun refreshEstimate() {
+            val n = estimate()
+            val capped = if (n >= maxFrames) " (capped)" else ""
+            tvEstimate.text = "≈ $n frame(s): 1 reference + ${(n - 1).coerceAtLeast(0)} deformed$capped"
+        }
+
+        sliderFps.addOnChangeListener { _, v, _ -> tvFps.text = "${v.toInt()} fps"; refreshEstimate() }
+        range.addOnChangeListener { s, _, _ ->
+            val startMs = (s.values.first() * 1000).toLong()
+            val endMs = (s.values.last() * 1000).toLong()
+            tvSegment.text = "${formatClock(startMs)} – ${formatClock(endMs)}"
+            refreshEstimate()
+        }
+        refreshEstimate()
+
+        AlertDialog.Builder(this)
+            .setTitle("Video Sampling")
+            .setView(view)
+            .setPositiveButton("Extract") { _, _ ->
+                val fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1)
+                val startMs = (range.values.first() * 1000).toLong()
+                val endMs = (range.values.last() * 1000).toLong()
+                extractVideoFrames(uri, fpsExtract, startMs, endMs)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /** Extracts frames at [fpsExtract] over [startMs, endMs] with the progress overlay. */
+    private fun extractVideoFrames(uri: Uri, fpsExtract: Double, startMs: Long, endMs: Long) {
+        processingStartTime = System.currentTimeMillis()
+        showComputeOverlay(title = "Extracting Frames", status = "Reading video…")
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val retriever = android.media.MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(this@StaticAnalysisActivity, uri)
+
+                val stepMs = 1000.0 / fpsExtract
+                val maxFrames = 300
+                val span = (endMs - startMs).coerceAtLeast(0L)
+                val count = ((span / stepMs).toInt() + 1).coerceIn(1, maxFrames)
+
+                val tempDir = File(cacheDir, "temp_deformed")
+                if (!tempDir.exists()) tempDir.mkdirs()
+                tempDir.listFiles()?.forEach { it.delete() }
+                viewModel.clearPreviousResults()
+
+                val defPaths = mutableListOf<String>()
+                var refPreview: Bitmap? = null
+                var firstDefPreview: Bitmap? = null
+
+                for (i in 0 until count) {
+                    val timeMs = startMs + i * stepMs
+                    if (timeMs > endMs + stepMs / 2) break
+                    val frame = retriever.getFrameAtTime(
+                        (timeMs * 1000).toLong(), android.media.MediaMetadataRetriever.OPTION_CLOSEST
+                    ) ?: continue
+
+                    val png = java.io.ByteArrayOutputStream().use { out ->
+                        frame.compress(Bitmap.CompressFormat.PNG, 100, out)
+                        out.toByteArray()
+                    }
+
+                    if (i == 0) {
+                        viewModel.realRefWidth = frame.width
+                        viewModel.realRefHeight = frame.height
+                        viewModel.refBytes = png
+                        viewModel.refName = "Ref: video @ ${formatClock(startMs)}"
+                        refPreview = frame
+                        if (!viewModel.hasCustomRoi) {
+                            viewModel.roiX = 0; viewModel.roiY = 0
+                            viewModel.roiW = frame.width; viewModel.roiH = frame.height
+                        }
+                    } else {
+                        val f = File(tempDir, String.format("%04d_frame.png", i))
+                        f.writeBytes(png)
+                        defPaths.add(f.absolutePath)
+                        if (i == 1) firstDefPreview = frame
+                    }
+
+                    setComputeProgress((i + 1) * 100 / count)
+                    setComputeStatus("Extracting frame ${i + 1} of $count")
+                }
+
+                if (viewModel.refBytes == null || defPaths.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        hideComputeOverlay()
+                        Toast.makeText(this@StaticAnalysisActivity, "Couldn't extract enough frames from this segment.", Toast.LENGTH_LONG).show()
+                    }
+                    return@launch
+                }
+
+                viewModel.defFilePaths = defPaths.sorted()
+
+                withContext(Dispatchers.Main) {
+                    hideComputeOverlay()
+                    refPreview?.let { imgRef.setImageBitmap(it) }
+                    firstDefPreview?.let { imgDef.setImageBitmap(it) }
+                    tvRefName.text = viewModel.refName
+                    tvDefName.text = viewModel.getDefDisplayName()
+                    checkReady()
+                    Toast.makeText(
+                        this@StaticAnalysisActivity,
+                        "Video loaded: 1 reference + ${defPaths.size} deformed frames",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Log.e("StaticAnalysis", "Error extracting video frames", e)
+                withContext(Dispatchers.Main) {
+                    hideComputeOverlay()
+                    Toast.makeText(this@StaticAnalysisActivity, "Failed to read video: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                try { retriever.release() } catch (_: Exception) {}
+            }
+        }
+    }
+
     private fun currentSubsetSize(): Int = etSubsetSize.value.toInt()
     private fun currentStepSize(): Int = etStepSize.value.toInt()
     private fun currentStrainWindow(): Int = etStrainWindow.value.toInt()
@@ -504,6 +747,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         isProcessing = true
         checkReady()
+        processingStartTime = System.currentTimeMillis()
+        showComputeOverlay()
+        // Keep the legacy inline indicators in sync (hidden behind the overlay)
         progressBar.visibility = View.VISIBLE
         progressBar.progress = 0
         tvTimer.visibility = View.VISIBLE
@@ -511,8 +757,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         // Disable logout during heavy C++ processing to prevent memory leaks/crashes
         btnLogout.isEnabled = false
-
-        processingStartTime = System.currentTimeMillis()
 
         val batchDir = File(cacheDir, "batch_results")
         if (!batchDir.exists()) batchDir.mkdirs()
@@ -539,6 +783,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 var firstFrameAvgIters = 0.0f
                 var engineErrorCode = 0 // 🚀 PRIORITY 3: Track the negative return codes
 
+                setComputeStatus("Caching reference in engine…")
                 runOnUiThread { tvTimer.text = "Caching Reference in Native Engine..." }
                 // 🚀 DICe PARITY: Pass the maskData (or empty array) to build the Ghost Wall globally!
                 val safeMaskData = viewModel.roiMaskBytes ?: ByteArray(0)
@@ -553,17 +798,20 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                 for ((frameIndex, defPath) in viewModel.defFilePaths.withIndex()) {
                     val frameLabel = "Processing Frame ${frameIndex + 1}/$totalFrames..."
+                    setComputeStatus(
+                        if (totalFrames > 1) "Processing frame ${frameIndex + 1} of $totalFrames"
+                        else "Correlating & solving…"
+                    )
                     runOnUiThread { tvTimer.text = frameLabel }
 
                     val defBytes = File(defPath).readBytes()
 
                     val callback = object : ProgressCallback {
                         override fun onProgressUpdate(percentage: Int) {
-                            runOnUiThread {
-                                val frameProgress = (frameIndex.toFloat() / totalFrames) * 100
-                                val overallProgress = frameProgress + (percentage.toFloat() / totalFrames)
-                                progressBar.progress = overallProgress.toInt()
-                            }
+                            val frameProgress = (frameIndex.toFloat() / totalFrames) * 100
+                            val overallProgress = frameProgress + (percentage.toFloat() / totalFrames)
+                            setComputeProgress(overallProgress.toInt())
+                            runOnUiThread { progressBar.progress = overallProgress.toInt() }
                         }
                     }
 
@@ -713,6 +961,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                 withContext(Dispatchers.Main) {
                     isProcessing = false
+                    hideComputeOverlay()
                     progressBar.visibility = View.GONE
                     btnLogout.isEnabled = true
 
@@ -755,6 +1004,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 Log.e("StaticAnalysis", "Batch processing failed", e)
                 withContext(Dispatchers.Main) {
                     isProcessing = false
+                    hideComputeOverlay()
                     progressBar.visibility = View.GONE
                     tvTimer.text = "Engine Error"
                     tvResult.text = "❌ Error: ${e.message}"
@@ -880,6 +1130,42 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnBack.visibility = if (forward) View.VISIBLE else View.GONE
 
         checkReady()
+    }
+
+    // ------------------------------------------------------------------
+    // Compute progress overlay control
+    // ------------------------------------------------------------------
+    private fun showComputeOverlay(
+        title: String = "Computing Strain Field",
+        status: String = "Initializing engine…"
+    ) {
+        overlayTitle.text = title
+        overlayProgress.progress = 0
+        overlayPercent.text = "0%"
+        overlayStatus.text = status
+        overlayElapsed.text = "Elapsed 0s"
+        computeOverlay.visibility = View.VISIBLE
+        elapsedHandler.removeCallbacks(elapsedTicker)
+        elapsedHandler.post(elapsedTicker)
+    }
+
+    private fun hideComputeOverlay() {
+        computeOverlay.visibility = View.GONE
+        elapsedHandler.removeCallbacks(elapsedTicker)
+    }
+
+    /** Update the overlay's ring + percentage. Safe to call from any thread. */
+    private fun setComputeProgress(percent: Int) {
+        runOnUiThread {
+            val p = percent.coerceIn(0, 100)
+            overlayProgress.progress = p
+            overlayPercent.text = "$p%"
+        }
+    }
+
+    /** Update the overlay's status line (e.g. "Processing frame 2/5"). */
+    private fun setComputeStatus(text: String) {
+        runOnUiThread { overlayStatus.text = text }
     }
 
     private fun checkReady() {

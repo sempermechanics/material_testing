@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+  <LinearLayout
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -92,6 +96,55 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="14dp">
+
+                <!-- Quick start: load a video (frame 0 = reference, rest = deformed) -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginBottom="8dp">
+
+                            <ImageView
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:src="@drawable/ic_video"
+                                android:contentDescription="Video" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="10dp"
+                                android:text="Load from Video"
+                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="10dp"
+                            android:text="Extracts frames automatically — the first frame becomes the reference and the rest become the deformed sequence."
+                            android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnLoadVideo"
+                            style="@style/Widget.IndicVision.Button.Tonal"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:icon="@drawable/ic_video"
+                            app:iconGravity="textStart"
+                            android:text="Select Video" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
 
                 <!-- Card: Reference image -->
                 <com.google.android.material.card.MaterialCardView
@@ -606,4 +659,98 @@
             android:text="Next: Settings →"
             android:enabled="false" />
     </LinearLayout>
-</LinearLayout>
+  </LinearLayout>
+
+    <!-- ===================== Compute progress overlay ===================== -->
+    <!-- Full-screen scrim + centered card; blocks touches while the native
+         engine runs. Driven by the ProgressCallback in checkReady/compute. -->
+    <FrameLayout
+        android:id="@+id/computeOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#B3000814"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="300dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="22dp"
+            app:cardElevation="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:padding="28dp">
+
+                <TextView
+                    android:id="@+id/overlayTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Computing Strain Field"
+                    android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+
+                <FrameLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:layout_marginBottom="16dp">
+
+                    <com.google.android.material.progressindicator.CircularProgressIndicator
+                        android:id="@+id/overlayProgress"
+                        android:layout_width="132dp"
+                        android:layout_height="132dp"
+                        android:layout_gravity="center"
+                        app:indicatorColor="@color/sky_primary"
+                        app:trackColor="@color/sky_container"
+                        app:indicatorSize="132dp"
+                        app:trackThickness="10dp"
+                        app:indicatorInset="0dp"
+                        android:max="100"
+                        android:progress="0" />
+
+                    <TextView
+                        android:id="@+id/overlayPercent"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="0%"
+                        android:textColor="@color/sky_primary"
+                        android:textSize="30sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/overlayStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="Initializing engine…"
+                    android:textColor="@color/text_primary"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/overlayElapsed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Elapsed 0s"
+                    android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center"
+                    android:text="Please keep the app open"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+    </FrameLayout>
+</FrameLayout>

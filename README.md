@@ -8,7 +8,7 @@
 # inDIC
 ### *2D Digital Image Correlation. Natively on Android.*
 
-<img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build"> <img src="https://img.shields.io/badge/platform-Android%20ARM64-blue?style=flat-square&logo=android" alt="Platform"> <img src="https://img.shields.io/badge/language-Kotlin%20%7C%20C%2B%2B17-orange?style=flat-square" alt="Language"> <img src="https://img.shields.io/badge/NDK-C%2B%2B%20Engine-red?style=flat-square" alt="NDK"> <img src="https://img.shields.io/badge/math-Eigen%203.4-purple?style=flat-square" alt="Eigen"> <img src="https://img.shields.io/badge/vision-OpenCV%204.x-green?style=flat-square" alt="OpenCV"> <img src="https://img.shields.io/badge/license-Proprietary-lightgrey?style=flat-square" alt="License"> <img src="https://img.shields.io/badge/RMSE-0.0078%20px-brightgreen?style=flat-square" alt="RMSE">
+<img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build"> <img src="https://img.shields.io/badge/platform-Android%20(all%20ABIs)-blue?style=flat-square&logo=android" alt="Platform"> <img src="https://img.shields.io/badge/language-Kotlin%20%7C%20C%2B%2B17-orange?style=flat-square" alt="Language"> <img src="https://img.shields.io/badge/NDK-C%2B%2B%20Engine-red?style=flat-square" alt="NDK"> <img src="https://img.shields.io/badge/math-Eigen%203.4-purple?style=flat-square" alt="Eigen"> <img src="https://img.shields.io/badge/vision-OpenCV%204.x-green?style=flat-square" alt="OpenCV"> <img src="https://img.shields.io/badge/license-Proprietary-lightgrey?style=flat-square" alt="License"> <img src="https://img.shields.io/badge/RMSE-0.0078%20px-brightgreen?style=flat-square" alt="RMSE">
 
 > **inDIC** is the first offline-first, full-field 2D Digital Image Correlation platform engineered natively for Android — delivering sub-pixel displacement and Green–Lagrange strain metrology entirely on-device, without any cloud dependency.
 
@@ -57,7 +57,7 @@ inDIC conquers the HPC Wall through three interlocking innovations:
 
 1. **Pre-inverted Hessian Pool** — The expensive 6×6 Hessian matrix is computed and inverted *once* for the entire ROI in a parallel pre-pass, then reused across all solver calls. This converts a per-iteration \\(\mathcal{O}(N \cdot 36)\\) operation into a \\(\mathcal{O}(1)\\) lookup.
 2. **Hybrid Delaunay-ICGN Architecture** — A sparse AKAZE feature mesh provides exact 6-DOF affine initial guesses, collapsing ICGN convergence from 20–50 iterations to 3–7 iterations per subset on average.
-3. **ARM64-Native NEON SIMD** — The inner ICGN loop uses hand-vectorised ARM NEON intrinsics to process 4 floating-point values per clock cycle during the ZNSSD error accumulation step.
+3. **Portable SIMD (NEON + SSE)** — The inner ICGN loop is vectorised through OpenCV universal intrinsics, so the ZNSSD error and gradient accumulation compile to NEON on ARM and SSE on x86 from a single codepath. The engine ships for **all Android ABIs** (arm64-v8a, armeabi-v7a, x86, x86_64), so it runs natively on physical devices *and* emulators.
 
 The result: **78,000 point full-field DIC in 4.6 seconds** on a consumer Android smartphone, with RMSE accuracy of 0.0078 px — matching Sandia National Labs' desktop software (DICe) on the standard DIC Challenge benchmark.
 
@@ -106,10 +106,10 @@ $$E_{xx}=u_{,x}+\frac{1}{2}(u_{,x}^2+v_{,x}^2)$$
 - **VSG (Virtual Strain Gauge):** Fits a linear displacement plane to all neighbours within a circular window via LDLT least-squares. Equivalent to DICe's standard method.
 - **NLVC (Non-Local Virtual Compressor):** Uses a Gaussian derivative kernel over a circular horizon, providing smooth, noise-robust strain estimates with configurable spatial localisation.
 
-### 2.7 ARM64 NEON SIMD Vectorisation
-**Files:** `OptimizationEngine.cpp` (fast-path in `solve_icgn`)
+### 2.7 Portable SIMD Vectorisation (NEON + SSE)
+**Files:** `core/SimdKernels.h`, `OptimizationEngine.cpp` (fast-path in `solve_icgn`), `SubsetPrecomputer.cpp` (`sdi_planes`)
 
-On AArch64 targets, the inner ZNSSD accumulation loop uses `float32x4_t` NEON intrinsics to process 4 pixels simultaneously. The mean subtraction, standard deviation computation, error image construction, and steepest descent projection are all vectorised — the scalar fallback is preserved for non-NEON targets via `#ifdef __aarch64__` guards.
+The inner ZNSSD accumulation loop is written **once** using OpenCV universal intrinsics (`cv::v_float32`) in `SimdKernels.h`, which the compiler maps to NEON on ARM and SSE on x86 — replacing the previous hand-written `#ifdef __aarch64__` NEON blocks. Mean subtraction, standard-deviation computation, the error image, and the 6-DOF steepest-descent projection are all vectorised. To vectorise the gradient projection, the steepest-descent images are stored in a Structure-of-Arrays mirror (`sdi_planes`) so all six components stream contiguously. The scalar tail is handled automatically, and a plain scalar path remains for any target without SIMD. This makes the engine architecture-independent while keeping (and, on the gradient loop, improving) the original ARM performance. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and the `SimdKernels` test suite in [`docs/TESTING.md`](docs/TESTING.md).
 
 ### 2.8 JNI Thread Pinning
 **File:** `AnalysisViewModel.kt`
@@ -125,9 +125,10 @@ Result heatmaps are rendered using a **pre-computed 256-entry Jet LUT** (built o
 
 ## 3. App Features
 
-### 📷 Image Input
+### 📷 Image & Video Input
 - Load reference and deformed images from device gallery (single or batch up to N frames)
 - Supports PNG, TIFF, JPEG (with JPEG artifact warning), DNG/RAW
+- **Load from Video** — pick a clip and the app auto-extracts frames: the first frame of the chosen segment becomes the reference and the rest become the deformed sequence. A sampling dialog shows the video's resolution, frame rate and length (from metadata) and lets you choose the **extraction frame rate** and **time segment** to sample.
 - Optional 7-tap Gaussian pre-filter (toggleable per-analysis)
 - Native C++ image dimension detection without full decode
 
@@ -141,11 +142,14 @@ Result heatmaps are rendered using a **pre-computed 256-entry Jet LUT** (built o
 - Screen rotation state preservation
 
 ### ⚙️ Algorithm Configuration
-- Subset size (pixels)
-- Step size (pixels)
-- Strain window (subsets)
-- Strain method: VSG (linear plane fit) or NLVC (Gaussian derivative kernel)
+Setup is a **two-step wizard**: *1 · Load Images* (or video), then *2 · Settings & Run*. Parameters live on a dedicated settings page with **sliders** and **segmented toggles** (no more raw text fields):
+- Subset size (px) — slider
+- Step size / density (px) — slider
+- Strain window (px) — slider
+- Strain method: **VSG** (linear plane fit) or **NLVC** (Gaussian derivative kernel) — segmented toggle
+- Sub-pixel interpolation kernel: **4×4 Bicubic** or **6×6 Keys** — segmented toggle
 - Gaussian pre-blur toggle
+- The **Next** and **Compute** buttons stay disabled/faded until images are loaded and the settings page has been reviewed.
 
 ### 🚀 Analysis Engine
 - Two-pass Hybrid Core: Delaunay Mesh (PATH A) + RGDIC Flood-Fill (PATH B)
@@ -153,7 +157,7 @@ Result heatmaps are rendered using a **pre-computed 256-entry Jet LUT** (built o
 - Levenberg-Marquardt regularisation (configurable $\alpha$)
 - Nelder-Mead Simplex rescue for diverged subsets
 - Multi-core parallel execution via OpenMP
-- Live progress callback from C++ to Kotlin UI (10–90% range)
+- Live progress callback from C++ to Kotlin UI, shown as a **full-screen progress overlay** (ring + %, frame counter, elapsed time)
 - Batch analysis: process entire image sequences sequentially
 
 ### 📊 Results Viewer
@@ -172,9 +176,10 @@ Result heatmaps are rendered using a **pre-computed 256-entry Jet LUT** (built o
 - **Export Images (Batch ZIP):** all frames as PNGs in a single ZIP archive
 - **Export Master Batch CSV:** single CSV with all frames and all fields
 
-### 🔐 Security
+### 🔐 Security & Sign-in
+- Email/password sign-in, plus **native "Continue with Google" SSO** (Credential Manager one-tap → Supabase ID-token verification; see [docs/GOOGLE_SSO_SETUP.md](docs/GOOGLE_SSO_SETUP.md))
 - Hardware-locked authentication via Android Keystore RSA key pair
-- Supabase backend with admin-controlled `APPROVED/PENDING/REVOKED` access tiers
+- Supabase backend with admin-controlled `APPROVED/PENDING/REVOKED` access tiers (new SSO users are created `PENDING`, same as email registrations)
 - Offline-capable: cached session token permits operation without internet after first login
 - Self-healing KeyStore: if the Keystore is wiped (factory reset, OS update), the public key is automatically re-registered on next login without requiring re-approval
 
@@ -188,9 +193,9 @@ Result heatmaps are rendered using a **pre-computed 256-entry Jet LUT** (built o
 
 ### Step 1 — Launch & Authentication
 
-On first launch, inDIC presents the secure login portal. Enter your registered email and password to authenticate.
+On first launch, inDIC presents the secure login portal. Sign in with your registered **email and password**, or tap **Continue with Google** for native one-tap SSO (requires the Google provider to be configured — see [docs/GOOGLE_SSO_SETUP.md](docs/GOOGLE_SSO_SETUP.md)).
 
-> **Note for new users:** Tap *"Need access? Request an account"* to submit a registration request. Your account will be in `PENDING` status until an administrator approves it. You will see the Pending Approval screen (Step 1b) until approval is granted.
+> **Note for new users:** Tap *"Need access? Request an account"* to submit a registration request. Your account will be in `PENDING` status until an administrator approves it (Google sign-ins are also created `PENDING` on first login). You will see the Pending Approval screen (Step 1b) until approval is granted.
 
 <table>
   <tr>
@@ -217,12 +222,10 @@ On first launch, inDIC presents the secure login portal. Enter your registered e
 
 ### Step 2 — Main Analysis Interface
 
-After successful login, you arrive at the **Analysis Studio** — the central control hub.
+After successful login, you arrive at the **Analysis Studio**, organised as a **two-step wizard** with a step indicator at the top (*1 · Load Images* → *2 · Settings & Run*):
 
-The screen is divided into three zones:
-- **Image Panel (top):** Two side-by-side thumbnail cards — Reference image (left) and Deformed image (right)
-- **ROI & Control Panel (middle):** Image selection buttons, ROI definition tools, and algorithm parameter fields
-- **Action Bar (bottom):** Run Analysis button, View Results button, and progress/timer display
+- **Page 1 — Load Images:** a "Load from Video" card at the top, plus the Reference and Deformed image cards with their ROI tools. A gated **Next** button advances to page 2 once both a reference and deformed input are loaded.
+- **Page 2 — Settings & Run:** the analysis-parameters settings page (sliders + segmented toggles) and the **Compute Full-Field 2D Strain** button. A **Back** button returns to page 1.
 
 <p align="center">
   <img src="images/inDIC readme Images/main_analysis_interface.jpg" width="300" alt="Main Analysis Interface">
@@ -246,7 +249,9 @@ The screen is divided into three zones:
 2. Select one image for a single analysis, or multiple images for batch mode.
 3. The label updates to show either the filename (single) or the count (e.g., "12 images selected").
 
-**Supported formats:** PNG, TIFF, BMP, DNG, JPEG (with warning)
+**Or load a video:** Tap **Select Video** on the "Load from Video" card. Choose a clip, then in the sampling dialog pick the **extraction frame rate** and **time segment** (the dialog also shows the video's resolution, fps and length). On **Extract**, a progress overlay counts up while frames are decoded — the first frame of the segment becomes the reference and the rest become the deformed sequence.
+
+**Supported formats:** PNG, TIFF, BMP, DNG, JPEG (with warning); video via any format the device's `MediaMetadataRetriever` can decode (MP4/H.264, etc.)
 
 <p align="center">
   <img src="images/inDIC readme Images/file_picker.jpg" width="300" alt="File Picker">
@@ -311,17 +316,21 @@ Tap **FULL IMAGE** to use the entire image frame as the analysis region. The sta
 
 ### Step 5 — Configuring Analysis Parameters
 
-Adjust the three core parameters in the text fields:
+On **page 2 (Settings & Run)**, the parameters are a settings page with **sliders** (each showing its live value) and **segmented toggles**:
 
-| Parameter | Description | Typical Range |
-|---|---|---|
-| **Subset Size** | Side length of the correlation window (pixels). Larger = more robust but lower spatial resolution. Must be odd. | 21–61 px |
-| **Step Size** | Spacing between adjacent grid points (pixels). Smaller = higher point density but longer compute time. | 3–15 px |
-| **Strain Window** | Neighbourhood radius for strain calculation (pixels). Controls spatial averaging of the strain field. | 50–200 px |
+| Parameter | Control | Description | Typical Range |
+|---|---|---|---|
+| **Subset Size** | slider | Side length of the correlation window (pixels). Larger = more robust but lower spatial resolution. | 15–101 px |
+| **Step Size** | slider | Spacing between adjacent grid points (pixels). Smaller = higher point density but longer compute time. | 1–30 px |
+| **Strain Window** | slider | Neighbourhood size for strain calculation (pixels). Controls spatial averaging of the strain field. | 5–51 px |
 
-**Strain Method (Radio Group):**
+**Strain Method (segmented toggle):**
 - **VSG** — Virtual Strain Gauge: linear plane fit. Faster, standard. Recommended for most use cases.
 - **NLVC** — Non-Local Virtual Compressor: Gaussian derivative kernel. Smoother, better noise floor.
+
+**Sub-pixel Interpolation Kernel (segmented toggle):**
+- **4×4 Bicubic** — Keys cubic convolution, fast (default).
+- **6×6 Keys** — 4th-order Keys kernel for DICe parity.
 
 **Gaussian Blur Toggle:**
 Enable the pre-filter switch if your images have sensor noise or compression artifacts. Disable for high-quality optical images to preserve sharp speckle boundaries.
@@ -334,11 +343,11 @@ Enable the pre-filter switch if your images have sensor noise or compression art
 
 ### Step 6 — Running the Analysis
 
-1. Confirm the status bar shows both ✅ Reference and ✅ Deformed images loaded.
-2. Tap **RUN ANALYSIS**.
-3. The button disables and a **progress bar + elapsed timer** appear. The progress updates live from the C++ engine (10% → 90% during point solving → 100% on completion).
-4. For batch mode, a frame counter ("Frame 3 / 12") is shown as each deformed image is processed sequentially.
-5. On completion, the **VIEW RESULTS** button activates.
+1. On page 2, confirm inputs are loaded (the **Compute** button is enabled, not faded).
+2. Tap **Compute Full-Field 2D Strain**.
+3. A **full-screen progress overlay** appears — a circular progress ring with live %, the current frame counter, and an elapsed timer. Progress updates live from the C++ engine.
+4. For batch mode, the overlay shows "Processing frame 3 of 12" as each deformed image is processed sequentially.
+5. On completion, the results viewer opens automatically (and **VIEW RESULTS** stays available to reopen it).
 
 > **During processing:** The back button is intercepted. Pressing it shows a warning dialog rather than killing the thread mid-computation, preventing memory corruption.
 
@@ -530,83 +539,69 @@ One row per solved grid point. Invalid/failed points are omitted.
 
 | Tool | Version | Notes |
 |---|---|---|
-| Android Studio | Hedgehog (2023.1.1) or newer | Required for CMake integration |
-| Android NDK | r25c or r26b | Must match CMakeLists.txt ABI filters |
+| Android Studio | Ladybug (2024.2) or newer | Required for CMake integration |
+| Android NDK | r27+ (tested with 28.2) | r27+ builds 16 KB-page-aligned libs by default |
 | CMake | 3.22.1 | Bundled with NDK, or install via SDK Manager |
-| Min Android API | 26 (Android 8.0) | Required for AndroidKeyStore APIs used in auth |
-| Target ABI | `arm64-v8a` | NEON SIMD intrinsics are AArch64-specific |
-| OpenCV Android SDK | 4.8.x or 4.9.x | Download from opencv.org → Android releases |
-| Eigen | 3.4.0 | Header-only, included in `cpp/third_party/eigen/` |
+| Min Android API | 24 (Android 7.0) | `minSdk = 24`; `compileSdk`/`targetSdk = 36` |
+| Target ABIs | all (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`) | No `abiFilters` — every ABI is built; APK splits + a universal APK are produced |
+| OpenCV | 4.12.0 | **Git submodule** at `app/src/main/cpp/third_party/opencv`, **built from source** (curated modules: core, imgproc, imgcodecs, features2d, calib3d, flann) |
+| Eigen | 3.4.0 | **Git submodule** at `app/src/main/cpp/third_party/eigen` |
 
 -----
 
-### Step 1 — Extract the Source Code
+### Step 1 — Clone the Repository (with submodules)
 
-Extract the provided `inDIC_source.zip` repository to a local folder on your machine.
+Clone the repository and initialise submodules:
 
------
-
-### Step 2 — Download and Place the OpenCV Android SDK
-
-1.  Download the OpenCV Android SDK from https://opencv.org/releases/ (choose the "Android" variant).
-2.  Unzip the archive. You will get a folder named `OpenCV-android-sdk/`.
-3.  Place it at the following path inside the project:
-
-<!-- end list -->
-
-```text
-inDIC/
-├── app/
-│   └── src/
-│       └── main/
-│           └── cpp/
-│               └── third_party/
-│                   └── OpenCV-android-sdk/   ← place here
+```bash
+git clone --recurse-submodules https://github.com/<org>/IndicVisionDIC.git
+# or, if already cloned:
+git submodule update --init --recursive
 ```
 
-4.  Verify that the path `third_party/OpenCV-android-sdk/sdk/native/jni/include/opencv2/opencv.hpp` exists.
+Both native dependencies are **git submodules pinned to release tags**:
 
-> **Important:** The OpenCV SDK is not packaged with the source due to its size (\~200 MB). It must be downloaded and placed manually. The `CMakeLists.txt` references it at the relative path above.
+- **Eigen** → `app/src/main/cpp/third_party/eigen` @ **3.4.0** (header-only)
+- **OpenCV** → `app/src/main/cpp/third_party/opencv` @ **4.12.0**, **compiled from source** as part of the native build (only the modules the engine uses: core, imgproc, imgcodecs, features2d, calib3d, flann; its bundled 3rd-party image codecs are built in-tree, so no system libraries are required).
+
+> **Build-time note:** Because OpenCV is built from source, the **first** native build compiles OpenCV once per ABI and is slow (tens of minutes, ×4 ABIs). Subsequent builds are incremental (ninja caches the OpenCV objects). Building OpenCV also requires a working host **Python 3** on `PATH` (used only by OpenCV's CMake).
 
 -----
 
-### Step 3 — Configure Supabase Credentials
+### Step 2 — Configure Supabase Credentials
 
 The app's authentication backend uses Supabase. Credentials are injected via `BuildConfig` from `local.properties` (never committed to version control).
 
 Add the following to `local.properties` in the project root:
 
 ```properties
-SUPABASE_URL=[https://your-project-id.supabase.co](https://your-project-id.supabase.co)
+SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_ANON_KEY=your-supabase-anon-key-here
+# Optional — only needed for "Continue with Google" SSO (see docs/GOOGLE_SSO_SETUP.md)
+GOOGLE_WEB_CLIENT_ID=1234567890-abcdefg.apps.googleusercontent.com
 ```
 
-These values are read in `app/build.gradle` and exposed as `BuildConfig.SUPABASE_URL` and `BuildConfig.SUPABASE_ANON_KEY`. Your `SupabaseManager.kt` already references these constants.
+These are read in `app/build.gradle.kts` and exposed as `BuildConfig.SUPABASE_URL`, `BuildConfig.SUPABASE_ANON_KEY`, and `BuildConfig.GOOGLE_WEB_CLIENT_ID`. `SupabaseManager.kt` already references the Supabase constants; the Google client ID is used by `ui/GoogleSignInHelper.kt`.
 
-> **For contributors building a standalone version:** You can substitute a self-hosted Supabase instance or replace `AuthRepository.kt` with a simple stub that returns `Result.success("APPROVED")` to bypass authentication during development.
+> **For contributors building a standalone version:** You can substitute a self-hosted Supabase instance or replace `AuthRepository.kt` with a simple stub that returns `Result.success("APPROVED")` to bypass authentication during development. Note that debug builds may also skip straight to the analysis screen (a `BuildConfig.DEBUG` gate in `SplashActivity`) for fast iteration.
 
 -----
 
-### Step 4 — Verify CMakeLists.txt NDK Path
+### Step 3 — (Optional) Configure Google SSO
 
-Open `app/src/main/cpp/CMakeLists.txt` and confirm the OpenCV path matches your SDK location:
-
-```cmake
-set(OpenCV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/OpenCV-android-sdk/sdk/native/jni")
-find_package(OpenCV REQUIRED)
-```
+To enable **Continue with Google**, complete the Google Cloud + Supabase setup in [docs/GOOGLE_SSO_SETUP.md](docs/GOOGLE_SSO_SETUP.md) and add `GOOGLE_WEB_CLIENT_ID` to `local.properties`. Until then, the button shows a "not set up yet" hint and the rest of the app works normally.
 
 -----
 
-### Step 5 — Build & Run
+### Step 4 — Build & Run
 
 1.  Open the project root in Android Studio.
 2.  Let Gradle sync complete (this will download Kotlin/Java dependencies via Maven).
-3.  Connect an ARM64 Android device (API 26+) or create an AVD with `arm64-v8a` ABI.
+3.  Connect any Android device (API 24+) or create an AVD — **any ABI works** (arm64-v8a, x86_64 emulators included). For Google SSO testing, use a **Google APIs / Play Store** emulator image.
 4.  Select the `debug` build variant.
 5.  Click **Run ▶**.
 
-> **Build time note:** The first CMake build compiles the full C++ engine (\~15 files including OpenCV + Eigen headers). Expect 3–8 minutes on first build. Subsequent incremental builds are \<30 seconds.
+> **Build time note:** The first CMake build compiles the full C++ engine across all ABIs (including OpenCV + Eigen headers). Expect several minutes on first build. Subsequent incremental builds are \<30 seconds. The build produces per-ABI split APKs plus a universal APK under `app/build/outputs/apk/`.
 
 -----
 
@@ -621,16 +616,13 @@ find_package(OpenCV REQUIRED)
 
 ### Common Build Issues
 
-  - **`OpenCV_DIR not found`** — Verify the OpenCV SDK is placed at exactly `cpp/third_party/OpenCV-android-sdk/`. The path is case-sensitive on Linux/macOS.
-  - **`ANDROID_NDK not set`** — Open SDK Manager → SDK Tools → Install NDK (Side by side). Then set the NDK path in `local.properties`:
-
-<!-- end list -->
-
-```properties
-ndk.dir=/path/to/sdk/ndk/25.2.9519653
-```
-
-  - **`arm_neon.h not found`** — Ensure ABI filter in `build.gradle` includes only `arm64-v8a`. The NEON header is not available for `x86` or `armeabi-v7a` targets.
+  - **OpenCV headers not found / submodule empty** — run `git submodule update --init --recursive`. OpenCV is built from source at `app/src/main/cpp/third_party/opencv` via `add_subdirectory` in `CMakeLists.txt`.
+  - **OpenCV configure fails on Python detection** (`find_package called with invalid argument OFF`) — a broken `python3` shim was found. Ensure a real **Python 3** is on `PATH`; `CMakeLists.txt` points OpenCV at it via `find_program`.
+  - **First native build is very slow** — expected: OpenCV compiles from source once per ABI. Subsequent builds are cached by ninja.
+  - **`ANDROID_NDK not set`** — Open SDK Manager → SDK Tools → Install NDK (Side by side, r27+). Gradle picks it up automatically; you can pin it via `ndkVersion` in `app/build.gradle.kts`.
+  - **`arm_neon.h not found`** — Should not occur: the engine no longer includes `arm_neon.h` unconditionally. SIMD goes through OpenCV universal intrinsics (`core/SimdKernels.h`), which compile for every ABI. If you reintroduce raw NEON, guard the include with `#if defined(__aarch64__)`.
+  - **App crashes only on the emulator (native)** — Ensure you're on the current build: all ABIs are compiled, so x86/x86_64 emulators run the native engine natively. (Historically this was an `arm64-v8a`-only `abiFilter` — now removed.)
+  - **"not 16 KB compatible" warning** — Build with NDK r27+ (produces 16 KB-aligned libraries; the CMake link flags also force `max-page-size=16384`).
   - **`SIGSEGV on first OpenMP call`** — This means the JNI call is being made from a new OS thread each time. Verify `AnalysisViewModel.nativeExecutor` is being used for all `IndicVisionNativeLib` calls in `StaticAnalysisActivity`.
 
 -----
@@ -719,6 +711,9 @@ ndk.dir=/path/to/sdk/ndk/25.2.9519653
 │                                                                 │
 │  ImageProcessor.cpp       StrainCalculator.cpp                  │
 │  (Keys bicubic interp.)   (VSG LDLT + NLVC Gaussian kernel)     │
+│                                                                 │
+│  SimdKernels.h — portable SIMD hot loops (NEON on ARM, SSE on   │
+│  x86) via OpenCV universal intrinsics; built for all ABIs       │
 └─────────────────────────────────────────────────────────────────┘
                               │
 ┌─────────────────────────────▼───────────────────────────────────┐
@@ -749,7 +744,10 @@ Device Boot
     ▼
 SplashActivity — checks local Supabase session token
     │
-    ├── No token → AuthActivity (Login / Register)
+    ├── No token → AuthActivity (Email/password · Register · Continue with Google)
+    │                   └── Google SSO: Credential Manager → ID token →
+    │                       Supabase signInWith(IDToken) → create PENDING profile
+    │                       on first login → back to SplashActivity routing
     │
     └── Token found → query auth_profiles
             │
@@ -782,7 +780,11 @@ If the Supabase server is unreachable (no internet), `AuthRepository.checkUserAc
   - [ ] **Real-World Specimen Validation** — Transition from synthetic DIC Challenge datasets to physically deformed test coupons (tensile specimens, beam bending)
   - [ ] **3D Stereo DIC** — Dual-phone stereo acquisition mode using Wi-Fi-Direct synchronisation for out-of-plane displacement measurement
   - [ ] **Project Persistence** — Save and reload complete analysis sessions (images + results + parameters) to device storage
-  - [ ] **UI/UX Enhancements** — Results history gallery, annotation layer on heatmaps, shareable report links
+  - [x] **Video input** — Extract reference + deformed frames directly from a video clip with selectable frame rate and time segment
+  - [x] **UI/UX overhaul** — Deep-sky-blue design system, two-step setup wizard, sliders/segmented toggles, full-screen progress overlay, edge-to-edge insets
+  - [x] **Cross-architecture engine** — Portable SIMD (NEON/SSE) and all-ABI builds so the app runs on emulators and non-ARM64 devices
+  - [x] **Google SSO** — Native one-tap sign-in via Credential Manager + Supabase
+  - [ ] **Results history gallery, annotation layer, shareable report links**
   - [ ] **Pure RGDIC Path** — An optional pipeline for ROIs with no AKAZE features (e.g. uniform-texture specimens with small deformations)
 
 -----
@@ -804,10 +806,11 @@ Dr. Sankara J. Subramanian, IndicVision
 **Libraries Used:**
 
   - [Eigen 3.4](https://eigen.tuxfamily.org) — Linear algebra (MIT License)
-  - [OpenCV 4.x](https://opencv.org) — AKAZE, Delaunay, image I/O (Apache 2.0)
+  - [OpenCV 4.x](https://opencv.org) — AKAZE, Delaunay, image I/O, and universal intrinsics for portable SIMD (Apache 2.0)
   - [Supabase](https://supabase.com) — Auth + database backend (Apache 2.0)
+  - [AndroidX Credential Manager + Google Identity](https://developer.android.com/training/sign-in/credential-manager) — native Google SSO
   - [Kotlin Coroutines](https://github.com/Kotlin/kotlinx.coroutines) — Async execution
-  - ARM NEON Intrinsics — AArch64 SIMD vectorisation
+  - Portable SIMD (NEON on ARM, SSE on x86) via OpenCV universal intrinsics
 
 -----
 

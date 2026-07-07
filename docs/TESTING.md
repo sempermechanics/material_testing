@@ -18,16 +18,20 @@ cmake --build build
 ./build/dic_tests Engine.PureTranslation_Subpixel   # one test
 ```
 
-No dependencies beyond a compiler: the framework is a self-contained header
-(`framework/test_framework.h`), Eigen and the OpenCV intrinsics headers ship in
-the repo, and `<android/log.h>` is replaced by `shim/android/log.h`.
+Dependencies come from the git submodules (`git submodule update --init`):
+Eigen (`third_party/eigen`) and OpenCV's universal-intrinsics headers
+(`third_party/opencv/modules/core/include`). OpenCV's generated
+`opencv2/opencv_modules.hpp` + `cvconfig.h` are committed under
+`app/src/test/cpp/shim/opencv2/` so the host build needs no OpenCV configure,
+and `<android/log.h>` is replaced by `shim/android/log.h`.
 
 One-liner alternative (any host g++/clang++):
 
 ```bash
 g++ -std=c++17 -O2 -ffast-math \
   -Iapp/src/test/cpp -Iapp/src/test/cpp/shim -Iapp/src/main/cpp \
-  -Iapp/src/main/cpp/include -Iapp/src/main/cpp/opencv/sdk/native/jni/include \
+  -Iapp/src/main/cpp/third_party/eigen \
+  -Iapp/src/main/cpp/third_party/opencv/modules/core/include \
   app/src/test/cpp/*.cpp \
   app/src/main/cpp/preprocessing/*.cpp app/src/main/cpp/core/OptimizationEngine.cpp \
   app/src/main/cpp/postprocessing/StrainCalculator.cpp -o dic_tests
