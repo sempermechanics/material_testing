@@ -48,8 +48,9 @@ target_include_directories(dic_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}            # framework/
         ${CMAKE_CURRENT_SOURCE_DIR}/shim       # android/log.h stand-in
         ${ENGINE_DIR}                          # core/, preprocessing/, ...
-        ${ENGINE_DIR}/include                  # Eigen
-        ${ENGINE_DIR}/opencv/sdk/native/jni/include  # OpenCV universal intrinsics (header-only)
+        ${ENGINE_DIR}/third_party/eigen        # Eigen (git submodule @ 3.4.0)
+        ${ENGINE_DIR}/third_party/opencv/modules/core/include  # OpenCV universal intrinsics (submodule, header-only)
+        # shim/ (added below) supplies the generated opencv2/opencv_modules.hpp + cvconfig.h
 )
 
 # Quiet the intentional LOGD redefinitions in engine sources (Clang-only flag)
