@@ -2,9 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-feature android:name="android.hardware.camera.any" />
-    <uses-permission android:name="android.permission.CAMERA" />
-
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -42,7 +39,6 @@
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <activity android:name=".RoiDrawActivity" />
-        <activity android:name=".MainActivity" android:exported="false" />
 
     </application>
 </manifest>

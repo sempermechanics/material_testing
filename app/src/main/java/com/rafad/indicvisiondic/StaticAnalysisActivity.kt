@@ -411,7 +411,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
                 checkReady()
             }
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) {
+            Log.e("StaticAnalysisActivity", "Failed to load reference image", e)
+            Toast.makeText(this, "Failed to load reference image. Please try another file.", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun handleDeformedBatch(uris: List<Uri>) {
@@ -857,10 +860,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 val totalTime = executionTimeMs / 1000.0
 
                 // 🚀 THE TRUE ADMIN STEALTH QUEUE (OFFLINE-FIRST)
-                var generatedRefPath = ""
-                var generatedDefPath = "" // 🚀 ADDED THIS
-
                 if (firstFrameValidPoints > 0) {
+                    viewModel.currentSessionId = "Pending_Cloud_Sync_" + java.util.UUID.randomUUID().toString().take(8)
+
                     withContext(Dispatchers.IO) {
                         Log.d("inDIC_Diag", "========================================")
                         Log.d("inDIC_Diag", "1. ENGINE FINISHED. PREPARING BATCH OFFLINE QUEUE.")
@@ -907,9 +909,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                                     // Grab the correct math data for THIS specific frame
                                     val datFile = File(batchDir, String.format("frame_%04d.dat", frameIndex))
-
-                                    // Assign a unique session ID for this specific frame
-                                    viewModel.currentSessionId = "Pending_Cloud_Sync_" + java.util.UUID.randomUUID().toString().take(8)
 
                                     // 🚀 QUEUE THE WORKER FOR THIS SPECIFIC FRAME
                                     val uploadData = androidx.work.Data.Builder()
@@ -1060,7 +1059,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 viewModel.hasCustomRoi = true
                 checkReady()
             }
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) {
+            Log.e("StaticAnalysisActivity", "Failed to load ROI mask", e)
+            Toast.makeText(this, "Failed to load ROI mask. Please try another file.", Toast.LENGTH_LONG).show()
+        }
     }
 
     @SuppressLint("Range")
@@ -1326,7 +1328,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, paint)
 
                     finalX = (cx - rx).toInt()
-                    finalY = (cy - rx).toInt()
+                    finalY = (cy - ry).toInt()
                     finalW = (rx * 2).toInt()
                     finalH = (ry * 2).toInt()
                 }

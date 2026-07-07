@@ -360,12 +360,12 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    private fun calculateMaxMin() {
-        val data = rawData ?: return
+    private fun computeMaxMinIndices(): Pair<Int, Int> {
+        val data = rawData ?: return -1 to -1
         var maxV = -Float.MAX_VALUE
         var minV = Float.MAX_VALUE
-        lastMaxIdx = -1
-        lastMinIdx = -1
+        var maxIdx = -1
+        var minIdx = -1
 
         val validValues = mutableListOf<Float>()
         for (i in data.indices step 8) {
@@ -375,7 +375,7 @@ class ResultViewerActivity : AppCompatActivity() {
             }
         }
 
-        if (validValues.isEmpty()) return
+        if (validValues.isEmpty()) return -1 to -1
 
         validValues.sort()
         val p02 = validValues[(validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)]
@@ -386,22 +386,30 @@ class ResultViewerActivity : AppCompatActivity() {
             if (corr != 0f && corr <= 0.15f) {
                 val v = data[i + currentDataIndex]
                 if (v in p02..p98) {
-                    if (v > maxV) { maxV = v; lastMaxIdx = i }
-                    if (v < minV) { minV = v; lastMinIdx = i }
+                    if (v > maxV) { maxV = v; maxIdx = i }
+                    if (v < minV) { minV = v; minIdx = i }
                 }
             }
         }
 
-        if (lastMaxIdx == -1 || lastMinIdx == -1) {
+        if (maxIdx == -1 || minIdx == -1) {
             for (i in data.indices step 8) {
                 val corr = data[i + 7]
                 if (corr != 0f && corr <= 0.15f) {
                     val v = data[i + currentDataIndex]
-                    if (v > maxV) { maxV = v; lastMaxIdx = i }
-                    if (v < minV) { minV = v; lastMinIdx = i }
+                    if (v > maxV) { maxV = v; maxIdx = i }
+                    if (v < minV) { minV = v; minIdx = i }
                 }
             }
         }
+
+        return maxIdx to minIdx
+    }
+
+    private fun calculateMaxMin() {
+        val (maxIdx, minIdx) = computeMaxMinIndices()
+        lastMaxIdx = maxIdx
+        lastMinIdx = minIdx
     }
 
     private fun findNearestDataPoint(physX: Float, physY: Float) {
@@ -1094,7 +1102,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         Thread {
             try {
-                calculateMaxMin()
+                val (maxIdx, minIdx) = computeMaxMinIndices()
                 val mergedBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(mergedBitmap)
 
@@ -1109,7 +1117,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
                 bakeAnnotationsToCanvas(
                     canvas, imgW, imgH, currentHeatmapMin, currentHeatmapMax,
-                    currentTypeString, unit, lastMaxIdx, lastMinIdx, dataArray
+                    currentTypeString, unit, maxIdx, minIdx, dataArray
                 )
                 val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
                 val fileName = "IndicVision_${currentTypeString}_${imgName}.png"
