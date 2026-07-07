@@ -1,6 +1,8 @@
 [submodule "app/src/main/cpp/third_party/eigen"]
 	path = app/src/main/cpp/third_party/eigen
 	url = https://gitlab.com/libeigen/eigen.git
+	ignore = dirty
 [submodule "app/src/main/cpp/third_party/opencv"]
 	path = app/src/main/cpp/third_party/opencv
 	url = https://github.com/opencv/opencv.git
+	ignore = dirty

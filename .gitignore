@@ -26,3 +26,4 @@ output-metadata.json
 .DS_Store
 *.log
 *.hprof
+app/src/main/cpp/third_party/*
