@@ -14,8 +14,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.rafad.indicvisiondic.ui.Insets
 import java.io.File
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -85,6 +83,7 @@ class ResultViewerActivity : AppCompatActivity() {
     private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
     private var pdfProgressDialog: androidx.appcompat.app.AlertDialog? = null
     private val exportActions = mutableListOf<() -> Unit>()
+    private val exporter by lazy { ResultExporter(applicationContext, lifecycleScope) }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -545,57 +544,7 @@ class ResultViewerActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.no_data_to_save, Toast.LENGTH_SHORT).show()
             return
         }
-
-        Toast.makeText(this, R.string.saving_csv, Toast.LENGTH_SHORT).show()
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
-            val fileName = "IndicVision_${imgName}.csv"
-            val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/IndicVision")
-            }
-
-            val resolver = applicationContext.contentResolver
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-
-            if (uri != null) {
-                try {
-                    resolver.openOutputStream(uri)?.use { outputStream ->
-                        val writer = outputStream.bufferedWriter()
-                        writer.write("X,Y,U_Displacement,V_Displacement,Exx_Strain,Eyy_Strain,Exy_Shear,Correlation\n")
-
-                        var i = 0
-                        while (i < data.size) {
-                            val x = data[i]
-                            val y = data[i + 1]
-                            val u = data[i + DicResult.IDX_U]
-                            val v = data[i + DicResult.IDX_V]
-                            val exx = data[i + DicResult.IDX_EXX]
-                            val eyy = data[i + DicResult.IDX_EYY]
-                            val exy = data[i + DicResult.IDX_EXY]
-                            val c = data[i + DicResult.IDX_ZNSSD]
-
-                            if (DicResult.isSolvedPoint(c)) {
-                                writer.write("$x,$y,$u,$v,$exx,$eyy,$exy,$c\n")
-                            }
-                            i += DicResult.STRIDE
-                        }
-                        writer.flush()
-                    }
-
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ResultViewerActivity, R.string.csv_saved, Toast.LENGTH_LONG).show()
-                    }
-                } catch (e: Exception) {
-                    Log.e("ResultViewer", "CSV export failed", e)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ResultViewerActivity, R.string.csv_save_failed, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
+        exporter.exportCsv(data, originalDefNames, currentFrameIndex)
     }
 
     private fun generatePdfReport() {
@@ -715,69 +664,14 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     private fun exportAllImagesZip() {
-        if (batchFiles.isEmpty() || cachedBaseImage == null) {
+        val base = cachedBaseImage
+        if (batchFiles.isEmpty() || base == null) {
             Toast.makeText(this, R.string.no_data_to_save, Toast.LENGTH_SHORT).show()
             return
         }
-
-        Toast.makeText(this, R.string.saving_images_zip, Toast.LENGTH_LONG).show()
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            val refName = intent.getStringExtra(DicKeys.REF_NAME)?.substringBeforeLast(".") ?: "Batch"
-            val fileName = "IndicVision_Images_${currentTypeString}_${refName}.zip"
-            val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/IndicVision")
-            }
-
-            val resolver = applicationContext.contentResolver
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-
-            if (uri != null) {
-                try {
-                    resolver.openOutputStream(uri)?.use { outputStream ->
-                        ZipOutputStream(outputStream).use { zipOut ->
-                            val base = cachedBaseImage!!
-                            val alphaPaint = Paint().apply { alpha = 180 }
-
-                            for (index in batchFiles.indices) {
-                                val file = batchFiles[index]
-                                val data = DicResult.decodeDatBytes(file.readBytes()) ?: continue
-
-                                val (heatmap, _, _) = VisualizationEngine.generateHeatmap(
-                                    data, imgW, imgH, currentDataIndex, step
-                                )
-
-                                val mergedBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
-                                val canvas = Canvas(mergedBitmap)
-                                canvas.drawBitmap(base, 0f, 0f, null)
-                                canvas.drawBitmap(heatmap, 0f, 0f, alphaPaint)
-
-                                val trueFrameIndex = file.nameWithoutExtension.substringAfterLast("_").toIntOrNull() ?: index
-                                val imgName = originalDefNames.getOrNull(trueFrameIndex) ?: "Frame_${trueFrameIndex + 1}"
-                                val entryName = "IndicVision_${currentTypeString}_${imgName}.png"
-
-                                zipOut.putNextEntry(ZipEntry(entryName))
-                                mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, zipOut)
-                                zipOut.closeEntry()
-
-                                heatmap.recycle()
-                                mergedBitmap.recycle()
-                            }
-                        }
-                    }
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ResultViewerActivity, R.string.images_zip_saved, Toast.LENGTH_LONG).show()
-                    }
-                } catch (e: Exception) {
-                    Log.e("ResultViewer", "ZIP export failed", e)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ResultViewerActivity, R.string.images_zip_failed, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
+        exporter.exportAllImagesZip(
+            batchSnapshot(), base, imgW, imgH, currentDataIndex, step, currentTypeString
+        )
     }
 
     private fun exportAllDataCsv() {
@@ -785,64 +679,7 @@ class ResultViewerActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.no_data_to_save, Toast.LENGTH_SHORT).show()
             return
         }
-
-        Toast.makeText(this, R.string.saving_master_csv, Toast.LENGTH_LONG).show()
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            val refName = intent.getStringExtra(DicKeys.REF_NAME)?.substringBeforeLast(".") ?: "Batch"
-            val fileName = "IndicVision_BatchData_${refName}.csv"
-            val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/IndicVision")
-            }
-
-            val resolver = applicationContext.contentResolver
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-
-            if (uri != null) {
-                try {
-                    resolver.openOutputStream(uri)?.use { outputStream ->
-                        outputStream.bufferedWriter().use { writer ->
-                            writer.write("Image_Name,X,Y,U_Displacement,V_Displacement,Exx_Strain,Eyy_Strain,Exy_Shear,Correlation\n")
-
-                            for (index in batchFiles.indices) {
-                                val file = batchFiles[index]
-                                val data = DicResult.decodeDatBytes(file.readBytes()) ?: continue
-
-                                val trueFrameIndex = file.nameWithoutExtension.substringAfterLast("_").toIntOrNull() ?: index
-                                val imgName = originalDefNames.getOrNull(trueFrameIndex) ?: "Frame_${trueFrameIndex + 1}"
-
-                                var i = 0
-                                while (i < data.size) {
-                                    val x = data[i]
-                                    val y = data[i + 1]
-                                    val u = data[i + DicResult.IDX_U]
-                                    val v = data[i + DicResult.IDX_V]
-                                    val exx = data[i + DicResult.IDX_EXX]
-                                    val eyy = data[i + DicResult.IDX_EYY]
-                                    val exy = data[i + DicResult.IDX_EXY]
-                                    val c = data[i + DicResult.IDX_ZNSSD]
-
-                                    if (c != 0f) {
-                                        writer.write("$imgName,$x,$y,$u,$v,$exx,$eyy,$exy,$c\n")
-                                    }
-                                    i += DicResult.STRIDE
-                                }
-                            }
-                        }
-                    }
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ResultViewerActivity, R.string.master_csv_saved, Toast.LENGTH_LONG).show()
-                    }
-                } catch (e: Exception) {
-                    Log.e("ResultViewer", "Master CSV export failed", e)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ResultViewerActivity, R.string.master_csv_failed, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
+        exporter.exportAllDataCsv(batchSnapshot())
     }
 
     private fun exportMergedImage() {
@@ -853,63 +690,23 @@ class ResultViewerActivity : AppCompatActivity() {
 
         val base = cachedBaseImage
         val overlay = cachedHeatmap
-
         if (base == null || overlay == null) {
             Toast.makeText(this, R.string.export_images_missing, Toast.LENGTH_SHORT).show()
             return
         }
 
-        Toast.makeText(this, R.string.saving_image, Toast.LENGTH_SHORT).show()
-
-        lifecycleScope.launch(Dispatchers.Default) {
-            try {
-                val (maxIdx, minIdx) = computeMaxMinIndices()
-                val mergedBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(mergedBitmap)
-
-                canvas.drawBitmap(base, 0f, 0f, null)
-
-                val alphaPaint = Paint().apply { alpha = 180 }
-                canvas.drawBitmap(overlay, 0f, 0f, alphaPaint)
-
-                val isStrain = DicResult.isStrainFieldIndex(currentDataIndex)
-                val unit = if (isStrain) "mε" else "px"
-                val dataArray = rawData ?: FloatArray(0)
-
-                ReportBuilder.bakeAnnotationsToCanvas(
-                    canvas, imgW, imgH, currentHeatmapMin, currentHeatmapMax,
-                    currentTypeString, unit, maxIdx, minIdx, dataArray
-                )
-                val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
-                val fileName = "IndicVision_${currentTypeString}_${imgName}.png"
-
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/IndicVision")
-                }
-
-                withContext(Dispatchers.IO) {
-                    val resolver = applicationContext.contentResolver
-                    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-
-                    if (uri != null) {
-                        resolver.openOutputStream(uri)?.use { outputStream ->
-                            mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-                        }
-                    }
-                    mergedBitmap.recycle()
-                }
-
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@ResultViewerActivity, R.string.image_saved, Toast.LENGTH_LONG).show()
-                }
-            } catch (e: Exception) {
-                Log.e("ResultViewer", "Image export failed", e)
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@ResultViewerActivity, R.string.image_save_failed, Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
+        val (maxIdx, minIdx) = computeMaxMinIndices()
+        exporter.exportMergedImage(
+            base, overlay, rawData ?: FloatArray(0),
+            imgW, imgH, currentDataIndex, currentTypeString,
+            currentHeatmapMin, currentHeatmapMax, maxIdx, minIdx,
+            originalDefNames, currentFrameIndex,
+        )
     }
+
+    private fun batchSnapshot() = ResultExporter.BatchSnapshot(
+        batchFiles = batchFiles,
+        originalDefNames = originalDefNames,
+        refName = intent.getStringExtra(DicKeys.REF_NAME)?.substringBeforeLast("."),
+    )
 }
