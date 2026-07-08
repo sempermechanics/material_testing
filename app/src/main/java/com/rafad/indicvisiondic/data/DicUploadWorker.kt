@@ -1,4 +1,10 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.data
+import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.DicResult
+import com.rafad.indicvisiondic.report.EngineStats
+import com.rafad.indicvisiondic.report.PdfReportGenerator
+import com.rafad.indicvisiondic.report.ReportBuilder
+import com.rafad.indicvisiondic.report.RoiData
 
 import android.content.Context
 import android.graphics.BitmapFactory

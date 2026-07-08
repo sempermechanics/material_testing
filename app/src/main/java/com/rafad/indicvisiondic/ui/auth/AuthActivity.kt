@@ -1,4 +1,9 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.ui.auth
+import com.rafad.indicvisiondic.BuildConfig
+import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.data.AuthRepository
+import com.rafad.indicvisiondic.data.DeviceKeyManager
 
 import android.content.Intent
 import android.graphics.Color
@@ -14,7 +19,6 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar // Added for modern error messages
 import com.rafad.indicvisiondic.ui.Motion
 import com.rafad.indicvisiondic.ui.Insets
-import com.rafad.indicvisiondic.ui.GoogleSignInHelper
 import kotlinx.coroutines.launch
 
 class AuthActivity : AppCompatActivity() {

@@ -1,4 +1,8 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.report
+import com.rafad.indicvisiondic.BuildConfig
+import com.rafad.indicvisiondic.DicResult
+import com.rafad.indicvisiondic.data.DicUploadWorker
+import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 
 import android.graphics.Bitmap
 import android.graphics.Canvas

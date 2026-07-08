@@ -1,4 +1,5 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.data
+import com.rafad.indicvisiondic.BuildConfig
 
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient

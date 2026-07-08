@@ -1,4 +1,5 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.data
+import com.rafad.indicvisiondic.ui.auth.SplashActivity
 
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google

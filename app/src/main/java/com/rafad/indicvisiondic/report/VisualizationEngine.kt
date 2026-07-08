@@ -1,4 +1,5 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.report
+import com.rafad.indicvisiondic.DicResult
 
 import android.graphics.Bitmap
 import android.graphics.Color

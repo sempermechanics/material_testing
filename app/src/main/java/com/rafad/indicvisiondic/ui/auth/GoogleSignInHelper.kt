@@ -1,4 +1,4 @@
-package com.rafad.indicvisiondic.ui
+package com.rafad.indicvisiondic.ui.auth
 
 import android.app.Activity
 import androidx.credentials.CredentialManager

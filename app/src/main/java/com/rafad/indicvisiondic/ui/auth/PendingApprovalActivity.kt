@@ -1,4 +1,11 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.ui.auth
+import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.data.AuthRepository
+import com.rafad.indicvisiondic.data.DeviceKeyManager
+import com.rafad.indicvisiondic.data.SupabaseManager
+import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
 
 import android.content.Intent
 import android.os.Bundle

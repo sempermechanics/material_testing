@@ -1,4 +1,4 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.data
 
 import android.content.Context
 import android.provider.Settings // 🚀 NEW: Connects to the physical hardware ID

@@ -1,4 +1,4 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.report
 
 import android.graphics.*
 import android.graphics.pdf.PdfDocument

@@ -23,7 +23,7 @@
             android:scaleType="fitCenter"
             android:contentDescription="@string/roi_canvas_image" />
 
-        <com.rafad.indicvisiondic.StudioOverlayView
+        <com.rafad.indicvisiondic.ui.analysis.StudioOverlayView
             android:id="@+id/overlayRoi"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />

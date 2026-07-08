@@ -1,4 +1,4 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.ui.viewer
 
 import android.content.Context
 import android.graphics.Canvas

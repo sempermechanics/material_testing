@@ -1,4 +1,4 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

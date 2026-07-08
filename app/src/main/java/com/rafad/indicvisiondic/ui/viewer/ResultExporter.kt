@@ -1,4 +1,8 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.ui.viewer
+import com.rafad.indicvisiondic.DicResult
+import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.report.ReportBuilder
+import com.rafad.indicvisiondic.report.VisualizationEngine
 
 import android.content.ContentValues
 import android.content.Context

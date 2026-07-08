@@ -20,7 +20,7 @@
         android:hardwareAccelerated="true">
 
         <activity
-            android:name=".SplashActivity"
+            android:name=".ui.auth.SplashActivity"
             android:exported="true"
             android:theme="@style/Theme.IndicVisionDIC.Splash">
             <intent-filter>
@@ -29,16 +29,16 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".AuthActivity" android:exported="false" />
-        <activity android:name=".PendingApprovalActivity" android:exported="false" />
-        <activity android:name=".ResultViewerActivity" />
+        <activity android:name=".ui.auth.AuthActivity" android:exported="false" />
+        <activity android:name=".ui.auth.PendingApprovalActivity" android:exported="false" />
+        <activity android:name=".ui.viewer.ResultViewerActivity" />
 
         <activity
-            android:name=".StaticAnalysisActivity"
+            android:name=".ui.analysis.StaticAnalysisActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
-        <activity android:name=".RoiDrawActivity" />
+        <activity android:name=".ui.analysis.RoiDrawActivity" />
 
     </application>
 </manifest>

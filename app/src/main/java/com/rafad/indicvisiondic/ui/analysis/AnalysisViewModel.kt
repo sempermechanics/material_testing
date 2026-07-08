@@ -1,4 +1,11 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.ui.analysis
+import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.DicResult
+import com.rafad.indicvisiondic.IndicVisionNativeLib
+import com.rafad.indicvisiondic.ProgressCallback
+import com.rafad.indicvisiondic.data.DicUploadWorker
+import com.rafad.indicvisiondic.data.SupabaseManager
+import com.rafad.indicvisiondic.report.EngineStats
 
 import android.content.Context
 import android.graphics.Bitmap

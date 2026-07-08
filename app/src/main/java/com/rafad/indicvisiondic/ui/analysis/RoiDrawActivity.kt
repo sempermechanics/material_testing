@@ -1,4 +1,7 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.ui.analysis
+import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.IndicVisionNativeLib
+import com.rafad.indicvisiondic.R
 
 import android.app.Activity
 import android.content.Intent
