@@ -122,7 +122,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # validate-wrappers is off here: this job checks out submodules, and
+      # OpenCV's repo bundles its own (ancient) gradle-wrapper.jar files
+      # that fail checksum validation. Our own wrapper is validated by the
+      # android-kotlin job, which has no submodules.
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
 
       # The from-source OpenCV build dominates; cache per-ABI object dirs
       # keyed on everything that can change the native build.
@@ -164,7 +170,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # See the all-ABIs job: OpenCV submodule ships wrapper jars that
+      # fail checksum validation; ours is validated in android-kotlin.
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
 
       - name: Cache native build (.cxx)
         uses: actions/cache@v4

@@ -60,7 +60,12 @@ namespace IndicVision {
     // Replaces the old "Subset" class. Now just a pure data struct.
     struct SubsetData {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-        int_t cx, cy, dim;
+        // dim MUST default to 0 (never a real subset dim): precompute_subset
+        // only allocates its vectors when data.dim != dim, so an indeterminate
+        // dim that happens to equal the request (e.g. stale stack memory from
+        // a previous SubsetData at the same address) skips allocation and
+        // null-derefs. Caught by TSan in CI.
+        int_t cx = 0, cy = 0, dim = 0;
         std::vector<int_t> x_offsets, y_offsets;
         // 🚀 OPTIMIZATION T1.1: Pre-converted float offsets to eliminate 4-cycle SCVTF latency in the ICGN hot loop
         std::vector<float> x_offsets_f, y_offsets_f;

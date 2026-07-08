@@ -8,6 +8,12 @@
 // =====================================================================
 #include "framework/test_framework.h"
 
+#include <cstdio>
+
 int main(int argc, char **argv) {
+    // Unbuffered output: on CI stdout is a pipe (fully buffered), so a
+    // crash would otherwise swallow every [ RUN ] line printed before it,
+    // hiding which test died.
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
     return dictest::run_all(argc, argv);
 }

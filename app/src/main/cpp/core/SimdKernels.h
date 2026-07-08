@@ -83,6 +83,16 @@ namespace IndicVision {
             float err = 0.0f;
             float dp0 = 0.0f, dp1 = 0.0f, dp2 = 0.0f, dp3 = 0.0f, dp4 = 0.0f, dp5 = 0.0f;
             size_t i = 0;
+            // Plane base pointers shared by the SIMD body and the scalar
+            // tail. Indexing the tail as p_k[i] (instead of
+            // sdi_planes[k*n + i]) also keeps GCC's aggressive loop
+            // optimizer from flagging the recomputed k*n+i offsets.
+            const float *p0 = sdi_planes;
+            const float *p1 = sdi_planes + n;
+            const float *p2 = sdi_planes + 2 * n;
+            const float *p3 = sdi_planes + 3 * n;
+            const float *p4 = sdi_planes + 4 * n;
+            const float *p5 = sdi_planes + 5 * n;
 #if CV_SIMD
             const size_t step = (size_t) cv::VTraits<cv::v_float32>::vlanes();
             cv::v_float32 mean_v = cv::vx_setall_f32(mean);
@@ -91,12 +101,6 @@ namespace IndicVision {
             cv::v_float32 a0 = cv::vx_setzero_f32(), a1 = cv::vx_setzero_f32(),
                     a2 = cv::vx_setzero_f32(), a3 = cv::vx_setzero_f32(),
                     a4 = cv::vx_setzero_f32(), a5 = cv::vx_setzero_f32();
-            const float *p0 = sdi_planes;
-            const float *p1 = sdi_planes + n;
-            const float *p2 = sdi_planes + 2 * n;
-            const float *p3 = sdi_planes + 3 * n;
-            const float *p4 = sdi_planes + 4 * n;
-            const float *p5 = sdi_planes + 5 * n;
             for (; i + step <= n; i += step) {
                 cv::v_float32 norm_def =
                         cv::v_mul(cv::v_sub(cv::vx_load(vals + i), mean_v), inv_v);
@@ -121,12 +125,12 @@ namespace IndicVision {
                 float norm_def = (vals[i] - mean) * inv_std;
                 float diff = ref[i] - norm_def;
                 err += diff * diff;
-                dp0 += sdi_planes[i] * diff;
-                dp1 += sdi_planes[n + i] * diff;
-                dp2 += sdi_planes[2 * n + i] * diff;
-                dp3 += sdi_planes[3 * n + i] * diff;
-                dp4 += sdi_planes[4 * n + i] * diff;
-                dp5 += sdi_planes[5 * n + i] * diff;
+                dp0 += p0[i] * diff;
+                dp1 += p1[i] * diff;
+                dp2 += p2[i] * diff;
+                dp3 += p3[i] * diff;
+                dp4 += p4[i] * diff;
+                dp5 += p5[i] * diff;
             }
             dp_out[0] = dp0;
             dp_out[1] = dp1;
