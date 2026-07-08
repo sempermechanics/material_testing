@@ -2,7 +2,6 @@ package com.rafad.indicvisiondic.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.rafad.indicvisiondic.DicKeys
@@ -15,6 +14,7 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 
 /**
@@ -34,11 +34,11 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val datPath = inputData.getString(DicKeys.DAT_PATH) ?: return@withContext Result.failure()
         val frameName = inputData.getString(DicKeys.FRAME_NAME) ?: "Frame"
 
-        Log.d("inDIC_Diag", "========================================")
-        Log.d("inDIC_Diag", "Upload worker started (network available)")
+        Timber.d("========================================")
+        Timber.d("Upload worker started (network available)")
 
         try {
-            Log.d("inDIC_Diag", "-> Step 1: Connecting to Supabase Database...")
+            Timber.d("-> Step 1: Connecting to Supabase Database...")
             val sessionData = AnalysisSessionInsert(
                 userId = userId,
                 userEmail = userEmail,
@@ -54,25 +54,25 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
             val trueSessionId = insertedRow.sessionId
             val cloudFolder = "$userEmail/Session_$trueSessionId"
-            Log.d("inDIC_Diag", "Row Created! Target Folder: $cloudFolder")
+            Timber.d("Row Created! Target Folder: $cloudFolder")
 
             val storageBucket = SupabaseManager.client.storage["session_artifacts"]
 
-            Log.d("inDIC_Diag", "-> Step 2: Uploading Reference Image...")
+            Timber.d("-> Step 2: Uploading Reference Image...")
             val refFile = File(refPath)
             if (refFile.exists()) {
                 storageBucket.upload("$cloudFolder/Reference.png", refFile.readBytes()) { upsert = true }
-                Log.d("inDIC_Diag", "Reference Uploaded.")
+                Timber.d("Reference Uploaded.")
             }
 
-            Log.d("inDIC_Diag", "-> Step 3: Uploading Deformed Image...")
+            Timber.d("-> Step 3: Uploading Deformed Image...")
             val defFile = File(defPath)
             if (defFile.exists()) {
                 storageBucket.upload("$cloudFolder/Deformed_$frameName.png", defFile.readBytes()) { upsert = true }
-                Log.d("inDIC_Diag", "Deformed Uploaded.")
+                Timber.d("Deformed Uploaded.")
             }
 
-            Log.d("inDIC_Diag", "-> Step 4: Generating CSV...")
+            Timber.d("-> Step 4: Generating CSV...")
             val datFile = File(datPath)
             var publicCsvUrl = ""
             var rawFloatData: FloatArray? = null
@@ -98,11 +98,11 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     val csvCloudPath = "$cloudFolder/Data_$frameName.csv"
                     storageBucket.upload(csvCloudPath, csvContent.toString().toByteArray()) { upsert = true }
                     publicCsvUrl = storageBucket.publicUrl(csvCloudPath)
-                    Log.d("inDIC_Diag", "CSV Uploaded.")
+                    Timber.d("CSV Uploaded.")
                 }
             }
 
-            Log.d("inDIC_Diag", "-> Step 5: Generating PDF in Background...")
+            Timber.d("-> Step 5: Generating PDF in Background...")
             var publicPdfUrl = ""
             if (rawFloatData != null && refFile.exists() && defFile.exists()) {
                 publicPdfUrl = generateHeadlessPdfAndUpload(
@@ -114,10 +114,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     frameName,
                     trueSessionId,
                 )
-                Log.d("inDIC_Diag", "PDF Uploaded.")
+                Timber.d("PDF Uploaded.")
             }
 
-            Log.d("inDIC_Diag", "-> Step 6: Updating Database Ledger...")
+            Timber.d("-> Step 6: Updating Database Ledger...")
             if (publicCsvUrl.isNotEmpty() || publicPdfUrl.isNotEmpty()) {
                 val updateMap = mutableMapOf<String, String>()
                 if (publicCsvUrl.isNotEmpty()) updateMap["summary_csv_path"] = publicCsvUrl
@@ -126,17 +126,17 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 SupabaseManager.client.postgrest["analysis_sessions"].update(updateMap) {
                     filter { eq("session_id", trueSessionId) }
                 }
-                Log.d("inDIC_Diag", "Ledger Updated.")
+                Timber.d("Ledger Updated.")
             }
 
-            Log.d("inDIC_Diag", "Upload worker finished successfully")
-            Log.d("inDIC_Diag", "========================================")
+            Timber.d("Upload worker finished successfully")
+            Timber.d("========================================")
             Result.success()
         } catch (e: Exception) {
-            Log.e("inDIC_Diag", "========================================")
-            Log.e("inDIC_Diag", "Upload worker failed; will retry")
-            Log.e("inDIC_Diag", "Error Message: ${e.message}")
-            Log.e("inDIC_Diag", "========================================")
+            Timber.e("========================================")
+            Timber.e("Upload worker failed; will retry")
+            Timber.e("Error Message: ${e.message}")
+            Timber.e("========================================")
             Result.retry()
         }
     }

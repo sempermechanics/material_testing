@@ -126,6 +126,8 @@ android {
     lint {
         baseline = file("lint-baseline.xml")
         abortOnError = true
+        // Layouts are fully extracted to strings.xml — keep it that way.
+        error += "HardcodedText"
     }
 }
 
@@ -155,6 +157,7 @@ dependencies {
     implementation("io.ktor:ktor-client-okhttp:3.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("com.jakewharton.timber:timber:5.0.1")
 }
 
 // Static analysis gate: `./gradlew :app:detekt` (CI). Existing findings are

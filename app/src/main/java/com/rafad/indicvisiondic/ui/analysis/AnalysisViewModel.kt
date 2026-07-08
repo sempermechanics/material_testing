@@ -1,7 +1,6 @@
 package com.rafad.indicvisiondic.ui.analysis
 import android.content.Context
 import android.graphics.Bitmap
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.work.Constraints
 import androidx.work.Data
@@ -19,6 +18,7 @@ import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ExecutorService
@@ -261,8 +261,8 @@ class AnalysisViewModel : ViewModel() {
         firstFrameAvgIters: Float,
         executionTimeMs: Int,
     ) = withContext(Dispatchers.IO) {
-        Log.d("inDIC_Diag", "========================================")
-        Log.d("inDIC_Diag", "1. ENGINE FINISHED. PREPARING BATCH OFFLINE QUEUE.")
+        Timber.d("========================================")
+        Timber.d("1. ENGINE FINISHED. PREPARING BATCH OFFLINE QUEUE.")
 
         var refBmp: Bitmap? = null
         try {
@@ -331,16 +331,16 @@ class AnalysisViewModel : ViewModel() {
                         .build()
 
                     WorkManager.getInstance(appContext).enqueue(uploadWork)
-                    Log.d("inDIC_Diag", "-> SUCCESS! Worker queued for Frame ${frameIndex + 1}.")
+                    Timber.d("-> SUCCESS! Worker queued for Frame ${frameIndex + 1}.")
                 } finally {
                     defBmp?.recycle()
                 }
             }
         } catch (e: Exception) {
-            Log.e("inDIC_Diag", "LOCAL CATCH: Failed to enqueue batch workers", e)
+            Timber.e(e, "LOCAL CATCH: Failed to enqueue batch workers")
         } finally {
             refBmp?.recycle()
-            Log.d("inDIC_Diag", "========================================")
+            Timber.d("========================================")
         }
     }
 }

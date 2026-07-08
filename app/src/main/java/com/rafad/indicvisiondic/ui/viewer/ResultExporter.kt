@@ -7,7 +7,6 @@ import android.graphics.Paint
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
-import android.util.Log
 import android.widget.Toast
 import com.rafad.indicvisiondic.DicResult
 import com.rafad.indicvisiondic.R
@@ -17,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import java.io.OutputStream
 import java.util.zip.ZipEntry
@@ -89,7 +89,7 @@ class ResultExporter(
                 }
                 toastOnMain(R.string.csv_saved, long = true)
             } catch (e: Exception) {
-                Log.e("ResultExporter", "CSV export failed", e)
+                Timber.e(e, "CSV export failed")
                 toastOnMain(R.string.csv_save_failed)
             }
         }
@@ -169,7 +169,7 @@ class ResultExporter(
                 }
                 toastOnMain(R.string.images_zip_saved, long = true)
             } catch (e: Exception) {
-                Log.e("ResultExporter", "ZIP export failed", e)
+                Timber.e(e, "ZIP export failed")
                 toastOnMain(R.string.images_zip_failed)
             }
         }
@@ -207,7 +207,7 @@ class ResultExporter(
                 }
                 toastOnMain(R.string.master_csv_saved, long = true)
             } catch (e: Exception) {
-                Log.e("ResultExporter", "Master CSV export failed", e)
+                Timber.e(e, "Master CSV export failed")
                 toastOnMain(R.string.master_csv_failed)
             }
         }
@@ -262,7 +262,7 @@ class ResultExporter(
                 }
                 toastOnMain(R.string.image_saved, long = true)
             } catch (e: Exception) {
-                Log.e("ResultExporter", "Image export failed", e)
+                Timber.e(e, "Image export failed")
                 toastOnMain(R.string.image_save_failed)
             }
         }

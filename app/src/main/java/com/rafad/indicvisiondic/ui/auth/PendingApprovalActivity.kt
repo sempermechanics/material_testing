@@ -18,6 +18,7 @@ import com.rafad.indicvisiondic.ui.Insets
 import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * Holding screen for authenticated accounts whose `auth_profiles.access_status`
@@ -128,7 +129,7 @@ class PendingApprovalActivity : AppCompatActivity() {
                 SupabaseManager.client.auth.signOut()
             } catch (e: Exception) {
                 // Even if the network fails, we force them out locally to ensure security
-                android.util.Log.e("inDIC_Auth", "Server logout failed, forcing local exit.", e)
+                Timber.e(e, "Server logout failed, forcing local exit.")
             } finally {
                 // 2. Burn the bridge and route to login
                 routeToLogin("You have been successfully logged out.")

@@ -5,7 +5,6 @@ import android.graphics.*
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.widget.*
@@ -28,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 
 /**
@@ -325,7 +325,7 @@ class ResultViewerActivity : AppCompatActivity() {
                 val file = batchFiles[index]
                 val data = DicResult.decodeDatBytes(file.readBytes())
                 if (data == null) {
-                    Log.e("ResultViewer", "Invalid file size for frame $index")
+                    Timber.e("Invalid file size for frame $index")
                     return@launch
                 }
 
@@ -339,7 +339,7 @@ class ResultViewerActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
-                    Log.e("ResultViewer", "Failed to load frame $index", e)
+                    Timber.e(e, "Failed to load frame $index")
                 }
             }
         }

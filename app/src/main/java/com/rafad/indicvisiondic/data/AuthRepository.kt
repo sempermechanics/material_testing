@@ -1,5 +1,4 @@
 package com.rafad.indicvisiondic.data
-import android.util.Log
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
@@ -11,6 +10,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import timber.log.Timber
 
 // Used for fetching data during LOGIN
 @Serializable
@@ -90,9 +90,9 @@ class AuthRepository {
     suspend fun loginUser(emailInput: String, passwordInput: String, currentDeviceId: String, currentPublicKey: String): Result<String> {
         return withContext(Dispatchers.IO) {
             try {
-                Log.d("inDIC_Auth_Diag", "========================================")
-                Log.d("inDIC_Auth_Diag", "INITIATING SECURE LOGIN")
-                Log.d("inDIC_Auth_Diag", "-> Local Device ID presented by phone: $currentDeviceId")
+                Timber.d("========================================")
+                Timber.d("INITIATING SECURE LOGIN")
+                Timber.d("-> Local Device ID presented by phone: $currentDeviceId")
 
                 supabase.auth.signInWith(Email) {
                     email = emailInput
@@ -106,11 +106,11 @@ class AuthRepository {
                     .select { filter { eq("user_id", userId) } }
                     .decodeSingle<AuthProfile>()
 
-                Log.d("inDIC_Auth_Diag", "-> Supabase Vault Device ID: ${profile.deviceFingerprint}")
+                Timber.d("-> Supabase Vault Device ID: ${profile.deviceFingerprint}")
 
                 when (profile.accessStatus) {
                     "APPROVED" -> {
-                        Log.d("inDIC_Auth_Diag", "-> Status: APPROVED")
+                        Timber.d("-> Status: APPROVED")
                     }
                     "PENDING" -> return@withContext Result.failure(Exception("Account is pending Admin approval."))
                     "REVOKED" -> {
@@ -125,16 +125,16 @@ class AuthRepository {
 
                 // THE HARDWARE LOCK GATE
                 if (profile.deviceFingerprint != null && profile.deviceFingerprint != currentDeviceId) {
-                    Log.e("inDIC_Auth_Diag", "Hardware key mismatch for this account")
-                    Log.e("inDIC_Auth_Diag", "Expected: ${profile.deviceFingerprint}")
-                    Log.e("inDIC_Auth_Diag", "Received: $currentDeviceId")
+                    Timber.e("Hardware key mismatch for this account")
+                    Timber.e("Expected: ${profile.deviceFingerprint}")
+                    Timber.e("Received: $currentDeviceId")
                     supabase.auth.signOut()
                     return@withContext Result.failure(Exception("UNAUTHORIZED HARDWARE: Account locked to a different device."))
                 }
 
                 // THE SELF-HEALING KEYSTORE
                 if (profile.hardwarePublicKey != currentPublicKey) {
-                    Log.d("inDIC_Auth_Diag", "KeyStore wipe detected. Healing public key in database...")
+                    Timber.d("KeyStore wipe detected. Healing public key in database...")
                     supabase.postgrest["auth_profiles"].update(
                         mapOf("hardware_public_key" to currentPublicKey),
                     ) {
@@ -142,8 +142,8 @@ class AuthRepository {
                     }
                 }
 
-                Log.d("inDIC_Auth_Diag", "Login successful")
-                Log.d("inDIC_Auth_Diag", "========================================")
+                Timber.d("Login successful")
+                Timber.d("========================================")
                 Result.success("Secure Login Successful!")
             } catch (e: Exception) {
                 val errorMsg = e.message ?: ""
@@ -189,7 +189,7 @@ class AuthRepository {
             val userId = user.id
             val email = user.email ?: "unknown@google"
 
-            Log.d("inDIC_Auth_Diag", "Google sign-in OK for $email")
+            Timber.d("Google sign-in OK for $email")
 
             // Create the profile on first login so the gatekeeper has a row.
             val existing = supabase.postgrest["auth_profiles"]
@@ -205,7 +205,7 @@ class AuthRepository {
                         hardwarePublicKey = publicKey,
                     ),
                 )
-                Log.d("inDIC_Auth_Diag", "Created PENDING profile for new Google user")
+                Timber.d("Created PENDING profile for new Google user")
             }
 
             Result.success("Google sign-in successful!")

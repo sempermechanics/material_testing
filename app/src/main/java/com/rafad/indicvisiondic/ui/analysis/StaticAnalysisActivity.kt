@@ -10,7 +10,6 @@ import android.graphics.Path
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
-import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.activity.OnBackPressedCallback
@@ -38,6 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 
 /**
@@ -335,7 +335,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 SupabaseManager.client.auth.signOut()
             } catch (e: Exception) {
                 // Force exit even if network fails
-                Log.e("inDIC_Auth", "Server logout failed, forcing local exit.", e)
+                Timber.e(e, "Server logout failed, forcing local exit.")
             } finally {
                 // 2. Burn the bridge and route back to Zone 2 (AuthActivity)
                 val intent = Intent(this@StaticAnalysisActivity, AuthActivity::class.java)
@@ -405,7 +405,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 checkReady()
             }
         } catch (e: Exception) {
-            Log.e("StaticAnalysisActivity", "Failed to load reference image", e)
+            Timber.e(e, "Failed to load reference image")
             Toast.makeText(this, R.string.failed_load_reference, Toast.LENGTH_LONG).show()
         }
     }
@@ -486,7 +486,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     Toast.makeText(this@StaticAnalysisActivity, message, Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
-                Log.e("StaticAnalysis", "Error handling batch", e)
+                Timber.e(e, "Error handling batch")
                 withContext(Dispatchers.Main) {
                     Toast.makeText(this@StaticAnalysisActivity, getString(R.string.error_loading_images, e.message), Toast.LENGTH_LONG).show()
                 }
@@ -540,7 +540,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
                 meta = VideoMeta(durationMs, fps, fpsKnown, w, h)
             } catch (e: Exception) {
-                Log.e("StaticAnalysis", "Video metadata read failed", e)
+                Timber.e(e, "Video metadata read failed")
             } finally {
                 try {
                     retriever.release()
@@ -710,7 +710,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     ).show()
                 }
             } catch (e: Exception) {
-                Log.e("StaticAnalysis", "Error extracting video frames", e)
+                Timber.e(e, "Error extracting video frames")
                 withContext(Dispatchers.Main) {
                     hideComputeOverlay()
                     Toast.makeText(this@StaticAnalysisActivity, getString(R.string.video_read_error, e.message), Toast.LENGTH_LONG).show()
@@ -842,7 +842,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     }
                 }
             } catch (e: Exception) {
-                Log.e("StaticAnalysis", "Batch processing failed", e)
+                Timber.e(e, "Batch processing failed")
                 withContext(Dispatchers.Main) {
                     isProcessing = false
                     hideComputeOverlay()
@@ -902,7 +902,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 checkReady()
             }
         } catch (e: Exception) {
-            Log.e("StaticAnalysisActivity", "Failed to load ROI mask", e)
+            Timber.e(e, "Failed to load ROI mask")
             Toast.makeText(this, R.string.failed_load_mask, Toast.LENGTH_LONG).show()
         }
     }

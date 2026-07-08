@@ -19,7 +19,7 @@
         errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/AnalysisViewModel.kt"
-            line="213"
+            line="219"
             column="45"/>
     </issue>
 
@@ -30,7 +30,7 @@
         errorLine2="                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/AnalysisViewModel.kt"
-            line="293"
+            line="299"
             column="50"/>
     </issue>
 
@@ -63,7 +63,7 @@
         errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="461"
+            line="466"
             column="36"/>
     </issue>
 
@@ -74,7 +74,7 @@
         errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="674"
+            line="679"
             column="47"/>
     </issue>
 
@@ -85,7 +85,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="529"
+            line="534"
             column="40"/>
     </issue>
 
@@ -129,7 +129,7 @@
         errorLine2="      ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/SplashActivity.kt"
-            line="16"
+            line="21"
             column="7"/>
     </issue>
 
@@ -162,7 +162,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="139"
+            line="141"
             column="20"/>
     </issue>
 
@@ -173,7 +173,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="144"
+            line="146"
             column="20"/>
     </issue>
 
@@ -184,7 +184,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="147"
+            line="149"
             column="20"/>
     </issue>
 
@@ -195,7 +195,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="148"
+            line="150"
             column="20"/>
     </issue>
 
@@ -206,7 +206,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="149"
+            line="151"
             column="20"/>
     </issue>
 
@@ -217,7 +217,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="157"
+            line="159"
             column="20"/>
     </issue>
 
@@ -261,7 +261,7 @@
         errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="151"
+            line="153"
             column="29"/>
     </issue>
 
@@ -272,7 +272,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="155"
+            line="157"
             column="20"/>
     </issue>
 
@@ -283,7 +283,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="156"
+            line="158"
             column="20"/>
     </issue>
 
@@ -585,6 +585,50 @@
     </issue>
 
     <issue
+        id="TypographyDashes"
+        message="Replace &quot;--&quot; with an &quot;em dash&quot; character (—, &amp;#8212;) ?"
+        errorLine1="    &lt;string name=&quot;max_nmin&quot;>Max: --\nMin: --&lt;/string>"
+        errorLine2="                            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="179"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="TypographyDashes"
+        message="Replace &quot;--&quot; with an &quot;em dash&quot; character (—, &amp;#8212;) ?"
+        errorLine1="    &lt;string name=&quot;result&quot;>Result: --&lt;/string>"
+        errorLine2="                          ~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="220"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;loading_email&quot;>Loading email...&lt;/string>"
+        errorLine2="                                 ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="170"
+            column="34"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;device_id_loading&quot;>Device ID: Loading...&lt;/string>"
+        errorLine2="                                     ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="171"
+            column="38"/>
+    </issue>
+
+    <issue
         id="MonochromeLauncherIcon"
         message="The application adaptive icon is missing a monochrome tag"
         errorLine1="&lt;adaptive-icon xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
@@ -613,7 +657,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/AuthActivity.kt"
-            line="241"
+            line="246"
             column="40"/>
     </issue>
 
@@ -624,7 +668,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/AuthActivity.kt"
-            line="243"
+            line="248"
             column="40"/>
     </issue>
 
@@ -635,7 +679,7 @@
         errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/DicUploadWorker.kt"
-            line="156"
+            line="162"
             column="23"/>
     </issue>
 
@@ -646,7 +690,7 @@
         errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/DicUploadWorker.kt"
-            line="157"
+            line="163"
             column="22"/>
     </issue>
 
@@ -800,7 +844,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="376"
+            line="381"
             column="38"/>
     </issue>
 
@@ -811,7 +855,7 @@
         errorLine2="                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="447"
+            line="452"
             column="50"/>
     </issue>
 
@@ -822,7 +866,7 @@
         errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="1120"
+            line="1125"
             column="30"/>
     </issue>
 
@@ -888,7 +932,7 @@
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/report/VisualizationEngine.kt"
-            line="77"
+            line="82"
             column="27"/>
     </issue>
 
@@ -899,7 +943,7 @@
         errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/report/VisualizationEngine.kt"
-            line="152"
+            line="157"
             column="22"/>
     </issue>
 
@@ -910,7 +954,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="139"
+            line="141"
             column="20"/>
     </issue>
 
@@ -921,7 +965,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="144"
+            line="146"
             column="20"/>
     </issue>
 
@@ -932,7 +976,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="147"
+            line="149"
             column="20"/>
     </issue>
 
@@ -943,7 +987,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="148"
+            line="150"
             column="20"/>
     </issue>
 
@@ -954,7 +998,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="149"
+            line="151"
             column="20"/>
     </issue>
 
@@ -965,7 +1009,7 @@
         errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="151"
+            line="153"
             column="29"/>
     </issue>
 
@@ -976,7 +1020,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="152"
+            line="154"
             column="20"/>
     </issue>
 
@@ -987,7 +1031,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="153"
+            line="155"
             column="20"/>
     </issue>
 
@@ -998,7 +1042,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="154"
+            line="156"
             column="20"/>
     </issue>
 
@@ -1009,7 +1053,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="155"
+            line="157"
             column="20"/>
     </issue>
 
@@ -1020,7 +1064,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="156"
+            line="158"
             column="20"/>
     </issue>
 
@@ -1031,7 +1075,18 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="157"
+            line="159"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;com.jakewharton.timber:timber:5.0.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="160"
             column="20"/>
     </issue>
 
@@ -1075,7 +1130,7 @@
         errorLine2="                               ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/AuthActivity.kt"
-            line="113"
+            line="118"
             column="32"/>
     </issue>
 
@@ -1086,7 +1141,7 @@
         errorLine2="                                  ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/AuthActivity.kt"
-            line="114"
+            line="119"
             column="35"/>
     </issue>
 
@@ -1097,7 +1152,7 @@
         errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/AuthActivity.kt"
-            line="115"
+            line="120"
             column="34"/>
     </issue>
 
@@ -1108,7 +1163,7 @@
         errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/AuthActivity.kt"
-            line="119"
+            line="124"
             column="32"/>
     </issue>
 
@@ -1119,7 +1174,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/AuthActivity.kt"
-            line="120"
+            line="125"
             column="35"/>
     </issue>
 
@@ -1130,7 +1185,7 @@
         errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/AuthActivity.kt"
-            line="121"
+            line="126"
             column="34"/>
     </issue>
 
@@ -1141,7 +1196,7 @@
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/PendingApprovalActivity.kt"
-            line="68"
+            line="73"
             column="27"/>
     </issue>
 
@@ -1152,7 +1207,7 @@
         errorLine2="                           ~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/PendingApprovalActivity.kt"
-            line="68"
+            line="73"
             column="28"/>
     </issue>
 
@@ -1163,7 +1218,7 @@
         errorLine2="                                     ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/PendingApprovalActivity.kt"
-            line="151"
+            line="156"
             column="38"/>
     </issue>
 
@@ -1174,7 +1229,7 @@
         errorLine2="                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="329"
+            line="335"
             column="43"/>
     </issue>
 
@@ -1185,7 +1240,7 @@
         errorLine2="                                                           ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="329"
+            line="335"
             column="60"/>
     </issue>
 
@@ -1196,7 +1251,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="409"
+            line="415"
             column="40"/>
     </issue>
 
@@ -1207,7 +1262,7 @@
         errorLine2="                                        ~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="409"
+            line="415"
             column="41"/>
     </issue>
 
@@ -1218,7 +1273,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="416"
+            line="422"
             column="41"/>
     </issue>
 
@@ -1229,7 +1284,7 @@
         errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="439"
+            line="445"
             column="33"/>
     </issue>
 
@@ -1240,7 +1295,7 @@
         errorLine2="                                 ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="439"
+            line="445"
             column="34"/>
     </issue>
 
@@ -1251,7 +1306,7 @@
         errorLine2="                                                                                                     ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="439"
+            line="445"
             column="102"/>
     </issue>
 
@@ -1262,7 +1317,7 @@
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="494"
+            line="500"
             column="27"/>
     </issue>
 
@@ -1273,7 +1328,7 @@
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="495"
+            line="501"
             column="27"/>
     </issue>
 
@@ -1284,7 +1339,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="556"
+            line="562"
             column="35"/>
     </issue>
 
@@ -1295,7 +1350,7 @@
         errorLine2="                                   ~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="556"
+            line="562"
             column="36"/>
     </issue>
 
@@ -1306,7 +1361,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="557"
+            line="563"
             column="35"/>
     </issue>
 
@@ -1317,7 +1372,7 @@
         errorLine2="                                   ~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="557"
+            line="563"
             column="36"/>
     </issue>
 
@@ -1328,7 +1383,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="78"
+            line="83"
             column="35"/>
     </issue>
 
@@ -1339,7 +1394,7 @@
         errorLine2="                                   ~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="78"
+            line="83"
             column="36"/>
     </issue>
 
@@ -1350,7 +1405,7 @@
         errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="250"
+            line="255"
             column="47"/>
     </issue>
 
@@ -1361,7 +1416,7 @@
         errorLine2="                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="253"
+            line="258"
             column="46"/>
     </issue>
 
@@ -1372,7 +1427,7 @@
         errorLine2="                                              ~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="253"
+            line="258"
             column="47"/>
     </issue>
 
@@ -1383,7 +1438,7 @@
         errorLine2="                                                                                              ~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="253"
+            line="258"
             column="95"/>
     </issue>
 
@@ -1394,7 +1449,7 @@
         errorLine2="                                      ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="259"
+            line="264"
             column="39"/>
     </issue>
 
@@ -1405,7 +1460,7 @@
         errorLine2="                                      ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="293"
+            line="298"
             column="39"/>
     </issue>
 
@@ -1416,7 +1471,7 @@
         errorLine2="                          ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="324"
+            line="329"
             column="27"/>
     </issue>
 
@@ -1427,7 +1482,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="420"
+            line="425"
             column="38"/>
     </issue>
 
@@ -1438,7 +1493,7 @@
         errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="577"
+            line="582"
             column="22"/>
     </issue>
 
@@ -1449,7 +1504,7 @@
         errorLine2="                                                ~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="577"
+            line="582"
             column="49"/>
     </issue>
 
@@ -1460,7 +1515,7 @@
         errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="584"
+            line="589"
             column="26"/>
     </issue>
 
@@ -1471,7 +1526,7 @@
         errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="596"
+            line="601"
             column="31"/>
     </issue>
 
@@ -1482,7 +1537,7 @@
         errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="596"
+            line="601"
             column="36"/>
     </issue>
 
@@ -1493,7 +1548,7 @@
         errorLine2="                                                                                       ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="596"
+            line="601"
             column="88"/>
     </issue>
 
@@ -1504,7 +1559,7 @@
         errorLine2="                         ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="600"
+            line="605"
             column="26"/>
     </issue>
 
@@ -1515,7 +1570,7 @@
         errorLine2="                                      ~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="600"
+            line="605"
             column="39"/>
     </issue>
 
@@ -1526,7 +1581,7 @@
         errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="606"
+            line="611"
             column="30"/>
     </issue>
 
@@ -1537,7 +1592,7 @@
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="760"
+            line="765"
             column="25"/>
     </issue>
 
@@ -1548,7 +1603,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="817"
+            line="822"
             column="41"/>
     </issue>
 
@@ -1559,7 +1614,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="818"
+            line="823"
             column="41"/>
     </issue>
 
@@ -1570,7 +1625,7 @@
         errorLine2="                                         ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="818"
+            line="823"
             column="42"/>
     </issue>
 
@@ -1581,7 +1636,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="826"
+            line="831"
             column="41"/>
     </issue>
 
@@ -1592,7 +1647,7 @@
         errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="827"
+            line="832"
             column="42"/>
     </issue>
 
@@ -1603,7 +1658,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="829"
+            line="834"
             column="41"/>
     </issue>
 
@@ -1614,7 +1669,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="830"
+            line="835"
             column="41"/>
     </issue>
 
@@ -1625,7 +1680,7 @@
         errorLine2="                                         ~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="830"
+            line="835"
             column="42"/>
     </issue>
 
@@ -1636,7 +1691,7 @@
         errorLine2="                                                                          ~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="830"
+            line="835"
             column="75"/>
     </issue>
 
@@ -1647,7 +1702,7 @@
         errorLine2="                                    ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="845"
+            line="850"
             column="37"/>
     </issue>
 
@@ -1658,7 +1713,7 @@
         errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="846"
+            line="851"
             column="37"/>
     </issue>
 
@@ -1669,7 +1724,7 @@
         errorLine2="                                     ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="846"
+            line="851"
             column="38"/>
     </issue>
 
@@ -1680,7 +1735,7 @@
         errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="922"
+            line="927"
             column="34"/>
     </issue>
 
@@ -1691,7 +1746,7 @@
         errorLine2="                                                               ~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="922"
+            line="927"
             column="64"/>
     </issue>
 
@@ -1702,7 +1757,7 @@
         errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="923"
+            line="928"
             column="32"/>
     </issue>
 
@@ -1713,7 +1768,7 @@
         errorLine2="                                                           ~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="923"
+            line="928"
             column="60"/>
     </issue>
 
@@ -1724,7 +1779,7 @@
         errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="924"
+            line="929"
             column="34"/>
     </issue>
 
@@ -1735,7 +1790,7 @@
         errorLine2="                                                                 ~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="924"
+            line="929"
             column="66"/>
     </issue>
 
@@ -1746,7 +1801,7 @@
         errorLine2="                               ~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="994"
+            line="999"
             column="32"/>
     </issue>
 
@@ -1757,7 +1812,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="1010"
+            line="1015"
             column="35"/>
     </issue>
 
@@ -1768,7 +1823,7 @@
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="1079"
+            line="1084"
             column="25"/>
     </issue>
 
@@ -1779,206 +1834,8 @@
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="1080"
+            line="1085"
             column="25"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;inDIC&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;inDIC&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_auth.xml"
-            line="22"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Secure Access Portal&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Secure Access Portal&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_auth.xml"
-            line="33"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Email Address&quot;, should use `@string` resource"
-        errorLine1="                    android:hint=&quot;Email Address&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_auth.xml"
-            line="55"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Password (min 6 characters)&quot;, should use `@string` resource"
-        errorLine1="                    android:hint=&quot;Password (min 6 characters)&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_auth.xml"
-            line="73"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Confirm Password&quot;, should use `@string` resource"
-        errorLine1="                    android:hint=&quot;Confirm Password&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_auth.xml"
-            line="94"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Forgot Password?&quot;, should use `@string` resource"
-        errorLine1="                    android:text=&quot;Forgot Password?&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_auth.xml"
-            line="113"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Secure Login&quot;, should use `@string` resource"
-        errorLine1="                android:text=&quot;Secure Login&quot; />"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_auth.xml"
-            line="134"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;or&quot;, should use `@string` resource"
-        errorLine1="                android:text=&quot;or&quot;"
-        errorLine2="                ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_auth.xml"
-            line="164"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Continue with Google&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Continue with Google&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_auth.xml"
-            line="181"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Request an account&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Request an account&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_auth.xml"
-            line="195"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;inDIC&quot;, should use `@string` resource"
-        errorLine1="    android:text=&quot;inDIC&quot;"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_pending_approval.xml"
-            line="13"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Approval Pending&quot;, should use `@string` resource"
-        errorLine1="        android:text=&quot;Approval Pending&quot;"
-        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_pending_approval.xml"
-            line="26"
-            column="9"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Your device has been securely registered. Please wait for an administrator to approve your access to the inDIC engine.&quot;, should use `@string` resource"
-        errorLine1="        android:text=&quot;Your device has been securely registered. Please wait for an administrator to approve your access to the inDIC engine.&quot;"
-        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_pending_approval.xml"
-            line="38"
-            column="9"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;ACCOUNT DETAILS&quot;, should use `@string` resource"
-        errorLine1="                android:text=&quot;ACCOUNT DETAILS&quot;"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_pending_approval.xml"
-            line="63"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Loading email...&quot;, should use `@string` resource"
-        errorLine1="                android:text=&quot;Loading email...&quot;"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_pending_approval.xml"
-            line="73"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Device ID: Loading...&quot;, should use `@string` resource"
-        errorLine1="                android:text=&quot;Device ID: Loading...&quot;"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_pending_approval.xml"
-            line="82"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;CHECK STATUS&quot;, should use `@string` resource"
-        errorLine1="        android:text=&quot;CHECK STATUS&quot;"
-        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_pending_approval.xml"
-            line="93"
-            column="9"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Log out of this device&quot;, should use `@string` resource"
-        errorLine1="        android:text=&quot;Log out of this device&quot;"
-        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_pending_approval.xml"
-            line="112"
-            column="9"/>
     </issue>
 
     <issue
@@ -2005,17 +1862,6 @@
 
     <issue
         id="HardcodedText"
-        message="Hardcoded string &quot;X, Y&quot;, should use `@string` resource"
-        errorLine1="                android:text=&quot;X, Y&quot;"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_result_viewer.xml"
-            line="64"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
         message="Hardcoded string &quot;Max/Min&quot;, should use `@string` resource"
         errorLine1="                android:textOff=&quot;Max/Min&quot;"
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~">
@@ -2034,688 +1880,6 @@
             file="src/main/res/layout/activity_result_viewer.xml"
             line="86"
             column="17"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Min: 0.0&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Min: 0.0&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_result_viewer.xml"
-            line="118"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Max: 0.0&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Max: 0.0&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_result_viewer.xml"
-            line="135"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Frame: 1 / 1&quot;, should use `@string` resource"
-        errorLine1="                android:text=&quot;Frame: 1 / 1&quot;"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_result_viewer.xml"
-            line="211"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Tap image to inspect&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Tap image to inspect&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_result_viewer.xml"
-            line="282"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Max: --\nMin: --&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Max: --\nMin: --&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_result_viewer.xml"
-            line="307"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;IndicVision&quot;, should use `@string` resource"
-        errorLine1="        android:text=&quot;IndicVision&quot;"
-        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_splash.xml"
-            line="13"
-            column="9"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Log Out&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Log Out&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="32"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;1 · Load Images&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;1 · Load Images&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="54"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;2 · Settings &amp; Run&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;2 · Settings &amp;amp; Run&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="72"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Video&quot;, should use `@string` resource"
-        errorLine1="                                android:contentDescription=&quot;Video&quot; />"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="121"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Load from Video&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;Load from Video&quot;"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="127"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Extracts frames automatically — the first frame becomes the reference and the rest become the deformed sequence.&quot;, should use `@string` resource"
-        errorLine1="                            android:text=&quot;Extracts frames automatically — the first frame becomes the reference and the rest become the deformed sequence.&quot;"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="135"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Select Video&quot;, should use `@string` resource"
-        errorLine1="                            android:text=&quot;Select Video&quot; />"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="145"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;1&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;1&quot; />"
-        errorLine2="                                ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="168"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Reference Image&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;Reference Image&quot;"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="174"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Select Reference Image&quot;, should use `@string` resource"
-        errorLine1="                            android:text=&quot;Select Reference Image&quot; />"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="184"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;No file selected&quot;, should use `@string` resource"
-        errorLine1="                            android:text=&quot;No file selected&quot;"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="191"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Load images to begin&quot;, should use `@string` resource"
-        errorLine1="                            android:text=&quot;Load images to begin&quot;"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="199"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Reference image preview&quot;, should use `@string` resource"
-        errorLine1="                                android:contentDescription=&quot;Reference image preview&quot; />"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="220"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Draw ROI&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;Draw ROI&quot; />"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="236"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Manual ROI&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;Manual ROI&quot; />"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="245"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Use Full Image (No ROI)&quot;, should use `@string` resource"
-        errorLine1="                            android:text=&quot;Use Full Image (No ROI)&quot; />"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="255"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;2&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;2&quot; />"
-        errorLine2="                                ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="278"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Deformed Image(s)&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;Deformed Image(s)&quot;"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="284"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Select Deformed Image(s)&quot;, should use `@string` resource"
-        errorLine1="                            android:text=&quot;Select Deformed Image(s)&quot; />"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="293"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;No file selected&quot;, should use `@string` resource"
-        errorLine1="                            android:text=&quot;No file selected&quot;"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="300"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Deformed image preview&quot;, should use `@string` resource"
-        errorLine1="                                android:contentDescription=&quot;Deformed image preview&quot; />"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="318"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Parameters&quot;, should use `@string` resource"
-        errorLine1="                                android:contentDescription=&quot;Parameters&quot; />"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="362"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Analysis Parameters&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;Analysis Parameters&quot;"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="368"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Subset size&quot;, should use `@string` resource"
-        errorLine1="                                    android:text=&quot;Subset size&quot;"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="392"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;41 px&quot;, should use `@string` resource"
-        errorLine1="                                    android:text=&quot;41 px&quot;"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="399"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Step size (density)&quot;, should use `@string` resource"
-        errorLine1="                                    android:text=&quot;Step size (density)&quot;"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="422"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;5 px&quot;, should use `@string` resource"
-        errorLine1="                                    android:text=&quot;5 px&quot;"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="429"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Strain window&quot;, should use `@string` resource"
-        errorLine1="                                    android:text=&quot;Strain window&quot;"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="452"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;15 px&quot;, should use `@string` resource"
-        errorLine1="                                    android:text=&quot;15 px&quot;"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="459"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Apply Gaussian blur (noise reduction)&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;Apply Gaussian blur (noise reduction)&quot;"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="478"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Strain calculation method&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;Strain calculation method&quot;"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="487"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;VSG (Smooth)&quot;, should use `@string` resource"
-        errorLine1="                                    android:text=&quot;VSG (Smooth)&quot; />"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="506"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;NLVC (Fractures)&quot;, should use `@string` resource"
-        errorLine1="                                    android:text=&quot;NLVC (Fractures)&quot; />"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="514"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Sub-pixel interpolation kernel&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;Sub-pixel interpolation kernel&quot;"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="521"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;4×4 Bicubic&quot;, should use `@string` resource"
-        errorLine1="                                    android:text=&quot;4×4 Bicubic&quot; />"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="540"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;6×6 Keys&quot;, should use `@string` resource"
-        errorLine1="                                    android:text=&quot;6×6 Keys&quot; />"
-        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="548"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Optional: Upload Custom ROI Mask (PNG)&quot;, should use `@string` resource"
-        errorLine1="                                android:text=&quot;Optional: Upload Custom ROI Mask (PNG)&quot; />"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="557"
-            column="33"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Compute Full-Field 2D Strain&quot;, should use `@string` resource"
-        errorLine1="                    android:text=&quot;Compute Full-Field 2D Strain&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="569"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;View Last Results&quot;, should use `@string` resource"
-        errorLine1="                    android:text=&quot;View Last Results&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="578"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;View Last Results&quot;, should use `@string` resource"
-        errorLine1="                    android:text=&quot;View Last Results&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="587"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Elapsed Time: 0s&quot;, should use `@string` resource"
-        errorLine1="                        android:text=&quot;Elapsed Time: 0s&quot;"
-        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="612"
-            column="25"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Result: --&quot;, should use `@string` resource"
-        errorLine1="                    android:text=&quot;Result: --&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="622"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Back&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Back&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="650"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Next: Settings →&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Next: Settings →&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="659"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Computing Strain Field&quot;, should use `@string` resource"
-        errorLine1="                    android:text=&quot;Computing Strain Field&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="695"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;0%&quot;, should use `@string` resource"
-        errorLine1="                        android:text=&quot;0%&quot;"
-        errorLine2="                        ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="722"
-            column="25"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Initializing engine…&quot;, should use `@string` resource"
-        errorLine1="                    android:text=&quot;Initializing engine…&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="733"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Elapsed 0s&quot;, should use `@string` resource"
-        errorLine1="                    android:text=&quot;Elapsed 0s&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="742"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Please keep the app open&quot;, should use `@string` resource"
-        errorLine1="                    android:text=&quot;Please keep the app open&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/activity_static_analysis.xml"
-            line="750"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Video&quot;, should use `@string` resource"
-        errorLine1="            android:contentDescription=&quot;Video&quot; />"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/dialog_video_sampling.xml"
-            line="22"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;—&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;—&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/dialog_video_sampling.xml"
-            line="30"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Extraction frame rate&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Extraction frame rate&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/dialog_video_sampling.xml"
-            line="46"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;10 fps&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;10 fps&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/dialog_video_sampling.xml"
-            line="53"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Time segment&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Time segment&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/dialog_video_sampling.xml"
-            line="77"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;0:00 – 0:00&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;0:00 – 0:00&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/dialog_video_sampling.xml"
-            line="84"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;≈ 0 frames&quot;, should use `@string` resource"
-        errorLine1="        android:text=&quot;≈ 0 frames&quot;"
-        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/layout/dialog_video_sampling.xml"
-            line="101"
-            column="9"/>
     </issue>
 
 </issues>

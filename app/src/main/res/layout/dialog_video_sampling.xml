@@ -19,7 +19,7 @@
             android:layout_width="20dp"
             android:layout_height="20dp"
             android:src="@drawable/ic_video"
-            android:contentDescription="Video" />
+            android:contentDescription="@string/video" />
 
         <TextView
             android:id="@+id/tvVideoInfo"
@@ -27,7 +27,7 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
-            android:text="—"
+            android:text="@string/text"
             android:textColor="@color/sky_on_container"
             android:textStyle="bold"
             android:textSize="13sp" />
@@ -43,14 +43,14 @@
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:text="Extraction frame rate"
+            android:text="@string/extraction_frame_rate"
             android:textColor="@color/text_primary"
             android:textStyle="bold" />
         <TextView
             android:id="@+id/tvFpsValue"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="10 fps"
+            android:text="@string/label_10_fps"
             android:textColor="@color/sky_primary"
             android:textStyle="bold" />
     </LinearLayout>
@@ -74,14 +74,14 @@
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:text="Time segment"
+            android:text="@string/time_segment"
             android:textColor="@color/text_primary"
             android:textStyle="bold" />
         <TextView
             android:id="@+id/tvSegmentValue"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="0:00 – 0:00"
+            android:text="@string/label_0_00_0_00"
             android:textColor="@color/sky_primary"
             android:textStyle="bold" />
     </LinearLayout>
@@ -98,6 +98,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
-        android:text="≈ 0 frames"
+        android:text="@string/label_0_frames"
         android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
 </LinearLayout>

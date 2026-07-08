@@ -19,7 +19,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="inDIC"
+            android:text="@string/app_name"
             android:textColor="@color/sky_primary"
             android:textSize="42sp"
             android:textStyle="bold"
@@ -30,7 +30,7 @@
             android:id="@+id/tvSubtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Secure Access Portal"
+            android:text="@string/secure_access_portal"
             android:textColor="@color/text_secondary"
             android:textSize="16sp"
             android:textAlignment="center"
@@ -52,7 +52,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="14dp"
-                    android:hint="Email Address"
+                    android:hint="@string/email_address"
                     app:boxStrokeColor="@color/sky_primary"
                     app:hintTextColor="@color/sky_primary">
 
@@ -70,7 +70,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="6dp"
-                    android:hint="Password (min 6 characters)"
+                    android:hint="@string/password_min_6_characters"
                     app:boxStrokeColor="@color/sky_primary"
                     app:hintTextColor="@color/sky_primary"
                     app:endIconMode="password_toggle"
@@ -91,7 +91,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="6dp"
                     android:visibility="gone"
-                    android:hint="Confirm Password"
+                    android:hint="@string/confirm_password"
                     app:boxStrokeColor="@color/sky_primary"
                     app:hintTextColor="@color/sky_primary"
                     app:endIconMode="password_toggle"
@@ -110,7 +110,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="end"
-                    android:text="Forgot Password?"
+                    android:text="@string/forgot_password"
                     android:textColor="@color/sky_primary"
                     android:textSize="14sp"
                     android:padding="8dp"
@@ -131,7 +131,7 @@
                 style="@style/Widget.IndicVision.Button.Cta"
                 android:layout_width="match_parent"
                 android:layout_height="55dp"
-                android:text="Secure Login" />
+                android:text="@string/secure_login" />
 
             <ProgressBar
                 android:id="@+id/progressBar"
@@ -161,7 +161,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:paddingHorizontal="12dp"
-                android:text="or"
+                android:text="@string/or"
                 android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
 
             <View
@@ -178,7 +178,7 @@
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:layout_marginBottom="4dp"
-            android:text="Continue with Google"
+            android:text="@string/continue_with_google"
             android:textAllCaps="false"
             android:textStyle="bold"
             android:textColor="@color/text_primary"
@@ -192,7 +192,7 @@
             android:id="@+id/tvToggleMode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Request an account"
+            android:text="@string/request_an_account"
             android:textColor="@color/text_secondary"
             android:textAlignment="center"
             android:textSize="15sp"

@@ -29,7 +29,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="end|center_vertical"
             android:layout_marginEnd="6dp"
-            android:text="Log Out"
+            android:text="@string/log_out"
             android:textColor="@color/text_on_primary"
             android:textAllCaps="false"
             app:rippleColor="#33FFFFFF" />
@@ -51,7 +51,7 @@
             android:layout_height="wrap_content"
             android:paddingHorizontal="16dp"
             android:paddingVertical="6dp"
-            android:text="1 · Load Images"
+            android:text="@string/label_1_load_images"
             android:textStyle="bold"
             android:textSize="13sp"
             android:textColor="@color/text_on_primary"
@@ -69,7 +69,7 @@
             android:layout_height="wrap_content"
             android:paddingHorizontal="16dp"
             android:paddingVertical="6dp"
-            android:text="2 · Settings &amp; Run"
+            android:text="@string/label_2_settings_amp_run"
             android:textStyle="bold"
             android:textSize="13sp"
             android:textColor="@color/sky_on_container"
@@ -118,13 +118,13 @@
                                 android:layout_width="24dp"
                                 android:layout_height="24dp"
                                 android:src="@drawable/ic_video"
-                                android:contentDescription="Video" />
+                                android:contentDescription="@string/video" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="10dp"
-                                android:text="Load from Video"
+                                android:text="@string/load_from_video"
                                 android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
                         </LinearLayout>
 
@@ -132,7 +132,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="10dp"
-                            android:text="Extracts frames automatically — the first frame becomes the reference and the rest become the deformed sequence."
+                            android:text="@string/extracts_frames_automatically_the_first"
                             android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
 
                         <com.google.android.material.button.MaterialButton
@@ -142,7 +142,7 @@
                             android:layout_height="wrap_content"
                             app:icon="@drawable/ic_video"
                             app:iconGravity="textStart"
-                            android:text="Select Video" />
+                            android:text="@string/select_video" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -165,13 +165,13 @@
 
                             <TextView
                                 style="@style/Widget.IndicVision.StepBadge"
-                                android:text="1" />
+                                android:text="@string/label_1" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="10dp"
-                                android:text="Reference Image"
+                                android:text="@string/reference_image"
                                 android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
                         </LinearLayout>
 
@@ -181,14 +181,14 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             app:iconGravity="textStart"
-                            android:text="Select Reference Image" />
+                            android:text="@string/select_reference_image" />
 
                         <TextView
                             android:id="@+id/tvRefName"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="6dp"
-                            android:text="No file selected"
+                            android:text="@string/no_file_selected"
                             android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
 
                         <TextView
@@ -196,7 +196,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
-                            android:text="Load images to begin"
+                            android:text="@string/load_images_to_begin"
                             android:textColor="@color/sky_on_container"
                             android:textStyle="bold"
                             android:background="@color/sky_container"
@@ -217,7 +217,7 @@
                                 android:maxHeight="400dp"
                                 android:adjustViewBounds="true"
                                 android:scaleType="fitCenter"
-                                android:contentDescription="Reference image preview" />
+                                android:contentDescription="@string/reference_image_preview" />
                         </FrameLayout>
 
                         <LinearLayout
@@ -233,7 +233,7 @@
                                 android:layout_weight="1"
                                 android:layout_height="wrap_content"
                                 android:layout_marginEnd="5dp"
-                                android:text="Draw ROI" />
+                                android:text="@string/draw_roi" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnManualRoi"
@@ -242,7 +242,7 @@
                                 android:layout_weight="1"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="5dp"
-                                android:text="Manual ROI" />
+                                android:text="@string/manual_roi" />
                         </LinearLayout>
 
                         <com.google.android.material.button.MaterialButton
@@ -252,7 +252,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:textAllCaps="false"
-                            android:text="Use Full Image (No ROI)" />
+                            android:text="@string/use_full_image_no_roi" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -275,13 +275,13 @@
 
                             <TextView
                                 style="@style/Widget.IndicVision.StepBadge"
-                                android:text="2" />
+                                android:text="@string/label_2" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="10dp"
-                                android:text="Deformed Image(s)"
+                                android:text="@string/deformed_image_s"
                                 android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
                         </LinearLayout>
 
@@ -290,14 +290,14 @@
                             style="@style/Widget.IndicVision.Button.Tonal"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Select Deformed Image(s)" />
+                            android:text="@string/select_deformed_image_s" />
 
                         <TextView
                             android:id="@+id/tvDefName"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="6dp"
-                            android:text="No file selected"
+                            android:text="@string/no_file_selected"
                             android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
 
                         <FrameLayout
@@ -315,7 +315,7 @@
                                 android:maxHeight="400dp"
                                 android:adjustViewBounds="true"
                                 android:scaleType="fitCenter"
-                                android:contentDescription="Deformed image preview" />
+                                android:contentDescription="@string/deformed_image_preview" />
                         </FrameLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -359,13 +359,13 @@
                                 android:layout_width="24dp"
                                 android:layout_height="24dp"
                                 android:src="@drawable/ic_tune"
-                                android:contentDescription="Parameters" />
+                                android:contentDescription="@string/parameters" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="10dp"
-                                android:text="Analysis Parameters"
+                                android:text="@string/analysis_parameters"
                                 android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
                         </LinearLayout>
 
@@ -389,14 +389,14 @@
                                     android:layout_width="0dp"
                                     android:layout_weight="1"
                                     android:layout_height="wrap_content"
-                                    android:text="Subset size"
+                                    android:text="@string/subset_size"
                                     android:textColor="@color/text_primary"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:id="@+id/tvSubsetValue"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="41 px"
+                                    android:text="@string/label_41_px"
                                     android:textColor="@color/sky_primary"
                                     android:textStyle="bold" />
                             </LinearLayout>
@@ -419,14 +419,14 @@
                                     android:layout_width="0dp"
                                     android:layout_weight="1"
                                     android:layout_height="wrap_content"
-                                    android:text="Step size (density)"
+                                    android:text="@string/step_size_density"
                                     android:textColor="@color/text_primary"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:id="@+id/tvStepValue"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="5 px"
+                                    android:text="@string/label_5_px"
                                     android:textColor="@color/sky_primary"
                                     android:textStyle="bold" />
                             </LinearLayout>
@@ -449,14 +449,14 @@
                                     android:layout_width="0dp"
                                     android:layout_weight="1"
                                     android:layout_height="wrap_content"
-                                    android:text="Strain window"
+                                    android:text="@string/strain_window"
                                     android:textColor="@color/text_primary"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:id="@+id/tvStrainValue"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="15 px"
+                                    android:text="@string/label_15_px"
                                     android:textColor="@color/sky_primary"
                                     android:textStyle="bold" />
                             </LinearLayout>
@@ -475,7 +475,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="8dp"
-                                android:text="Apply Gaussian blur (noise reduction)"
+                                android:text="@string/apply_gaussian_blur_noise_reduction"
                                 android:textColor="@color/text_primary"
                                 app:thumbTint="@color/sky_primary"
                                 app:trackTint="@color/sky_container" />
@@ -484,7 +484,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="14dp"
-                                android:text="Strain calculation method"
+                                android:text="@string/strain_calculation_method"
                                 android:textColor="@color/text_primary"
                                 android:textStyle="bold" />
 
@@ -503,7 +503,7 @@
                                     android:layout_width="0dp"
                                     android:layout_weight="1"
                                     android:layout_height="wrap_content"
-                                    android:text="VSG (Smooth)" />
+                                    android:text="@string/vsg_smooth" />
 
                                 <com.google.android.material.button.MaterialButton
                                     android:id="@+id/rbNlvc"
@@ -511,14 +511,14 @@
                                     android:layout_width="0dp"
                                     android:layout_weight="1"
                                     android:layout_height="wrap_content"
-                                    android:text="NLVC (Fractures)" />
+                                    android:text="@string/nlvc_fractures" />
                             </com.google.android.material.button.MaterialButtonToggleGroup>
 
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="14dp"
-                                android:text="Sub-pixel interpolation kernel"
+                                android:text="@string/sub_pixel_interpolation_kernel"
                                 android:textColor="@color/text_primary"
                                 android:textStyle="bold" />
 
@@ -537,7 +537,7 @@
                                     android:layout_width="0dp"
                                     android:layout_weight="1"
                                     android:layout_height="wrap_content"
-                                    android:text="4×4 Bicubic" />
+                                    android:text="@string/label_4_4_bicubic" />
 
                                 <com.google.android.material.button.MaterialButton
                                     android:id="@+id/rbKeys"
@@ -545,7 +545,7 @@
                                     android:layout_width="0dp"
                                     android:layout_weight="1"
                                     android:layout_height="wrap_content"
-                                    android:text="6×6 Keys" />
+                                    android:text="@string/label_6_6_keys" />
                             </com.google.android.material.button.MaterialButtonToggleGroup>
 
                             <com.google.android.material.button.MaterialButton
@@ -554,7 +554,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="16dp"
-                                android:text="Optional: Upload Custom ROI Mask (PNG)" />
+                                android:text="@string/optional_upload_custom_roi_mask" />
                         </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -566,7 +566,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Compute Full-Field 2D Strain"
+                    android:text="@string/compute_full_field_2d_strain"
                     android:enabled="false" />
 
                 <com.google.android.material.button.MaterialButton
@@ -575,7 +575,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="View Last Results"
+                    android:text="@string/view_last_results"
                     android:visibility="gone" />
 
                 <com.google.android.material.button.MaterialButton
@@ -584,7 +584,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="View Last Results"
+                    android:text="@string/view_last_results"
                     android:visibility="gone" />
 
                 <LinearLayout
@@ -609,7 +609,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="Elapsed Time: 0s"
+                        android:text="@string/elapsed_time_0s"
                         android:visibility="gone"
                         android:textColor="@color/text_secondary"
                         android:textStyle="italic" />
@@ -619,7 +619,7 @@
                     android:id="@+id/tvStaticResult"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Result: --"
+                    android:text="@string/result"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:textColor="@color/text_primary"
@@ -647,7 +647,7 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:layout_marginEnd="6dp"
-            android:text="Back"
+            android:text="@string/back"
             android:visibility="gone" />
 
         <com.google.android.material.button.MaterialButton
@@ -656,7 +656,7 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
-            android:text="Next: Settings →"
+            android:text="@string/next_settings"
             android:enabled="false" />
     </LinearLayout>
   </LinearLayout>
@@ -692,7 +692,7 @@
                     android:id="@+id/overlayTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Computing Strain Field"
+                    android:text="@string/computing_strain_field"
                     android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
 
                 <FrameLayout
@@ -719,7 +719,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:text="0%"
+                        android:text="@string/label_0"
                         android:textColor="@color/sky_primary"
                         android:textSize="30sp"
                         android:textStyle="bold" />
@@ -730,7 +730,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
-                    android:text="Initializing engine…"
+                    android:text="@string/initializing_engine"
                     android:textColor="@color/text_primary"
                     android:textStyle="bold" />
 
@@ -739,7 +739,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Elapsed 0s"
+                    android:text="@string/elapsed_0s"
                     android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
 
                 <TextView
@@ -747,7 +747,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
                     android:gravity="center"
-                    android:text="Please keep the app open"
+                    android:text="@string/please_keep_the_app_open"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
             </LinearLayout>
