@@ -29,6 +29,7 @@ object PdfReportGenerator {
             layout.drawKeyValue("Specimen / Target:", data.specimenName)
             layout.drawKeyValue("Date Generated:", data.analysisDate)
             layout.drawKeyValue("Session ID:", data.sessionId)
+            data.appBuild?.let { layout.drawKeyValue("App Build:", it) }
             layout.advanceY(40f)
 
             layout.drawSectionHeader("Algorithm Parameters")
@@ -44,7 +45,7 @@ object PdfReportGenerator {
             layout.drawKeyValue("Dimensions:", "${data.roiData.width} x ${data.roiData.height} px")
             layout.advanceY(40f)
 
-            layout.drawSectionHeader("Input Verification")
+            layout.drawSectionHeader("Analyzed Images")
             layout.drawInputVerificationCard(
                 data.referenceImage, data.referenceImageName,
                 data.deformedImage, data.deformedImageName
@@ -86,6 +87,7 @@ object PdfReportGenerator {
             layout.drawTable(
                 headers = listOf("Pipeline Stage", "Points"),
                 rows = listOf(
+                    listOf("Seeding Mode", stats.meshSeedingLabel()),
                     listOf("Total Target Grid Points", "${stats.totalPointsAttempted}"),
                     listOf("Phase 1: Solved by Delaunay Mesh", "${stats.pathAPoints}"),
                     listOf("Phase 2: Saved by RGDIC Propagation", "${stats.pathBPoints}"),

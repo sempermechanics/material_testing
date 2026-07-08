@@ -175,7 +175,9 @@ class AnalysisViewModel : ViewModel() {
             }
 
             outputBuffer.clear()
-            val metricsCatcher = FloatArray(16)
+            // 17 slots: 16 core metrics + mesh-seeding status. Slot 16 pre-set
+            // to "unknown" so an engine that only writes 16 leaves it valid.
+            val metricsCatcher = FloatArray(17).also { it[16] = EngineStats.MESH_SEEDING_UNKNOWN.toFloat() }
 
             val validPointsCount = IndicVisionNativeLib.computeFullFieldDirect(
                 refBytes, defBytes, params.maskData,

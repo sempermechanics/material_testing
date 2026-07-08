@@ -577,7 +577,7 @@ class ResultViewerActivity : AppCompatActivity() {
                             val exy = data[i + DicResult.IDX_EXY]
                             val c = data[i + DicResult.IDX_ZNSSD]
 
-                            if (c != 0f) {
+                            if (DicResult.isSolvedPoint(c)) {
                                 writer.write("$x,$y,$u,$v,$exx,$eyy,$exy,$c\n")
                             }
                             i += DicResult.STRIDE
@@ -616,7 +616,10 @@ class ResultViewerActivity : AppCompatActivity() {
         pdfProgressDialog?.show()
 
         val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
-        val fileName = "inDIC_MasterReport_${imgName}.pdf"
+        // Timestamp keeps exports from different sessions of the same frame
+        // from colliding in Documents/IndicVision ("report (1).pdf", …).
+        val timestamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
+        val fileName = "inDIC_MasterReport_${imgName}_$timestamp.pdf"
 
         lifecycleScope.launch {
             val reportData = withContext(Dispatchers.Default) {

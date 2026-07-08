@@ -14,7 +14,7 @@ data class ReportData(
     // 🚀 NEW: Region of Interest Details
     val roiData: RoiData,
 
-    // DOWN-SCALED IMAGES (300 DPI max)
+    // DOWN-SCALED IMAGES (300 DPI max) for the page-1 preview card
     val referenceImage: Bitmap,
     val deformedImage: Bitmap,
     val referenceImageName: String,
@@ -26,7 +26,10 @@ data class ReportData(
     // NEW DIAGNOSTIC MAPS
     val znssdHeatmap: Bitmap,
     val solverPathMap: Bitmap, // Future-proofing for path scatter plot
-    val globalAvgZnssd: Float
+    val globalAvgZnssd: Float,
+
+    /** Traceability, e.g. "v1.4 (12) • arm64-v8a". Null when unavailable. */
+    val appBuild: String? = null
 )
 
 // 🚀 NEW: Dedicated Data Class for ROI
@@ -72,10 +75,22 @@ data class EngineStats(
     val delaunayMs: Float,
     val strainMs: Float,
     val avgThroughputPtsPerMs: Float,
-    val convergencePercent: Float
+    val convergencePercent: Float,
+
+    /** 2 = full AKAZE mesh, 1 = sparse mesh, 0 = Path C fallback (RGDIC-only), -1 = unknown */
+    val meshSeedingQuality: Int = MESH_SEEDING_UNKNOWN
 ) {
+    fun meshSeedingLabel(): String = when (meshSeedingQuality) {
+        2 -> "Full AKAZE Mesh"
+        1 -> "Sparse AKAZE Mesh"
+        0 -> "Fallback (RGDIC-only, no mesh)"
+        else -> "Unknown (legacy data)"
+    }
+
     companion object {
-        /** Matches the 16-element float[] written by IndicVisionJNI.cpp */
+        const val MESH_SEEDING_UNKNOWN = -1
+
+        /** Matches the float[] written by IndicVisionJNI.cpp (16 slots + optional slot 16) */
         fun fromArray(a: FloatArray): EngineStats =
             if (a.size >= 16) EngineStats(
                 totalPointsAttempted = a[0].toInt(),
@@ -93,7 +108,8 @@ data class EngineStats(
                 delaunayMs           = a[12],
                 strainMs             = a[13],
                 avgThroughputPtsPerMs = a[14],
-                convergencePercent   = a[15]
+                convergencePercent   = a[15],
+                meshSeedingQuality   = if (a.size >= 17) a[16].toInt() else MESH_SEEDING_UNKNOWN
             ) else EngineStats(0,0,0,0,0,0,0,0,0f,0f,0f,0f,0f,0f,0f,0f)
     }
 }

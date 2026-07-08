@@ -7,6 +7,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.os.Build
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -48,6 +49,9 @@ object ReportBuilder {
         val drawMinMarker: Boolean = true,
     )
 
+    fun appBuildLabel(): String =
+        "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • ${Build.SUPPORTED_ABIS.firstOrNull() ?: "?"}"
+
     fun formatMetric(value: Float): String {
         val absVal = abs(value)
         return if (absVal > 0f && (absVal < 0.001f || absVal >= 10000f)) {
@@ -58,8 +62,10 @@ object ReportBuilder {
     }
 
     fun Bitmap.compressForPdf(maxWidth: Int = 600): Bitmap {
-        val ratio = maxWidth.toFloat() / width
-        val newWidth = if (width > maxWidth) maxWidth else width
+        // Only ever downscale — a ratio > 1 applied to the height alone would
+        // vertically stretch images narrower than maxWidth.
+        val ratio = if (width > maxWidth) maxWidth.toFloat() / width else 1f
+        val newWidth = (width * ratio).toInt()
         val newHeight = (height * ratio).toInt()
 
         val scaled = Bitmap.createScaledBitmap(this, newWidth, newHeight, true)
@@ -226,7 +232,8 @@ object ReportBuilder {
             engineStats = params.engineStats,
             znssdHeatmap = correlationHeatmap ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
             solverPathMap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
-            globalAvgZnssd = computeGlobalAvgZnssd(data)
+            globalAvgZnssd = computeGlobalAvgZnssd(data),
+            appBuild = appBuildLabel()
         )
     }
 

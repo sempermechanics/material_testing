@@ -31,8 +31,15 @@ object DicResult {
         }
     }
 
+    /**
+     * The native engine writes a negative ZNSSD sentinel (CORR_INVALID = -1) for
+     * skipped/failed points; every real solve has ZNSSD >= 0. Testing `>= 0`
+     * instead of `!= 0` keeps a genuinely perfect match (ZNSSD == 0.0) valid.
+     */
+    fun isSolvedPoint(corr: Float): Boolean = corr >= 0f
+
     fun isAcceptedPoint(corr: Float, includeCorrelationField: Boolean = false): Boolean =
-        if (includeCorrelationField) corr != 0f else corr != 0f && corr <= MAX_ZNSSD
+        if (includeCorrelationField) isSolvedPoint(corr) else isSolvedPoint(corr) && corr <= MAX_ZNSSD
 
     fun isStrainFieldIndex(dataIndex: Int): Boolean = dataIndex in IDX_EXX..IDX_EXY
 

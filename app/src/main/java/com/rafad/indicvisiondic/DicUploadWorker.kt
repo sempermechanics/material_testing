@@ -78,7 +78,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     var i = 0
                     while (i < data.size) {
                         val c = data[i + DicResult.IDX_ZNSSD]
-                        if (c != 0f) {
+                        if (DicResult.isSolvedPoint(c)) {
                             csvContent.append(
                                 "${data[i]},${data[i + 1]},${data[i + 2]},${data[i + 3]}," +
                                     "${data[i + 4]},${data[i + 5]},${data[i + 6]},$c\n"
@@ -140,10 +140,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val step = inputData.getInt("STEP", 5)
 
         val originalBaseImg = BitmapFactory.decodeFile(refFile.absolutePath) ?: return@withContext ""
-        val originalDefImg = BitmapFactory.decodeFile(defFile.absolutePath) ?: originalBaseImg
+        // Null when the deformed frame can't be decoded — the cover card then
+        // reuses baseImg, and cleanup below must not recycle it twice.
+        val originalDefImg = BitmapFactory.decodeFile(defFile.absolutePath)
 
         val baseImg = Bitmap.createScaledBitmap(originalBaseImg, imgW, imgH, true)
-        val defImg = Bitmap.createScaledBitmap(originalDefImg, imgW, imgH, true)
+        val defImg = Bitmap.createScaledBitmap(originalDefImg ?: originalBaseImg, imgW, imgH, true)
 
         val statsArray = inputData.getFloatArray("ENGINE_STATS") ?: FloatArray(16)
         val reportData = ReportBuilder.buildReport(
@@ -186,7 +188,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         baseImg.recycle()
         defImg.recycle()
         originalBaseImg.recycle()
-        originalDefImg.recycle()
+        originalDefImg?.recycle()
         tempPdfFile.delete()
 
         storageBucket.publicUrl(pdfCloudPath)
