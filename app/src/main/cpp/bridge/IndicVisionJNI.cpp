@@ -542,6 +542,12 @@
         path_c_seed_x = gridW / 2;
         path_c_seed_y = gridH / 2;
 
+        // Sentinel for "no valid correlation here" (skipped or failed point).
+        // ZNSSD is >= 0 for every real solve, so a negative value can never be
+        // confused with a genuinely perfect match (ZNSSD == 0.0), which the old
+        // corr==0 convention silently discarded.
+        constexpr float CORR_INVALID = -1.0f;
+
         struct GridPoint {
             float x, y, u, v, ux, uy, vx, vy, corr;
             bool solved;
@@ -604,7 +610,7 @@
 
                 // Note: If shouldSkip is true, the point is marked as 'solved' so the OpenMP
                 // workers will ignore it entirely, just like DICe's kd-tree ignores it.
-                resultGrid[y][x] = {(float)realX, (float)realY, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, shouldSkip, -1, -1, 0, false, 0};
+                resultGrid[y][x] = {(float)realX, (float)realY, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, CORR_INVALID, shouldSkip, -1, -1, 0, false, 0};
             }
         }
 
@@ -1077,7 +1083,7 @@
                             global_points_solved.fetch_add(1, std::memory_order_relaxed); local_pts++;
                         } else {
                             resultGrid[y][x].solved = false;
-                            resultGrid[y][x].corr = 0.0f;
+                            resultGrid[y][x].corr = CORR_INVALID;
                             resultGrid[y][x].used_simplex = needed_rescue;
                             // 🚀 FIX: Assign the real iterations on failure
                             resultGrid[y][x].icgn_iters = res.iters;
@@ -1106,7 +1112,7 @@
             const int dx4[] = {1, -1, 0, 0}, dy4[] = {0, 0, 1, -1};
             for (int y = 0; y < gridH; ++y) {
                 for (int x = 0; x < gridW; ++x) {
-                    if (!resultGrid[y][x].solved || resultGrid[y][x].corr <= 0.f) continue;
+                    if (!resultGrid[y][x].solved || resultGrid[y][x].corr < 0.f) continue;
                     bool touching = false;
                     for (int k = 0; k < 4; ++k) {
                         int nx = x + dx4[k], ny = y + dy4[k];
@@ -1221,7 +1227,7 @@
                     resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, -1, order, resultGrid[seed.y_idx][seed.x_idx].mesh_assignment_type, needed_rescue, icgn_iters_used};                global_points_solved.fetch_add(1, std::memory_order_relaxed);
                     gq.q.push(IndicVision::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
                 } else {
-                    resultGrid[seed.y_idx][seed.x_idx].corr = 0.f;
+                    resultGrid[seed.y_idx][seed.x_idx].corr = CORR_INVALID;
                     resultGrid[seed.y_idx][seed.x_idx].used_simplex = needed_rescue;
                     resultGrid[seed.y_idx][seed.x_idx].icgn_iters = icgn_iters_used;
                 }
@@ -1320,7 +1326,7 @@
                                                 seed_pushed = true;
                                             } else {
                                                 std::lock_guard<std::mutex> lg(grid_mutex);
-                                                resultGrid[seed.y_idx][seed.x_idx].corr = 0.f;
+                                                resultGrid[seed.y_idx][seed.x_idx].corr = CORR_INVALID;
                                                 resultGrid[seed.y_idx][seed.x_idx].used_simplex = needed_rescue;
                                                 // 🚀 FIX: Assign the real iterations
                                                 resultGrid[seed.y_idx][seed.x_idx].icgn_iters = res.iters;
@@ -1402,7 +1408,7 @@
                                     pending_pushes.push_back(IndicVision::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
                                 } else {
                                     std::lock_guard<std::mutex> lg(grid_mutex);
-                                    resultGrid[ny][nx].corr = 0.f;
+                                    resultGrid[ny][nx].corr = CORR_INVALID;
                                     resultGrid[ny][nx].used_simplex = needed_rescue;
                                     // 🚀 FIX: Assign the real iterations
                                     resultGrid[ny][nx].icgn_iters = res.iters;
@@ -1425,7 +1431,9 @@
         for (int y = 0; y < gridH; ++y) {
             for (int x = 0; x < gridW; ++x) {
                 int idx = y * gridW + x;
-                if (resultGrid[y][x].solved && resultGrid[y][x].corr != 0.0f) {
+                // corr >= 0 accepts a genuinely perfect solve (ZNSSD == 0.0)
+                // while still rejecting skipped/failed points (CORR_INVALID).
+                if (resultGrid[y][x].solved && resultGrid[y][x].corr >= 0.0f) {
                     dispField.u[idx] = resultGrid[y][x].u;
                     dispField.v[idx] = resultGrid[y][x].v;
                     dispField.valid[idx] = true;
@@ -1851,9 +1859,11 @@
         }
 
         if (out_metrics != nullptr) {
-            // Ensure the array from Kotlin is large enough (we need 16 slots)
-            if (env->GetArrayLength(out_metrics) >= 16) {
-                jfloat metrics_data[16];
+            // Ensure the array from Kotlin is large enough (we need 16 slots;
+            // slot 16 is the optional mesh-seeding status for newer callers)
+            jsize metrics_len = env->GetArrayLength(out_metrics);
+            if (metrics_len >= 16) {
+                jfloat metrics_data[17];
 
                 // 0-4: Point Counts
                 metrics_data[0] = (float)total_valid_points;      // Total Attempted
@@ -1876,10 +1886,20 @@
                 metrics_data[13] = (float)time_strain;            // Strain Calc Time
 
                 // 14-15: Ratios
-                metrics_data[14] = (time_pathA > 0) ? (float)(pathA_pts / time_pathA) : 0.0f; // Throughput Pts/ms
+                // Throughput over the whole solve, not just Path A — when the
+                // mesh phase is skipped (pathA_pts == 0) the old formula
+                // reported 0.00 pts/ms even though RGDIC solved every point.
+                metrics_data[14] = (time_total > 0) ? (float)(valid_count / time_total) : 0.0f; // Throughput Pts/ms
                 metrics_data[15] = (total_valid_points > 0) ? ((float)valid_count / total_valid_points) * 100.0f : 0.0f; // Convergence %
 
-                env->SetFloatArrayRegion(out_metrics, 0, 16, metrics_data);
+                // 16: How the solve was seeded. Surfaces silently-skipped mesh
+                // phases (AKAZE fail / clustered features → Path C, RGDIC-only)
+                // in the report instead of just "0.0 ms / 0 points".
+                //   2 = full AKAZE mesh, 1 = sparse mesh, 0 = Path C fallback
+                metrics_data[16] = (mesh_quality == MeshQuality::FULL) ? 2.0f
+                                 : (mesh_quality == MeshQuality::SPARSE) ? 1.0f : 0.0f;
+
+                env->SetFloatArrayRegion(out_metrics, 0, (metrics_len >= 17) ? 17 : 16, metrics_data);
             } else {
                 LOGE("out_metrics array from Kotlin is too small! Expected 16, got %d", env->GetArrayLength(out_metrics));
             }

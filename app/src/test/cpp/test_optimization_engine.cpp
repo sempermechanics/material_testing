@@ -218,6 +218,34 @@ TEST_CASE(Engine, BothInterpolatorsConverge) {
     }
 }
 
+// --- Determinism: the same solve twice must be bit-identical ----------
+// Guards against threading races, uninitialized buffers, and any future
+// change that makes results vary run-to-run on the same device.
+TEST_CASE(Engine, RepeatSolve_BitIdentical) {
+    auto truth = centered(1.3f, -0.7f, 0.006f, -0.004f, 0.003f, 0.008f);
+    auto r1 = run_engine(truth, 1.0f, -1.0f, INIT_NO_SIMPLEX);
+    auto r2 = run_engine(truth, 1.0f, -1.0f, INIT_NO_SIMPLEX);
+    REQUIRE(r1.status == 0);
+    REQUIRE(r2.status == 0);
+    CHECK(r1.u == r2.u);
+    CHECK(r1.v == r2.v);
+    CHECK(r1.ux == r2.ux);
+    CHECK(r1.uy == r2.uy);
+    CHECK(r1.vx == r2.vx);
+    CHECK(r1.vy == r2.vy);
+    CHECK(r1.correlation_score == r2.correlation_score);
+}
+
+// --- Contract: a successful solve always reports ZNSSD >= 0 -----------
+// The JNI layer marks failed/skipped points with a negative sentinel
+// (CORR_INVALID = -1), so a real solve must never produce a negative
+// score — including the perfect-match case (ZNSSD == 0.0 exactly).
+TEST_CASE(Engine, SuccessfulSolve_CorrelationNonNegative) {
+    auto res = run_engine(centered(0.0f, 0.0f), 0.0f, 0.0f, INIT_NO_SIMPLEX);
+    REQUIRE(res.status == 0);
+    CHECK(res.correlation_score >= 0.0f);
+}
+
 // --- Levenberg-Marquardt damping must not change a well-posed answer --
 TEST_CASE(Engine, LmDampingPreservesWellPosedSolution) {
     const float u_true = 1.6f, v_true = 0.8f;

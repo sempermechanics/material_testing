@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.22)
 project("indicvision_core")
 
+# 🚀 Always build native code optimized, even for debug APK variants.
+# AGP passes -DCMAKE_BUILD_TYPE=Debug for debug builds, which compiles the
+# whole from-source OpenCV (and the engine) at -O0 — AKAZE alone gets ~10x
+# slower. The old prebuilt OpenCV SDK was release-built regardless of variant;
+# this restores that behavior. (FORCE is required to override AGP's -D cache.)
+set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
+
 # Eigen headers — git submodule pinned to release 3.4.0
 # (third_party/eigen; run `git submodule update --init --recursive` after cloning)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/eigen)
@@ -40,11 +47,16 @@ foreach(_flag
         BUILD_opencv_python_bindings_generator BUILD_opencv_gapi
         BUILD_opencv_dnn BUILD_opencv_ml BUILD_opencv_photo
         BUILD_opencv_video BUILD_opencv_objdetect BUILD_ITT
-        WITH_PROTOBUF WITH_ADE WITH_IPP WITH_CAROTENE WITH_OPENCL
+        WITH_PROTOBUF WITH_ADE WITH_IPP WITH_OPENCL
         WITH_QUIRC WITH_FFMPEG WITH_GSTREAMER WITH_OPENEXR
         WITH_OPENJPEG WITH_JASPER WITH_CUDA WITH_EIGEN WITH_1394)
     set(${_flag} OFF CACHE BOOL "" FORCE)
 endforeach()
+
+# Carotene is OpenCV's hand-tuned ARM NEON HAL — the prebuilt Android SDK
+# ships with it enabled. It accelerates the imgproc/features2d internals the
+# pipeline leans on (resize, blur, AKAZE). No effect on x86/x86_64 ABIs.
+set(WITH_CAROTENE ON CACHE BOOL "" FORCE)
 
 # We build no Python bindings, so skip OpenCV's host-Python detection entirely.
 # This removes any Python dependency from the build and sidesteps broken Windows
