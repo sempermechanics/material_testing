@@ -19,3 +19,34 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ============================================================
+# JNI REFLECTION CONTRACT
+# IndicVisionJNI.cpp resolves this callback method BY NAME at
+# runtime (GetMethodID("onProgressUpdate", "(I)V")). If R8
+# renames it, the lookup returns null and engine progress
+# callbacks silently stop working in release builds.
+# ============================================================
+-keepclassmembers class * implements com.rafad.indicvisiondic.ProgressCallback {
+    public void onProgressUpdate(int);
+}
+
+# Native entry points: AGP's default rules keep classes with native
+# methods, but be explicit — the C symbol names embed this class name.
+-keep class com.rafad.indicvisiondic.IndicVisionNativeLib { *; }
+
+# ============================================================
+# SUPABASE / KOTLINX-SERIALIZATION MODELS
+# The libraries ship consumer rules, but keep our own DTOs'
+# serializers explicitly so a library update can't silently
+# break the cloud sync payloads.
+# ============================================================
+-keepclassmembers @kotlinx.serialization.Serializable class com.rafad.indicvisiondic.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.rafad.indicvisiondic.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Keep readable crash reports from the field
+-keepattributes SourceFile,LineNumberTable

@@ -40,6 +40,14 @@ android {
         // any physical device AND any emulator without changing the build.
         // At install time Android extracts only the matching architecture's
         // .so, so each device transparently uses its own native code.
+        //
+        // CI override: -PabiFilters=x86_64 (comma-separated) restricts the
+        // native build so e.g. the emulator smoke job doesn't compile
+        // OpenCV four times. Never set for release builds.
+        (project.findProperty("abiFilters") as String?)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { filters -> ndk { abiFilters.addAll(filters.split(",")) } }
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
