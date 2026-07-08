@@ -165,7 +165,7 @@ object ReportBuilder {
             }
             if (validValues.isEmpty()) continue
 
-            val extrema = computeFieldExtrema(data, dataIndex)
+            val extrema = computeFieldExtrema(data, dataIndex, absoluteStrainValues = false)
             val mean = validValues.average().toFloat()
             val stdDev = sqrt(validValues.map { (it - mean) * (it - mean) }.average()).toFloat()
 
