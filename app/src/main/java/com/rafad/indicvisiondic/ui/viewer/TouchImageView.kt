@@ -10,7 +10,8 @@ import android.view.ScaleGestureDetector
 import androidx.appcompat.widget.AppCompatImageView
 
 class TouchImageView @JvmOverloads constructor(
-    context: Context, attrs: AttributeSet? = null
+    context: Context,
+    attrs: AttributeSet? = null,
 ) : AppCompatImageView(context, attrs) {
 
     private var matrix = Matrix()
@@ -141,16 +142,22 @@ class TouchImageView @JvmOverloads constructor(
             val targetX = (viewWidth - contentW) / 2f
             deltaX = targetX - transX
         } else {
-            if (transX > 0) deltaX = -transX
-            else if (transX + contentW < viewWidth) deltaX = viewWidth - (transX + contentW)
+            if (transX > 0) {
+                deltaX = -transX
+            } else if (transX + contentW < viewWidth) {
+                deltaX = viewWidth - (transX + contentW)
+            }
         }
 
         if (contentH <= viewHeight) {
             val targetY = (viewHeight - contentH) / 2f
             deltaY = targetY - transY
         } else {
-            if (transY > 0) deltaY = -transY
-            else if (transY + contentH < viewHeight) deltaY = viewHeight - (transY + contentH)
+            if (transY > 0) {
+                deltaY = -transY
+            } else if (transY + contentH < viewHeight) {
+                deltaY = viewHeight - (transY + contentH)
+            }
         }
 
         if (deltaX != 0f || deltaY != 0f) {

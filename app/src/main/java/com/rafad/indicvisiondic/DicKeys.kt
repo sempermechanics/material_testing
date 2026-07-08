@@ -8,11 +8,11 @@ package com.rafad.indicvisiondic
  * Same-file keys (e.g. savedInstanceState) intentionally stay local.
  */
 object DicKeys {
-    // ── Auth → session hand-off (AuthActivity / SplashActivity / PendingApproval)
+    // ── Auth  session hand-off (AuthActivity / SplashActivity / PendingApproval)
     const val USER_ID = "USER_ID"
     const val USER_EMAIL = "USER_EMAIL"
 
-    // ── StaticAnalysisActivity ↔ RoiDrawActivity
+    // ── StaticAnalysisActivity  RoiDrawActivity
     const val IMAGE_FILE_PATH = "IMAGE_FILE_PATH"
     const val MASK_FILE_PATH = "MASK_FILE_PATH"
     const val IMAGE_WIDTH = "IMAGE_WIDTH"
@@ -23,7 +23,7 @@ object DicKeys {
     const val ROI_T = "ROI_T"
     const val ROI_B = "ROI_B"
 
-    // ── StaticAnalysisActivity → ResultViewerActivity
+    // ── StaticAnalysisActivity  ResultViewerActivity
     const val SESSION_ID = "SESSION_ID"
     const val REF_NAME = "REF_NAME"
     const val REF_PATH = "REF_PATH"
@@ -39,7 +39,7 @@ object DicKeys {
     const val EXEC_TIME = "EXEC_TIME"
     const val AVG_ITERS = "AVG_ITERS"
 
-    // ── AnalysisViewModel → DicUploadWorker (WorkManager Data)
+    // ── AnalysisViewModel  DicUploadWorker (WorkManager Data)
     const val STEP = "STEP"
     const val SUBSET = "SUBSET"
     const val STRAIN_WIN = "STRAIN_WIN"

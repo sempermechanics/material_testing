@@ -1,4 +1,8 @@
 package com.rafad.indicvisiondic.ui.auth
+import android.content.Intent
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
@@ -6,14 +10,14 @@ import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.data.DeviceKeyManager
 import com.rafad.indicvisiondic.data.SupabaseManager
 import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
-
-import android.content.Intent
-import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
 
+/**
+ * App entry point: restores an existing Supabase session and routes to
+ * [StaticAnalysisActivity] (approved user), [PendingApprovalActivity]
+ * (account awaiting admin approval), or [AuthActivity] (signed out).
+ */
 class SplashActivity : AppCompatActivity() {
 
     private val authRepo = AuthRepository()
@@ -56,7 +60,7 @@ class SplashActivity : AppCompatActivity() {
                     when (status) {
                         "APPROVED" -> navigateTo(StaticAnalysisActivity::class.java)
                         "OFFLINE_CACHE_APPROVED" -> {
-                            // 🚀 THE OFFLINE BYPASS: They have a token but no Wi-Fi. Let them work!
+                            // THE OFFLINE BYPASS: They have a token but no Wi-Fi. Let them work!
                             android.widget.Toast.makeText(this, "Offline Mode", android.widget.Toast.LENGTH_LONG).show()
                             navigateTo(StaticAnalysisActivity::class.java)
                         }
@@ -66,9 +70,8 @@ class SplashActivity : AppCompatActivity() {
                 },
                 onFailure = { exception ->
                     navigateTo(AuthActivity::class.java, exception.message ?: "Could not verify account securely.")
-                }
+                },
             )
-
         } catch (e: Exception) {
             navigateTo(AuthActivity::class.java, "A critical system error occurred during startup.")
         }

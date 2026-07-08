@@ -1,12 +1,16 @@
 package com.rafad.indicvisiondic.report
-import com.rafad.indicvisiondic.DicResult
-
 import android.graphics.Bitmap
 import android.graphics.Color
+import com.rafad.indicvisiondic.DicResult
 
+/**
+ * Turns a full-field result array into heatmap bitmaps: grid interpolation,
+ * percentile-based color scaling, and the jet colormap shared by the on-screen
+ * viewer and the PDF report.
+ */
 object VisualizationEngine {
 
-    // 🚀 PRECOMPUTED LOOKUP TABLE: Jet Colormap (256 colors)
+    // PRECOMPUTED LOOKUP TABLE: Jet Colormap (256 colors)
     private val JET_LUT = IntArray(256) { i ->
         val v = i / 255.0f
         val r = (clamp(minOf(4f * v - 1.5f, -4f * v + 4.5f)) * 255).toInt()
@@ -16,7 +20,8 @@ object VisualizationEngine {
     }
 
     private fun clamp(v: Float) = v.coerceIn(0f, 1f)
-    // 🚀 NEW: Robust Percentile Clamping (Aligns perfectly with the Max/Min Button)
+
+    // Robust Percentile Clamping (Aligns perfectly with the Max/Min Button)
     private fun computeSigmaClampedRange(values: MutableList<Float>, valIndex: Int): Pair<Float, Float> {
         if (values.isEmpty()) return Pair(0f, 1f)
 
@@ -48,10 +53,9 @@ object VisualizationEngine {
         imgH: Int,
         valIndex: Int,
         step: Int,
-        customMin: Float? = null, // 🚀 NEW: Optional Custom Bounds
-        customMax: Float? = null
+        customMin: Float? = null, // Optional Custom Bounds
+        customMax: Float? = null,
     ): Triple<Bitmap, Float, Float> {
-
         var minX = Int.MAX_VALUE
         var minY = Int.MAX_VALUE
         var maxX = Int.MIN_VALUE
@@ -63,8 +67,8 @@ object VisualizationEngine {
             val corr = data[i + DicResult.IDX_ZNSSD]
             if (DicResult.isAcceptedPoint(corr)) {
                 val x = data[i].toInt()
-                val y = data[i+1].toInt()
-                val v = data[i+valIndex]
+                val y = data[i + 1].toInt()
+                val v = data[i + valIndex]
 
                 validValues.add(v)
                 if (x < minX) minX = x
@@ -78,7 +82,7 @@ object VisualizationEngine {
             return Triple(Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888), 0f, 0f)
         }
 
-        // 🚀 THE SCALING LOGIC: Use Custom Bounds if provided, else use Mean ± 3σ Statistical Clamping
+        // THE SCALING LOGIC: Use Custom Bounds if provided, else use Mean ± 3σ Statistical Clamping
         val minV: Float
         val maxV: Float
         if (customMin != null && customMax != null) {
@@ -101,11 +105,11 @@ object VisualizationEngine {
             val corr = data[i + DicResult.IDX_ZNSSD]
             if (DicResult.isAcceptedPoint(corr)) {
                 val x = data[i].toInt()
-                val y = data[i+1].toInt()
+                val y = data[i + 1].toInt()
                 val c = (x - minX) / step
                 val r = (y - minY) / step
                 if (c in 0 until cols && r in 0 until rows) {
-                    grid[r * cols + c] = data[i+valIndex]
+                    grid[r * cols + c] = data[i + valIndex]
                 }
             }
         }
@@ -139,7 +143,7 @@ object VisualizationEngine {
 
                             val v = leftEdgeV + wx * (rightEdgeV - leftEdgeV)
 
-                            // 🚀 Color Mapping naturally clamps to Min/Max bounds!
+                            // Color Mapping naturally clamps to Min/Max bounds!
                             val norm = ((v.coerceIn(minV, maxV) - minV) / range * 255).toInt()
                             val color = JET_LUT[norm.coerceIn(0, 255)]
 

@@ -11,7 +11,7 @@ data class ReportData(
     val strainWindow: Int,
     val strainMethod: String,
 
-    // 🚀 NEW: Region of Interest Details
+    // Region of Interest Details
     val roiData: RoiData,
 
     // DOWN-SCALED IMAGES (300 DPI max) for the page-1 preview card
@@ -29,15 +29,15 @@ data class ReportData(
     val globalAvgZnssd: Float,
 
     /** Traceability, e.g. "v1.4 (12) • arm64-v8a". Null when unavailable. */
-    val appBuild: String? = null
+    val appBuild: String? = null,
 )
 
-// 🚀 NEW: Dedicated Data Class for ROI
+// Dedicated Data Class for ROI
 data class RoiData(
     val startX: Int,
     val startY: Int,
     val width: Int,
-    val height: Int
+    val height: Int,
 )
 
 data class FieldResult(
@@ -47,13 +47,14 @@ data class FieldResult(
     val minValue: Float,
     val maxValue: Float,
     val meanValue: Float,
-    val meanType: String, // 🚀 NEW: "Simple Mean" or "Mean Absolute"
+    val meanType: String, // "Simple Mean" or "Mean Absolute"
     val stdDevValue: Float,
     val minCoordX: Int,
     val minCoordY: Int,
     val maxCoordX: Int,
     val maxCoordY: Int,
-    val bakedHeatmap: Bitmap // Down-scaled to 300 DPI
+    // Down-scaled to 300 DPI
+    val bakedHeatmap: Bitmap,
 )
 
 data class EngineStats(
@@ -78,7 +79,7 @@ data class EngineStats(
     val convergencePercent: Float,
 
     /** 2 = full AKAZE mesh, 1 = sparse mesh, 0 = Path C fallback (RGDIC-only), -1 = unknown */
-    val meshSeedingQuality: Int = MESH_SEEDING_UNKNOWN
+    val meshSeedingQuality: Int = MESH_SEEDING_UNKNOWN,
 ) {
     fun meshSeedingLabel(): String = when (meshSeedingQuality) {
         2 -> "Full AKAZE Mesh"
@@ -91,25 +92,28 @@ data class EngineStats(
         const val MESH_SEEDING_UNKNOWN = -1
 
         /** Matches the float[] written by IndicVisionJNI.cpp (16 slots + optional slot 16) */
-        fun fromArray(a: FloatArray): EngineStats =
-            if (a.size >= 16) EngineStats(
+        fun fromArray(a: FloatArray): EngineStats = if (a.size >= 16) {
+            EngineStats(
                 totalPointsAttempted = a[0].toInt(),
-                totalPointsSolved    = a[1].toInt(),
-                totalPointsRejected  = a[2].toInt(),
-                pathAPoints          = a[3].toInt(),
-                pathBPoints          = a[4].toInt(),
-                simplexCalls         = a[5].toInt(),
-                simplexSaved         = a[6].toInt(),
-                finalDeadPoints      = a[7].toInt(),
-                avgIcgnIterations    = a[8],
-                wallTimeMs           = a[9],
-                akazeRansacMs        = a[10],
-                hessianPrepassMs     = a[11],
-                delaunayMs           = a[12],
-                strainMs             = a[13],
+                totalPointsSolved = a[1].toInt(),
+                totalPointsRejected = a[2].toInt(),
+                pathAPoints = a[3].toInt(),
+                pathBPoints = a[4].toInt(),
+                simplexCalls = a[5].toInt(),
+                simplexSaved = a[6].toInt(),
+                finalDeadPoints = a[7].toInt(),
+                avgIcgnIterations = a[8],
+                wallTimeMs = a[9],
+                akazeRansacMs = a[10],
+                hessianPrepassMs = a[11],
+                delaunayMs = a[12],
+                strainMs = a[13],
                 avgThroughputPtsPerMs = a[14],
-                convergencePercent   = a[15],
-                meshSeedingQuality   = if (a.size >= 17) a[16].toInt() else MESH_SEEDING_UNKNOWN
-            ) else EngineStats(0,0,0,0,0,0,0,0,0f,0f,0f,0f,0f,0f,0f,0f)
+                convergencePercent = a[15],
+                meshSeedingQuality = if (a.size >= 17) a[16].toInt() else MESH_SEEDING_UNKNOWN,
+            )
+        } else {
+            EngineStats(0, 0, 0, 0, 0, 0, 0, 0, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        }
     }
 }

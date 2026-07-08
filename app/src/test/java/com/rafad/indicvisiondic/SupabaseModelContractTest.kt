@@ -3,7 +3,6 @@ import com.rafad.indicvisiondic.data.AnalysisSessionInsert
 import com.rafad.indicvisiondic.data.AnalysisSessionResponse
 import com.rafad.indicvisiondic.data.AuthProfile
 import com.rafad.indicvisiondic.data.UserProfileInsert
-
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -106,7 +105,9 @@ class SupabaseModelContractTest {
         // switch the SDK to encodeDefaults=true, re-verify the DB default
         // and RLS still force PENDING for self-registration.
         val insert = UserProfileInsert(
-            userId = "u", emailAddress = "e", deviceFingerprint = "d",
+            userId = "u",
+            emailAddress = "e",
+            deviceFingerprint = "d",
             hardwarePublicKey = "k",
         )
         val obj = json.encodeToString(insert).let { json.parseToJsonElement(it).jsonObject }
@@ -117,7 +118,9 @@ class SupabaseModelContractTest {
     fun `UserProfileInsert defaults access_status to PENDING`() {
         // Security invariant: a client can never self-register as APPROVED.
         val insert = UserProfileInsert(
-            userId = "u", emailAddress = "e", deviceFingerprint = "d",
+            userId = "u",
+            emailAddress = "e",
+            deviceFingerprint = "d",
             hardwarePublicKey = "k",
         )
         assertEquals("PENDING", insert.accessStatus)

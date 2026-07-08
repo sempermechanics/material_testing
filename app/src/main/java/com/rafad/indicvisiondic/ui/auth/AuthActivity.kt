@@ -1,26 +1,30 @@
 package com.rafad.indicvisiondic.ui.auth
+import android.content.Intent
+import android.graphics.Color
+import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ProgressBar
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.google.android.material.snackbar.Snackbar // Added for modern error messages
 import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.data.DeviceKeyManager
-
-import android.content.Intent
-import android.graphics.Color
-import android.os.Bundle
-import android.view.View
-import android.widget.Button
-import android.widget.EditText
-import android.widget.ProgressBar
-import android.widget.TextView
-import android.view.ViewGroup
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import com.google.android.material.snackbar.Snackbar // Added for modern error messages
-import com.rafad.indicvisiondic.ui.Motion
 import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.Motion
 import kotlinx.coroutines.launch
 
+/**
+ * Sign-in / sign-up screen: email+password and Google one-tap (Credential
+ * Manager). On success, routing depends on the account's approval status —
+ * see docs/BACKEND.md for the auth and access-gate flow.
+ */
 class AuthActivity : AppCompatActivity() {
 
     private val authRepo = AuthRepository()
@@ -134,17 +138,18 @@ class AuthActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val idToken = GoogleSignInHelper.getIdToken(
-                    this@AuthActivity, BuildConfig.GOOGLE_WEB_CLIENT_ID
+                    this@AuthActivity,
+                    BuildConfig.GOOGLE_WEB_CLIENT_ID,
                 )
                 val result = authRepo.loginWithGoogle(idToken, deviceId, publicKey)
                 setLoadingState(false)
                 result.fold(
                     onSuccess = {
-                        // Gatekeeper routes APPROVED → analysis, PENDING → pending page
+                        // Gatekeeper routes APPROVED  analysis, PENDING  pending page
                         startActivity(Intent(this@AuthActivity, SplashActivity::class.java))
                         finish()
                     },
-                    onFailure = { showSnackbar(it.message ?: "Google sign-in failed.", isError = true) }
+                    onFailure = { showSnackbar(it.message ?: "Google sign-in failed.", isError = true) },
                 )
             } catch (e: GoogleSignInHelper.NotConfigured) {
                 setLoadingState(false)
@@ -170,7 +175,7 @@ class AuthActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val result: Result<String> = if (isLoginMode) {
-                // 🚀 FIX: Pass the public key during login so it can self-heal!
+                // Pass the public key during login so it can self-heal!
                 authRepo.loginUser(email, pass, myDeviceId, myPublicKey)
             } else {
                 authRepo.registerUser(email, pass, myDeviceId, myPublicKey)
@@ -195,7 +200,7 @@ class AuthActivity : AppCompatActivity() {
                     } else {
                         showSnackbar(errorMsg, isError = true)
                     }
-                }
+                },
             )
         }
     }
@@ -214,7 +219,7 @@ class AuthActivity : AppCompatActivity() {
 
             result.fold(
                 onSuccess = { message -> showSnackbar(message, isError = false) },
-                onFailure = { exception -> showSnackbar(exception.message ?: "Failed to send reset email.", isError = true) }
+                onFailure = { exception -> showSnackbar(exception.message ?: "Failed to send reset email.", isError = true) },
             )
         }
     }

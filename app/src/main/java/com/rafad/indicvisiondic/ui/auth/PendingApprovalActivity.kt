@@ -1,12 +1,4 @@
 package com.rafad.indicvisiondic.ui.auth
-import com.rafad.indicvisiondic.DicKeys
-import com.rafad.indicvisiondic.R
-import com.rafad.indicvisiondic.data.AuthRepository
-import com.rafad.indicvisiondic.data.DeviceKeyManager
-import com.rafad.indicvisiondic.data.SupabaseManager
-import com.rafad.indicvisiondic.ui.Insets
-import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
-
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -17,11 +9,20 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.data.AuthRepository
+import com.rafad.indicvisiondic.data.DeviceKeyManager
+import com.rafad.indicvisiondic.data.SupabaseManager
+import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
 import io.github.jan.supabase.auth.auth
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
+/**
+ * Holding screen for authenticated accounts whose `auth_profiles.access_status`
+ * is still PENDING. Polls for approval and routes onward once granted.
+ */
 class PendingApprovalActivity : AppCompatActivity() {
 
     private val authRepo = AuthRepository()
@@ -101,7 +102,7 @@ class PendingApprovalActivity : AppCompatActivity() {
                 onFailure = { exception ->
                     setLoadingState(false)
                     Toast.makeText(this@PendingApprovalActivity, exception.message ?: "Network error. Try again.", Toast.LENGTH_LONG).show()
-                }
+                },
             )
         }
     }

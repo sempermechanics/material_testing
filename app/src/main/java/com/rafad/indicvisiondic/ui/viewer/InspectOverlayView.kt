@@ -8,42 +8,79 @@ import android.util.AttributeSet
 import android.view.View
 
 class InspectOverlayView @JvmOverloads constructor(
-    context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0,
 ) : View(context, attrs, defStyleAttr) {
 
     // Probe State
-    private var drawX = -1f; private var drawY = -1f
+    private var drawX = -1f
+    private var drawY = -1f
     private var showCrosshair = false
 
     // Max/Min State
-    private var maxDX = -1f; private var maxDY = -1f
-    private var minDX = -1f; private var minDY = -1f
+    private var maxDX = -1f
+    private var maxDY = -1f
+    private var minDX = -1f
+    private var minDY = -1f
     private var showMaxMin = false
 
     // Paints
-    private val paintProbe = Paint().apply { color = Color.GREEN; style = Paint.Style.STROKE; strokeWidth = 3f; isAntiAlias = true }
-    private val paintMax = Paint().apply { color = Color.RED; style = Paint.Style.STROKE; strokeWidth = 4f; isAntiAlias = true }
-    private val paintMin = Paint().apply { color = Color.CYAN; style = Paint.Style.STROKE; strokeWidth = 4f; isAntiAlias = true }
-    private val paintShadow = Paint().apply { color = Color.parseColor("#88000000"); style = Paint.Style.STROKE; strokeWidth = 6f; isAntiAlias = true }
+    private val paintProbe = Paint().apply {
+        color = Color.GREEN
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+        isAntiAlias = true
+    }
+    private val paintMax = Paint().apply {
+        color = Color.RED
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        isAntiAlias = true
+    }
+    private val paintMin = Paint().apply {
+        color = Color.CYAN
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        isAntiAlias = true
+    }
+    private val paintShadow = Paint().apply {
+        color = Color.parseColor("#88000000")
+        style = Paint.Style.STROKE
+        strokeWidth = 6f
+        isAntiAlias = true
+    }
 
     fun updatePosition(x: Float, y: Float) {
-        drawX = x; drawY = y; showCrosshair = true; invalidate()
+        drawX = x
+        drawY = y
+        showCrosshair = true
+        invalidate()
     }
 
     fun hide() {
-        showCrosshair = false; invalidate()
+        showCrosshair = false
+        invalidate()
     }
 
     fun updateMaxMinPositions(maxX: Float, maxY: Float, minX: Float, minY: Float) {
-        maxDX = maxX; maxDY = maxY; minDX = minX; minDY = minY; showMaxMin = true; invalidate()
+        maxDX = maxX
+        maxDY = maxY
+        minDX = minX
+        minDY = minY
+        showMaxMin = true
+        invalidate()
     }
 
     fun hideMaxMin() {
-        showMaxMin = false; invalidate()
+        showMaxMin = false
+        invalidate()
     }
 
     private fun drawReticle(canvas: Canvas, x: Float, y: Float, paint: Paint) {
-        val radius = 15f; val lineLen = 35f; val gap = 5f
+        val radius = 15f
+        val lineLen = 35f
+        val gap = 5f
 
         // Shadow
         canvas.drawCircle(x, y, radius, paintShadow)

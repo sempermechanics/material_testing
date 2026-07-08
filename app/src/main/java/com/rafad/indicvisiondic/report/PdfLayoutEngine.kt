@@ -18,21 +18,42 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
 
     // Design System Colors
     private val colorPrimary = Color.parseColor("#1A237E") // Navy Blue
-    private val colorText = Color.parseColor("#37474F")    // Slate Gray
-    private val colorBorder = Color.parseColor("#CFD8DC")  // Light Gray
-    private val colorZebra = Color.parseColor("#F8F9FA")   // Faint Gray
+    private val colorText = Color.parseColor("#37474F") // Slate Gray
+    private val colorBorder = Color.parseColor("#CFD8DC") // Light Gray
+    private val colorZebra = Color.parseColor("#F8F9FA") // Faint Gray
 
     // Typography
-    private val h1Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorPrimary; textSize = 90f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD) }
-    private val h2Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorText; textSize = 55f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD) }
-    private val bodyPaintLeft = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorText; textSize = 38f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL) }
-    private val bodyPaintRight = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorText; textSize = 38f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD); textAlign = Paint.Align.RIGHT }
-    private val tableHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 35f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD) }
+    private val h1Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorPrimary
+        textSize = 90f
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+    }
+    private val h2Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorText
+        textSize = 55f
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+    }
+    private val bodyPaintLeft = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorText
+        textSize = 38f
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+    }
+    private val bodyPaintRight = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorText
+        textSize = 38f
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        textAlign = Paint.Align.RIGHT
+    }
+    private val tableHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 35f
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+    }
 
     // Smooth Upscaling Paint for our tiny Bitmaps
     private val upscalerPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
-    // 🚀 NEW: Smart Mathematical Formatter for PDF Tables!
+    // Smart Mathematical Formatter for PDF Tables!
     private fun formatMetric(value: Float): String {
         val absVal = kotlin.math.abs(value)
         return if (absVal > 0f && (absVal < 0.001f || absVal >= 10000f)) {
@@ -61,15 +82,37 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
     }
 
     private fun drawFooter() {
-        val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorBorder; textSize = 30f; textAlign = Paint.Align.CENTER }
-        canvas?.drawLine(margin, pageHeight - margin, pageWidth - margin, pageHeight - margin, Paint().apply { color = colorBorder; strokeWidth = 2f })
+        val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorBorder
+            textSize = 30f
+            textAlign = Paint.Align.CENTER
+        }
+        canvas?.drawLine(
+            margin,
+            pageHeight - margin,
+            pageWidth - margin,
+            pageHeight - margin,
+            Paint().apply {
+                color = colorBorder
+                strokeWidth = 2f
+            },
+        )
         canvas?.drawText("inDIC Metrology Report • Page $pageNumber", pageWidth / 2f, pageHeight - (margin / 2f), footerPaint)
     }
 
     fun drawTitle(title: String) {
         canvas?.drawText(title, margin, cursorY + 80f, h1Paint)
         cursorY += 120f
-        canvas?.drawLine(margin, cursorY, pageWidth - margin, cursorY, Paint().apply { color = colorPrimary; strokeWidth = 6f })
+        canvas?.drawLine(
+            margin,
+            cursorY,
+            pageWidth - margin,
+            cursorY,
+            Paint().apply {
+                color = colorPrimary
+                strokeWidth = 6f
+            },
+        )
         cursorY += 60f
     }
 
@@ -82,7 +125,16 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         canvas?.drawText(key, margin, cursorY + 40f, bodyPaintLeft)
         canvas?.drawText(value, pageWidth - margin, cursorY + 40f, bodyPaintRight)
         cursorY += 60f
-        canvas?.drawLine(margin, cursorY, pageWidth - margin, cursorY, Paint().apply { color = colorZebra; strokeWidth = 2f })
+        canvas?.drawLine(
+            margin,
+            cursorY,
+            pageWidth - margin,
+            cursorY,
+            Paint().apply {
+                color = colorZebra
+                strokeWidth = 2f
+            },
+        )
         cursorY += 20f
     }
 
@@ -118,7 +170,16 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
             }
             cursorY += rowHeight
         }
-        canvas?.drawLine(margin, cursorY, pageWidth - margin, cursorY, Paint().apply { color = colorPrimary; strokeWidth = 4f })
+        canvas?.drawLine(
+            margin,
+            cursorY,
+            pageWidth - margin,
+            cursorY,
+            Paint().apply {
+                color = colorPrimary
+                strokeWidth = 4f
+            },
+        )
         cursorY += 60f
     }
 
@@ -136,14 +197,26 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
 
         val cardRect = RectF(margin, cursorY, pageWidth - margin, startY + maxImgHeight + 100f)
         canvas?.drawRoundRect(cardRect, 20f, 20f, Paint().apply { color = Color.WHITE })
-        canvas?.drawRoundRect(cardRect, 20f, 20f, Paint().apply { color = colorBorder; style = Paint.Style.STROKE; strokeWidth = 4f })
+        canvas?.drawRoundRect(
+            cardRect,
+            20f,
+            20f,
+            Paint().apply {
+                color = colorBorder
+                style = Paint.Style.STROKE
+                strokeWidth = 4f
+            },
+        )
 
         canvas?.drawBitmap(refBmp, null, RectF(margin + 20f, startY, margin + 20f + imgWidth, startY + refHeight), upscalerPaint)
         canvas?.drawBitmap(defBmp, null, RectF(margin + 40f + imgWidth, startY, margin + 40f + imgWidth * 2f, startY + defHeight), upscalerPaint)
 
-        val labelPaint = Paint(bodyPaintLeft).apply { textAlign = Paint.Align.CENTER; textSize = 32f }
-        canvas?.drawText("Ref: $refName", margin + 20f + (imgWidth/2f), startY + maxImgHeight + 60f, labelPaint)
-        canvas?.drawText("Def: $defName", margin + 40f + imgWidth + (imgWidth/2f), startY + maxImgHeight + 60f, labelPaint)
+        val labelPaint = Paint(bodyPaintLeft).apply {
+            textAlign = Paint.Align.CENTER
+            textSize = 32f
+        }
+        canvas?.drawText("Ref: $refName", margin + 20f + (imgWidth / 2f), startY + maxImgHeight + 60f, labelPaint)
+        canvas?.drawText("Def: $defName", margin + 40f + imgWidth + (imgWidth / 2f), startY + maxImgHeight + 60f, labelPaint)
 
         cursorY += maxImgHeight + 160f
     }
@@ -154,16 +227,16 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         canvas?.drawText("${field.fieldName}  [${field.unit}]", margin, cursorY + 60f, h2Paint)
         cursorY += 100f
 
-        // 🚀 UPGRADED: Dynamic Scientific Notation applied here!
+        // Dynamic Scientific Notation applied here!
         drawTable(
             headers = listOf("Metric", "Value", "Location (X,Y)"),
             rows = listOf(
                 listOf("Maximum (+)", formatMetric(field.maxValue), "(${field.maxCoordX}, ${field.maxCoordY})"),
                 listOf("Minimum (-)", formatMetric(field.minValue), "(${field.minCoordX}, ${field.minCoordY})"),
                 listOf(field.meanType, formatMetric(field.meanValue), "—"),
-                listOf("Standard Dev.", formatMetric(field.stdDevValue), "—")
+                listOf("Standard Dev.", formatMetric(field.stdDevValue), "—"),
             ),
-            colWeights = listOf(0.4f, 0.3f, 0.3f)
+            colWeights = listOf(0.4f, 0.3f, 0.3f),
         )
 
         val remainingSpace = blockHeight - (cursorY - startY) - 40f
@@ -180,7 +253,14 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         val destRect = RectF(margin + centerOffset, cursorY, margin + centerOffset + drawW, cursorY + drawH)
 
         canvas?.drawBitmap(field.bakedHeatmap, null, destRect, upscalerPaint)
-        canvas?.drawRect(destRect, Paint().apply { color = colorBorder; style = Paint.Style.STROKE; strokeWidth = 3f })
+        canvas?.drawRect(
+            destRect,
+            Paint().apply {
+                color = colorBorder
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+            },
+        )
 
         cursorY = startY + blockHeight
     }
@@ -205,7 +285,14 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         val destRect = RectF(margin + centerOffset, cursorY, margin + centerOffset + drawW, cursorY + drawH)
 
         canvas?.drawBitmap(bitmap, null, destRect, upscalerPaint)
-        canvas?.drawRect(destRect, Paint().apply { color = colorBorder; style = Paint.Style.STROKE; strokeWidth = 3f })
+        canvas?.drawRect(
+            destRect,
+            Paint().apply {
+                color = colorBorder
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+            },
+        )
 
         cursorY = startY + blockHeight
     }

@@ -1,14 +1,4 @@
 package com.rafad.indicvisiondic.ui.viewer
-import com.rafad.indicvisiondic.DicKeys
-import com.rafad.indicvisiondic.DicResult
-import com.rafad.indicvisiondic.R
-import com.rafad.indicvisiondic.report.EngineStats
-import com.rafad.indicvisiondic.report.PdfReportGenerator
-import com.rafad.indicvisiondic.report.ReportBuilder
-import com.rafad.indicvisiondic.report.ReportData
-import com.rafad.indicvisiondic.report.RoiData
-import com.rafad.indicvisiondic.report.VisualizationEngine
-
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.graphics.*
@@ -21,16 +11,31 @@ import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.google.android.material.textfield.TextInputEditText
+import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.DicResult
+import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.report.EngineStats
+import com.rafad.indicvisiondic.report.PdfReportGenerator
+import com.rafad.indicvisiondic.report.ReportBuilder
+import com.rafad.indicvisiondic.report.ReportData
+import com.rafad.indicvisiondic.report.RoiData
+import com.rafad.indicvisiondic.report.VisualizationEngine
 import com.rafad.indicvisiondic.ui.Insets
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.progressindicator.LinearProgressIndicator
-import com.google.android.material.textfield.TextInputEditText
+import java.io.File
 
+/**
+ * Results browser: renders displacement/strain heatmaps over the reference
+ * image, with frame scrubbing (batch runs), point inspection, min/max
+ * markers, custom color scales, and all exports (PDF/CSV/PNG/ZIP via
+ * [ResultExporter]).
+ */
 class ResultViewerActivity : AppCompatActivity() {
 
     private lateinit var imgMain: TouchImageView
@@ -61,9 +66,15 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var glassShield: InspectOverlayView
 
     private var rawData: FloatArray? = null
-    private var imgW = 0; private var imgH = 0; private var step = 5
+    private var imgW = 0
+    private var imgH = 0
+    private var step = 5
+
     // ROI Tracking Variables for the PDF
-    private var roiX = 0; private var roiY = 0; private var roiW = 0; private var roiH = 0
+    private var roiX = 0
+    private var roiY = 0
+    private var roiW = 0
+    private var roiH = 0
 
     private var cachedBaseImage: Bitmap? = null
     private var cachedHeatmap: Bitmap? = null
@@ -146,7 +157,7 @@ class ResultViewerActivity : AppCompatActivity() {
         roiW = intent.getIntExtra(DicKeys.ROI_W, imgW)
         roiH = intent.getIntExtra(DicKeys.ROI_H, imgH)
 
-        // 🚀 FIXED: Load the TRUE Reference Image for the background!
+        // Load the TRUE Reference Image for the background!
         val refPath = intent.getStringExtra(DicKeys.REF_PATH)
         if (refPath != null) {
             cachedBaseImage = BitmapFactory.decodeFile(refPath)
@@ -416,11 +427,13 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         if (isMaxMinActive && lastMaxIdx != -1 && lastMinIdx != -1) {
-            val maxX = data[lastMaxIdx].toInt(); val maxY = data[lastMaxIdx+1].toInt()
-            val minX = data[lastMinIdx].toInt(); val minY = data[lastMinIdx+1].toInt()
+            val maxX = data[lastMaxIdx].toInt()
+            val maxY = data[lastMaxIdx + 1].toInt()
+            val minX = data[lastMinIdx].toInt()
+            val minY = data[lastMinIdx + 1].toInt()
 
-            val maxV = data[lastMaxIdx+currentDataIndex] * multiplier
-            val minV = data[lastMinIdx+currentDataIndex] * multiplier
+            val maxV = data[lastMaxIdx + currentDataIndex] * multiplier
+            val minV = data[lastMinIdx + currentDataIndex] * multiplier
 
             val ptsMax = floatArrayOf(maxX.toFloat(), maxY.toFloat())
             val ptsMin = floatArrayOf(minX.toFloat(), minY.toFloat())
@@ -520,7 +533,13 @@ class ResultViewerActivity : AppCompatActivity() {
         visualizationJob?.cancel()
         visualizationJob = lifecycleScope.launch(Dispatchers.Default) {
             val result = VisualizationEngine.generateHeatmap(
-                data, imgW, imgH, index, step, forceMin, forceMax
+                data,
+                imgW,
+                imgH,
+                index,
+                step,
+                forceMin,
+                forceMax,
             )
 
             val heatmap = result.first
@@ -660,7 +679,7 @@ class ResultViewerActivity : AppCompatActivity() {
                 engineStats = engineStats,
                 referenceImageName = intent.getStringExtra(DicKeys.REF_NAME) ?: "reference.png",
                 deformedImageName = originalDefNames.getOrNull(currentFrameIndex) ?: "Frame_${currentFrameIndex + 1}",
-            )
+            ),
         )
     }
 
@@ -679,7 +698,13 @@ class ResultViewerActivity : AppCompatActivity() {
             return
         }
         exporter.exportAllImagesZip(
-            batchSnapshot(), base, imgW, imgH, currentDataIndex, step, currentTypeString
+            batchSnapshot(),
+            base,
+            imgW,
+            imgH,
+            currentDataIndex,
+            step,
+            currentTypeString,
         )
     }
 

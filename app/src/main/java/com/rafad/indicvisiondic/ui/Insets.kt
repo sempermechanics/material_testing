@@ -36,11 +36,11 @@ object Insets {
         val startBottom = view.paddingBottom
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, windowInsets ->
             val bars = windowInsets.getInsets(
-                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
             )
             v.updatePadding(
                 top = if (top) startTop + bars.top else v.paddingTop,
-                bottom = if (bottom) startBottom + bars.bottom else v.paddingBottom
+                bottom = if (bottom) startBottom + bars.bottom else v.paddingBottom,
             )
             windowInsets
         }

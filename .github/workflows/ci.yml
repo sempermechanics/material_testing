@@ -95,6 +95,12 @@ jobs:
       - name: Compile Kotlin and run unit tests
         run: ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest --console=plain
 
+      # Style & static-analysis gates (Kotlin only; cpp/ is out of scope).
+      # Existing findings are frozen in detekt-baseline.xml / lint-baseline.xml;
+      # only NEW issues fail. Fix formatting locally with `spotlessApply`.
+      - name: Code quality gates (spotless + detekt + lint)
+        run: ./gradlew spotlessCheck :app:detekt :app:lintDebug --console=plain
+
       # R8/ProGuard pass for the release variant (no native build needed).
       # Catches missing keep rules and shrinker config breakage that would
       # otherwise only surface as runtime failures in shipped builds.

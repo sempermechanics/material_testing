@@ -1,8 +1,4 @@
 package com.rafad.indicvisiondic.ui.analysis
-import com.rafad.indicvisiondic.DicKeys
-import com.rafad.indicvisiondic.IndicVisionNativeLib
-import com.rafad.indicvisiondic.R
-
 import android.app.Activity
 import android.content.Intent
 import android.graphics.RectF
@@ -14,10 +10,18 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.IndicVisionNativeLib
+import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.ui.Insets
 import java.io.File
 import kotlin.math.roundToInt
 
+/**
+ * Full-screen region-of-interest editor: draw rectangles or freehand masks
+ * over the reference image; the resulting mask PNG limits which pixels the
+ * engine tracks.
+ */
 class RoiDrawActivity : AppCompatActivity() {
 
     private lateinit var imgRoiCanvas: ImageView
@@ -105,7 +109,7 @@ class RoiDrawActivity : AppCompatActivity() {
         switchSubtractMode.setOnCheckedChangeListener { _, isChecked ->
             overlayRoi.isSubtractMode = isChecked
             tvHud.text = getString(
-                if (isChecked) R.string.roi_hud_mode_erase else R.string.roi_hud_mode_draw
+                if (isChecked) R.string.roi_hud_mode_erase else R.string.roi_hud_mode_draw,
             )
         }
 
@@ -123,7 +127,7 @@ class RoiDrawActivity : AppCompatActivity() {
                     roi.width().roundToInt(),
                     roi.height().roundToInt(),
                     roi.left.roundToInt(),
-                    roi.top.roundToInt()
+                    roi.top.roundToInt(),
                 )
             } else {
                 tvHud.text = getString(R.string.roi_hud_select_tool)

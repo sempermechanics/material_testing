@@ -1,9 +1,4 @@
 package com.rafad.indicvisiondic.ui.viewer
-import com.rafad.indicvisiondic.DicResult
-import com.rafad.indicvisiondic.R
-import com.rafad.indicvisiondic.report.ReportBuilder
-import com.rafad.indicvisiondic.report.VisualizationEngine
-
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
@@ -14,18 +9,22 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
-import java.io.File
-import java.io.OutputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
+import com.rafad.indicvisiondic.DicResult
+import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.report.ReportBuilder
+import com.rafad.indicvisiondic.report.VisualizationEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.OutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 /**
  * File exports for analysis results (CSV / batch ZIP / batch CSV / annotated
- * PNG), extracted from [ResultViewerActivity]. Pure data-in → MediaStore-out:
+ * PNG), extracted from [ResultViewerActivity]. Pure data-in  MediaStore-out:
  * the activity keeps UI concerns (preconditions, progress dialogs) and hands
  * over an immutable snapshot of what to export.
  */
@@ -45,8 +44,7 @@ class ResultExporter(
         Toast.makeText(context, resId, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
     }
 
-    private suspend fun toastOnMain(resId: Int, long: Boolean = false) =
-        withContext(Dispatchers.Main) { toast(resId, long) }
+    private suspend fun toastOnMain(resId: Int, long: Boolean = false) = withContext(Dispatchers.Main) { toast(resId, long) }
 
     /** Shared MediaStore insert; returns null if the resolver refuses. */
     private fun insertMediaStore(
@@ -66,8 +64,7 @@ class ResultExporter(
         return uri to stream
     }
 
-    private fun frameLabel(defNames: List<String>, frameIndex: Int): String =
-        defNames.getOrNull(frameIndex)?.substringBeforeLast(".") ?: "Frame_${frameIndex + 1}"
+    private fun frameLabel(defNames: List<String>, frameIndex: Int): String = defNames.getOrNull(frameIndex)?.substringBeforeLast(".") ?: "Frame_${frameIndex + 1}"
 
     // ── Single-frame CSV ─────────────────────────────────────────────────
 
@@ -78,8 +75,10 @@ class ResultExporter(
             val fileName = "IndicVision_${frameLabel(defNames, frameIndex)}.csv"
             try {
                 val target = insertMediaStore(
-                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, fileName,
-                    "text/csv", Environment.DIRECTORY_DOWNLOADS + "/IndicVision"
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    fileName,
+                    "text/csv",
+                    Environment.DIRECTORY_DOWNLOADS + "/IndicVision",
                 ) ?: return@launch
 
                 target.second.use { outputStream ->
@@ -126,11 +125,13 @@ class ResultExporter(
 
         scope.launch(Dispatchers.IO) {
             val refName = snapshot.refName ?: "Batch"
-            val fileName = "IndicVision_Images_${typeString}_${refName}.zip"
+            val fileName = "IndicVision_Images_${typeString}_$refName.zip"
             try {
                 val target = insertMediaStore(
-                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, fileName,
-                    "application/zip", Environment.DIRECTORY_DOWNLOADS + "/IndicVision"
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    fileName,
+                    "application/zip",
+                    Environment.DIRECTORY_DOWNLOADS + "/IndicVision",
                 ) ?: return@launch
 
                 target.second.use { outputStream ->
@@ -142,7 +143,11 @@ class ResultExporter(
                             val data = DicResult.decodeDatBytes(file.readBytes()) ?: continue
 
                             val (heatmap, _, _) = VisualizationEngine.generateHeatmap(
-                                data, imgW, imgH, dataIndex, step
+                                data,
+                                imgW,
+                                imgH,
+                                dataIndex,
+                                step,
                             )
 
                             val mergedBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
@@ -153,7 +158,7 @@ class ResultExporter(
                             val trueFrameIndex = file.nameWithoutExtension.substringAfterLast("_").toIntOrNull() ?: index
                             val imgName = snapshot.originalDefNames.getOrNull(trueFrameIndex) ?: "Frame_${trueFrameIndex + 1}"
 
-                            zipOut.putNextEntry(ZipEntry("IndicVision_${typeString}_${imgName}.png"))
+                            zipOut.putNextEntry(ZipEntry("IndicVision_${typeString}_$imgName.png"))
                             mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, zipOut)
                             zipOut.closeEntry()
 
@@ -177,11 +182,13 @@ class ResultExporter(
 
         scope.launch(Dispatchers.IO) {
             val refName = snapshot.refName ?: "Batch"
-            val fileName = "IndicVision_BatchData_${refName}.csv"
+            val fileName = "IndicVision_BatchData_$refName.csv"
             try {
                 val target = insertMediaStore(
-                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, fileName,
-                    "text/csv", Environment.DIRECTORY_DOWNLOADS + "/IndicVision"
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    fileName,
+                    "text/csv",
+                    Environment.DIRECTORY_DOWNLOADS + "/IndicVision",
                 ) ?: return@launch
 
                 target.second.use { outputStream ->
@@ -237,15 +244,17 @@ class ResultExporter(
                 val unit = if (isStrain) "mε" else "px"
                 ReportBuilder.bakeAnnotationsToCanvas(
                     canvas, imgW, imgH, heatmapMin, heatmapMax,
-                    typeString, unit, maxIdx, minIdx, data
+                    typeString, unit, maxIdx, minIdx, data,
                 )
 
                 val fileName = "IndicVision_${typeString}_${frameLabel(defNames, frameIndex)}.png"
 
                 withContext(Dispatchers.IO) {
                     insertMediaStore(
-                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, fileName,
-                        "image/png", Environment.DIRECTORY_PICTURES + "/IndicVision"
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        fileName,
+                        "image/png",
+                        Environment.DIRECTORY_PICTURES + "/IndicVision",
                     )?.second?.use { outputStream ->
                         mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
                     }

@@ -7,6 +7,11 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import java.io.OutputStream
 
+/**
+ * Renders a [ReportData] into the multi-page PDF report (cover, field
+ * statistics + heatmaps, engine telemetry), emitting progress as a Flow.
+ * Page drawing primitives live in [PdfLayoutEngine].
+ */
 object PdfReportGenerator {
 
     sealed class Progress {
@@ -39,7 +44,7 @@ object PdfReportGenerator {
             layout.drawKeyValue("Strain Window:", "${data.strainWindow} subsets")
             layout.advanceY(40f)
 
-            // 🚀 NEW: Add the ROI information explicitly to the first page!
+            // Add the ROI information explicitly to the first page!
             layout.drawSectionHeader("Analysis Region (ROI)")
             layout.drawKeyValue("Origin (X, Y):", "(${data.roiData.startX}, ${data.roiData.startY})")
             layout.drawKeyValue("Dimensions:", "${data.roiData.width} x ${data.roiData.height} px")
@@ -47,8 +52,10 @@ object PdfReportGenerator {
 
             layout.drawSectionHeader("Analyzed Images")
             layout.drawInputVerificationCard(
-                data.referenceImage, data.referenceImageName,
-                data.deformedImage, data.deformedImageName
+                data.referenceImage,
+                data.referenceImageName,
+                data.deformedImage,
+                data.deformedImageName,
             )
 
             // PAGES 2+: FIELD VISUALIZATIONS (Strictly 2 Per Page!)
@@ -68,7 +75,7 @@ object PdfReportGenerator {
                     layout.drawFieldBlock(field, blockHeight)
                 }
 
-                // 🚀 NEW: Fill the empty slot! If this chunk only has 1 item (Exy Shear),
+                // Fill the empty slot! If this chunk only has 1 item (Exy Shear),
                 // we have exactly enough space left on the page to print the ZNSSD Heatmap.
                 if (fieldsChunk.size == 1) {
                     emit(Progress.Status("Rendering Diagnostic ZNSSD Map...", 85))
@@ -91,9 +98,9 @@ object PdfReportGenerator {
                     listOf("Total Target Grid Points", "${stats.totalPointsAttempted}"),
                     listOf("Phase 1: Solved by Delaunay Mesh", "${stats.pathAPoints}"),
                     listOf("Phase 2: Saved by RGDIC Propagation", "${stats.pathBPoints}"),
-                    listOf("Final Unsolvable (Dead Points)", "${stats.totalPointsRejected}")
+                    listOf("Final Unsolvable (Dead Points)", "${stats.totalPointsRejected}"),
                 ),
-                colWeights = listOf(0.7f, 0.3f)
+                colWeights = listOf(0.7f, 0.3f),
             )
 
             layout.drawSectionHeader("2. Optimization & Quality")
@@ -102,18 +109,18 @@ object PdfReportGenerator {
                 rows = listOf(
                     listOf("Global Average ZNSSD (Correlation)", "%.5f".format(data.globalAvgZnssd)),
                     listOf("Overall Convergence Rate", "%.2f %%".format(stats.convergencePercent)),
-                    listOf("Average ICGN Iterations", "%.2f".format(stats.avgIcgnIterations))
+                    listOf("Average ICGN Iterations", "%.2f".format(stats.avgIcgnIterations)),
                 ),
-                colWeights = listOf(0.7f, 0.3f)
+                colWeights = listOf(0.7f, 0.3f),
             )
 
             layout.drawSectionHeader("3. Simplex Rescue Subsystem")
             layout.drawTable(
                 headers = listOf("Intervention", "Triggered", "Saved"),
                 rows = listOf(
-                    listOf("Simplex Interventions", "${stats.simplexCalls}", "${stats.simplexSaved}")
+                    listOf("Simplex Interventions", "${stats.simplexCalls}", "${stats.simplexSaved}"),
                 ),
-                colWeights = listOf(0.5f, 0.25f, 0.25f)
+                colWeights = listOf(0.5f, 0.25f, 0.25f),
             )
 
             layout.drawSectionHeader("4. Hardware Profiling (Wall Time)")
@@ -125,9 +132,9 @@ object PdfReportGenerator {
                     listOf("Delaunay Mesh Phase", "%.1f ms".format(stats.delaunayMs)),
                     listOf("Strain Calculation Phase", "%.1f ms".format(stats.strainMs)),
                     listOf("TOTAL WALL TIME", "%.1f ms".format(stats.wallTimeMs)),
-                    listOf("Average Throughput", "%.2f pts/ms".format(stats.avgThroughputPtsPerMs))
+                    listOf("Average Throughput", "%.2f pts/ms".format(stats.avgThroughputPtsPerMs)),
                 ),
-                colWeights = listOf(0.6f, 0.4f)
+                colWeights = listOf(0.6f, 0.4f),
             )
 
             emit(Progress.Status("Finalizing PDF...", 98))

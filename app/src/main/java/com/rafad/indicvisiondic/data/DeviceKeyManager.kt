@@ -1,7 +1,7 @@
 package com.rafad.indicvisiondic.data
 
 import android.content.Context
-import android.provider.Settings // 🚀 NEW: Connects to the physical hardware ID
+import android.provider.Settings // Connects to the physical hardware ID
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -9,7 +9,7 @@ import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.Signature
 
-class DeviceKeyManager(private val context: Context) { // 🚀 Notice the 'private val'
+class DeviceKeyManager(private val context: Context) { // Notice the 'private val'
 
     // Connect to the physical Android hardware keystore
     private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -29,7 +29,7 @@ class DeviceKeyManager(private val context: Context) { // 🚀 Notice the 'priva
             val keyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, "AndroidKeyStore")
             val parameterSpec = KeyGenParameterSpec.Builder(
                 KEY_ALIAS,
-                KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
+                KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY,
             )
                 .setDigests(KeyProperties.DIGEST_SHA256)
                 .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
@@ -41,7 +41,7 @@ class DeviceKeyManager(private val context: Context) { // 🚀 Notice the 'priva
     }
 
     /**
-     * 🚀 THE MAGIC FIX: Reads the permanent Android Hardware ID.
+     * THE MAGIC FIX: Reads the permanent Android Hardware ID.
      * This survives uninstalls and "Clear Data" wipes!
      */
     fun getDeviceId(): String {

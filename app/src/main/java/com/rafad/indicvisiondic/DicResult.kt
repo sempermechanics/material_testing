@@ -21,8 +21,7 @@ object DicResult {
     const val MAX_ZNSSD = 0.15f
     const val STRAIN_TO_MILLISTRAIN = 1000f
 
-    fun isValidDatBytes(bytes: ByteArray): Boolean =
-        bytes.isNotEmpty() && bytes.size % BYTES_PER_POINT == 0
+    fun isValidDatBytes(bytes: ByteArray): Boolean = bytes.isNotEmpty() && bytes.size % BYTES_PER_POINT == 0
 
     fun decodeDatBytes(bytes: ByteArray): FloatArray? {
         if (!isValidDatBytes(bytes)) return null
@@ -38,11 +37,9 @@ object DicResult {
      */
     fun isSolvedPoint(corr: Float): Boolean = corr >= 0f
 
-    fun isAcceptedPoint(corr: Float, includeCorrelationField: Boolean = false): Boolean =
-        if (includeCorrelationField) isSolvedPoint(corr) else isSolvedPoint(corr) && corr <= MAX_ZNSSD
+    fun isAcceptedPoint(corr: Float, includeCorrelationField: Boolean = false): Boolean = if (includeCorrelationField) isSolvedPoint(corr) else isSolvedPoint(corr) && corr <= MAX_ZNSSD
 
     fun isStrainFieldIndex(dataIndex: Int): Boolean = dataIndex in IDX_EXX..IDX_EXY
 
-    fun strainMultiplier(dataIndex: Int): Float =
-        if (isStrainFieldIndex(dataIndex)) STRAIN_TO_MILLISTRAIN else 1f
+    fun strainMultiplier(dataIndex: Int): Float = if (isStrainFieldIndex(dataIndex)) STRAIN_TO_MILLISTRAIN else 1f
 }

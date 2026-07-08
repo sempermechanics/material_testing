@@ -11,10 +11,10 @@ data class AnalysisSessionInsert(
     @SerialName("specimen_identifier") val specimenIdentifier: String,
     @SerialName("points_converged") val pointsConverged: Int,
     @SerialName("avg_iterations") val avgIterations: Float,
-    @SerialName("execution_time_ms") val executionTimeMs: Int
+    @SerialName("execution_time_ms") val executionTimeMs: Int,
 )
 
 @Serializable
 data class AnalysisSessionResponse(
-    @SerialName("session_id") val sessionId: String
+    @SerialName("session_id") val sessionId: String,
 )

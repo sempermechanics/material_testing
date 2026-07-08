@@ -1,22 +1,44 @@
 plugins {
     alias(libs.plugins.android.application)
     kotlin("plugin.serialization") version "1.9.22"
+    id("io.gitlab.arturbosch.detekt") version "1.23.8"
 }
 
 // 🚀 PURE KOTLIN BYPASS: Reads the file without needing 'java.util'
 val localPropertiesFile = rootProject.file("local.properties")
-val supabaseUrl = if (localPropertiesFile.exists()) {
-    localPropertiesFile.readLines().find { it.startsWith("SUPABASE_URL=") }?.substringAfter("=")?.trim() ?: ""
-} else ""
-val supabaseAnonKey = if (localPropertiesFile.exists()) {
-    localPropertiesFile.readLines().find { it.startsWith("SUPABASE_ANON_KEY=") }?.substringAfter("=")?.trim() ?: ""
-} else ""
+val supabaseUrl =
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile
+            .readLines()
+            .find { it.startsWith("SUPABASE_URL=") }
+            ?.substringAfter("=")
+            ?.trim() ?: ""
+    } else {
+        ""
+    }
+val supabaseAnonKey =
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile
+            .readLines()
+            .find { it.startsWith("SUPABASE_ANON_KEY=") }
+            ?.substringAfter("=")
+            ?.trim() ?: ""
+    } else {
+        ""
+    }
 // Google OAuth *Web* client ID (from Google Cloud console). Used by the
 // Credential Manager one-tap flow to obtain a Google ID token that Supabase
 // verifies. See docs/GOOGLE_SSO_SETUP.md. Empty = SSO button shows a setup hint.
-val googleWebClientId = if (localPropertiesFile.exists()) {
-    localPropertiesFile.readLines().find { it.startsWith("GOOGLE_WEB_CLIENT_ID=") }?.substringAfter("=")?.trim() ?: ""
-} else ""
+val googleWebClientId =
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile
+            .readLines()
+            .find { it.startsWith("GOOGLE_WEB_CLIENT_ID=") }
+            ?.substringAfter("=")
+            ?.trim() ?: ""
+    } else {
+        ""
+    }
 
 android {
     namespace = "com.rafad.indicvisiondic"
@@ -62,7 +84,7 @@ android {
             isShrinkResources = true // 🚀 Destroys unused files
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
     }
@@ -98,6 +120,13 @@ android {
             version = "3.22.1"
         }
     }
+
+    // Android Lint gate: existing findings frozen in lint-baseline.xml;
+    // only new issues fail `./gradlew :app:lintDebug` (CI).
+    lint {
+        baseline = file("lint-baseline.xml")
+        abortOnError = true
+    }
 }
 
 dependencies {
@@ -126,4 +155,12 @@ dependencies {
     implementation("io.ktor:ktor-client-okhttp:3.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+}
+
+// Static analysis gate: `./gradlew :app:detekt` (CI). Existing findings are
+// frozen in detekt-baseline.xml — only NEW issues fail the build. Regenerate
+// deliberately with `./gradlew :app:detektBaseline`.
+detekt {
+    buildUponDefaultConfig = true
+    baseline = file("detekt-baseline.xml")
 }

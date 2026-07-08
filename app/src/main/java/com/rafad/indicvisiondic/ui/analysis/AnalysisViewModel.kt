@@ -1,12 +1,4 @@
 package com.rafad.indicvisiondic.ui.analysis
-import com.rafad.indicvisiondic.DicKeys
-import com.rafad.indicvisiondic.DicResult
-import com.rafad.indicvisiondic.IndicVisionNativeLib
-import com.rafad.indicvisiondic.ProgressCallback
-import com.rafad.indicvisiondic.data.DicUploadWorker
-import com.rafad.indicvisiondic.data.SupabaseManager
-import com.rafad.indicvisiondic.report.EngineStats
-
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
@@ -16,6 +8,13 @@ import androidx.work.Data
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.DicResult
+import com.rafad.indicvisiondic.IndicVisionNativeLib
+import com.rafad.indicvisiondic.ProgressCallback
+import com.rafad.indicvisiondic.data.DicUploadWorker
+import com.rafad.indicvisiondic.data.SupabaseManager
+import com.rafad.indicvisiondic.report.EngineStats
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -25,9 +24,15 @@ import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+/**
+ * Holds analysis inputs/state across configuration changes and runs the
+ * batch solve: streams each deformed frame through the native engine
+ * ([IndicVisionNativeLib]) on a dedicated thread, writes per-frame `.dat`
+ * results, and enqueues cloud sync via DicUploadWorker.
+ */
 class AnalysisViewModel : ViewModel() {
 
-    // ✅ NATIVE THREAD PINNING: A single persistent OS thread for ALL JNI/OpenMP calls.
+    // NATIVE THREAD PINNING: A single persistent OS thread for ALL JNI/OpenMP calls.
     val nativeExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
         Thread(r, "IndicVision-NativeThread").also { it.isDaemon = true }
     }
@@ -139,7 +144,11 @@ class AnalysisViewModel : ViewModel() {
 
         onProgress(BatchProgressUpdate(0, "Caching reference in engine…", "Caching Reference in Native Engine..."))
         IndicVisionNativeLib.initializeReference(
-            refBytes, params.maskData, realRefWidth, realRefHeight, params.applyBlur
+            refBytes,
+            params.maskData,
+            realRefWidth,
+            realRefHeight,
+            params.applyBlur,
         )
 
         val gridW = params.finalRectW / params.step
@@ -158,8 +167,8 @@ class AnalysisViewModel : ViewModel() {
                     } else {
                         "Correlating & solving…"
                     },
-                    timerText = frameLabel
-                )
+                    timerText = frameLabel,
+                ),
             )
 
             val defBytes = File(defPath).readBytes()
@@ -175,8 +184,8 @@ class AnalysisViewModel : ViewModel() {
                             } else {
                                 "Correlating & solving…"
                             },
-                            timerText = frameLabel
-                        )
+                            timerText = frameLabel,
+                        ),
                     )
                 }
             }
@@ -191,7 +200,7 @@ class AnalysisViewModel : ViewModel() {
                 params.finalRectX, params.finalRectY, params.finalRectW, params.finalRectH,
                 params.step, params.subset, params.strainWin, true, true, false, params.applyBlur,
                 params.useNlvc, params.use6x6,
-                outputBuffer, callback, metricsCatcher
+                outputBuffer, callback, metricsCatcher,
             )
 
             if (validPointsCount < 0) {
@@ -224,8 +233,13 @@ class AnalysisViewModel : ViewModel() {
         if (firstFrameValidPoints > 0) {
             currentSessionId = "Pending_Cloud_Sync_" + UUID.randomUUID().toString().take(8)
             enqueueUploadWorkers(
-                appContext, params, batchDir, refBytes,
-                firstFrameValidPoints, firstFrameAvgIters, executionTimeMs
+                appContext,
+                params,
+                batchDir,
+                refBytes,
+                firstFrameValidPoints,
+                firstFrameAvgIters,
+                executionTimeMs,
             )
         }
 
@@ -234,7 +248,7 @@ class AnalysisViewModel : ViewModel() {
             firstFrameValidPoints = firstFrameValidPoints,
             totalFrames = totalFrames,
             executionTimeMs = executionTimeMs,
-            batchDirPath = batchDir.absolutePath
+            batchDirPath = batchDir.absolutePath,
         )
     }
 
@@ -274,7 +288,7 @@ class AnalysisViewModel : ViewModel() {
                         defBmp = IndicVisionNativeLib.getPreviewFromBytes(defBytes, realRefWidth)
                         val defPngFile = File(
                             params.cacheDir,
-                            "temp_def_${System.currentTimeMillis()}_frame_$frameIndex.png"
+                            "temp_def_${System.currentTimeMillis()}_frame_$frameIndex.png",
                         )
                         defPngFile.outputStream().use { out ->
                             defBmp?.compress(Bitmap.CompressFormat.PNG, 100, out)
@@ -311,7 +325,7 @@ class AnalysisViewModel : ViewModel() {
                         .setConstraints(
                             Constraints.Builder()
                                 .setRequiredNetworkType(NetworkType.CONNECTED)
-                                .build()
+                                .build(),
                         )
                         .setInputData(uploadData)
                         .build()
@@ -323,7 +337,7 @@ class AnalysisViewModel : ViewModel() {
                 }
             }
         } catch (e: Exception) {
-            Log.e("inDIC_Diag", "❌ LOCAL CATCH: Failed to enqueue batch workers", e)
+            Log.e("inDIC_Diag", "LOCAL CATCH: Failed to enqueue batch workers", e)
         } finally {
             refBmp?.recycle()
             Log.d("inDIC_Diag", "========================================")

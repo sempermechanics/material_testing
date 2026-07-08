@@ -1,6 +1,5 @@
 package com.rafad.indicvisiondic.data
-import com.rafad.indicvisiondic.ui.auth.SplashActivity
-
+import android.util.Log
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
@@ -12,21 +11,23 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import android.util.Log
 
 // Used for fetching data during LOGIN
 @Serializable
 data class AuthProfile(
     @SerialName("access_status") val accessStatus: String,
     @SerialName("device_fingerprint") val deviceFingerprint: String? = null,
-    @SerialName("hardware_public_key") val hardwarePublicKey: String? = null // 🚀 NEW: We need to read the current key!
+    // Read back so re-registration can compare against the current key
+    @SerialName("hardware_public_key") val hardwarePublicKey: String? = null,
 )
+
 // Used ONLY for injecting hardware keys after registration
 @Serializable
 data class HardwareKeysUpdate(
     @SerialName("device_fingerprint") val deviceFingerprint: String,
-    @SerialName("hardware_public_key") val hardwarePublicKey: String
+    @SerialName("hardware_public_key") val hardwarePublicKey: String,
 )
+
 // Used for sending data during REGISTRATION
 @Serializable
 data class UserProfileInsert(
@@ -34,8 +35,14 @@ data class UserProfileInsert(
     @SerialName("email_address") val emailAddress: String,
     @SerialName("device_fingerprint") val deviceFingerprint: String,
     @SerialName("hardware_public_key") val hardwarePublicKey: String,
-    @SerialName("access_status") val accessStatus: String = "PENDING"
+    @SerialName("access_status") val accessStatus: String = "PENDING",
 )
+
+/**
+ * Authentication + access-gate logic: sign-in/up against Supabase, the
+ * `auth_profiles` PENDING/APPROVED status check, and device hardware-key
+ * registration used to pin an account to a device.
+ */
 class AuthRepository {
 
     private val supabase = SupabaseManager.client
@@ -46,34 +53,35 @@ class AuthRepository {
         emailInput: String,
         passwordInput: String,
         deviceId: String,
-        publicKey: String
-    ): Result<String> {
-        return withContext(Dispatchers.IO) {
+        publicKey: String,
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            // We send everything in ONE single request
+            supabase.auth.signUpWith(Email) {
+                email = emailInput
+                password = passwordInput
+                // Inject hardware keys directly into the Supabase user metadata
+                data = buildJsonObject {
+                    put("device_fingerprint", deviceId)
+                    put("hardware_public_key", publicKey)
+                }
+            }
+
             try {
-                // We send everything in ONE single request
-                supabase.auth.signUpWith(Email) {
-                    email = emailInput
-                    password = passwordInput
-                    // Inject hardware keys directly into the Supabase user metadata
-                    data = buildJsonObject {
-                        put("device_fingerprint", deviceId)
-                        put("hardware_public_key", publicKey)
-                    }
-                }
+                supabase.auth.signOut()
+            } catch (e: Exception) { /* Ignore */ }
 
-                try { supabase.auth.signOut() } catch (e: Exception) { /* Ignore */ }
-
-                Result.success("Registration successful! Account is PENDING admin approval.")
-            } catch (e: Exception) {
-                val errorMsg = e.message ?: ""
-                // 🚀 Clean Network Error Interceptor
-                if (errorMsg.contains("UnknownHostException", ignoreCase = true) ||
-                    errorMsg.contains("resolve host", ignoreCase = true) ||
-                    errorMsg.contains("Failed to connect", ignoreCase = true)) {
-                    Result.failure(Exception("No internet connection. Please connect to a network to register."))
-                } else {
-                    Result.failure(Exception("Registration failed: $errorMsg"))
-                }
+            Result.success("Registration successful! Account is PENDING admin approval.")
+        } catch (e: Exception) {
+            val errorMsg = e.message ?: ""
+            // Clean Network Error Interceptor
+            if (errorMsg.contains("UnknownHostException", ignoreCase = true) ||
+                errorMsg.contains("resolve host", ignoreCase = true) ||
+                errorMsg.contains("Failed to connect", ignoreCase = true)
+            ) {
+                Result.failure(Exception("No internet connection. Please connect to a network to register."))
+            } else {
+                Result.failure(Exception("Registration failed: $errorMsg"))
             }
         }
     }
@@ -83,7 +91,7 @@ class AuthRepository {
         return withContext(Dispatchers.IO) {
             try {
                 Log.d("inDIC_Auth_Diag", "========================================")
-                Log.d("inDIC_Auth_Diag", "🔐 INITIATING SECURE LOGIN")
+                Log.d("inDIC_Auth_Diag", "INITIATING SECURE LOGIN")
                 Log.d("inDIC_Auth_Diag", "-> Local Device ID presented by phone: $currentDeviceId")
 
                 supabase.auth.signInWith(Email) {
@@ -101,7 +109,9 @@ class AuthRepository {
                 Log.d("inDIC_Auth_Diag", "-> Supabase Vault Device ID: ${profile.deviceFingerprint}")
 
                 when (profile.accessStatus) {
-                    "APPROVED" -> { Log.d("inDIC_Auth_Diag", "-> Status: APPROVED") }
+                    "APPROVED" -> {
+                        Log.d("inDIC_Auth_Diag", "-> Status: APPROVED")
+                    }
                     "PENDING" -> return@withContext Result.failure(Exception("Account is pending Admin approval."))
                     "REVOKED" -> {
                         supabase.auth.signOut()
@@ -113,39 +123,41 @@ class AuthRepository {
                     }
                 }
 
-                // 🚀 THE HARDWARE LOCK GATE
+                // THE HARDWARE LOCK GATE
                 if (profile.deviceFingerprint != null && profile.deviceFingerprint != currentDeviceId) {
-                    Log.e("inDIC_Auth_Diag", "❌ HARDWARE MISMATCH DETECTED!")
+                    Log.e("inDIC_Auth_Diag", "Hardware key mismatch for this account")
                     Log.e("inDIC_Auth_Diag", "Expected: ${profile.deviceFingerprint}")
                     Log.e("inDIC_Auth_Diag", "Received: $currentDeviceId")
                     supabase.auth.signOut()
                     return@withContext Result.failure(Exception("UNAUTHORIZED HARDWARE: Account locked to a different device."))
                 }
 
-                // 🚀 THE SELF-HEALING KEYSTORE
+                // THE SELF-HEALING KEYSTORE
                 if (profile.hardwarePublicKey != currentPublicKey) {
-                    Log.d("inDIC_Auth_Diag", "🩹 KeyStore wipe detected. Healing public key in database...")
+                    Log.d("inDIC_Auth_Diag", "KeyStore wipe detected. Healing public key in database...")
                     supabase.postgrest["auth_profiles"].update(
-                        mapOf("hardware_public_key" to currentPublicKey)
+                        mapOf("hardware_public_key" to currentPublicKey),
                     ) {
                         filter { eq("user_id", userId) }
                     }
                 }
 
-                Log.d("inDIC_Auth_Diag", "✅ LOGIN SUCCESSFUL!")
+                Log.d("inDIC_Auth_Diag", "Login successful")
                 Log.d("inDIC_Auth_Diag", "========================================")
                 Result.success("Secure Login Successful!")
-
             } catch (e: Exception) {
                 val errorMsg = e.message ?: ""
 
-                // 🚀 Clean Network Error Interceptor
+                // Clean Network Error Interceptor
                 if (errorMsg.contains("UnknownHostException", ignoreCase = true) ||
                     errorMsg.contains("resolve host", ignoreCase = true) ||
-                    errorMsg.contains("Failed to connect", ignoreCase = true)) {
+                    errorMsg.contains("Failed to connect", ignoreCase = true)
+                ) {
                     Result.failure(Exception("No internet connection. Please connect to Wi-Fi or cellular data to log in."))
                 } else {
-                    try { supabase.auth.signOut() } catch (ex: Exception) {}
+                    try {
+                        supabase.auth.signOut()
+                    } catch (ex: Exception) {}
 
                     // If it isn't a network error, it's usually a bad password.
                     // We return a clean message instead of Supabase's JSON error strings.
@@ -159,70 +171,70 @@ class AuthRepository {
         }
     }
 
-    // 2b. GOOGLE SSO (native one-tap → Supabase ID-token exchange)
+    // 2b. GOOGLE SSO (native one-tap  Supabase ID-token exchange)
     // Verifies the Google ID token with Supabase, then ensures an
     // auth_profiles row exists (first-time SSO users are created PENDING,
     // so an admin still approves them exactly like email registrations).
     // Routing (APPROVED / PENDING / hardware-lock) is then handled by the
     // SplashActivity gatekeeper, identical to the email path.
-    suspend fun loginWithGoogle(idToken: String, deviceId: String, publicKey: String): Result<String> {
-        return withContext(Dispatchers.IO) {
-            try {
-                supabase.auth.signInWith(IDToken) {
-                    this.idToken = idToken
-                    provider = Google
-                }
+    suspend fun loginWithGoogle(idToken: String, deviceId: String, publicKey: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            supabase.auth.signInWith(IDToken) {
+                this.idToken = idToken
+                provider = Google
+            }
 
-                val user = supabase.auth.currentUserOrNull()
-                    ?: throw Exception("Google sign-in failed: session not established.")
-                val userId = user.id
-                val email = user.email ?: "unknown@google"
+            val user = supabase.auth.currentUserOrNull()
+                ?: throw Exception("Google sign-in failed: session not established.")
+            val userId = user.id
+            val email = user.email ?: "unknown@google"
 
-                Log.d("inDIC_Auth_Diag", "🔓 Google sign-in OK for $email")
+            Log.d("inDIC_Auth_Diag", "Google sign-in OK for $email")
 
-                // Create the profile on first login so the gatekeeper has a row.
-                val existing = supabase.postgrest["auth_profiles"]
-                    .select { filter { eq("user_id", userId) } }
-                    .decodeSingleOrNull<AuthProfile>()
+            // Create the profile on first login so the gatekeeper has a row.
+            val existing = supabase.postgrest["auth_profiles"]
+                .select { filter { eq("user_id", userId) } }
+                .decodeSingleOrNull<AuthProfile>()
 
-                if (existing == null) {
-                    supabase.postgrest["auth_profiles"].insert(
-                        UserProfileInsert(
-                            userId = userId,
-                            emailAddress = email,
-                            deviceFingerprint = deviceId,
-                            hardwarePublicKey = publicKey
-                        )
-                    )
-                    Log.d("inDIC_Auth_Diag", "🆕 Created PENDING profile for new Google user")
-                }
+            if (existing == null) {
+                supabase.postgrest["auth_profiles"].insert(
+                    UserProfileInsert(
+                        userId = userId,
+                        emailAddress = email,
+                        deviceFingerprint = deviceId,
+                        hardwarePublicKey = publicKey,
+                    ),
+                )
+                Log.d("inDIC_Auth_Diag", "Created PENDING profile for new Google user")
+            }
 
-                Result.success("Google sign-in successful!")
-            } catch (e: Exception) {
-                val errorMsg = e.message ?: ""
-                if (errorMsg.contains("UnknownHostException", ignoreCase = true) ||
-                    errorMsg.contains("resolve host", ignoreCase = true) ||
-                    errorMsg.contains("Failed to connect", ignoreCase = true)) {
-                    Result.failure(Exception("No internet connection. Please connect to a network to sign in."))
-                } else {
-                    try { supabase.auth.signOut() } catch (_: Exception) {}
-                    Result.failure(Exception("Google sign-in failed: $errorMsg"))
-                }
+            Result.success("Google sign-in successful!")
+        } catch (e: Exception) {
+            val errorMsg = e.message ?: ""
+            if (errorMsg.contains("UnknownHostException", ignoreCase = true) ||
+                errorMsg.contains("resolve host", ignoreCase = true) ||
+                errorMsg.contains("Failed to connect", ignoreCase = true)
+            ) {
+                Result.failure(Exception("No internet connection. Please connect to a network to sign in."))
+            } else {
+                try {
+                    supabase.auth.signOut()
+                } catch (_: Exception) {}
+                Result.failure(Exception("Google sign-in failed: $errorMsg"))
             }
         }
     }
 
     // 3. FORGOT PASSWORD
-    suspend fun resetPassword(emailInput: String): Result<String> {
-        return withContext(Dispatchers.IO) {
-            try {
-                supabase.auth.resetPasswordForEmail(emailInput)
-                Result.success("Password reset link sent to your email.")
-            } catch (e: Exception) {
-                Result.failure(Exception(e.message ?: "Failed to send reset email."))
-            }
+    suspend fun resetPassword(emailInput: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            supabase.auth.resetPasswordForEmail(emailInput)
+            Result.success("Password reset link sent to your email.")
+        } catch (e: Exception) {
+            Result.failure(Exception(e.message ?: "Failed to send reset email."))
         }
     }
+
     // Fetches the user's current status from the database
     suspend fun checkUserAccessStatus(currentDeviceId: String): Result<String> {
         return withContext(Dispatchers.IO) {
@@ -249,7 +261,7 @@ class AuthRepository {
                     else -> Result.failure(Exception("Unknown status."))
                 }
             } catch (e: io.github.jan.supabase.exceptions.HttpRequestException) {
-                // 🚀 THE MAGIC BULLET: If we have no internet, we return a special OFFLINE code!
+                // THE MAGIC BULLET: If we have no internet, we return a special OFFLINE code!
                 Result.success("OFFLINE_CACHE_APPROVED")
             } catch (e: Exception) {
                 Result.failure(Exception("Could not verify account status."))

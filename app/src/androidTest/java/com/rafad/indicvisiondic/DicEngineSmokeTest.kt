@@ -8,14 +8,14 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.random.Random
-import org.junit.Assert.assertTrue
-import org.junit.Test
-import org.junit.runner.RunWith
 
 /**
  * On-device / emulator smoke tests of the REAL native pipeline.
@@ -83,11 +83,10 @@ class DicEngineSmokeTest {
         return back
     }
 
-    private fun Bitmap.toPngBytes(): ByteArray =
-        ByteArrayOutputStream().use { out ->
-            compress(Bitmap.CompressFormat.PNG, 100, out)
-            out.toByteArray()
-        }
+    private fun Bitmap.toPngBytes(): ByteArray = ByteArrayOutputStream().use { out ->
+        compress(Bitmap.CompressFormat.PNG, 100, out)
+        out.toByteArray()
+    }
 
     // ── Solve + field assertion helpers ──────────────────────────────────
 
@@ -114,7 +113,7 @@ class DicEngineSmokeTest {
             0, 0, W, H,
             STEP, SUBSET, 15,
             true, true, false, false, false, false,
-            buffer, callback, metrics
+            buffer, callback, metrics,
         )
         assertTrue("Engine returned error code $validPoints", validPoints > 0)
 
@@ -131,7 +130,7 @@ class DicEngineSmokeTest {
     private fun assertFieldMatchesWarp(res: SolveResult, m: Matrix, tolPx: Float, minCoverageFrac: Float) {
         assertTrue(
             "Too few solved points: ${res.validPoints}/${res.maxPoints}",
-            res.validPoints > (res.maxPoints * minCoverageFrac).toInt()
+            res.validPoints > (res.maxPoints * minCoverageFrac).toInt(),
         )
 
         val errsU = ArrayList<Float>()
@@ -142,7 +141,8 @@ class DicEngineSmokeTest {
             if (DicResult.isAcceptedPoint(res.data[i + DicResult.IDX_ZNSSD])) {
                 val x = res.data[i + DicResult.IDX_X]
                 val y = res.data[i + DicResult.IDX_Y]
-                pt[0] = x; pt[1] = y
+                pt[0] = x
+                pt[1] = y
                 m.mapPoints(pt)
                 errsU.add(abs(res.data[i + DicResult.IDX_U] - (pt[0] - x)))
                 errsV.add(abs(res.data[i + DicResult.IDX_V] - (pt[1] - y)))
@@ -151,7 +151,8 @@ class DicEngineSmokeTest {
         }
         assertTrue("No accepted points in output", errsU.isNotEmpty())
 
-        errsU.sort(); errsV.sort()
+        errsU.sort()
+        errsV.sort()
         val medU = errsU[errsU.size / 2]
         val medV = errsV[errsV.size / 2]
         assertTrue("Median |U error| = $medU px (tol $tolPx)", medU < tolPx)
@@ -200,12 +201,16 @@ class DicEngineSmokeTest {
         // make the solve invariant to lighting drift between frames.
         val ref = makeReference()
         val m = Matrix().apply { setTranslate(3f, 2f) }
-        val filter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
-            0.7f, 0f, 0f, 0f, 30f,
-            0f, 0.7f, 0f, 0f, 30f,
-            0f, 0f, 0.7f, 0f, 30f,
-            0f, 0f, 0f, 1f, 0f
-        )))
+        val filter = ColorMatrixColorFilter(
+            ColorMatrix(
+                floatArrayOf(
+                    0.7f, 0f, 0f, 0f, 30f,
+                    0f, 0.7f, 0f, 0f, 30f,
+                    0f, 0f, 0.7f, 0f, 30f,
+                    0f, 0f, 0f, 1f, 0f,
+                ),
+            ),
+        )
         val res = solve(ref.toPngBytes(), warp(ref, m, filter).toPngBytes())
         assertFieldMatchesWarp(res, m, tolPx = 0.25f, minCoverageFrac = 0.25f)
     }

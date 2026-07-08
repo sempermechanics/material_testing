@@ -1,9 +1,4 @@
 package com.rafad.indicvisiondic.report
-import com.rafad.indicvisiondic.BuildConfig
-import com.rafad.indicvisiondic.DicResult
-import com.rafad.indicvisiondic.data.DicUploadWorker
-import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
-
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -12,6 +7,10 @@ import android.graphics.Paint
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
+import com.rafad.indicvisiondic.BuildConfig
+import com.rafad.indicvisiondic.DicResult
+import com.rafad.indicvisiondic.data.DicUploadWorker
+import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,8 +24,12 @@ import kotlin.math.sqrt
 object ReportBuilder {
 
     private val FIELD_NAMES = listOf(
-        "U Displacement", "V Displacement", "Exx Strain", "Eyy Strain", "Exy Shear",
-        "ZNSSD (Correlation Quality)"
+        "U Displacement",
+        "V Displacement",
+        "Exx Strain",
+        "Eyy Strain",
+        "Exy Shear",
+        "ZNSSD (Correlation Quality)",
     )
     private val FIELD_KEYS = listOf("U", "V", "Exx", "Eyy", "Exy", "ZNSSD")
 
@@ -53,8 +56,7 @@ object ReportBuilder {
         val drawMinMarker: Boolean = true,
     )
 
-    fun appBuildLabel(): String =
-        "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • ${Build.SUPPORTED_ABIS.firstOrNull() ?: "?"}"
+    fun appBuildLabel(): String = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • ${Build.SUPPORTED_ABIS.firstOrNull() ?: "?"}"
 
     fun formatMetric(value: Float): String {
         val absVal = abs(value)
@@ -94,8 +96,7 @@ object ReportBuilder {
         var minIdx = -1
         val validValues = mutableListOf<Float>()
 
-        fun fieldValue(rawVal: Float): Float =
-            if (isStrain && absoluteStrainValues) abs(rawVal) else rawVal
+        fun fieldValue(rawVal: Float): Float = if (isStrain && absoluteStrainValues) abs(rawVal) else rawVal
 
         for (i in data.indices step DicResult.STRIDE) {
             val corr = data[i + DicResult.IDX_ZNSSD]
@@ -114,8 +115,14 @@ object ReportBuilder {
             if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
                 val valToCheck = fieldValue(data[i + dataIndex])
                 if (valToCheck in p02..p98) {
-                    if (valToCheck > maxV) { maxV = valToCheck; maxIdx = i }
-                    if (valToCheck < minV) { minV = valToCheck; minIdx = i }
+                    if (valToCheck > maxV) {
+                        maxV = valToCheck
+                        maxIdx = i
+                    }
+                    if (valToCheck < minV) {
+                        minV = valToCheck
+                        minIdx = i
+                    }
                 }
             }
         }
@@ -125,8 +132,14 @@ object ReportBuilder {
                 val corr = data[i + DicResult.IDX_ZNSSD]
                 if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
                     val valToCheck = fieldValue(data[i + dataIndex])
-                    if (valToCheck > maxV) { maxV = valToCheck; maxIdx = i }
-                    if (valToCheck < minV) { minV = valToCheck; minIdx = i }
+                    if (valToCheck > maxV) {
+                        maxV = valToCheck
+                        maxIdx = i
+                    }
+                    if (valToCheck < minV) {
+                        minV = valToCheck
+                        minIdx = i
+                    }
                 }
             }
         }
@@ -180,7 +193,13 @@ object ReportBuilder {
             val stdDev = sqrt(validValues.map { (it - mean) * (it - mean) }.average()).toFloat()
 
             val (heatmapBmp, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
-                data, params.imgW, params.imgH, dataIndex, params.step, null, null
+                data,
+                params.imgW,
+                params.imgH,
+                dataIndex,
+                params.step,
+                null,
+                null,
             )
 
             val bakedHeatmap = Bitmap.createBitmap(params.imgW, params.imgH, Bitmap.Config.ARGB_8888).also { bmp ->
@@ -213,8 +232,8 @@ object ReportBuilder {
                         minCoordY = data[extrema.minIdx + 1].toInt(),
                         maxCoordX = data[extrema.maxIdx].toInt(),
                         maxCoordY = data[extrema.maxIdx + 1].toInt(),
-                        bakedHeatmap = bakedHeatmap
-                    )
+                        bakedHeatmap = bakedHeatmap,
+                    ),
                 )
             }
         }
@@ -237,12 +256,11 @@ object ReportBuilder {
             znssdHeatmap = correlationHeatmap ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
             solverPathMap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
             globalAvgZnssd = computeGlobalAvgZnssd(data),
-            appBuild = appBuildLabel()
+            appBuild = appBuildLabel(),
         )
     }
 
-    fun currentAnalysisDate(): String =
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+    fun currentAnalysisDate(): String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
 
     fun bakeAnnotationsToCanvas(
         canvas: Canvas,
@@ -276,7 +294,7 @@ object ReportBuilder {
             "inDIC Analysis Report",
             "Field: $typeString [$unit]",
             "Max: ${formatMetric(maxVal)}",
-            "Min: ${formatMetric(minVal)}"
+            "Min: ${formatMetric(minVal)}",
         )
         var maxTextWidth = 0f
         for (line in infoText) {
@@ -285,10 +303,11 @@ object ReportBuilder {
         }
 
         canvas.drawRect(
-            padding * 0.5f, padding * 0.5f,
+            padding * 0.5f,
+            padding * 0.5f,
             padding * 1.5f + maxTextWidth,
             padding + (infoText.size * (textSize * 1.4f)) + padding,
-            bgPaint
+            bgPaint,
         )
         var currentY = padding + textSize
         for (line in infoText) {
@@ -304,18 +323,32 @@ object ReportBuilder {
         val barBottom = barTop + barHeight
 
         val jetColors = intArrayOf(
-            Color.rgb(127, 0, 0), Color.rgb(255, 0, 0), Color.rgb(255, 255, 0),
-            Color.rgb(0, 255, 255), Color.rgb(0, 0, 255), Color.rgb(0, 0, 127)
+            Color.rgb(127, 0, 0),
+            Color.rgb(255, 0, 0),
+            Color.rgb(255, 255, 0),
+            Color.rgb(0, 255, 255),
+            Color.rgb(0, 0, 255),
+            Color.rgb(0, 0, 127),
         )
         canvas.drawRect(
-            barLeft, barTop, barRight, barBottom,
+            barLeft,
+            barTop,
+            barRight,
+            barBottom,
             Paint().apply {
                 shader = LinearGradient(0f, barTop, 0f, barBottom, jetColors, null, Shader.TileMode.CLAMP)
-            }
+            },
         )
         canvas.drawRect(
-            barLeft, barTop, barRight, barBottom,
-            Paint().apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 3f }
+            barLeft,
+            barTop,
+            barRight,
+            barBottom,
+            Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+            },
         )
 
         val scaleTextPaint = Paint(textPaint).apply {
@@ -327,9 +360,11 @@ object ReportBuilder {
         fun drawScaleLabel(text: String, y: Float) {
             val w = scaleTextPaint.measureText(text)
             canvas.drawRect(
-                barRight + padding * 0.5f - 5f, y - textSize,
-                barRight + padding * 0.5f + w + 5f, y + (textSize * 0.3f),
-                whiteBgPaint
+                barRight + padding * 0.5f - 5f,
+                y - textSize,
+                barRight + padding * 0.5f + w + 5f,
+                y + (textSize * 0.3f),
+                whiteBgPaint,
             )
             canvas.drawText(text, barRight + padding * 0.5f, y, scaleTextPaint)
         }

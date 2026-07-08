@@ -1,51 +1,50 @@
 package com.rafad.indicvisiondic.ui.analysis
-import com.rafad.indicvisiondic.DicKeys
-import com.rafad.indicvisiondic.IndicVisionNativeLib
-import com.rafad.indicvisiondic.R
-import com.rafad.indicvisiondic.data.SupabaseManager
-import com.rafad.indicvisiondic.ui.auth.AuthActivity
-import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
-
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
 import android.view.View
 import android.widget.*
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog // Added for Logout Popup
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import java.io.File
-
-// --- ROI DRAWING ENGINE IMPORTS ---
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.slider.Slider
+import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
+import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.IndicVisionNativeLib
+import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.data.SupabaseManager
+import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.Motion
+import com.rafad.indicvisiondic.ui.auth.AuthActivity
+import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
-
-import androidx.activity.OnBackPressedCallback
-import com.google.android.material.slider.Slider
-import com.google.android.material.switchmaterial.SwitchMaterial
-import com.google.android.material.button.MaterialButtonToggleGroup
-import com.rafad.indicvisiondic.ui.Motion
-import com.rafad.indicvisiondic.ui.Insets
-
-
+/**
+ * The analysis setup wizard: page 1 loads reference/deformed images (or
+ * extracts frames from a video), page 2 sets parameters + ROI and launches
+ * the batch solve via [AnalysisViewModel]. Results open in ResultViewerActivity.
+ */
 class StaticAnalysisActivity : AppCompatActivity() {
 
     private val viewModel: AnalysisViewModel by viewModels()
@@ -87,7 +86,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
     private lateinit var switchBlur: SwitchMaterial
     private lateinit var rgStrainMethod: MaterialButtonToggleGroup
-    private lateinit var rgInterpolator: MaterialButtonToggleGroup // 🚀 ADDED
+    private lateinit var rgInterpolator: MaterialButtonToggleGroup // ADDED
     private lateinit var btnViewResults: Button
     private lateinit var btnLogout: Button // Added for Secure Exit
 
@@ -112,28 +111,31 @@ class StaticAnalysisActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_static_analysis)
         // --- BACK BUTTON INTERCEPTOR (SAFETY LOCK) ---
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (isProcessing) {
-                    // Block the back button completely if the C++ engine is running
-                    Toast.makeText(this@StaticAnalysisActivity, R.string.analysis_running_back_blocked, Toast.LENGTH_SHORT).show()
-                } else if (viewModel.wizardStep == 2) {
-                    // On the settings page, back returns to the images page
-                    goToStep(1, animate = true)
-                } else if (viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty()) {
-                    AlertDialog.Builder(this@StaticAnalysisActivity)
-                        .setTitle(R.string.exit_indic_title)
-                        .setMessage(R.string.exit_indic_message)
-                        .setPositiveButton(R.string.exit) { _, _ ->
-                            finish()
-                        }
-                        .setNegativeButton(R.string.cancel, null)
-                        .show()
-                } else {
-                    finish()
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (isProcessing) {
+                        // Block the back button completely if the C++ engine is running
+                        Toast.makeText(this@StaticAnalysisActivity, R.string.analysis_running_back_blocked, Toast.LENGTH_SHORT).show()
+                    } else if (viewModel.wizardStep == 2) {
+                        // On the settings page, back returns to the images page
+                        goToStep(1, animate = true)
+                    } else if (viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty()) {
+                        AlertDialog.Builder(this@StaticAnalysisActivity)
+                            .setTitle(R.string.exit_indic_title)
+                            .setMessage(R.string.exit_indic_message)
+                            .setPositiveButton(R.string.exit) { _, _ ->
+                                finish()
+                            }
+                            .setNegativeButton(R.string.cancel, null)
+                            .show()
+                    } else {
+                        finish()
+                    }
                 }
-            }
-        })
+            },
+        )
         // ---------------------------------------------
 
         // Bind UI Components
@@ -163,7 +165,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnCalculateFullField = findViewById(R.id.btnCalculateFullField)
         switchBlur = findViewById(R.id.switchBlur)
         rgStrainMethod = findViewById(R.id.rgStrainMethod)
-        rgInterpolator = findViewById(R.id.rgInterpolator) // 🚀 BOUND
+        rgInterpolator = findViewById(R.id.rgInterpolator) // BOUND
         btnViewResults = findViewById(R.id.btnViewResults)
         btnLogout = findViewById(R.id.btnLogout) // Bind Logout Button
 
@@ -224,7 +226,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             uri?.let { handleMaskSelection(it) }
         }
 
-        // Video picker: frame 0 → reference, remaining sampled frames → deformed
+        // Video picker: frame 0  reference, remaining sampled frames  deformed
         val pickVideo = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let { handleVideo(it) }
         }
@@ -238,7 +240,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     viewModel.roiW = data.getIntExtra(DicKeys.ROI_W, viewModel.realRefWidth)
                     viewModel.roiH = data.getIntExtra(DicKeys.ROI_H, viewModel.realRefHeight)
 
-                    // 🚀 PIPELINE FIX: Actually read the mask file sent by RoiDrawActivity!
+                    // PIPELINE FIX: Actually read the mask file sent by RoiDrawActivity!
                     val maskPath = data.getStringExtra(DicKeys.MASK_FILE_PATH)
                     if (maskPath != null) {
                         val file = File(maskPath)
@@ -247,7 +249,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         }
                     }
 
-                    // 🚀 FIX FULL IMAGE OVERRIDE: If it's exactly the image bounds, unset custom ROI
+                    // FIX FULL IMAGE OVERRIDE: If it's exactly the image bounds, unset custom ROI
                     if (viewModel.roiW == viewModel.realRefWidth && viewModel.roiH == viewModel.realRefHeight) {
                         viewModel.hasCustomRoi = false
                         tvInstruction.text = "✅ Full Image Analysis Set"
@@ -483,7 +485,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     val message = if (sortedPaths.size == 1) "1 image selected" else "${sortedPaths.size} images selected"
                     Toast.makeText(this@StaticAnalysisActivity, message, Toast.LENGTH_SHORT).show()
                 }
-
             } catch (e: Exception) {
                 Log.e("StaticAnalysis", "Error handling batch", e)
                 withContext(Dispatchers.Main) {
@@ -498,7 +499,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // the rest become the deformed sequence, feeding the exact same
     // refBytes / defFilePaths state as the image flow.
     //
-    // Step 1: read metadata → show resolution/fps/length + sampling options.
+    // Step 1: read metadata  show resolution/fps/length + sampling options.
     // Step 2: extract at the chosen frame rate over the chosen time segment.
     // ------------------------------------------------------------------
     private data class VideoMeta(
@@ -506,7 +507,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val fps: Double,
         val fpsKnown: Boolean,
         val width: Int,
-        val height: Int
+        val height: Int,
     )
 
     private fun formatClock(ms: Long): String {
@@ -525,7 +526,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 var w = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
                 var h = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
                 val rot = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
-                if (rot == 90 || rot == 270) { val t = w; w = h; h = t } // display orientation
+                if (rot == 90 || rot == 270) {
+                    val t = w
+                    w = h
+                    h = t
+                } // display orientation
                 val frameCountMeta = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull()
                 var fps = 30.0
                 var fpsKnown = false
@@ -537,7 +542,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e("StaticAnalysis", "Video metadata read failed", e)
             } finally {
-                try { retriever.release() } catch (_: Exception) {}
+                try {
+                    retriever.release()
+                } catch (_: Exception) {}
             }
 
             if (meta.durationMs <= 0L) {
@@ -594,7 +601,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             tvEstimate.text = "≈ $n frame(s): 1 reference + ${(n - 1).coerceAtLeast(0)} deformed$capped"
         }
 
-        sliderFps.addOnChangeListener { _, v, _ -> tvFps.text = "${v.toInt()} fps"; refreshEstimate() }
+        sliderFps.addOnChangeListener { _, v, _ ->
+            tvFps.text = "${v.toInt()} fps"
+            refreshEstimate()
+        }
         range.addOnChangeListener { s, _, _ ->
             val startMs = (s.values.first() * 1000).toLong()
             val endMs = (s.values.last() * 1000).toLong()
@@ -644,7 +654,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     val timeMs = startMs + i * stepMs
                     if (timeMs > endMs + stepMs / 2) break
                     val frame = retriever.getFrameAtTime(
-                        (timeMs * 1000).toLong(), android.media.MediaMetadataRetriever.OPTION_CLOSEST
+                        (timeMs * 1000).toLong(),
+                        android.media.MediaMetadataRetriever.OPTION_CLOSEST,
                     ) ?: continue
 
                     val png = java.io.ByteArrayOutputStream().use { out ->
@@ -659,8 +670,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         viewModel.refName = "Ref: video @ ${formatClock(startMs)}"
                         refPreview = frame
                         if (!viewModel.hasCustomRoi) {
-                            viewModel.roiX = 0; viewModel.roiY = 0
-                            viewModel.roiW = frame.width; viewModel.roiH = frame.height
+                            viewModel.roiX = 0
+                            viewModel.roiY = 0
+                            viewModel.roiW = frame.width
+                            viewModel.roiH = frame.height
                         }
                     } else {
                         val f = File(tempDir, String.format("%04d_frame.png", i))
@@ -693,7 +706,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     Toast.makeText(
                         this@StaticAnalysisActivity,
                         getString(R.string.video_loaded_frames, defPaths.size),
-                        Toast.LENGTH_LONG
+                        Toast.LENGTH_LONG,
                     ).show()
                 }
             } catch (e: Exception) {
@@ -703,7 +716,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     Toast.makeText(this@StaticAnalysisActivity, getString(R.string.video_read_error, e.message), Toast.LENGTH_LONG).show()
                 }
             } finally {
-                try { retriever.release() } catch (_: Exception) {}
+                try {
+                    retriever.release()
+                } catch (_: Exception) {}
             }
         }
     }
@@ -777,7 +792,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     use6x6 = use6x6,
                     maskData = maskData,
                     debugDir = debugDir,
-                    processingStartTime = processingStartTime
+                    processingStartTime = processingStartTime,
                 )
 
                 val outcome = viewModel.runBatchAnalysis(applicationContext, params) { progress ->
@@ -848,21 +863,21 @@ class StaticAnalysisActivity : AppCompatActivity() {
             putExtra(DicKeys.STEP, viewModel.lastStep)
             putExtra(DicKeys.REF_NAME, viewModel.refName.removePrefix("Ref: "))
 
-            // 🚀 THE FIX: Pass the dynamic timestamped path stored in the ViewModel
+            // THE FIX: Pass the dynamic timestamped path stored in the ViewModel
             putExtra(DicKeys.REF_PATH, viewModel.lastRefPath ?: "")
 
             putExtra(DicKeys.DEF_PATH, viewModel.lastDefPath)
             putExtra(DicKeys.BATCH_DIR_PATH, viewModel.lastBatchDirPath)
             putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(viewModel.defFilePaths.map { it.substringAfterLast('/') }))
 
-            // 🚀 PDF GENERATOR DATA
+            // PDF GENERATOR DATA
             putExtra(DicKeys.SESSION_ID, viewModel.currentSessionId)
             putExtra(DicKeys.SUBSET_SIZE, currentSubsetSize())
             putExtra(DicKeys.STRAIN_WINDOW, currentStrainWindow())
             putExtra(DicKeys.STRAIN_METHOD, if (currentUseNlvc()) "NLVC" else "VSG")
             putExtra(DicKeys.ENGINE_STATS, viewModel.engineStatsArray)
 
-            // 🚀 NEW: PASSING ROI DATA FOR THE PDF REPORT
+            // PASSING ROI DATA FOR THE PDF REPORT
             putExtra(DicKeys.ROI_X, viewModel.roiX)
             putExtra(DicKeys.ROI_Y, viewModel.roiY)
             putExtra(DicKeys.ROI_W, viewModel.roiW)
@@ -921,7 +936,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Wizard navigation: page 1 (images) ⇄ page 2 (settings + run)
+    // Wizard navigation: page 1 (images)  page 2 (settings + run)
     // ------------------------------------------------------------------
     private fun goToStep(step: Int, animate: Boolean) {
         val forward = step == 2
@@ -939,20 +954,29 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (animate) {
             showing.startAnimation(
                 android.view.animation.AnimationUtils.loadAnimation(
-                    this, if (forward) R.anim.slide_in_right else R.anim.slide_in_left
-                )
+                    this,
+                    if (forward) R.anim.slide_in_right else R.anim.slide_in_left,
+                ),
             )
         }
 
         // Step indicator chips
         tvStepChip1.setBackgroundResource(
-            if (forward) R.drawable.bg_chip_step_inactive else R.drawable.bg_pill_accent)
-        tvStepChip1.setTextColor(getColor(
-            if (forward) R.color.sky_on_container else R.color.text_on_primary))
+            if (forward) R.drawable.bg_chip_step_inactive else R.drawable.bg_pill_accent,
+        )
+        tvStepChip1.setTextColor(
+            getColor(
+                if (forward) R.color.sky_on_container else R.color.text_on_primary,
+            ),
+        )
         tvStepChip2.setBackgroundResource(
-            if (forward) R.drawable.bg_pill_accent else R.drawable.bg_chip_step_inactive)
-        tvStepChip2.setTextColor(getColor(
-            if (forward) R.color.text_on_primary else R.color.sky_on_container))
+            if (forward) R.drawable.bg_pill_accent else R.drawable.bg_chip_step_inactive,
+        )
+        tvStepChip2.setTextColor(
+            getColor(
+                if (forward) R.color.text_on_primary else R.color.sky_on_container,
+            ),
+        )
 
         // Bottom nav: Next drives page 1, Back appears on page 2
         btnNext.visibility = if (forward) View.GONE else View.VISIBLE
@@ -966,7 +990,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // ------------------------------------------------------------------
     private fun showComputeOverlay(
         title: String = "Computing Strain Field",
-        status: String = "Initializing engine…"
+        status: String = "Initializing engine…",
     ) {
         overlayTitle.text = title
         overlayProgress.progress = 0
@@ -1030,7 +1054,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
             try {
                 val firstBytes = File(viewModel.defFilePaths[0]).readBytes()
                 imgDef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(firstBytes, 1000))
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
         checkReady()
     }
@@ -1090,13 +1116,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
         dialog.show()
 
         dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            var finalX = 0; var finalY = 0; var finalW = 0; var finalH = 0
+            var finalX = 0
+            var finalY = 0
+            var finalW = 0
+            var finalH = 0
             var requiresMask = false
 
             val maskBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(maskBitmap)
             canvas.drawColor(Color.BLACK)
-            val paint = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
+            val paint = Paint().apply {
+                color = Color.WHITE
+                style = Paint.Style.FILL
+            }
 
             when (spinner.selectedItemPosition) {
                 0 -> {
@@ -1108,8 +1140,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
                 1 -> {
                     requiresMask = true
-                    val cx = dialogView.findViewById<TextInputEditText>(R.id.etCircCx).text.toString().toFloatOrNull() ?: (imgW/2f)
-                    val cy = dialogView.findViewById<TextInputEditText>(R.id.etCircCy).text.toString().toFloatOrNull() ?: (imgH/2f)
+                    val cx = dialogView.findViewById<TextInputEditText>(R.id.etCircCx).text.toString().toFloatOrNull() ?: (imgW / 2f)
+                    val cy = dialogView.findViewById<TextInputEditText>(R.id.etCircCy).text.toString().toFloatOrNull() ?: (imgH / 2f)
                     val r = dialogView.findViewById<TextInputEditText>(R.id.etCircR).text.toString().toFloatOrNull() ?: 100f
 
                     canvas.drawCircle(cx, cy, r, paint)
@@ -1121,8 +1153,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
                 2 -> {
                     requiresMask = true
-                    val cx = dialogView.findViewById<TextInputEditText>(R.id.etEllCx).text.toString().toFloatOrNull() ?: (imgW/2f)
-                    val cy = dialogView.findViewById<TextInputEditText>(R.id.etEllCy).text.toString().toFloatOrNull() ?: (imgH/2f)
+                    val cx = dialogView.findViewById<TextInputEditText>(R.id.etEllCx).text.toString().toFloatOrNull() ?: (imgW / 2f)
+                    val cy = dialogView.findViewById<TextInputEditText>(R.id.etEllCy).text.toString().toFloatOrNull() ?: (imgH / 2f)
                     val rx = dialogView.findViewById<TextInputEditText>(R.id.etEllRx).text.toString().toFloatOrNull() ?: 150f
                     val ry = dialogView.findViewById<TextInputEditText>(R.id.etEllRy).text.toString().toFloatOrNull() ?: 100f
 
@@ -1142,7 +1174,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     val x3 = dialogView.findViewById<TextInputEditText>(R.id.etTriX3).text.toString().toFloatOrNull() ?: 0f
                     val y3 = dialogView.findViewById<TextInputEditText>(R.id.etTriY3).text.toString().toFloatOrNull() ?: 0f
 
-                    val path = Path().apply { moveTo(x1, y1); lineTo(x2, y2); lineTo(x3, y3); close() }
+                    val path = Path().apply {
+                        moveTo(x1, y1)
+                        lineTo(x2, y2)
+                        lineTo(x3, y3)
+                        close()
+                    }
                     canvas.drawPath(path, paint)
 
                     finalX = minOf(x1, x2, x3).toInt()
@@ -1158,7 +1195,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 } else {
                     getString(
                         R.string.manual_roi_out_of_bounds,
-                        imgW, imgH, finalX + finalW, finalY + finalH
+                        imgW,
+                        imgH,
+                        finalX + finalW,
+                        finalY + finalH,
                     )
                 }
                 Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
@@ -1172,8 +1212,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     tvInstruction.text = getString(R.string.manual_roi_rect_set, finalW, finalH)
                 }
 
-                viewModel.roiX = finalX; viewModel.roiY = finalY
-                viewModel.roiW = finalW; viewModel.roiH = finalH
+                viewModel.roiX = finalX
+                viewModel.roiY = finalY
+                viewModel.roiW = finalW
+                viewModel.roiH = finalH
                 viewModel.hasCustomRoi = true
 
                 checkReady()
