@@ -142,9 +142,11 @@ jobs:
       - name: Assemble debug APK (all ABIs)
         run: ./gradlew :app:assembleDebug --console=plain
 
+      # ABI splits are enabled, so outputs are per-ABI APKs + a universal one.
       - name: Verify all four ABIs are packaged
         run: |
-          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'libindicvision_core.so' | tee /tmp/abis.txt
+          UNIVERSAL=$(ls app/build/outputs/apk/debug/*universal*.apk)
+          unzip -l "$UNIVERSAL" | grep 'libindicvision_core.so' | tee /tmp/abis.txt
           for abi in arm64-v8a armeabi-v7a x86 x86_64; do
             grep -q "lib/$abi/libindicvision_core.so" /tmp/abis.txt || { echo "MISSING ABI: $abi"; exit 1; }
           done
