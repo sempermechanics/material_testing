@@ -67,6 +67,40 @@ translation ≤ 0.02 px, displacement gradients ≤ 2×10⁻³.
 
 ---
 
+## Numerical reproducibility contract
+
+What "the same result" means across builds, and when a difference is a bug.
+
+**Same APK, same device, same inputs → bit-identical results.**
+Guarded by `Engine.RepeatSolve_BitIdentical`. Any run-to-run variation on
+identical inputs is a defect (threading race, uninitialized memory).
+
+**Different builds / ABIs / dependency versions → small drift is expected.**
+The engine compiles with `-ffast-math` and uses FMA-based SIMD reductions, so
+any change to the compiler, NDK, OpenCV build (e.g. Carotene on ARM vs the
+generic path), Eigen version, or kernel summation order legally perturbs
+floating-point rounding. Because ICGN is iterative, last-bit differences per
+iteration shift the convergence path. Empirically (verified across the
+prebuilt-SDK → from-source OpenCV migration, ARM NEON → portable SIMD):
+
+| Quantity | Expected cross-build agreement |
+|---|---|
+| Displacements (U, V) | ≤ ~1×10⁻⁴ px (typically identical to 5 decimals) |
+| Strains (Exx, Eyy, Exy) | ≤ ~1 µε (0.001 mε) |
+| Solver stats (solved/dead counts, convergence %) | identical |
+| Report max/min **locations** | may hop between near-tied grid points |
+
+Anything beyond this — values off in the first or second significant digit,
+extrema in unrelated regions, changed dead-point counts on the same input —
+is a real regression: bisect with the `Engine` suite per-ABI.
+
+Trade-off note: `-ffast-math` makes results build-specific by design. If
+bit-reproducibility across builds ever becomes a requirement, compile `core/`
+and `preprocessing/` with `-fno-fast-math` and re-benchmark; the explicit SIMD
+kernels already do the heavy lifting, so the expected cost is small.
+
+---
+
 ## Suite: `Engine` — `test_optimization_engine.cpp`
 
 The synthetic deformation regression suite. Covers `OptimizationEngine`
@@ -86,6 +120,8 @@ end-to-end (ICGN, Simplex, auto-search, guards).
 | `SubsetOffImage_ReportsFailureStatus` | Impossible warp → `status != 0` | Engine fabricates answers instead of failing (silent corruption) |
 | `BothInterpolatorsConverge` | Bicubic AND Keys 6×6 paths both solve | One interpolator selector path regressed |
 | `LmDampingPreservesWellPosedSolution` | LM damping (α=1e-3) doesn't shift a good solution | LM applied to wrong DOFs or damping leaking into the answer |
+| `RepeatSolve_BitIdentical` | The same solve twice is bit-identical | Threading race, uninitialized buffer, or run-to-run nondeterminism |
+| `SuccessfulSolve_CorrelationNonNegative` | Successful solves report ZNSSD ≥ 0 | Sentinel contract broken — the JNI layer marks failed/skipped points with `CORR_INVALID = -1`, so a real score must never be negative |
 
 ## Suite: `SimdKernels` — `test_simd_kernels.cpp`
 

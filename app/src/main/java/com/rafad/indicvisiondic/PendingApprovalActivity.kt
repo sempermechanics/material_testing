@@ -130,7 +130,7 @@ class PendingApprovalActivity : AppCompatActivity() {
 
     private fun routeToLogin(message: String) {
         val intent = Intent(this, AuthActivity::class.java)
-        intent.putExtra("ROUTING_ERROR", message)
+        intent.putExtra(DicKeys.ROUTING_ERROR, message)
         // CLEAR_TASK and NEW_TASK wipe the Android backstack completely
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)

@@ -73,7 +73,7 @@ class SplashActivity : AppCompatActivity() {
         // If an error occurred, package it up and send it to AuthActivity
         // so we can display it nicely in the UI.
         if (errorMessage != null) {
-            intent.putExtra("ROUTING_ERROR", errorMessage)
+            intent.putExtra(DicKeys.ROUTING_ERROR, errorMessage)
         }
 
         startActivity(intent)

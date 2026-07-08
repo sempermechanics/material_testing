@@ -227,13 +227,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (result.resultCode == Activity.RESULT_OK) {
                 val data = result.data
                 if (data != null) {
-                    viewModel.roiX = data.getIntExtra("ROI_X", 0)
-                    viewModel.roiY = data.getIntExtra("ROI_Y", 0)
-                    viewModel.roiW = data.getIntExtra("ROI_W", viewModel.realRefWidth)
-                    viewModel.roiH = data.getIntExtra("ROI_H", viewModel.realRefHeight)
+                    viewModel.roiX = data.getIntExtra(DicKeys.ROI_X, 0)
+                    viewModel.roiY = data.getIntExtra(DicKeys.ROI_Y, 0)
+                    viewModel.roiW = data.getIntExtra(DicKeys.ROI_W, viewModel.realRefWidth)
+                    viewModel.roiH = data.getIntExtra(DicKeys.ROI_H, viewModel.realRefHeight)
 
                     // 🚀 PIPELINE FIX: Actually read the mask file sent by RoiDrawActivity!
-                    val maskPath = data.getStringExtra("MASK_FILE_PATH")
+                    val maskPath = data.getStringExtra(DicKeys.MASK_FILE_PATH)
                     if (maskPath != null) {
                         val file = File(maskPath)
                         if (file.exists()) {
@@ -268,9 +268,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 try {
                     tempFile.writeBytes(viewModel.refBytes!!)
                     val intent = Intent(this, RoiDrawActivity::class.java)
-                    intent.putExtra("IMAGE_FILE_PATH", tempFile.absolutePath)
-                    intent.putExtra("IMAGE_WIDTH", viewModel.realRefWidth)
-                    intent.putExtra("IMAGE_HEIGHT", viewModel.realRefHeight)
+                    intent.putExtra(DicKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
+                    intent.putExtra(DicKeys.IMAGE_WIDTH, viewModel.realRefWidth)
+                    intent.putExtra(DicKeys.IMAGE_HEIGHT, viewModel.realRefHeight)
                     roiStudioLauncher.launch(intent)
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -331,7 +331,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             } finally {
                 // 2. Burn the bridge and route back to Zone 2 (AuthActivity)
                 val intent = Intent(this@StaticAnalysisActivity, AuthActivity::class.java)
-                intent.putExtra("ROUTING_ERROR", "You have been successfully logged out.")
+                intent.putExtra(DicKeys.ROUTING_ERROR, "You have been successfully logged out.")
 
                 // CRITICAL: Wipe the backstack so they can't press 'Back' to return to the engine
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -837,30 +837,30 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun openResultViewer() {
         val intent = Intent(this, ResultViewerActivity::class.java).apply {
-            putExtra("IMG_W", viewModel.realRefWidth)
-            putExtra("IMG_H", viewModel.realRefHeight)
-            putExtra("STEP", viewModel.lastStep)
-            putExtra("REF_NAME", viewModel.refName.removePrefix("Ref: "))
+            putExtra(DicKeys.IMG_W, viewModel.realRefWidth)
+            putExtra(DicKeys.IMG_H, viewModel.realRefHeight)
+            putExtra(DicKeys.STEP, viewModel.lastStep)
+            putExtra(DicKeys.REF_NAME, viewModel.refName.removePrefix("Ref: "))
 
             // 🚀 THE FIX: Pass the dynamic timestamped path stored in the ViewModel
-            putExtra("REF_PATH", viewModel.lastRefPath ?: "")
+            putExtra(DicKeys.REF_PATH, viewModel.lastRefPath ?: "")
 
-            putExtra("DEF_PATH", viewModel.lastDefPath)
-            putExtra("BATCH_DIR_PATH", viewModel.lastBatchDirPath)
-            putStringArrayListExtra("DEF_FILE_NAMES", ArrayList(viewModel.defFilePaths.map { it.substringAfterLast('/') }))
+            putExtra(DicKeys.DEF_PATH, viewModel.lastDefPath)
+            putExtra(DicKeys.BATCH_DIR_PATH, viewModel.lastBatchDirPath)
+            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(viewModel.defFilePaths.map { it.substringAfterLast('/') }))
 
             // 🚀 PDF GENERATOR DATA
-            putExtra("SESSION_ID", viewModel.currentSessionId)
-            putExtra("SUBSET_SIZE", currentSubsetSize())
-            putExtra("STRAIN_WINDOW", currentStrainWindow())
-            putExtra("STRAIN_METHOD", if (currentUseNlvc()) "NLVC" else "VSG")
-            putExtra("ENGINE_STATS", viewModel.engineStatsArray)
+            putExtra(DicKeys.SESSION_ID, viewModel.currentSessionId)
+            putExtra(DicKeys.SUBSET_SIZE, currentSubsetSize())
+            putExtra(DicKeys.STRAIN_WINDOW, currentStrainWindow())
+            putExtra(DicKeys.STRAIN_METHOD, if (currentUseNlvc()) "NLVC" else "VSG")
+            putExtra(DicKeys.ENGINE_STATS, viewModel.engineStatsArray)
 
             // 🚀 NEW: PASSING ROI DATA FOR THE PDF REPORT
-            putExtra("ROI_X", viewModel.roiX)
-            putExtra("ROI_Y", viewModel.roiY)
-            putExtra("ROI_W", viewModel.roiW)
-            putExtra("ROI_H", viewModel.roiH)
+            putExtra(DicKeys.ROI_X, viewModel.roiX)
+            putExtra(DicKeys.ROI_Y, viewModel.roiY)
+            putExtra(DicKeys.ROI_W, viewModel.roiW)
+            putExtra(DicKeys.ROI_H, viewModel.roiH)
         }
         startActivity(intent)
     }

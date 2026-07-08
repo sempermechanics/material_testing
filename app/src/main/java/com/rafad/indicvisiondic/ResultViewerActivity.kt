@@ -129,17 +129,17 @@ class ResultViewerActivity : AppCompatActivity() {
         tvMaxMinData = findViewById(R.id.tvMaxMinData)
         glassShield = findViewById(R.id.glassShield)
 
-        imgW = intent.getIntExtra("IMG_W", 0)
-        imgH = intent.getIntExtra("IMG_H", 0)
-        step = intent.getIntExtra("STEP", 5)
+        imgW = intent.getIntExtra(DicKeys.IMG_W, 0)
+        imgH = intent.getIntExtra(DicKeys.IMG_H, 0)
+        step = intent.getIntExtra(DicKeys.STEP, 5)
 
-        roiX = intent.getIntExtra("ROI_X", 0)
-        roiY = intent.getIntExtra("ROI_Y", 0)
-        roiW = intent.getIntExtra("ROI_W", imgW)
-        roiH = intent.getIntExtra("ROI_H", imgH)
+        roiX = intent.getIntExtra(DicKeys.ROI_X, 0)
+        roiY = intent.getIntExtra(DicKeys.ROI_Y, 0)
+        roiW = intent.getIntExtra(DicKeys.ROI_W, imgW)
+        roiH = intent.getIntExtra(DicKeys.ROI_H, imgH)
 
         // 🚀 FIXED: Load the TRUE Reference Image for the background!
-        val refPath = intent.getStringExtra("REF_PATH")
+        val refPath = intent.getStringExtra(DicKeys.REF_PATH)
         if (refPath != null) {
             cachedBaseImage = BitmapFactory.decodeFile(refPath)
             imgMain.setImageBitmap(cachedBaseImage)
@@ -147,10 +147,10 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         // Save the DefPath strictly for the PDF Generator!
-        currentDefPath = intent.getStringExtra("DEF_PATH")
+        currentDefPath = intent.getStringExtra(DicKeys.DEF_PATH)
 
-        val batchDirPath = intent.getStringExtra("BATCH_DIR_PATH")
-        originalDefNames = intent.getStringArrayListExtra("DEF_FILE_NAMES") ?: emptyList()
+        val batchDirPath = intent.getStringExtra(DicKeys.BATCH_DIR_PATH)
+        originalDefNames = intent.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES) ?: emptyList()
 
         if (batchDirPath != null) {
             val dir = File(batchDirPath)
@@ -675,7 +675,7 @@ class ResultViewerActivity : AppCompatActivity() {
         val baseImg = cachedBaseImage ?: return null
         val data = rawData ?: return null
 
-        val statsArray = intent.getFloatArrayExtra("ENGINE_STATS") ?: FloatArray(16)
+        val statsArray = intent.getFloatArrayExtra(DicKeys.ENGINE_STATS) ?: FloatArray(16)
         val engineStats = if (statsArray.size >= 16) {
             EngineStats.fromArray(statsArray)
         } else {
@@ -692,15 +692,15 @@ class ResultViewerActivity : AppCompatActivity() {
                 imgW = imgW,
                 imgH = imgH,
                 step = step,
-                sessionId = intent.getStringExtra("SESSION_ID") ?: "Local_Offline_Mode",
-                specimenName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch Analysis",
+                sessionId = intent.getStringExtra(DicKeys.SESSION_ID) ?: "Local_Offline_Mode",
+                specimenName = intent.getStringExtra(DicKeys.REF_NAME)?.substringBeforeLast(".") ?: "Batch Analysis",
                 analysisDate = ReportBuilder.currentAnalysisDate(),
-                subsetSize = intent.getIntExtra("SUBSET_SIZE", 41),
-                strainWindow = intent.getIntExtra("STRAIN_WINDOW", 15),
-                strainMethod = intent.getStringExtra("STRAIN_METHOD") ?: "VSG",
+                subsetSize = intent.getIntExtra(DicKeys.SUBSET_SIZE, 41),
+                strainWindow = intent.getIntExtra(DicKeys.STRAIN_WINDOW, 15),
+                strainMethod = intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG",
                 roiData = RoiData(roiX, roiY, roiW, roiH),
                 engineStats = engineStats,
-                referenceImageName = intent.getStringExtra("REF_NAME") ?: "reference.png",
+                referenceImageName = intent.getStringExtra(DicKeys.REF_NAME) ?: "reference.png",
                 deformedImageName = originalDefNames.getOrNull(currentFrameIndex) ?: "Frame_${currentFrameIndex + 1}",
             )
         )
@@ -723,7 +723,7 @@ class ResultViewerActivity : AppCompatActivity() {
         Toast.makeText(this, R.string.saving_images_zip, Toast.LENGTH_LONG).show()
 
         lifecycleScope.launch(Dispatchers.IO) {
-            val refName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch"
+            val refName = intent.getStringExtra(DicKeys.REF_NAME)?.substringBeforeLast(".") ?: "Batch"
             val fileName = "IndicVision_Images_${currentTypeString}_${refName}.zip"
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -789,7 +789,7 @@ class ResultViewerActivity : AppCompatActivity() {
         Toast.makeText(this, R.string.saving_master_csv, Toast.LENGTH_LONG).show()
 
         lifecycleScope.launch(Dispatchers.IO) {
-            val refName = intent.getStringExtra("REF_NAME")?.substringBeforeLast(".") ?: "Batch"
+            val refName = intent.getStringExtra(DicKeys.REF_NAME)?.substringBeforeLast(".") ?: "Batch"
             val fileName = "IndicVision_BatchData_${refName}.csv"
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)

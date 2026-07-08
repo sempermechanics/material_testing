@@ -97,7 +97,7 @@ class AuthActivity : AppCompatActivity() {
         }
 
         // Check if the Gatekeeper (SplashActivity) routed us here with an error
-        val routingError = intent.getStringExtra("ROUTING_ERROR")
+        val routingError = intent.getStringExtra(DicKeys.ROUTING_ERROR)
         if (routingError != null) {
             // Check if it's a successful logout message vs a real error
             val isError = !routingError.contains("successfully logged out")

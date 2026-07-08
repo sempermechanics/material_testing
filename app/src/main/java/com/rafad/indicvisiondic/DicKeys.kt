@@ -1,0 +1,54 @@
+package com.rafad.indicvisiondic
+
+/**
+ * Keys shared across component boundaries — Intent extras and WorkManager
+ * [androidx.work.Data]. Centralized so a typo becomes a compile error instead
+ * of a silent fallback to a default value.
+ *
+ * Same-file keys (e.g. savedInstanceState) intentionally stay local.
+ */
+object DicKeys {
+    // ── Auth → session hand-off (AuthActivity / SplashActivity / PendingApproval)
+    const val USER_ID = "USER_ID"
+    const val USER_EMAIL = "USER_EMAIL"
+
+    // ── StaticAnalysisActivity ↔ RoiDrawActivity
+    const val IMAGE_FILE_PATH = "IMAGE_FILE_PATH"
+    const val MASK_FILE_PATH = "MASK_FILE_PATH"
+    const val IMAGE_WIDTH = "IMAGE_WIDTH"
+    const val IMAGE_HEIGHT = "IMAGE_HEIGHT"
+    const val DRAW_MODE = "DRAW_MODE"
+    const val ROI_L = "ROI_L"
+    const val ROI_R = "ROI_R"
+    const val ROI_T = "ROI_T"
+    const val ROI_B = "ROI_B"
+
+    // ── StaticAnalysisActivity → ResultViewerActivity
+    const val SESSION_ID = "SESSION_ID"
+    const val REF_NAME = "REF_NAME"
+    const val REF_PATH = "REF_PATH"
+    const val DEF_PATH = "DEF_PATH"
+    const val BATCH_DIR_PATH = "BATCH_DIR_PATH"
+    const val DEF_FILE_NAMES = "DEF_FILE_NAMES"
+    const val SUBSET_SIZE = "SUBSET_SIZE"
+    const val STRAIN_WINDOW = "STRAIN_WINDOW"
+    const val STRAIN_METHOD = "STRAIN_METHOD"
+    const val ENGINE_STATS = "ENGINE_STATS"
+    const val ROUTING_ERROR = "ROUTING_ERROR"
+    const val POINTS_CONVERGED = "POINTS_CONVERGED"
+    const val EXEC_TIME = "EXEC_TIME"
+    const val AVG_ITERS = "AVG_ITERS"
+
+    // ── AnalysisViewModel → DicUploadWorker (WorkManager Data)
+    const val STEP = "STEP"
+    const val SUBSET = "SUBSET"
+    const val STRAIN_WIN = "STRAIN_WIN"
+    const val IMG_W = "IMG_W"
+    const val IMG_H = "IMG_H"
+    const val ROI_X = "ROI_X"
+    const val ROI_Y = "ROI_Y"
+    const val ROI_W = "ROI_W"
+    const val ROI_H = "ROI_H"
+    const val FRAME_NAME = "FRAME_NAME"
+    const val DAT_PATH = "DAT_PATH"
+}

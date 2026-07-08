@@ -17,13 +17,13 @@ import java.nio.ByteOrder
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val userEmail = inputData.getString("USER_EMAIL") ?: "Unknown_User"
-        val userId = inputData.getString("USER_ID") ?: return@withContext Result.failure()
+        val userEmail = inputData.getString(DicKeys.USER_EMAIL) ?: "Unknown_User"
+        val userId = inputData.getString(DicKeys.USER_ID) ?: return@withContext Result.failure()
 
-        val refPath = inputData.getString("REF_PATH") ?: return@withContext Result.failure()
-        val defPath = inputData.getString("DEF_PATH") ?: return@withContext Result.failure()
-        val datPath = inputData.getString("DAT_PATH") ?: return@withContext Result.failure()
-        val frameName = inputData.getString("FRAME_NAME") ?: "Frame"
+        val refPath = inputData.getString(DicKeys.REF_PATH) ?: return@withContext Result.failure()
+        val defPath = inputData.getString(DicKeys.DEF_PATH) ?: return@withContext Result.failure()
+        val datPath = inputData.getString(DicKeys.DAT_PATH) ?: return@withContext Result.failure()
+        val frameName = inputData.getString(DicKeys.FRAME_NAME) ?: "Frame"
 
         Log.d("inDIC_Diag", "========================================")
         Log.d("inDIC_Diag", "👻 GHOST WORKER WOKE UP (NETWORK DETECTED)!")
@@ -33,10 +33,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val sessionData = AnalysisSessionInsert(
                 userId = userId,
                 userEmail = userEmail,
-                specimenIdentifier = inputData.getString("REF_NAME") ?: "Target",
-                pointsConverged = inputData.getInt("POINTS_CONVERGED", 0),
-                avgIterations = inputData.getFloat("AVG_ITERS", 0f),
-                executionTimeMs = inputData.getInt("EXEC_TIME", 0)
+                specimenIdentifier = inputData.getString(DicKeys.REF_NAME) ?: "Target",
+                pointsConverged = inputData.getInt(DicKeys.POINTS_CONVERGED, 0),
+                avgIterations = inputData.getFloat(DicKeys.AVG_ITERS, 0f),
+                executionTimeMs = inputData.getInt(DicKeys.EXEC_TIME, 0)
             )
 
             val insertedRow = SupabaseManager.client.postgrest["analysis_sessions"]
@@ -135,9 +135,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         frameName: String,
         trueSessionId: String
     ): String = withContext(Dispatchers.Default) {
-        val imgW = inputData.getInt("IMG_W", 1000)
-        val imgH = inputData.getInt("IMG_H", 1000)
-        val step = inputData.getInt("STEP", 5)
+        val imgW = inputData.getInt(DicKeys.IMG_W, 1000)
+        val imgH = inputData.getInt(DicKeys.IMG_H, 1000)
+        val step = inputData.getInt(DicKeys.STEP, 5)
 
         val originalBaseImg = BitmapFactory.decodeFile(refFile.absolutePath) ?: return@withContext ""
         // Null when the deformed frame can't be decoded — the cover card then
@@ -147,7 +147,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val baseImg = Bitmap.createScaledBitmap(originalBaseImg, imgW, imgH, true)
         val defImg = Bitmap.createScaledBitmap(originalDefImg ?: originalBaseImg, imgW, imgH, true)
 
-        val statsArray = inputData.getFloatArray("ENGINE_STATS") ?: FloatArray(16)
+        val statsArray = inputData.getFloatArray(DicKeys.ENGINE_STATS) ?: FloatArray(16)
         val reportData = ReportBuilder.buildReport(
             ReportBuilder.ReportBuildParams(
                 data = data,
@@ -157,16 +157,16 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 imgH = imgH,
                 step = step,
                 sessionId = trueSessionId,
-                specimenName = inputData.getString("REF_NAME") ?: "Target",
+                specimenName = inputData.getString(DicKeys.REF_NAME) ?: "Target",
                 analysisDate = ReportBuilder.currentAnalysisDate(),
-                subsetSize = inputData.getInt("SUBSET", 41),
-                strainWindow = inputData.getInt("STRAIN_WIN", 15),
-                strainMethod = inputData.getString("STRAIN_METHOD") ?: "VSG",
+                subsetSize = inputData.getInt(DicKeys.SUBSET, 41),
+                strainWindow = inputData.getInt(DicKeys.STRAIN_WIN, 15),
+                strainMethod = inputData.getString(DicKeys.STRAIN_METHOD) ?: "VSG",
                 roiData = RoiData(
-                    inputData.getInt("ROI_X", 0),
-                    inputData.getInt("ROI_Y", 0),
-                    inputData.getInt("ROI_W", imgW),
-                    inputData.getInt("ROI_H", imgH)
+                    inputData.getInt(DicKeys.ROI_X, 0),
+                    inputData.getInt(DicKeys.ROI_Y, 0),
+                    inputData.getInt(DicKeys.ROI_W, imgW),
+                    inputData.getInt(DicKeys.ROI_H, imgH)
                 ),
                 engineStats = EngineStats.fromArray(statsArray),
                 referenceImageName = "Baseline",

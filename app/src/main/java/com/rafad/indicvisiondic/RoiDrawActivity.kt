@@ -45,9 +45,9 @@ class RoiDrawActivity : AppCompatActivity() {
         Insets.padTop(tvHud)
         Insets.padBottom(findViewById(R.id.bottomToolbar))
 
-        val imageFilePath = intent.getStringExtra("IMAGE_FILE_PATH")
-        realImageWidth = intent.getIntExtra("IMAGE_WIDTH", 0)
-        realImageHeight = intent.getIntExtra("IMAGE_HEIGHT", 0)
+        val imageFilePath = intent.getStringExtra(DicKeys.IMAGE_FILE_PATH)
+        realImageWidth = intent.getIntExtra(DicKeys.IMAGE_WIDTH, 0)
+        realImageHeight = intent.getIntExtra(DicKeys.IMAGE_HEIGHT, 0)
 
         overlayRoi.realImageWidth = realImageWidth
         overlayRoi.realImageHeight = realImageHeight
@@ -67,11 +67,11 @@ class RoiDrawActivity : AppCompatActivity() {
                         overlayRoi.imageView = imgRoiCanvas
 
                         if (savedInstanceState != null) {
-                            val left = savedInstanceState.getFloat("ROI_L", -1f)
+                            val left = savedInstanceState.getFloat(DicKeys.ROI_L, -1f)
                             if (left != -1f) {
-                                val top = savedInstanceState.getFloat("ROI_T")
-                                val right = savedInstanceState.getFloat("ROI_R")
-                                val bottom = savedInstanceState.getFloat("ROI_B")
+                                val top = savedInstanceState.getFloat(DicKeys.ROI_T)
+                                val right = savedInstanceState.getFloat(DicKeys.ROI_R)
+                                val bottom = savedInstanceState.getFloat(DicKeys.ROI_B)
                                 overlayRoi.restoreRelativeRoi(RectF(left, top, right, bottom))
                             }
                         }
@@ -96,7 +96,7 @@ class RoiDrawActivity : AppCompatActivity() {
         }
 
         if (savedInstanceState != null) {
-            rgDrawMode.check(savedInstanceState.getInt("DRAW_MODE", R.id.rbRect))
+            rgDrawMode.check(savedInstanceState.getInt(DicKeys.DRAW_MODE, R.id.rbRect))
         }
 
         switchSubtractMode.setOnCheckedChangeListener { _, isChecked ->
@@ -166,11 +166,11 @@ class RoiDrawActivity : AppCompatActivity() {
             java.io.FileOutputStream(maskFile).use { it.write(maskBytes) }
 
             val resultIntent = Intent()
-            resultIntent.putExtra("ROI_X", rectX)
-            resultIntent.putExtra("ROI_Y", rectY)
-            resultIntent.putExtra("ROI_W", rectW)
-            resultIntent.putExtra("ROI_H", rectH)
-            resultIntent.putExtra("MASK_FILE_PATH", maskFile.absolutePath)
+            resultIntent.putExtra(DicKeys.ROI_X, rectX)
+            resultIntent.putExtra(DicKeys.ROI_Y, rectY)
+            resultIntent.putExtra(DicKeys.ROI_W, rectW)
+            resultIntent.putExtra(DicKeys.ROI_H, rectH)
+            resultIntent.putExtra(DicKeys.MASK_FILE_PATH, maskFile.absolutePath)
 
             setResult(Activity.RESULT_OK, resultIntent)
             finish()
@@ -179,14 +179,14 @@ class RoiDrawActivity : AppCompatActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putInt("DRAW_MODE", rgDrawMode.checkedButtonId)
+        outState.putInt(DicKeys.DRAW_MODE, rgDrawMode.checkedButtonId)
 
         if (overlayRoi.hasValidRoi && overlayRoi.currentMode != StudioOverlayView.RoiMode.FREEFORM) {
             val relativeRoi = overlayRoi.getRelativeRoi()
-            outState.putFloat("ROI_L", relativeRoi.left)
-            outState.putFloat("ROI_T", relativeRoi.top)
-            outState.putFloat("ROI_R", relativeRoi.right)
-            outState.putFloat("ROI_B", relativeRoi.bottom)
+            outState.putFloat(DicKeys.ROI_L, relativeRoi.left)
+            outState.putFloat(DicKeys.ROI_T, relativeRoi.top)
+            outState.putFloat(DicKeys.ROI_R, relativeRoi.right)
+            outState.putFloat(DicKeys.ROI_B, relativeRoi.bottom)
         }
     }
 }

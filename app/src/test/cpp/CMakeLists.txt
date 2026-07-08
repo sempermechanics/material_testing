@@ -29,6 +29,15 @@ else ()
     add_compile_options(/O2 /fp:fast)
 endif ()
 
+# Optional sanitizer build: -DDIC_SANITIZER=address,undefined  or  thread
+# CI runs both; the thread build turns the Robustness concurrency test
+# into a data-race detector for the shared read-only solve path.
+set(DIC_SANITIZER "" CACHE STRING "Comma-separated sanitizers (address,undefined,thread) or empty")
+if (DIC_SANITIZER AND NOT MSVC)
+    add_compile_options(-fsanitize=${DIC_SANITIZER} -g -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=${DIC_SANITIZER})
+endif ()
+
 add_executable(dic_tests
         test_main.cpp
         test_simd_kernels.cpp
@@ -36,6 +45,7 @@ add_executable(dic_tests
         test_subset_precomputer.cpp
         test_optimization_engine.cpp
         test_strain_calculator.cpp
+        test_robustness.cpp
 
         # Production sources under test — compiled as-is, no test doubles
         ${ENGINE_DIR}/preprocessing/ImageProcessor.cpp
