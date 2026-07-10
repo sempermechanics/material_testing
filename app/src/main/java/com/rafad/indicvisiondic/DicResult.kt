@@ -42,4 +42,34 @@ object DicResult {
     fun isStrainFieldIndex(dataIndex: Int): Boolean = dataIndex in IDX_EXX..IDX_EXY
 
     fun strainMultiplier(dataIndex: Int): Float = if (isStrainFieldIndex(dataIndex)) STRAIN_TO_MILLISTRAIN else 1f
+
+    /**
+     * `[max, min, mean]` of one field over accepted points, unit-scaled
+     * (millistrain for strain fields). Null when no point is accepted.
+     */
+    fun fieldStats(data: FloatArray, dataIndex: Int): FloatArray? {
+        val multiplier = strainMultiplier(dataIndex)
+        var maxV = Float.NEGATIVE_INFINITY
+        var minV = Float.POSITIVE_INFINITY
+        var sum = 0.0
+        var n = 0
+        var i = 0
+        while (i < data.size) {
+            if (isAcceptedPoint(data[i + IDX_ZNSSD])) {
+                val v = data[i + dataIndex] * multiplier
+                if (v > maxV) maxV = v
+                if (v < minV) minV = v
+                sum += v
+                n++
+            }
+            i += STRIDE
+        }
+        return if (n == 0) null else floatArrayOf(maxV, minV, (sum / n).toFloat())
+    }
+
+    /** One solved point as a CSV fragment: `X,Y,U,V,Exx,Eyy,Exy,ZNSSD` (raw units). */
+    fun csvRow(data: FloatArray, i: Int): String {
+        val head = "${data[i + IDX_X]},${data[i + IDX_Y]},${data[i + IDX_U]},${data[i + IDX_V]}"
+        return "$head,${data[i + IDX_EXX]},${data[i + IDX_EYY]},${data[i + IDX_EXY]},${data[i + IDX_ZNSSD]}"
+    }
 }

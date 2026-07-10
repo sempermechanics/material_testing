@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Auto Backup rules for API 30 and below (API 31+ uses
+   data_extraction_rules.xml). Kept in sync with that file.
+
+   Excluded and why:
+   - sharedpref: holds the Supabase auth session token (device-bound
+     credential) — must never leave the device via backup.
+   - files/sessions: the local session index plus per-session frames and
+     reference images. Bulky (Auto Backup caps at 25 MB) and already
+     recoverable through cloud sync for synced sessions.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="file" path="sessions" />
 </full-backup-content>

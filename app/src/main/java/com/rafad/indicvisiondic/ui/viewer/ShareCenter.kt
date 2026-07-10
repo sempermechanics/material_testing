@@ -182,13 +182,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 val name = s.defNames.getOrNull(index) ?: "Frame_${index + 1}"
                 var i = 0
                 while (i < data.size) {
-                    val c = data[i + DicResult.IDX_ZNSSD]
-                    if (DicResult.isSolvedPoint(c)) {
-                        w.write(
-                            "$name,${data[i]},${data[i + 1]},${data[i + DicResult.IDX_U]}," +
-                                "${data[i + DicResult.IDX_V]},${data[i + DicResult.IDX_EXX]}," +
-                                "${data[i + DicResult.IDX_EYY]},${data[i + DicResult.IDX_EXY]},$c\n",
-                        )
+                    if (DicResult.isSolvedPoint(data[i + DicResult.IDX_ZNSSD])) {
+                        w.write("$name,${DicResult.csvRow(data, i)}\n")
                     }
                     i += DicResult.STRIDE
                 }
@@ -222,7 +217,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val name = s.defNames.getOrNull(index) ?: "Frame_${index + 1}"
         val image = renderAnnotated(data, s.dataIndex, s.typeString)
         val rows = FIELDS.map { (label, idx) ->
-            val stats = fieldStats(data, idx)
+            val stats = DicResult.fieldStats(data, idx) ?: floatArrayOf(0f, 0f, 0f)
             val unit = if (DicResult.isStrainFieldIndex(idx)) "mε" else "px"
             listOf(
                 "$label [$unit]",
@@ -232,31 +227,6 @@ class ShareCenter(private val host: ResultViewerActivity) {
             )
         }
         return PdfReportGenerator.FrameChapter(name, image, rows)
-    }
-
-    /** [max, min, mean] over accepted points, unit-scaled. */
-    private fun fieldStats(data: FloatArray, dataIndex: Int): FloatArray {
-        val multiplier = DicResult.strainMultiplier(dataIndex)
-        var maxV = Float.NEGATIVE_INFINITY
-        var minV = Float.POSITIVE_INFINITY
-        var sum = 0.0
-        var n = 0
-        var i = 0
-        while (i < data.size) {
-            if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) {
-                val v = data[i + dataIndex] * multiplier
-                if (v > maxV) maxV = v
-                if (v < minV) minV = v
-                sum += v
-                n++
-            }
-            i += DicResult.STRIDE
-        }
-        return if (n == 0) {
-            floatArrayOf(0f, 0f, 0f)
-        } else {
-            floatArrayOf(maxV, minV, (sum / n).toFloat())
-        }
     }
 
     private suspend fun everythingZip(): File {

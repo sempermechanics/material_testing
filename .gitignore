@@ -27,3 +27,6 @@ output-metadata.json
 *.log
 *.hprof
 app/src/main/cpp/third_party/*
+
+# === Kotlin compiler session data ===
+.kotlin/

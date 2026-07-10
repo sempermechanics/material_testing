@@ -9,7 +9,7 @@ plugins {
 spotless {
     kotlin {
         target("app/src/**/*.kt")
-        targetExclude("**/build/**")
+        targetExclude("**/build/**", "app/src/main/cpp/**")
         ktlint("1.5.0").editorConfigOverride(
             mapOf(
                 // Keep the gate about consistency, not churn: these rules would

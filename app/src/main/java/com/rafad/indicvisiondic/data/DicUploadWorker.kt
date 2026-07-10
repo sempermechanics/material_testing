@@ -74,7 +74,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
             Timber.d("-> Step 4: Generating CSV...")
             val datFile = File(datPath)
-            var publicCsvUrl = ""
+            var csvStoragePath = ""
             var rawFloatData: FloatArray? = null
 
             if (datFile.exists()) {
@@ -86,26 +86,22 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     )
                     var i = 0
                     while (i < data.size) {
-                        val c = data[i + DicResult.IDX_ZNSSD]
-                        if (DicResult.isSolvedPoint(c)) {
-                            csvContent.append(
-                                "${data[i]},${data[i + 1]},${data[i + 2]},${data[i + 3]}," +
-                                    "${data[i + 4]},${data[i + 5]},${data[i + 6]},$c\n",
-                            )
+                        if (DicResult.isSolvedPoint(data[i + DicResult.IDX_ZNSSD])) {
+                            csvContent.append(DicResult.csvRow(data, i)).append('\n')
                         }
                         i += DicResult.STRIDE
                     }
                     val csvCloudPath = "$cloudFolder/Data_$frameName.csv"
                     storageBucket.upload(csvCloudPath, csvContent.toString().toByteArray()) { upsert = true }
-                    publicCsvUrl = storageBucket.publicUrl(csvCloudPath)
+                    csvStoragePath = csvCloudPath
                     Timber.d("CSV Uploaded.")
                 }
             }
 
             Timber.d("-> Step 5: Generating PDF in Background...")
-            var publicPdfUrl = ""
+            var pdfStoragePath = ""
             if (rawFloatData != null && refFile.exists() && defFile.exists()) {
-                publicPdfUrl = generateHeadlessPdfAndUpload(
+                pdfStoragePath = generateHeadlessPdfAndUpload(
                     rawFloatData,
                     refFile,
                     defFile,
@@ -118,10 +114,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             }
 
             Timber.d("-> Step 6: Updating Database Ledger...")
-            if (publicCsvUrl.isNotEmpty() || publicPdfUrl.isNotEmpty()) {
+            if (csvStoragePath.isNotEmpty() || pdfStoragePath.isNotEmpty()) {
+                // Bucket paths, not URLs: the bucket stays private and readers
+                // mint short-lived signed URLs from these paths on demand.
                 val updateMap = mutableMapOf<String, String>()
-                if (publicCsvUrl.isNotEmpty()) updateMap["summary_csv_path"] = publicCsvUrl
-                if (publicPdfUrl.isNotEmpty()) updateMap["heatmap_png_path"] = publicPdfUrl
+                if (csvStoragePath.isNotEmpty()) updateMap["summary_csv_path"] = csvStoragePath
+                if (pdfStoragePath.isNotEmpty()) updateMap["heatmap_png_path"] = pdfStoragePath
 
                 SupabaseManager.client.postgrest["analysis_sessions"].update(updateMap) {
                     filter { eq("session_id", trueSessionId) }
@@ -211,6 +209,6 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         originalDefImg?.recycle()
         tempPdfFile.delete()
 
-        storageBucket.publicUrl(pdfCloudPath)
+        pdfCloudPath
     }
 }

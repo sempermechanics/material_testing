@@ -4,7 +4,6 @@
     <!-- Accessibility -->
     <string name="prev_frame">Previous frame</string>
     <string name="next_frame">Next frame</string>
-    <string name="export_execute">Export selected format</string>
 
     <!-- Common actions -->
     <string name="cancel">Cancel</string>
@@ -74,23 +73,15 @@
     <string name="analysis_running_back_blocked">Analysis running. Please wait or cancel first.</string>
     <string name="exit_indic_title">Exit inDIC engine?</string>
     <string name="exit_indic_message">Are you sure you want to leave? All uncalculated setup and ROI definitions will be lost.</string>
-    <string name="logout_wait_analysis">Please wait for analysis to finish before logging out.</string>
     <string name="no_images_selected">No images selected</string>
     <string name="failed_save_temp_file">Failed to save temporary file</string>
     <string name="load_image_first">Load an image first.</string>
-    <string name="logout_title">Log out?</string>
-    <string name="logout_message">Are you sure you want to log out of inDIC on this device?</string>
-    <string name="jpeg_warning_ref">JPEG artifacts severely reduce DIC accuracy. Lossless PNG, TIFF, or RAW formats are recommended.</string>
-    <string name="jpeg_warning_batch">JPEG artifact compression detected in batch. This will reduce accuracy.</string>
     <string name="failed_decode_raw">Failed to decode RAW image.</string>
     <string name="failed_load_reference">Failed to load reference image. Please try another file.</string>
     <string name="failed_load_mask">Failed to load ROI mask. Please try another file.</string>
     <string name="mask_uploaded">Custom ROI mask uploaded</string>
-    <string name="mask_uploaded_button">Mask uploaded</string>
     <string name="roi_too_small">ROI is too small. It must be larger than the subset size.</string>
     <string name="analysis_failed_title">Analysis failed</string>
-    <string name="raw_png_loaded">Raw PNG loaded</string>
-    <string name="video_sampling_title">Video sampling</string>
     <string name="video_read_failed">Could not read this video.</string>
     <string name="video_extract_insufficient">Could not extract enough frames from this segment.</string>
     <string name="video_read_error">Failed to read video: %1$s</string>
@@ -98,6 +89,8 @@
     <string name="video_loaded_frames">Video loaded: 1 reference + %1$d deformed frames</string>
 
     <!-- Result viewer -->
+    <string name="toggle_inspect">Inspect</string>
+    <string name="toggle_max_min">Max/Min</string>
     <string name="no_batch_data">No valid batch data found.</string>
     <string name="coord_dialog_title">Go to pixel coordinate</string>
     <string name="coord_hint_x">X coordinate (0 to %1$d)</string>
@@ -110,49 +103,9 @@
     <string name="scale_unit_px">px</string>
     <string name="scale_unit_strain">mε</string>
     <string name="invalid_scale_inputs">Invalid scale inputs.</string>
-    <string name="no_data_to_save">No data to save.</string>
-    <string name="saving_csv">Saving CSV locally…</string>
-    <string name="csv_saved">CSV saved to Downloads/IndicVision</string>
-    <string name="csv_save_failed">Failed to save CSV</string>
-    <string name="wait_for_heatmap">Please wait for the heatmap to finish.</string>
-    <string name="pdf_generating_title">Generating master report</string>
-    <string name="pdf_analyzing_fields">Analyzing all fields…</string>
-    <string name="pdf_parse_failed">Failed to parse data.</string>
-    <string name="pdf_saved">Master PDF saved to Documents</string>
-    <string name="pdf_error">Error generating PDF</string>
-    <string name="saving_images_zip">Generating images ZIP locally. Please wait.</string>
-    <string name="images_zip_saved">Images ZIP saved to Downloads/IndicVision</string>
-    <string name="images_zip_failed">Failed to save images ZIP</string>
-    <string name="saving_master_csv">Generating master batch CSV locally. This may take a moment.</string>
-    <string name="master_csv_saved">Master CSV saved to Downloads/IndicVision</string>
-    <string name="master_csv_failed">Failed to save master CSV</string>
-    <string name="heatmap_drawing_wait">Please wait, heatmap is drawing…</string>
-    <string name="export_images_missing">Images missing from memory.</string>
-    <string name="saving_image">Saving image locally…</string>
-    <string name="image_saved">Saved to Pictures/IndicVision</string>
-    <string name="image_save_failed">Failed to save image</string>
-    <string name="frame_counter">Frame: %1$d / %2$d</string>
 
-    <string-array name="interpolator_options">
-        <item>Bicubic (fast)</item>
-        <item>Lanczos-6 (high acc.)</item>
-    </string-array>
 
-    <string-array name="result_field_options">
-        <item>U Displacement</item>
-        <item>V Displacement</item>
-        <item>Exx Strain</item>
-        <item>Eyy Strain</item>
-        <item>Exy Shear</item>
-    </string-array>
 
-    <string-array name="export_options">
-        <item>Export image (current)</item>
-        <item>Export PDF report</item>
-        <item>Export CSV (current)</item>
-        <item>Export images (batch ZIP)</item>
-        <item>Export master batch CSV</item>
-    </string-array>
 
     <!-- Extracted from layouts (Day 1 strings sweep) -->
     <string name="secure_access_portal">Secure Access Portal</string>
@@ -164,58 +117,25 @@
     <string name="or">or</string>
     <string name="continue_with_google">Continue with Google</string>
     <string name="request_an_account">Request an account</string>
-    <string name="approval_pending">Approval Pending</string>
-    <string name="your_device_has_been_securely">Your device has been securely registered. Please wait for an administrator to approve your access to the inDIC engine.</string>
-    <string name="account_details">ACCOUNT DETAILS</string>
-    <string name="loading_email">Loading email...</string>
-    <string name="device_id_loading">Device ID: Loading...</string>
-    <string name="check_status">CHECK STATUS</string>
-    <string name="log_out_of_this_device">Log out of this device</string>
     <string name="x_y">X, Y</string>
     <string name="min_0_0">Min: 0.0</string>
     <string name="max_0_0">Max: 0.0</string>
     <string name="frame_1_1">Frame: 1 / 1</string>
     <string name="tap_image_to_inspect">Tap image to inspect</string>
     <string name="max_nmin">Max: --\nMin: --</string>
-    <string name="indicvision">IndicVision</string>
-    <string name="log_out">Log Out</string>
-    <string name="label_1_load_images">1 · Load Images</string>
-    <string name="label_2_settings_amp_run">2 · Settings &amp; Run</string>
     <string name="video">Video</string>
-    <string name="load_from_video">Load from Video</string>
-    <string name="extracts_frames_automatically_the_first">Extracts frames automatically — the first frame becomes the reference and the rest become the deformed sequence.</string>
-    <string name="select_video">Select Video</string>
-    <string name="label_1">1</string>
     <string name="reference_image">Reference Image</string>
-    <string name="select_reference_image">Select Reference Image</string>
-    <string name="no_file_selected">No file selected</string>
-    <string name="load_images_to_begin">Load images to begin</string>
     <string name="reference_image_preview">Reference image preview</string>
-    <string name="draw_roi">Draw ROI</string>
-    <string name="manual_roi">Manual ROI</string>
-    <string name="use_full_image_no_roi">Use Full Image (No ROI)</string>
-    <string name="label_2">2</string>
-    <string name="deformed_image_s">Deformed Image(s)</string>
-    <string name="select_deformed_image_s">Select Deformed Image(s)</string>
-    <string name="deformed_image_preview">Deformed image preview</string>
     <string name="parameters">Parameters</string>
-    <string name="analysis_parameters">Analysis Parameters</string>
     <string name="subset_size">Subset size</string>
     <string name="label_41_px">41 px</string>
     <string name="step_size_density">Step size (density)</string>
     <string name="label_5_px">5 px</string>
     <string name="strain_window">Strain window</string>
     <string name="label_15_px">15 px</string>
-    <string name="apply_gaussian_blur_noise_reduction">Apply Gaussian blur (noise reduction)</string>
-    <string name="strain_calculation_method">Strain calculation method</string>
-    <string name="vsg_smooth">VSG (Smooth)</string>
-    <string name="nlvc_fractures">NLVC (Fractures)</string>
     <string name="sub_pixel_interpolation_kernel">Sub-pixel interpolation kernel</string>
     <string name="label_4_4_bicubic">4×4 Bicubic</string>
     <string name="label_6_6_keys">6×6 Keys</string>
-    <string name="optional_upload_custom_roi_mask">Optional: Upload Custom ROI Mask (PNG)</string>
-    <string name="compute_full_field_2d_strain">Compute Full-Field 2D Strain</string>
-    <string name="view_last_results">View Last Results</string>
     <string name="elapsed_time_0s">Elapsed Time: 0s</string>
     <string name="result">Result: --</string>
     <string name="back">Back</string>
@@ -264,8 +184,6 @@
     <string name="advanced_defaults_suffix"> · defaults</string>
     <string name="run_points_solved">points solved</string>
     <string name="run_convergence">convergence</string>
-    <string name="run_screen_note">Screen stays on while the analysis runs</string>
-    <string name="run_headline_fmt">Analyzing frame %1$d of %2$d</string>
     <string name="cancel_run_title">Cancel this analysis?</string>
     <string name="cancel_run_body">Stops after the current frame. Results so far are discarded.</string>
     <string name="keep_running">Keep running</string>

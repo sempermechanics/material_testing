@@ -25,7 +25,6 @@
     <color name="text_on_primary">#FFFFFF</color>
 
     <!-- Semantic -->
-    <color name="semantic_success">#2E9E5B</color>
     <color name="semantic_danger">#E53935</color>
     <color name="semantic_warning">#F5A623</color>
 
@@ -33,17 +32,13 @@
          glass controls on top -->
     <color name="viewer_canvas">#F4F9FC</color> <!-- light: matches app background -->
     <color name="viewer_glass">#F0FFFFFF</color>
-    <color name="viewer_glass_soft">#CCFFFFFF</color>
     <color name="viewer_chip_off">#FFFFFF</color>
     <color name="viewer_on_dark">#152430</color> <!-- now "on viewer panel"; light theme -->
 
     <!-- Legacy names remapped to the new palette so any lingering
          references stay on-brand during migration. -->
     <color name="purple_200">#7FD3F4</color>
-    <color name="purple_500">#0288D1</color>
     <color name="purple_700">#0277BD</color>
     <color name="teal_200">#00BFFF</color>
-    <color name="teal_700">#0277BD</color>
     <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
 </resources>

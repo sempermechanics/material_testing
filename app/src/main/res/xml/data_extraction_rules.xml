@@ -1,19 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   Backup/transfer rules for API 31+. Kept in sync with backup_rules.xml
+   (which covers API 30 and below).
+
+   Excluded and why:
+   - sharedpref: holds the Supabase auth session token (device-bound
+     credential) — must never leave the device via backup or transfer.
+   - files/sessions: the local session index plus per-session frames and
+     reference images. Bulky (cloud backup caps at 25 MB) and already
+     recoverable through cloud sync for synced sessions.
+
+   After a restore the user signs in again and starts with an empty local
+   list — synced artifacts remain available in Supabase.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="sessions" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="sessions" />
     </device-transfer>
-    -->
 </data-extraction-rules>

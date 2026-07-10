@@ -272,24 +272,13 @@ class ResultViewerActivity : AppCompatActivity() {
         // Keep the Home row's headline in sync with what was on screen.
         intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)?.let { localId ->
             val data = rawData ?: return@let
-            val multiplier = DicResult.strainMultiplier(currentDataIndex)
-            var maxV = Float.NEGATIVE_INFINITY
-            var i = 0
-            while (i < data.size) {
-                if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) {
-                    val v = data[i + currentDataIndex] * multiplier
-                    if (v > maxV) maxV = v
-                }
-                i += DicResult.STRIDE
-            }
-            if (maxV.isFinite()) {
-                val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) "m\u03b5" else "px"
-                com.rafad.indicvisiondic.data.SessionStore.updateHeadline(
-                    this,
-                    localId,
-                    "$currentTypeString max ${ReportBuilder.formatMetric(maxV)} $unit",
-                )
-            }
+            val stats = DicResult.fieldStats(data, currentDataIndex) ?: return@let
+            val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) "m\u03b5" else "px"
+            com.rafad.indicvisiondic.data.SessionStore.updateHeadline(
+                this,
+                localId,
+                "$currentTypeString max ${ReportBuilder.formatMetric(stats[0])} $unit",
+            )
         }
     }
 
@@ -627,32 +616,17 @@ class ResultViewerActivity : AppCompatActivity() {
     /** Permanent max/min/mean tiles for the current field + frame. */
     private fun updateStatsStrip() {
         val data = rawData ?: return
-        val multiplier = DicResult.strainMultiplier(currentDataIndex)
-        var maxV = Float.NEGATIVE_INFINITY
-        var minV = Float.POSITIVE_INFINITY
-        var sum = 0.0
-        var n = 0
-        var i = 0
-        while (i < data.size) {
-            if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) {
-                val v = data[i + currentDataIndex] * multiplier
-                if (v > maxV) maxV = v
-                if (v < minV) minV = v
-                sum += v
-                n++
-            }
-            i += DicResult.STRIDE
-        }
-        val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) " m\u03b5" else " px"
-        if (n == 0) {
+        val stats = DicResult.fieldStats(data, currentDataIndex)
+        if (stats == null) {
             findViewById<TextView>(R.id.tvStatMax).text = getString(R.string.stat_empty)
             findViewById<TextView>(R.id.tvStatMin).text = getString(R.string.stat_empty)
             findViewById<TextView>(R.id.tvStatMean).text = getString(R.string.stat_empty)
             return
         }
-        findViewById<TextView>(R.id.tvStatMax).text = ReportBuilder.formatMetric(maxV) + unit
-        findViewById<TextView>(R.id.tvStatMin).text = ReportBuilder.formatMetric(minV) + unit
-        findViewById<TextView>(R.id.tvStatMean).text = ReportBuilder.formatMetric((sum / n).toFloat()) + unit
+        val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) " m\u03b5" else " px"
+        findViewById<TextView>(R.id.tvStatMax).text = ReportBuilder.formatMetric(stats[0]) + unit
+        findViewById<TextView>(R.id.tvStatMin).text = ReportBuilder.formatMetric(stats[1]) + unit
+        findViewById<TextView>(R.id.tvStatMean).text = ReportBuilder.formatMetric(stats[2]) + unit
     }
 
     private fun updateNavButtons() {

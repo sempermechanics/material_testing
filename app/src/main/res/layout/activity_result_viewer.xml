@@ -132,8 +132,8 @@
                 android:paddingHorizontal="16dp"
                 android:textAllCaps="false"
                 android:textColor="@color/viewer_on_dark"
-                android:textOff="Inspect"
-                android:textOn="Inspect"
+                android:textOff="@string/toggle_inspect"
+                android:textOn="@string/toggle_inspect"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@id/btnInputCoords"
@@ -147,18 +147,18 @@
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
                 android:minWidth="0dp"
+                android:outlineProvider="background"
                 android:paddingHorizontal="18dp"
                 android:text="@string/x_y"
                 android:textAllCaps="false"
-                android:textColor="@color/text_on_primary"
+                android:textColor="@color/viewer_on_dark"
                 android:textStyle="bold"
-                app:backgroundTint="@color/sky_primary"
+                app:backgroundTint="@color/ic_indic_launcher_background"
                 app:cornerRadius="22dp"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@id/toggleMaxMin"
                 app:layout_constraintStart_toEndOf="@id/toggleInspect"
-                app:layout_constraintTop_toTopOf="parent"
-                app:rippleColor="#33FFFFFF" />
+                app:layout_constraintTop_toTopOf="parent" />
 
             <ToggleButton
                 android:id="@+id/toggleMaxMin"
@@ -169,8 +169,8 @@
                 android:paddingHorizontal="16dp"
                 android:textAllCaps="false"
                 android:textColor="@color/viewer_on_dark"
-                android:textOff="Max/Min"
-                android:textOn="Max/Min"
+                android:textOff="@string/toggle_max_min"
+                android:textOn="@string/toggle_max_min"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -244,6 +244,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:alpha="0.7"
+            android:outlineProvider="bounds"
             android:scaleType="matrix" />
 
         <com.rafad.indicvisiondic.ui.viewer.InspectOverlayView
