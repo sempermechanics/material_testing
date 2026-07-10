@@ -3,7 +3,7 @@
     <!-- ============================================================= -->
     <!--  Application theme — Deep Sky Blue & White                    -->
     <!-- ============================================================= -->
-    <style name="Theme.IndicVisionDIC" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.IndicVisionDIC" parent="Theme.MaterialComponents.Light.NoActionBar">
         <!-- Brand -->
         <item name="colorPrimary">@color/sky_primary</item>
         <item name="colorPrimaryVariant">@color/sky_primary_dark</item>
@@ -19,8 +19,8 @@
         <item name="colorError">@color/semantic_danger</item>
 
         <!-- System bars -->
-        <item name="android:statusBarColor">@color/sky_primary_dark</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/surface_muted</item>
+        <item name="android:windowLightStatusBar">true</item>
 
         <!-- Shapes: soft, consistent rounding across all Material components -->
         <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.IndicVision.Small</item>
@@ -35,9 +35,9 @@
         <item name="android:windowAnimationStyle">@style/Animation.IndicVision.Activity</item>
     </style>
 
-    <!-- Splash keeps the brand color edge-to-edge for a calm first frame -->
+    <!-- Splash window matches the light layout so the first frame doesn't flash -->
     <style name="Theme.IndicVisionDIC.Splash" parent="Theme.IndicVisionDIC">
-        <item name="android:statusBarColor">@color/sky_primary</item>
-        <item name="android:windowBackground">@color/sky_primary</item>
+        <item name="android:statusBarColor">@color/surface_muted</item>
+        <item name="android:windowBackground">@color/surface_muted</item>
     </style>
 </resources>

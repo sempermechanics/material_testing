@@ -16,15 +16,12 @@
     <ID>CyclomaticComplexMethod:RoiDrawActivity.kt$RoiDrawActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
     <ID>CyclomaticComplexMethod:StaticAnalysisActivity.kt$StaticAnalysisActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
     <ID>CyclomaticComplexMethod:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun extractVideoFrames(uri: Uri, fpsExtract: Double, startMs: Long, endMs: Long)</ID>
-    <ID>CyclomaticComplexMethod:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun handleDeformedBatch(uris: List&lt;Uri&gt;)</ID>
-    <ID>CyclomaticComplexMethod:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun showShapeRoiDialog()</ID>
     <ID>CyclomaticComplexMethod:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun startBatchAnalysis()</ID>
     <ID>CyclomaticComplexMethod:StudioOverlayView.kt$StudioOverlayView$override fun onDraw(canvas: Canvas)</ID>
     <ID>CyclomaticComplexMethod:StudioOverlayView.kt$StudioOverlayView$override fun onTouchEvent(event: MotionEvent): Boolean</ID>
     <ID>CyclomaticComplexMethod:StudioOverlayView.kt$StudioOverlayView$private fun getTouchState(x: Float, y: Float): TouchState</ID>
     <ID>CyclomaticComplexMethod:VisualizationEngine.kt$VisualizationEngine$fun generateHeatmap( data: FloatArray, imgW: Int, imgH: Int, valIndex: Int, step: Int, customMin: Float? = null, // Optional Custom Bounds customMax: Float? = null, ): Triple&lt;Bitmap, Float, Float&gt;</ID>
     <ID>EmptyCatchBlock:AuthRepository.kt$AuthRepository${}</ID>
-    <ID>EmptyFunctionBlock:ResultViewerActivity.kt$ResultViewerActivity.&lt;no name provided&gt;${}</ID>
     <ID>EmptyFunctionBlock:StaticAnalysisActivity.kt$StaticAnalysisActivity.&lt;no name provided&gt;${}</ID>
     <ID>ImplicitDefaultLocale:AnalysisViewModel.kt$AnalysisViewModel$String.format("frame_%04d.dat", frameIndex)</ID>
     <ID>ImplicitDefaultLocale:PdfLayoutEngine.kt$PdfLayoutEngine$String.format("%.2e", value)</ID>
@@ -33,43 +30,37 @@
     <ID>ImplicitDefaultLocale:StaticAnalysisActivity.kt$StaticAnalysisActivity$String.format("%04d_frame.png", i)</ID>
     <ID>InstanceOfCheckForException:ResultViewerActivity.kt$ResultViewerActivity$e !is kotlinx.coroutines.CancellationException</ID>
     <ID>LargeClass:StaticAnalysisActivity.kt$StaticAnalysisActivity : AppCompatActivity</ID>
-    <ID>LongMethod:AnalysisViewModel.kt$AnalysisViewModel$private suspend fun enqueueUploadWorkers( appContext: Context, params: BatchAnalysisParams, batchDir: File, refBytes: ByteArray, firstFrameValidPoints: Int, firstFrameAvgIters: Float, executionTimeMs: Int, )</ID>
     <ID>LongMethod:AnalysisViewModel.kt$AnalysisViewModel$suspend fun runBatchAnalysis( appContext: Context, params: BatchAnalysisParams, onProgress: (BatchProgressUpdate) -&gt; Unit, ): BatchAnalysisOutcome</ID>
+    <ID>LongMethod:AuthActivity.kt$AuthActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
     <ID>LongMethod:AuthRepository.kt$AuthRepository$suspend fun loginUser(emailInput: String, passwordInput: String, currentDeviceId: String, currentPublicKey: String): Result&lt;String&gt;</ID>
     <ID>LongMethod:DicUploadWorker.kt$DicUploadWorker$override suspend fun doWork(): Result</ID>
-    <ID>LongMethod:PdfReportGenerator.kt$PdfReportGenerator$fun generate(data: ReportData, outputStream: OutputStream): Flow&lt;Progress&gt;</ID>
     <ID>LongMethod:ReportBuilder.kt$ReportBuilder$fun bakeAnnotationsToCanvas( canvas: Canvas, width: Int, height: Int, minValRaw: Float, maxValRaw: Float, typeString: String, unit: String, maxIdx: Int, minIdx: Int, dataArray: FloatArray, drawMinMarker: Boolean = true, )</ID>
     <ID>LongMethod:ReportBuilder.kt$ReportBuilder$fun buildReport(params: ReportBuildParams): ReportData</ID>
     <ID>LongMethod:ResultViewerActivity.kt$ResultViewerActivity$@SuppressLint("ClickableViewAccessibility") override fun onCreate(savedInstanceState: Bundle?)</ID>
-    <ID>LongMethod:ResultViewerActivity.kt$ResultViewerActivity$private fun generatePdfReport()</ID>
     <ID>LongMethod:RoiDrawActivity.kt$RoiDrawActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
     <ID>LongMethod:StaticAnalysisActivity.kt$StaticAnalysisActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
     <ID>LongMethod:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun extractVideoFrames(uri: Uri, fpsExtract: Double, startMs: Long, endMs: Long)</ID>
-    <ID>LongMethod:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun handleDeformedBatch(uris: List&lt;Uri&gt;)</ID>
-    <ID>LongMethod:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun showShapeRoiDialog()</ID>
     <ID>LongMethod:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun startBatchAnalysis()</ID>
     <ID>LongMethod:StudioOverlayView.kt$StudioOverlayView$fun generateMaskBytes(): ByteArray</ID>
     <ID>LongMethod:StudioOverlayView.kt$StudioOverlayView$override fun onDraw(canvas: Canvas)</ID>
     <ID>LongMethod:StudioOverlayView.kt$StudioOverlayView$override fun onTouchEvent(event: MotionEvent): Boolean</ID>
     <ID>LongMethod:VisualizationEngine.kt$VisualizationEngine$fun generateHeatmap( data: FloatArray, imgW: Int, imgH: Int, valIndex: Int, step: Int, customMin: Float? = null, // Optional Custom Bounds customMax: Float? = null, ): Triple&lt;Bitmap, Float, Float&gt;</ID>
-    <ID>LongParameterList:AnalysisViewModel.kt$AnalysisViewModel$( appContext: Context, params: BatchAnalysisParams, batchDir: File, refBytes: ByteArray, firstFrameValidPoints: Int, firstFrameAvgIters: Float, executionTimeMs: Int, )</ID>
     <ID>LongParameterList:DicUploadWorker.kt$DicUploadWorker$( data: FloatArray, refFile: File, defFile: File, cloudFolder: String, storageBucket: io.github.jan.supabase.storage.BucketApi, frameName: String, trueSessionId: String, )</ID>
     <ID>LongParameterList:IndicVisionNativeLib.kt$IndicVisionNativeLib$( refBytes: ByteArray, defBytes: ByteArray, maskData: ByteArray, roiX: Int, roiY: Int, roiW: Int, roiH: Int, step: Int, subset: Int, strainWin: Int, useZNCC: Boolean, useICGN: Boolean, useSpline: Boolean, applyBlur: Boolean, useNlvc: Boolean, // UI toggle selecting the Keys 6x6 interpolation kernel use6x6Interpolator: Boolean, outputBuffer: ByteBuffer, callback: ProgressCallback, // 17-slot engine telemetry (see EngineStats.fromArray) outMetrics: FloatArray, )</ID>
     <ID>LongParameterList:IndicVisionNativeLib.kt$IndicVisionNativeLib$( refData: ByteArray, defData: ByteArray, roiX: Int, roiY: Int, subsetSize: Int, originalWidth: Int, originalHeight: Int, )</ID>
     <ID>LongParameterList:ReportBuilder.kt$ReportBuilder$( canvas: Canvas, width: Int, height: Int, minValRaw: Float, maxValRaw: Float, typeString: String, unit: String, maxIdx: Int, minIdx: Int, dataArray: FloatArray, drawMinMarker: Boolean = true, )</ID>
-    <ID>LongParameterList:ResultExporter.kt$ResultExporter$( base: Bitmap, overlay: Bitmap, data: FloatArray, imgW: Int, imgH: Int, dataIndex: Int, typeString: String, heatmapMin: Float, heatmapMax: Float, maxIdx: Int, minIdx: Int, defNames: List&lt;String&gt;, frameIndex: Int, )</ID>
-    <ID>LongParameterList:ResultExporter.kt$ResultExporter$( snapshot: BatchSnapshot, baseImage: Bitmap, imgW: Int, imgH: Int, dataIndex: Int, step: Int, typeString: String, )</ID>
     <ID>LongParameterList:VisualizationEngine.kt$VisualizationEngine$( data: FloatArray, imgW: Int, imgH: Int, valIndex: Int, step: Int, customMin: Float? = null, // Optional Custom Bounds customMax: Float? = null, )</ID>
     <ID>LoopWithTooManyJumpStatements:AnalysisViewModel.kt$AnalysisViewModel$for</ID>
     <ID>LoopWithTooManyJumpStatements:StaticAnalysisActivity.kt$StaticAnalysisActivity$for</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$100</ID>
+    <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$12</ID>
+    <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$15</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$16</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$17</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$5</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$50_000_000</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$8</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel.&lt;no name provided&gt;$100</ID>
-    <ID>MagicNumber:AuthActivity.kt$AuthActivity$6</ID>
     <ID>MagicNumber:DicResult.kt$DicResult$4</ID>
     <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$1000</ID>
     <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$15</ID>
@@ -79,6 +70,7 @@
     <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$41</ID>
     <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$5</ID>
     <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$6</ID>
+    <ID>MagicNumber:HomeActivity.kt$HomeActivity.SessionAdapter$8</ID>
     <ID>MagicNumber:InspectOverlayView.kt$InspectOverlayView$15f</ID>
     <ID>MagicNumber:InspectOverlayView.kt$InspectOverlayView$35f</ID>
     <ID>MagicNumber:InspectOverlayView.kt$InspectOverlayView$3f</ID>
@@ -108,7 +100,9 @@
     <ID>MagicNumber:PdfLayoutEngine.kt$PdfLayoutEngine$6f</ID>
     <ID>MagicNumber:PdfLayoutEngine.kt$PdfLayoutEngine$80f</ID>
     <ID>MagicNumber:PdfLayoutEngine.kt$PdfLayoutEngine$90f</ID>
+    <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$0.23f</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$0.25f</ID>
+    <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$0.31f</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$0.3f</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$0.4f</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$0.5f</ID>
@@ -116,10 +110,14 @@
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$0.7f</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$10</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$1604f</ID>
+    <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$2100f</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$30</ID>
+    <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$30f</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$40f</ID>
+    <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$5</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$85</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$90</ID>
+    <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$96</ID>
     <ID>MagicNumber:PdfReportGenerator.kt$PdfReportGenerator$98</ID>
     <ID>MagicNumber:PendingApprovalActivity.kt$PendingApprovalActivity$4</ID>
     <ID>MagicNumber:PendingApprovalActivity.kt$PendingApprovalActivity$8</ID>
@@ -147,15 +145,11 @@
     <ID>MagicNumber:ReportBuilder.kt$ReportBuilder$5f</ID>
     <ID>MagicNumber:ReportBuilder.kt$ReportBuilder$6f</ID>
     <ID>MagicNumber:ReportModels.kt$EngineStats.Companion$16</ID>
-    <ID>MagicNumber:ResultExporter.kt$ResultExporter$100</ID>
-    <ID>MagicNumber:ResultExporter.kt$ResultExporter$180</ID>
     <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$0.5f</ID>
     <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$1.5f</ID>
     <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$15</ID>
     <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$16</ID>
     <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$16f</ID>
-    <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$3</ID>
-    <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$4</ID>
     <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$41</ID>
     <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$5</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$0.1</ID>
@@ -167,14 +161,17 @@
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$1000.0</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$1000f</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$100f</ID>
+    <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$15</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$150f</ID>
+    <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$180f</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$2</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$270</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$3</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$30</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$30.0</ID>
-    <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$300</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$4</ID>
+    <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$41</ID>
+    <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$5</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$60</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$90</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity.&lt;no name provided&gt;$1000</ID>
@@ -200,11 +197,15 @@
     <ID>MagicNumber:VisualizationEngine.kt$VisualizationEngine$3.5f</ID>
     <ID>MagicNumber:VisualizationEngine.kt$VisualizationEngine$4.5f</ID>
     <ID>MagicNumber:VisualizationEngine.kt$VisualizationEngine$4f</ID>
+    <ID>MaxLineLength:AnalysisViewModel.kt$AnalysisViewModel$SessionStore.upsert(appContext, buildSessionRecord(appContext, localSessionId, batchDir, refPngPath, params, cloudEnabled))</ID>
     <ID>MaxLineLength:AuthActivity.kt$AuthActivity$onFailure = { exception -&gt; showSnackbar(exception.message ?: "Failed to send reset email.", isError = true) }</ID>
     <ID>MaxLineLength:AuthRepository.kt$AuthRepository$Result.failure(Exception("No internet connection. Please connect to Wi-Fi or cellular data to log in."))</ID>
     <ID>MaxLineLength:AuthRepository.kt$AuthRepository$return@withContext Result.failure(Exception("UNAUTHORIZED HARDWARE: Account locked to a different device."))</ID>
     <ID>MaxLineLength:AuthRepository.kt$AuthRepository$suspend</ID>
     <ID>MaxLineLength:DicResult.kt$DicResult$fun isAcceptedPoint(corr: Float, includeCorrelationField: Boolean = false): Boolean</ID>
+    <ID>MaxLineLength:DicSettings.kt$DicSettings$fun setKeepEveryRerun(context: Context, value: Boolean)</ID>
+    <ID>MaxLineLength:DicSettings.kt$DicSettings$fun setSaveToCloud(context: Context, value: Boolean)</ID>
+    <ID>MaxLineLength:HomeActivity.kt$HomeActivity$android.widget.Toast.makeText(this, R.string.picker_select_reference, android.widget.Toast.LENGTH_LONG).show()</ID>
     <ID>MaxLineLength:IndicVisionNativeLib.kt$IndicVisionNativeLib$external</ID>
     <ID>MaxLineLength:PdfLayoutEngine.kt$PdfLayoutEngine$canvas?.drawBitmap(defBmp, null, RectF(margin + 40f + imgWidth, startY, margin + 40f + imgWidth * 2f, startY + defHeight), upscalerPaint)</ID>
     <ID>MaxLineLength:PdfLayoutEngine.kt$PdfLayoutEngine$canvas?.drawBitmap(refBmp, null, RectF(margin + 20f, startY, margin + 20f + imgWidth, startY + refHeight), upscalerPaint)</ID>
@@ -216,16 +217,10 @@
     <ID>MaxLineLength:PendingApprovalActivity.kt$PendingApprovalActivity$Toast.makeText(this@PendingApprovalActivity, "Account is still pending approval.", Toast.LENGTH_SHORT).show()</ID>
     <ID>MaxLineLength:PendingApprovalActivity.kt$PendingApprovalActivity$Toast.makeText(this@PendingApprovalActivity, exception.message ?: "Network error. Try again.", Toast.LENGTH_LONG).show()</ID>
     <ID>MaxLineLength:ReportBuilder.kt$ReportBuilder$fun appBuildLabel(): String</ID>
-    <ID>MaxLineLength:ResultExporter.kt$ResultExporter$private fun frameLabel(defNames: List&lt;String&gt;, frameIndex: Int): String</ID>
-    <ID>MaxLineLength:ResultExporter.kt$ResultExporter$private suspend fun toastOnMain(resId: Int, long: Boolean = false)</ID>
-    <ID>MaxLineLength:ResultExporter.kt$ResultExporter$val imgName = snapshot.originalDefNames.getOrNull(trueFrameIndex) ?: "Frame_${trueFrameIndex + 1}"</ID>
-    <ID>MaxLineLength:ResultExporter.kt$ResultExporter$val trueFrameIndex = file.nameWithoutExtension.substringAfterLast("_").toIntOrNull() ?: index</ID>
-    <ID>MaxLineLength:ResultExporter.kt$ResultExporter$writer.write("Image_Name,X,Y,U_Displacement,V_Displacement,Exx_Strain,Eyy_Strain,Exy_Shear,Correlation\n")</ID>
+    <ID>MaxLineLength:ResultViewerActivity.kt$ResultViewerActivity$com.google.android.material.snackbar.Snackbar.make(findViewById(android.R.id.content), R.string.no_batch_data, com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show()</ID>
     <ID>MaxLineLength:ResultViewerActivity.kt$ResultViewerActivity$tvInspectorData.text = "Loc: ($actualX, $actualY)\n$currentTypeString: ${ReportBuilder.formatMetric(value)} $unit"</ID>
     <ID>MaxLineLength:ResultViewerActivity.kt$ResultViewerActivity$tvMaxMinData.text = "🔴 MAX: ($maxX, $maxY) = ${ReportBuilder.formatMetric(maxV)} $unit\n🔵 MIN: ($minX, $minY) = ${ReportBuilder.formatMetric(minV)} $unit"</ID>
-    <ID>MaxLineLength:ResultViewerActivity.kt$ResultViewerActivity$val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$-1 -&gt; "Feature Extraction Failed (AKAZE). The speckle pattern might be too fine, out of focus, or destroyed by scaling."</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$Toast.makeText(this@StaticAnalysisActivity, R.string.jpeg_warning_batch, Toast.LENGTH_LONG).show()</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$Toast.makeText(this@StaticAnalysisActivity, R.string.video_extract_insufficient, Toast.LENGTH_LONG).show()</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$Toast.makeText(this@StaticAnalysisActivity, getString(R.string.error_loading_images, e.message), Toast.LENGTH_LONG).show()</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$Toast.makeText(this@StaticAnalysisActivity, getString(R.string.video_read_error, e.message), Toast.LENGTH_LONG).show()</ID>
@@ -237,7 +232,6 @@
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val cy = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etCircCy).text.toString().toFloatOrNull() ?: (imgH / 2f)</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val cy = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etEllCy).text.toString().toFloatOrNull() ?: (imgH / 2f)</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val frameCountMeta = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull()</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val message = if (sortedPaths.size == 1) "1 image selected" else "${sortedPaths.size} images selected"</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val r = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etCircR).text.toString().toFloatOrNull() ?: 100f</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val rx = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etEllRx).text.toString().toFloatOrNull() ?: 150f</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val ry = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etEllRy).text.toString().toFloatOrNull() ?: 100f</ID>
@@ -249,11 +243,12 @@
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val y3 = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etTriY3).text.toString().toFloatOrNull() ?: 0f</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity.&lt;no name provided&gt;$Toast.makeText(this@StaticAnalysisActivity, R.string.analysis_running_back_blocked, Toast.LENGTH_SHORT).show()</ID>
     <ID>NestedBlockDepth:ReportBuilder.kt$ReportBuilder$fun computeFieldExtrema( data: FloatArray, dataIndex: Int, absoluteStrainValues: Boolean = true, ): FieldExtrema</ID>
+    <ID>NestedBlockDepth:ResultViewerActivity.kt$ResultViewerActivity$override fun onStop()</ID>
+    <ID>NestedBlockDepth:ShareCenter.kt$ShareCenter$private fun batchCsv(): File</ID>
     <ID>NestedBlockDepth:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun handleReferenceImage(uri: Uri)</ID>
     <ID>NestedBlockDepth:StudioOverlayView.kt$StudioOverlayView$override fun onTouchEvent(event: MotionEvent): Boolean</ID>
     <ID>NestedBlockDepth:VisualizationEngine.kt$VisualizationEngine$fun generateHeatmap( data: FloatArray, imgW: Int, imgH: Int, valIndex: Int, step: Int, customMin: Float? = null, // Optional Custom Bounds customMax: Float? = null, ): Triple&lt;Bitmap, Float, Float&gt;</ID>
-    <ID>PrintStackTrace:StaticAnalysisActivity.kt$StaticAnalysisActivity$e</ID>
-    <ID>ReturnCount:ResultExporter.kt$ResultExporter$private fun insertMediaStore( collection: Uri, fileName: String, mimeType: String, relativePath: String, ): Pair&lt;Uri, OutputStream&gt;?</ID>
+    <ID>ReturnCount:ResultViewerActivity.kt$ResultViewerActivity$internal fun buildShareSnapshot(): ShareCenter.Snapshot?</ID>
     <ID>ReturnCount:ResultViewerActivity.kt$ResultViewerActivity$private fun buildReportData(): ReportData?</ID>
     <ID>ReturnCount:StudioOverlayView.kt$StudioOverlayView$fun updateImageBounds()</ID>
     <ID>ReturnCount:StudioOverlayView.kt$StudioOverlayView$override fun onTouchEvent(event: MotionEvent): Boolean</ID>
@@ -272,14 +267,17 @@
     <ID>TooGenericExceptionCaught:DicUploadWorker.kt$DicUploadWorker$e: Exception</ID>
     <ID>TooGenericExceptionCaught:PdfReportGenerator.kt$PdfReportGenerator$e: Exception</ID>
     <ID>TooGenericExceptionCaught:PendingApprovalActivity.kt$PendingApprovalActivity$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:ResultExporter.kt$ResultExporter$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ResultViewerActivity.kt$ResultViewerActivity$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SessionStore.kt$SessionStore$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ShareCenter.kt$ShareCenter$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SplashActivity.kt$SplashActivity$e: Exception</ID>
     <ID>TooGenericExceptionCaught:StaticAnalysisActivity.kt$StaticAnalysisActivity$e: Exception</ID>
     <ID>TooGenericExceptionThrown:AuthRepository.kt$AuthRepository$throw Exception("Google sign-in failed: session not established.")</ID>
     <ID>TooGenericExceptionThrown:AuthRepository.kt$AuthRepository$throw Exception("Login failed: User session not established.")</ID>
     <ID>TooManyFunctions:PdfLayoutEngine.kt$PdfLayoutEngine</ID>
     <ID>TooManyFunctions:ResultViewerActivity.kt$ResultViewerActivity : AppCompatActivity</ID>
+    <ID>TooManyFunctions:SessionStore.kt$SessionStore</ID>
+    <ID>TooManyFunctions:ShareCenter.kt$ShareCenter</ID>
     <ID>TooManyFunctions:StaticAnalysisActivity.kt$StaticAnalysisActivity : AppCompatActivity</ID>
     <ID>TooManyFunctions:StudioOverlayView.kt$StudioOverlayView : View</ID>
     <ID>UseCheckOrError:AnalysisViewModel.kt$AnalysisViewModel$throw IllegalStateException("Reference missing")</ID>

@@ -129,6 +129,11 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 Timber.d("Ledger Updated.")
             }
 
+            // Flip the Home badge: this session's data reached the cloud.
+            inputData.getString(DicKeys.SESSION_LOCAL_ID)?.let { localId ->
+                SessionStore.markSynced(applicationContext, localId)
+            }
+
             Timber.d("Upload worker finished successfully")
             Timber.d("========================================")
             Result.success()

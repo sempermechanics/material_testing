@@ -1,23 +1,18 @@
 package com.rafad.indicvisiondic.ui.viewer
 import android.annotation.SuppressLint
-import android.content.ContentValues
 import android.graphics.*
 import android.os.Bundle
-import android.os.Environment
-import android.provider.MediaStore
 import android.view.MotionEvent
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.android.material.textfield.TextInputEditText
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.DicResult
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.report.EngineStats
-import com.rafad.indicvisiondic.report.PdfReportGenerator
 import com.rafad.indicvisiondic.report.ReportBuilder
 import com.rafad.indicvisiondic.report.ReportData
 import com.rafad.indicvisiondic.report.RoiData
@@ -34,13 +29,12 @@ import java.io.File
  * Results browser: renders displacement/strain heatmaps over the reference
  * image, with frame scrubbing (batch runs), point inspection, min/max
  * markers, custom color scales, and all exports (PDF/CSV/PNG/ZIP via
- * [ResultExporter]).
+ * [ShareCenter]).
  */
 class ResultViewerActivity : AppCompatActivity() {
 
     private lateinit var imgMain: TouchImageView
     private lateinit var imgHeatmap: ImageView
-    private lateinit var spinnerType: Spinner
 
     // UI - Batch Controls
     private lateinit var btnPrevFrame: ImageButton
@@ -52,8 +46,6 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var tvScaleMax: TextView
     private lateinit var tvScaleMin: TextView
 
-    private lateinit var spinnerExportType: Spinner
-    private lateinit var btnExportExecute: ImageButton
     private lateinit var btnInputCoords: Button
     private lateinit var toggleMaxMin: ToggleButton
 
@@ -101,9 +93,6 @@ class ResultViewerActivity : AppCompatActivity() {
     private var currentHeatmapMax = 0f
 
     private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
-    private var pdfProgressDialog: androidx.appcompat.app.AlertDialog? = null
-    private val exportActions = mutableListOf<() -> Unit>()
-    private val exporter by lazy { ResultExporter(applicationContext, lifecycleScope) }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,7 +109,6 @@ class ResultViewerActivity : AppCompatActivity() {
 
         imgMain = findViewById(R.id.imgBaseResult)
         imgHeatmap = findViewById(R.id.imgHeatmapOverlay)
-        spinnerType = findViewById(R.id.spinnerResultType)
 
         btnPrevFrame = findViewById(R.id.btnPrevFrame)
         btnNextFrame = findViewById(R.id.btnNextFrame)
@@ -134,9 +122,6 @@ class ResultViewerActivity : AppCompatActivity() {
         // and lift the frame scrubber above the nav-bar gesture area.
         Insets.padTop(findViewById(R.id.topBarHost))
         Insets.padBottom(findViewById(R.id.layoutScrubber))
-
-        spinnerExportType = findViewById(R.id.spinnerExportType)
-        btnExportExecute = findViewById(R.id.btnExportExecute)
 
         toggleInspect = findViewById(R.id.toggleInspect)
         btnInputCoords = findViewById(R.id.btnInputCoords)
@@ -182,7 +167,7 @@ class ResultViewerActivity : AppCompatActivity() {
             loadFrameData(currentFrameIndex)
             updateNavButtons()
         } else {
-            Toast.makeText(this, R.string.no_batch_data, Toast.LENGTH_LONG).show()
+            com.google.android.material.snackbar.Snackbar.make(findViewById(android.R.id.content), R.string.no_batch_data, com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show()
         }
 
         btnPrevFrame.setOnClickListener {
@@ -208,22 +193,35 @@ class ResultViewerActivity : AppCompatActivity() {
             updateStickyScaleBar()
         }
 
-        val options = arrayOf("U", "V", "Exx", "Eyy", "Exy")
-        // White text for both the selected value and the (dark) dropdown popup
-        spinnerType.adapter = ArrayAdapter(this, R.layout.spinner_item_white, options).apply {
-            setDropDownViewResource(R.layout.spinner_dropdown_white)
-        }
-        spinnerType.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p0: AdapterView<*>?, p1: View?, position: Int, p3: Long) {
-                currentTypeString = options[position]
-                currentDataIndex = position + 2
+        // Five equal-width field buttons spanning the screen (wireframe 08)
+        val fieldByButton = mapOf(
+            R.id.rbFieldU to ("U" to DicResult.IDX_U),
+            R.id.rbFieldV to ("V" to DicResult.IDX_V),
+            R.id.rbFieldExx to ("Exx" to DicResult.IDX_EXX),
+            R.id.rbFieldEyy to ("Eyy" to DicResult.IDX_EYY),
+            R.id.rbFieldExy to ("Exy" to DicResult.IDX_EXY),
+        )
+        findViewById<com.google.android.material.button.MaterialButtonToggleGroup>(R.id.fieldToggle)
+            .addOnButtonCheckedListener { _, checkedId, isChecked ->
+                if (!isChecked) return@addOnButtonCheckedListener
+                val (label, index) = fieldByButton[checkedId] ?: return@addOnButtonCheckedListener
+                currentTypeString = label
+                currentDataIndex = index
                 updateVisualization(currentDataIndex)
-
+                updateStatsStrip()
                 if (isMaxMinActive) calculateMaxMin()
                 refreshCrosshairs()
             }
-            override fun onNothingSelected(p0: AdapterView<*>?) {}
+
+        findViewById<View>(R.id.btnViewerBack).setOnClickListener { finish() }
+        findViewById<View>(R.id.btnViewerHome).setOnClickListener {
+            val home = android.content.Intent(this, com.rafad.indicvisiondic.ui.home.HomeActivity::class.java)
+            home.flags = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+            startActivity(home)
+            finish()
         }
+        findViewById<View>(R.id.btnViewerShare).setOnClickListener { showShareSheet() }
 
         layoutColorScale.setOnClickListener { showCustomScaleDialog() }
 
@@ -259,31 +257,6 @@ class ResultViewerActivity : AppCompatActivity() {
             true
         }
 
-        val exportOptions = mutableListOf<String>()
-        exportActions.clear()
-        val exportLabels = resources.getStringArray(R.array.export_options)
-        exportOptions.add(exportLabels[0])
-        exportActions.add { exportMergedImage() }
-        exportOptions.add(exportLabels[1])
-        exportActions.add { generatePdfReport() }
-        exportOptions.add(exportLabels[2])
-        exportActions.add { exportToCSV() }
-
-        if (batchFiles.size > 1) {
-            exportOptions.add(exportLabels[3])
-            exportActions.add { exportAllImagesZip() }
-            exportOptions.add(exportLabels[4])
-            exportActions.add { exportAllDataCsv() }
-        }
-
-        val adapter = ArrayAdapter(this, R.layout.spinner_item_white, exportOptions)
-        adapter.setDropDownViewResource(R.layout.spinner_dropdown_white)
-        spinnerExportType.adapter = adapter
-
-        btnExportExecute.setOnClickListener {
-            exportActions.getOrNull(spinnerExportType.selectedItemPosition)?.invoke()
-        }
-
         imgMain.post {
             refreshCrosshairs()
             updateStickyScaleBar()
@@ -294,11 +267,36 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Keep the Home row's headline in sync with what was on screen.
+        intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)?.let { localId ->
+            val data = rawData ?: return@let
+            val multiplier = DicResult.strainMultiplier(currentDataIndex)
+            var maxV = Float.NEGATIVE_INFINITY
+            var i = 0
+            while (i < data.size) {
+                if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) {
+                    val v = data[i + currentDataIndex] * multiplier
+                    if (v > maxV) maxV = v
+                }
+                i += DicResult.STRIDE
+            }
+            if (maxV.isFinite()) {
+                val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) "m\u03b5" else "px"
+                com.rafad.indicvisiondic.data.SessionStore.updateHeadline(
+                    this,
+                    localId,
+                    "$currentTypeString max ${ReportBuilder.formatMetric(maxV)} $unit",
+                )
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         loadFrameJob?.cancel()
         visualizationJob?.cancel()
-        pdfProgressDialog?.dismiss()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -334,6 +332,7 @@ class ResultViewerActivity : AppCompatActivity() {
                     val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
                     tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
                     updateVisualization(currentDataIndex)
+                    updateStatsStrip()
                     if (isMaxMinActive) calculateMaxMin()
                     if (isInspectModeActive && lastClosestIdx != -1) refreshCrosshairs()
                 }
@@ -566,88 +565,6 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    private fun exportToCSV() {
-        val data = rawData
-        if (data == null) {
-            Toast.makeText(this, R.string.no_data_to_save, Toast.LENGTH_SHORT).show()
-            return
-        }
-        exporter.exportCsv(data, originalDefNames, currentFrameIndex)
-    }
-
-    private fun generatePdfReport() {
-        if (isGeneratingHeatmap || cachedBaseImage == null) {
-            Toast.makeText(this, R.string.wait_for_heatmap, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val progressView = layoutInflater.inflate(R.layout.dialog_pdf_progress, null)
-        val tvMessage = progressView.findViewById<TextView>(R.id.tvPdfProgressMessage)
-        val progressIndicator = progressView.findViewById<LinearProgressIndicator>(R.id.pdfProgressIndicator)
-
-        pdfProgressDialog = MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.pdf_generating_title)
-            .setView(progressView)
-            .setCancelable(false)
-            .create()
-        pdfProgressDialog?.show()
-
-        val imgName = originalDefNames.getOrNull(currentFrameIndex)?.substringBeforeLast(".") ?: "Frame_${currentFrameIndex + 1}"
-        // Timestamp keeps exports from different sessions of the same frame
-        // from colliding in Documents/IndicVision ("report (1).pdf", …).
-        val timestamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
-        val fileName = "inDIC_MasterReport_${imgName}_$timestamp.pdf"
-
-        lifecycleScope.launch {
-            val reportData = withContext(Dispatchers.Default) {
-                buildReportData()
-            }
-
-            if (reportData == null) {
-                pdfProgressDialog?.dismiss()
-                Toast.makeText(this@ResultViewerActivity, R.string.pdf_parse_failed, Toast.LENGTH_SHORT).show()
-                return@launch
-            }
-
-            val (uri, outputStream) = withContext(Dispatchers.IO) {
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/IndicVision")
-                }
-                val resolver = applicationContext.contentResolver
-                val destUri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
-                val stream = destUri?.let { resolver.openOutputStream(it) }
-                Pair(destUri, stream)
-            }
-
-            if (uri == null || outputStream == null) return@launch
-
-            PdfReportGenerator.generate(reportData, outputStream).collect { progress ->
-                when (progress) {
-                    is PdfReportGenerator.Progress.Status -> {
-                        runOnUiThread {
-                            tvMessage.text = progress.message
-                            progressIndicator.progress = progress.percent
-                        }
-                    }
-                    is PdfReportGenerator.Progress.Complete -> {
-                        withContext(Dispatchers.IO) { outputStream.close() }
-                        pdfProgressDialog?.dismiss()
-                        Toast.makeText(this@ResultViewerActivity, R.string.pdf_saved, Toast.LENGTH_LONG).show()
-
-                        reportData.fieldResults.forEach { it.bakedHeatmap.recycle() }
-                    }
-                    is PdfReportGenerator.Progress.Error -> {
-                        withContext(Dispatchers.IO) { outputStream.close() }
-                        pdfProgressDialog?.dismiss()
-                        Toast.makeText(this@ResultViewerActivity, R.string.pdf_error, Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-        }
-    }
-
     private fun buildReportData(): ReportData? {
         val baseImg = cachedBaseImage ?: return null
         val data = rawData ?: return null
@@ -683,6 +600,61 @@ class ResultViewerActivity : AppCompatActivity() {
         )
     }
 
+    /** Everything ShareCenter needs, captured from the viewer's state. */
+    internal fun buildShareSnapshot(): ShareCenter.Snapshot? {
+        val data = rawData ?: return null
+        val base = cachedBaseImage ?: return null
+        return ShareCenter.Snapshot(
+            data = data,
+            batchFiles = batchFiles,
+            defNames = originalDefNames,
+            frameIndex = currentFrameIndex,
+            imgW = imgW,
+            imgH = imgH,
+            step = step,
+            dataIndex = currentDataIndex,
+            typeString = currentTypeString,
+            baseImage = base,
+            buildReport = { buildReportData() },
+        )
+    }
+
+    /** Share sheet (wireframe 08) - targets wired via ShareCenter. */
+    private fun showShareSheet() {
+        ShareCenter(this).show()
+    }
+
+    /** Permanent max/min/mean tiles for the current field + frame. */
+    private fun updateStatsStrip() {
+        val data = rawData ?: return
+        val multiplier = DicResult.strainMultiplier(currentDataIndex)
+        var maxV = Float.NEGATIVE_INFINITY
+        var minV = Float.POSITIVE_INFINITY
+        var sum = 0.0
+        var n = 0
+        var i = 0
+        while (i < data.size) {
+            if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) {
+                val v = data[i + currentDataIndex] * multiplier
+                if (v > maxV) maxV = v
+                if (v < minV) minV = v
+                sum += v
+                n++
+            }
+            i += DicResult.STRIDE
+        }
+        val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) " m\u03b5" else " px"
+        if (n == 0) {
+            findViewById<TextView>(R.id.tvStatMax).text = getString(R.string.stat_empty)
+            findViewById<TextView>(R.id.tvStatMin).text = getString(R.string.stat_empty)
+            findViewById<TextView>(R.id.tvStatMean).text = getString(R.string.stat_empty)
+            return
+        }
+        findViewById<TextView>(R.id.tvStatMax).text = ReportBuilder.formatMetric(maxV) + unit
+        findViewById<TextView>(R.id.tvStatMin).text = ReportBuilder.formatMetric(minV) + unit
+        findViewById<TextView>(R.id.tvStatMean).text = ReportBuilder.formatMetric((sum / n).toFloat()) + unit
+    }
+
     private fun updateNavButtons() {
         btnPrevFrame.isEnabled = currentFrameIndex > 0
         btnNextFrame.isEnabled = currentFrameIndex < batchFiles.size - 1
@@ -690,57 +662,4 @@ class ResultViewerActivity : AppCompatActivity() {
         btnPrevFrame.alpha = if (btnPrevFrame.isEnabled) 1.0f else 0.5f
         btnNextFrame.alpha = if (btnNextFrame.isEnabled) 1.0f else 0.5f
     }
-
-    private fun exportAllImagesZip() {
-        val base = cachedBaseImage
-        if (batchFiles.isEmpty() || base == null) {
-            Toast.makeText(this, R.string.no_data_to_save, Toast.LENGTH_SHORT).show()
-            return
-        }
-        exporter.exportAllImagesZip(
-            batchSnapshot(),
-            base,
-            imgW,
-            imgH,
-            currentDataIndex,
-            step,
-            currentTypeString,
-        )
-    }
-
-    private fun exportAllDataCsv() {
-        if (batchFiles.isEmpty()) {
-            Toast.makeText(this, R.string.no_data_to_save, Toast.LENGTH_SHORT).show()
-            return
-        }
-        exporter.exportAllDataCsv(batchSnapshot())
-    }
-
-    private fun exportMergedImage() {
-        if (isGeneratingHeatmap) {
-            Toast.makeText(this, R.string.heatmap_drawing_wait, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val base = cachedBaseImage
-        val overlay = cachedHeatmap
-        if (base == null || overlay == null) {
-            Toast.makeText(this, R.string.export_images_missing, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val (maxIdx, minIdx) = computeMaxMinIndices()
-        exporter.exportMergedImage(
-            base, overlay, rawData ?: FloatArray(0),
-            imgW, imgH, currentDataIndex, currentTypeString,
-            currentHeatmapMin, currentHeatmapMax, maxIdx, minIdx,
-            originalDefNames, currentFrameIndex,
-        )
-    }
-
-    private fun batchSnapshot() = ResultExporter.BatchSnapshot(
-        batchFiles = batchFiles,
-        originalDefNames = originalDefNames,
-        refName = intent.getStringExtra(DicKeys.REF_NAME)?.substringBeforeLast("."),
-    )
 }

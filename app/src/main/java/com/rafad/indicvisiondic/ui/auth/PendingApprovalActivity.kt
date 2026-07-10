@@ -15,7 +15,7 @@ import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.data.DeviceKeyManager
 import com.rafad.indicvisiondic.data.SupabaseManager
 import com.rafad.indicvisiondic.ui.Insets
-import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
+import com.rafad.indicvisiondic.ui.home.HomeActivity
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -86,7 +86,7 @@ class PendingApprovalActivity : AppCompatActivity() {
                         "APPROVED" -> {
                             // The admin approved them! Route to the Main App.
                             Toast.makeText(this@PendingApprovalActivity, "Access Granted!", Toast.LENGTH_SHORT).show()
-                            val intent = Intent(this@PendingApprovalActivity, StaticAnalysisActivity::class.java)
+                            val intent = Intent(this@PendingApprovalActivity, HomeActivity::class.java)
                             startActivity(intent)
                             finish()
                         }

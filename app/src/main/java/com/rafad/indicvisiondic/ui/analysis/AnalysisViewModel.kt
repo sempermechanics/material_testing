@@ -11,7 +11,10 @@ import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.DicResult
 import com.rafad.indicvisiondic.IndicVisionNativeLib
 import com.rafad.indicvisiondic.ProgressCallback
+import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.DicUploadWorker
+import com.rafad.indicvisiondic.data.SessionRecord
+import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.SupabaseManager
 import com.rafad.indicvisiondic.report.EngineStats
 import io.github.jan.supabase.auth.auth
@@ -31,6 +34,11 @@ import java.util.concurrent.Executors
  * results, and enqueues cloud sync via DicUploadWorker.
  */
 class AnalysisViewModel : ViewModel() {
+
+    companion object {
+        /** Outcome code for a user-cancelled run (not an engine failure). */
+        const val ERROR_CANCELLED = -99
+    }
 
     // NATIVE THREAD PINNING: A single persistent OS thread for ALL JNI/OpenMP calls.
     val nativeExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
@@ -84,6 +92,23 @@ class AnalysisViewModel : ViewModel() {
         lastRefPath = null
         lastDefPath = null
         hasCompletedAnalysis = false
+        workingLocalId = null
+    }
+
+    /**
+     * Identity of the working session on the Home list. Re-runs reuse it so
+     * the row updates in place; with "Keep every re-run" enabled each run gets
+     * a fresh id (its own row). New inputs reset it via [clearPreviousResults].
+     */
+    var workingLocalId: String? = null
+
+    private fun resolveLocalSessionId(appContext: Context): String {
+        val current = workingLocalId
+        return if (current == null || DicSettings.keepEveryRerun(appContext)) {
+            UUID.randomUUID().toString().take(12).also { workingLocalId = it }
+        } else {
+            current
+        }
     }
 
     data class BatchAnalysisParams(
@@ -103,10 +128,17 @@ class AnalysisViewModel : ViewModel() {
         val processingStartTime: Long,
     )
 
+    /** Cooperative cancel: checked between frames (the native solve itself is not interruptible). */
+    @Volatile
+    var cancelRequested = false
+
     data class BatchProgressUpdate(
         val percent: Int,
         val status: String,
         val timerText: String,
+        // Live overlay tiles; -1 = no update this tick
+        val pointsSolved: Int = -1,
+        val convergencePercent: Float = -1f,
     )
 
     data class BatchAnalysisOutcome(
@@ -125,9 +157,11 @@ class AnalysisViewModel : ViewModel() {
         params: BatchAnalysisParams,
         onProgress: (BatchProgressUpdate) -> Unit,
     ): BatchAnalysisOutcome = withContext(nativeExecutor.asCoroutineDispatcher()) {
-        val batchDir = File(params.cacheDir, "batch_results")
-        if (!batchDir.exists()) batchDir.mkdirs()
-        batchDir.listFiles()?.forEach { it.delete() }
+        // Results live in app-private persistent storage (NOT cacheDir, which
+        // the OS may evict): one directory per Home-list session.
+        val localSessionId = resolveLocalSessionId(appContext)
+        val batchDir = SessionStore.dirFor(appContext, localSessionId)
+        batchDir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
 
         lastBatchDirPath = batchDir.absolutePath
         lastStep = params.step
@@ -157,7 +191,15 @@ class AnalysisViewModel : ViewModel() {
         val outputBuffer = java.nio.ByteBuffer.allocateDirect(maxPoints * DicResult.BYTES_PER_POINT)
         outputBuffer.order(java.nio.ByteOrder.nativeOrder())
 
+        cancelRequested = false
+        var totalPointsSolved = 0
+        var lastConvergence = -1f
+
         for ((frameIndex, defPath) in defFilePaths.withIndex()) {
+            if (cancelRequested) {
+                engineErrorCode = ERROR_CANCELLED
+                break
+            }
             val frameLabel = "Processing Frame ${frameIndex + 1}/$totalFrames..."
             onProgress(
                 BatchProgressUpdate(
@@ -224,23 +266,49 @@ class AnalysisViewModel : ViewModel() {
                 fos.write(bytes)
             }
 
+            totalPointsSolved += validPointsCount
+            lastConvergence = metricsCatcher[15]
+            onProgress(
+                BatchProgressUpdate(
+                    percent = (((frameIndex + 1).toFloat() / totalFrames) * 100).toInt(),
+                    status = "Processing frame ${frameIndex + 1} of $totalFrames",
+                    timerText = frameLabel,
+                    pointsSolved = totalPointsSolved,
+                    convergencePercent = lastConvergence,
+                ),
+            )
+
             @Suppress("ExplicitGarbageCollectionCall")
             System.gc()
         }
 
         val executionTimeMs = (System.currentTimeMillis() - params.processingStartTime).toInt()
 
-        if (firstFrameValidPoints > 0) {
+        if (firstFrameValidPoints > 0 && engineErrorCode != ERROR_CANCELLED) {
             currentSessionId = "Pending_Cloud_Sync_" + UUID.randomUUID().toString().take(8)
-            enqueueUploadWorkers(
-                appContext,
-                params,
-                batchDir,
-                refBytes,
-                firstFrameValidPoints,
-                firstFrameAvgIters,
-                executionTimeMs,
-            )
+
+            // Persist a viewable copy of the reference next to the frames —
+            // the Home list and reopened sessions depend on it surviving.
+            val refPngPath = writeReferenceCopy(batchDir, refBytes)
+            lastRefPath = refPngPath
+
+            val cloudEnabled = DicSettings.saveToCloud(appContext)
+            SessionStore.upsert(appContext, buildSessionRecord(appContext, localSessionId, batchDir, refPngPath, params, cloudEnabled))
+
+            if (cloudEnabled) {
+                enqueueUploadWorkers(
+                    appContext,
+                    params,
+                    batchDir,
+                    localSessionId,
+                    refPngPath,
+                    firstFrameValidPoints,
+                    firstFrameAvgIters,
+                    executionTimeMs,
+                )
+            } else {
+                Timber.d("Save to cloud is off — session %s stays local only", localSessionId)
+            }
         }
 
         BatchAnalysisOutcome(
@@ -252,27 +320,77 @@ class AnalysisViewModel : ViewModel() {
         )
     }
 
+    /** Writes a PNG copy of the reference into the session dir; returns its path. */
+    private fun writeReferenceCopy(sessionDir: File, refBytes: ByteArray): String {
+        val refPngFile = File(sessionDir, "reference.png")
+        var refBmp: Bitmap? = null
+        try {
+            refBmp = IndicVisionNativeLib.getPreviewFromBytes(refBytes, realRefWidth)
+            refPngFile.outputStream().use { out ->
+                refBmp?.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+        } finally {
+            refBmp?.recycle()
+        }
+        return refPngFile.absolutePath
+    }
+
+    @Suppress("LongParameterList") // one-shot assembly of the index row
+    private fun buildSessionRecord(
+        appContext: Context,
+        localSessionId: String,
+        batchDir: File,
+        refPngPath: String,
+        params: BatchAnalysisParams,
+        cloudEnabled: Boolean,
+    ): SessionRecord {
+        val now = System.currentTimeMillis()
+        // Re-runs upsert over the same id: keep the original creation time
+        // and any user-chosen name.
+        val existing = SessionStore.get(appContext, localSessionId)
+        val cleanRefName = refName.removePrefix("Ref: ")
+        val convergence = engineStatsArray?.getOrNull(15) ?: 0f
+        return SessionRecord(
+            id = localSessionId,
+            name = existing?.name ?: cleanRefName.substringBeforeLast('.').ifBlank { "Analysis" },
+            createdAt = existing?.createdAt ?: now,
+            updatedAt = now,
+            frameCount = defFilePaths.size,
+            subset = params.subset,
+            step = params.step,
+            strainWindow = params.strainWin,
+            use6x6 = params.use6x6,
+            imgW = realRefWidth,
+            imgH = realRefHeight,
+            roiX = params.finalRectX,
+            roiY = params.finalRectY,
+            roiW = params.finalRectW,
+            roiH = params.finalRectH,
+            refPath = refPngPath,
+            refName = cleanRefName,
+            sessionDir = batchDir.absolutePath,
+            defNames = defFilePaths.map { it.substringAfterLast('/') },
+            headline = String.format(java.util.Locale.US, "%.1f%% converged", convergence),
+            engineStats = engineStatsArray?.toList() ?: emptyList(),
+            syncState = if (cloudEnabled) SessionRecord.SyncState.PENDING else SessionRecord.SyncState.LOCAL_ONLY,
+        )
+    }
+
+    @Suppress("LongParameterList", "LongMethod") // per-frame worker Data assembly
     private suspend fun enqueueUploadWorkers(
         appContext: Context,
         params: BatchAnalysisParams,
         batchDir: File,
-        refBytes: ByteArray,
+        localSessionId: String,
+        refPngPath: String,
         firstFrameValidPoints: Int,
         firstFrameAvgIters: Float,
         executionTimeMs: Int,
     ) = withContext(Dispatchers.IO) {
-        Timber.d("========================================")
-        Timber.d("1. ENGINE FINISHED. PREPARING BATCH OFFLINE QUEUE.")
+        Timber.d("Engine finished — queueing offline upload workers")
 
-        var refBmp: Bitmap? = null
         try {
-            refBmp = IndicVisionNativeLib.getPreviewFromBytes(refBytes, realRefWidth)
-            val refPngFile = File(params.cacheDir, "temp_ref_${System.currentTimeMillis()}.png")
-            refPngFile.outputStream().use { out ->
-                refBmp?.compress(Bitmap.CompressFormat.PNG, 100, out)
-            }
-            val generatedRefPath = refPngFile.absolutePath
-            lastRefPath = generatedRefPath
+            val generatedRefPath = refPngPath
 
             val currentUser = SupabaseManager.client.auth.currentUserOrNull()
             val userEmail = currentUser?.email ?: "Offline_User"
@@ -319,6 +437,7 @@ class AnalysisViewModel : ViewModel() {
                         .putInt(DicKeys.POINTS_CONVERGED, firstFrameValidPoints)
                         .putFloat(DicKeys.AVG_ITERS, firstFrameAvgIters)
                         .putInt(DicKeys.EXEC_TIME, executionTimeMs)
+                        .putString(DicKeys.SESSION_LOCAL_ID, localSessionId)
                         .build()
 
                     val uploadWork = OneTimeWorkRequestBuilder<DicUploadWorker>()
@@ -337,10 +456,7 @@ class AnalysisViewModel : ViewModel() {
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "LOCAL CATCH: Failed to enqueue batch workers")
-        } finally {
-            refBmp?.recycle()
-            Timber.d("========================================")
+            Timber.e(e, "Failed to enqueue batch workers")
         }
     }
 }

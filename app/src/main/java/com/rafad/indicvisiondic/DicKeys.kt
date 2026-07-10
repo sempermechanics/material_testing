@@ -12,6 +12,10 @@ object DicKeys {
     const val USER_ID = "USER_ID"
     const val USER_EMAIL = "USER_EMAIL"
 
+    // ── HomeActivity → StaticAnalysisActivity (media picker hand-off)
+    const val PICKED_REF_URI = "PICKED_REF_URI"
+    const val PICKED_VIDEO_URI = "PICKED_VIDEO_URI"
+
     // ── StaticAnalysisActivity  RoiDrawActivity
     const val IMAGE_FILE_PATH = "IMAGE_FILE_PATH"
     const val MASK_FILE_PATH = "MASK_FILE_PATH"
@@ -40,6 +44,7 @@ object DicKeys {
     const val AVG_ITERS = "AVG_ITERS"
 
     // ── AnalysisViewModel  DicUploadWorker (WorkManager Data)
+    const val SESSION_LOCAL_ID = "SESSION_LOCAL_ID"
     const val STEP = "STEP"
     const val SUBSET = "SUBSET"
     const val STRAIN_WIN = "STRAIN_WIN"

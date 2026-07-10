@@ -20,6 +20,81 @@ object PdfReportGenerator {
         data class Error(val ex: Exception) : Progress()
     }
 
+    /** One chapter of the all-frames report: heatmap + per-field stats. */
+    data class FrameChapter(
+        val title: String,
+        val image: android.graphics.Bitmap?,
+        // rows: field / max / min / mean
+        val statRows: List<List<String>>,
+    )
+
+    /**
+     * The whole-analysis PDF: cover with parameters, one chapter per frame
+     * (annotated heatmap of the on-screen field + a five-field stats table),
+     * and the engine telemetry of the first frame at the end. Chapters are
+     * built lazily and their bitmaps recycled page-by-page, so a 50-frame
+     * report never holds more than one frame's bitmap in memory.
+     */
+    fun generateBatch(
+        cover: ReportData,
+        frameCount: Int,
+        chapterAt: (Int) -> FrameChapter,
+        outputStream: OutputStream,
+    ): Flow<Progress> = flow {
+        val pdfDocument = PdfDocument()
+        val layout = PdfLayoutEngine(pdfDocument)
+        try {
+            emit(Progress.Status("Building cover…", 2))
+            layout.newPage()
+            layout.drawTitle("DIC Analysis Report — All Frames")
+            layout.drawSectionHeader("Session Details")
+            layout.drawKeyValue("Specimen / Target:", cover.specimenName)
+            layout.drawKeyValue("Date Generated:", cover.analysisDate)
+            layout.drawKeyValue("Session ID:", cover.sessionId)
+            layout.drawKeyValue("Frames:", frameCount.toString())
+            cover.appBuild?.let { layout.drawKeyValue("App Build:", it) }
+            layout.advanceY(40f)
+            layout.drawSectionHeader("Algorithm Parameters")
+            layout.drawKeyValue("Subset Size:", "${cover.subsetSize} px")
+            layout.drawKeyValue("Step Size:", "${cover.stepSize} px")
+            layout.drawKeyValue("Strain Method:", cover.strainMethod)
+            layout.drawKeyValue("Strain Window:", "${cover.strainWindow} subsets")
+            layout.advanceY(40f)
+            layout.drawSectionHeader("Analysis Region (ROI)")
+            layout.drawKeyValue("Origin (X, Y):", "(${cover.roiData.startX}, ${cover.roiData.startY})")
+            layout.drawKeyValue("Dimensions:", "${cover.roiData.width} x ${cover.roiData.height} px")
+
+            for (index in 0 until frameCount) {
+                emit(Progress.Status("Frame ${index + 1} of $frameCount…", 5 + (index * 90 / frameCount)))
+                val chapter = chapterAt(index)
+                layout.newPage()
+                layout.drawTitle(chapter.title)
+                if (chapter.statRows.isNotEmpty()) {
+                    layout.drawTable(
+                        headers = listOf("Field", "Max", "Min", "Mean"),
+                        rows = chapter.statRows,
+                        colWeights = listOf(0.31f, 0.23f, 0.23f, 0.23f),
+                    )
+                }
+                chapter.image?.let { bmp ->
+                    layout.advanceY(30f)
+                    layout.drawDiagnosticBlock("", bmp, 2100f)
+                    bmp.recycle()
+                }
+            }
+
+            emit(Progress.Status("Telemetry…", 96))
+            drawTelemetryPage(layout, cover)
+
+            pdfDocument.writeTo(outputStream)
+            emit(Progress.Complete)
+        } catch (e: Exception) {
+            emit(Progress.Error(e))
+        } finally {
+            pdfDocument.close()
+        }
+    }.flowOn(Dispatchers.Default)
+
     fun generate(data: ReportData, outputStream: OutputStream): Flow<Progress> = flow {
         val pdfDocument = PdfDocument()
         val layout = PdfLayoutEngine(pdfDocument)
@@ -85,57 +160,7 @@ object PdfReportGenerator {
 
             // FINAL PAGE: TELEMETRY & HARDWARE LOG
             emit(Progress.Status("Compiling Engine Telemetry...", 90))
-            layout.newPage()
-            layout.drawTitle("Engine Performance Log")
-
-            val stats = data.engineStats
-
-            layout.drawSectionHeader("1. Solver Pipeline (2-Pass Architecture)")
-            layout.drawTable(
-                headers = listOf("Pipeline Stage", "Points"),
-                rows = listOf(
-                    listOf("Seeding Mode", stats.meshSeedingLabel()),
-                    listOf("Total Target Grid Points", "${stats.totalPointsAttempted}"),
-                    listOf("Phase 1: Solved by Delaunay Mesh", "${stats.pathAPoints}"),
-                    listOf("Phase 2: Saved by RGDIC Propagation", "${stats.pathBPoints}"),
-                    listOf("Final Unsolvable (Dead Points)", "${stats.totalPointsRejected}"),
-                ),
-                colWeights = listOf(0.7f, 0.3f),
-            )
-
-            layout.drawSectionHeader("2. Optimization & Quality")
-            layout.drawTable(
-                headers = listOf("Metric", "Value"),
-                rows = listOf(
-                    listOf("Global Average ZNSSD (Correlation)", "%.5f".format(data.globalAvgZnssd)),
-                    listOf("Overall Convergence Rate", "%.2f %%".format(stats.convergencePercent)),
-                    listOf("Average ICGN Iterations", "%.2f".format(stats.avgIcgnIterations)),
-                ),
-                colWeights = listOf(0.7f, 0.3f),
-            )
-
-            layout.drawSectionHeader("3. Simplex Rescue Subsystem")
-            layout.drawTable(
-                headers = listOf("Intervention", "Triggered", "Saved"),
-                rows = listOf(
-                    listOf("Simplex Interventions", "${stats.simplexCalls}", "${stats.simplexSaved}"),
-                ),
-                colWeights = listOf(0.5f, 0.25f, 0.25f),
-            )
-
-            layout.drawSectionHeader("4. Hardware Profiling (Wall Time)")
-            layout.drawTable(
-                headers = listOf("Execution Phase", "Time (ms)"),
-                rows = listOf(
-                    listOf("AKAZE + RANSAC Phase", "%.1f ms".format(stats.akazeRansacMs)),
-                    listOf("Hessian Pre-Pass", "%.1f ms".format(stats.hessianPrepassMs)),
-                    listOf("Delaunay Mesh Phase", "%.1f ms".format(stats.delaunayMs)),
-                    listOf("Strain Calculation Phase", "%.1f ms".format(stats.strainMs)),
-                    listOf("TOTAL WALL TIME", "%.1f ms".format(stats.wallTimeMs)),
-                    listOf("Average Throughput", "%.2f pts/ms".format(stats.avgThroughputPtsPerMs)),
-                ),
-                colWeights = listOf(0.6f, 0.4f),
-            )
+            drawTelemetryPage(layout, data)
 
             emit(Progress.Status("Finalizing PDF...", 98))
             layout.finishCurrentPage()
@@ -148,4 +173,59 @@ object PdfReportGenerator {
             pdfDocument.close()
         }
     }.flowOn(Dispatchers.IO)
+
+    /** Final page: engine telemetry (shared by single and batch reports). */
+    private fun drawTelemetryPage(layout: PdfLayoutEngine, data: ReportData) {
+        layout.newPage()
+        layout.drawTitle("Engine Performance Log")
+
+        val stats = data.engineStats
+
+        layout.drawSectionHeader("1. Solver Pipeline (2-Pass Architecture)")
+        layout.drawTable(
+            headers = listOf("Pipeline Stage", "Points"),
+            rows = listOf(
+                listOf("Seeding Mode", stats.meshSeedingLabel()),
+                listOf("Total Target Grid Points", "${stats.totalPointsAttempted}"),
+                listOf("Phase 1: Solved by Delaunay Mesh", "${stats.pathAPoints}"),
+                listOf("Phase 2: Saved by RGDIC Propagation", "${stats.pathBPoints}"),
+                listOf("Final Unsolvable (Dead Points)", "${stats.totalPointsRejected}"),
+            ),
+            colWeights = listOf(0.7f, 0.3f),
+        )
+
+        layout.drawSectionHeader("2. Optimization & Quality")
+        layout.drawTable(
+            headers = listOf("Metric", "Value"),
+            rows = listOf(
+                listOf("Global Average ZNSSD (Correlation)", "%.5f".format(data.globalAvgZnssd)),
+                listOf("Overall Convergence Rate", "%.2f %%".format(stats.convergencePercent)),
+                listOf("Average ICGN Iterations", "%.2f".format(stats.avgIcgnIterations)),
+            ),
+            colWeights = listOf(0.7f, 0.3f),
+        )
+
+        layout.drawSectionHeader("3. Simplex Rescue Subsystem")
+        layout.drawTable(
+            headers = listOf("Intervention", "Triggered", "Saved"),
+            rows = listOf(
+                listOf("Simplex Interventions", "${stats.simplexCalls}", "${stats.simplexSaved}"),
+            ),
+            colWeights = listOf(0.5f, 0.25f, 0.25f),
+        )
+
+        layout.drawSectionHeader("4. Hardware Profiling (Wall Time)")
+        layout.drawTable(
+            headers = listOf("Execution Phase", "Time (ms)"),
+            rows = listOf(
+                listOf("AKAZE + RANSAC Phase", "%.1f ms".format(stats.akazeRansacMs)),
+                listOf("Hessian Pre-Pass", "%.1f ms".format(stats.hessianPrepassMs)),
+                listOf("Delaunay Mesh Phase", "%.1f ms".format(stats.delaunayMs)),
+                listOf("Strain Calculation Phase", "%.1f ms".format(stats.strainMs)),
+                listOf("TOTAL WALL TIME", "%.1f ms".format(stats.wallTimeMs)),
+                listOf("Average Throughput", "%.2f pts/ms".format(stats.avgThroughputPtsPerMs)),
+            ),
+            colWeights = listOf(0.6f, 0.4f),
+        )
+    }
 }

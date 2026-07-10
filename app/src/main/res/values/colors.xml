@@ -31,11 +31,11 @@
 
     <!-- Result viewer: dark canvas so heatmaps stay vivid, with translucent
          glass controls on top -->
-    <color name="viewer_canvas">#12181F</color>
-    <color name="viewer_glass">#CC1B2530</color>       <!-- translucent control panels -->
-    <color name="viewer_glass_soft">#991B2530</color>
-    <color name="viewer_chip_off">#33FFFFFF</color>    <!-- unselected chip fill -->
-    <color name="viewer_on_dark">#FFFFFF</color>
+    <color name="viewer_canvas">#F4F9FC</color> <!-- light: matches app background -->
+    <color name="viewer_glass">#F0FFFFFF</color>
+    <color name="viewer_glass_soft">#CCFFFFFF</color>
+    <color name="viewer_chip_off">#FFFFFF</color>
+    <color name="viewer_on_dark">#152430</color> <!-- now "on viewer panel"; light theme -->
 
     <!-- Legacy names remapped to the new palette so any lingering
          references stay on-brand during migration. -->

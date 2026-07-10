@@ -1,0 +1,40 @@
+package com.rafad.indicvisiondic.data
+
+import android.content.Context
+import android.content.SharedPreferences
+
+/**
+ * Behavioral settings surfaced in the Home settings drawer. Plain
+ * SharedPreferences — read at the point of use, no caching layer.
+ */
+object DicSettings {
+
+    const val DEFAULT_MAX_FRAMES = 50
+    const val MIN_MAX_FRAMES = 10
+    const val MAX_MAX_FRAMES = 200
+
+    private const val PREFS = "dic_settings"
+    private const val KEY_SAVE_TO_CLOUD = "save_to_cloud"
+    private const val KEY_KEEP_EVERY_RERUN = "keep_every_rerun"
+    private const val KEY_MAX_FRAMES = "max_frames"
+
+    private fun prefs(context: Context): SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    /** Master switch for the upload worker; off = sessions stay "local only". */
+    fun saveToCloud(context: Context): Boolean = prefs(context).getBoolean(KEY_SAVE_TO_CLOUD, true)
+
+    fun setSaveToCloud(context: Context, value: Boolean) = prefs(context).edit().putBoolean(KEY_SAVE_TO_CLOUD, value).apply()
+
+    /** On: every re-run in the exploration loop persists its own session row. */
+    fun keepEveryRerun(context: Context): Boolean = prefs(context).getBoolean(KEY_KEEP_EVERY_RERUN, false)
+
+    fun setKeepEveryRerun(context: Context, value: Boolean) = prefs(context).edit().putBoolean(KEY_KEEP_EVERY_RERUN, value).apply()
+
+    /** Cap on deformed frames per analysis (picker + video extraction). */
+    fun maxFrames(context: Context): Int = prefs(context).getInt(KEY_MAX_FRAMES, DEFAULT_MAX_FRAMES)
+        .coerceIn(MIN_MAX_FRAMES, MAX_MAX_FRAMES)
+
+    fun setMaxFrames(context: Context, value: Int) = prefs(context).edit()
+        .putInt(KEY_MAX_FRAMES, value.coerceIn(MIN_MAX_FRAMES, MAX_MAX_FRAMES))
+        .apply()
+}

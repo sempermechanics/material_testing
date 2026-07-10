@@ -21,18 +21,15 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
-import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.IndicVisionNativeLib
 import com.rafad.indicvisiondic.R
-import com.rafad.indicvisiondic.data.SupabaseManager
+import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.ui.Insets
 import com.rafad.indicvisiondic.ui.Motion
-import com.rafad.indicvisiondic.ui.auth.AuthActivity
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
@@ -50,14 +47,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private val viewModel: AnalysisViewModel by viewModels()
 
     // UI Components
-    private lateinit var imgRef: ImageView
-    private lateinit var imgDef: ImageView
-    private lateinit var btnLoadRef: Button
-    private lateinit var btnLoadDef: Button
     private lateinit var btnFullImage: Button
     private lateinit var btnDefineRoi: Button
-    private lateinit var btnManualRoi: Button
-    private lateinit var btnLoadRoiMask: Button
     private lateinit var tvResult: TextView
     private lateinit var tvInstruction: TextView
     private lateinit var tvRefName: TextView
@@ -67,6 +58,23 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var etStrainWindow: Slider
     private lateinit var progressBar: ProgressBar
     private lateinit var tvTimer: TextView
+    private var updateAdvancedSummary: (() -> Unit)? = null
+
+    // Wireframe slots (load-frames page + confirm-settings page)
+    private lateinit var refDropzone: View
+    private lateinit var refCard: View
+    private lateinit var ivRefThumb: ImageView
+    private lateinit var tvRefMeta: TextView
+    private lateinit var defDropzone: View
+    private lateinit var defCard: View
+    private lateinit var tvDefMeta: TextView
+    private lateinit var tvDefDropHint: TextView
+    private lateinit var jpegWarnRow: View
+    private lateinit var tvNextReason: TextView
+    private lateinit var ivInputsThumb: ImageView
+    private lateinit var tvInputsTitle: TextView
+    private lateinit var tvInputsMeta: TextView
+    private var refPreviewBmp: android.graphics.Bitmap? = null
     private lateinit var btnCalculateFullField: Button
 
     // Prominent progress overlay (compute + video extraction)
@@ -84,11 +92,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             elapsedHandler.postDelayed(this, 1000)
         }
     }
-    private lateinit var switchBlur: SwitchMaterial
-    private lateinit var rgStrainMethod: MaterialButtonToggleGroup
-    private lateinit var rgInterpolator: MaterialButtonToggleGroup // ADDED
-    private lateinit var btnViewResults: Button
-    private lateinit var btnLogout: Button // Added for Secure Exit
+    private lateinit var rgInterpolator: MaterialButtonToggleGroup // ADDED // Added for Secure Exit
 
     // Live value labels for the parameter sliders
     private lateinit var tvSubsetValue: TextView
@@ -98,8 +102,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // Two-step wizard: page 1 = load images, page 2 = settings + run
     private lateinit var scrollStepImages: View
     private lateinit var scrollStepSettings: View
-    private lateinit var tvStepChip1: TextView
-    private lateinit var tvStepChip2: TextView
     private lateinit var btnNext: Button
     private lateinit var btnBack: Button
 
@@ -147,15 +149,22 @@ class StaticAnalysisActivity : AppCompatActivity() {
         overlayPercent = findViewById(R.id.overlayPercent)
         overlayStatus = findViewById(R.id.overlayStatus)
         overlayElapsed = findViewById(R.id.overlayElapsed)
-        imgRef = findViewById(R.id.imgRef)
-        imgDef = findViewById(R.id.imgDef)
-        btnLoadRef = findViewById(R.id.btnLoadRef)
-        btnLoadDef = findViewById(R.id.btnLoadDef)
         btnFullImage = findViewById(R.id.btnFullImage)
         btnDefineRoi = findViewById(R.id.btnDefineRoi)
-        btnManualRoi = findViewById(R.id.btnManualRoi)
-        btnLoadRoiMask = findViewById(R.id.btnLoadRoiMask)
         tvResult = findViewById(R.id.tvStaticResult)
+        refDropzone = findViewById(R.id.refDropzone)
+        refCard = findViewById(R.id.refCard)
+        ivRefThumb = findViewById(R.id.ivRefThumb)
+        tvRefMeta = findViewById(R.id.tvRefMeta)
+        defDropzone = findViewById(R.id.defDropzone)
+        defCard = findViewById(R.id.defCard)
+        tvDefMeta = findViewById(R.id.tvDefMeta)
+        tvDefDropHint = findViewById(R.id.tvDefDropHint)
+        jpegWarnRow = findViewById(R.id.jpegWarnRow)
+        tvNextReason = findViewById(R.id.tvNextReason)
+        ivInputsThumb = findViewById(R.id.ivInputsThumb)
+        tvInputsTitle = findViewById(R.id.tvInputsTitle)
+        tvInputsMeta = findViewById(R.id.tvInputsMeta)
         tvInstruction = findViewById(R.id.tvInstruction)
         tvRefName = findViewById(R.id.tvRefName)
         tvDefName = findViewById(R.id.tvDefName)
@@ -163,11 +172,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etStepSize = findViewById(R.id.etStepSize)
         etStrainWindow = findViewById(R.id.etStrainWindow)
         btnCalculateFullField = findViewById(R.id.btnCalculateFullField)
-        switchBlur = findViewById(R.id.switchBlur)
-        rgStrainMethod = findViewById(R.id.rgStrainMethod)
         rgInterpolator = findViewById(R.id.rgInterpolator) // BOUND
-        btnViewResults = findViewById(R.id.btnViewResults)
-        btnLogout = findViewById(R.id.btnLogout) // Bind Logout Button
 
         // --- Parameter sliders: live value labels ---
         tvSubsetValue = findViewById(R.id.tvSubsetValue)
@@ -178,8 +183,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // --- Two-step wizard wiring ---
         scrollStepImages = findViewById(R.id.scrollStepImages)
         scrollStepSettings = findViewById(R.id.scrollStepSettings)
-        tvStepChip1 = findViewById(R.id.tvStepChip1)
-        tvStepChip2 = findViewById(R.id.tvStepChip2)
         btnNext = findViewById(R.id.btnNext)
         btnBack = findViewById(R.id.btnBack)
 
@@ -187,10 +190,28 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnBack.setOnClickListener { goToStep(1, animate = true) }
         goToStep(viewModel.wizardStep, animate = false)
 
+        // Hand-off from Home's media picker: the selection type already
+        // decided the branch — image becomes the reference, video enters
+        // the extract-frames flow. Consumed once.
+        intent.getStringExtra(DicKeys.PICKED_REF_URI)?.let {
+            intent.removeExtra(DicKeys.PICKED_REF_URI)
+            handleReferenceImage(Uri.parse(it))
+        }
+        intent.getStringExtra(DicKeys.PICKED_VIDEO_URI)?.let {
+            intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
+            handleVideo(Uri.parse(it))
+        }
+
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
         // and keep the wizard nav above the nav-bar gesture area so the top
         // controls aren't in the system swipe-down zone.
         Insets.padTop(findViewById(R.id.toolbar))
+        findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).apply {
+            title = getString(R.string.new_analysis_title)
+            setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+            setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
+        }
+        tvDefDropHint.text = getString(R.string.def_formats_hint_fmt, DicSettings.maxFrames(this))
         Insets.padBottom(findViewById(R.id.bottomNav))
 
         // Gentle entrance: cards cascade in on first show only (not on rotation)
@@ -199,15 +220,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         restoreUiFromViewModel()
-
-        // --- SECURE EXIT LISTENER ---
-        btnLogout.setOnClickListener {
-            if (isProcessing) {
-                Toast.makeText(this, R.string.logout_wait_analysis, Toast.LENGTH_SHORT).show()
-            } else {
-                showLogoutConfirmation()
-            }
-        }
 
         val pickRef = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let { handleReferenceImage(it) }
@@ -220,15 +232,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, R.string.no_images_selected, Toast.LENGTH_SHORT).show()
             }
-        }
-
-        val pickMask = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            uri?.let { handleMaskSelection(it) }
-        }
-
-        // Video picker: frame 0  reference, remaining sampled frames  deformed
-        val pickVideo = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            uri?.let { handleVideo(it) }
         }
 
         val roiStudioLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -265,10 +268,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
             }
         }
 
-        btnLoadRef.setOnClickListener { pickRef.launch("image/*") }
-        btnLoadDef.setOnClickListener { pickDefBatch.launch("image/*") }
-        btnLoadRoiMask.setOnClickListener { pickMask.launch("image/*") }
-        findViewById<Button>(R.id.btnLoadVideo).setOnClickListener { pickVideo.launch("video/*") }
+        refDropzone.setOnClickListener { pickRef.launch("image/*") }
+        findViewById<View>(R.id.btnRefChange).setOnClickListener { pickRef.launch("image/*") }
+        val launchDefPicker = {
+            Toast.makeText(this, R.string.picker_select_deformed, Toast.LENGTH_LONG).show()
+            pickDefBatch.launch("image/*")
+        }
+        defDropzone.setOnClickListener { launchDefPicker() }
+        findViewById<View>(R.id.btnDefChange).setOnClickListener { launchDefPicker() }
 
         btnDefineRoi.setOnClickListener {
             if (viewModel.refBytes != null) {
@@ -289,8 +296,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             }
         }
 
-        btnManualRoi.setOnClickListener { showShapeRoiDialog() }
-
         btnFullImage.setOnClickListener {
             if (viewModel.realRefWidth > 0) {
                 viewModel.hasCustomRoi = false
@@ -303,51 +308,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnCalculateFullField.setOnClickListener {
             startBatchAnalysis()
         }
-
-        btnViewResults.setOnClickListener {
-            openResultViewer()
-        }
     }
 
     // ==========================================
     // --- SECURE EXIT PROTOCOL FUNCTIONS ---
     // ==========================================
-
-    private fun showLogoutConfirmation() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.logout_title)
-            .setMessage(R.string.logout_message)
-            .setPositiveButton("Log Out") { _, _ ->
-                performLogout()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun performLogout() {
-        // Show loading state on the button
-        btnLogout.text = "Logging out..."
-        btnLogout.isEnabled = false
-
-        lifecycleScope.launch {
-            try {
-                // 1. Destroy the session on the server and local vault
-                SupabaseManager.client.auth.signOut()
-            } catch (e: Exception) {
-                // Force exit even if network fails
-                Timber.e(e, "Server logout failed, forcing local exit.")
-            } finally {
-                // 2. Burn the bridge and route back to Zone 2 (AuthActivity)
-                val intent = Intent(this@StaticAnalysisActivity, AuthActivity::class.java)
-                intent.putExtra(DicKeys.ROUTING_ERROR, "You have been successfully logged out.")
-
-                // CRITICAL: Wipe the backstack so they can't press 'Back' to return to the engine
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                startActivity(intent)
-                finish()
-            }
-        }
-    }
 
     // ==========================================
     // --- NATIVE ENGINE FUNCTIONS (UNTOUCHED) ---
@@ -355,10 +320,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun handleReferenceImage(uri: Uri) {
         val name = getFileName(uri)
-
-        if (name.endsWith(".jpg", true) || name.endsWith(".jpeg", true)) {
-            Toast.makeText(this, R.string.jpeg_warning_ref, Toast.LENGTH_LONG).show()
-        }
 
         val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
 
@@ -393,8 +354,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                 viewModel.refName = "Ref: $name"
                 viewModel.refBytes = bytes
-                imgRef.setImageBitmap(previewBmp)
-                tvRefName.text = viewModel.refName
+                refPreviewBmp = previewBmp
+                refreshRefSlot()
 
                 if (!viewModel.hasCustomRoi) {
                     viewModel.roiX = 0
@@ -410,7 +371,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleDeformedBatch(uris: List<Uri>) {
+    @Suppress("LongMethod", "CyclomaticComplexMethod") // legacy import pipeline; slated for P5 split
+    private fun handleDeformedBatch(rawUris: List<Uri>) {
+        // Frame cap (Home settings drawer): keep the first N and say so.
+        val cap = DicSettings.maxFrames(this)
+        val uris = if (rawUris.size > cap) {
+            Toast.makeText(this, getString(R.string.frames_capped_fmt, cap), Toast.LENGTH_LONG).show()
+            rawUris.take(cap)
+        } else {
+            rawUris
+        }
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val tempDir = File(cacheDir, "temp_deformed")
@@ -430,12 +400,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     var previewBmp: Bitmap? = null
 
                     val originalName = getFileName(uri)
-
-                    if (index == 0 && (originalName.endsWith(".jpg", true) || originalName.endsWith(".jpeg", true))) {
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(this@StaticAnalysisActivity, R.string.jpeg_warning_batch, Toast.LENGTH_LONG).show()
-                        }
-                    }
 
                     val isRaw = originalName.endsWith(".dng", true) || originalName.endsWith(".raw", true)
 
@@ -467,23 +431,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     val file = File(tempDir, filename)
                     file.writeBytes(bytes)
                     filePaths.add(file.absolutePath)
-
-                    if (index == 0) {
-                        withContext(Dispatchers.Main) {
-                            imgDef.setImageBitmap(previewBmp)
-                        }
-                    }
                 }
 
                 val sortedPaths = filePaths.sorted()
                 viewModel.defFilePaths = sortedPaths
 
                 withContext(Dispatchers.Main) {
-                    tvDefName.text = viewModel.getDefDisplayName()
                     tvResult.text = ""
+                    refreshDefSlot()
                     checkReady()
-                    val message = if (sortedPaths.size == 1) "1 image selected" else "${sortedPaths.size} images selected"
-                    Toast.makeText(this@StaticAnalysisActivity, message, Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error handling batch")
@@ -588,17 +544,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
         range.values = listOf(0f, durationSec)
         tvSegment.text = "${formatClock(0)} – ${formatClock(meta.durationMs)}"
 
-        val maxFrames = 300
+        val maxFrames = DicSettings.maxFrames(this@StaticAnalysisActivity)
         fun estimate(): Int {
             val startS = range.values.first()
             val endS = range.values.last()
             val segSec = (endS - startS).coerceAtLeast(0f)
             return (segSec * sliderFps.value + 1f).toInt().coerceIn(1, maxFrames)
         }
+        val btnExtract = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnExtractFrames)
         fun refreshEstimate() {
             val n = estimate()
-            val capped = if (n >= maxFrames) " (capped)" else ""
+            val capped = if (n >= maxFrames) getString(R.string.video_capped_suffix) else ""
             tvEstimate.text = "≈ $n frame(s): 1 reference + ${(n - 1).coerceAtLeast(0)} deformed$capped"
+            btnExtract.text = getString(R.string.extract_n_frames_fmt, n)
         }
 
         sliderFps.addOnChangeListener { _, v, _ ->
@@ -613,17 +571,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
         refreshEstimate()
 
-        AlertDialog.Builder(this)
-            .setTitle(R.string.video_sampling_title)
-            .setView(view)
-            .setPositiveButton("Extract") { _, _ ->
-                val fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1)
-                val startMs = (range.values.first() * 1000).toLong()
-                val endMs = (range.values.last() * 1000).toLong()
-                extractVideoFrames(uri, fpsExtract, startMs, endMs)
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        // Bottom sheet (wireframe 05b): the primary button states the outcome.
+        val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+        sheet.setContentView(view)
+        btnExtract.setOnClickListener {
+            sheet.dismiss()
+            val fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1)
+            val startMs = (range.values.first() * 1000).toLong()
+            val endMs = (range.values.last() * 1000).toLong()
+            extractVideoFrames(uri, fpsExtract, startMs, endMs)
+        }
+        sheet.show()
     }
 
     /** Extracts frames at [fpsExtract] over [startMs, endMs] with the progress overlay. */
@@ -637,7 +595,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 retriever.setDataSource(this@StaticAnalysisActivity, uri)
 
                 val stepMs = 1000.0 / fpsExtract
-                val maxFrames = 300
+                val maxFrames = DicSettings.maxFrames(this@StaticAnalysisActivity)
                 val span = (endMs - startMs).coerceAtLeast(0L)
                 val count = ((span / stepMs).toInt() + 1).coerceIn(1, maxFrames)
 
@@ -698,10 +656,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                 withContext(Dispatchers.Main) {
                     hideComputeOverlay()
-                    refPreview?.let { imgRef.setImageBitmap(it) }
-                    firstDefPreview?.let { imgDef.setImageBitmap(it) }
-                    tvRefName.text = viewModel.refName
-                    tvDefName.text = viewModel.getDefDisplayName()
+                    refPreview?.let { refPreviewBmp = it }
+                    refreshRefSlot()
+                    refreshDefSlot()
                     checkReady()
                     Toast.makeText(
                         this@StaticAnalysisActivity,
@@ -726,7 +683,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun currentSubsetSize(): Int = etSubsetSize.value.toInt()
     private fun currentStepSize(): Int = etStepSize.value.toInt()
     private fun currentStrainWindow(): Int = etStrainWindow.value.toInt()
-    private fun currentUseNlvc(): Boolean = rgStrainMethod.checkedButtonId == R.id.rbNlvc
     private fun currentUseKeysInterpolator(): Boolean = rgInterpolator.checkedButtonId == R.id.rbKeys
 
     private fun startBatchAnalysis() {
@@ -758,17 +714,31 @@ class StaticAnalysisActivity : AppCompatActivity() {
         checkReady()
         processingStartTime = System.currentTimeMillis()
         showComputeOverlay()
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        findViewById<View>(R.id.btnRunCancel).apply {
+            isEnabled = true
+            setOnClickListener {
+                MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
+                    .setTitle(R.string.cancel_run_title)
+                    .setMessage(R.string.cancel_run_body)
+                    .setPositiveButton(R.string.action_cancel) { _, _ ->
+                        viewModel.cancelRequested = true
+                        isEnabled = false
+                    }
+                    .setNegativeButton(R.string.keep_running, null)
+                    .show()
+            }
+        }
         // Keep the legacy inline indicators in sync (hidden behind the overlay)
         progressBar.visibility = View.VISIBLE
         progressBar.progress = 0
         tvTimer.visibility = View.VISIBLE
         tvTimer.text = "Initializing Engine..."
 
-        // Disable logout during heavy C++ processing to prevent memory leaks/crashes
-        btnLogout.isEnabled = false
-
-        val applyBlur = switchBlur.isChecked
-        val useNlvc = currentUseNlvc()
+        // Pinned: strain is always VSG, blur always off (UI removed; the
+        // native signature keeps both flags so C++ stays untouched).
+        val applyBlur = false
+        val useNlvc = false
         val use6x6 = currentUseKeysInterpolator()
         val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
 
@@ -798,9 +768,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 val outcome = viewModel.runBatchAnalysis(applicationContext, params) { progress ->
                     setComputeProgress(progress.percent)
                     setComputeStatus(progress.status)
+                    runOnUiThread { overlayTitle.text = progress.status }
                     runOnUiThread {
                         progressBar.progress = progress.percent
                         tvTimer.text = progress.timerText
+                        if (progress.pointsSolved >= 0) {
+                            findViewById<TextView>(R.id.tvRunPoints).text =
+                                String.format(java.util.Locale.US, "%,d", progress.pointsSolved)
+                        }
+                        if (progress.convergencePercent >= 0f) {
+                            findViewById<TextView>(R.id.tvRunConvergence).text =
+                                String.format(java.util.Locale.US, "%.1f%%", progress.convergencePercent)
+                        }
                     }
                 }
 
@@ -809,10 +788,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     isProcessing = false
                     hideComputeOverlay()
+                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     progressBar.visibility = View.GONE
-                    btnLogout.isEnabled = true
 
-                    if (outcome.engineErrorCode < 0) {
+                    if (outcome.engineErrorCode == AnalysisViewModel.ERROR_CANCELLED) {
+                        // User cancelled: stay on settings, nothing to report.
+                        tvTimer.visibility = View.GONE
+                        checkReady()
+                    } else if (outcome.engineErrorCode < 0) {
                         val errorMsg = when (outcome.engineErrorCode) {
                             -1 -> "Feature Extraction Failed (AKAZE). The speckle pattern might be too fine, out of focus, or destroyed by scaling."
                             -2 -> "Invalid ROI. The mask excluded the entire specimen (0 valid points)."
@@ -849,7 +832,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     progressBar.visibility = View.GONE
                     tvTimer.text = "Engine Error"
                     tvResult.text = "❌ Error: ${e.message}"
-                    btnLogout.isEnabled = true
                     checkReady()
                 }
             }
@@ -872,9 +854,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
             // PDF GENERATOR DATA
             putExtra(DicKeys.SESSION_ID, viewModel.currentSessionId)
+            putExtra(DicKeys.SESSION_LOCAL_ID, viewModel.workingLocalId)
             putExtra(DicKeys.SUBSET_SIZE, currentSubsetSize())
             putExtra(DicKeys.STRAIN_WINDOW, currentStrainWindow())
-            putExtra(DicKeys.STRAIN_METHOD, if (currentUseNlvc()) "NLVC" else "VSG")
+            putExtra(DicKeys.STRAIN_METHOD, "VSG")
             putExtra(DicKeys.ENGINE_STATS, viewModel.engineStatsArray)
 
             // PASSING ROI DATA FOR THE PDF REPORT
@@ -886,18 +869,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
+    @Suppress("UnusedPrivateMember", "unused") // P5: rehome inside the ROI editor
     private fun handleMaskSelection(uri: Uri) {
         try {
             contentResolver.openInputStream(uri)?.use { stream ->
                 viewModel.roiMaskBytes = stream.readBytes()
                 Toast.makeText(this, R.string.mask_uploaded, Toast.LENGTH_SHORT).show()
-                btnLoadRoiMask.text = getString(R.string.mask_uploaded_button)
-                // Success state via the design-system color, keeping the
-                // outlined Material shape intact.
-                (btnLoadRoiMask as? com.google.android.material.button.MaterialButton)?.let {
-                    it.setStrokeColorResource(R.color.semantic_success)
-                    it.setTextColor(getColor(R.color.semantic_success))
-                }
                 viewModel.hasCustomRoi = true
                 checkReady()
             }
@@ -927,8 +904,54 @@ class StaticAnalysisActivity : AppCompatActivity() {
             tvSubsetValue.text = "${etSubsetSize.value.toInt()} px"
             tvStepValue.text = "${etStepSize.value.toInt()} px"
             tvStrainValue.text = "${etStrainWindow.value.toInt()} px"
+            updateAdvancedSummary?.invoke()
         }
         updateLabels()
+
+        // Advanced expander: collapsed by default; header toggles, summary
+        // chip shows current values (+ "defaults" marker when untouched).
+        val advancedBody = findViewById<View>(R.id.advancedParamsBody)
+        val advancedChevron = findViewById<ImageView>(R.id.ivAdvancedChevron)
+        val tvAdvancedSummary = findViewById<TextView>(R.id.tvAdvancedSummary)
+
+        updateAdvancedSummary = {
+            val s = currentSubsetSize()
+            val st = currentStepSize()
+            val w = currentStrainWindow()
+            val isDefaults = s == 41 && st == 5 && w == 15 && !currentUseKeysInterpolator()
+            tvAdvancedSummary.text = getString(R.string.advanced_summary_fmt, s, st, w) +
+                if (isDefaults) getString(R.string.advanced_defaults_suffix) else ""
+        }
+        updateAdvancedSummary?.invoke()
+
+        @Suppress("MagicNumber") // the documented defaults: 41 / 5 / 15
+        findViewById<View>(R.id.btnAdvancedReset).setOnClickListener {
+            etSubsetSize.value = 41f
+            etStepSize.value = 5f
+            etStrainWindow.value = 15f
+            rgInterpolator.check(R.id.rbBicubic)
+            updateAdvancedSummary?.invoke()
+        }
+
+        fun infoDialog(titleRes: Int, bodyRes: Int): (View) -> Unit = {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(titleRes)
+                .setMessage(bodyRes)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+        findViewById<View>(R.id.btnSubsetInfo)
+            .setOnClickListener(infoDialog(R.string.subset_size, R.string.info_subset))
+        findViewById<View>(R.id.btnStepInfo)
+            .setOnClickListener(infoDialog(R.string.step_size_density, R.string.info_step))
+        findViewById<View>(R.id.btnStrainInfo)
+            .setOnClickListener(infoDialog(R.string.strain_window, R.string.info_strain_window))
+
+        findViewById<View>(R.id.advancedParamsHeader).setOnClickListener {
+            val expanded = advancedBody.visibility == View.VISIBLE
+            advancedBody.visibility = if (expanded) View.GONE else View.VISIBLE
+            advancedChevron.rotation = if (expanded) 0f else 180f
+        }
 
         etSubsetSize.addOnChangeListener { _, _, _ -> updateLabels() }
         etStepSize.addOnChangeListener { _, _, _ -> updateLabels() }
@@ -960,23 +983,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
             )
         }
 
-        // Step indicator chips
-        tvStepChip1.setBackgroundResource(
-            if (forward) R.drawable.bg_chip_step_inactive else R.drawable.bg_pill_accent,
-        )
-        tvStepChip1.setTextColor(
-            getColor(
-                if (forward) R.color.sky_on_container else R.color.text_on_primary,
-            ),
-        )
-        tvStepChip2.setBackgroundResource(
-            if (forward) R.drawable.bg_pill_accent else R.drawable.bg_chip_step_inactive,
-        )
-        tvStepChip2.setTextColor(
-            getColor(
-                if (forward) R.color.text_on_primary else R.color.sky_on_container,
-            ),
-        )
+        findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).subtitle =
+            getString(R.string.step_of_fmt, step)
+        if (forward) {
+            refreshInputsCard()
+            updateRoiSummary()
+        }
 
         // Bottom nav: Next drives page 1, Back appears on page 2
         btnNext.visibility = if (forward) View.GONE else View.VISIBLE
@@ -1028,6 +1040,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val nextEnabled = ready && !isProcessing
         btnNext.isEnabled = nextEnabled
         btnNext.alpha = if (nextEnabled) 1.0f else 0.4f
+        tvNextReason.text = when {
+            viewModel.refBytes == null -> getString(R.string.next_reason_ref)
+            viewModel.defFilePaths.isEmpty() -> getString(R.string.next_reason_def)
+            else -> ""
+        }
 
         // Page-2 gate: Compute needs images AND the settings page visited
         val computeEnabled = ready && viewModel.settingsReviewed && !isProcessing
@@ -1035,31 +1052,83 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnCalculateFullField.alpha = if (computeEnabled) 1.0f else 0.4f
 
         btnDefineRoi.isEnabled = (viewModel.refBytes != null) && !isProcessing
-        btnManualRoi.isEnabled = !isProcessing
-        btnLoadRef.isEnabled = !isProcessing
-        btnLoadDef.isEnabled = !isProcessing
         btnBack.isEnabled = !isProcessing
-        btnViewResults.visibility = if (viewModel.hasCompletedAnalysis && !isProcessing) View.VISIBLE else View.GONE
         // Enabled/disabled visuals are handled by the Material theme —
         // no more hand-painted setBackgroundColor state juggling.
     }
 
     private fun restoreUiFromViewModel() {
-        tvRefName.text = viewModel.refName
-        tvDefName.text = viewModel.getDefDisplayName()
-
-        viewModel.refBytes?.let { imgRef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(it, 1000)) }
-
-        if (viewModel.defFilePaths.isNotEmpty()) {
-            try {
-                val firstBytes = File(viewModel.defFilePaths[0]).readBytes()
-                imgDef.setImageBitmap(IndicVisionNativeLib.getPreviewFromBytes(firstBytes, 1000))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+        viewModel.refBytes?.let {
+            refPreviewBmp = IndicVisionNativeLib.getPreviewFromBytes(it, 1000)
         }
+        refreshRefSlot()
+        refreshDefSlot()
         checkReady()
     }
+
+    /** Reference slot: dropzone when empty, summary card when filled. */
+    private fun refreshRefSlot() {
+        val hasRef = viewModel.refBytes != null
+        refDropzone.visibility = if (hasRef) View.GONE else View.VISIBLE
+        refCard.visibility = if (hasRef) View.VISIBLE else View.GONE
+        if (hasRef) {
+            tvRefName.text = viewModel.refName.removePrefix("Ref: ")
+            tvRefMeta.text = getString(
+                R.string.reference_meta_fmt,
+                viewModel.realRefWidth,
+                viewModel.realRefHeight,
+            )
+            refPreviewBmp?.let { ivRefThumb.setImageBitmap(it) }
+        }
+        updateJpegChip()
+    }
+
+    /** Deformed slot: dropzone when empty, count card when filled. */
+    private fun refreshDefSlot() {
+        val n = viewModel.defFilePaths.size
+        defDropzone.visibility = if (n > 0) View.GONE else View.VISIBLE
+        defCard.visibility = if (n > 0) View.VISIBLE else View.GONE
+        if (n > 0) {
+            tvDefName.text = getString(R.string.def_count_fmt, n)
+            val first = viewModel.defFilePaths.first().substringAfterLast('/')
+            val last = viewModel.defFilePaths.last().substringAfterLast('/')
+            tvDefMeta.text = if (n == 1) first else "$first … $last"
+        }
+        updateJpegChip()
+    }
+
+    /** Confirm-settings inputs summary card. */
+    private fun refreshInputsCard() {
+        tvInputsTitle.text = viewModel.refName.removePrefix("Ref: ")
+        tvInputsMeta.text = getString(R.string.inputs_meta_fmt, viewModel.defFilePaths.size)
+        refPreviewBmp?.let { ivInputsThumb.setImageBitmap(it) }
+    }
+
+    /** ROI card subtitle reflecting the current selection. */
+    private fun updateRoiSummary() {
+        tvInstruction.text = if (!viewModel.hasCustomRoi) {
+            getString(R.string.roi_full_fmt, viewModel.realRefWidth, viewModel.realRefHeight)
+        } else {
+            getString(
+                R.string.roi_custom_fmt,
+                viewModel.roiW,
+                viewModel.roiH,
+                viewModel.roiX,
+                viewModel.roiY,
+            )
+        }
+    }
+
+    /** Inline, non-blocking JPEG accuracy warning. */
+    private fun updateJpegChip() {
+        val jpeg = viewModel.refName.endsWith(".jpg", true) ||
+            viewModel.refName.endsWith(".jpeg", true) ||
+            viewModel.defFilePaths.any { it.endsWith(".jpg", true) || it.endsWith(".jpeg", true) }
+        jpegWarnRow.visibility = if (jpeg) View.VISIBLE else View.GONE
+    }
+
+    // P5: rehome inside the ROI editor
+    @Suppress("UnusedPrivateMember", "unused", "LongMethod", "CyclomaticComplexMethod")
     private fun showShapeRoiDialog() {
         if (viewModel.refBytes == null) {
             Toast.makeText(this, R.string.manual_roi_load_ref_first, Toast.LENGTH_SHORT).show()
@@ -1092,8 +1161,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
             getString(R.string.manual_roi_max_height, imgH)
 
         val shapes = resources.getStringArray(R.array.manual_roi_shapes)
-        spinner.adapter = ArrayAdapter(this, R.layout.spinner_item_white, shapes).apply {
-            setDropDownViewResource(R.layout.spinner_dropdown_white)
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, shapes).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
 
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {

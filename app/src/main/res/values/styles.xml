@@ -112,7 +112,7 @@
         <item name="android:textSize">12sp</item>
         <item name="cornerRadius">20dp</item>
         <item name="backgroundTint">@color/chip_toggle_bg_dark</item>
-        <item name="strokeColor">#33FFFFFF</item>
+        <item name="strokeColor">@color/surface_outline</item>
         <item name="strokeWidth">1dp</item>
         <item name="rippleColor">#33FFFFFF</item>
     </style>
@@ -153,5 +153,12 @@
         <item name="android:activityOpenExitAnimation">@anim/fade_out_scale</item>
         <item name="android:activityCloseEnterAnimation">@anim/fade_in_scale</item>
         <item name="android:activityCloseExitAnimation">@anim/slide_out_right</item>
+    </style>
+    <style name="Widget.IndicVision.ShareRow" parent="">
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:layout_marginTop">8dp</item>
+        <item name="android:background">?attr/selectableItemBackground</item>
     </style>
 </resources>

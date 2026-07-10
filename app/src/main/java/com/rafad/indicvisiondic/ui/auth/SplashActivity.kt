@@ -9,22 +9,29 @@ import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.data.DeviceKeyManager
 import com.rafad.indicvisiondic.data.SupabaseManager
-import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
+import com.rafad.indicvisiondic.ui.home.HomeActivity
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
 
 /**
  * App entry point: restores an existing Supabase session and routes to
- * [StaticAnalysisActivity] (approved user), [PendingApprovalActivity]
+ * [com.rafad.indicvisiondic.ui.home.HomeActivity] (approved user), [PendingApprovalActivity]
  * (account awaiting admin approval), or [AuthActivity] (signed out).
  */
 class SplashActivity : AppCompatActivity() {
 
     private val authRepo = AuthRepository()
 
+    private val spinnerHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_splash)
+
+        // Spinner only if routing takes longer than 400 ms — a flash on a
+        // fast session restore reads as slowness.
+        val spinner = findViewById<android.widget.ProgressBar>(R.id.progressBar)
+        spinnerHandler.postDelayed({ spinner.visibility = android.view.View.VISIBLE }, SPINNER_DELAY_MS)
 
         // Using lifecycleScope ensures that if the user minimizes or closes
         // the app while it's loading, it doesn't crash trying to update UI.
@@ -33,13 +40,22 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        spinnerHandler.removeCallbacksAndMessages(null)
+    }
+
+    private companion object {
+        const val SPINNER_DELAY_MS = 400L
+    }
+
     private suspend fun performRoutingCheck() {
         try {
             // 1. SILENT VAULT CHECK: Is there a session saved on the device?
             val session = SupabaseManager.client.auth.currentSessionOrNull()
 
             if (BuildConfig.DEBUG) {
-                navigateTo(StaticAnalysisActivity::class.java)
+                navigateTo(HomeActivity::class.java)
                 return
             }
 
@@ -58,11 +74,11 @@ class SplashActivity : AppCompatActivity() {
             statusResult.fold(
                 onSuccess = { status ->
                     when (status) {
-                        "APPROVED" -> navigateTo(StaticAnalysisActivity::class.java)
+                        "APPROVED" -> navigateTo(HomeActivity::class.java)
                         "OFFLINE_CACHE_APPROVED" -> {
                             // THE OFFLINE BYPASS: They have a token but no Wi-Fi. Let them work!
                             android.widget.Toast.makeText(this, "Offline Mode", android.widget.Toast.LENGTH_LONG).show()
-                            navigateTo(StaticAnalysisActivity::class.java)
+                            navigateTo(HomeActivity::class.java)
                         }
                         "PENDING" -> navigateTo(PendingApprovalActivity::class.java)
                         else -> navigateTo(AuthActivity::class.java, "System error: Unknown account status.")

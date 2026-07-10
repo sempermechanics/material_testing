@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Fill for ROI draw-mode chips on the dark viewer toolbar -->
+<!-- Fill for ROI draw-mode chips (light theme: tonal checked state) -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/sky_primary" android:state_checked="true" />
+    <item android:color="@color/sky_container" android:state_checked="true" />
     <item android:color="@color/viewer_chip_off" />
 </selector>

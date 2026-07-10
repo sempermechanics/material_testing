@@ -27,6 +27,10 @@ import kotlinx.coroutines.launch
  */
 class AuthActivity : AppCompatActivity() {
 
+    private companion object {
+        const val MIN_PASSWORD_LENGTH = 6
+    }
+
     private val authRepo = AuthRepository()
     private var isLoginMode = true // Tracks which screen we are currently showing
 
@@ -86,13 +90,27 @@ class AuthActivity : AppCompatActivity() {
             val password = etPassword.text.toString().trim()
             val confirmPassword = etConfirmPassword.text.toString().trim()
 
-            if (email.isEmpty() || password.isEmpty()) {
-                showSnackbar("Please enter both email and password.", isError = true)
+            // Inline errors on the offending field (wireframe 02) — the
+            // snackbar stays for non-field problems like network failures.
+            val layoutEmail = findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.layoutEmail)
+            val layoutPw = findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.layoutPassword)
+            layoutEmail.error = null
+            layoutPw.error = null
+
+            if (email.isEmpty()) {
+                layoutEmail.error = getString(R.string.error_email_required)
                 return@setOnClickListener
             }
-
-            if (password.length < 6) {
-                showSnackbar("Password must be at least 6 characters.", isError = true)
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                layoutEmail.error = getString(R.string.error_email_invalid)
+                return@setOnClickListener
+            }
+            if (password.isEmpty()) {
+                layoutPw.error = getString(R.string.error_password_required)
+                return@setOnClickListener
+            }
+            if (password.length < MIN_PASSWORD_LENGTH) {
+                layoutPw.error = getString(R.string.error_password_short)
                 return@setOnClickListener
             }
 
@@ -208,7 +226,8 @@ class AuthActivity : AppCompatActivity() {
     private fun handleForgotPassword() {
         val email = etEmail.text.toString().trim()
         if (email.isEmpty()) {
-            showSnackbar("Please enter your email address to reset password.", isError = true)
+            findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.layoutEmail).error =
+                getString(R.string.error_email_for_reset)
             return
         }
 
