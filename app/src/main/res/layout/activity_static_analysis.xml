@@ -471,8 +471,7 @@
                                 android:layout_height="wrap_content"
                                 android:orientation="horizontal">
                                 <TextView
-                                    android:layout_width="0dp"
-                                    android:layout_weight="1"
+                                    android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="@string/subset_size"
                                     android:textColor="@color/text_primary"
@@ -480,12 +479,19 @@
 
                                 <ImageButton
                                     android:id="@+id/btnSubsetInfo"
-                                    android:layout_width="30dp"
-                                    android:layout_height="30dp"
+                                    android:layout_width="18dp"
+                                    android:layout_height="18dp"
+                                    android:layout_marginStart="6dp"
                                     android:background="?attr/selectableItemBackgroundBorderless"
                                     android:contentDescription="@string/info"
-                                    android:scaleType="centerInside"
-                                    android:src="@android:drawable/ic_dialog_info" />
+                                    android:scaleType="fitCenter"
+                                    android:src="@drawable/ic_info_min"
+                                    app:tint="@color/text_secondary" />
+
+                                <View
+                                    android:layout_width="0dp"
+                                    android:layout_height="1dp"
+                                    android:layout_weight="1" />
                                 <TextView
                                     android:id="@+id/tvSubsetValue"
                                     android:layout_width="wrap_content"
@@ -510,8 +516,7 @@
                                 android:orientation="horizontal"
                                 android:layout_marginTop="4dp">
                                 <TextView
-                                    android:layout_width="0dp"
-                                    android:layout_weight="1"
+                                    android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="@string/step_size_density"
                                     android:textColor="@color/text_primary"
@@ -519,12 +524,19 @@
 
                                 <ImageButton
                                     android:id="@+id/btnStepInfo"
-                                    android:layout_width="30dp"
-                                    android:layout_height="30dp"
+                                    android:layout_width="18dp"
+                                    android:layout_height="18dp"
+                                    android:layout_marginStart="6dp"
                                     android:background="?attr/selectableItemBackgroundBorderless"
                                     android:contentDescription="@string/info"
-                                    android:scaleType="centerInside"
-                                    android:src="@android:drawable/ic_dialog_info" />
+                                    android:scaleType="fitCenter"
+                                    android:src="@drawable/ic_info_min"
+                                    app:tint="@color/text_secondary" />
+
+                                <View
+                                    android:layout_width="0dp"
+                                    android:layout_height="1dp"
+                                    android:layout_weight="1" />
                                 <TextView
                                     android:id="@+id/tvStepValue"
                                     android:layout_width="wrap_content"
@@ -549,8 +561,7 @@
                                 android:orientation="horizontal"
                                 android:layout_marginTop="4dp">
                                 <TextView
-                                    android:layout_width="0dp"
-                                    android:layout_weight="1"
+                                    android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="@string/strain_window"
                                     android:textColor="@color/text_primary"
@@ -558,12 +569,19 @@
 
                                 <ImageButton
                                     android:id="@+id/btnStrainInfo"
-                                    android:layout_width="30dp"
-                                    android:layout_height="30dp"
+                                    android:layout_width="18dp"
+                                    android:layout_height="18dp"
+                                    android:layout_marginStart="6dp"
                                     android:background="?attr/selectableItemBackgroundBorderless"
                                     android:contentDescription="@string/info"
-                                    android:scaleType="centerInside"
-                                    android:src="@android:drawable/ic_dialog_info" />
+                                    android:scaleType="fitCenter"
+                                    android:src="@drawable/ic_info_min"
+                                    app:tint="@color/text_secondary" />
+
+                                <View
+                                    android:layout_width="0dp"
+                                    android:layout_height="1dp"
+                                    android:layout_weight="1" />
                                 <TextView
                                     android:id="@+id/tvStrainValue"
                                     android:layout_width="wrap_content"
