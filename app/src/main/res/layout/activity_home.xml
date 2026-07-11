@@ -49,15 +49,6 @@
             android:paddingBottom="96dp" />
     </LinearLayout>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|start"
-        android:layout_margin="20dp"
-        android:text="@string/home_footer_note"
-        android:textColor="@color/text_secondary"
-        android:textSize="11sp" />
-
     <LinearLayout
         android:id="@+id/emptyState"
         android:layout_width="wrap_content"

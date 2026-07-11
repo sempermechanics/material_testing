@@ -249,7 +249,6 @@
     <string name="extract_n_frames_fmt">Extract %1$d frames</string>
     <string name="video_capped_suffix">" (capped — raise Max frames in Settings)"</string>
     <string name="video_first_frame_note">First frame becomes the reference</string>
-    <string name="home_footer_note">Metadata stays on this phone · full data in your cloud folder</string>
     <string name="info_subset">The pixel window tracked at each grid point. Bigger = more robust on weak speckle, but smooths out sharp strain gradients.</string>
     <string name="info_step">Spacing between tracked points. Smaller = denser results and longer analysis time.</string>
     <string name="info_strain_window">How many neighboring points are fitted to turn displacement into strain. Bigger = smoother strain, less local detail.</string>
