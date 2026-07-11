@@ -6,10 +6,13 @@
     android:layout_height="match_parent"
     android:background="@color/viewer_canvas">
 
+    <!-- forceDarkAllowed=false: the specimen image and ROI strokes keep
+         their exact colors in dark mode. -->
     <FrameLayout
         android:id="@+id/canvasFrame"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:forceDarkAllowed="false"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toTopOf="@id/bottomToolbar"
         app:layout_constraintStart_toStartOf="parent"

@@ -69,6 +69,10 @@ class HomeActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
 
+        // Edge-to-edge (enforced on API 35+): drop the header below the status
+        // bar, otherwise the bar swallows taps on the settings gear.
+        com.rafad.indicvisiondic.ui.Insets.padTop(findViewById(R.id.homeTopBar))
+
         list = findViewById(R.id.sessionList)
         emptyState = findViewById(R.id.emptyState)
         list.layoutManager = LinearLayoutManager(this)

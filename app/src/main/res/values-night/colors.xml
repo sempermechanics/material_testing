@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+    Dark mode is force-dark: the light palette inverts at render time, so no
+    full night palette lives here. Only the window-level colors force dark
+    cannot reach — system bars and the splash's first frame — get night values,
+    tuned to sit next to the inverted surface_muted.
+-->
+<resources>
+    <color name="bar_system">#101518</color>
+    <color name="splash_bg">#101518</color>
+</resources>

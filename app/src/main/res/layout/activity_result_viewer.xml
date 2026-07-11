@@ -188,6 +188,7 @@
         android:layout_below="@id/topBarHost"
         android:layout_marginHorizontal="12dp"
         android:layout_marginTop="2dp"
+        android:forceDarkAllowed="false"
         android:background="@drawable/bg_viewer_panel"
         android:clickable="true"
         android:focusable="true"
@@ -226,12 +227,15 @@
     </LinearLayout>
 
     <!-- Image area: fills the space between the legend band and the scrubber. -->
+    <!-- forceDarkAllowed=false: measurement colors (heatmap, legend,
+         inspect crosshair) must never be inverted by dark mode. -->
     <RelativeLayout
         android:id="@+id/zoomContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_above="@id/layoutScrubber"
-        android:layout_below="@id/layoutColorScale">
+        android:layout_below="@id/layoutColorScale"
+        android:forceDarkAllowed="false">
 
         <com.rafad.indicvisiondic.ui.viewer.TouchImageView
             android:id="@+id/imgBaseResult"

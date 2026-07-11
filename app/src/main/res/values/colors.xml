@@ -35,10 +35,9 @@
     <color name="viewer_chip_off">#FFFFFF</color>
     <color name="viewer_on_dark">#152430</color> <!-- now "on viewer panel"; light theme -->
 
-    <!-- Legacy names remapped to the new palette so any lingering
-         references stay on-brand during migration. -->
-    <color name="purple_200">#7FD3F4</color>
-    <color name="purple_700">#0277BD</color>
-    <color name="teal_200">#00BFFF</color>
-    <color name="black">#FF000000</color>
+    <!-- Dark mode is force-dark (render-time inversion of this palette), which
+         never touches window/system-bar colors — these two aliases carry the
+         night variant instead (see values-night/colors.xml). -->
+    <color name="bar_system">@color/surface_muted</color>
+    <color name="splash_bg">@color/surface_muted</color>
 </resources>

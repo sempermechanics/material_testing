@@ -18,9 +18,15 @@
         <item name="colorOnSurface">@color/text_primary</item>
         <item name="colorError">@color/semantic_danger</item>
 
-        <!-- System bars -->
-        <item name="android:statusBarColor">@color/surface_muted</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <!-- Dark mode: the system inverts this light palette at render time
+             (API 29+; older devices stay light). Views showing measurement
+             colors opt out per-view with forceDarkAllowed="false". -->
+        <item name="android:forceDarkAllowed" tools:targetApi="q">true</item>
+
+        <!-- System bars: force dark never touches these, so the night
+             variants come from values-night resource aliases -->
+        <item name="android:statusBarColor">@color/bar_system</item>
+        <item name="android:windowLightStatusBar">@bool/light_system_bars</item>
 
         <!-- Shapes: soft, consistent rounding across all Material components -->
         <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.IndicVision.Small</item>
@@ -35,9 +41,10 @@
         <item name="android:windowAnimationStyle">@style/Animation.IndicVision.Activity</item>
     </style>
 
-    <!-- Splash window matches the light layout so the first frame doesn't flash -->
+    <!-- Splash window matches the layout so the first frame doesn't flash —
+         splash_bg is night-qualified for the same guarantee in dark mode -->
     <style name="Theme.IndicVisionDIC.Splash" parent="Theme.IndicVisionDIC">
-        <item name="android:statusBarColor">@color/surface_muted</item>
-        <item name="android:windowBackground">@color/surface_muted</item>
+        <item name="android:statusBarColor">@color/splash_bg</item>
+        <item name="android:windowBackground">@color/splash_bg</item>
     </style>
 </resources>
