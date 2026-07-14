@@ -202,7 +202,11 @@ object ReportBuilder {
                 null,
             )
 
-            val bakedHeatmap = Bitmap.createBitmap(params.imgW, params.imgH, Bitmap.Config.ARGB_8888).also { bmp ->
+            // Compose at full resolution, then downscale for the PDF. The full-res
+            // canvas is a throwaway — compressForPdf() returns a *new* small bitmap,
+            // so the original must be recycled here or we leak one full-res
+            // ARGB_8888 bitmap per field (6×), which OOMs large-image reports.
+            val fullResComposite = Bitmap.createBitmap(params.imgW, params.imgH, Bitmap.Config.ARGB_8888).also { bmp ->
                 val tempCanvas = Canvas(bmp)
                 tempCanvas.drawBitmap(baseImg, 0f, 0f, null)
                 tempCanvas.drawBitmap(heatmapBmp, 0f, 0f, Paint().apply { alpha = 180 })
@@ -211,7 +215,9 @@ object ReportBuilder {
                     FIELD_KEYS[fieldIndex], unit, extrema.maxIdx, extrema.minIdx, data,
                     drawMinMarker = params.drawMinMarker,
                 )
-            }.compressForPdf()
+            }
+            val bakedHeatmap = fullResComposite.compressForPdf()
+            fullResComposite.recycle()
 
             heatmapBmp.recycle()
 

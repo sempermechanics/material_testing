@@ -86,6 +86,10 @@ object PdfReportGenerator {
             emit(Progress.Status("Telemetry…", 96))
             drawTelemetryPage(layout, cover)
 
+            // Finish the still-open telemetry page before writing — PdfDocument
+            // rejects writeTo()/close() while any page is unfinished. (generate()
+            // does this too; generateBatch was missing it.)
+            layout.finishCurrentPage()
             pdfDocument.writeTo(outputStream)
             emit(Progress.Complete)
         } catch (e: Exception) {

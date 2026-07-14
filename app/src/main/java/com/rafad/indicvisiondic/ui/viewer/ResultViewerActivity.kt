@@ -1,10 +1,12 @@
 package com.rafad.indicvisiondic.ui.viewer
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.*
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -76,6 +78,9 @@ class ResultViewerActivity : AppCompatActivity() {
     // Batch Data State
     private var batchFiles: List<File> = emptyList()
     private var originalDefNames: List<String> = emptyList()
+    // Raw image sources for the export bundle (best-effort; may be absent on reopen)
+    private var refImagePath: String? = null
+    private var defImagePaths: List<String> = emptyList()
     private var currentFrameIndex = 0
     private var loadFrameJob: Job? = null
     private var visualizationJob: Job? = null
@@ -93,6 +98,46 @@ class ResultViewerActivity : AppCompatActivity() {
     private var currentHeatmapMax = 0f
 
     private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
+
+    // Storage Access Framework: "Save to device" writes a generated artifact to a
+    // user-chosen location. The picker is async, so the pending file is held here.
+    private var pendingSaveFile: File? = null
+    private val saveDocumentLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val uri = result.data?.data
+            val src = pendingSaveFile
+            pendingSaveFile = null
+            if (result.resultCode != RESULT_OK || uri == null || src == null) return@registerForActivityResult
+            lifecycleScope.launch {
+                val ok = withContext(Dispatchers.IO) {
+                    try {
+                        contentResolver.openOutputStream(uri)?.use { out ->
+                            src.inputStream().use { it.copyTo(out) }
+                        } != null
+                    } catch (e: Exception) {
+                        Timber.e(e, "Save to device failed")
+                        false
+                    }
+                }
+                Toast.makeText(
+                    this@ResultViewerActivity,
+                    if (ok) R.string.save_success else R.string.save_failed,
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+
+    /** Launches the system "create document" picker to save [file] to the device. */
+    internal fun saveFileToDevice(file: File, mime: String) {
+        pendingSaveFile = file
+        saveDocumentLauncher.launch(
+            Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = mime
+                putExtra(Intent.EXTRA_TITLE, file.name)
+            },
+        )
+    }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -155,6 +200,14 @@ class ResultViewerActivity : AppCompatActivity() {
 
         val batchDirPath = intent.getStringExtra(DicKeys.BATCH_DIR_PATH)
         originalDefNames = intent.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES) ?: emptyList()
+        refImagePath = intent.getStringExtra(DicKeys.REF_PATH)
+        // Prefer the raw deformed originals persisted in the session dir (survive
+        // reopen/eviction); fall back to the just-analysed session's temp paths.
+        val rawDeformedDir = batchDirPath?.let { File(it, "raw_deformed") }
+        defImagePaths = rawDeformedDir?.takeIf { it.isDirectory }
+            ?.listFiles()?.sortedBy { it.name }?.map { it.absolutePath }
+            ?: intent.getStringArrayListExtra(DicKeys.DEF_FILE_PATHS)
+            ?: emptyList()
 
         if (batchDirPath != null) {
             val dir = File(batchDirPath)
@@ -604,6 +657,8 @@ class ResultViewerActivity : AppCompatActivity() {
             dataIndex = currentDataIndex,
             typeString = currentTypeString,
             baseImage = base,
+            refImagePath = refImagePath,
+            defImagePaths = defImagePaths,
             buildReport = { buildReportData() },
         )
     }
