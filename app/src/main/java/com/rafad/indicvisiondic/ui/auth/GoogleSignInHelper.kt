@@ -1,17 +1,21 @@
 package com.rafad.indicvisiondic.ui.auth
 
 import android.app.Activity
+import android.content.Context
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import timber.log.Timber
 
 /**
  * Native "Sign in with Google" via AndroidX Credential Manager.
  *
- * Returns a Google **ID token** which the backend (Supabase) verifies against
- * the Google Web Client ID. No password or account UI is built here — the
- * system credential sheet handles account selection.
+ * Returns a Google **ID token** which the inDIC backend (Cloud Run) verifies
+ * against the Google Web Client ID (signature, audience, issuer, hosted domain).
+ * No password or account UI is built here — the system credential sheet handles
+ * account selection.
  *
  * Requires:
  *  - GOOGLE_WEB_CLIENT_ID (Web OAuth client) — see docs/GOOGLE_SSO_SETUP.md
@@ -38,5 +42,28 @@ object GoogleSignInHelper {
         val credential = response.credential
         val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
         return googleCredential.idToken
+    }
+
+    /**
+     * Best-effort **silent** ID-token refresh (no UI). Used to re-obtain a token
+     * for background uploads once the previous one expires. Returns null if a
+     * fresh token can't be issued without user interaction — the caller then
+     * defers (WorkManager retry) until the app is next foregrounded.
+     */
+    suspend fun getIdTokenSilent(context: Context, webClientId: String): String? {
+        if (webClientId.isBlank()) return null
+        return try {
+            val option = GetGoogleIdOption.Builder()
+                .setServerClientId(webClientId)
+                .setFilterByAuthorizedAccounts(true)
+                .setAutoSelectEnabled(true)
+                .build()
+            val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+            val response = CredentialManager.create(context).getCredential(context, request)
+            GoogleIdTokenCredential.createFrom(response.credential.data).idToken
+        } catch (e: Exception) {
+            Timber.d("Silent Google token refresh unavailable: ${e.message}")
+            null
+        }
     }
 }

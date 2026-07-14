@@ -25,15 +25,13 @@ import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
-import com.rafad.indicvisiondic.data.SupabaseManager
+import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
 import com.rafad.indicvisiondic.ui.auth.AuthActivity
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -208,7 +206,7 @@ class HomeActivity : AppCompatActivity() {
         }
 
         view.findViewById<TextView>(R.id.tvAccountEmail).text =
-            SupabaseManager.client.auth.currentUserOrNull()?.email ?: ""
+            TokenStore.cachedEmail(this) ?: ""
 
         view.findViewById<android.view.View>(R.id.btnAbout).setOnClickListener {
             MaterialAlertDialogBuilder(this)
@@ -219,17 +217,11 @@ class HomeActivity : AppCompatActivity() {
         }
         view.findViewById<android.view.View>(R.id.btnSignOut).setOnClickListener {
             sheet.dismiss()
-            lifecycleScope.launch {
-                try {
-                    SupabaseManager.client.auth.signOut()
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                    Timber.e(e, "Server sign-out failed; leaving locally anyway")
-                }
-                val intent = Intent(this@HomeActivity, AuthActivity::class.java)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                startActivity(intent)
-                finish()
-            }
+            TokenStore.clear(this)
+            val intent = Intent(this@HomeActivity, AuthActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
+            finish()
         }
 
         sheet.show()

@@ -3,168 +3,81 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
-import android.view.ViewGroup
 import android.widget.Button
-import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.snackbar.Snackbar // Added for modern error messages
+import com.google.android.material.snackbar.Snackbar
 import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
-import com.rafad.indicvisiondic.data.DeviceKeyManager
 import com.rafad.indicvisiondic.ui.Insets
 import com.rafad.indicvisiondic.ui.Motion
+import com.rafad.indicvisiondic.ui.home.HomeActivity
 import kotlinx.coroutines.launch
 
 /**
- * Sign-in / sign-up screen: email+password and Google one-tap (Credential
- * Manager). On success, routing depends on the account's approval status —
- * see docs/BACKEND.md for the auth and access-gate flow.
+ * Sign-in screen. Authentication is **Google-only** (Credential Manager one-tap
+ * → Google ID token), verified by the inDIC backend, which enforces the
+ * corporate hosted-domain and the APPROVED allow-list. On success, routing
+ * depends on the account's approval status — see docs/CLOUD_ARCHITECTURE_GCP.md.
  */
 class AuthActivity : AppCompatActivity() {
 
-    private companion object {
-        const val MIN_PASSWORD_LENGTH = 6
-    }
+    private val authRepo by lazy { AuthRepository(applicationContext) }
 
-    private val authRepo = AuthRepository()
-    private var isLoginMode = true // Tracks which screen we are currently showing
-
-    // UI Elements
-    private lateinit var etEmail: EditText
-    private lateinit var etPassword: EditText
-    private lateinit var btnMainAction: Button
-    private lateinit var tvToggleMode: TextView
-    private lateinit var tvForgotPassword: TextView
-    private lateinit var tvSubtitle: TextView
     private lateinit var progressBar: ProgressBar
-    private lateinit var layoutConfirmPassword: View
-    private lateinit var etConfirmPassword: EditText
     private lateinit var btnGoogleSignIn: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_auth)
 
-        // Initialize UI Elements
-        etEmail = findViewById(R.id.etEmail)
-        etPassword = findViewById(R.id.etPassword)
-        btnMainAction = findViewById(R.id.btnMainAction)
-        tvToggleMode = findViewById(R.id.tvToggleMode)
-        tvForgotPassword = findViewById(R.id.tvForgotPassword)
-        tvSubtitle = findViewById(R.id.tvSubtitle)
+        // Email/password sign-in has been retired — hide those controls,
+        // leaving Google sign-in as the single entry point.
+        intArrayOf(
+            R.id.layoutEmail, R.id.layoutPassword, R.id.layoutConfirmPassword,
+            R.id.btnMainAction, R.id.tvToggleMode, R.id.tvForgotPassword,
+        ).forEach { id -> findViewById<View?>(id)?.visibility = View.GONE }
+
+        findViewById<TextView>(R.id.tvSubtitle).text = getString(R.string.secure_access_portal)
+
         progressBar = findViewById(R.id.progressBar)
-        layoutConfirmPassword = findViewById(R.id.layoutConfirmPassword)
-        etConfirmPassword = findViewById(R.id.etConfirmPassword)
         btnGoogleSignIn = findViewById(R.id.btnGoogleSignIn)
         btnGoogleSignIn.setOnClickListener { handleGoogleSignIn() }
 
-        setupUIForCurrentMode()
-
-        // Edge-to-edge: keep the form clear of the status bar and nav bar
         Insets.padVertical(findViewById(R.id.authColumn))
-
-        // Gentle entrance on first show
         if (savedInstanceState == null) {
             Motion.enterStaggered(findViewById(R.id.authColumn))
         }
 
-        // Setup Listeners
-        tvToggleMode.setOnClickListener {
-            isLoginMode = !isLoginMode // Flip the mode
-            // Animate the confirm-password field sliding in/out instead of snapping
-            Motion.animateExpandCollapse(findViewById<ViewGroup>(R.id.authColumn))
-            setupUIForCurrentMode()
-        }
-
-        tvForgotPassword.setOnClickListener {
-            handleForgotPassword()
-        }
-
-        btnMainAction.setOnClickListener {
-            val email = etEmail.text.toString().trim()
-            val password = etPassword.text.toString().trim()
-            val confirmPassword = etConfirmPassword.text.toString().trim()
-
-            // Inline errors on the offending field (wireframe 02) — the
-            // snackbar stays for non-field problems like network failures.
-            val layoutEmail = findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.layoutEmail)
-            val layoutPw = findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.layoutPassword)
-            layoutEmail.error = null
-            layoutPw.error = null
-
-            if (email.isEmpty()) {
-                layoutEmail.error = getString(R.string.error_email_required)
-                return@setOnClickListener
-            }
-            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-                layoutEmail.error = getString(R.string.error_email_invalid)
-                return@setOnClickListener
-            }
-            if (password.isEmpty()) {
-                layoutPw.error = getString(R.string.error_password_required)
-                return@setOnClickListener
-            }
-            if (password.length < MIN_PASSWORD_LENGTH) {
-                layoutPw.error = getString(R.string.error_password_short)
-                return@setOnClickListener
-            }
-
-            if (!isLoginMode && password != confirmPassword) {
-                showSnackbar("Passwords do not match!", isError = true)
-                return@setOnClickListener
-            }
-
-            executeAuthAction(email, password)
-        }
-
-        // Check if the Gatekeeper (SplashActivity) routed us here with an error
         val routingError = intent.getStringExtra(DicKeys.ROUTING_ERROR)
         if (routingError != null) {
-            // Check if it's a successful logout message vs a real error
             val isError = !routingError.contains("successfully logged out")
             showSnackbar(routingError, isError = isError)
         }
     }
 
-    private fun setupUIForCurrentMode() {
-        if (isLoginMode) {
-            tvSubtitle.text = "Secure Access Portal"
-            btnMainAction.text = "Secure Login"
-            tvToggleMode.text = "Need access? Request an account"
-            tvForgotPassword.visibility = View.VISIBLE
-            layoutConfirmPassword.visibility = View.GONE
-        } else {
-            tvSubtitle.text = "Beta Registration Request"
-            btnMainAction.text = "Submit Request"
-            tvToggleMode.text = "Already have an account? Login here"
-            tvForgotPassword.visibility = View.GONE
-            layoutConfirmPassword.visibility = View.VISIBLE
-        }
-    }
-
     private fun handleGoogleSignIn() {
         setLoadingState(true)
-        val keyManager = DeviceKeyManager(this)
-        val deviceId = keyManager.getDeviceId()
-        val publicKey = keyManager.getPublicKeyBase64()
-
         lifecycleScope.launch {
             try {
                 val idToken = GoogleSignInHelper.getIdToken(
                     this@AuthActivity,
                     BuildConfig.GOOGLE_WEB_CLIENT_ID,
                 )
-                val result = authRepo.loginWithGoogle(idToken, deviceId, publicKey)
+                val result = authRepo.signInWithGoogle(idToken)
                 setLoadingState(false)
                 result.fold(
-                    onSuccess = {
-                        // Gatekeeper routes APPROVED  analysis, PENDING  pending page
-                        startActivity(Intent(this@AuthActivity, SplashActivity::class.java))
+                    onSuccess = { status ->
+                        val target = if (status == "PENDING") {
+                            PendingApprovalActivity::class.java
+                        } else {
+                            HomeActivity::class.java // APPROVED / OFFLINE_CACHE_APPROVED
+                        }
+                        startActivity(Intent(this@AuthActivity, target))
                         finish()
                     },
                     onFailure = { showSnackbar(it.message ?: "Google sign-in failed.", isError = true) },
@@ -177,96 +90,22 @@ class AuthActivity : AppCompatActivity() {
             } catch (e: androidx.credentials.exceptions.NoCredentialException) {
                 setLoadingState(false)
                 showSnackbar("No Google account available on this device.", isError = true)
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 setLoadingState(false)
                 showSnackbar(e.message ?: "Google sign-in failed.", isError = true)
             }
         }
     }
 
-    private fun executeAuthAction(email: String, pass: String) {
-        setLoadingState(true)
-
-        val keyManager = DeviceKeyManager(this)
-        val myDeviceId = keyManager.getDeviceId()
-        val myPublicKey = keyManager.getPublicKeyBase64()
-
-        lifecycleScope.launch {
-            val result: Result<String> = if (isLoginMode) {
-                // Pass the public key during login so it can self-heal!
-                authRepo.loginUser(email, pass, myDeviceId, myPublicKey)
-            } else {
-                authRepo.registerUser(email, pass, myDeviceId, myPublicKey)
-            }
-
-            setLoadingState(false)
-
-            result.fold(
-                onSuccess = {
-                    // Success! Let the Gatekeeper handle the routing.
-                    val intent = Intent(this@AuthActivity, SplashActivity::class.java)
-                    startActivity(intent)
-                    finish()
-                },
-                onFailure = { exception ->
-                    val errorMsg = exception.message ?: "An unknown error occurred"
-
-                    if (errorMsg.contains("pending", ignoreCase = true)) {
-                        val intent = Intent(this@AuthActivity, PendingApprovalActivity::class.java)
-                        startActivity(intent)
-                        finish()
-                    } else {
-                        showSnackbar(errorMsg, isError = true)
-                    }
-                },
-            )
-        }
-    }
-
-    private fun handleForgotPassword() {
-        val email = etEmail.text.toString().trim()
-        if (email.isEmpty()) {
-            findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.layoutEmail).error =
-                getString(R.string.error_email_for_reset)
-            return
-        }
-
-        setLoadingState(true)
-        lifecycleScope.launch {
-            val result: Result<String> = authRepo.resetPassword(email)
-            setLoadingState(false)
-
-            result.fold(
-                onSuccess = { message -> showSnackbar(message, isError = false) },
-                onFailure = { exception -> showSnackbar(exception.message ?: "Failed to send reset email.", isError = true) },
-            )
-        }
-    }
-
     private fun setLoadingState(isLoading: Boolean) {
-        if (isLoading) {
-            btnMainAction.text = ""
-            btnMainAction.isEnabled = false
-            progressBar.visibility = View.VISIBLE
-        } else {
-            btnMainAction.isEnabled = true
-            progressBar.visibility = View.GONE
-            setupUIForCurrentMode() // Restores the button text
-        }
+        btnGoogleSignIn.isEnabled = !isLoading
+        progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
     }
 
-    // --- NEW SNACKBAR FUNCTION ---
     private fun showSnackbar(message: String, isError: Boolean) {
-        // This natively grabs the screen root, making it 100% crash-proof
         val rootView = findViewById<View>(android.R.id.content)
         val snackbar = Snackbar.make(rootView, message, Snackbar.LENGTH_LONG)
-
-        if (isError) {
-            snackbar.setBackgroundTint(Color.parseColor("#D32F2F")) // Material Red
-        } else {
-            snackbar.setBackgroundTint(Color.parseColor("#388E3C")) // Material Green
-        }
-
+        snackbar.setBackgroundTint(if (isError) Color.parseColor("#D32F2F") else Color.parseColor("#388E3C"))
         snackbar.setTextColor(Color.WHITE)
         snackbar.show()
     }

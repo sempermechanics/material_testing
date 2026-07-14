@@ -6,28 +6,20 @@ plugins {
 
 // 🚀 PURE KOTLIN BYPASS: Reads the file without needing 'java.util'
 val localPropertiesFile = rootProject.file("local.properties")
-val supabaseUrl =
+// Base URL of the inDIC GCP backend (Cloud Run). Empty = cloud sync disabled;
+// the app still runs fully offline. e.g. https://indic-api-xxxx.a.run.app
+val indicApiBaseUrl =
     if (localPropertiesFile.exists()) {
         localPropertiesFile
             .readLines()
-            .find { it.startsWith("SUPABASE_URL=") }
-            ?.substringAfter("=")
-            ?.trim() ?: ""
-    } else {
-        ""
-    }
-val supabaseAnonKey =
-    if (localPropertiesFile.exists()) {
-        localPropertiesFile
-            .readLines()
-            .find { it.startsWith("SUPABASE_ANON_KEY=") }
+            .find { it.startsWith("INDIC_API_BASE_URL=") }
             ?.substringAfter("=")
             ?.trim() ?: ""
     } else {
         ""
     }
 // Google OAuth *Web* client ID (from Google Cloud console). Used by the
-// Credential Manager one-tap flow to obtain a Google ID token that Supabase
+// Credential Manager one-tap flow to obtain a Google ID token that the backend
 // verifies. See docs/GOOGLE_SSO_SETUP.md. Empty = SSO button shows a setup hint.
 val googleWebClientId =
     if (localPropertiesFile.exists()) {
@@ -52,8 +44,7 @@ android {
         versionName = "1.0"
 
         // 🚀 SECURE INJECTION: Uses our pure Kotlin variables
-        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
+        buildConfigField("String", "INDIC_API_BASE_URL", "\"$indicApiBaseUrl\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
 
         // 🚀 ARCHITECTURE-ADAPTIVE: No hardcoded abiFilters here.
@@ -145,16 +136,13 @@ dependencies {
 
     implementation("androidx.activity:activity-ktx:1.8.2")
 
-    // 🚀 Google SSO via Credential Manager (native one-tap) + Supabase ID token
+    // 🚀 Google SSO via Credential Manager (native one-tap) → Google ID token
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
-    implementation(platform("io.github.jan-tennert.supabase:bom:3.0.3"))
-    implementation("io.github.jan-tennert.supabase:auth-kt")
-    implementation("io.github.jan-tennert.supabase:postgrest-kt")
-    implementation("io.github.jan-tennert.supabase:storage-kt")
-    implementation("io.ktor:ktor-client-okhttp:3.0.0")
+    // inDIC GCP backend client: OkHttp + kotlinx.serialization
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("com.jakewharton.timber:timber:5.0.1")

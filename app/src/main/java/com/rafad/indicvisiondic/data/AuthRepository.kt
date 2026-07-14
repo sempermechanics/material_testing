@@ -1,271 +1,93 @@
 package com.rafad.indicvisiondic.data
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.auth.providers.Google
-import io.github.jan.supabase.auth.providers.builtin.Email
-import io.github.jan.supabase.auth.providers.builtin.IDToken
-import io.github.jan.supabase.postgrest.postgrest
+
+import android.content.Context
+import com.rafad.indicvisiondic.data.net.IndicApi
+import com.rafad.indicvisiondic.data.net.TokenProvider
+import com.rafad.indicvisiondic.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import timber.log.Timber
-
-// Used for fetching data during LOGIN
-@Serializable
-data class AuthProfile(
-    @SerialName("access_status") val accessStatus: String,
-    @SerialName("device_fingerprint") val deviceFingerprint: String? = null,
-    // Read back so re-registration can compare against the current key
-    @SerialName("hardware_public_key") val hardwarePublicKey: String? = null,
-)
-
-// Used ONLY for injecting hardware keys after registration
-@Serializable
-data class HardwareKeysUpdate(
-    @SerialName("device_fingerprint") val deviceFingerprint: String,
-    @SerialName("hardware_public_key") val hardwarePublicKey: String,
-)
-
-// Used for sending data during REGISTRATION
-@Serializable
-data class UserProfileInsert(
-    @SerialName("user_id") val userId: String,
-    @SerialName("email_address") val emailAddress: String,
-    @SerialName("device_fingerprint") val deviceFingerprint: String,
-    @SerialName("hardware_public_key") val hardwarePublicKey: String,
-    @SerialName("access_status") val accessStatus: String = "PENDING",
-)
+import java.io.IOException
 
 /**
- * Authentication + access-gate logic: sign-in/up against Supabase, the
- * `auth_profiles` PENDING/APPROVED status check, and device hardware-key
- * registration used to pin an account to a device.
+ * Authentication + access-gate against the inDIC GCP backend (Cloud Run).
+ *
+ * Sign-in is Google-only: the app obtains a Google ID token and the backend
+ * verifies it (signature, audience, issuer, hosted domain) and enforces the
+ * APPROVED allow-list. First sign-in creates a PENDING user server-side; an
+ * admin approves it. On the first APPROVED call the device's public key is
+ * registered (one-user-one-device binding).
+ *
+ * Status strings returned:
+ *  - "APPROVED"               → route to the app
+ *  - "PENDING"                → route to the pending-approval screen
+ *  - "OFFLINE_CACHE_APPROVED" → offline but previously approved (offline-first bypass)
  */
-class AuthRepository {
+class AuthRepository(context: Context) {
 
-    private val supabase = SupabaseManager.client
+    private val appContext = context.applicationContext
+    private val api = IndicApi(appContext)
 
-    // 1. REGISTRATION (Atomic Version)
-    // 1. REGISTRATION (Atomic Version)
-    suspend fun registerUser(
-        emailInput: String,
-        passwordInput: String,
-        deviceId: String,
-        publicKey: String,
-    ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            // We send everything in ONE single request
-            supabase.auth.signUpWith(Email) {
-                email = emailInput
-                password = passwordInput
-                // Inject hardware keys directly into the Supabase user metadata
-                data = buildJsonObject {
-                    put("device_fingerprint", deviceId)
-                    put("hardware_public_key", publicKey)
-                }
-            }
+    val cloudConfigured: Boolean get() = api.enabled
 
-            try {
-                supabase.auth.signOut()
-            } catch (e: Exception) { /* Ignore */ }
+    /** Complete a Google sign-in: verify with the backend and resolve access status. */
+    suspend fun signInWithGoogle(idToken: String): Result<String> = withContext(Dispatchers.IO) {
+        if (!api.enabled) {
+            return@withContext Result.failure(Exception("Cloud backend is not configured (INDIC_API_BASE_URL)."))
+        }
+        TokenStore.saveToken(appContext, idToken)
+        resolveStatus(idToken)
+    }
 
-            Result.success("Registration successful! Account is PENDING admin approval.")
-        } catch (e: Exception) {
-            val errorMsg = e.message ?: ""
-            // Clean Network Error Interceptor
-            if (errorMsg.contains("UnknownHostException", ignoreCase = true) ||
-                errorMsg.contains("resolve host", ignoreCase = true) ||
-                errorMsg.contains("Failed to connect", ignoreCase = true)
-            ) {
-                Result.failure(Exception("No internet connection. Please connect to a network to register."))
+    /** Re-check the account status using a currently-valid token (silent refresh if needed). */
+    suspend fun refreshStatus(): Result<String> = withContext(Dispatchers.IO) {
+        val token = TokenProvider.usableIdToken(appContext)
+            ?: return@withContext offlineOrExpired()
+        resolveStatus(token)
+    }
+
+    fun signOut() = TokenStore.clear(appContext)
+
+    fun cachedEmail(): String? = TokenStore.cachedEmail(appContext)
+
+    fun hasSession(): Boolean = TokenStore.hasSession(appContext)
+
+    // ------------------------------------------------------------------ internal
+
+    private suspend fun resolveStatus(idToken: String): Result<String> {
+        return try {
+            api.me(idToken) // 200 = APPROVED
+            TokenStore.setStatus(appContext, "APPROVED")
+            ensureDeviceRegistered(idToken)
+            Result.success("APPROVED")
+        } catch (e: IndicApi.NotApprovedException) {
+            TokenStore.setStatus(appContext, "PENDING")
+            Result.success("PENDING")
+        } catch (e: IndicApi.DeviceConflictException) {
+            // User is approved but the account is bound to another device.
+            Result.failure(Exception("This account is locked to a different device. An admin must re-bind it."))
+        } catch (e: IndicApi.ApiException) {
+            if (e.code == 401) {
+                Result.failure(Exception("Session expired. Please sign in again."))
             } else {
-                Result.failure(Exception("Registration failed: $errorMsg"))
+                Result.failure(Exception("Could not verify account (server error ${e.code})."))
             }
+        } catch (e: IOException) {
+            offlineOrExpired()
         }
     }
 
-    // 2. LOGIN & VAULT CHECK
-    suspend fun loginUser(emailInput: String, passwordInput: String, currentDeviceId: String, currentPublicKey: String): Result<String> {
-        return withContext(Dispatchers.IO) {
-            try {
-                Timber.d("========================================")
-                Timber.d("INITIATING SECURE LOGIN")
-                Timber.d("-> Local Device ID presented by phone: $currentDeviceId")
-
-                supabase.auth.signInWith(Email) {
-                    email = emailInput
-                    password = passwordInput
-                }
-
-                val userId = supabase.auth.currentUserOrNull()?.id
-                    ?: throw Exception("Login failed: User session not established.")
-
-                val profile = supabase.postgrest["auth_profiles"]
-                    .select { filter { eq("user_id", userId) } }
-                    .decodeSingle<AuthProfile>()
-
-                Timber.d("-> Supabase Vault Device ID: ${profile.deviceFingerprint}")
-
-                when (profile.accessStatus) {
-                    "APPROVED" -> {
-                        Timber.d("-> Status: APPROVED")
-                    }
-                    "PENDING" -> return@withContext Result.failure(Exception("Account is pending Admin approval."))
-                    "REVOKED" -> {
-                        supabase.auth.signOut()
-                        return@withContext Result.failure(Exception("Account access has been revoked."))
-                    }
-                    else -> {
-                        supabase.auth.signOut()
-                        return@withContext Result.failure(Exception("Unknown account status."))
-                    }
-                }
-
-                // THE HARDWARE LOCK GATE
-                if (profile.deviceFingerprint != null && profile.deviceFingerprint != currentDeviceId) {
-                    Timber.e("Hardware key mismatch for this account")
-                    Timber.e("Expected: ${profile.deviceFingerprint}")
-                    Timber.e("Received: $currentDeviceId")
-                    supabase.auth.signOut()
-                    return@withContext Result.failure(Exception("UNAUTHORIZED HARDWARE: Account locked to a different device."))
-                }
-
-                // THE SELF-HEALING KEYSTORE
-                if (profile.hardwarePublicKey != currentPublicKey) {
-                    Timber.d("KeyStore wipe detected. Healing public key in database...")
-                    supabase.postgrest["auth_profiles"].update(
-                        mapOf("hardware_public_key" to currentPublicKey),
-                    ) {
-                        filter { eq("user_id", userId) }
-                    }
-                }
-
-                Timber.d("Login successful")
-                Timber.d("========================================")
-                Result.success("Secure Login Successful!")
-            } catch (e: Exception) {
-                val errorMsg = e.message ?: ""
-
-                // Clean Network Error Interceptor
-                if (errorMsg.contains("UnknownHostException", ignoreCase = true) ||
-                    errorMsg.contains("resolve host", ignoreCase = true) ||
-                    errorMsg.contains("Failed to connect", ignoreCase = true)
-                ) {
-                    Result.failure(Exception("No internet connection. Please connect to Wi-Fi or cellular data to log in."))
-                } else {
-                    try {
-                        supabase.auth.signOut()
-                    } catch (ex: Exception) {}
-
-                    // If it isn't a network error, it's usually a bad password.
-                    // We return a clean message instead of Supabase's JSON error strings.
-                    if (errorMsg.contains("Invalid login credentials", ignoreCase = true)) {
-                        Result.failure(Exception("Invalid Email or Password."))
-                    } else {
-                        Result.failure(Exception(errorMsg))
-                    }
-                }
-            }
-        }
+    private suspend fun ensureDeviceRegistered(idToken: String) {
+        if (TokenStore.isDeviceRegistered(appContext)) return
+        api.registerDevice(idToken) // throws DeviceConflictException on 409
+        TokenStore.setDeviceRegistered(appContext, true)
+        Timber.d("Device registered with backend")
     }
 
-    // 2b. GOOGLE SSO (native one-tap  Supabase ID-token exchange)
-    // Verifies the Google ID token with Supabase, then ensures an
-    // auth_profiles row exists (first-time SSO users are created PENDING,
-    // so an admin still approves them exactly like email registrations).
-    // Routing (APPROVED / PENDING / hardware-lock) is then handled by the
-    // SplashActivity gatekeeper, identical to the email path.
-    suspend fun loginWithGoogle(idToken: String, deviceId: String, publicKey: String): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            supabase.auth.signInWith(IDToken) {
-                this.idToken = idToken
-                provider = Google
-            }
-
-            val user = supabase.auth.currentUserOrNull()
-                ?: throw Exception("Google sign-in failed: session not established.")
-            val userId = user.id
-            val email = user.email ?: "unknown@google"
-
-            Timber.d("Google sign-in OK for $email")
-
-            // Create the profile on first login so the gatekeeper has a row.
-            val existing = supabase.postgrest["auth_profiles"]
-                .select { filter { eq("user_id", userId) } }
-                .decodeSingleOrNull<AuthProfile>()
-
-            if (existing == null) {
-                supabase.postgrest["auth_profiles"].insert(
-                    UserProfileInsert(
-                        userId = userId,
-                        emailAddress = email,
-                        deviceFingerprint = deviceId,
-                        hardwarePublicKey = publicKey,
-                    ),
-                )
-                Timber.d("Created PENDING profile for new Google user")
-            }
-
-            Result.success("Google sign-in successful!")
-        } catch (e: Exception) {
-            val errorMsg = e.message ?: ""
-            if (errorMsg.contains("UnknownHostException", ignoreCase = true) ||
-                errorMsg.contains("resolve host", ignoreCase = true) ||
-                errorMsg.contains("Failed to connect", ignoreCase = true)
-            ) {
-                Result.failure(Exception("No internet connection. Please connect to a network to sign in."))
-            } else {
-                try {
-                    supabase.auth.signOut()
-                } catch (_: Exception) {}
-                Result.failure(Exception("Google sign-in failed: $errorMsg"))
-            }
+    private fun offlineOrExpired(): Result<String> =
+        if (TokenStore.cachedStatus(appContext) == "APPROVED") {
+            Result.success("OFFLINE_CACHE_APPROVED")
+        } else {
+            Result.failure(Exception("Could not verify account. Check your connection and sign in again."))
         }
-    }
-
-    // 3. FORGOT PASSWORD
-    suspend fun resetPassword(emailInput: String): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            supabase.auth.resetPasswordForEmail(emailInput)
-            Result.success("Password reset link sent to your email.")
-        } catch (e: Exception) {
-            Result.failure(Exception(e.message ?: "Failed to send reset email."))
-        }
-    }
-
-    // Fetches the user's current status from the database
-    suspend fun checkUserAccessStatus(currentDeviceId: String): Result<String> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val userId = supabase.auth.currentUserOrNull()?.id
-                    ?: return@withContext Result.failure(Exception("No active session."))
-
-                val profile = supabase.postgrest["auth_profiles"]
-                    .select { filter { eq("user_id", userId) } }
-                    .decodeSingle<AuthProfile>()
-
-                if (profile.deviceFingerprint != currentDeviceId && profile.deviceFingerprint != null) {
-                    supabase.auth.signOut()
-                    return@withContext Result.failure(Exception("UNAUTHORIZED HARDWARE"))
-                }
-
-                when (profile.accessStatus) {
-                    "APPROVED" -> Result.success("APPROVED")
-                    "PENDING" -> Result.success("PENDING")
-                    "REVOKED" -> {
-                        supabase.auth.signOut()
-                        Result.failure(Exception("Account access has been revoked."))
-                    }
-                    else -> Result.failure(Exception("Unknown status."))
-                }
-            } catch (e: io.github.jan.supabase.exceptions.HttpRequestException) {
-                // THE MAGIC BULLET: If we have no internet, we return a special OFFLINE code!
-                Result.success("OFFLINE_CACHE_APPROVED")
-            } catch (e: Exception) {
-                Result.failure(Exception("Could not verify account status."))
-            }
-        }
-    }
 }

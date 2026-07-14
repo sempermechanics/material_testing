@@ -13,20 +13,18 @@ import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.data.DeviceKeyManager
-import com.rafad.indicvisiondic.data.SupabaseManager
 import com.rafad.indicvisiondic.ui.Insets
 import com.rafad.indicvisiondic.ui.home.HomeActivity
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
- * Holding screen for authenticated accounts whose `auth_profiles.access_status`
- * is still PENDING. Polls for approval and routes onward once granted.
+ * Holding screen for authenticated accounts whose backend access_status is
+ * still PENDING. Polls for approval and routes onward once granted.
  */
 class PendingApprovalActivity : AppCompatActivity() {
 
-    private val authRepo = AuthRepository()
+    private val authRepo by lazy { AuthRepository(applicationContext) }
     private lateinit var keyManager: DeviceKeyManager
 
     // UI Elements
@@ -65,25 +63,23 @@ class PendingApprovalActivity : AppCompatActivity() {
     }
 
     private fun loadProfileData() {
-        // Safely fetch current user info from the local Supabase session vault
-        val user = SupabaseManager.client.auth.currentUserOrNull()
+        // Identity comes from the cached backend session (ID-token claims).
+        val email = authRepo.cachedEmail()
         val deviceId = keyManager.getDeviceId()
 
-        tvUserEmail.text = user?.email ?: "Unknown User"
-        tvDeviceId.text = "Hardware ID: ${deviceId.take(8)}...${deviceId.takeLast(4)}"
+        tvUserEmail.text = email ?: "Unknown User"
+        tvDeviceId.text = "Device ID: ${deviceId.take(8)}...${deviceId.takeLast(4)}"
     }
 
     private fun checkStatusAgain() {
         setLoadingState(true)
 
         lifecycleScope.launch {
-            val deviceId = keyManager.getDeviceId()
-
-            authRepo.checkUserAccessStatus(deviceId).fold(
+            authRepo.refreshStatus().fold(
                 onSuccess = { status ->
                     setLoadingState(false)
                     when (status) {
-                        "APPROVED" -> {
+                        "APPROVED", "OFFLINE_CACHE_APPROVED" -> {
                             // The admin approved them! Route to the Main App.
                             Toast.makeText(this@PendingApprovalActivity, "Access Granted!", Toast.LENGTH_SHORT).show()
                             val intent = Intent(this@PendingApprovalActivity, HomeActivity::class.java)
@@ -125,13 +121,10 @@ class PendingApprovalActivity : AppCompatActivity() {
         setLoadingState(true)
         lifecycleScope.launch {
             try {
-                // 1. Destroy the session on the server and local vault
-                SupabaseManager.client.auth.signOut()
-            } catch (e: Exception) {
-                // Even if the network fails, we force them out locally to ensure security
-                Timber.e(e, "Server logout failed, forcing local exit.")
+                authRepo.signOut() // clears the local session token
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Timber.e(e, "Logout cleanup failed, forcing local exit.")
             } finally {
-                // 2. Burn the bridge and route to login
                 routeToLogin("You have been successfully logged out.")
             }
         }

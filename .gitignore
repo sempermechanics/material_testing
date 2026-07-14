@@ -3,7 +3,7 @@
 build/
 gradle/gradle-daemon-jvm.properties
 
-# === Local config (contains SDK path + Supabase secrets — NEVER commit) ===
+# === Local config (SDK path + GOOGLE_WEB_CLIENT_ID + backend URL — NEVER commit) ===
 local.properties
 
 # === Android Studio / IntelliJ ===
@@ -30,3 +30,4 @@ app/src/main/cpp/third_party/*
 
 # === Kotlin compiler session data ===
 .kotlin/
+backend/app/__pycache__/*

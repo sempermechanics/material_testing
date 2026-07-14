@@ -7,20 +7,17 @@ import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
-import com.rafad.indicvisiondic.data.DeviceKeyManager
-import com.rafad.indicvisiondic.data.SupabaseManager
 import com.rafad.indicvisiondic.ui.home.HomeActivity
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
 
 /**
- * App entry point: restores an existing Supabase session and routes to
+ * App entry point: restores an existing backend session and routes to
  * [com.rafad.indicvisiondic.ui.home.HomeActivity] (approved user), [PendingApprovalActivity]
  * (account awaiting admin approval), or [AuthActivity] (signed out).
  */
 class SplashActivity : AppCompatActivity() {
 
-    private val authRepo = AuthRepository()
+    private val authRepo by lazy { AuthRepository(applicationContext) }
 
     private val spinnerHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
@@ -51,32 +48,24 @@ class SplashActivity : AppCompatActivity() {
 
     private suspend fun performRoutingCheck() {
         try {
-            // 1. SILENT VAULT CHECK: Is there a session saved on the device?
-            val session = SupabaseManager.client.auth.currentSessionOrNull()
-
             if (BuildConfig.DEBUG) {
                 navigateTo(HomeActivity::class.java)
                 return
             }
 
-            if (session == null) {
+            // 1. Is there a saved backend session on this device?
+            if (!authRepo.hasSession()) {
                 navigateTo(AuthActivity::class.java)
                 return
             }
 
-            // 2. SESSION EXISTS: Grab the physical hardware ID
-            val deviceKeyManager = DeviceKeyManager(this@SplashActivity)
-            val currentDeviceId = deviceKeyManager.getDeviceId()
-
-            // 3. SERVER TRUTH: Ask Supabase for their real-time authorization status
-            val statusResult = authRepo.checkUserAccessStatus(currentDeviceId)
-
-            statusResult.fold(
+            // 2. Ask the backend for the current authorization status (with an
+            //    offline bypass when previously approved).
+            authRepo.refreshStatus().fold(
                 onSuccess = { status ->
                     when (status) {
                         "APPROVED" -> navigateTo(HomeActivity::class.java)
                         "OFFLINE_CACHE_APPROVED" -> {
-                            // THE OFFLINE BYPASS: They have a token but no Wi-Fi. Let them work!
                             android.widget.Toast.makeText(this, "Offline Mode", android.widget.Toast.LENGTH_LONG).show()
                             navigateTo(HomeActivity::class.java)
                         }

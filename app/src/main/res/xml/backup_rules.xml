@@ -3,8 +3,9 @@
    data_extraction_rules.xml). Kept in sync with that file.
 
    Excluded and why:
-   - sharedpref: holds the Supabase auth session token (device-bound
-     credential) — must never leave the device via backup.
+   - sharedpref: holds the backend session (Google ID token) and the device
+     id — device-bound credentials that must never leave the device via backup.
+     (The device private key lives in the Android Keystore, not here.)
    - files/sessions: the local session index plus per-session frames and
      reference images. Bulky (Auto Backup caps at 25 MB) and already
      recoverable through cloud sync for synced sessions.

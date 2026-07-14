@@ -36,8 +36,8 @@
 -keep class com.rafad.indicvisiondic.IndicVisionNativeLib { *; }
 
 # ============================================================
-# SUPABASE / KOTLINX-SERIALIZATION MODELS
-# The libraries ship consumer rules, but keep our own DTOs'
+# KOTLINX-SERIALIZATION MODELS (backend wire DTOs)
+# The library ships consumer rules, but keep our own DTOs'
 # serializers explicitly so a library update can't silently
 # break the cloud sync payloads.
 # ============================================================

@@ -390,6 +390,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 viewModel.clearPreviousResults()
 
                 val filePaths = mutableListOf<String>()
+                // Temp path → original picked filename, kept so exports can use the
+                // user's real (default) names instead of the sanitized temp names.
+                val originalByPath = mutableMapOf<String, String>()
 
                 withContext(Dispatchers.Main) {
                     tvResult.text = "Caching images..."
@@ -431,10 +434,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     val file = File(tempDir, filename)
                     file.writeBytes(bytes)
                     filePaths.add(file.absolutePath)
+                    originalByPath[file.absolutePath] = originalName
                 }
 
                 val sortedPaths = filePaths.sorted()
                 viewModel.defFilePaths = sortedPaths
+                viewModel.defOriginalNames = sortedPaths.map { originalByPath[it] ?: File(it).name }
 
                 withContext(Dispatchers.Main) {
                     tvResult.text = ""
@@ -652,7 +657,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                viewModel.defFilePaths = defPaths.sorted()
+                val sortedDefPaths = defPaths.sorted()
+                viewModel.defFilePaths = sortedDefPaths
+                viewModel.defOriginalNames =
+                    sortedDefPaths.mapIndexed { idx, _ -> String.format("frame_%04d.png", idx + 1) }
 
                 withContext(Dispatchers.Main) {
                     hideComputeOverlay()
@@ -851,6 +859,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             putExtra(DicKeys.DEF_PATH, viewModel.lastDefPath)
             putExtra(DicKeys.BATCH_DIR_PATH, viewModel.lastBatchDirPath)
             putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(viewModel.defFilePaths.map { it.substringAfterLast('/') }))
+            putStringArrayListExtra(DicKeys.DEF_FILE_PATHS, ArrayList(viewModel.defFilePaths))
 
             // PDF GENERATOR DATA
             putExtra(DicKeys.SESSION_ID, viewModel.currentSessionId)

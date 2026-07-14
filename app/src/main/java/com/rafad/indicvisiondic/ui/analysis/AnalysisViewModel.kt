@@ -15,9 +15,8 @@ import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.DicUploadWorker
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
-import com.rafad.indicvisiondic.data.SupabaseManager
+import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.report.EngineStats
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -38,6 +37,9 @@ class AnalysisViewModel : ViewModel() {
     companion object {
         /** Outcome code for a user-cancelled run (not an engine failure). */
         const val ERROR_CANCELLED = -99
+
+        /** Session-dir subfolder holding the persisted raw deformed originals. */
+        const val RAW_DEFORMED_SUBDIR = "raw_deformed"
     }
 
     // NATIVE THREAD PINNING: A single persistent OS thread for ALL JNI/OpenMP calls.
@@ -53,6 +55,8 @@ class AnalysisViewModel : ViewModel() {
     var refBytes: ByteArray? = null
     var roiMaskBytes: ByteArray? = null
     var defFilePaths: List<String> = emptyList()
+    /** Original picked filenames, index-aligned with [defFilePaths]. */
+    var defOriginalNames: List<String> = emptyList()
 
     var realRefWidth: Int = 0
     var realRefHeight: Int = 0
@@ -195,6 +199,13 @@ class AnalysisViewModel : ViewModel() {
         var totalPointsSolved = 0
         var lastConvergence = -1f
 
+        // Persist the raw deformed originals alongside the reference so exports
+        // (and reopened sessions) can bundle them. Cleared per re-run.
+        val rawDeformedDir = File(batchDir, RAW_DEFORMED_SUBDIR).apply {
+            mkdirs()
+            listFiles()?.forEach { it.delete() }
+        }
+
         for ((frameIndex, defPath) in defFilePaths.withIndex()) {
             if (cancelRequested) {
                 engineErrorCode = ERROR_CANCELLED
@@ -214,6 +225,19 @@ class AnalysisViewModel : ViewModel() {
             )
 
             val defBytes = File(defPath).readBytes()
+            // Store the untouched original bytes (no re-encode) under the user's own
+            // filename so the export's raw photos keep their default names.
+            try {
+                val rawName = (defOriginalNames.getOrNull(frameIndex) ?: File(defPath).name)
+                    .substringAfterLast('/').substringAfterLast('\\')
+                // Keep the default name; only index-prefix if it would collide.
+                val target = File(rawDeformedDir, rawName).let {
+                    if (it.exists()) File(rawDeformedDir, String.format("%04d_%s", frameIndex, rawName)) else it
+                }
+                target.writeBytes(defBytes)
+            } catch (e: Exception) {
+                Timber.w(e, "Could not persist raw deformed frame %d", frameIndex)
+            }
             val callback = object : ProgressCallback {
                 override fun onProgressUpdate(percentage: Int) {
                     val frameProgress = (frameIndex.toFloat() / totalFrames) * 100
@@ -392,9 +416,8 @@ class AnalysisViewModel : ViewModel() {
         try {
             val generatedRefPath = refPngPath
 
-            val currentUser = SupabaseManager.client.auth.currentUserOrNull()
-            val userEmail = currentUser?.email ?: "Offline_User"
-            val userId = currentUser?.id ?: "Offline_ID"
+            val userEmail = TokenStore.cachedEmail(appContext) ?: "Offline_User"
+            val userId = TokenStore.cachedUid(appContext) ?: "Offline_ID"
 
             for ((frameIndex, rawDefPath) in defFilePaths.withIndex()) {
                 var defBmp: Bitmap? = null

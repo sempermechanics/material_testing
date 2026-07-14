@@ -34,6 +34,9 @@ object DicKeys {
     const val DEF_PATH = "DEF_PATH"
     const val BATCH_DIR_PATH = "BATCH_DIR_PATH"
     const val DEF_FILE_NAMES = "DEF_FILE_NAMES"
+    /** Full paths to the raw deformed images (transient cache copies) — best-effort
+     *  source for the export's "raw photos" folder; absent when reopened from Home. */
+    const val DEF_FILE_PATHS = "DEF_FILE_PATHS"
     const val SUBSET_SIZE = "SUBSET_SIZE"
     const val STRAIN_WINDOW = "STRAIN_WINDOW"
     const val STRAIN_METHOD = "STRAIN_METHOD"
