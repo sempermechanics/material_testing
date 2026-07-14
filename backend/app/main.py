@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 
 from . import audit, drive, firestore_repo as repo
 from .config import settings
-from .deps import current_user, verified_device
+from .deps import admin_user, current_user, verified_device
 from .models import DeviceReg, FileComplete, SessionCreate
 
 logging.basicConfig(level=logging.INFO)
@@ -37,11 +37,17 @@ async def me(user=Depends(current_user)):
 
 @app.post("/v1/devices/register", status_code=201)
 async def register_device(body: DeviceReg, user=Depends(current_user)):
-    if repo.user_has_active_device(user["uid"]):
-        raise HTTPException(409, "device_conflict")  # replacement requires admin rebind
-    repo.register_device(user["uid"], body)
-    audit.record(user["uid"], body.deviceId, action="DEVICE_REGISTER")
-    return {"deviceId": body.deviceId}
+    active = user.get("activeDeviceId")
+    # A different active device = a real device switch → requires a reset/rebind.
+    # The SAME device id re-registering (reinstall wipes the Keystore key) is
+    # allowed and simply heals the stored public key.
+    if active and active != body.deviceId:
+        raise HTTPException(409, "device_conflict")
+    healed = active == body.deviceId
+    repo.register_device(user["uid"], body)  # upsert: refreshes the public key
+    audit.record(user["uid"], body.deviceId,
+                 action="DEVICE_REBIND" if healed else "DEVICE_REGISTER")
+    return {"deviceId": body.deviceId, "healed": healed}
 
 
 @app.post("/v1/challenge")
@@ -70,6 +76,28 @@ async def create_session(body: SessionCreate, ctx=Depends(verified_device)):
     audit.record(user["uid"], device.get("deviceId"), action="SESSION_CREATE",
                  target={"type": "session", "id": sid})
     return {"sessionId": sid, "uploads": uploads}
+
+
+@app.get("/v1/admin/users")
+async def admin_list_users(status: str = "", admin=Depends(admin_user)):
+    """List users, optionally filtered by access_status (e.g. ?status=PENDING)."""
+    return {"users": repo.list_users(status)}
+
+
+@app.post("/v1/admin/users/{uid}/approve")
+async def admin_approve_user(uid: str, admin=Depends(admin_user)):
+    if not repo.set_user_status(uid, "APPROVED"):
+        raise HTTPException(404, "user_not_found")
+    audit.record(admin["uid"], action="ADMIN_APPROVE", target={"type": "user", "id": uid})
+    return {"uid": uid, "access_status": "APPROVED"}
+
+
+@app.post("/v1/admin/users/{uid}/revoke")
+async def admin_revoke_user(uid: str, admin=Depends(admin_user)):
+    if not repo.set_user_status(uid, "SUSPENDED"):
+        raise HTTPException(404, "user_not_found")
+    audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
+    return {"uid": uid, "access_status": "SUSPENDED"}
 
 
 @app.post("/v1/files/{file_id}/complete")

@@ -48,7 +48,10 @@ class SplashActivity : AppCompatActivity() {
 
     private suspend fun performRoutingCheck() {
         try {
-            if (BuildConfig.DEBUG) {
+            // Offline dev convenience: skip auth ONLY when no backend is
+            // configured. With INDIC_API_BASE_URL set, always run real auth
+            // (so device testing exercises the full sign-in + upload path).
+            if (BuildConfig.DEBUG && !authRepo.cloudConfigured) {
                 navigateTo(HomeActivity::class.java)
                 return
             }

@@ -21,6 +21,7 @@ object TokenStore {
     private const val K_UID = "uid"
     private const val K_EMAIL = "email"
     private const val K_STATUS = "last_status" // last server-confirmed access_status
+    private const val K_ROLE = "role"          // "admin" | "user"
     private const val K_DEVICE_REGISTERED = "device_registered"
 
     // Refresh a little before the hard expiry so a request in flight doesn't 401.
@@ -53,6 +54,12 @@ object TokenStore {
     fun cachedStatus(context: Context): String? = prefs(context).getString(K_STATUS, null)
     fun setStatus(context: Context, status: String) =
         prefs(context).edit().putString(K_STATUS, status).apply()
+
+    fun cachedRole(context: Context): String? = prefs(context).getString(K_ROLE, null)
+    fun setRole(context: Context, role: String?) =
+        prefs(context).edit().putString(K_ROLE, role).apply()
+
+    fun isAdmin(context: Context): Boolean = cachedRole(context) == "admin"
 
     fun isDeviceRegistered(context: Context): Boolean =
         prefs(context).getBoolean(K_DEVICE_REGISTERED, false)

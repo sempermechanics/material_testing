@@ -172,6 +172,16 @@
         android:layout_marginTop="16dp"
         android:background="@color/surface_outline" />
 
+    <!-- Admin: only shown for accounts whose backend role is admin -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnAdmin"
+        style="@style/Widget.IndicVision.Button.Outlined"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="@string/admin_pending_requests"
+        android:visibility="gone" />
+
     <!-- Account: no card — the outlined buttons carry their own borders -->
     <LinearLayout
         android:layout_width="match_parent"

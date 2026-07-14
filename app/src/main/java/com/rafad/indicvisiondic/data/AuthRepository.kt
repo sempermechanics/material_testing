@@ -56,8 +56,9 @@ class AuthRepository(context: Context) {
 
     private suspend fun resolveStatus(idToken: String): Result<String> {
         return try {
-            api.me(idToken) // 200 = APPROVED
+            val me = api.me(idToken) // 200 = APPROVED
             TokenStore.setStatus(appContext, "APPROVED")
+            TokenStore.setRole(appContext, me.role ?: "user")
             ensureDeviceRegistered(idToken)
             Result.success("APPROVED")
         } catch (e: IndicApi.NotApprovedException) {

@@ -6,8 +6,25 @@ class Settings:
     # app uses (BuildConfig.GOOGLE_WEB_CLIENT_ID). Must match exactly.
     WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID", "")
 
-    # Corporate gate. e.g. "company.com". Empty disables the hd check (dev only).
+    # Hard sign-in gate. If set (e.g. "company.com") ONLY that hosted domain may
+    # sign in. Empty = any Google account may sign in (and lands PENDING unless
+    # auto-approved below) — used for the "outside collaborators request access"
+    # model.
     ALLOWED_HD = os.environ.get("ALLOWED_HD", "")
+
+    # Accounts whose verified email is in this domain are created APPROVED
+    # automatically (e.g. "indicvision.com"). Everyone else is created PENDING
+    # and must be approved individually. Empty = nobody auto-approved by domain.
+    AUTO_APPROVE_HD = os.environ.get("AUTO_APPROVE_HD", "")
+
+    # Comma-separated emails that are treated as admins (role=admin, always
+    # approved) — they can call the /v1/admin/* endpoints. e.g.
+    # "support@indicvision.com,damodar@indicvision.com".
+    ADMIN_EMAILS = {
+        e.strip().lower()
+        for e in os.environ.get("ADMIN_EMAILS", "").split(",")
+        if e.strip()
+    }
 
     # The runtime service account email Cloud Run runs as. Used for the keyless
     # self-impersonation that mints Drive-scoped tokens.

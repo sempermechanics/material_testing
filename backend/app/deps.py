@@ -1,6 +1,7 @@
 """FastAPI dependencies: user auth (Google ID token) and device assertion."""
 import base64
 import hashlib
+import logging
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -12,19 +13,40 @@ from . import audit, firestore_repo as repo
 from .config import settings
 from .google_auth import verify_google_id_token
 
+log = logging.getLogger("indic.auth")
+
 _DEV_USER = {"uid": "dev-user", "email": "dev@local", "role": "admin",
              "access_status": "APPROVED", "activeDeviceId": "dev-device"}
 _DEV_DEVICE = {"deviceId": "dev-device", "uid": "dev-user", "status": "ACTIVE"}
 
 
-async def current_user(authorization: str = Header(default="")) -> dict:
+def _client_bearer(authorization: str, x_forwarded_authorization: str) -> str:
+    """The end-user's bearer token.
+
+    Behind API Gateway / ESPv2 the gateway replaces `Authorization` with its own
+    backend service-account token and moves the original client token to
+    `X-Forwarded-Authorization`. Direct (non-gateway) calls just use
+    `Authorization`. Prefer the forwarded header when present.
+    """
+    return x_forwarded_authorization or authorization
+
+
+async def current_user(
+    authorization: str = Header(default=""),
+    x_forwarded_authorization: str = Header(default=""),
+) -> dict:
     if settings.DEV_INSECURE_AUTH:
         return _DEV_USER
-    if not authorization.startswith("Bearer "):
+    bearer = _client_bearer(authorization, x_forwarded_authorization)
+    if not bearer.startswith("Bearer "):
+        log.warning("no bearer token: authorization=%s x_forwarded=%s",
+                    bool(authorization), bool(x_forwarded_authorization))
         raise HTTPException(401, "missing_bearer")
     try:
-        claims = verify_google_id_token(authorization[7:])
-    except Exception:  # noqa: BLE001
+        claims = verify_google_id_token(bearer[7:])
+    except Exception as e:  # noqa: BLE001
+        log.warning("id_token verify FAILED (x_forwarded_present=%s): %s",
+                    bool(x_forwarded_authorization), e)
         audit.record(action="AUTH_DENIED", outcome="DENIED", detail={"stage": "id_token"})
         raise HTTPException(401, "invalid_token")
     user = repo.get_or_create_user(claims)
@@ -33,14 +55,31 @@ async def current_user(authorization: str = Header(default="")) -> dict:
     return user
 
 
+async def admin_user(
+    authorization: str = Header(default=""),
+    x_forwarded_authorization: str = Header(default=""),
+) -> dict:
+    """Authenticated caller that is an admin (role=admin or in ADMIN_EMAILS).
+
+    ID-token based (no device signature) so it works from an in-app admin screen
+    or from curl in dev mode. Admin actions are low-frequency and audited.
+    """
+    user = await current_user(authorization, x_forwarded_authorization)
+    email = (user.get("email") or "").lower()
+    if user.get("role") != "admin" and email not in settings.ADMIN_EMAILS:
+        raise HTTPException(403, "not_admin")
+    return user
+
+
 async def verified_device(
     request: Request,
     authorization: str = Header(default=""),
+    x_forwarded_authorization: str = Header(default=""),
     x_device_id: str = Header(default=""),
     x_nonce: str = Header(default=""),
     x_signature: str = Header(default=""),
 ) -> dict:
-    user = await current_user(authorization)
+    user = await current_user(authorization, x_forwarded_authorization)
     if settings.DEV_INSECURE_AUTH:
         return {"user": user, "device": _DEV_DEVICE}
 

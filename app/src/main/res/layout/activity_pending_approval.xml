@@ -38,11 +38,18 @@
         android:textSize="13sp" />
 
     <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnRequestAccess"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:text="@string/action_request_access" />
+
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btnRefreshStatus"
         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
+        android:layout_marginTop="8dp"
         android:text="@string/check_now"
         android:textColor="@color/sky_primary" />
 

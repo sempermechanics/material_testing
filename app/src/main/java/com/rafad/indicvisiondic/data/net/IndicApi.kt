@@ -111,6 +111,34 @@ class IndicApi(context: Context) {
             resp.use { if (it.code != 200) throw ApiException(it.code, it.bodyText()) }
         }
 
+    // ------------------------------------------------------------------- admin
+
+    /** GET /v1/admin/users?status=… (admin ID token; no device signature). */
+    suspend fun listUsers(idToken: String, status: String = ""): List<AdminUserDto> =
+        withContext(Dispatchers.IO) {
+            val url = if (status.isBlank()) "$base/v1/admin/users" else "$base/v1/admin/users?status=$status"
+            val req = Request.Builder().url(url)
+                .header("Authorization", "Bearer $idToken").get().build()
+            client.newCall(req).execute().use { resp ->
+                when (resp.code) {
+                    200 -> json.decodeFromString<AdminUsersResponse>(resp.body!!.string()).users
+                    403 -> throw ApiException(403, "not_admin")
+                    else -> throw ApiException(resp.code, resp.bodyText())
+                }
+            }
+        }
+
+    /** POST /v1/admin/users/{uid}/{action} where action is "approve" or "revoke". */
+    suspend fun setUserStatus(idToken: String, uid: String, action: String) =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder().url("$base/v1/admin/users/$uid/$action")
+                .header("Authorization", "Bearer $idToken")
+                .post(ByteArray(0).toRequestBody(jsonMedia)).build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.code != 200) throw ApiException(resp.code, resp.bodyText())
+            }
+        }
+
     // ------------------------------------------------------- device-signed POST
 
     private fun signedPost(idToken: String, path: String, bodyBytes: ByteArray): Response {

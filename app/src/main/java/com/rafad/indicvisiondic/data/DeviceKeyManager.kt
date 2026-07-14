@@ -1,6 +1,7 @@
 package com.rafad.indicvisiondic.data
 
 import android.content.Context
+import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -29,6 +30,8 @@ class DeviceKeyManager(private val context: Context) {
         const val KEY_ALIAS = "IndicDeviceKeyEc"
         const val PREFS = "indic_device"
         const val K_DEVICE_ID = "device_id"
+        // The infamous Android 2.2 bug value shared by many devices — never use it.
+        const val LEGACY_BAD_ANDROID_ID = "9774d56d682e549c"
     }
 
     init {
@@ -50,8 +53,22 @@ class DeviceKeyManager(private val context: Context) {
         }
     }
 
-    /** Stable, app-scoped random device id. Survives across launches. */
+    /**
+     * Stable device id that **survives app reinstalls**: `ANDROID_ID` (scoped to
+     * the app signing key + user + device — not a hardware serial/IMEI/MAC, needs
+     * no permission; resets only on factory reset). Because it survives reinstall,
+     * the backend can *heal* the re-registered Keystore key on the same device id
+     * instead of treating a reinstall as a brand-new device. Falls back to a
+     * persisted random UUID if ANDROID_ID is unavailable.
+     */
+    @Suppress("HardwareIds") // ANDROID_ID is app-scoped, not a hardware identifier
     fun getDeviceId(): String {
+        val androidId = Settings.Secure.getString(
+            context.contentResolver, Settings.Secure.ANDROID_ID,
+        )
+        if (!androidId.isNullOrBlank() && androidId != LEGACY_BAD_ANDROID_ID) {
+            return "and-$androidId"
+        }
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs.getString(K_DEVICE_ID, null)?.let { return it }
         val id = "dev-" + UUID.randomUUID().toString()

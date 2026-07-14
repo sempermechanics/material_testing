@@ -22,25 +22,69 @@ def _now():
 
 
 # ---------------- users ----------------
+def _is_admin_email(claims: dict) -> bool:
+    return claims.get("email", "").lower() in settings.ADMIN_EMAILS
+
+
+def _auto_approved(claims: dict) -> bool:
+    """Admins, blanket AUTO_APPROVE, or the verified email is in AUTO_APPROVE_HD."""
+    if settings.AUTO_APPROVE or _is_admin_email(claims):
+        return True
+    hd = settings.AUTO_APPROVE_HD
+    if not hd:
+        return False
+    email = claims.get("email", "")
+    return claims.get("hd") == hd or email.endswith("@" + hd)
+
+
 def get_or_create_user(claims: dict) -> dict:
     uid = claims["sub"]
     ref = db().collection("users").document(uid)
     snap = ref.get()
     if snap.exists:
-        ref.update({"lastSeenAt": firestore.SERVER_TIMESTAMP})
-        return {**snap.to_dict(), "uid": uid}
+        # Keep admin role in sync with ADMIN_EMAILS for pre-existing users.
+        patch = {"lastSeenAt": firestore.SERVER_TIMESTAMP}
+        if _is_admin_email(claims) and snap.to_dict().get("role") != "admin":
+            patch["role"] = "admin"
+        ref.update(patch)
+        return {**snap.to_dict(), **patch, "uid": uid}
     data = {
         "email": claims.get("email"),
         "hd": claims.get("hd"),
         "displayName": claims.get("name"),
-        "role": "user",
-        "access_status": "APPROVED" if settings.AUTO_APPROVE else "PENDING",
+        "role": "admin" if _is_admin_email(claims) else "user",
+        "access_status": "APPROVED" if _auto_approved(claims) else "PENDING",
         "activeDeviceId": None,
         "createdAt": firestore.SERVER_TIMESTAMP,
         "lastSeenAt": firestore.SERVER_TIMESTAMP,
     }
     ref.set(data)
     return {**data, "uid": uid}
+
+
+def list_users(status: str = "", limit: int = 200) -> list:
+    col = db().collection("users")
+    query = col.where("access_status", "==", status) if status else col
+    out = []
+    for d in query.limit(limit).stream():
+        u = d.to_dict()
+        out.append({
+            "uid": d.id,
+            "email": u.get("email"),
+            "displayName": u.get("displayName"),
+            "role": u.get("role"),
+            "access_status": u.get("access_status"),
+            "activeDeviceId": u.get("activeDeviceId"),
+        })
+    return out
+
+
+def set_user_status(uid: str, status: str) -> bool:
+    ref = db().collection("users").document(uid)
+    if not ref.get().exists:
+        return False
+    ref.update({"access_status": status, "updatedAt": firestore.SERVER_TIMESTAMP})
+    return True
 
 
 # ---------------- devices ----------------

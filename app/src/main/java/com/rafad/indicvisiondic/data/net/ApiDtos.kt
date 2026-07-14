@@ -63,3 +63,16 @@ data class FileCompleteRequest(
     val bytes: Long,
     val md5: String? = null,
 )
+
+@Serializable
+data class AdminUserDto(
+    val uid: String,
+    val email: String? = null,
+    val displayName: String? = null,
+    val role: String? = null,
+    val access_status: String? = null,
+    val activeDeviceId: String? = null,
+)
+
+@Serializable
+data class AdminUsersResponse(val users: List<AdminUserDto>)

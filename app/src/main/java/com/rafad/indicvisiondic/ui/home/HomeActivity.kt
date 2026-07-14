@@ -208,6 +208,15 @@ class HomeActivity : AppCompatActivity() {
         view.findViewById<TextView>(R.id.tvAccountEmail).text =
             TokenStore.cachedEmail(this) ?: ""
 
+        // Admin entry: only for accounts whose backend role is admin.
+        view.findViewById<android.view.View>(R.id.btnAdmin).apply {
+            visibility = if (TokenStore.isAdmin(this@HomeActivity)) android.view.View.VISIBLE else android.view.View.GONE
+            setOnClickListener {
+                sheet.dismiss()
+                startActivity(Intent(this@HomeActivity, com.rafad.indicvisiondic.ui.admin.AdminActivity::class.java))
+            }
+        }
+
         view.findViewById<android.view.View>(R.id.btnAbout).setOnClickListener {
             MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.about_title)

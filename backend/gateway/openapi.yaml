@@ -1,0 +1,84 @@
+swagger: '2.0'
+info:
+  title: indic-api
+  description: API Gateway front door for the private inDIC Cloud Run service.
+  version: '1.0'
+schemes:
+  - https
+produces:
+  - application/json
+# All requests are forwarded to the private Cloud Run service, invoked with the
+# gateway's backend-auth service account. The incoming path is appended to the
+# address, so the backend sees the same path. Replace the address with your
+# Cloud Run URL:  gcloud run services describe indic-api --region asia-south1 \
+#                   --format='value(status.url)'
+x-google-backend:
+  address: https://REPLACE_WITH_CLOUD_RUN_URL
+  path_translation: APPEND_PATH_TO_ADDRESS
+  deadline: 60.0
+paths:
+  /healthz:
+    get:
+      operationId: healthz
+      responses:
+        '200': { description: OK }
+  /v1/me:
+    get:
+      operationId: getMe
+      responses:
+        '200': { description: OK }
+  /v1/devices/register:
+    post:
+      operationId: registerDevice
+      responses:
+        '201': { description: Created }
+  /v1/challenge:
+    post:
+      operationId: challenge
+      responses:
+        '200': { description: OK }
+  /v1/sessions:
+    post:
+      operationId: createSession
+      responses:
+        '200': { description: OK }
+  /v1/files/{fileId}/complete:
+    post:
+      operationId: completeFile
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+  /v1/admin/users:
+    get:
+      operationId: adminListUsers
+      parameters:
+        - name: status
+          in: query
+          required: false
+          type: string
+      responses:
+        '200': { description: OK }
+  /v1/admin/users/{uid}/approve:
+    post:
+      operationId: adminApproveUser
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+  /v1/admin/users/{uid}/revoke:
+    post:
+      operationId: adminRevokeUser
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
