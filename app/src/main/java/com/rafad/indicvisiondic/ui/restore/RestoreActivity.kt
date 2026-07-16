@@ -8,12 +8,16 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.google.android.material.button.MaterialButton
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.CloudRestore
+import com.rafad.indicvisiondic.data.DicRestoreWorker
 import com.rafad.indicvisiondic.data.net.CloudSessionDto
 import com.rafad.indicvisiondic.ui.Insets
 import kotlinx.coroutines.launch
@@ -31,6 +35,8 @@ class RestoreActivity : AppCompatActivity() {
     private lateinit var tvEmpty: TextView
     private lateinit var tvStatus: TextView
     private lateinit var progress: ProgressBar
+    private lateinit var progressSection: View
+    private lateinit var progressBar: ProgressBar
     private val adapter = BackupAdapter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,10 +48,47 @@ class RestoreActivity : AppCompatActivity() {
         tvEmpty = findViewById(R.id.tvRestoreEmpty)
         tvStatus = findViewById(R.id.tvRestoreStatus)
         progress = findViewById(R.id.progressRestore)
+        progressSection = findViewById(R.id.restoreProgressSection)
+        progressBar = findViewById(R.id.progressRestoreBar)
         rv.layoutManager = LinearLayoutManager(this)
         rv.adapter = adapter
 
+        findViewById<View>(R.id.btnRestoreBack).setOnClickListener {
+            onBackPressedDispatcher.onBackPressed()
+        }
+
         load()
+        observeRestores()
+    }
+
+    /**
+     * Watch every restore job (by tag), so the progress bar re-appears whenever
+     * this screen is opened while a restore is running — not just for one we
+     * started this session. The work itself lives in WorkManager, so it keeps
+     * going regardless of whether this screen is shown.
+     */
+    private fun observeRestores() {
+        WorkManager.getInstance(this)
+            .getWorkInfosByTagLiveData("restore")
+            .observe(this) { infos ->
+                val active = infos.firstOrNull {
+                    it.state == WorkInfo.State.RUNNING ||
+                        it.state == WorkInfo.State.ENQUEUED ||
+                        it.state == WorkInfo.State.BLOCKED
+                }
+                if (active != null) {
+                    val done = active.progress.getInt(DicRestoreWorker.KEY_DONE, 0)
+                    val total = active.progress.getInt(DicRestoreWorker.KEY_TOTAL, 0)
+                    showProgress(done, total, indeterminate = active.state != WorkInfo.State.RUNNING || total == 0)
+                } else {
+                    if (progressSection.isVisible) {
+                        // A restore just finished — refresh the list so the
+                        // now-local analysis drops off the "restorable" list.
+                        progressSection.visibility = View.GONE
+                        load()
+                    }
+                }
+            }
     }
 
     private fun load() {
@@ -67,32 +110,29 @@ class RestoreActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Hand the download to WorkManager and watch it.
+     *
+     * The work is deliberately NOT owned by this Activity: restores are large,
+     * and a lifecycleScope job dies the instant the user leaves the screen. Here
+     * we only observe — leaving mid-restore is now harmless, and the analysis
+     * simply shows up on Home when it lands.
+     */
     private fun restore(item: CloudSessionDto) {
-        setBusy(true)
-        tvStatus.visibility = View.VISIBLE
-        lifecycleScope.launch {
-            try {
-                CloudRestore.restore(this@RestoreActivity, item.sessionId) { done, total ->
-                    runOnUiThread {
-                        tvStatus.text = getString(R.string.restore_progress_fmt, done, total)
-                    }
-                }
-                Toast.makeText(
-                    this@RestoreActivity,
-                    getString(R.string.restore_done_fmt, item.specimen ?: item.sessionId),
-                    Toast.LENGTH_LONG,
-                ).show()
-                finish() // Home reloads the list on resume
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                Toast.makeText(
-                    this@RestoreActivity,
-                    getString(R.string.restore_failed_fmt, e.message ?: ""),
-                    Toast.LENGTH_LONG,
-                ).show()
-            } finally {
-                setBusy(false)
-                tvStatus.visibility = View.GONE
-            }
+        CloudRestore.enqueueRestore(this, item.sessionId)
+        // observeRestores() (watching by tag) shows and tracks the progress —
+        // including if the user leaves and re-opens this screen mid-restore.
+        showProgress(0, item.fileCount, indeterminate = true)
+    }
+
+    /** Show the pinned bottom progress bar. [indeterminate] while waiting for the network. */
+    private fun showProgress(done: Int, total: Int, indeterminate: Boolean = false) {
+        progressSection.visibility = View.VISIBLE
+        tvStatus.text = getString(R.string.restore_progress_fmt, done, total)
+        progressBar.isIndeterminate = indeterminate
+        if (!indeterminate && total > 0) {
+            progressBar.max = total
+            progressBar.setProgress(done, true)
         }
     }
 

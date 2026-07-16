@@ -24,6 +24,7 @@ import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.rafad.indicvisiondic.data.CloudSync
 import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
@@ -51,6 +52,7 @@ class HomeActivity : AppCompatActivity() {
 
     private lateinit var list: RecyclerView
     private lateinit var emptyState: android.view.View
+    private lateinit var swipeRefresh: SwipeRefreshLayout
     private val adapter = SessionAdapter()
 
     private val pickReference =
@@ -76,6 +78,11 @@ class HomeActivity : AppCompatActivity() {
 
         list = findViewById(R.id.sessionList)
         emptyState = findViewById(R.id.emptyState)
+        swipeRefresh = findViewById(R.id.swipeRefresh)
+        swipeRefresh.setColorSchemeResources(R.color.sky_primary)
+        // Pull down = deep re-check: verify the blobs really exist in Drive,
+        // not just that the backend's index says so.
+        swipeRefresh.setOnRefreshListener { refresh(deep = true) }
         list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
 
@@ -93,31 +100,56 @@ class HomeActivity : AppCompatActivity() {
         refresh()
     }
 
-    private fun refresh() {
+    /**
+     * @param deep verify blobs really exist in Drive (pull-to-refresh) rather
+     *   than trusting the backend index (cheap resume check).
+     */
+    private fun refresh(deep: Boolean = false) {
         lifecycleScope.launch {
             val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
             adapter.submit(sessions)
             emptyState.isVisible = sessions.isEmpty()
-            reconcileWithCloud()
+            try {
+                reconcileWithCloud(deep)
+            } finally {
+                // The spinner tracks the cloud check, not the local list read —
+                // that's the part worth waiting for.
+                swipeRefresh.isRefreshing = false
+            }
         }
     }
 
     /**
      * Ask the backend what is actually backed up and repair any drift — a
      * session whose cloud copy was deleted stops claiming "Synced" and is
-     * re-queued for upload. Best-effort: offline/unconfigured leaves state alone.
+     * re-queued for upload.
+     *
+     * Offline and "not configured" stay silent (that's normal for an
+     * offline-first app), but a real backend fault is surfaced: otherwise the
+     * badges quietly go stale and the user trusts a backup that isn't there.
      */
-    private suspend fun reconcileWithCloud() {
-        val report = CloudSync.reconcile(this@HomeActivity) ?: return
-        if (report.repaired > 0) {
-            // The rows changed underneath us — show the corrected state.
-            val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
-            adapter.submit(sessions)
-            Toast.makeText(
-                this,
-                getString(R.string.cloud_resync_fmt, report.repaired),
-                Toast.LENGTH_LONG,
-            ).show()
+    private suspend fun reconcileWithCloud(deep: Boolean) {
+        when (val outcome = CloudSync.reconcile(this@HomeActivity, deep = deep)) {
+            is CloudSync.Outcome.Ok -> {
+                if (outcome.repaired > 0) {
+                    // The rows changed underneath us — show the corrected state.
+                    val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
+                    adapter.submit(sessions)
+                    Toast.makeText(
+                        this,
+                        getString(R.string.cloud_resync_fmt, outcome.repaired),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+            is CloudSync.Outcome.Failed ->
+                Toast.makeText(
+                    this,
+                    getString(R.string.cloud_check_failed_fmt, outcome.reason),
+                    Toast.LENGTH_LONG,
+                ).show()
+            // Normal for an offline-first app — don't nag.
+            CloudSync.Outcome.Offline, CloudSync.Outcome.Disabled -> Unit
         }
     }
 

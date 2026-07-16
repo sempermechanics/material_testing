@@ -3,8 +3,6 @@ package com.rafad.indicvisiondic.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.os.Build
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -18,22 +16,30 @@ import com.rafad.indicvisiondic.data.net.SessionCreateRequest
 import com.rafad.indicvisiondic.data.net.TokenProvider
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.report.EngineStats
+import com.rafad.indicvisiondic.report.FieldResult
 import com.rafad.indicvisiondic.report.PdfReportGenerator
 import com.rafad.indicvisiondic.report.ReportBuilder
 import com.rafad.indicvisiondic.report.RoiData
-import com.rafad.indicvisiondic.report.VisualizationEngine
 import com.rafad.indicvisiondic.ui.analysis.AnalysisViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
+import java.io.BufferedOutputStream
 import java.io.File
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 /**
  * Offline-first cloud sync against the inDIC GCP backend — **one backend session
@@ -53,14 +59,111 @@ import java.util.TimeZone
  * session/<sid>/raw/       Reference.png (once) + the original deformed images
  *               dat/       frame_%04d.dat   ← engine results; enables full restore
  *               csv/       Data_Frame_N.csv
- *               reports/   Master_Report_Frame_1.pdf (first frame only —
- *                          every other report is regenerable from the .dat)
+ *               reports/   Reports.zip   (every frame's Master_Report_Frame_N.pdf)
+ *               processed/ Processed.zip (every frame's U/V/Exx/Eyy/Exy heatmaps)
  *               metadata/  metadata.json (device, time, engine params, frame list)
  * ```
  */
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     private data class Artifact(val role: String, val name: String, val file: File)
+
+    /** One file still to push: where to put it, and which local file it is. */
+    private data class UploadJob(
+        val fileId: String,
+        val uploadUrl: String,
+        val chunkSize: Int,
+        val name: String,
+        val file: File,
+    )
+
+    /** A session to upload into, and the files still to push. */
+    private data class Plan(val sessionId: String, val work: List<UploadJob>)
+
+    /** What resuming an existing session concluded. */
+    private sealed interface Resume {
+        /** Continue this session — [work] is the still-pending files (never empty). */
+        data class Continue(val work: List<UploadJob>) : Resume
+
+        /** Already fully uploaded in the cloud. */
+        data object Done : Resume
+
+        /** Unusable (gone, or its files don't match ours): delete it and start fresh. */
+        data object Rebuild : Resume
+    }
+
+    /**
+     * Decide whether an existing session can be continued.
+     *
+     * Every pending file must match a current artifact by role, name **and
+     * size** — the session's resumable URIs were opened for exactly those sizes.
+     * A single mismatch (an older build's report names, changed content) means
+     * the session can't be finished, so we rebuild rather than silently upload a
+     * partial set and mark it "synced". This is the guard against a false sync.
+     */
+    private suspend fun resumeSession(
+        api: IndicApi,
+        idToken: String,
+        cloudSessionId: String,
+        artifacts: List<Artifact>,
+    ): Resume {
+        val state = try {
+            api.sessionUploads(idToken, cloudSessionId)
+        } catch (e: IndicApi.ApiException) {
+            Timber.w("Cannot query session %s (HTTP %d) — will rebuild", cloudSessionId, e.code)
+            return Resume.Rebuild
+        }
+        if (state.status == "COMPLETED") return Resume.Done
+
+        val byKey = artifacts.associateBy { it.role to it.name }
+        val work = ArrayList<UploadJob>(state.uploads.size)
+        for (u in state.uploads) {
+            val art = byKey[u.role to u.name]
+            if (art == null || art.file.length() != u.sizeBytes) {
+                Timber.w(
+                    "Session %s incompatible: pending %s/%s (declared %d B) has no matching artifact",
+                    cloudSessionId, u.role, u.name, u.sizeBytes,
+                )
+                return Resume.Rebuild
+            }
+            work.add(UploadJob(u.fileId, u.uploadUrl, u.chunkSize, u.name, art.file))
+        }
+        if (work.isEmpty()) {
+            // No pending files, yet not COMPLETED — inconsistent; don't trust it.
+            Timber.w("Session %s has no pending uploads but isn't COMPLETED — rebuilding", cloudSessionId)
+            return Resume.Rebuild
+        }
+        return Resume.Continue(work)
+    }
+
+    /** Declare the whole analysis and get one resumable target per file. */
+    private suspend fun createSession(
+        api: IndicApi,
+        idToken: String,
+        localId: String,
+        record: SessionRecord,
+        artifacts: List<Artifact>,
+    ): Plan {
+        val specs = artifacts.map { FileSpecDto(it.name, it.role, it.file.length(), sha256(it.file)) }
+        val metrics = mapOf(
+            "pointsConverged" to record.pointsConverged.toFloat(),
+            "avgIterations" to record.avgIterations,
+            "executionTimeMs" to record.executionTimeMs.toFloat(),
+            "frameCount" to record.frameCount.toFloat(),
+        )
+        val session = api.createSession(
+            idToken,
+            SessionCreateRequest(record.refName, specs, metrics, localSessionId = localId),
+        )
+        require(session.uploads.size == artifacts.size) {
+            "Backend returned ${session.uploads.size} targets for ${artifacts.size} files"
+        }
+        val work = artifacts.mapIndexed { i, art ->
+            val t = session.uploads[i]
+            UploadJob(t.fileId, t.uploadUrl, t.chunkSize, art.name, art.file)
+        }
+        return Plan(session.sessionId, work)
+    }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val api = IndicApi(applicationContext)
@@ -81,18 +184,30 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
         val sessionDir = File(record.sessionDir)
         val rawDeformedDir = File(sessionDir, AnalysisViewModel.RAW_DEFORMED_SUBDIR)
-        val temps = mutableListOf<File>()
+
+        // Generated artifacts live in a PERSISTENT staging dir, not cache. They
+        // must be byte-identical across a resumed upload: createSession declared
+        // each file's size/sha256, and a regenerated zip (new PDF dates, new zip
+        // timestamps) would no longer match, so Drive's resumable URI and the
+        // completeFile size check would never reconcile. Generating once and
+        // reusing also skips the expensive report/zip work on every retry.
+        val stagingDir = File(sessionDir, "upload_staging")
+        if (record.cloudSessionId.isBlank()) {
+            // Fresh upload (first attempt, or a re-run reset the cloud id) —
+            // discard any files staged for a previous, now-superseded run.
+            stagingDir.deleteRecursively()
+        }
+        stagingDir.mkdirs()
 
         try {
             val artifacts = mutableListOf<Artifact>()
 
-            // ── session-level metadata (once) ───────────────────────────────
-            val metaFile = File(applicationContext.cacheDir, "upload_${localId}_metadata.json")
-            metaFile.writeText(buildMetadataJson(record))
-            temps += metaFile
+            // ── session-level metadata (generated once, then reused) ────────
+            val metaFile = File(stagingDir, "metadata.json")
+            if (!metaFile.exists()) metaFile.writeText(buildMetadataJson(record))
             artifacts += Artifact("metadata", "metadata.json", metaFile)
 
-            // ── reference image (once, not once per frame) ──────────────────
+            // ── reference image (already stable on disk) ────────────────────
             val refFile = File(record.refPath)
             if (refFile.exists() && refFile.length() > 0) {
                 artifacts += Artifact("raw", "Reference.png", refFile)
@@ -116,27 +231,24 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 }
                 artifacts += Artifact("dat", datFile.name, datFile)
 
-                val data = DicResult.decodeDatBytes(datFile.readBytes()) ?: return@forEachIndexed
-
-                val csvFile = File(applicationContext.cacheDir, "upload_${localId}_$frameName.csv")
-                writeCsv(data, csvFile)
-                temps += csvFile
+                val csvFile = File(stagingDir, "Data_$frameName.csv")
+                if (!csvFile.exists()) {
+                    DicResult.decodeDatBytes(datFile.readBytes())?.let { writeCsv(it, csvFile) }
+                }
                 if (csvFile.length() > 0) artifacts += Artifact("csv", "Data_$frameName.csv", csvFile)
             }
 
-            // ── per-frame reports, bundled into one archive ─────────────────
-            // The classic single-frame report for every frame, zipped together:
-            // one Drive item instead of N, while keeping each frame's report a
-            // separate file you can pull out on its own.
+            // ── per-frame reports + heatmaps, bundled (generated once) ──────
             if (refFile.exists() && record.defNames.isNotEmpty()) {
-                val zipFile = File(applicationContext.cacheDir, "upload_${localId}_reports.zip")
-                val written = buildReportsZip(record, sessionDir, refFile, rawDeformedDir, zipFile)
-                temps += zipFile
-                if (written > 0 && zipFile.length() > 0) {
-                    artifacts += Artifact("reports", "Reports.zip", zipFile)
-                } else {
-                    Timber.e("Reports zip NOT built for %s (reports=%d, bytes=%d)", localId, written, zipFile.length())
+                val reportsZip = File(stagingDir, "Reports.zip")
+                val processedZip = File(stagingDir, "Processed.zip")
+                if (!reportsZip.exists() || !processedZip.exists()) {
+                    buildBundles(record, sessionDir, refFile, rawDeformedDir, reportsZip, processedZip)
                 }
+                if (reportsZip.length() > 0) artifacts += Artifact("reports", "Reports.zip", reportsZip)
+                else Timber.e("Reports zip missing for %s", localId)
+                if (processedZip.length() > 0) artifacts += Artifact("processed", "Processed.zip", processedZip)
+                else Timber.e("Processed zip missing for %s", localId)
             } else {
                 Timber.e(
                     "Skipping reports for %s — reference exists=%s, frames=%d",
@@ -146,55 +258,96 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
             if (artifacts.isEmpty()) {
                 Timber.w("No artifacts to upload for %s", localId)
+                stagingDir.deleteRecursively()
                 return@withContext Result.success()
             }
 
-            // ── manifest → one session for the whole analysis ───────────────
+            // ── resume an interrupted session, or create a new one ──────────
             Timber.i(
                 "Uploading %s: %d files (%s)",
                 localId,
                 artifacts.size,
                 artifacts.groupingBy { it.role }.eachCount(),
             )
-            val specs = artifacts.map { FileSpecDto(it.name, it.role, it.file.length(), sha256(it.file)) }
-            val metrics = mapOf(
-                "pointsConverged" to record.pointsConverged.toFloat(),
-                "avgIterations" to record.avgIterations,
-                "executionTimeMs" to record.executionTimeMs.toFloat(),
-                "frameCount" to record.frameCount.toFloat(),
-            )
-            val session = api.createSession(
-                idToken,
-                SessionCreateRequest(record.refName, specs, metrics, localSessionId = localId),
-            )
-            if (session.uploads.size != artifacts.size) {
-                Timber.e("Backend returned %d targets for %d files", session.uploads.size, artifacts.size)
-                return@withContext Result.retry()
-            }
-            // Remember the cloud id now — even a partial upload leaves data we
-            // must be able to erase later.
-            SessionStore.setCloudSessionId(applicationContext, localId, session.sessionId)
 
-            // ── upload each artifact straight to Drive, then record it ──────
-            artifacts.forEachIndexed { i, art ->
-                val target = session.uploads[i]
-                Timber.d("Uploading %s (%d bytes)…", art.name, art.file.length())
-                val (driveId, md5) = api.uploadResumable(target.uploadUrl, art.file, target.chunkSize)
-                val tk = TokenProvider.usableIdToken(applicationContext) ?: idToken
-                api.completeFile(
-                    tk, target.fileId,
-                    FileCompleteRequest(session.sessionId, driveId, art.file.length(), md5),
-                )
-                setProgress(androidx.work.workDataOf("done" to i + 1, "total" to artifacts.size))
+            // Continue the session a prior run created, tracked by the stored
+            // pointer. Deliberately NOT looked up by localSessionId: the staging
+            // dir is cleared+regenerated whenever the pointer is blank, so
+            // resuming a session found any other way would upload freshly-sized
+            // files into a session that expects the old sizes → a size mismatch.
+            val existingId = record.cloudSessionId.ifBlank { null }
+            val plan: Plan = if (existingId == null) {
+                Timber.i("No resumable session for %s — creating a new one", localId)
+                createSession(api, idToken, localId, record, artifacts)
+            } else {
+                when (val r = resumeSession(api, idToken, existingId, artifacts)) {
+                    is Resume.Continue -> {
+                        Timber.i(
+                            "Resuming session %s — %d of %d files still to upload",
+                            existingId, r.work.size, artifacts.size,
+                        )
+                        Plan(existingId, r.work)
+                    }
+                    Resume.Done -> {
+                        // Everything already landed; a prior run died before it
+                        // could record the sync locally.
+                        Timber.i("Session %s already complete in the cloud", existingId)
+                        SessionStore.markSynced(applicationContext, localId)
+                        stagingDir.deleteRecursively()
+                        return@withContext Result.success()
+                    }
+                    Resume.Rebuild -> {
+                        // Unusable session — erase it (so it doesn't orphan/eat
+                        // quota), drop the pointer + staged files, and rebuild
+                        // fresh on the next run.
+                        Timber.w("Discarding unusable session %s — rebuilding fresh", existingId)
+                        runCatching { api.deleteSession(idToken, existingId) }
+                            .onFailure { Timber.w(it, "Could not delete unusable session") }
+                        SessionStore.setCloudSessionId(applicationContext, localId, "")
+                        stagingDir.deleteRecursively()
+                        return@withContext Result.retry()
+                    }
+                }
+            }
+            SessionStore.setCloudSessionId(applicationContext, localId, plan.sessionId)
+
+            // ── upload straight to Drive, several files at a time ───────────
+            // Sequential uploads left most of the link idle: every 8 MiB chunk
+            // waits a full round-trip before the next starts, and a session is
+            // mostly many smallish files. A few in flight keeps the pipe full.
+            val done = java.util.concurrent.atomic.AtomicInteger(0)
+            val total = plan.work.size
+            coroutineScope {
+                val gate = Semaphore(UPLOAD_CONCURRENCY)
+                plan.work.map { job ->
+                    async {
+                        gate.withPermit {
+                            Timber.d("Uploading %s (%d bytes)…", job.name, job.file.length())
+                            val (driveId, md5) = api.uploadResumable(job.uploadUrl, job.file, job.chunkSize)
+                            // Re-read the token: a long upload can outlive it.
+                            val tk = TokenProvider.usableIdToken(applicationContext) ?: idToken
+                            api.completeFile(
+                                tk, job.fileId,
+                                FileCompleteRequest(plan.sessionId, driveId, job.file.length(), md5),
+                            )
+                            setProgress(
+                                androidx.work.workDataOf(
+                                    "done" to done.incrementAndGet(), "total" to total,
+                                ),
+                            )
+                        }
+                    }
+                }.awaitAll()
             }
 
             SessionStore.markSynced(applicationContext, localId)
-            Timber.d("Upload complete for %s (%d files, session %s)", localId, artifacts.size, session.sessionId)
+            Timber.i("Upload complete for %s (%d files, session %s)", localId, total, plan.sessionId)
+            stagingDir.deleteRecursively() // done — staged files no longer needed
             Result.success()
         } catch (e: IndicApi.DeviceNotActiveException) {
             // The server has no ACTIVE device record for us (revoked/reset) while
             // our local "registered" flag said otherwise. Re-register and retry
-            // instead of stalling forever.
+            // instead of stalling forever. Keep staging for the retry.
             Timber.w("Device not active server-side — re-registering and retrying")
             TokenStore.setDeviceRegistered(applicationContext, false)
             runCatching { api.registerDevice(idToken) }
@@ -204,23 +357,42 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         } catch (e: IndicApi.DeviceConflictException) {
             Timber.e("This account is bound to a different device — cannot upload")
             SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
+            stagingDir.deleteRecursively()
             Result.failure()
         } catch (e: IndicApi.ApiException) {
-            // 409 = analysis quota reached, 413 = too many files: retrying won't help,
-            // so mark it FAILED instead of failing silently.
-            if (e.code == 409 || e.code == 413) {
-                Timber.e("Upload rejected (%d): %s", e.code, e.detail)
-                SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
-                Result.failure()
-            } else {
-                Timber.e(e, "Upload failed for %s; will retry", localId)
-                Result.retry()
+            when {
+                // 409 = analysis quota reached, 413 = too many files: retrying won't help.
+                e.code == 409 || e.code == 413 -> {
+                    Timber.e("Upload rejected (%d): %s", e.code, e.detail)
+                    SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
+                    stagingDir.deleteRecursively()
+                    Result.failure()
+                }
+                // 400 = the resumable session's expected size no longer matches our
+                // files (a session from an earlier build, or content that changed).
+                // The session is unrecoverable: drop the pointer + staged files so
+                // the next run rebuilds a fresh session that matches.
+                e.code == 400 -> {
+                    Timber.e("Upload 400 (%s) — discarding stale session %s, rebuilding",
+                        e.detail, record.cloudSessionId)
+                    // Erase the half-uploaded session so it doesn't orphan and
+                    // eat a quota slot, then rebuild fresh next run.
+                    runCatching {
+                        if (record.cloudSessionId.isNotBlank()) api.deleteSession(idToken, record.cloudSessionId)
+                    }.onFailure { Timber.w(it, "Could not delete stale session") }
+                    SessionStore.setCloudSessionId(applicationContext, localId, "")
+                    stagingDir.deleteRecursively()
+                    Result.retry()
+                }
+                else -> {
+                    // Transient — keep the staged files so the retry resumes identically.
+                    Timber.e(e, "Upload failed for %s; will retry", localId)
+                    Result.retry()
+                }
             }
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.e(e, "Upload failed for %s; will retry", localId)
             Result.retry()
-        } finally {
-            temps.forEach { runCatching { it.delete() } }
         }
     }
 
@@ -306,41 +478,101 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         return md.digest().joinToString("") { "%02x".format(it) }
     }
 
+    private data class BundleCounts(val reports: Int, val processed: Int)
+
     /**
-     * The whole-analysis PDF: a cover built from frame 1 plus one chapter per
-     * frame (annotated Exx heatmap + a five-field stats table) — the same
-     * artifact the app produces for "share all frames". Chapters are built
-     * lazily by [PdfReportGenerator.generateBatch] and recycled page-by-page,
-     * so memory stays flat regardless of frame count.
+     * One pass over the frames producing BOTH archives:
+     *  - `Reports.zip`   — every frame's Master_Report_Frame_N.pdf
+     *  - `Processed.zip` — every frame's per-field heatmaps (U/V/Exx/Eyy/Exy)
      *
-     * Returns false when the report could not be built (e.g. unreadable frame 1).
+     * They're built together deliberately: [ReportBuilder.buildReport] already
+     * bakes the field heatmaps to make the PDF, so writing them out here costs
+     * nothing extra. Rendering them in a second pass would double the most
+     * expensive work in the whole upload.
+     *
+     * Only one PDF exists on disk at a time (a scratch file, reused per frame),
+     * and each frame's bitmaps are recycled before moving on, so memory and cache
+     * stay flat regardless of frame count.
      */
-    @Suppress("ReturnCount")
-    private suspend fun generateBatchReport(
+    private suspend fun buildBundles(
         record: SessionRecord,
         sessionDir: File,
         refFile: File,
         rawDeformedDir: File,
-        out: File,
+        reportsZip: File,
+        processedZip: File,
+    ): BundleCounts = withContext(Dispatchers.Default) {
+        var reports = 0
+        var processed = 0
+        val scratch = File(applicationContext.cacheDir, "upload_${record.id}_frame.pdf")
+        try {
+            ZipOutputStream(BufferedOutputStream(reportsZip.outputStream())).use { reportsOut ->
+                ZipOutputStream(BufferedOutputStream(processedZip.outputStream())).use { processedOut ->
+                    record.defNames.forEachIndexed { index, defName ->
+                        val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
+                        if (!datFile.exists()) return@forEachIndexed
+                        val data = DicResult.decodeDatBytes(datFile.readBytes()) ?: return@forEachIndexed
+
+                        val frameName = "Frame_${index + 1}"
+                        val defFile = File(rawDeformedDir, defName)
+
+                        val ok = renderFrame(data, refFile, defFile, frameName, record, scratch) { fields ->
+                            // Same bitmaps the PDF just used — write them out before
+                            // they're recycled.
+                            fields.forEach { field ->
+                                processedOut.putNextEntry(ZipEntry("${frameName}_${field.fieldKey}.png"))
+                                field.bakedHeatmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, processedOut)
+                                processedOut.closeEntry()
+                                processed++
+                            }
+                        }
+                        if (!ok || scratch.length() == 0L) {
+                            Timber.w("Report generation failed for %s", frameName)
+                            return@forEachIndexed
+                        }
+                        reportsOut.putNextEntry(ZipEntry("Master_Report_$frameName.pdf"))
+                        scratch.inputStream().use { it.copyTo(reportsOut) }
+                        reportsOut.closeEntry()
+                        reports++
+                    }
+                }
+            }
+        } finally {
+            scratch.delete()
+        }
+        Timber.i("Bundled %d frame reports and %d processed images", reports, processed)
+        BundleCounts(reports, processed)
+    }
+
+    /**
+     * Build one frame's report: writes the classic single-frame PDF to [pdfOut]
+     * and hands the freshly baked per-field heatmaps to [onFieldHeatmaps] before
+     * they are recycled.
+     */
+    private suspend fun renderFrame(
+        data: FloatArray,
+        refFile: File,
+        defFile: File,
+        frameName: String,
+        record: SessionRecord,
+        pdfOut: File,
+        onFieldHeatmaps: (List<FieldResult>) -> Unit,
     ): Boolean = withContext(Dispatchers.Default) {
         val imgW = record.imgW
         val imgH = record.imgH
         if (imgW <= 0 || imgH <= 0) return@withContext false
 
-        val firstDat = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", 0))
-        if (!firstDat.exists()) return@withContext false
-        val firstData = DicResult.decodeDatBytes(firstDat.readBytes()) ?: return@withContext false
-
         val originalBaseImg = BitmapFactory.decodeFile(refFile.absolutePath) ?: return@withContext false
+        // The deformed original is only the cover image; fall back to the
+        // reference rather than losing the whole report over it.
+        val originalDefImg = BitmapFactory.decodeFile(defFile.absolutePath)
         val baseImg = Bitmap.createScaledBitmap(originalBaseImg, imgW, imgH, true)
-        val firstDefFile = File(rawDeformedDir, record.defNames.firstOrNull().orEmpty())
-        val originalDefImg = BitmapFactory.decodeFile(firstDefFile.absolutePath)
         val defImg = Bitmap.createScaledBitmap(originalDefImg ?: originalBaseImg, imgW, imgH, true)
 
         val statsArray = FloatArray(ENGINE_STATS_SIZE) { record.engineStats.getOrElse(it) { 0f } }
-        val cover = ReportBuilder.buildReport(
+        val reportData = ReportBuilder.buildReport(
             ReportBuilder.ReportBuildParams(
-                data = firstData,
+                data = data,
                 baseImg = baseImg,
                 defImgForCover = defImg,
                 imgW = imgW,
@@ -355,31 +587,25 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 roiData = RoiData(record.roiX, record.roiY, record.roiW, record.roiH),
                 engineStats = EngineStats.fromArray(statsArray),
                 referenceImageName = "Baseline",
-                deformedImageName = record.defNames.firstOrNull() ?: "Frame_1",
+                deformedImageName = frameName,
                 drawMinMarker = false,
             ),
         )
 
         var ok = true
         try {
-            out.outputStream().use { stream ->
-                PdfReportGenerator.generateBatch(
-                    cover = cover,
-                    frameCount = record.defNames.size,
-                    chapterAt = { index -> buildChapter(record, sessionDir, baseImg, index) },
-                    outputStream = stream,
-                ).collect { progress ->
-                    // generateBatch surfaces failures as a Flow event rather than
-                    // throwing — don't hand back a half-written PDF.
+            pdfOut.outputStream().use { stream ->
+                PdfReportGenerator.generate(reportData, stream).collect { progress ->
                     if (progress is PdfReportGenerator.Progress.Error) {
-                        Timber.e(progress.ex, "Batch report failed")
+                        Timber.e(progress.ex, "PDF generation failed for %s", frameName)
                         ok = false
                     }
                 }
             }
+            onFieldHeatmaps(reportData.fieldResults)
         } finally {
-            cover.fieldResults.forEach { it.bakedHeatmap.recycle() }
-            cover.znssdHeatmap.recycle()
+            reportData.fieldResults.forEach { it.bakedHeatmap.recycle() }
+            reportData.znssdHeatmap.recycle()
             defImg.recycle()
             originalDefImg?.recycle()
             baseImg.recycle()
@@ -388,71 +614,11 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         ok
     }
 
-    /** One frame's chapter: annotated heatmap over the reference + stats table. */
-    private fun buildChapter(
-        record: SessionRecord,
-        sessionDir: File,
-        baseImg: Bitmap,
-        index: Int,
-    ): PdfReportGenerator.FrameChapter {
-        val title = record.defNames.getOrNull(index) ?: "Frame_${index + 1}"
-        val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
-        val data = (if (datFile.exists()) DicResult.decodeDatBytes(datFile.readBytes()) else null)
-            ?: return PdfReportGenerator.FrameChapter("$title (unreadable)", null, emptyList())
-
-        val image = renderAnnotated(record, baseImg, data, CHAPTER_FIELD_INDEX, CHAPTER_FIELD_LABEL)
-        val rows = CHAPTER_FIELDS.map { (label, idx) ->
-            val stats = DicResult.fieldStats(data, idx) ?: floatArrayOf(0f, 0f, 0f)
-            val unit = if (DicResult.isStrainFieldIndex(idx)) "mε" else "px"
-            listOf(
-                "$label [$unit]",
-                ReportBuilder.formatMetric(stats[0]),
-                ReportBuilder.formatMetric(stats[1]),
-                ReportBuilder.formatMetric(stats[2]),
-            )
-        }
-        return PdfReportGenerator.FrameChapter(title, image, rows)
-    }
-
-    /** Heatmap of one field baked over the reference image, with annotations. */
-    private fun renderAnnotated(
-        record: SessionRecord,
-        baseImg: Bitmap,
-        data: FloatArray,
-        dataIndex: Int,
-        typeString: String,
-    ): Bitmap {
-        val (heatmap, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
-            data, record.imgW, record.imgH, dataIndex, record.step, null, null,
-        )
-        val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex)
-        val out = Bitmap.createBitmap(record.imgW, record.imgH, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(out)
-        canvas.drawBitmap(baseImg, 0f, 0f, null)
-        canvas.drawBitmap(heatmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
-        val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
-        ReportBuilder.bakeAnnotationsToCanvas(
-            canvas, record.imgW, record.imgH, actualMin, actualMax,
-            typeString, unit, extrema.maxIdx, extrema.minIdx, data,
-        )
-        heatmap.recycle()
-        return out
-    }
-
     private companion object {
         const val ENGINE_STATS_SIZE = 16
-        const val HEATMAP_ALPHA = 180
+        const val PNG_QUALITY = 100
 
-        /** Field shown as each chapter's heatmap. */
-        const val CHAPTER_FIELD_INDEX = DicResult.IDX_EXX
-        const val CHAPTER_FIELD_LABEL = "Exx"
-
-        val CHAPTER_FIELDS = listOf(
-            "U" to DicResult.IDX_U,
-            "V" to DicResult.IDX_V,
-            "Exx" to DicResult.IDX_EXX,
-            "Eyy" to DicResult.IDX_EYY,
-            "Exy" to DicResult.IDX_EXY,
-        )
+        /** Files uploaded concurrently. Keeps the link busy without thrashing. */
+        const val UPLOAD_CONCURRENCY = 4
     }
 }

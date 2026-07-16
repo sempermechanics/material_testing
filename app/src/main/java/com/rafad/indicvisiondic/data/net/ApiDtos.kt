@@ -87,6 +87,24 @@ data class FileCompleteRequest(
     val md5: String? = null,
 )
 
+/** A file still awaiting bytes, with the resumable URI to continue into. */
+@Serializable
+data class PendingUploadDto(
+    val fileId: String,
+    val uploadUrl: String,
+    val chunkSize: Int = 8 * 1024 * 1024,
+    val name: String = "",
+    val role: String = "",
+    val sizeBytes: Long = 0,
+)
+
+@Serializable
+data class SessionUploadsResponse(
+    val sessionId: String,
+    val status: String? = null,
+    val uploads: List<PendingUploadDto> = emptyList(),
+)
+
 @Serializable
 data class CloudFileDto(
     val fileId: String,

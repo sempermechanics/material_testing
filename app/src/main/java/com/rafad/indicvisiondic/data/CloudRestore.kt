@@ -1,6 +1,13 @@
 package com.rafad.indicvisiondic.data
 
 import android.content.Context
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.rafad.indicvisiondic.data.net.CloudSessionDto
 import com.rafad.indicvisiondic.data.net.IndicApi
 import com.rafad.indicvisiondic.data.net.TokenProvider
@@ -10,6 +17,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import timber.log.Timber
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * Rebuilds an analysis on this device from its cloud backup.
@@ -30,10 +38,33 @@ import java.io.File
  */
 object CloudRestore {
 
-    /** Progress callback: (filesDone, filesTotal). */
-    fun interface Progress {
-        fun onProgress(done: Int, total: Int)
+    /** Input key for [DicRestoreWorker]: which cloud session to pull down. */
+    const val KEY_CLOUD_SESSION_ID = "CLOUD_SESSION_ID"
+
+    /**
+     * Queue a restore. It runs in [DicRestoreWorker] rather than a UI scope so
+     * it survives leaving the screen — a restore can be hundreds of megabytes
+     * and must not die because the user navigated away.
+     */
+    fun enqueueRestore(context: Context, cloudSessionId: String): String {
+        val name = workName(cloudSessionId)
+        val work = OneTimeWorkRequestBuilder<DicRestoreWorker>()
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
+            )
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
+            .setInputData(Data.Builder().putString(KEY_CLOUD_SESSION_ID, cloudSessionId).build())
+            .addTag("restore")
+            .build()
+        WorkManager.getInstance(context.applicationContext)
+            .enqueueUniqueWork(name, ExistingWorkPolicy.KEEP, work)
+        return name
     }
+
+    /** Unique work name for a restore, so the UI can observe its progress. */
+    fun workName(cloudSessionId: String): String = "restore-$cloudSessionId"
+
+    private const val BACKOFF_SECONDS = 30L
 
     /** Cloud analyses available to restore (excludes ones already on this device). */
     suspend fun listRestorable(context: Context): List<CloudSessionDto> = withContext(Dispatchers.IO) {
@@ -54,7 +85,7 @@ object CloudRestore {
     suspend fun restore(
         context: Context,
         sessionId: String,
-        progress: Progress? = null,
+        onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> },
     ): String = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         val api = IndicApi(appContext)
@@ -84,7 +115,7 @@ object CloudRestore {
         // 2. Everything else, into the layout a local run would have produced.
         var done = 0
         val total = files.size
-        progress?.onProgress(0, total)
+        onProgress(0, total)
         var refPath = ""
         for (f in files) {
             val dest = when (f.role) {
@@ -100,7 +131,7 @@ object CloudRestore {
             }
             api.downloadFile(token, f.fileId, dest)
             if (f.role == "raw" && f.name == "Reference.png") refPath = dest.absolutePath
-            progress?.onProgress(++done, total)
+            onProgress(++done, total)
         }
 
         // 3. Rebuild the index row from the blueprint.

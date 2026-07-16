@@ -49,6 +49,12 @@ paths:
   /v1/sessions:
     get:
       operationId: listSessions
+      parameters:
+        # Deep check: also confirm each session's blobs still exist in Drive.
+        - name: verify
+          in: query
+          required: false
+          type: boolean
       responses:
         '200': { description: OK }
     post:
@@ -58,6 +64,16 @@ paths:
   /v1/sessions/{sid}:
     delete:
       operationId: deleteSession
+      parameters:
+        - name: sid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+  /v1/sessions/{sid}/uploads:
+    get:
+      operationId: sessionUploads
       parameters:
         - name: sid
           in: path

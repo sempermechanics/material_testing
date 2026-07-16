@@ -92,17 +92,36 @@ async def delete_account(ctx=Depends(verified_device)):
     """
     user, device = ctx["user"], ctx["device"]
     uid = user["uid"]
-
     token = drive.access_token()
-    folder = drive.find_user_folder(token, uid)
-    if folder:
-        drive.delete_file(token, folder)
 
+    # 1. Delete each session's Drive folder via its STORED pointer. Never rely
+    #    on walking the tree by name for this: if the lookup missed we would
+    #    silently skip Drive and still wipe the metadata, stranding the blobs
+    #    with nothing left pointing at them.
+    sessions = repo.list_user_sessions(uid, limit=1000)
+    folders_deleted = 0
+    for s in sessions:
+        folder = s.get("driveFolderId")
+        if folder:
+            drive.delete_file(token, folder)  # raises → we abort before touching Firestore
+            folders_deleted += 1
+
+    # 2. Then the whole user subtree — removes the scaffolding and anything a
+    #    failed sync orphaned. Prefer the id stored at upload time; only fall
+    #    back to walking names for accounts that predate it.
+    user_folder = user.get("driveFolderId") or drive.find_user_folder(token, uid)
+    if user_folder:
+        drive.delete_file(token, user_folder)
+    else:
+        log.warning("No Drive folder found for uid %s — nothing to purge there", uid)
+
+    # 3. Only once the blobs are gone: erase the metadata.
     counts = repo.delete_all_user_data(uid)
+    detail = {**counts, "driveFolders": folders_deleted, "userFolderFound": bool(user_folder)}
     audit.record(uid, device.get("deviceId"), action="ACCOUNT_DELETE",
-                 target={"type": "user", "id": uid}, detail=counts)
-    log.info("Erased account %s: %s, driveFolderDeleted=%s", uid, counts, bool(folder))
-    return {"deleted": uid, **counts}
+                 target={"type": "user", "id": uid}, detail=detail)
+    log.info("Erased account %s: %s", uid, detail)
+    return {"deleted": uid, **detail}
 
 
 @app.post("/v1/devices/register", status_code=201)
@@ -128,10 +147,35 @@ async def challenge(user=Depends(current_user), x_device_id: str = Header(defaul
 
 
 @app.get("/v1/sessions")
-async def list_sessions(user=Depends(current_user)):
+async def list_sessions(verify: bool = False, user=Depends(current_user)):
     """The caller's cloud analyses. The app reconciles local sync state against
-    this, so a session deleted in the cloud stops showing as 'synced'."""
+    this, so a session deleted in the cloud stops showing as 'synced'.
+
+    Firestore is only an index. `?verify=true` additionally confirms each
+    session's folder still exists in Drive, which catches artifacts deleted
+    out-of-band (straight in Drive) — the index would otherwise keep claiming
+    COMPLETED forever. Any session whose blobs are gone has its orphaned
+    metadata purged here, so the app stops trusting it and the quota is freed.
+
+    Verification costs one Drive call per session, so it's opt-in: the app uses
+    it for an explicit pull-to-refresh, not for every screen resume.
+    """
     sessions = repo.list_user_sessions(user["uid"])
+
+    if verify:
+        token = drive.access_token()
+        alive = []
+        for s in sessions:
+            folder = s.get("driveFolderId")
+            if folder and not drive.file_exists(token, folder):
+                repo.delete_session(s["sessionId"])
+                audit.record(user["uid"], action="SESSION_ORPHAN_PURGED",
+                             target={"type": "session", "id": s["sessionId"]})
+                log.info("Purged orphaned session %s (Drive folder gone)", s["sessionId"])
+                continue
+            alive.append(s)
+        sessions = alive
+
     return {
         "sessions": sessions,
         "quota": {"used": len(sessions), "max": settings.MAX_SESSIONS_PER_USER},
@@ -162,6 +206,24 @@ async def delete_session(sid: str, ctx=Depends(verified_device)):
                  detail={"filesRemoved": removed, "localSessionId": session.get("localSessionId", "")})
     log.info("Erased session %s for uid %s (%d files)", sid, user["uid"], removed)
     return {"deleted": sid, "filesRemoved": removed}
+
+
+@app.get("/v1/sessions/{sid}/uploads")
+async def session_uploads(sid: str, user=Depends(current_user)):
+    """What still needs uploading for a session — the resume path.
+
+    An interrupted upload re-reads this instead of calling POST /v1/sessions
+    again, so it continues into the same session/Drive folder rather than
+    creating a duplicate.
+    """
+    session = repo.get_session(sid)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(404, "session_not_found")
+    return {
+        "sessionId": sid,
+        "status": session.get("status"),
+        "uploads": repo.list_pending_uploads(sid),
+    }
 
 
 @app.get("/v1/sessions/{sid}/files")
@@ -222,6 +284,8 @@ async def create_session(body: SessionCreate, ctx=Depends(verified_device)):
     sid = uuid.uuid4().hex
     token = drive.access_token()
     folders = drive.ensure_session_folders(token, user["uid"], sid)
+    # Remember the user's Drive subtree so account erasure can delete it by id.
+    repo.remember_user_folder(user["uid"], folders["userFolderId"])
 
     uploads = []
     for f in body.files:

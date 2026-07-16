@@ -275,8 +275,11 @@ class ResultViewerActivity : AppCompatActivity() {
             finish()
         }
         findViewById<View>(R.id.btnViewerShare).setOnClickListener { showShareSheet() }
+        findViewById<View>(R.id.btnViewerSettingsInfo).setOnClickListener { showSettingsUsedSheet() }
 
         layoutColorScale.setOnClickListener { showCustomScaleDialog() }
+
+        // (settings-used sheet is built in showSettingsUsedSheet)
 
         toggleInspect.setOnCheckedChangeListener { _, isChecked ->
             isInspectModeActive = isChecked
@@ -666,6 +669,105 @@ class ResultViewerActivity : AppCompatActivity() {
     /** Share sheet (wireframe 08) - targets wired via ShareCenter. */
     private fun showShareSheet() {
         ShareCenter(this).show()
+    }
+
+    /**
+     * The engine settings this result was produced with.
+     *
+     * Read from the intent extras the viewer was launched with — not from
+     * [com.rafad.indicvisiondic.data.DicSettings] — so a result opened later
+     * still shows the values it was actually computed with, even if the user has
+     * changed their settings since.
+     */
+    private fun showSettingsUsedSheet() {
+        val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.sheet_settings_used, null)
+        sheet.setContentView(view)
+
+        view.findViewById<TextView>(R.id.tvSettingsUsedSpecimen).text =
+            intent.getStringExtra(DicKeys.REF_NAME)?.removePrefix("Ref: ").orEmpty()
+
+        val rows = view.findViewById<LinearLayout>(R.id.settingsUsedRows)
+        val roiW = intent.getIntExtra(DicKeys.ROI_W, 0)
+        val roiH = intent.getIntExtra(DicKeys.ROI_H, 0)
+
+        val entries = buildList {
+            add(
+                getString(R.string.setting_subset) to
+                    getString(R.string.setting_px_fmt, intent.getIntExtra(DicKeys.SUBSET_SIZE, 0)),
+            )
+            add(
+                getString(R.string.setting_step) to
+                    getString(R.string.setting_px_fmt, intent.getIntExtra(DicKeys.STEP, 0)),
+            )
+            add(
+                getString(R.string.setting_strain_window) to
+                    getString(R.string.setting_subsets_fmt, intent.getIntExtra(DicKeys.STRAIN_WINDOW, 0)),
+            )
+            add(
+                getString(R.string.setting_strain_method) to
+                    (intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG"),
+            )
+            // ROI is only meaningful when one was actually recorded.
+            if (roiW > 0 && roiH > 0) {
+                add(
+                    getString(R.string.setting_roi) to getString(
+                        R.string.setting_roi_fmt, roiW, roiH,
+                        intent.getIntExtra(DicKeys.ROI_X, 0), intent.getIntExtra(DicKeys.ROI_Y, 0),
+                    ),
+                )
+            }
+            add(
+                getString(R.string.setting_image_size) to getString(
+                    R.string.setting_size_fmt,
+                    intent.getIntExtra(DicKeys.IMG_W, 0), intent.getIntExtra(DicKeys.IMG_H, 0),
+                ),
+            )
+        }
+
+        entries.forEachIndexed { index, (label, value) ->
+            if (index > 0) rows.addView(settingsDivider())
+            rows.addView(settingsRow(label, value))
+        }
+        sheet.show()
+    }
+
+    private fun settingsRow(label: String, value: String): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        }
+        row.addView(
+            TextView(this).apply {
+                text = label
+                setTextColor(getColor(R.color.text_secondary))
+                textSize = SETTINGS_ROW_SP
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            },
+        )
+        row.addView(
+            TextView(this).apply {
+                text = value
+                setTextColor(getColor(R.color.text_primary))
+                textSize = SETTINGS_ROW_SP
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+            },
+        )
+        return row
+    }
+
+    private fun settingsDivider(): View = View(this).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 1,
+        ).apply { topMargin = SETTINGS_DIVIDER_MARGIN; bottomMargin = SETTINGS_DIVIDER_MARGIN }
+        setBackgroundColor(getColor(R.color.surface_outline))
+    }
+
+    private companion object {
+        const val SETTINGS_ROW_SP = 13f
+        const val SETTINGS_DIVIDER_MARGIN = 10
     }
 
     /** Permanent max/min/mean tiles for the current field + frame. */

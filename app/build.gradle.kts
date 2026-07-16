@@ -130,6 +130,8 @@ dependencies {
     implementation(libs.androidx.activity)
     // AndroidX transitions power the shared-element / expand-collapse motion in ui/Motion.kt
     implementation("androidx.transition:transition:1.5.1")
+    // Pull-to-refresh on the Home list (re-checks cloud backup state on demand)
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

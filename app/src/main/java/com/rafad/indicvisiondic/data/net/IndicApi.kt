@@ -108,9 +108,17 @@ class IndicApi(context: Context) {
 
     // ----------------------------------------------------------- session/files
 
-    /** GET /v1/sessions — the caller's cloud analyses (for sync reconciliation). */
-    suspend fun listSessions(idToken: String): ListSessionsResponse = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url("$base/v1/sessions")
+    /**
+     * GET /v1/sessions — the caller's cloud analyses (for sync reconciliation).
+     *
+     * [verify] makes the backend also confirm each session's blobs still exist
+     * in Drive (catching artifacts deleted straight in Drive, which the
+     * Firestore index alone can't see). It costs a Drive call per session, so
+     * it's for explicit refreshes, not every resume.
+     */
+    suspend fun listSessions(idToken: String, verify: Boolean = false): ListSessionsResponse = withContext(Dispatchers.IO) {
+        val url = if (verify) "$base/v1/sessions?verify=true" else "$base/v1/sessions"
+        val req = Request.Builder().url(url)
             .header("Authorization", "Bearer $idToken").get().build()
         client.newCall(req).execute().use { resp ->
             when (resp.code) {
@@ -129,6 +137,23 @@ class IndicApi(context: Context) {
             resp.use {
                 if (it.code == 200) json.decodeFromString(it.body!!.string())
                 else failSigned(it.code, it.bodyText())
+            }
+        }
+
+    /**
+     * GET /v1/sessions/{sid}/uploads — what still needs uploading.
+     *
+     * The resume path: an interrupted upload continues into the same session
+     * instead of POSTing a new one (which would duplicate the Drive folder and
+     * consume another slot of the analysis quota).
+     */
+    suspend fun sessionUploads(idToken: String, sessionId: String): SessionUploadsResponse =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder().url("$base/v1/sessions/$sessionId/uploads")
+                .header("Authorization", "Bearer $idToken").get().build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.code == 200) json.decodeFromString(resp.body!!.string())
+                else throw ApiException(resp.code, resp.bodyText())
             }
         }
 
@@ -244,7 +269,11 @@ class IndicApi(context: Context) {
      */
     suspend fun deleteAccount(idToken: String) = withContext(Dispatchers.IO) {
         val resp = signedRequest(idToken, "DELETE", "/v1/me", ByteArray(0))
-        resp.use { if (it.code != 200 && it.code != 404) failSigned(it.code, it.bodyText()) }
+        // No 404-is-fine shortcut here: this endpoint never legitimately 404s,
+        // so a 404 means the route isn't reachable (e.g. not published on the
+        // API Gateway). Treating that as success would wipe the local copy while
+        // leaving every byte in the cloud.
+        resp.use { if (it.code != 200) failSigned(it.code, it.bodyText()) }
     }
 
     /**
@@ -255,8 +284,14 @@ class IndicApi(context: Context) {
     suspend fun deleteSession(idToken: String, sessionId: String) = withContext(Dispatchers.IO) {
         val resp = signedRequest(idToken, "DELETE", "/v1/sessions/$sessionId", ByteArray(0))
         resp.use {
-            // Already gone is success — the caller wanted it erased.
-            if (it.code != 200 && it.code != 404) failSigned(it.code, it.bodyText())
+            if (it.code == 200) return@use
+            val body = it.bodyText()
+            // A 404 is only "already erased" when OUR backend says so
+            // (`session_not_found`). A bare 404 means the route isn't reachable —
+            // accepting that as success would delete the local copy and orphan
+            // the cloud data forever.
+            if (it.code == 404 && body.contains("session_not_found")) return@use
+            failSigned(it.code, body)
         }
     }
 
@@ -301,7 +336,15 @@ class IndicApi(context: Context) {
     suspend fun uploadResumable(uploadUrl: String, file: java.io.File, chunkSize: Int): Pair<String, String?> =
         withContext(Dispatchers.IO) {
             val total = file.length()
-            var offset = queryResumeOffset(uploadUrl, total)
+
+            // Where does Drive want us to continue — or does it already have the
+            // whole file? A file fully uploaded in a prior attempt (but whose
+            // completeFile never ran) reports COMPLETE here; return its resource
+            // instead of trying to re-send zero bytes and failing.
+            val probe = probeStatus(uploadUrl, total)
+            probe.result?.let { return@withContext it }
+            var offset = probe.offset
+
             RandomAccessFile(file, "r").use { raf ->
                 val buf = ByteArray(chunkSize)
                 while (offset < total) {
@@ -324,19 +367,30 @@ class IndicApi(context: Context) {
                     }
                 }
             }
-            throw IOException("upload finished without a final Drive response")
+
+            // Loop reached `total` without a final 200/201 — the last bytes were
+            // already on Drive from a previous attempt. Re-probe to finalize and
+            // get the resource, rather than failing.
+            probeStatus(uploadUrl, total).result
+                ?: throw IOException("upload finished without a final Drive response")
         }
 
-    /** Ask Drive how many bytes it already has: PUT bytes-* /total with an empty body. */
-    private fun queryResumeOffset(uploadUrl: String, total: Long): Long {
+    /** Current state of a resumable session: continue at [offset], or already [result]. */
+    private data class UploadProbe(val offset: Long, val result: Pair<String, String?>?)
+
+    /** Ask Drive what it already has: PUT `bytes * /total` with an empty body. */
+    private fun probeStatus(uploadUrl: String, total: Long): UploadProbe {
         val req = Request.Builder().url(uploadUrl)
             .header("Content-Range", "bytes */$total")
             .put(ByteArray(0).toRequestBody(octet)).build()
         client.newCall(req).execute().use { resp ->
             return when (resp.code) {
-                308 -> resp.header("Range")?.substringAfterLast('-')?.toLongOrNull()?.plus(1) ?: 0L
-                200, 201 -> total // already complete
-                else -> 0L // start fresh (e.g. 404 expired handled by caller retry)
+                // Resume Incomplete: Range tells us the last byte received (may be absent = nothing yet).
+                308 -> UploadProbe(resp.header("Range")?.substringAfterLast('-')?.toLongOrNull()?.plus(1) ?: 0L, null)
+                // Already complete — the body is the Drive file resource.
+                200, 201 -> UploadProbe(total, parseDriveResult(resp.body?.string().orEmpty()))
+                // 404/410 = session expired; start fresh (caller re-inits on retry).
+                else -> UploadProbe(0L, null)
             }
         }
     }

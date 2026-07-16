@@ -158,6 +158,11 @@ def delete_session(sid: str) -> int:
     return removed
 
 
+def remember_user_folder(uid: str, folder_id: str) -> None:
+    """Persist the user's Drive subtree id so erasure never has to guess by name."""
+    db().collection("users").document(uid).update({"driveFolderId": folder_id})
+
+
 def get_user(uid: str):
     snap = db().collection("users").document(uid).get()
     return {**snap.to_dict(), "uid": uid} if snap.exists else None
@@ -206,6 +211,30 @@ def get_session(sid: str):
 def get_file(file_id: str):
     snap = db().collection("files").document(file_id).get()
     return {**snap.to_dict(), "fileId": file_id} if snap.exists else None
+
+
+def list_pending_uploads(sid: str) -> list:
+    """Files in a session that still need bytes, with their resumable URIs.
+
+    Lets an interrupted upload resume the SAME session instead of creating a
+    duplicate (which would also burn the per-user analysis quota). Files already
+    COMPLETED have their uploadUrl cleared, so they're naturally excluded.
+    """
+    out = []
+    for d in db().collection("files").where("sessionId", "==", sid).stream():
+        f = d.to_dict()
+        url = f.get("uploadUrl")
+        if f.get("status") == "COMPLETED" or not url:
+            continue
+        out.append({
+            "fileId": d.id,
+            "uploadUrl": url,
+            "chunkSize": 8 * 1024 * 1024,
+            "name": f.get("name"),
+            "role": f.get("role"),
+            "sizeBytes": f.get("sizeBytes", 0),
+        })
+    return out
 
 
 def list_session_files(sid: str) -> list:

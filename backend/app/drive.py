@@ -3,10 +3,14 @@
 Metadata calls only. File BYTES never pass through here — the client PUTs
 directly to the resumable session URI returned by init_resumable().
 """
+import logging
+
 import requests
 
 from .config import settings
 from .google_auth import drive_access_token
+
+log = logging.getLogger("indic.drive")
 
 API = "https://www.googleapis.com/drive/v3"
 UPLOAD = (
@@ -87,16 +91,23 @@ def _find_folder(token: str, name: str, parent: str):
 def find_user_folder(token: str, uid: str):
     """The user's whole Drive subtree (…/Research Storage/user/{uid}), or None.
 
-    Deleting this one folder erases every analysis the user ever uploaded,
-    including any orphaned by failed syncs.
+    Best-effort cleanup only. Callers deleting real data must go through the
+    stored `driveFolderId` per session — a name walk that quietly returns None
+    (renamed folder, wrong ROOT_FOLDER_ID, a level missing) would look exactly
+    like "nothing to delete" and strand the user's blobs.
     """
     research = _find_folder(token, "Research Storage", settings.ROOT_FOLDER_ID)
     if not research:
+        log.warning("find_user_folder: no 'Research Storage' under root %s", settings.ROOT_FOLDER_ID)
         return None
     user_dir = _find_folder(token, "user", research)
     if not user_dir:
+        log.warning("find_user_folder: no 'user' folder under Research Storage")
         return None
-    return _find_folder(token, uid, user_dir)
+    found = _find_folder(token, uid, user_dir)
+    if not found:
+        log.warning("find_user_folder: no folder named %s under user/", uid)
+    return found
 
 
 def ensure_session_folders(token: str, uid: str, sid: str) -> dict:
@@ -107,10 +118,30 @@ def ensure_session_folders(token: str, uid: str, sid: str) -> dict:
     uid_dir = _find_or_create_folder(token, uid, user_dir)
     sess_dir = _find_or_create_folder(token, "session", uid_dir)
     sid_dir = _find_or_create_folder(token, sid, sess_dir)
-    folders = {"sessionFolderId": sid_dir}
+    # userFolderId is returned so it can be persisted on the user doc: account
+    # deletion then erases Drive via a stored id instead of re-walking names.
+    folders = {"sessionFolderId": sid_dir, "userFolderId": uid_dir}
     for role in ("raw", "processed", "reports", "metadata", "csv", "dat"):
         folders[role] = _find_or_create_folder(token, role, sid_dir)
     return folders
+
+
+def file_exists(token: str, file_id: str) -> bool:
+    """Is this file/folder still really in Drive (and not trashed)?
+
+    Firestore is only an index — if someone deletes a session folder straight in
+    Drive, the index still claims COMPLETED. This is the check that catches that.
+    """
+    r = requests.get(
+        f"{API}/files/{file_id}",
+        headers=_headers(token),
+        params={"fields": "id,trashed", "supportsAllDrives": "true"},
+        timeout=30,
+    )
+    if r.status_code == 404:
+        return False
+    r.raise_for_status()
+    return not r.json().get("trashed", False)
 
 
 def delete_file(token: str, file_id: str) -> None:
@@ -126,8 +157,25 @@ def delete_file(token: str, file_id: str) -> None:
         params={"supportsAllDrives": "true"},
         timeout=120,
     )
-    if r.status_code not in (204, 200, 404):
-        r.raise_for_status()
+    if r.status_code in (200, 204):
+        return  # explicit success
+
+    if r.status_code == 404:
+        # Ambiguous: Drive returns 404 both for "already gone" AND for "you may
+        # not touch this" (it hides existence instead of returning 403). Taking
+        # it as success once meant erasure silently no-op'd while reporting that
+        # it had deleted everything. Never believe a 404 — check.
+        if file_exists(token, file_id):
+            log.error("drive delete %s: 404 but the file is STILL THERE — permission problem", file_id)
+            raise PermissionError(
+                f"Drive refused to delete {file_id}. The service account needs "
+                "Manager (organizer) rights on the shared drive: files.delete "
+                "requires organizer rights on the parent."
+            )
+        return  # genuinely absent
+
+    log.error("drive delete %s FAILED: HTTP %s %s", file_id, r.status_code, r.text[:500])
+    r.raise_for_status()
 
 
 def stream_file(token: str, drive_file_id: str, chunk_size: int = 256 * 1024):

@@ -15,6 +15,7 @@ import com.rafad.indicvisiondic.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -28,25 +29,64 @@ import java.util.concurrent.TimeUnit
  */
 object CloudSync {
 
-    /** Result of a reconcile pass, for surfacing in the UI. */
-    data class Report(val cloudCount: Int, val quotaMax: Int, val repaired: Int)
+    /**
+     * What a reconcile pass concluded.
+     *
+     * The distinction that matters: **[Offline] is normal, [Failed] is not.**
+     * Collapsing them (as an earlier version did, by returning null for both)
+     * meant a broken backend — a stale API Gateway config, a bad deploy — looked
+     * exactly like "no signal", and the app silently kept showing a stale
+     * "Synced" badge. Anything the server actually answered with an error must
+     * reach the user.
+     */
+    sealed interface Outcome {
+        /** Reconciled successfully. [repaired] sessions were found missing and re-queued. */
+        data class Ok(
+            val cloudCount: Int,
+            val quotaUsed: Int,
+            val quotaMax: Int,
+            val repaired: Int,
+        ) : Outcome
+
+        /** Cloud sync isn't configured — nothing to check, say nothing. */
+        data object Disabled : Outcome
+
+        /** No connectivity or no usable token. Expected for an offline-first app; stay quiet. */
+        data object Offline : Outcome
+
+        /** The backend answered, and the answer was wrong. The user needs to know. */
+        data class Failed(val reason: String) : Outcome
+    }
 
     /**
-     * Compare local sessions against the cloud and fix drift.
-     * Returns null when the cloud isn't reachable/configured (state left alone).
+     * Compare local sessions against the cloud and repair drift. Local state is
+     * only ever changed on a successful check.
+     *
+     * [deep] verifies the blobs still exist in Drive rather than trusting the
+     * backend's index — the only way to catch artifacts deleted straight in
+     * Drive. It costs a Drive call per session, so it's reserved for an explicit
+     * pull-to-refresh; screen resumes use the cheap index check.
      */
-    suspend fun reconcile(context: Context, reupload: Boolean = true): Report? =
+    suspend fun reconcile(context: Context, reupload: Boolean = true, deep: Boolean = false): Outcome =
         withContext(Dispatchers.IO) {
             val appContext = context.applicationContext
             val api = IndicApi(appContext)
-            if (!api.enabled) return@withContext null
-            val token = TokenProvider.usableIdToken(appContext) ?: return@withContext null
+            if (!api.enabled) return@withContext Outcome.Disabled
+            val token = TokenProvider.usableIdToken(appContext) ?: return@withContext Outcome.Offline
 
             val cloud = try {
-                api.listSessions(token)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                Timber.w(e, "Cloud reconcile skipped — backend unreachable")
-                return@withContext null
+                api.listSessions(token, verify = deep)
+            } catch (e: IndicApi.NotApprovedException) {
+                Timber.w("Cloud reconcile refused — account not approved")
+                return@withContext Outcome.Failed("your account isn't approved for cloud backup")
+            } catch (e: IndicApi.ApiException) {
+                // The server responded — so this is a real fault (404 = route not
+                // published on the gateway, 5xx = backend broken), not bad signal.
+                Timber.e(e, "Cloud reconcile FAILED with HTTP %d", e.code)
+                return@withContext Outcome.Failed("server returned HTTP ${e.code}")
+            } catch (e: IOException) {
+                Timber.w(e, "Cloud reconcile skipped — offline")
+                return@withContext Outcome.Offline
             }
 
             // Only COMPLETED cloud sessions count as a real backup.
@@ -66,7 +106,7 @@ object CloudSync {
                     if (reupload) enqueueUpload(appContext, record.id)
                 }
             }
-            Report(cloud.sessions.size, cloud.quota.max, repaired)
+            Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
         }
 
     /** Outcome of an erase request, so the UI can tell the user what happened. */
