@@ -163,7 +163,7 @@
             android:layout_height="wrap_content"
             android:stepSize="10"
             android:valueFrom="10"
-            android:valueTo="200" />
+            android:valueTo="150" />
     </LinearLayout>
 
     <View

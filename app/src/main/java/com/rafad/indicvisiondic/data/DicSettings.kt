@@ -11,7 +11,9 @@ object DicSettings {
 
     const val DEFAULT_MAX_FRAMES = 50
     const val MIN_MAX_FRAMES = 10
-    const val MAX_MAX_FRAMES = 200
+
+    /** Hard ceiling: an analysis may use at most this many deformed images. */
+    const val MAX_MAX_FRAMES = 150
 
     private const val PREFS = "dic_settings"
     private const val KEY_SAVE_TO_CLOUD = "save_to_cloud"
