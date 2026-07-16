@@ -2,20 +2,13 @@ package com.rafad.indicvisiondic.ui.analysis
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
-import androidx.work.Constraints
-import androidx.work.Data
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.DicResult
 import com.rafad.indicvisiondic.IndicVisionNativeLib
 import com.rafad.indicvisiondic.ProgressCallback
+import com.rafad.indicvisiondic.data.CloudSync
 import com.rafad.indicvisiondic.data.DicSettings
-import com.rafad.indicvisiondic.data.DicUploadWorker
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
-import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.report.EngineStats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -206,6 +199,11 @@ class AnalysisViewModel : ViewModel() {
             listFiles()?.forEach { it.delete() }
         }
 
+        // The filenames actually written into raw_deformed/, index-aligned with
+        // the frames. These (not the cache-copy paths) are what the session index
+        // and the cloud upload look the images up by. Blank = persist failed.
+        val persistedRawNames = MutableList(totalFrames) { "" }
+
         for ((frameIndex, defPath) in defFilePaths.withIndex()) {
             if (cancelRequested) {
                 engineErrorCode = ERROR_CANCELLED
@@ -235,6 +233,9 @@ class AnalysisViewModel : ViewModel() {
                     if (it.exists()) File(rawDeformedDir, String.format("%04d_%s", frameIndex, rawName)) else it
                 }
                 target.writeBytes(defBytes)
+                // Record the name we ACTUALLY wrote: the session index (and the
+                // cloud upload) must be able to find these files again.
+                persistedRawNames[frameIndex] = target.name
             } catch (e: Exception) {
                 Timber.w(e, "Could not persist raw deformed frame %d", frameIndex)
             }
@@ -317,19 +318,18 @@ class AnalysisViewModel : ViewModel() {
             lastRefPath = refPngPath
 
             val cloudEnabled = DicSettings.saveToCloud(appContext)
-            SessionStore.upsert(appContext, buildSessionRecord(appContext, localSessionId, batchDir, refPngPath, params, cloudEnabled))
+            SessionStore.upsert(
+                appContext,
+                buildSessionRecord(
+                    appContext, localSessionId, batchDir, refPngPath, params, cloudEnabled,
+                    firstFrameValidPoints, firstFrameAvgIters, executionTimeMs,
+                    persistedRawNames,
+                ),
+            )
 
             if (cloudEnabled) {
-                enqueueUploadWorkers(
-                    appContext,
-                    params,
-                    batchDir,
-                    localSessionId,
-                    refPngPath,
-                    firstFrameValidPoints,
-                    firstFrameAvgIters,
-                    executionTimeMs,
-                )
+                // Everything the worker needs now lives in the SessionRecord.
+                CloudSync.enqueueUpload(appContext, localSessionId)
             } else {
                 Timber.d("Save to cloud is off — session %s stays local only", localSessionId)
             }
@@ -367,6 +367,10 @@ class AnalysisViewModel : ViewModel() {
         refPngPath: String,
         params: BatchAnalysisParams,
         cloudEnabled: Boolean,
+        pointsConverged: Int,
+        avgIterations: Float,
+        executionTimeMs: Int,
+        persistedRawNames: List<String>,
     ): SessionRecord {
         val now = System.currentTimeMillis()
         // Re-runs upsert over the same id: keep the original creation time
@@ -393,93 +397,22 @@ class AnalysisViewModel : ViewModel() {
             refPath = refPngPath,
             refName = cleanRefName,
             sessionDir = batchDir.absolutePath,
-            defNames = defFilePaths.map { it.substringAfterLast('/') },
+            // The names actually on disk in raw_deformed/ — reopening a session,
+            // exporting and cloud upload all resolve the images by these.
+            defNames = persistedRawNames.mapIndexed { i, persisted ->
+                persisted.ifBlank {
+                    (defOriginalNames.getOrNull(i) ?: defFilePaths[i].substringAfterLast('/'))
+                        .substringAfterLast('/').substringAfterLast('\\')
+                }
+            },
             headline = String.format(java.util.Locale.US, "%.1f%% converged", convergence),
             engineStats = engineStatsArray?.toList() ?: emptyList(),
+            strainMethod = if (params.useNlvc) "NLVC" else "VSG",
+            pointsConverged = pointsConverged,
+            avgIterations = avgIterations,
+            executionTimeMs = executionTimeMs,
             syncState = if (cloudEnabled) SessionRecord.SyncState.PENDING else SessionRecord.SyncState.LOCAL_ONLY,
         )
     }
 
-    @Suppress("LongParameterList", "LongMethod") // per-frame worker Data assembly
-    private suspend fun enqueueUploadWorkers(
-        appContext: Context,
-        params: BatchAnalysisParams,
-        batchDir: File,
-        localSessionId: String,
-        refPngPath: String,
-        firstFrameValidPoints: Int,
-        firstFrameAvgIters: Float,
-        executionTimeMs: Int,
-    ) = withContext(Dispatchers.IO) {
-        Timber.d("Engine finished — queueing offline upload workers")
-
-        try {
-            val generatedRefPath = refPngPath
-
-            val userEmail = TokenStore.cachedEmail(appContext) ?: "Offline_User"
-            val userId = TokenStore.cachedUid(appContext) ?: "Offline_ID"
-
-            for ((frameIndex, rawDefPath) in defFilePaths.withIndex()) {
-                var defBmp: Bitmap? = null
-                try {
-                    var generatedDefPath = ""
-                    val rawFile = File(rawDefPath)
-                    if (rawFile.exists() && rawFile.length() < 50_000_000) {
-                        val defBytes = rawFile.readBytes()
-                        defBmp = IndicVisionNativeLib.getPreviewFromBytes(defBytes, realRefWidth)
-                        val defPngFile = File(
-                            params.cacheDir,
-                            "temp_def_${System.currentTimeMillis()}_frame_$frameIndex.png",
-                        )
-                        defPngFile.outputStream().use { out ->
-                            defBmp?.compress(Bitmap.CompressFormat.PNG, 100, out)
-                        }
-                        generatedDefPath = defPngFile.absolutePath
-                    }
-
-                    val datFile = File(batchDir, String.format("frame_%04d.dat", frameIndex))
-                    val uploadData = Data.Builder()
-                        .putString(DicKeys.USER_ID, userId)
-                        .putString(DicKeys.USER_EMAIL, userEmail)
-                        .putString(DicKeys.REF_PATH, generatedRefPath)
-                        .putString(DicKeys.DEF_PATH, generatedDefPath)
-                        .putString(DicKeys.DAT_PATH, datFile.absolutePath)
-                        .putString(DicKeys.FRAME_NAME, "Frame_${frameIndex + 1}")
-                        .putString(DicKeys.REF_NAME, refName.removePrefix("Ref: "))
-                        .putInt(DicKeys.IMG_W, realRefWidth)
-                        .putInt(DicKeys.IMG_H, realRefHeight)
-                        .putInt(DicKeys.STEP, params.step)
-                        .putInt(DicKeys.SUBSET, params.subset)
-                        .putInt(DicKeys.STRAIN_WIN, params.strainWin)
-                        .putString(DicKeys.STRAIN_METHOD, if (params.useNlvc) "NLVC" else "VSG")
-                        .putInt(DicKeys.ROI_X, params.finalRectX)
-                        .putInt(DicKeys.ROI_Y, params.finalRectY)
-                        .putInt(DicKeys.ROI_W, params.finalRectW)
-                        .putInt(DicKeys.ROI_H, params.finalRectH)
-                        .putFloatArray(DicKeys.ENGINE_STATS, engineStatsArray ?: FloatArray(16))
-                        .putInt(DicKeys.POINTS_CONVERGED, firstFrameValidPoints)
-                        .putFloat(DicKeys.AVG_ITERS, firstFrameAvgIters)
-                        .putInt(DicKeys.EXEC_TIME, executionTimeMs)
-                        .putString(DicKeys.SESSION_LOCAL_ID, localSessionId)
-                        .build()
-
-                    val uploadWork = OneTimeWorkRequestBuilder<DicUploadWorker>()
-                        .setConstraints(
-                            Constraints.Builder()
-                                .setRequiredNetworkType(NetworkType.CONNECTED)
-                                .build(),
-                        )
-                        .setInputData(uploadData)
-                        .build()
-
-                    WorkManager.getInstance(appContext).enqueue(uploadWork)
-                    Timber.d("-> SUCCESS! Worker queued for Frame ${frameIndex + 1}.")
-                } finally {
-                    defBmp?.recycle()
-                }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to enqueue batch workers")
-        }
-    }
 }

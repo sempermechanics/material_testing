@@ -22,6 +22,9 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
+import android.widget.Toast
+import androidx.core.content.FileProvider
+import com.rafad.indicvisiondic.data.CloudSync
 import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
@@ -95,6 +98,26 @@ class HomeActivity : AppCompatActivity() {
             val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
             adapter.submit(sessions)
             emptyState.isVisible = sessions.isEmpty()
+            reconcileWithCloud()
+        }
+    }
+
+    /**
+     * Ask the backend what is actually backed up and repair any drift — a
+     * session whose cloud copy was deleted stops claiming "Synced" and is
+     * re-queued for upload. Best-effort: offline/unconfigured leaves state alone.
+     */
+    private suspend fun reconcileWithCloud() {
+        val report = CloudSync.reconcile(this@HomeActivity) ?: return
+        if (report.repaired > 0) {
+            // The rows changed underneath us — show the corrected state.
+            val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
+            adapter.submit(sessions)
+            Toast.makeText(
+                this,
+                getString(R.string.cloud_resync_fmt, report.repaired),
+                Toast.LENGTH_LONG,
+            ).show()
         }
     }
 
@@ -160,16 +183,107 @@ class HomeActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Delete an analysis. When a cloud backup exists the user gets an explicit
+     * choice, with full erasure (device + cloud) as the primary action — the
+     * GDPR right-to-erasure path.
+     */
     private fun confirmDelete(record: SessionRecord) {
+        val hasCloudCopy = record.syncState == SessionRecord.SyncState.SYNCED ||
+            record.cloudSessionId.isNotBlank()
+
+        if (!hasCloudCopy) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.delete_confirm_title)
+                .setMessage(R.string.delete_confirm_body_local)
+                .setPositiveButton(R.string.action_delete) { _, _ -> eraseEverywhere(record) }
+                .setNegativeButton(R.string.action_cancel, null)
+                .show()
+            return
+        }
+
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delete_confirm_title)
-            .setMessage(R.string.delete_confirm_body)
-            .setPositiveButton(R.string.action_delete) { _, _ ->
-                SessionStore.delete(this, record.id)
-                refresh()
+            .setMessage(R.string.delete_confirm_body_cloud)
+            .setPositiveButton(R.string.delete_everywhere) { _, _ -> eraseEverywhere(record) }
+            .setNeutralButton(R.string.delete_device_only) { _, _ ->
+                lifecycleScope.launch {
+                    CloudSync.eraseLocalOnly(this@HomeActivity, record.id)
+                    Toast.makeText(this@HomeActivity, R.string.delete_device_done, Toast.LENGTH_SHORT).show()
+                    refresh()
+                }
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
+    }
+
+    private fun routeToSignIn() {
+        val intent = Intent(this@HomeActivity, AuthActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        finish()
+    }
+
+    /**
+     * GDPR data portability: fetch a machine-readable copy of everything the
+     * backend holds about this account and hand it to the share sheet, so the
+     * user can keep it wherever they like.
+     */
+    private fun exportMyData() {
+        Toast.makeText(this, R.string.export_data_working, Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val file = CloudSync.exportAccountData(this@HomeActivity)
+            if (file == null) {
+                Toast.makeText(this@HomeActivity, R.string.export_data_failed, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val uri = FileProvider.getUriForFile(
+                this@HomeActivity, "$packageName.fileprovider", file,
+            )
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, file.name)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(send, getString(R.string.export_data_share)))
+        }
+    }
+
+    /**
+     * GDPR account deletion. Spells out exactly what is erased, and only claims
+     * success once the cloud has actually confirmed it.
+     */
+    private fun confirmDeleteAccount() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.delete_account_title)
+            .setMessage(R.string.delete_account_body)
+            .setPositiveButton(R.string.delete_account_confirm) { _, _ ->
+                lifecycleScope.launch {
+                    if (CloudSync.deleteAccount(this@HomeActivity)) {
+                        Toast.makeText(this@HomeActivity, R.string.delete_account_done, Toast.LENGTH_LONG).show()
+                        routeToSignIn()
+                    } else {
+                        // Nothing was deleted — keep the user signed in and say so.
+                        Toast.makeText(this@HomeActivity, R.string.delete_account_failed, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun eraseEverywhere(record: SessionRecord) {
+        lifecycleScope.launch {
+            when (CloudSync.eraseEverywhere(this@HomeActivity, record.id)) {
+                CloudSync.EraseResult.ERASED_EVERYWHERE ->
+                    Toast.makeText(this@HomeActivity, R.string.delete_everywhere_done, Toast.LENGTH_SHORT).show()
+                // Nothing was deleted — don't imply the cloud copy is gone.
+                CloudSync.EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE ->
+                    Toast.makeText(this@HomeActivity, R.string.delete_cloud_failed, Toast.LENGTH_LONG).show()
+            }
+            refresh()
+        }
     }
 
     // ── Settings drawer ──────────────────────────────────────────────────
@@ -208,6 +322,11 @@ class HomeActivity : AppCompatActivity() {
         view.findViewById<TextView>(R.id.tvAccountEmail).text =
             TokenStore.cachedEmail(this) ?: ""
 
+        view.findViewById<android.view.View>(R.id.btnRestoreCloud).setOnClickListener {
+            sheet.dismiss()
+            startActivity(Intent(this@HomeActivity, com.rafad.indicvisiondic.ui.restore.RestoreActivity::class.java))
+        }
+
         // Admin entry: only for accounts whose backend role is admin.
         view.findViewById<android.view.View>(R.id.btnAdmin).apply {
             visibility = if (TokenStore.isAdmin(this@HomeActivity)) android.view.View.VISIBLE else android.view.View.GONE
@@ -227,10 +346,15 @@ class HomeActivity : AppCompatActivity() {
         view.findViewById<android.view.View>(R.id.btnSignOut).setOnClickListener {
             sheet.dismiss()
             TokenStore.clear(this)
-            val intent = Intent(this@HomeActivity, AuthActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            startActivity(intent)
-            finish()
+            routeToSignIn()
+        }
+        view.findViewById<android.view.View>(R.id.btnExportData).setOnClickListener {
+            sheet.dismiss()
+            exportMyData()
+        }
+        view.findViewById<android.view.View>(R.id.btnDeleteAccount).setOnClickListener {
+            sheet.dismiss()
+            confirmDeleteAccount()
         }
 
         sheet.show()
@@ -277,8 +401,15 @@ class HomeActivity : AppCompatActivity() {
                 SessionRecord.SyncState.SYNCED -> getString(R.string.badge_synced)
                 SessionRecord.SyncState.PENDING -> getString(R.string.badge_pending)
                 SessionRecord.SyncState.LOCAL_ONLY -> getString(R.string.badge_local)
+                SessionRecord.SyncState.FAILED -> getString(R.string.badge_not_backed_up)
             }
-            holder.badge.setTextColor(getColor(R.color.sky_on_container))
+            holder.badge.setTextColor(
+                if (r.syncState == SessionRecord.SyncState.FAILED) {
+                    getColor(R.color.semantic_danger)
+                } else {
+                    getColor(R.color.sky_on_container)
+                },
+            )
 
             val refFile = File(r.refPath)
             if (refFile.exists()) {

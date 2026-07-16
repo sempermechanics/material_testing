@@ -2,7 +2,7 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-Role = Literal["raw", "processed", "reports", "metadata", "csv"]
+Role = Literal["raw", "processed", "reports", "metadata", "csv", "dat"]
 
 
 class DeviceReg(BaseModel):
@@ -22,8 +22,11 @@ class FileSpec(BaseModel):
 
 class SessionCreate(BaseModel):
     specimen: str = Field(min_length=1, max_length=200)
-    files: List[FileSpec] = Field(min_length=1, max_length=500)
+    files: List[FileSpec] = Field(min_length=1, max_length=600)
     metrics: dict = {}
+    # The app's local analysis id. Lets the client reconcile its local sync
+    # state against what actually exists in the cloud (and restore later).
+    localSessionId: str = Field(default="", max_length=128)
 
 
 class FileComplete(BaseModel):

@@ -172,6 +172,14 @@
         android:layout_marginTop="16dp"
         android:background="@color/surface_outline" />
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnRestoreCloud"
+        style="@style/Widget.IndicVision.Button.Outlined"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="@string/home_restore_from_cloud" />
+
     <!-- Admin: only shown for accounts whose backend role is admin -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnAdmin"
@@ -224,5 +232,26 @@
                 android:textColor="@color/semantic_danger"
                 app:strokeColor="@color/semantic_danger" />
         </LinearLayout>
+
+        <!-- GDPR: portability — a machine-readable copy of everything we hold. -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnExportData"
+            style="@style/Widget.IndicVision.Button.Outlined"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/export_data" />
+
+        <!-- GDPR: erase the account and every analysis, everywhere. -->
+        <TextView
+            android:id="@+id/btnDeleteAccount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp"
+            android:padding="6dp"
+            android:text="@string/delete_account"
+            android:textColor="@color/semantic_danger"
+            android:textSize="13sp" />
     </LinearLayout>
 </LinearLayout>

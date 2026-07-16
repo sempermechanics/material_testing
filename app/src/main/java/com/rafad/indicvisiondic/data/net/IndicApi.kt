@@ -48,7 +48,23 @@ class IndicApi(context: Context) {
 
     class ApiException(val code: Int, val detail: String) : IOException("HTTP $code: $detail")
     class NotApprovedException : IOException("not_approved")
+
+    /** This account is bound to a *different* device (registration refused). */
     class DeviceConflictException : IOException("device_conflict")
+
+    /**
+     * The backend has no ACTIVE device record for us — the record was revoked or
+     * deleted server-side while we still believed we were registered. Callers
+     * should re-register and retry rather than give up.
+     */
+    class DeviceNotActiveException : IOException("device_not_active")
+
+    /** Maps a failed signed-request response to the most specific exception. */
+    private fun failSigned(code: Int, body: String): Nothing {
+        if (code == 409 && body.contains("device_not_active")) throw DeviceNotActiveException()
+        if (code == 409 && body.contains("device_conflict")) throw DeviceConflictException()
+        throw ApiException(code, body)
+    }
 
     // ---------------------------------------------------------------- identity
 
@@ -92,6 +108,19 @@ class IndicApi(context: Context) {
 
     // ----------------------------------------------------------- session/files
 
+    /** GET /v1/sessions — the caller's cloud analyses (for sync reconciliation). */
+    suspend fun listSessions(idToken: String): ListSessionsResponse = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url("$base/v1/sessions")
+            .header("Authorization", "Bearer $idToken").get().build()
+        client.newCall(req).execute().use { resp ->
+            when (resp.code) {
+                200 -> json.decodeFromString(resp.body!!.string())
+                403 -> throw NotApprovedException()
+                else -> throw ApiException(resp.code, resp.bodyText())
+            }
+        }
+    }
+
     /** POST /v1/sessions (device-signed). Initiates a session + one resumable target per file. */
     suspend fun createSession(idToken: String, request: SessionCreateRequest): SessionCreateResponse =
         withContext(Dispatchers.IO) {
@@ -99,7 +128,7 @@ class IndicApi(context: Context) {
             val resp = signedPost(idToken, "/v1/sessions", bodyBytes)
             resp.use {
                 if (it.code == 200) json.decodeFromString(it.body!!.string())
-                else throw ApiException(it.code, it.bodyText())
+                else failSigned(it.code, it.bodyText())
             }
         }
 
@@ -108,7 +137,38 @@ class IndicApi(context: Context) {
         withContext(Dispatchers.IO) {
             val bodyBytes = json.encodeToString(request).toByteArray()
             val resp = signedPost(idToken, "/v1/files/$fileId/complete", bodyBytes)
-            resp.use { if (it.code != 200) throw ApiException(it.code, it.bodyText()) }
+            resp.use { if (it.code != 200) failSigned(it.code, it.bodyText()) }
+        }
+
+    // ----------------------------------------------------------------- restore
+
+    /** GET /v1/sessions/{sid}/files — the manifest for one cloud analysis. */
+    suspend fun listSessionFiles(idToken: String, sessionId: String): SessionFilesResponse =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder().url("$base/v1/sessions/$sessionId/files")
+                .header("Authorization", "Bearer $idToken").get().build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.code == 200) json.decodeFromString(resp.body!!.string())
+                else throw ApiException(resp.code, resp.bodyText())
+            }
+        }
+
+    /**
+     * GET /v1/files/{id}/content — stream a file back from Drive into [dest].
+     * These bytes are proxied by the backend (Drive has no anonymous download),
+     * so this is the one path where the backend touches file content.
+     */
+    suspend fun downloadFile(idToken: String, fileId: String, dest: java.io.File) =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder().url("$base/v1/files/$fileId/content")
+                .header("Authorization", "Bearer $idToken").get().build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.code != 200) throw ApiException(resp.code, resp.bodyText())
+                dest.parentFile?.mkdirs()
+                resp.body!!.byteStream().use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output, 1 shl 16) }
+                }
+            }
         }
 
     // ------------------------------------------------------------------- admin
@@ -141,13 +201,63 @@ class IndicApi(context: Context) {
 
     // ------------------------------------------------------- device-signed POST
 
-    private fun signedPost(idToken: String, path: String, bodyBytes: ByteArray): Response {
+    private fun signedPost(idToken: String, path: String, bodyBytes: ByteArray): Response =
+        signedRequest(idToken, "POST", path, bodyBytes)
+
+    /** A device-signed request. The signature covers method + path + body hash. */
+    private fun signedRequest(
+        idToken: String,
+        method: String,
+        path: String,
+        bodyBytes: ByteArray,
+    ): Response {
         val nonce = fetchChallenge(idToken)
-        val headers = signedHeaders(idToken, "POST", path, bodyBytes, nonce)
-        val req = Request.Builder().url("$base$path")
-            .headers(headers)
-            .post(bodyBytes.toRequestBody(jsonMedia)).build()
-        return client.newCall(req).execute()
+        val headers = signedHeaders(idToken, method, path, bodyBytes, nonce)
+        val builder = Request.Builder().url("$base$path").headers(headers)
+        when (method) {
+            "POST" -> builder.post(bodyBytes.toRequestBody(jsonMedia))
+            // No body: the backend hashes empty bytes, so we must send none.
+            "DELETE" -> builder.delete()
+            else -> builder.method(method, bodyBytes.toRequestBody(jsonMedia))
+        }
+        return client.newCall(builder.build()).execute()
+    }
+
+    /**
+     * GET /v1/me/export — the caller's full account data as JSON (GDPR
+     * portability). Returned as raw text so it can be written straight to a
+     * file the user keeps.
+     */
+    suspend fun exportAccount(idToken: String): String = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url("$base/v1/me/export")
+            .header("Authorization", "Bearer $idToken").get().build()
+        client.newCall(req).execute().use { resp ->
+            if (resp.code == 200) resp.body!!.string()
+            else throw ApiException(resp.code, resp.bodyText())
+        }
+    }
+
+    /**
+     * DELETE /v1/me — erase the account and every analysis it owns from the
+     * cloud. The caller must sign out immediately afterwards; any further
+     * authenticated call would create a fresh, empty profile.
+     */
+    suspend fun deleteAccount(idToken: String) = withContext(Dispatchers.IO) {
+        val resp = signedRequest(idToken, "DELETE", "/v1/me", ByteArray(0))
+        resp.use { if (it.code != 200 && it.code != 404) failSigned(it.code, it.bodyText()) }
+    }
+
+    /**
+     * DELETE /v1/sessions/{id} — erase an analysis from the cloud: the Drive
+     * folder (raw images, .dat, csv, report) and all Firestore metadata.
+     * Permanent; there is no undo.
+     */
+    suspend fun deleteSession(idToken: String, sessionId: String) = withContext(Dispatchers.IO) {
+        val resp = signedRequest(idToken, "DELETE", "/v1/sessions/$sessionId", ByteArray(0))
+        resp.use {
+            // Already gone is success — the caller wanted it erased.
+            if (it.code != 200 && it.code != 404) failSigned(it.code, it.bodyText())
+        }
     }
 
     /** POST /v1/challenge → single-use nonce bound to (uid, deviceId). */

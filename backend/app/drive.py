@@ -59,8 +59,48 @@ def _find_or_create_folder(token: str, name: str, parent: str) -> str:
     return r.json()["id"]
 
 
+def _find_folder(token: str, name: str, parent: str):
+    """Look a folder up WITHOUT creating it — used on the erasure path."""
+    safe = name.replace("'", "\\'")
+    q = (
+        f"name='{safe}' and mimeType='{FOLDER_MIME}' and "
+        f"'{parent}' in parents and trashed=false"
+    )
+    r = requests.get(
+        f"{API}/files",
+        headers=_headers(token),
+        params={
+            "q": q,
+            "fields": "files(id)",
+            "supportsAllDrives": "true",
+            "includeItemsFromAllDrives": "true",
+            "corpora": "drive",
+            "driveId": settings.SHARED_DRIVE_ID,
+        },
+        timeout=30,
+    )
+    r.raise_for_status()
+    files = r.json().get("files", [])
+    return files[0]["id"] if files else None
+
+
+def find_user_folder(token: str, uid: str):
+    """The user's whole Drive subtree (…/Research Storage/user/{uid}), or None.
+
+    Deleting this one folder erases every analysis the user ever uploaded,
+    including any orphaned by failed syncs.
+    """
+    research = _find_folder(token, "Research Storage", settings.ROOT_FOLDER_ID)
+    if not research:
+        return None
+    user_dir = _find_folder(token, "user", research)
+    if not user_dir:
+        return None
+    return _find_folder(token, uid, user_dir)
+
+
 def ensure_session_folders(token: str, uid: str, sid: str) -> dict:
-    """Build Research Storage/user/{uid}/session/{sid}/{raw,processed,reports,metadata,csv}."""
+    """Build Research Storage/user/{uid}/session/{sid}/{raw,processed,reports,metadata,csv,dat}."""
     root = settings.ROOT_FOLDER_ID
     research = _find_or_create_folder(token, "Research Storage", root)
     user_dir = _find_or_create_folder(token, "user", research)
@@ -68,9 +108,48 @@ def ensure_session_folders(token: str, uid: str, sid: str) -> dict:
     sess_dir = _find_or_create_folder(token, "session", uid_dir)
     sid_dir = _find_or_create_folder(token, sid, sess_dir)
     folders = {"sessionFolderId": sid_dir}
-    for role in ("raw", "processed", "reports", "metadata", "csv"):
+    for role in ("raw", "processed", "reports", "metadata", "csv", "dat"):
         folders[role] = _find_or_create_folder(token, role, sid_dir)
     return folders
+
+
+def delete_file(token: str, file_id: str) -> None:
+    """**Permanently** delete a file/folder (GDPR erasure).
+
+    files.delete on a Shared Drive skips the trash and removes descendants, so
+    deleting a session folder erases every artifact inside it. A 404 is treated
+    as success — the goal is "it is gone", and it already is.
+    """
+    r = requests.delete(
+        f"{API}/files/{file_id}",
+        headers=_headers(token),
+        params={"supportsAllDrives": "true"},
+        timeout=120,
+    )
+    if r.status_code not in (204, 200, 404):
+        r.raise_for_status()
+
+
+def stream_file(token: str, drive_file_id: str, chunk_size: int = 256 * 1024):
+    """Yield a Drive file's bytes for restore/download.
+
+    NOTE: unlike uploads (which go device→Drive directly via a resumable URI),
+    Drive offers no anonymous signed download, so restore bytes must be proxied
+    through here. That costs egress and is the main argument for moving blobs to
+    GCS (signed URLs) if downloads ever become common. See
+    docs/CLOUD_ARCHITECTURE_GCP.md §0 and §19.
+    """
+    r = requests.get(
+        f"{API}/files/{drive_file_id}",
+        headers=_headers(token),
+        params={"alt": "media", "supportsAllDrives": "true"},
+        stream=True,
+        timeout=600,
+    )
+    r.raise_for_status()
+    for chunk in r.iter_content(chunk_size=chunk_size):
+        if chunk:
+            yield chunk
 
 
 def init_resumable(token: str, parent_folder_id: str, filename: str, size_bytes: int) -> str:

@@ -41,6 +41,29 @@ data class SessionCreateRequest(
     val specimen: String,
     val files: List<FileSpecDto>,
     val metrics: Map<String, Float> = emptyMap(),
+    /** The app's local analysis id, so cloud sessions can be matched back to it. */
+    val localSessionId: String = "",
+)
+
+@Serializable
+data class CloudSessionDto(
+    val sessionId: String,
+    val localSessionId: String = "",
+    val specimen: String? = null,
+    val status: String? = null,
+    val fileCount: Int = 0,
+    val completedCount: Int = 0,
+    val totalBytes: Long = 0,
+    val driveFolderId: String? = null,
+)
+
+@Serializable
+data class QuotaDto(val used: Int = 0, val max: Int = 0)
+
+@Serializable
+data class ListSessionsResponse(
+    val sessions: List<CloudSessionDto> = emptyList(),
+    val quota: QuotaDto = QuotaDto(),
 )
 
 @Serializable
@@ -62,6 +85,25 @@ data class FileCompleteRequest(
     val driveFileId: String,
     val bytes: Long,
     val md5: String? = null,
+)
+
+@Serializable
+data class CloudFileDto(
+    val fileId: String,
+    val name: String = "",
+    val role: String = "",
+    val sizeBytes: Long = 0,
+    val sha256: String? = null,
+    val status: String? = null,
+)
+
+@Serializable
+data class SessionFilesResponse(
+    val sessionId: String,
+    val localSessionId: String = "",
+    val specimen: String? = null,
+    val status: String? = null,
+    val files: List<CloudFileDto> = emptyList(),
 )
 
 @Serializable

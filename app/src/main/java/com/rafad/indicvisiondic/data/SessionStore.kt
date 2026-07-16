@@ -39,10 +39,29 @@ data class SessionRecord(
     // Headline shown on the row, e.g. "97.5% converged"
     val headline: String = "",
     val engineStats: List<Float> = emptyList(),
+    // Run metrics — kept here (not just in the worker's input Data) so a
+    // re-upload triggered by cloud reconciliation is still complete.
+    val strainMethod: String = "",
+    val pointsConverged: Int = 0,
+    val avgIterations: Float = 0f,
+    val executionTimeMs: Int = 0,
+    /** Backend session id of the cloud copy — needed to erase it. Blank if never synced. */
+    val cloudSessionId: String = "",
     val syncState: SyncState = SyncState.LOCAL_ONLY,
 ) {
     @Serializable
-    enum class SyncState { LOCAL_ONLY, PENDING, SYNCED }
+    enum class SyncState {
+        LOCAL_ONLY,
+        PENDING,
+        SYNCED,
+
+        /**
+         * Backup was refused for a reason retrying can't fix — the cloud
+         * analysis quota is full, the session is too large, or the device
+         * isn't authorised. Surfaced on the Home row so it isn't silent.
+         */
+        FAILED,
+    }
 
     /** True when the frame data is still on this phone (Results can reopen). */
     fun hasLocalData(): Boolean {
@@ -110,12 +129,21 @@ object SessionStore {
         )
     }
 
-    fun markSynced(context: Context, id: String) = synchronized(lock) {
+    fun markSynced(context: Context, id: String) = setSyncState(context, id, SessionRecord.SyncState.SYNCED)
+
+    /** Remember which cloud session backs this analysis (so it can be erased). */
+    fun setCloudSessionId(context: Context, id: String, cloudSessionId: String) = synchronized(lock) {
         write(
             context,
-            list(context).map {
-                if (it.id == id) it.copy(syncState = SessionRecord.SyncState.SYNCED) else it
-            },
+            list(context).map { if (it.id == id) it.copy(cloudSessionId = cloudSessionId) else it },
+        )
+    }
+
+    /** Set a session's sync state — used by cloud reconciliation as well as uploads. */
+    fun setSyncState(context: Context, id: String, state: SessionRecord.SyncState) = synchronized(lock) {
+        write(
+            context,
+            list(context).map { if (it.id == id) it.copy(syncState = state) else it },
         )
     }
 
@@ -123,6 +151,15 @@ object SessionStore {
     fun delete(context: Context, id: String) = synchronized(lock) {
         write(context, list(context).filterNot { it.id == id })
         dirFor(context, id).deleteRecursively()
+    }
+
+    /**
+     * Wipes every local analysis — the index and all per-session directories.
+     * Used by account deletion (GDPR); cloud erasure is handled separately.
+     */
+    fun deleteAll(context: Context) = synchronized(lock) {
+        root(context).deleteRecursively()
+        root(context).mkdirs()
     }
 
     private fun write(context: Context, records: List<SessionRecord>) {

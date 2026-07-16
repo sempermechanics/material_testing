@@ -33,6 +33,7 @@
         <activity android:name=".ui.auth.AuthActivity" android:exported="false" />
         <activity android:name=".ui.home.HomeActivity" android:exported="false" />
         <activity android:name=".ui.admin.AdminActivity" android:exported="false" />
+        <activity android:name=".ui.restore.RestoreActivity" android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

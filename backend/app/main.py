@@ -1,7 +1,9 @@
 import logging
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import StreamingResponse
 
 from . import audit, drive, firestore_repo as repo
 from .config import settings
@@ -35,6 +37,74 @@ async def me(user=Depends(current_user)):
             "role": user.get("role"), "access_status": user["access_status"]}
 
 
+@app.get("/v1/me/export")
+async def export_account(user=Depends(current_user)):
+    """GDPR data portability (Art. 20): everything we hold about the caller, as JSON.
+
+    Structured and machine-readable: the profile, registered devices, and every
+    analysis with its full file manifest. The binary artifacts themselves stay
+    downloadable via /v1/files/{id}/content (each file's `fileId` is included),
+    which is also what the app's Restore screen uses.
+    """
+    uid = user["uid"]
+    profile = repo.get_user(uid) or {}
+    sessions = repo.list_user_sessions(uid, limit=1000)
+    for s in sessions:
+        s["files"] = repo.list_session_files(s["sessionId"])
+
+    audit.record(uid, action="DATA_EXPORT", target={"type": "user", "id": uid},
+                 detail={"sessions": len(sessions)})
+    return {
+        "exportedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "schema": "indic.account.export/1",
+        "profile": {
+            "uid": uid,
+            "email": profile.get("email"),
+            "displayName": profile.get("displayName"),
+            "hostedDomain": profile.get("hd"),
+            "role": profile.get("role"),
+            "accessStatus": profile.get("access_status"),
+            "createdAt": str(profile.get("createdAt")),
+            "lastSeenAt": str(profile.get("lastSeenAt")),
+        },
+        "devices": repo.list_user_devices(uid),
+        "sessions": sessions,
+        "artifactDownload": {
+            "endpoint": "/v1/files/{fileId}/content",
+            "note": "Images, .dat results, CSVs and reports are downloadable per file "
+                    "using the fileId values above, or via the app's Restore screen.",
+        },
+    }
+
+
+@app.delete("/v1/me")
+async def delete_account(ctx=Depends(verified_device)):
+    """Erase the account and ALL of its data (GDPR right to erasure).
+
+    Deletes the user's entire Drive subtree in one shot (every analysis, plus
+    anything orphaned by a failed sync), then every Firestore record: sessions,
+    file pointers, device registrations and the user profile.
+
+    Only the append-only audit trail survives — it records that actions
+    (including this erasure) happened, and holds no analysis content. The caller
+    must sign out afterwards: any further authenticated call would create a
+    fresh, empty profile.
+    """
+    user, device = ctx["user"], ctx["device"]
+    uid = user["uid"]
+
+    token = drive.access_token()
+    folder = drive.find_user_folder(token, uid)
+    if folder:
+        drive.delete_file(token, folder)
+
+    counts = repo.delete_all_user_data(uid)
+    audit.record(uid, device.get("deviceId"), action="ACCOUNT_DELETE",
+                 target={"type": "user", "id": uid}, detail=counts)
+    log.info("Erased account %s: %s, driveFolderDeleted=%s", uid, counts, bool(folder))
+    return {"deleted": uid, **counts}
+
+
 @app.post("/v1/devices/register", status_code=201)
 async def register_device(body: DeviceReg, user=Depends(current_user)):
     active = user.get("activeDeviceId")
@@ -57,9 +127,98 @@ async def challenge(user=Depends(current_user), x_device_id: str = Header(defaul
     return {"nonce": repo.issue_nonce(user["uid"], x_device_id)}
 
 
+@app.get("/v1/sessions")
+async def list_sessions(user=Depends(current_user)):
+    """The caller's cloud analyses. The app reconciles local sync state against
+    this, so a session deleted in the cloud stops showing as 'synced'."""
+    sessions = repo.list_user_sessions(user["uid"])
+    return {
+        "sessions": sessions,
+        "quota": {"used": len(sessions), "max": settings.MAX_SESSIONS_PER_USER},
+    }
+
+
+@app.delete("/v1/sessions/{sid}")
+async def delete_session(sid: str, ctx=Depends(verified_device)):
+    """Erase one analysis from the cloud (GDPR right to erasure).
+
+    Permanently deletes the Drive folder — every raw image, .dat, csv and report
+    inside it — then hard-deletes the Firestore metadata (which carries the
+    user's email, device id and engine parameters). Nothing is soft-deleted; the
+    only trace kept is the audit record that the erasure happened.
+    """
+    user, device = ctx["user"], ctx["device"]
+    session = repo.get_session(sid)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(404, "session_not_found")
+
+    folder = session.get("driveFolderId")
+    if folder:
+        drive.delete_file(drive.access_token(), folder)
+    removed = repo.delete_session(sid)
+
+    audit.record(user["uid"], device.get("deviceId"), action="SESSION_DELETE",
+                 target={"type": "session", "id": sid},
+                 detail={"filesRemoved": removed, "localSessionId": session.get("localSessionId", "")})
+    log.info("Erased session %s for uid %s (%d files)", sid, user["uid"], removed)
+    return {"deleted": sid, "filesRemoved": removed}
+
+
+@app.get("/v1/sessions/{sid}/files")
+async def list_session_files(sid: str, user=Depends(current_user)):
+    """The manifest for one analysis — what the app needs to restore it."""
+    session = repo.get_session(sid)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(404, "session_not_found")
+    return {
+        "sessionId": sid,
+        "localSessionId": session.get("localSessionId", ""),
+        "specimen": session.get("specimen"),
+        "status": session.get("status"),
+        "files": repo.list_session_files(sid),
+    }
+
+
+@app.get("/v1/files/{file_id}/content")
+async def download_file(file_id: str, user=Depends(current_user)):
+    """Stream one file back from Drive (restore).
+
+    Drive has no anonymous signed download, so — unlike uploads, which go
+    device→Drive directly — these bytes are proxied through Cloud Run.
+    """
+    f = repo.get_file(file_id)
+    if not f or f.get("uid") != user["uid"]:
+        raise HTTPException(404, "file_not_found")
+    drive_file_id = f.get("driveFileId")
+    if not drive_file_id:
+        raise HTTPException(409, "file_not_uploaded")
+    token = drive.access_token()
+    audit.record(user["uid"], action="FILE_DOWNLOAD", target={"type": "file", "id": file_id})
+    return StreamingResponse(
+        drive.stream_file(token, drive_file_id),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{f.get("name", file_id)}"',
+            "Content-Length": str(f.get("sizeBytes", 0)),
+        },
+    )
+
+
 @app.post("/v1/sessions")
 async def create_session(body: SessionCreate, ctx=Depends(verified_device)):
     user, device = ctx["user"], ctx["device"]
+
+    # Quotas: one session == one analysis.
+    if len(body.files) > settings.MAX_FILES_PER_SESSION:
+        raise HTTPException(413, "too_many_files")
+    used = repo.count_user_sessions(user["uid"])
+    if used >= settings.MAX_SESSIONS_PER_USER:
+        raise HTTPException(
+            409,
+            f"session_quota_exceeded: {used}/{settings.MAX_SESSIONS_PER_USER} analyses stored. "
+            "Delete an older analysis to sync a new one.",
+        )
+
     sid = uuid.uuid4().hex
     token = drive.access_token()
     folders = drive.ensure_session_folders(token, user["uid"], sid)

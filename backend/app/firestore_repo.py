@@ -9,6 +9,9 @@ from .models import DeviceReg, FileComplete, FileSpec, SessionCreate
 
 _DB = None
 
+# Firestore caps a write batch at 500 operations.
+_BATCH_LIMIT = 400
+
 
 def db() -> firestore.Client:
     global _DB
@@ -137,12 +140,122 @@ def consume_nonce(nonce: str, uid: str, device_id: str) -> bool:
 
 
 # ---------------- sessions / files ----------------
+def delete_session(sid: str) -> int:
+    """Hard-delete an analysis' metadata: every file doc, then the session doc.
+
+    GDPR erasure — records are removed, not flagged. Returns the file count.
+    Firestore batches cap at 500 writes, so this chunks.
+    """
+    files = list(db().collection("files").where("sessionId", "==", sid).stream())
+    removed = 0
+    for start in range(0, len(files), _BATCH_LIMIT):
+        batch = db().batch()
+        for d in files[start:start + _BATCH_LIMIT]:
+            batch.delete(d.reference)
+            removed += 1
+        batch.commit()
+    db().collection("sessions").document(sid).delete()
+    return removed
+
+
+def get_user(uid: str):
+    snap = db().collection("users").document(uid).get()
+    return {**snap.to_dict(), "uid": uid} if snap.exists else None
+
+
+def list_user_devices(uid: str) -> list:
+    out = []
+    for d in db().collection("devices").where("uid", "==", uid).stream():
+        v = d.to_dict()
+        out.append({
+            "deviceId": d.id,
+            "status": v.get("status"),
+            "model": v.get("model"),
+            "osVersion": v.get("osVersion"),
+            "appVersion": v.get("appVersion"),
+            "registeredAt": str(v.get("registeredAt")),
+        })
+    return out
+
+
+def delete_all_user_data(uid: str) -> dict:
+    """Erase every Firestore record belonging to a user (GDPR account deletion).
+
+    Sessions + their file docs, the device registrations, and the user profile
+    itself. Audit records are intentionally kept: they hold no analysis content,
+    only the fact that actions (including this erasure) occurred.
+    """
+    sessions = list(db().collection("sessions").where("uid", "==", uid).stream())
+    files_removed = 0
+    for s in sessions:
+        files_removed += delete_session(s.id)
+
+    devices = list(db().collection("devices").where("uid", "==", uid).stream())
+    for d in devices:
+        d.reference.delete()
+
+    db().collection("users").document(uid).delete()
+    return {"sessions": len(sessions), "files": files_removed, "devices": len(devices)}
+
+
+def get_session(sid: str):
+    snap = db().collection("sessions").document(sid).get()
+    return {**snap.to_dict(), "sessionId": sid} if snap.exists else None
+
+
+def get_file(file_id: str):
+    snap = db().collection("files").document(file_id).get()
+    return {**snap.to_dict(), "fileId": file_id} if snap.exists else None
+
+
+def list_session_files(sid: str) -> list:
+    """Every file in an analysis — the manifest the app restores from."""
+    out = []
+    for d in db().collection("files").where("sessionId", "==", sid).stream():
+        f = d.to_dict()
+        out.append({
+            "fileId": d.id,
+            "name": f.get("name"),
+            "role": f.get("role"),
+            "sizeBytes": f.get("sizeBytes", 0),
+            "sha256": f.get("sha256"),
+            "status": f.get("status"),
+        })
+    return out
+
+
+def list_user_sessions(uid: str, limit: int = 200) -> list:
+    """The user's cloud analyses — what the app reconciles its sync state against."""
+    q = db().collection("sessions").where("uid", "==", uid).limit(limit)
+    out = []
+    for d in q.stream():
+        s = d.to_dict()
+        out.append({
+            "sessionId": d.id,
+            "localSessionId": s.get("localSessionId") or "",
+            "specimen": s.get("specimen"),
+            "status": s.get("status"),
+            "fileCount": s.get("fileCount", 0),
+            "completedCount": s.get("completedCount", 0),
+            "totalBytes": s.get("totalBytes", 0),
+            "driveFolderId": s.get("driveFolderId"),
+        })
+    return out
+
+
+def count_user_sessions(uid: str) -> int:
+    """How many analyses this user already has in the cloud (quota check)."""
+    agg = db().collection("sessions").where("uid", "==", uid).count().get()
+    return int(agg[0][0].value)
+
+
 def create_session(sid: str, user: dict, device: dict, body: SessionCreate, folders: dict):
     db().collection("sessions").document(sid).set(
         {
             "uid": user["uid"],
             "deviceId": device.get("deviceId"),
             "specimen": body.specimen,
+            "localSessionId": body.localSessionId,
             "status": "UPLOADING",
             "driveFolderId": folders["sessionFolderId"],
             "totalBytes": sum(f.bytes for f in body.files),

@@ -27,6 +27,15 @@ paths:
       operationId: getMe
       responses:
         '200': { description: OK }
+    delete:
+      operationId: deleteAccount
+      responses:
+        '200': { description: OK }
+  /v1/me/export:
+    get:
+      operationId: exportAccount
+      responses:
+        '200': { description: OK }
   /v1/devices/register:
     post:
       operationId: registerDevice
@@ -38,13 +47,49 @@ paths:
       responses:
         '200': { description: OK }
   /v1/sessions:
+    get:
+      operationId: listSessions
+      responses:
+        '200': { description: OK }
     post:
       operationId: createSession
+      responses:
+        '200': { description: OK }
+  /v1/sessions/{sid}:
+    delete:
+      operationId: deleteSession
+      parameters:
+        - name: sid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+  /v1/sessions/{sid}/files:
+    get:
+      operationId: listSessionFiles
+      parameters:
+        - name: sid
+          in: path
+          required: true
+          type: string
       responses:
         '200': { description: OK }
   /v1/files/{fileId}/complete:
     post:
       operationId: completeFile
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+  /v1/files/{fileId}/content:
+    get:
+      operationId: downloadFile
+      produces:
+        - application/octet-stream
       parameters:
         - name: fileId
           in: path

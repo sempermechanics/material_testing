@@ -17,6 +17,12 @@ class Settings:
     # and must be approved individually. Empty = nobody auto-approved by domain.
     AUTO_APPROVE_HD = os.environ.get("AUTO_APPROVE_HD", "")
 
+    # Per-user quotas. MAX_SESSIONS_PER_USER = how many analyses a user may keep
+    # in the cloud; MAX_FILES_PER_SESSION bounds one analysis (150 frames x
+    # raw+dat+csv + reference + report + metadata ≈ 460, so 600 gives headroom).
+    MAX_SESSIONS_PER_USER = int(os.environ.get("MAX_SESSIONS_PER_USER", "50"))
+    MAX_FILES_PER_SESSION = int(os.environ.get("MAX_FILES_PER_SESSION", "600"))
+
     # Comma-separated emails that are treated as admins (role=admin, always
     # approved) — they can call the /v1/admin/* endpoints. e.g.
     # "support@indicvision.com,damodar@indicvision.com".
