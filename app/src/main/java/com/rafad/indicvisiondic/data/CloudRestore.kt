@@ -102,7 +102,6 @@ object CloudRestore {
         val metaTmp = File(appContext.cacheDir, "restore_${sessionId}_metadata.json")
         api.downloadFile(token, metaEntry.fileId, metaTmp)
         val meta = JSONObject(metaTmp.readText())
-        metaTmp.delete()
 
         // Restore under the original local id when we know it, so a restored
         // session lines up with its cloud copy for future reconciliation.
@@ -111,27 +110,27 @@ object CloudRestore {
         }
         val sessionDir = SessionStore.dirFor(appContext, localId)
         val rawDeformedDir = File(sessionDir, AnalysisViewModel.RAW_DEFORMED_SUBDIR).apply { mkdirs() }
+        metaTmp.copyTo(File(sessionDir, "metadata.json"), overwrite = true)
+        metaTmp.delete()
 
         // 2. Everything else, into the layout a local run would have produced.
-        var done = 0
-        val total = files.size
-        onProgress(0, total)
+        // New backups hold ONE Session.zip; older ones list every file. Both
+        // rebuild the identical on-disk layout.
+        val layout = Layout(sessionDir, rawDeformedDir)
         var refPath = ""
-        for (f in files) {
-            val dest = when (f.role) {
-                "metadata" -> File(sessionDir, "metadata.json")
-                "dat" -> File(sessionDir, f.name)
-                "raw" -> if (f.name == "Reference.png") {
-                    File(sessionDir, "reference.png")
-                } else {
-                    File(rawDeformedDir, f.name)
-                }
-                // csv/reports are regenerable; keep them beside the session for export.
-                else -> File(sessionDir, f.name)
+        val bundleEntry = files.firstOrNull { it.role == "bundle" }
+        if (bundleEntry != null) {
+            onProgress(0, 1)
+            val zipTmp = File(appContext.cacheDir, "restore_${sessionId}_bundle.zip")
+            try {
+                api.downloadFile(token, bundleEntry.fileId, zipTmp)
+                refPath = unpackBundle(zipTmp, layout)
+            } finally {
+                zipTmp.delete()
             }
-            api.downloadFile(token, f.fileId, dest)
-            if (f.role == "raw" && f.name == "Reference.png") refPath = dest.absolutePath
-            onProgress(++done, total)
+            onProgress(1, 1)
+        } else {
+            refPath = restoreLegacyFiles(api, token, files, layout, onProgress)
         }
 
         // 3. Rebuild the index row from the blueprint.
@@ -140,8 +139,82 @@ object CloudRestore {
             recordFrom(meta, localId, sessionDir, refPath),
             allowOverLimit = true, // already counted in the cloud quota
         )
-        Timber.i("Restored analysis %s from cloud session %s (%d files)", localId, sessionId, total)
+        Timber.i("Restored analysis %s from cloud session %s (%d files)", localId, sessionId, files.size)
         localId
+    }
+
+    /** The on-disk shape of a restored session — where artifacts land. */
+    private data class Layout(val sessionDir: File, val rawDeformedDir: File)
+
+    /** Legacy per-file backups: download each artifact into place. Returns refPath. */
+    private suspend fun restoreLegacyFiles(
+        api: IndicApi,
+        token: String,
+        files: List<com.rafad.indicvisiondic.data.net.CloudFileDto>,
+        layout: Layout,
+        onProgress: suspend (done: Int, total: Int) -> Unit,
+    ): String {
+        var refPath = ""
+        val rest = files.filter { it.role != "metadata" }
+        var done = 0
+        onProgress(0, rest.size)
+        for (f in rest) {
+            val dest = destFor(f.role, f.name, layout)
+            api.downloadFile(token, f.fileId, dest)
+            if (dest.name == "reference.png") refPath = dest.absolutePath
+            onProgress(++done, rest.size)
+        }
+        return refPath
+    }
+
+    /**
+     * Extract a Session.zip into the layout a local run would have produced.
+     * Entries are named `role/name` by [DicUploadWorker]; the mapping must
+     * mirror the legacy per-file restore. Returns the reference image's
+     * restored path ("" if the bundle somehow lacks one).
+     */
+    private fun unpackBundle(zip: File, layout: Layout): String {
+        var refPath = ""
+        java.util.zip.ZipInputStream(zip.inputStream().buffered()).use { zin ->
+            generateSequence { zin.nextEntry }
+                .filterNot { it.isDirectory }
+                .forEach { entry ->
+                    val dest = destFor(
+                        entry.name.substringBefore('/', ""),
+                        entry.name.substringAfter('/'),
+                        layout,
+                    )
+                    dest.outputStream().use { zin.copyTo(it) }
+                    if (dest.name == "reference.png") refPath = dest.absolutePath
+                }
+        }
+        return refPath
+    }
+
+    /**
+     * Where one artifact lands on disk, by role — the single mapping both
+     * restore paths share. Guards against zip-slip: an entry may not escape
+     * the session directory.
+     */
+    private fun destFor(role: String, name: String, layout: Layout): File {
+        val dest = when {
+            role == "raw" && name == "Reference.png" -> File(layout.sessionDir, "reference.png")
+            role == "raw" -> File(layout.rawDeformedDir, name)
+            // Per-frame reports/heatmaps into their own subfolders — one PDF and
+            // five PNGs per frame flat in the session dir would drown the .dat files.
+            role == "reports" -> File(layout.sessionDir, "reports/$name")
+            role == "processed" -> File(layout.sessionDir, "processed/$name")
+            // dat lives flat in the session dir; csv is regenerable and kept
+            // beside the session for export.
+            else -> File(layout.sessionDir, name)
+        }
+        val canonical = dest.canonicalPath
+        require(
+            canonical.startsWith(layout.sessionDir.canonicalPath) ||
+                canonical.startsWith(layout.rawDeformedDir.canonicalPath),
+        ) { "Artifact path escapes session dir: $role/$name" }
+        dest.parentFile?.mkdirs()
+        return dest
     }
 
     private fun recordFrom(meta: JSONObject, localId: String, sessionDir: File, refPath: String): SessionRecord {

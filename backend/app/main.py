@@ -291,7 +291,10 @@ async def create_session(body: SessionCreate, ctx=Depends(verified_device)):
 
     sid = uuid.uuid4().hex
     token = drive.access_token()
-    folders = drive.ensure_session_folders(token, user["uid"], sid)
+    # Only create the Drive subfolders this manifest actually uses (a bundle
+    # upload needs none — Session.zip and metadata.json sit at the session root).
+    folders = drive.ensure_session_folders(token, user["uid"], sid,
+                                           roles={f.role for f in body.files})
     # Remember the user's Drive subtree so account erasure can delete it by id.
     repo.remember_user_folder(user["uid"], folders["userFolderId"])
 
@@ -334,9 +337,13 @@ async def admin_revoke_user(uid: str, admin=Depends(admin_user)):
 @app.post("/v1/files/{file_id}/complete")
 async def complete_file(file_id: str, body: FileComplete, ctx=Depends(verified_device)):
     user = ctx["user"]
-    if not repo.complete_file(file_id, user["uid"], body):
+    outcome = repo.complete_file(file_id, user["uid"], body)
+    if not outcome:
         raise HTTPException(409, "size_or_state_mismatch")
-    repo.maybe_complete_session(body.sessionId)
+    # Only a FIRST completion advances the counter — a retried completion
+    # ("already") must not double-count toward session COMPLETED.
+    if outcome == "ok":
+        repo.bump_session_progress(body.sessionId)
     audit.record(user["uid"], ctx["device"].get("deviceId"), action="UPLOAD_COMPLETE",
                  target={"type": "file", "id": file_id})
     return {"status": "ok"}

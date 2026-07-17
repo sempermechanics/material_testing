@@ -2,7 +2,9 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-Role = Literal["raw", "processed", "reports", "metadata", "csv", "dat"]
+# "bundle" = one Session.zip holding raw/, dat/, csv/ and the report archives —
+# uploaded as a single file so a session costs ~2 Firestore file docs, not 3F+4.
+Role = Literal["raw", "processed", "reports", "metadata", "csv", "dat", "bundle"]
 
 
 class DeviceReg(BaseModel):

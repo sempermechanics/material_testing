@@ -337,14 +337,20 @@ def create_file(sid: str, uid: str, file_id: str, f: FileSpec, upload_url: str):
     )
 
 
-def complete_file(file_id: str, uid: str, body: FileComplete) -> bool:
+def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
+    """Record a file's Drive pointer. Returns "ok", "already" (a retry of a
+    completion that landed — idempotent, must NOT bump the session counter
+    again) or "" (rejected).
+    """
     ref = db().collection("files").document(file_id)
     snap = ref.get()
     if not snap.exists:
-        return False
+        return ""
     d = snap.to_dict()
     if d["uid"] != uid or d["sizeBytes"] != body.bytes:
-        return False
+        return ""
+    if d.get("status") == "COMPLETED":
+        return "already"
     ref.update(
         {
             "status": "COMPLETED",
@@ -354,14 +360,34 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> bool:
             "updatedAt": firestore.SERVER_TIMESTAMP,
         }
     )
-    return True
+    return "ok"
 
 
-def maybe_complete_session(sid: str):
-    files = list(db().collection("files").where("sessionId", "==", sid).stream())
-    done = sum(1 for f in files if f.to_dict().get("status") == "COMPLETED")
-    upd = {"completedCount": done, "updatedAt": firestore.SERVER_TIMESTAMP}
-    if files and done == len(files):
-        upd["status"] = "COMPLETED"
-        upd["completedAt"] = firestore.SERVER_TIMESTAMP
-    db().collection("sessions").document(sid).update(upd)
+def bump_session_progress(sid: str):
+    """One file just completed: advance the session's counter by one.
+
+    O(1) — a transaction on the session doc alone. The previous version
+    re-streamed EVERY file doc in the session on every completion, which made
+    an N-file upload cost ~N² Firestore reads (a 150-frame analysis burned the
+    whole daily free-tier read quota several times over by itself).
+
+    Trusting the counter is safe because complete_file is idempotent: a retried
+    completion returns "already" and never reaches this function.
+    """
+    ref = db().collection("sessions").document(sid)
+    transaction = db().transaction()
+
+    @firestore.transactional
+    def _bump(tx):
+        snap = ref.get(transaction=tx)
+        if not snap.exists:
+            return
+        s = snap.to_dict()
+        done = int(s.get("completedCount", 0)) + 1
+        upd = {"completedCount": done, "updatedAt": firestore.SERVER_TIMESTAMP}
+        if done >= int(s.get("fileCount", 0)):
+            upd["status"] = "COMPLETED"
+            upd["completedAt"] = firestore.SERVER_TIMESTAMP
+        tx.update(ref, upd)
+
+    _bump(transaction)

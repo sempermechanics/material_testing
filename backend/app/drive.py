@@ -110,8 +110,11 @@ def find_user_folder(token: str, uid: str):
     return found
 
 
-def ensure_session_folders(token: str, uid: str, sid: str) -> dict:
-    """Build Research Storage/user/{uid}/session/{sid}/{raw,processed,reports,metadata,csv,dat}."""
+def ensure_session_folders(token: str, uid: str, sid: str, roles=None) -> dict:
+    """Build Research Storage/user/{uid}/session/{sid}/ plus the role subfolders
+    the manifest actually uses. "bundle" (Session.zip) and "metadata" live at the
+    session root — no subfolder, no extra Drive round-trips.
+    """
     root = settings.ROOT_FOLDER_ID
     research = _find_or_create_folder(token, "Research Storage", root)
     user_dir = _find_or_create_folder(token, "user", research)
@@ -120,9 +123,12 @@ def ensure_session_folders(token: str, uid: str, sid: str) -> dict:
     sid_dir = _find_or_create_folder(token, sid, sess_dir)
     # userFolderId is returned so it can be persisted on the user doc: account
     # deletion then erases Drive via a stored id instead of re-walking names.
-    folders = {"sessionFolderId": sid_dir, "userFolderId": uid_dir}
-    for role in ("raw", "processed", "reports", "metadata", "csv", "dat"):
-        folders[role] = _find_or_create_folder(token, role, sid_dir)
+    folders = {"sessionFolderId": sid_dir, "userFolderId": uid_dir,
+               "bundle": sid_dir, "metadata": sid_dir}
+    wanted = roles if roles is not None else ("raw", "processed", "reports", "csv", "dat")
+    for role in wanted:
+        if role not in folders:
+            folders[role] = _find_or_create_folder(token, role, sid_dir)
     return folders
 
 

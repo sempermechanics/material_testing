@@ -56,14 +56,15 @@ import java.util.zip.ZipOutputStream
  *     bytes never pass through the backend,
  *  3. POSTs /v1/files/{id}/complete to record each Drive pointer.
  *
- * Layout per analysis:
+ * Layout per analysis (2 files — everything except the metadata blueprint is
+ * bundled into one archive to keep Firestore's per-file costs flat):
  * ```
- * session/<sid>/raw/       Reference.png (once) + the original deformed images
- *               dat/       frame_%04d.dat   ← engine results; enables full restore
- *               csv/       Data_Frame_N.csv
- *               reports/   Reports.zip   (every frame's Master_Report_Frame_N.pdf)
- *               processed/ Processed.zip (every frame's U/V/Exx/Eyy/Exy heatmaps)
- *               metadata/  metadata.json (device, time, engine params, frame list)
+ * session/<sid>/metadata.json   device, time, engine params, frame list
+ *               Session.zip     raw/… (reference + deformed images),
+ *                               dat/frame_%04d.dat  ← enables full restore,
+ *                               csv/Data_Frame_N.csv,
+ *                               reports/Master_Report_Frame_N.pdf,
+ *                               processed/Frame_N_<field>.png
  * ```
  */
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -240,17 +241,25 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 if (csvFile.length() > 0) artifacts += Artifact("csv", "Data_$frameName.csv", csvFile)
             }
 
-            // ── per-frame reports + heatmaps, bundled (generated once) ──────
+            // ── per-frame reports + heatmaps (generated once, as plain files:
+            // Session.zip compresses the whole payload, so nesting archives
+            // inside it would just deflate already-deflated bytes) ───────────
             if (refFile.exists() && record.defNames.isNotEmpty()) {
-                val reportsZip = File(stagingDir, "Reports.zip")
-                val processedZip = File(stagingDir, "Processed.zip")
-                if (!reportsZip.exists() || !processedZip.exists()) {
-                    buildBundles(record, sessionDir, refFile, rawDeformedDir, reportsZip, processedZip)
+                val reportsDir = File(stagingDir, "reports")
+                val processedDir = File(stagingDir, "processed")
+                // Marker written only after a COMPLETE generation pass — a dir
+                // half-filled by a killed run must not be mistaken for done.
+                val bundlesDone = File(stagingDir, ".bundles_done")
+                if (!bundlesDone.exists()) {
+                    buildBundles(record, sessionDir, refFile, rawDeformedDir, stagingDir)
+                    bundlesDone.createNewFile()
                 }
-                if (reportsZip.length() > 0) artifacts += Artifact("reports", "Reports.zip", reportsZip)
-                else Timber.e("Reports zip missing for %s", localId)
-                if (processedZip.length() > 0) artifacts += Artifact("processed", "Processed.zip", processedZip)
-                else Timber.e("Processed zip missing for %s", localId)
+                val pdfs = reportsDir.listFiles()?.sortedBy { it.name }.orEmpty()
+                val pngs = processedDir.listFiles()?.sortedBy { it.name }.orEmpty()
+                pdfs.forEach { artifacts += Artifact("reports", it.name, it) }
+                pngs.forEach { artifacts += Artifact("processed", it.name, it) }
+                if (pdfs.isEmpty()) Timber.e("No frame reports generated for %s", localId)
+                if (pngs.isEmpty()) Timber.e("No processed heatmaps generated for %s", localId)
             } else {
                 Timber.e(
                     "Skipping reports for %s — reference exists=%s, frames=%d",
@@ -264,12 +273,29 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 return@withContext Result.success()
             }
 
+            // ── bundle: everything except metadata.json into ONE Session.zip ──
+            // Firestore prices the whole flow per file (a doc, a signed complete
+            // call, a challenge/nonce cycle each), so 3F+4 files per analysis was
+            // burning the daily read quota in a single upload. One zip + the
+            // metadata blueprint = 2 files, and Drive resumable uploads resume a
+            // single large file mid-byte, so interruption recovery still works.
+            val payload = artifacts.filter { it.role != "metadata" }
+            val uploadSet = if (payload.isEmpty()) {
+                artifacts.toList()
+            } else {
+                val bundleZip = File(stagingDir, "Session.zip")
+                if (!bundleZip.exists() || bundleZip.length() == 0L) {
+                    buildSessionBundle(payload, bundleZip)
+                }
+                artifacts.filter { it.role == "metadata" } + Artifact("bundle", "Session.zip", bundleZip)
+            }
+
             // ── resume an interrupted session, or create a new one ──────────
             Timber.i(
                 "Uploading %s: %d files (%s)",
                 localId,
-                artifacts.size,
-                artifacts.groupingBy { it.role }.eachCount(),
+                uploadSet.size,
+                uploadSet.groupingBy { it.role }.eachCount(),
             )
 
             // Continue the session a prior run created, tracked by the stored
@@ -280,13 +306,13 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val existingId = record.cloudSessionId.ifBlank { null }
             val plan: Plan = if (existingId == null) {
                 Timber.i("No resumable session for %s — creating a new one", localId)
-                createSession(api, idToken, localId, record, artifacts)
+                createSession(api, idToken, localId, record, uploadSet)
             } else {
-                when (val r = resumeSession(api, idToken, existingId, artifacts)) {
+                when (val r = resumeSession(api, idToken, existingId, uploadSet)) {
                     is Resume.Continue -> {
                         Timber.i(
                             "Resuming session %s — %d of %d files still to upload",
-                            existingId, r.work.size, artifacts.size,
+                            existingId, r.work.size, uploadSet.size,
                         )
                         Plan(existingId, r.work)
                     }
@@ -481,6 +507,24 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         }
     }
 
+    /**
+     * Pack the payload artifacts into one archive, entries named `role/name`
+     * (`raw/Reference.png`, `dat/frame_0000.dat`, …) so restore can rebuild the
+     * exact per-role layout. Built once into the persistent staging dir and
+     * reused byte-identically on retries — zip entry timestamps differ across
+     * rebuilds, which would break the declared sha256/size of a resumed upload.
+     */
+    private fun buildSessionBundle(payload: List<Artifact>, out: File) {
+        ZipOutputStream(BufferedOutputStream(out.outputStream())).use { zip ->
+            payload.forEach { art ->
+                zip.putNextEntry(ZipEntry("${art.role}/${art.name}"))
+                art.file.inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+            }
+        }
+        Timber.i("Bundled %d artifacts into %s (%d bytes)", payload.size, out.name, out.length())
+    }
+
     private fun sha256(file: File): String {
         val md = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { ins ->
@@ -497,66 +541,64 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     private data class BundleCounts(val reports: Int, val processed: Int)
 
     /**
-     * One pass over the frames producing BOTH archives:
-     *  - `Reports.zip`   — every frame's Master_Report_Frame_N.pdf
-     *  - `Processed.zip` — every frame's per-field heatmaps (U/V/Exx/Eyy/Exy)
+     * One pass over the frames producing both artifact sets as plain files in
+     * the staging dir (Session.zip compresses everything at the end, so there
+     * is no point deflating them twice into nested archives):
+     *  - `reports/Master_Report_Frame_N.pdf`
+     *  - `processed/Frame_N_<field>.png` — the U/V/Exx/Eyy/Exy heatmaps
      *
      * They're built together deliberately: [ReportBuilder.buildReport] already
      * bakes the field heatmaps to make the PDF, so writing them out here costs
      * nothing extra. Rendering them in a second pass would double the most
      * expensive work in the whole upload.
      *
-     * Only one PDF exists on disk at a time (a scratch file, reused per frame),
-     * and each frame's bitmaps are recycled before moving on, so memory and cache
-     * stay flat regardless of frame count.
+     * The PDF is rendered to a scratch file reused per frame, and each frame's
+     * bitmaps are recycled before moving on, so memory stays flat regardless of
+     * frame count.
      */
     private suspend fun buildBundles(
         record: SessionRecord,
         sessionDir: File,
         refFile: File,
         rawDeformedDir: File,
-        reportsZip: File,
-        processedZip: File,
+        stagingDir: File,
     ): BundleCounts = withContext(Dispatchers.Default) {
+        val reportsDir = File(stagingDir, "reports").apply { mkdirs() }
+        val processedDir = File(stagingDir, "processed").apply { mkdirs() }
         var reports = 0
         var processed = 0
         val scratch = File(applicationContext.cacheDir, "upload_${record.id}_frame.pdf")
         try {
-            ZipOutputStream(BufferedOutputStream(reportsZip.outputStream())).use { reportsOut ->
-                ZipOutputStream(BufferedOutputStream(processedZip.outputStream())).use { processedOut ->
-                    record.defNames.forEachIndexed { index, defName ->
-                        val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
-                        if (!datFile.exists()) return@forEachIndexed
-                        val data = DicResult.decodeDatBytes(datFile.readBytes()) ?: return@forEachIndexed
+            record.defNames.forEachIndexed { index, defName ->
+                val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
+                if (!datFile.exists()) return@forEachIndexed
+                val data = DicResult.decodeDatBytes(datFile.readBytes()) ?: return@forEachIndexed
 
-                        val frameName = "Frame_${index + 1}"
-                        val defFile = File(rawDeformedDir, defName)
+                val frameName = "Frame_${index + 1}"
+                val defFile = File(rawDeformedDir, defName)
 
-                        val ok = renderFrame(data, refFile, defFile, frameName, record, scratch) { fields ->
-                            // Same bitmaps the PDF just used — write them out before
-                            // they're recycled.
-                            fields.forEach { field ->
-                                processedOut.putNextEntry(ZipEntry("${frameName}_${field.fieldKey}.png"))
-                                field.bakedHeatmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, processedOut)
-                                processedOut.closeEntry()
-                                processed++
+                val ok = renderFrame(data, refFile, defFile, frameName, record, scratch) { fields ->
+                    // Same bitmaps the PDF just used — write them out before
+                    // they're recycled.
+                    fields.forEach { field ->
+                        File(processedDir, "${frameName}_${field.fieldKey}.png")
+                            .outputStream().buffered().use { out ->
+                                field.bakedHeatmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out)
                             }
-                        }
-                        if (!ok || scratch.length() == 0L) {
-                            Timber.w("Report generation failed for %s", frameName)
-                            return@forEachIndexed
-                        }
-                        reportsOut.putNextEntry(ZipEntry("Master_Report_$frameName.pdf"))
-                        scratch.inputStream().use { it.copyTo(reportsOut) }
-                        reportsOut.closeEntry()
-                        reports++
+                        processed++
                     }
                 }
+                if (!ok || scratch.length() == 0L) {
+                    Timber.w("Report generation failed for %s", frameName)
+                    return@forEachIndexed
+                }
+                scratch.copyTo(File(reportsDir, "Master_Report_$frameName.pdf"), overwrite = true)
+                reports++
             }
         } finally {
             scratch.delete()
         }
-        Timber.i("Bundled %d frame reports and %d processed images", reports, processed)
+        Timber.i("Staged %d frame reports and %d processed images", reports, processed)
         BundleCounts(reports, processed)
     }
 
