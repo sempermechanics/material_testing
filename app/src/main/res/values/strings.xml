@@ -327,11 +327,8 @@
     <string name="limit_cleared">You\'re under the limit again.</string>
     <string name="request_access_none">No email app found. Please email %1$s to request access.</string>
     <string name="dot_separator">" · "</string>
-    <string name="error_email_required">Enter your email address</string>
     <string name="error_email_invalid">That does not look like an email address</string>
-    <string name="error_password_required">Enter your password</string>
     <string name="error_password_short">Password needs at least 6 characters</string>
-    <string name="error_email_for_reset">Enter your email first, then tap reset</string>
     <string name="extract_frames_title">Extract frames</string>
     <string name="extract_n_frames_fmt">Extract %1$d frames</string>
     <string name="video_capped_suffix">" (capped — raise Max frames in Settings)"</string>

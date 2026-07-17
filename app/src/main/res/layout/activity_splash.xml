@@ -7,10 +7,10 @@
     android:orientation="vertical">
 
     <ImageView
-        android:layout_width="72dp"
-        android:layout_height="72dp"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
         android:contentDescription="@string/app_name_short"
-        android:src="@drawable/ic_brand_mark" />
+        android:src="@mipmap/ic_indic_launcher" />
 
     <TextView
         android:layout_width="wrap_content"

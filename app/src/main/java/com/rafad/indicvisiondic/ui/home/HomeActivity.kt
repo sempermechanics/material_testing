@@ -30,6 +30,7 @@ import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
+import com.rafad.indicvisiondic.ui.MediaSourceChooser
 import com.rafad.indicvisiondic.ui.SessionLimitActivity
 import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
 import com.rafad.indicvisiondic.ui.auth.AuthActivity
@@ -150,22 +151,17 @@ class HomeActivity : AppCompatActivity() {
      * live here instead — Photos routes to the Photo Picker, Files to the Storage
      * Access Framework (Downloads, Drive, on-device storage).
      */
-    private fun showSourceChooser() {
-        val sheet = BottomSheetDialog(this)
-        val view = layoutInflater.inflate(R.layout.sheet_new_analysis, null)
-        view.findViewById<android.view.View>(R.id.rowSourcePhotos).setOnClickListener {
-            sheet.dismiss()
+    private fun showSourceChooser() = MediaSourceChooser.show(
+        activity = this,
+        titleRes = R.string.new_analysis_title,
+        captionRes = R.string.picker_select_reference,
+        onPhotos = {
             pickReference.launch(
                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
             )
-        }
-        view.findViewById<android.view.View>(R.id.rowSourceFiles).setOnClickListener {
-            sheet.dismiss()
-            pickDocument.launch(arrayOf("image/*", "video/*"))
-        }
-        sheet.setContentView(view)
-        sheet.show()
-    }
+        },
+        onFiles = { pickDocument.launch(arrayOf("image/*", "video/*")) },
+    )
 
     /**
      * @param deep verify blobs really exist in Drive (pull-to-refresh) rather

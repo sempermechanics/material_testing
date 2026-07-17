@@ -16,6 +16,9 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -54,6 +57,14 @@ class AnalysisViewModel : ViewModel() {
     var defFilePaths: List<String> = emptyList()
     /** Original picked filenames, index-aligned with [defFilePaths]. */
     var defOriginalNames: List<String> = emptyList()
+
+    /**
+     * Whether [defFilePaths] came from sampling a video rather than picked
+     * images. Video frames are extracted to image files, so the two sources are
+     * indistinguishable by the time the UI shows them — this is what lets the
+     * deformed-frames card show an icon that matches what the user chose.
+     */
+    var defFromVideo: Boolean = false
 
     var realRefWidth: Int = 0
     var realRefHeight: Int = 0
@@ -387,6 +398,18 @@ class AnalysisViewModel : ViewModel() {
     }
 
     @Suppress("LongParameterList") // one-shot assembly of the index row
+    /**
+     * Default name for a new analysis: the reference file's base name plus the
+     * run's timestamp. The name alone used to be the reference file name, so
+     * every run off the same reference produced an identical, indistinguishable
+     * row in the Home list. A user-chosen name always wins over this.
+     */
+    private fun defaultSessionName(refFileName: String, now: Long): String {
+        val base = refFileName.substringBeforeLast('.').ifBlank { "Analysis" }
+        val stamp = SimpleDateFormat("MMM d, HH:mm:ss", Locale.US).format(Date(now))
+        return "$base · $stamp"
+    }
+
     private fun buildSessionRecord(
         appContext: Context,
         localSessionId: String,
@@ -407,7 +430,7 @@ class AnalysisViewModel : ViewModel() {
         val convergence = engineStatsArray?.getOrNull(15) ?: 0f
         return SessionRecord(
             id = localSessionId,
-            name = existing?.name ?: cleanRefName.substringBeforeLast('.').ifBlank { "Analysis" },
+            name = existing?.name ?: defaultSessionName(cleanRefName, now),
             createdAt = existing?.createdAt ?: now,
             updatedAt = now,
             frameCount = defFilePaths.size,

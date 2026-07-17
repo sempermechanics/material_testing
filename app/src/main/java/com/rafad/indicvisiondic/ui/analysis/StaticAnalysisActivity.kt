@@ -13,6 +13,7 @@ import android.provider.OpenableColumns
 import android.view.View
 import android.widget.*
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -30,8 +31,8 @@ import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.MediaSourceChooser
 import com.rafad.indicvisiondic.ui.SessionLimitActivity
-import com.rafad.indicvisiondic.ui.TopMessage
 import com.rafad.indicvisiondic.ui.Motion
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +72,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var tvRefMeta: TextView
     private lateinit var defDropzone: View
     private lateinit var defCard: View
+    private lateinit var ivDefIcon: ImageView
     private lateinit var tvDefMeta: TextView
     private lateinit var tvDefDropHint: TextView
     private lateinit var jpegWarnRow: View
@@ -162,6 +164,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvRefMeta = findViewById(R.id.tvRefMeta)
         defDropzone = findViewById(R.id.defDropzone)
         defCard = findViewById(R.id.defCard)
+        ivDefIcon = findViewById(R.id.ivDefIcon)
         tvDefMeta = findViewById(R.id.tvDefMeta)
         tvDefDropHint = findViewById(R.id.tvDefDropHint)
         jpegWarnRow = findViewById(R.id.jpegWarnRow)
@@ -225,18 +228,27 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         restoreUiFromViewModel()
 
-        val pickRef = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            uri?.let { handleReferenceImage(it) }
-        }
-
-        // Multi-image picker for deformed images
-        val pickDefBatch = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-            if (uris.isNotEmpty()) {
-                handleDeformedBatch(uris)
-            } else {
-                Toast.makeText(this, R.string.no_images_selected, Toast.LENGTH_SHORT).show()
+        // Reference: one image, from either source. Files (SAF) is the route that
+        // reaches DNG/RAW, which the Photo Picker does not index.
+        val pickRefPhotos =
+            registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+                uri?.let { handleReferenceImage(it) }
             }
-        }
+        val pickRefFiles =
+            registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                uri?.let { handleReferenceImage(it) }
+            }
+
+        // Deformed frames: multi-select from either source. handleDeformedBatch
+        // enforces the per-analysis frame cap, so both launchers stay uncapped here.
+        val pickDefPhotos =
+            registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+                onDeformedPicked(uris)
+            }
+        val pickDefFiles =
+            registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+                onDeformedPicked(uris)
+            }
 
         val roiStudioLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
@@ -272,11 +284,34 @@ class StaticAnalysisActivity : AppCompatActivity() {
             }
         }
 
-        refDropzone.setOnClickListener { pickRef.launch("image/*") }
-        findViewById<View>(R.id.btnRefChange).setOnClickListener { pickRef.launch("image/*") }
+        val launchRefPicker = {
+            MediaSourceChooser.show(
+                activity = this,
+                titleRes = R.string.reference_image,
+                captionRes = R.string.ref_formats_hint,
+                onPhotos = {
+                    pickRefPhotos.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                onFiles = { pickRefFiles.launch(arrayOf("image/*")) },
+            )
+        }
+        refDropzone.setOnClickListener { launchRefPicker() }
+        findViewById<View>(R.id.btnRefChange).setOnClickListener { launchRefPicker() }
+
         val launchDefPicker = {
-            TopMessage.show(this, R.string.picker_select_deformed)
-            pickDefBatch.launch("image/*")
+            MediaSourceChooser.show(
+                activity = this,
+                titleRes = R.string.deformed_frames,
+                captionRes = R.string.picker_select_deformed,
+                onPhotos = {
+                    pickDefPhotos.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                onFiles = { pickDefFiles.launch(arrayOf("image/*")) },
+            )
         }
         defDropzone.setOnClickListener { launchDefPicker() }
         findViewById<View>(R.id.btnDefChange).setOnClickListener { launchDefPicker() }
@@ -375,6 +410,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
     }
 
+    /** Shared result path for the deformed-frame pickers (Photos and Files). */
+    private fun onDeformedPicked(uris: List<Uri>) {
+        if (uris.isNotEmpty()) {
+            handleDeformedBatch(uris)
+        } else {
+            Toast.makeText(this, R.string.no_images_selected, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     @Suppress("LongMethod", "CyclomaticComplexMethod") // legacy import pipeline; slated for P5 split
     private fun handleDeformedBatch(rawUris: List<Uri>) {
         // Frame cap (Home settings drawer): keep the first N and say so.
@@ -444,6 +488,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 val sortedPaths = filePaths.sorted()
                 viewModel.defFilePaths = sortedPaths
                 viewModel.defOriginalNames = sortedPaths.map { originalByPath[it] ?: File(it).name }
+                viewModel.defFromVideo = false
 
                 withContext(Dispatchers.Main) {
                     tvResult.text = ""
@@ -665,6 +710,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 viewModel.defFilePaths = sortedDefPaths
                 viewModel.defOriginalNames =
                     sortedDefPaths.mapIndexed { idx, _ -> String.format("frame_%04d.png", idx + 1) }
+                viewModel.defFromVideo = true
 
                 withContext(Dispatchers.Main) {
                     hideComputeOverlay()
@@ -1120,6 +1166,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val first = viewModel.defFilePaths.first().substringAfterLast('/')
             val last = viewModel.defFilePaths.last().substringAfterLast('/')
             tvDefMeta.text = if (n == 1) first else "$first … $last"
+            // Match the icon to what the user actually picked — the frames are
+            // image files either way, so only the source tells them apart.
+            ivDefIcon.setImageResource(
+                if (viewModel.defFromVideo) R.drawable.ic_video else R.drawable.ic_photos_share,
+            )
         }
         updateJpegChip()
     }

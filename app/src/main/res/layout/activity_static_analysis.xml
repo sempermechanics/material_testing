@@ -190,12 +190,13 @@
                             android:orientation="horizontal">
 
                             <ImageView
+                                android:id="@+id/ivDefIcon"
                                 android:layout_width="46dp"
                                 android:layout_height="46dp"
                                 android:background="@color/surface_muted"
                                 android:contentDescription="@string/deformed_frames"
                                 android:padding="11dp"
-                                android:src="@drawable/ic_video"
+                                android:src="@drawable/ic_photos_share"
                                 app:tint="@color/text_secondary" />
 
                             <LinearLayout
