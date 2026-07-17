@@ -6,6 +6,7 @@
     <ID>ComplexCondition:StaticAnalysisActivity.kt$StaticAnalysisActivity$finalX &lt; 0 || finalY &lt; 0 || (finalX + finalW) &gt; imgW || (finalY + finalH) &gt; imgH || finalW &lt;= 0 || finalH &lt;= 0</ID>
     <ID>ComplexCondition:TouchImageView.kt$TouchImageView$trueImageWidth &lt;= 0f || trueImageHeight &lt;= 0f || viewWidth &lt;= 0 || viewHeight &lt;= 0</ID>
     <ID>ComplexCondition:VisualizationEngine.kt$VisualizationEngine$!v00.isNaN() &amp;&amp; !v10.isNaN() &amp;&amp; !v01.isNaN() &amp;&amp; !v11.isNaN()</ID>
+    <ID>ConstructorParameterNaming:ApiDtos.kt$AdminUserDto$val access_status: String? = null</ID>
     <ID>ConstructorParameterNaming:ApiDtos.kt$MeResponse$val access_status: String</ID>
     <ID>CyclomaticComplexMethod:AnalysisViewModel.kt$AnalysisViewModel$suspend fun runBatchAnalysis( appContext: Context, params: BatchAnalysisParams, onProgress: (BatchProgressUpdate) -&gt; Unit, ): BatchAnalysisOutcome</ID>
     <ID>CyclomaticComplexMethod:DicUploadWorker.kt$DicUploadWorker$override suspend fun doWork(): Result</ID>
@@ -22,15 +23,19 @@
     <ID>CyclomaticComplexMethod:StudioOverlayView.kt$StudioOverlayView$private fun getTouchState(x: Float, y: Float): TouchState</ID>
     <ID>CyclomaticComplexMethod:VisualizationEngine.kt$VisualizationEngine$fun generateHeatmap( data: FloatArray, imgW: Int, imgH: Int, valIndex: Int, step: Int, customMin: Float? = null, // Optional Custom Bounds customMax: Float? = null, ): Triple&lt;Bitmap, Float, Float&gt;</ID>
     <ID>EmptyFunctionBlock:StaticAnalysisActivity.kt$StaticAnalysisActivity.&lt;no name provided&gt;${}</ID>
+    <ID>ImplicitDefaultLocale:AnalysisViewModel.kt$AnalysisViewModel$String.format("%04d_%s", frameIndex, rawName)</ID>
     <ID>ImplicitDefaultLocale:AnalysisViewModel.kt$AnalysisViewModel$String.format("frame_%04d.dat", frameIndex)</ID>
     <ID>ImplicitDefaultLocale:PdfLayoutEngine.kt$PdfLayoutEngine$String.format("%.2e", value)</ID>
     <ID>ImplicitDefaultLocale:PdfLayoutEngine.kt$PdfLayoutEngine$String.format("%.5f", value)</ID>
     <ID>ImplicitDefaultLocale:StaticAnalysisActivity.kt$StaticAnalysisActivity$String.format("%04d_%s", index, sanitizedName)</ID>
     <ID>ImplicitDefaultLocale:StaticAnalysisActivity.kt$StaticAnalysisActivity$String.format("%04d_frame.png", i)</ID>
+    <ID>ImplicitDefaultLocale:StaticAnalysisActivity.kt$StaticAnalysisActivity$String.format("frame_%04d.png", idx + 1)</ID>
     <ID>InstanceOfCheckForException:ResultViewerActivity.kt$ResultViewerActivity$e !is kotlinx.coroutines.CancellationException</ID>
+    <ID>LargeClass:ResultViewerActivity.kt$ResultViewerActivity : AppCompatActivity</ID>
     <ID>LargeClass:StaticAnalysisActivity.kt$StaticAnalysisActivity : AppCompatActivity</ID>
     <ID>LongMethod:AnalysisViewModel.kt$AnalysisViewModel$suspend fun runBatchAnalysis( appContext: Context, params: BatchAnalysisParams, onProgress: (BatchProgressUpdate) -&gt; Unit, ): BatchAnalysisOutcome</ID>
     <ID>LongMethod:DicUploadWorker.kt$DicUploadWorker$override suspend fun doWork(): Result</ID>
+    <ID>LongMethod:HomeActivity.kt$HomeActivity$private fun showSettingsDrawer()</ID>
     <ID>LongMethod:ReportBuilder.kt$ReportBuilder$fun bakeAnnotationsToCanvas( canvas: Canvas, width: Int, height: Int, minValRaw: Float, maxValRaw: Float, typeString: String, unit: String, maxIdx: Int, minIdx: Int, dataArray: FloatArray, drawMinMarker: Boolean = true, )</ID>
     <ID>LongMethod:ReportBuilder.kt$ReportBuilder$fun buildReport(params: ReportBuildParams): ReportData</ID>
     <ID>LongMethod:ResultViewerActivity.kt$ResultViewerActivity$@SuppressLint("ClickableViewAccessibility") override fun onCreate(savedInstanceState: Bundle?)</ID>
@@ -42,7 +47,9 @@
     <ID>LongMethod:StudioOverlayView.kt$StudioOverlayView$override fun onDraw(canvas: Canvas)</ID>
     <ID>LongMethod:StudioOverlayView.kt$StudioOverlayView$override fun onTouchEvent(event: MotionEvent): Boolean</ID>
     <ID>LongMethod:VisualizationEngine.kt$VisualizationEngine$fun generateHeatmap( data: FloatArray, imgW: Int, imgH: Int, valIndex: Int, step: Int, customMin: Float? = null, // Optional Custom Bounds customMax: Float? = null, ): Triple&lt;Bitmap, Float, Float&gt;</ID>
-    <ID>LongParameterList:DicUploadWorker.kt$DicUploadWorker$( data: FloatArray, refFile: File, defFile: File, frameName: String, specimen: String, out: File, )</ID>
+    <ID>LongParameterList:AnalysisViewModel.kt$AnalysisViewModel$( appContext: Context, localSessionId: String, batchDir: File, refPngPath: String, params: BatchAnalysisParams, cloudEnabled: Boolean, pointsConverged: Int, avgIterations: Float, executionTimeMs: Int, persistedRawNames: List&lt;String&gt;, )</ID>
+    <ID>LongParameterList:DicUploadWorker.kt$DicUploadWorker$( data: FloatArray, refFile: File, defFile: File, frameName: String, record: SessionRecord, pdfOut: File, onFieldHeatmaps: (List&lt;FieldResult&gt;) -&gt; Unit, )</ID>
+    <ID>LongParameterList:DicUploadWorker.kt$DicUploadWorker$( record: SessionRecord, sessionDir: File, refFile: File, rawDeformedDir: File, reportsZip: File, processedZip: File, )</ID>
     <ID>LongParameterList:IndicVisionNativeLib.kt$IndicVisionNativeLib$( refBytes: ByteArray, defBytes: ByteArray, maskData: ByteArray, roiX: Int, roiY: Int, roiW: Int, roiH: Int, step: Int, subset: Int, strainWin: Int, useZNCC: Boolean, useICGN: Boolean, useSpline: Boolean, applyBlur: Boolean, useNlvc: Boolean, // UI toggle selecting the Keys 6x6 interpolation kernel use6x6Interpolator: Boolean, outputBuffer: ByteBuffer, callback: ProgressCallback, // 17-slot engine telemetry (see EngineStats.fromArray) outMetrics: FloatArray, )</ID>
     <ID>LongParameterList:IndicVisionNativeLib.kt$IndicVisionNativeLib$( refData: ByteArray, defData: ByteArray, roiX: Int, roiY: Int, subsetSize: Int, originalWidth: Int, originalHeight: Int, )</ID>
     <ID>LongParameterList:ReportBuilder.kt$ReportBuilder$( canvas: Canvas, width: Int, height: Int, minValRaw: Float, maxValRaw: Float, typeString: String, unit: String, maxIdx: Int, minIdx: Int, dataArray: FloatArray, drawMinMarker: Boolean = true, )</ID>
@@ -55,24 +62,32 @@
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$16</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$17</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$5</ID>
-    <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$50_000_000</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel$8</ID>
     <ID>MagicNumber:AnalysisViewModel.kt$AnalysisViewModel.&lt;no name provided&gt;$100</ID>
+    <ID>MagicNumber:ApiDtos.kt$PendingUploadDto$1024</ID>
+    <ID>MagicNumber:ApiDtos.kt$PendingUploadDto$8</ID>
     <ID>MagicNumber:AuthRepository.kt$AuthRepository$401</ID>
+    <ID>MagicNumber:CloudRestore.kt$CloudRestore$12</ID>
+    <ID>MagicNumber:CloudRestore.kt$CloudRestore$15</ID>
+    <ID>MagicNumber:CloudRestore.kt$CloudRestore$41</ID>
+    <ID>MagicNumber:CloudRestore.kt$CloudRestore$5</ID>
     <ID>MagicNumber:DeviceKeyManager.kt$DeviceKeyManager$64</ID>
+    <ID>MagicNumber:DicRestoreWorker.kt$DicRestoreWorker$403</ID>
+    <ID>MagicNumber:DicRestoreWorker.kt$DicRestoreWorker$404</ID>
     <ID>MagicNumber:DicResult.kt$DicResult$4</ID>
-    <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$1000</ID>
-    <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$15</ID>
     <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$16</ID>
-    <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$41</ID>
-    <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$5</ID>
+    <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$400</ID>
+    <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$409</ID>
+    <ID>MagicNumber:DicUploadWorker.kt$DicUploadWorker$413</ID>
     <ID>MagicNumber:HomeActivity.kt$HomeActivity.SessionAdapter$8</ID>
+    <ID>MagicNumber:IndicApi.kt$IndicApi$16</ID>
     <ID>MagicNumber:IndicApi.kt$IndicApi$200</ID>
     <ID>MagicNumber:IndicApi.kt$IndicApi$201</ID>
     <ID>MagicNumber:IndicApi.kt$IndicApi$30</ID>
     <ID>MagicNumber:IndicApi.kt$IndicApi$300</ID>
     <ID>MagicNumber:IndicApi.kt$IndicApi$308</ID>
     <ID>MagicNumber:IndicApi.kt$IndicApi$403</ID>
+    <ID>MagicNumber:IndicApi.kt$IndicApi$404</ID>
     <ID>MagicNumber:IndicApi.kt$IndicApi$409</ID>
     <ID>MagicNumber:IndicApi.kt$IndicApi$60</ID>
     <ID>MagicNumber:InspectOverlayView.kt$InspectOverlayView$15f</ID>
@@ -149,6 +164,9 @@
     <ID>MagicNumber:ReportBuilder.kt$ReportBuilder$5f</ID>
     <ID>MagicNumber:ReportBuilder.kt$ReportBuilder$6f</ID>
     <ID>MagicNumber:ReportModels.kt$EngineStats.Companion$16</ID>
+    <ID>MagicNumber:RestoreActivity.kt$RestoreActivity$1024.0</ID>
+    <ID>MagicNumber:RestoreActivity.kt$RestoreActivity$20</ID>
+    <ID>MagicNumber:RestoreActivity.kt$RestoreActivity$30</ID>
     <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$0.5f</ID>
     <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$1.5f</ID>
     <ID>MagicNumber:ResultViewerActivity.kt$ResultViewerActivity$15</ID>
@@ -186,7 +204,6 @@
     <ID>MagicNumber:StudioOverlayView.kt$StudioOverlayView$45f</ID>
     <ID>MagicNumber:StudioOverlayView.kt$StudioOverlayView$50f</ID>
     <ID>MagicNumber:StudioOverlayView.kt$StudioOverlayView$5f</ID>
-    <ID>MagicNumber:TokenStore.kt$TokenStore$1000L</ID>
     <ID>MagicNumber:TouchImageView.kt$TouchImageView$10f</ID>
     <ID>MagicNumber:TouchImageView.kt$TouchImageView$9</ID>
     <ID>MagicNumber:VisualizationEngine.kt$VisualizationEngine$0.0001f</ID>
@@ -203,12 +220,12 @@
     <ID>MagicNumber:VisualizationEngine.kt$VisualizationEngine$3.5f</ID>
     <ID>MagicNumber:VisualizationEngine.kt$VisualizationEngine$4.5f</ID>
     <ID>MagicNumber:VisualizationEngine.kt$VisualizationEngine$4f</ID>
-    <ID>MaxLineLength:AnalysisViewModel.kt$AnalysisViewModel$SessionStore.upsert(appContext, buildSessionRecord(appContext, localSessionId, batchDir, refPngPath, params, cloudEnabled))</ID>
+    <ID>MaxLineLength:AuthRepository.kt$AuthRepository$return@withContext Result.failure(Exception("An account already exists for this email. Sign in instead."))</ID>
     <ID>MaxLineLength:DicResult.kt$DicResult$fun isAcceptedPoint(corr: Float, includeCorrelationField: Boolean = false): Boolean</ID>
     <ID>MaxLineLength:DicSettings.kt$DicSettings$fun setKeepEveryRerun(context: Context, value: Boolean)</ID>
     <ID>MaxLineLength:DicSettings.kt$DicSettings$fun setSaveToCloud(context: Context, value: Boolean)</ID>
-    <ID>MaxLineLength:DicUploadWorker.kt$DicUploadWorker$val csvFile = File(applicationContext.cacheDir, "upload_${frameName}_${System.currentTimeMillis()}.csv")</ID>
-    <ID>MaxLineLength:HomeActivity.kt$HomeActivity$android.widget.Toast.makeText(this, R.string.picker_select_reference, android.widget.Toast.LENGTH_LONG).show()</ID>
+    <ID>MaxLineLength:HomeActivity.kt$HomeActivity$visibility = if (TokenStore.isAdmin(this@HomeActivity)) android.view.View.VISIBLE else android.view.View.GONE</ID>
+    <ID>MaxLineLength:IndicApi.kt$IndicApi$suspend</ID>
     <ID>MaxLineLength:IndicVisionNativeLib.kt$IndicVisionNativeLib$external</ID>
     <ID>MaxLineLength:PdfLayoutEngine.kt$PdfLayoutEngine$canvas?.drawBitmap(defBmp, null, RectF(margin + 40f + imgWidth, startY, margin + 40f + imgWidth * 2f, startY + defHeight), upscalerPaint)</ID>
     <ID>MaxLineLength:PdfLayoutEngine.kt$PdfLayoutEngine$canvas?.drawBitmap(refBmp, null, RectF(margin + 20f, startY, margin + 20f + imgWidth, startY + refHeight), upscalerPaint)</ID>
@@ -250,21 +267,31 @@
     <ID>NestedBlockDepth:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun handleReferenceImage(uri: Uri)</ID>
     <ID>NestedBlockDepth:StudioOverlayView.kt$StudioOverlayView$override fun onTouchEvent(event: MotionEvent): Boolean</ID>
     <ID>NestedBlockDepth:VisualizationEngine.kt$VisualizationEngine$fun generateHeatmap( data: FloatArray, imgW: Int, imgH: Int, valIndex: Int, step: Int, customMin: Float? = null, // Optional Custom Bounds customMax: Float? = null, ): Triple&lt;Bitmap, Float, Float&gt;</ID>
+    <ID>ReturnCount:AuthActivity.kt$AuthActivity$private fun onMainAction()</ID>
+    <ID>ReturnCount:DeviceKeyManager.kt$DeviceKeyManager$@Suppress("HardwareIds") // ANDROID_ID is app-scoped, not a hardware identifier fun getDeviceId(): String</ID>
+    <ID>ReturnCount:DicUploadWorker.kt$DicUploadWorker$private suspend fun resumeSession( api: IndicApi, idToken: String, cloudSessionId: String, artifacts: List&lt;Artifact&gt;, ): Resume</ID>
     <ID>ReturnCount:ResultViewerActivity.kt$ResultViewerActivity$internal fun buildShareSnapshot(): ShareCenter.Snapshot?</ID>
     <ID>ReturnCount:ResultViewerActivity.kt$ResultViewerActivity$private fun buildReportData(): ReportData?</ID>
+    <ID>ReturnCount:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun startBatchAnalysis()</ID>
     <ID>ReturnCount:StudioOverlayView.kt$StudioOverlayView$fun updateImageBounds()</ID>
     <ID>ReturnCount:StudioOverlayView.kt$StudioOverlayView$override fun onTouchEvent(event: MotionEvent): Boolean</ID>
     <ID>ReturnCount:StudioOverlayView.kt$StudioOverlayView$private fun getTouchState(x: Float, y: Float): TouchState</ID>
     <ID>SwallowedException:AuthActivity.kt$AuthActivity$e: GoogleSignInHelper.NotConfigured</ID>
     <ID>SwallowedException:AuthActivity.kt$AuthActivity$e: androidx.credentials.exceptions.GetCredentialCancellationException</ID>
     <ID>SwallowedException:AuthActivity.kt$AuthActivity$e: androidx.credentials.exceptions.NoCredentialException</ID>
+    <ID>SwallowedException:AuthRepository.kt$AuthRepository$e: FirebaseAuthInvalidCredentialsException</ID>
+    <ID>SwallowedException:AuthRepository.kt$AuthRepository$e: FirebaseAuthInvalidUserException</ID>
+    <ID>SwallowedException:AuthRepository.kt$AuthRepository$e: FirebaseAuthUserCollisionException</ID>
+    <ID>SwallowedException:AuthRepository.kt$AuthRepository$e: FirebaseAuthWeakPasswordException</ID>
     <ID>SwallowedException:AuthRepository.kt$AuthRepository$e: IOException</ID>
     <ID>SwallowedException:AuthRepository.kt$AuthRepository$e: IndicApi.DeviceConflictException</ID>
     <ID>SwallowedException:AuthRepository.kt$AuthRepository$e: IndicApi.NotApprovedException</ID>
+    <ID>SwallowedException:CloudSync.kt$CloudSync$e: IndicApi.NotApprovedException</ID>
+    <ID>SwallowedException:PendingApprovalActivity.kt$PendingApprovalActivity$e: ActivityNotFoundException</ID>
+    <ID>SwallowedException:SessionLimitActivity.kt$SessionLimitActivity$e: ActivityNotFoundException</ID>
     <ID>SwallowedException:SplashActivity.kt$SplashActivity$e: Exception</ID>
+    <ID>ThrowsCount:IndicApi.kt$IndicApi$private fun failSigned(code: Int, body: String): Nothing</ID>
     <ID>TooGenericExceptionCaught:AnalysisViewModel.kt$AnalysisViewModel$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:DicUploadWorker.kt$DicUploadWorker$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:GoogleSignInHelper.kt$GoogleSignInHelper$e: Exception</ID>
     <ID>TooGenericExceptionCaught:IndicApi.kt$IndicApi$e: Exception</ID>
     <ID>TooGenericExceptionCaught:PdfReportGenerator.kt$PdfReportGenerator$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ResultViewerActivity.kt$ResultViewerActivity$e: Exception</ID>
@@ -273,7 +300,9 @@
     <ID>TooGenericExceptionCaught:ShareCenter.kt$ShareCenter$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:SplashActivity.kt$SplashActivity$e: Exception</ID>
     <ID>TooGenericExceptionCaught:StaticAnalysisActivity.kt$StaticAnalysisActivity$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:TokenStore.kt$TokenStore$e: Exception</ID>
+    <ID>TooManyFunctions:AuthActivity.kt$AuthActivity : AppCompatActivity</ID>
+    <ID>TooManyFunctions:AuthRepository.kt$AuthRepository</ID>
+    <ID>TooManyFunctions:HomeActivity.kt$HomeActivity : AppCompatActivity</ID>
     <ID>TooManyFunctions:IndicApi.kt$IndicApi</ID>
     <ID>TooManyFunctions:PdfLayoutEngine.kt$PdfLayoutEngine</ID>
     <ID>TooManyFunctions:ResultViewerActivity.kt$ResultViewerActivity : AppCompatActivity</ID>

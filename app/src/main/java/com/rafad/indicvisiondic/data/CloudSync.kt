@@ -73,7 +73,7 @@ object CloudSync {
             val appContext = context.applicationContext
             val api = IndicApi(appContext)
             if (!api.enabled) return@withContext Outcome.Disabled
-            val token = TokenProvider.usableIdToken(appContext) ?: return@withContext Outcome.Offline
+            val token = TokenProvider.usableIdToken() ?: return@withContext Outcome.Offline
 
             val cloud = try {
                 api.listSessions(token, verify = deep)
@@ -141,7 +141,7 @@ object CloudSync {
                 return@withContext EraseResult.ERASED_EVERYWHERE
             }
 
-            val token = TokenProvider.usableIdToken(appContext)
+            val token = TokenProvider.usableIdToken()
                 ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
             try {
                 val cloudId = resolveCloudId(api, token, record!!)
@@ -164,7 +164,7 @@ object CloudSync {
         val appContext = context.applicationContext
         val api = IndicApi(appContext)
         if (!api.enabled) return@withContext null
-        val token = TokenProvider.usableIdToken(appContext) ?: return@withContext null
+        val token = TokenProvider.usableIdToken() ?: return@withContext null
         try {
             val json = api.exportAccount(token)
             val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)
@@ -192,7 +192,7 @@ object CloudSync {
         val api = IndicApi(appContext)
 
         if (api.enabled) {
-            val token = TokenProvider.usableIdToken(appContext) ?: return@withContext false
+            val token = TokenProvider.usableIdToken() ?: return@withContext false
             try {
                 api.deleteAccount(token)
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {

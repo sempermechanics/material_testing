@@ -18,9 +18,12 @@ import com.google.android.material.button.MaterialButton
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.CloudRestore
 import com.rafad.indicvisiondic.data.DicRestoreWorker
+import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.CloudSessionDto
 import com.rafad.indicvisiondic.ui.Insets
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * "Restore from cloud": lists the account's completed cloud analyses that
@@ -38,6 +41,10 @@ class RestoreActivity : AppCompatActivity() {
     private lateinit var progressSection: View
     private lateinit var progressBar: ProgressBar
     private val adapter = BackupAdapter()
+
+    /** Restore outcomes already announced, so a replayed WorkInfo isn't re-toasted. */
+    private val reportedOutcomes = mutableSetOf<java.util.UUID>()
+    private var seededFinished = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,24 +78,66 @@ class RestoreActivity : AppCompatActivity() {
         WorkManager.getInstance(this)
             .getWorkInfosByTagLiveData("restore")
             .observe(this) { infos ->
-                val active = infos.firstOrNull {
-                    it.state == WorkInfo.State.RUNNING ||
-                        it.state == WorkInfo.State.ENQUEUED ||
-                        it.state == WorkInfo.State.BLOCKED
-                }
+                val active = infos.firstOrNull { !it.state.isFinished }
                 if (active != null) {
                     val done = active.progress.getInt(DicRestoreWorker.KEY_DONE, 0)
                     val total = active.progress.getInt(DicRestoreWorker.KEY_TOTAL, 0)
                     showProgress(done, total, indeterminate = active.state != WorkInfo.State.RUNNING || total == 0)
+                } else if (progressSection.isVisible) {
+                    // A restore just finished — refresh the list so the
+                    // now-local analysis drops off the "restorable" list.
+                    progressSection.visibility = View.GONE
+                    load()
+                }
+
+                val finished = infos.filter { it.state.isFinished }
+                if (!seededFinished) {
+                    // First emission: outcomes that predate this screen aren't
+                    // news, and WorkManager replays them on every re-observe
+                    // (including rotation). Remember them without announcing.
+                    finished.forEach { reportedOutcomes.add(it.id) }
+                    seededFinished = true
                 } else {
-                    if (progressSection.isVisible) {
-                        // A restore just finished — refresh the list so the
-                        // now-local analysis drops off the "restorable" list.
-                        progressSection.visibility = View.GONE
-                        load()
-                    }
+                    finished.filter { reportedOutcomes.add(it.id) }.forEach { announceOutcome(it) }
                 }
             }
+    }
+
+    /**
+     * Say how a restore actually ended.
+     *
+     * Every terminal state used to collapse into "hide the bar and reload", so a
+     * failed restore was indistinguishable from a successful one — the work
+     * reports an error the UI simply dropped. Cancellation stays silent: the
+     * user asked for it.
+     */
+    private fun announceOutcome(info: WorkInfo) {
+        when (info.state) {
+            WorkInfo.State.SUCCEEDED -> {
+                val localId = info.outputData.getString(DicRestoreWorker.KEY_LOCAL_ID)
+                lifecycleScope.launch {
+                    val name = localId?.let {
+                        withContext(Dispatchers.IO) { SessionStore.get(this@RestoreActivity, it)?.name }
+                    }.orEmpty()
+                    Toast.makeText(
+                        this@RestoreActivity,
+                        getString(R.string.restore_done_fmt, name),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+
+            WorkInfo.State.FAILED -> {
+                val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR).orEmpty()
+                Toast.makeText(
+                    this,
+                    getString(R.string.restore_failed_fmt, reason),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+
+            else -> Unit
+        }
     }
 
     private fun load() {

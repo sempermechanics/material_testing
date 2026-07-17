@@ -71,7 +71,7 @@ object CloudRestore {
         val appContext = context.applicationContext
         val api = IndicApi(appContext)
         if (!api.enabled) return@withContext emptyList()
-        val token = TokenProvider.usableIdToken(appContext) ?: return@withContext emptyList()
+        val token = TokenProvider.usableIdToken() ?: return@withContext emptyList()
         val localIds = SessionStore.list(appContext).map { it.id }.toSet()
         api.listSessions(token).sessions
             .filter { it.status == "COMPLETED" }
@@ -89,7 +89,7 @@ object CloudRestore {
     ): String = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         val api = IndicApi(appContext)
-        val token = TokenProvider.usableIdToken(appContext)
+        val token = TokenProvider.usableIdToken()
             ?: error("Not signed in")
 
         val manifest = api.listSessionFiles(token, sessionId)

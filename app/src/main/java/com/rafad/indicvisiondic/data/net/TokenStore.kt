@@ -101,10 +101,6 @@ object TokenStore {
     fun isSessionLimitReached(context: Context): Boolean =
         prefs(context).getBoolean(K_LIMIT_REACHED, false)
 
-    /** A signed-in Firebase user exists (session restored across launches by the SDK). */
-    fun hasSession(context: Context): Boolean =
-        FirebaseAuth.getInstance().currentUser != null
-
     /**
      * Whether the current account has acknowledged the beta / data-use notice.
      * Stored outside the session prefs so it survives [clear].

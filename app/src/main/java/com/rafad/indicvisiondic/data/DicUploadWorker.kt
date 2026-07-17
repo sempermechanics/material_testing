@@ -173,7 +173,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             Timber.d("Cloud backend not configured — skipping upload")
             return@withContext Result.success()
         }
-        val idToken = TokenProvider.usableIdToken(applicationContext)
+        val idToken = TokenProvider.usableIdToken()
         if (idToken == null) {
             Timber.w("No usable ID token yet — deferring upload")
             return@withContext Result.retry()
@@ -327,7 +327,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                             Timber.d("Uploading %s (%d bytes)…", job.name, job.file.length())
                             val (driveId, md5) = api.uploadResumable(job.uploadUrl, job.file, job.chunkSize)
                             // Re-read the token: a long upload can outlive it.
-                            val tk = TokenProvider.usableIdToken(applicationContext) ?: idToken
+                            val tk = TokenProvider.usableIdToken() ?: idToken
                             api.completeFile(
                                 tk, job.fileId,
                                 FileCompleteRequest(plan.sessionId, driveId, job.file.length(), md5),

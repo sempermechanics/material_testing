@@ -50,7 +50,7 @@ class AdminActivity : AppCompatActivity() {
     private fun load() {
         setLoading(true)
         lifecycleScope.launch {
-            val token = TokenProvider.usableIdToken(applicationContext)
+            val token = TokenProvider.usableIdToken()
             if (token == null) {
                 setLoading(false)
                 Toast.makeText(this@AdminActivity, R.string.error_generic, Toast.LENGTH_LONG).show()
@@ -76,7 +76,7 @@ class AdminActivity : AppCompatActivity() {
     private fun act(user: AdminUserDto, action: String) {
         setLoading(true)
         lifecycleScope.launch {
-            val token = TokenProvider.usableIdToken(applicationContext)
+            val token = TokenProvider.usableIdToken()
             if (token == null) {
                 setLoading(false)
                 return@launch

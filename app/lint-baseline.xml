@@ -15,23 +15,23 @@
     <issue
         id="DefaultLocale"
         message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
-        errorLine1="            val outputFile = File(batchDir, String.format(&quot;frame_%04d.dat&quot;, frameIndex))"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="                    if (it.exists()) File(rawDeformedDir, String.format(&quot;%04d_%s&quot;, frameIndex, rawName)) else it"
+        errorLine2="                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/AnalysisViewModel.kt"
-            line="260"
-            column="45"/>
+            line="269"
+            column="59"/>
     </issue>
 
     <issue
         id="DefaultLocale"
         message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
-        errorLine1="                    val datFile = File(batchDir, String.format(&quot;frame_%04d.dat&quot;, frameIndex))"
-        errorLine2="                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="            val outputFile = File(batchDir, String.format(&quot;frame_%04d.dat&quot;, frameIndex))"
+        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/AnalysisViewModel.kt"
-            line="415"
-            column="50"/>
+            line="322"
+            column="45"/>
     </issue>
 
     <issue
@@ -63,7 +63,7 @@
         errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="430"
+            line="481"
             column="36"/>
     </issue>
 
@@ -74,8 +74,19 @@
         errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="637"
+            line="691"
             column="47"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="                    sortedDefPaths.mapIndexed { idx, _ -> String.format(&quot;frame_%04d.png&quot;, idx + 1) }"
+        errorLine2="                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
+            line="712"
+            column="59"/>
     </issue>
 
     <issue
@@ -85,7 +96,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="490"
+            line="544"
             column="40"/>
     </issue>
 
@@ -96,7 +107,7 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_result_viewer.xml"
-            line="191"
+            line="203"
             column="9"/>
     </issue>
 
@@ -107,7 +118,7 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_result_viewer.xml"
-            line="238"
+            line="250"
             column="9"/>
     </issue>
 
@@ -140,7 +151,29 @@
         errorLine2="                                                                        ~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/home/HomeActivity.kt"
-            line="179"
+            line="399"
+            column="73"/>
+    </issue>
+
+    <issue
+        id="InflateParams"
+        message="Avoid passing `null` as the view root (needed to resolve layout parameters on the inflated layout&apos;s root element)"
+        errorLine1="        val view = activity.layoutInflater.inflate(R.layout.sheet_media_source, null)"
+        errorLine2="                                                                                ~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/ui/MediaSourceChooser.kt"
+            line="34"
+            column="81"/>
+    </issue>
+
+    <issue
+        id="InflateParams"
+        message="Avoid passing `null` as the view root (needed to resolve layout parameters on the inflated layout&apos;s root element)"
+        errorLine1="        val view = layoutInflater.inflate(R.layout.sheet_settings_used, null)"
+        errorLine2="                                                                        ~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
+            line="684"
             column="73"/>
     </issue>
 
@@ -151,7 +184,7 @@
         errorLine2="                                                                  ~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ShareCenter.kt"
-            line="45"
+            line="48"
             column="67"/>
     </issue>
 
@@ -162,7 +195,7 @@
         errorLine2="                                                                          ~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="518"
+            line="572"
             column="75"/>
     </issue>
 
@@ -179,7 +212,7 @@
 
     <issue
         id="AndroidGradlePluginVersion"
-        message="A newer version of com.android.application than 9.0.0 is available: 9.2.1. (There is also a newer version of 9.0.𝑥 available, if upgrading to 9.2.1 is difficult: 9.0.1)"
+        message="A newer version of com.android.application than 9.0.0 is available: 9.3.0. (There is also a newer version of 9.0.𝑥 available, if upgrading to 9.3.0 is difficult: 9.0.1)"
         errorLine1="agp = &quot;9.0.0&quot;"
         errorLine2="      ~~~~~~~">
         <location
@@ -195,7 +228,18 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="132"
+            line="139"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.swiperefreshlayout:swiperefreshlayout than 1.1.0 is available: 1.2.0"
+        errorLine1="    implementation(&quot;androidx.swiperefreshlayout:swiperefreshlayout:1.1.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="141"
             column="20"/>
     </issue>
 
@@ -206,7 +250,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="137"
+            line="146"
             column="20"/>
     </issue>
 
@@ -217,7 +261,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="140"
+            line="149"
             column="20"/>
     </issue>
 
@@ -228,7 +272,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="141"
+            line="150"
             column="20"/>
     </issue>
 
@@ -239,7 +283,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="142"
+            line="151"
             column="20"/>
     </issue>
 
@@ -250,7 +294,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="147"
+            line="156"
             column="20"/>
     </issue>
 
@@ -289,12 +333,23 @@
 
     <issue
         id="NewerVersionAvailable"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-play-services than 1.7.3 is available: 1.11.0"
+        errorLine1="    implementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="137"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
         message="A newer version of com.squareup.okhttp3:okhttp than 4.12.0 is available: 5.4.0"
         errorLine1="    implementation(&quot;com.squareup.okhttp3:okhttp:4.12.0&quot;)"
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="145"
+            line="154"
             column="20"/>
     </issue>
 
@@ -305,7 +360,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="146"
+            line="155"
             column="20"/>
     </issue>
 
@@ -316,8 +371,19 @@
         errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="211"
+            line="218"
             column="31"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
+        errorLine1="        val id = context.resources.getIdentifier(&quot;default_web_client_id&quot;, &quot;string&quot;, context.packageName)"
+        errorLine2="                                   ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/ui/auth/GoogleSignInHelper.kt"
+            line="29"
+            column="36"/>
     </issue>
 
     <issue
@@ -338,7 +404,18 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="164"
+            line="171"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;subsets&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;setting_subsets_fmt&quot;>%1$d subsets&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="194"
             column="5"/>
     </issue>
 
@@ -349,7 +426,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="181"
+            line="217"
             column="5"/>
     </issue>
 
@@ -360,7 +437,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="205"
+            line="241"
             column="5"/>
     </issue>
 
@@ -371,7 +448,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="206"
+            line="242"
             column="5"/>
     </issue>
 
@@ -382,7 +459,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="224"
+            line="264"
             column="5"/>
     </issue>
 
@@ -393,7 +470,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="230"
+            line="270"
             column="5"/>
     </issue>
 
@@ -404,7 +481,51 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="232"
+            line="272"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;analysis&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;cloud_resync_fmt&quot;>%1$d analysis backup(s) missing from the cloud — re-uploading.&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="287"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;files&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;restore_progress_fmt&quot;>Restoring… %1$d/%2$d files&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="294"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;files&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;restore_frames_fmt&quot;>%1$d files · %2$s&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="299"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;analyses&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;limit_quota_fmt&quot;>Using %1$d of %2$d analyses&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="321"
             column="5"/>
     </issue>
 
@@ -415,7 +536,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="252"
+            line="333"
             column="5"/>
     </issue>
 
@@ -448,7 +569,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/home/HomeActivity.kt"
-            line="238"
+            line="478"
             column="13"/>
     </issue>
 
@@ -470,7 +591,7 @@
         errorLine2="         ~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_result_viewer.xml"
-            line="276"
+            line="288"
             column="10"/>
     </issue>
 
@@ -481,7 +602,7 @@
         errorLine2="                 ~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_static_analysis.xml"
-            line="818"
+            line="819"
             column="18"/>
     </issue>
 
@@ -524,6 +645,17 @@
         errorLine1="    android:background=&quot;@color/surface_muted&quot;"
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
+            file="src/main/res/layout/activity_admin.xml"
+            line="6"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `@color/surface_muted` with a theme that also paints a background (inferred theme is `@style/Theme.IndicVisionDIC`)"
+        errorLine1="    android:background=&quot;@color/surface_muted&quot;"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
             file="src/main/res/layout/activity_auth.xml"
             line="7"
             column="5"/>
@@ -553,6 +685,17 @@
 
     <issue
         id="Overdraw"
+        message="Possible overdraw: Root element paints background `@color/surface_muted` with a theme that also paints a background (inferred theme is `@style/Theme.IndicVisionDIC`)"
+        errorLine1="    android:background=&quot;@color/surface_muted&quot;"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_restore.xml"
+            line="7"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
         message="Possible overdraw: Root element paints background `@color/viewer_canvas` with a theme that also paints a background (inferred theme is `@style/Theme.IndicVisionDIC`)"
         errorLine1="    android:background=&quot;@color/viewer_canvas&quot;>"
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
@@ -575,6 +718,17 @@
 
     <issue
         id="Overdraw"
+        message="Possible overdraw: Root element paints background `@color/surface_muted` with a theme that also paints a background (inferred theme is `@style/Theme.IndicVisionDIC`)"
+        errorLine1="    android:background=&quot;@color/surface_muted&quot;"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_session_limit.xml"
+            line="7"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
         message="Possible overdraw: Root element paints background `@color/surface_muted` with a theme that also paints a background (inferred theme is `@style/Theme_IndicVisionDIC_Splash`)"
         errorLine1="    android:background=&quot;@color/surface_muted&quot;"
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
@@ -582,61 +736,6 @@
             file="src/main/res/layout/activity_splash.xml"
             line="5"
             column="5"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.error_email_required` appears to be unused"
-        errorLine1="    &lt;string name=&quot;error_email_required&quot;>Enter your email address&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="246"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.error_email_invalid` appears to be unused"
-        errorLine1="    &lt;string name=&quot;error_email_invalid&quot;>That does not look like an email address&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="247"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.error_password_required` appears to be unused"
-        errorLine1="    &lt;string name=&quot;error_password_required&quot;>Enter your password&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="248"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.error_password_short` appears to be unused"
-        errorLine1="    &lt;string name=&quot;error_password_short&quot;>Password needs at least 6 characters&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="249"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.error_email_for_reset` appears to be unused"
-        errorLine1="    &lt;string name=&quot;error_email_for_reset&quot;>Enter your email first, then tap reset&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="250"
-            column="13"/>
     </issue>
 
     <issue
@@ -657,7 +756,7 @@
         errorLine2="                             ~~~~~~~~">
         <location
             file="src/main/res/layout/activity_static_analysis.xml"
-            line="605"
+            line="606"
             column="30"/>
     </issue>
 
@@ -668,7 +767,7 @@
         errorLine2="                            ~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="125"
+            line="132"
             column="29"/>
     </issue>
 
@@ -679,7 +778,7 @@
         errorLine2="                          ~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="140"
+            line="147"
             column="27"/>
     </issue>
 
@@ -712,7 +811,7 @@
         errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_result_viewer.xml"
-            line="297"
+            line="309"
             column="21"/>
     </issue>
 
@@ -723,7 +822,7 @@
         errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_result_viewer.xml"
-            line="324"
+            line="336"
             column="21"/>
     </issue>
 
@@ -734,7 +833,7 @@
         errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_result_viewer.xml"
-            line="351"
+            line="363"
             column="21"/>
     </issue>
 
@@ -756,7 +855,7 @@
         errorLine2="                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/AuthActivity.kt"
-            line="108"
+            line="189"
             column="49"/>
     </issue>
 
@@ -767,8 +866,30 @@
         errorLine2="                                                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/AuthActivity.kt"
-            line="108"
+            line="189"
             column="82"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            linkPrefs().edit().putString(K_PENDING_EMAIL, clean).apply()"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/data/AuthRepository.kt"
+            line="78"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        if (result.isSuccess) linkPrefs().edit().remove(K_PENDING_EMAIL).apply()"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/data/AuthRepository.kt"
+            line="95"
+            column="31"/>
     </issue>
 
     <issue
@@ -778,7 +899,7 @@
         errorLine2="        ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/DeviceKeyManager.kt"
-            line="58"
+            line="75"
             column="9"/>
     </issue>
 
@@ -789,7 +910,7 @@
         errorLine2="                                                           ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/DicSettings.kt"
-            line="26"
+            line="28"
             column="60"/>
     </issue>
 
@@ -800,7 +921,7 @@
         errorLine2="                                                              ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/DicSettings.kt"
-            line="31"
+            line="33"
             column="63"/>
     </issue>
 
@@ -811,7 +932,7 @@
         errorLine2="                                                     ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/DicSettings.kt"
-            line="37"
+            line="39"
             column="54"/>
     </issue>
 
@@ -822,7 +943,7 @@
         errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/DicUploadWorker.kt"
-            line="183"
+            line="585"
             column="23"/>
     </issue>
 
@@ -833,7 +954,7 @@
         errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/DicUploadWorker.kt"
-            line="184"
+            line="586"
             column="22"/>
     </issue>
 
@@ -905,6 +1026,28 @@
 
     <issue
         id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            data = Uri.parse(&quot;mailto:&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/ui/auth/PendingApprovalActivity.kt"
+            line="89"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            data = Uri.parse(&quot;mailto:&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/ui/auth/PendingApprovalActivity.kt"
+            line="89"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
         message="Use the KTX extension function `Bitmap.scale` instead?"
         errorLine1="        val scaled = Bitmap.createScaledBitmap(this, newWidth, newHeight, true)"
         errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
@@ -960,12 +1103,34 @@
 
     <issue
         id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            data = Uri.parse(&quot;mailto:&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/ui/SessionLimitActivity.kt"
+            line="81"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            data = Uri.parse(&quot;mailto:&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/ui/SessionLimitActivity.kt"
+            line="81"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
         message="Use the KTX function `createBitmap` instead?"
         errorLine1="        val out = Bitmap.createBitmap(s.imgW, s.imgH, Bitmap.Config.ARGB_8888)"
         errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ShareCenter.kt"
-            line="173"
+            line="176"
             column="19"/>
     </issue>
 
@@ -976,7 +1141,7 @@
         errorLine2="                                 ~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="198"
+            line="205"
             column="34"/>
     </issue>
 
@@ -987,7 +1152,7 @@
         errorLine2="                        ~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="202"
+            line="209"
             column="25"/>
     </issue>
 
@@ -998,7 +1163,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="342"
+            line="381"
             column="38"/>
     </issue>
 
@@ -1009,7 +1174,7 @@
         errorLine2="                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="416"
+            line="467"
             column="50"/>
     </issue>
 
@@ -1020,7 +1185,7 @@
         errorLine2="                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="952"
+            line="1024"
             column="28"/>
     </issue>
 
@@ -1031,7 +1196,7 @@
         errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="1195"
+            line="1272"
             column="30"/>
     </issue>
 
@@ -1097,7 +1262,7 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/net/TokenStore.kt"
-            line="35"
+            line="37"
             column="9"/>
     </issue>
 
@@ -1108,7 +1273,18 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/net/TokenStore.kt"
-            line="55"
+            line="48"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs(context).edit().putString(K_ROLE, role).apply()"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/data/net/TokenStore.kt"
+            line="52"
             column="9"/>
     </issue>
 
@@ -1119,7 +1295,40 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/net/TokenStore.kt"
-            line="60"
+            line="59"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs(context).edit()"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/data/net/TokenStore.kt"
+            line="84"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs(context).edit().putBoolean(K_LIMIT_REACHED, v).apply()"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/data/net/TokenStore.kt"
+            line="98"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        onboardingPrefs(context).edit().putBoolean(K_BETA_ACKED_PREFIX + uid, true).apply()"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/rafad/indicvisiondic/data/net/TokenStore.kt"
+            line="119"
             column="9"/>
     </issue>
 
@@ -1130,7 +1339,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/data/net/TokenStore.kt"
-            line="66"
+            line="123"
             column="35"/>
     </issue>
 
@@ -1159,11 +1368,66 @@
     <issue
         id="UseTomlInstead"
         message="Use version catalog instead"
+        errorLine1="    implementation(platform(&quot;com.google.firebase:firebase-bom:34.16.0&quot;))"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="132"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;com.google.firebase:firebase-analytics&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="133"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;com.google.firebase:firebase-auth&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="135"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="137"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
         errorLine1="    implementation(&quot;androidx.transition:transition:1.5.1&quot;)"
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="132"
+            line="139"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;androidx.swiperefreshlayout:swiperefreshlayout:1.1.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="141"
             column="20"/>
     </issue>
 
@@ -1174,7 +1438,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="137"
+            line="146"
             column="20"/>
     </issue>
 
@@ -1185,7 +1449,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="140"
+            line="149"
             column="20"/>
     </issue>
 
@@ -1196,7 +1460,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="141"
+            line="150"
             column="20"/>
     </issue>
 
@@ -1207,7 +1471,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="142"
+            line="151"
             column="20"/>
     </issue>
 
@@ -1218,7 +1482,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="145"
+            line="154"
             column="20"/>
     </issue>
 
@@ -1229,7 +1493,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="146"
+            line="155"
             column="20"/>
     </issue>
 
@@ -1240,7 +1504,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="147"
+            line="156"
             column="20"/>
     </issue>
 
@@ -1251,7 +1515,7 @@
         errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="148"
+            line="157"
             column="20"/>
     </issue>
 
@@ -1284,7 +1548,7 @@
         errorLine2="         ~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_result_viewer.xml"
-            line="246"
+            line="258"
             column="10"/>
     </issue>
 
@@ -1295,7 +1559,7 @@
         errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/home/HomeActivity.kt"
-            line="194"
+            line="414"
             column="31"/>
     </issue>
 
@@ -1306,7 +1570,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/home/HomeActivity.kt"
-            line="196"
+            line="416"
             column="35"/>
     </issue>
 
@@ -1317,7 +1581,7 @@
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/PendingApprovalActivity.kt"
-            line="71"
+            line="107"
             column="27"/>
     </issue>
 
@@ -1328,7 +1592,7 @@
         errorLine2="                           ~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/PendingApprovalActivity.kt"
-            line="71"
+            line="107"
             column="28"/>
     </issue>
 
@@ -1339,7 +1603,7 @@
         errorLine2="                                     ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/auth/PendingApprovalActivity.kt"
-            line="149"
+            line="185"
             column="38"/>
     </issue>
 
@@ -1350,7 +1614,7 @@
         errorLine2="                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="369"
+            line="378"
             column="43"/>
     </issue>
 
@@ -1361,7 +1625,7 @@
         errorLine2="                                                           ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="369"
+            line="378"
             column="60"/>
     </issue>
 
@@ -1372,7 +1636,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="450"
+            line="459"
             column="40"/>
     </issue>
 
@@ -1383,7 +1647,7 @@
         errorLine2="                                        ~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="450"
+            line="459"
             column="41"/>
     </issue>
 
@@ -1394,7 +1658,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="457"
+            line="466"
             column="41"/>
     </issue>
 
@@ -1405,7 +1669,7 @@
         errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="480"
+            line="489"
             column="33"/>
     </issue>
 
@@ -1416,7 +1680,7 @@
         errorLine2="                                 ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="480"
+            line="489"
             column="34"/>
     </issue>
 
@@ -1427,7 +1691,7 @@
         errorLine2="                                                                                                     ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="480"
+            line="489"
             column="102"/>
     </issue>
 
@@ -1438,7 +1702,7 @@
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="535"
+            line="544"
             column="27"/>
     </issue>
 
@@ -1449,7 +1713,7 @@
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="536"
+            line="545"
             column="27"/>
     </issue>
 
@@ -1460,7 +1724,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="597"
+            line="606"
             column="35"/>
     </issue>
 
@@ -1471,7 +1735,7 @@
         errorLine2="                                   ~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="597"
+            line="606"
             column="36"/>
     </issue>
 
@@ -1482,7 +1746,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="598"
+            line="607"
             column="35"/>
     </issue>
 
@@ -1493,7 +1757,7 @@
         errorLine2="                                   ~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="598"
+            line="607"
             column="36"/>
     </issue>
 
@@ -1504,7 +1768,7 @@
         errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="676"
+            line="784"
             column="55"/>
     </issue>
 
@@ -1515,7 +1779,7 @@
         errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="677"
+            line="785"
             column="55"/>
     </issue>
 
@@ -1526,7 +1790,7 @@
         errorLine2="                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/viewer/ResultViewerActivity.kt"
-            line="678"
+            line="786"
             column="56"/>
     </issue>
 
@@ -1537,7 +1801,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="91"
+            line="97"
             column="35"/>
     </issue>
 
@@ -1548,7 +1812,7 @@
         errorLine2="                                   ~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="91"
+            line="97"
             column="36"/>
     </issue>
 
@@ -1559,7 +1823,7 @@
         errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="258"
+            line="274"
             column="47"/>
     </issue>
 
@@ -1570,7 +1834,7 @@
         errorLine2="                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="261"
+            line="277"
             column="46"/>
     </issue>
 
@@ -1581,7 +1845,7 @@
         errorLine2="                                              ~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="261"
+            line="277"
             column="47"/>
     </issue>
 
@@ -1592,7 +1856,7 @@
         errorLine2="                                                                                              ~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="261"
+            line="277"
             column="95"/>
     </issue>
 
@@ -1603,7 +1867,7 @@
         errorLine2="                                      ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="267"
+            line="283"
             column="39"/>
     </issue>
 
@@ -1614,7 +1878,7 @@
         errorLine2="                                      ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="303"
+            line="342"
             column="39"/>
     </issue>
 
@@ -1625,7 +1889,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="395"
+            line="446"
             column="38"/>
     </issue>
 
@@ -1636,7 +1900,7 @@
         errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="538"
+            line="592"
             column="22"/>
     </issue>
 
@@ -1647,7 +1911,7 @@
         errorLine2="                                                ~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="538"
+            line="592"
             column="49"/>
     </issue>
 
@@ -1658,7 +1922,7 @@
         errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="545"
+            line="599"
             column="26"/>
     </issue>
 
@@ -1669,7 +1933,7 @@
         errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="558"
+            line="612"
             column="31"/>
     </issue>
 
@@ -1680,7 +1944,7 @@
         errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="558"
+            line="612"
             column="36"/>
     </issue>
 
@@ -1691,7 +1955,7 @@
         errorLine2="                                                                                       ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="558"
+            line="612"
             column="88"/>
     </issue>
 
@@ -1702,7 +1966,7 @@
         errorLine2="                         ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="563"
+            line="617"
             column="26"/>
     </issue>
 
@@ -1713,7 +1977,7 @@
         errorLine2="                                      ~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="563"
+            line="617"
             column="39"/>
     </issue>
 
@@ -1724,7 +1988,7 @@
         errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="569"
+            line="623"
             column="30"/>
     </issue>
 
@@ -1735,7 +1999,7 @@
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="736"
+            line="804"
             column="25"/>
     </issue>
 
@@ -1746,7 +2010,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="805"
+            line="877"
             column="41"/>
     </issue>
 
@@ -1757,7 +2021,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="806"
+            line="878"
             column="41"/>
     </issue>
 
@@ -1768,7 +2032,7 @@
         errorLine2="                                         ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="806"
+            line="878"
             column="42"/>
     </issue>
 
@@ -1779,7 +2043,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="814"
+            line="886"
             column="41"/>
     </issue>
 
@@ -1790,7 +2054,7 @@
         errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="815"
+            line="887"
             column="42"/>
     </issue>
 
@@ -1801,7 +2065,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="817"
+            line="889"
             column="41"/>
     </issue>
 
@@ -1812,7 +2076,7 @@
         errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="818"
+            line="890"
             column="41"/>
     </issue>
 
@@ -1823,7 +2087,7 @@
         errorLine2="                                         ~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="818"
+            line="890"
             column="42"/>
     </issue>
 
@@ -1834,7 +2098,7 @@
         errorLine2="                                                                          ~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="818"
+            line="890"
             column="75"/>
     </issue>
 
@@ -1845,7 +2109,7 @@
         errorLine2="                                    ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="833"
+            line="905"
             column="37"/>
     </issue>
 
@@ -1856,7 +2120,7 @@
         errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="834"
+            line="906"
             column="37"/>
     </issue>
 
@@ -1867,7 +2131,7 @@
         errorLine2="                                     ~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="834"
+            line="906"
             column="38"/>
     </issue>
 
@@ -1878,7 +2142,7 @@
         errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="905"
+            line="977"
             column="34"/>
     </issue>
 
@@ -1889,7 +2153,7 @@
         errorLine2="                                                               ~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="905"
+            line="977"
             column="64"/>
     </issue>
 
@@ -1900,7 +2164,7 @@
         errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="906"
+            line="978"
             column="32"/>
     </issue>
 
@@ -1911,7 +2175,7 @@
         errorLine2="                                                           ~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="906"
+            line="978"
             column="60"/>
     </issue>
 
@@ -1922,7 +2186,7 @@
         errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="907"
+            line="979"
             column="34"/>
     </issue>
 
@@ -1933,7 +2197,7 @@
         errorLine2="                                                                 ~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="907"
+            line="979"
             column="66"/>
     </issue>
 
@@ -1944,7 +2208,7 @@
         errorLine2="                                     ^">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="923"
+            line="995"
             column="38"/>
     </issue>
 
@@ -1955,7 +2219,7 @@
         errorLine2="                               ~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="1012"
+            line="1084"
             column="32"/>
     </issue>
 
@@ -1966,7 +2230,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="1028"
+            line="1100"
             column="35"/>
     </issue>
 
@@ -1977,7 +2241,7 @@
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="1154"
+            line="1231"
             column="25"/>
     </issue>
 
@@ -1988,7 +2252,7 @@
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/rafad/indicvisiondic/ui/analysis/StaticAnalysisActivity.kt"
-            line="1155"
+            line="1232"
             column="25"/>
     </issue>
 

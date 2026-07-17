@@ -147,7 +147,7 @@ class AuthRepository(context: Context) {
         }
 
     private suspend fun resolveStatus(): Result<String> {
-        val token = TokenProvider.usableIdToken(appContext) ?: return offlineOrExpired()
+        val token = TokenProvider.usableIdToken() ?: return offlineOrExpired()
         return try {
             val me = api.me(token) // 200 = APPROVED
             TokenStore.setStatus(appContext, "APPROVED")

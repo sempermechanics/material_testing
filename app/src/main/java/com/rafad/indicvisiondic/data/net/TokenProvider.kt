@@ -1,6 +1,5 @@
 package com.rafad.indicvisiondic.data.net
 
-import android.content.Context
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
@@ -15,7 +14,7 @@ import timber.log.Timber
  */
 object TokenProvider {
 
-    suspend fun usableIdToken(context: Context): String? {
+    suspend fun usableIdToken(): String? {
         val user = FirebaseAuth.getInstance().currentUser ?: return null
         return try {
             // getIdToken(false) returns the cached token, refreshing it if within
