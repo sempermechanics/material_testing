@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     kotlin("plugin.serialization") version "1.9.22"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
+    id("com.google.gms.google-services")
 }
 
 // 🚀 PURE KOTLIN BYPASS: Reads the file without needing 'java.util'
@@ -128,6 +129,12 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.activity)
+    implementation(platform("com.google.firebase:firebase-bom:34.16.0"))
+    implementation("com.google.firebase:firebase-analytics")
+    // Firebase Authentication (email/password, email-link, Google) — the identity layer.
+    implementation("com.google.firebase:firebase-auth")
+    // Await() on Firebase Task<T> from coroutines.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     // AndroidX transitions power the shared-element / expand-collapse motion in ui/Motion.kt
     implementation("androidx.transition:transition:1.5.1")
     // Pull-to-refresh on the Home list (re-checks cloud backup state on demand)

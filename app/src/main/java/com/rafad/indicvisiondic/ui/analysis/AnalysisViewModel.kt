@@ -9,6 +9,7 @@ import com.rafad.indicvisiondic.data.CloudSync
 import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
+import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.report.EngineStats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -30,6 +31,9 @@ class AnalysisViewModel : ViewModel() {
     companion object {
         /** Outcome code for a user-cancelled run (not an engine failure). */
         const val ERROR_CANCELLED = -99
+
+        /** Outcome code when a new session would exceed the account quota. */
+        const val ERROR_SESSION_LIMIT = -98
 
         /** Session-dir subfolder holding the persisted raw deformed originals. */
         const val RAW_DEFORMED_SUBDIR = "raw_deformed"
@@ -99,6 +103,10 @@ class AnalysisViewModel : ViewModel() {
      */
     var workingLocalId: String? = null
 
+    /** True when the next completed run would create a new Home-list row. */
+    fun wouldCreateNewSession(appContext: Context): Boolean =
+        workingLocalId == null || DicSettings.keepEveryRerun(appContext)
+
     private fun resolveLocalSessionId(appContext: Context): String {
         val current = workingLocalId
         return if (current == null || DicSettings.keepEveryRerun(appContext)) {
@@ -154,6 +162,23 @@ class AnalysisViewModel : ViewModel() {
         params: BatchAnalysisParams,
         onProgress: (BatchProgressUpdate) -> Unit,
     ): BatchAnalysisOutcome = withContext(nativeExecutor.asCoroutineDispatcher()) {
+        // Hard stop before any native work: new sessions cannot exceed the quota.
+        // Re-runs of an existing workingLocalId are still allowed.
+        if (wouldCreateNewSession(appContext)) {
+            val localCount = SessionStore.list(appContext).size
+            TokenStore.refreshSessionLimit(appContext, localCount)
+            if (TokenStore.isSessionLimitReached(appContext)) {
+                Timber.w("Hard stop: analysis blocked at session limit")
+                return@withContext BatchAnalysisOutcome(
+                    engineErrorCode = ERROR_SESSION_LIMIT,
+                    firstFrameValidPoints = 0,
+                    totalFrames = defFilePaths.size,
+                    executionTimeMs = 0,
+                    batchDirPath = "",
+                )
+            }
+        }
+
         // Results live in app-private persistent storage (NOT cacheDir, which
         // the OS may evict): one directory per Home-list session.
         val localSessionId = resolveLocalSessionId(appContext)
@@ -318,7 +343,7 @@ class AnalysisViewModel : ViewModel() {
             lastRefPath = refPngPath
 
             val cloudEnabled = DicSettings.saveToCloud(appContext)
-            SessionStore.upsert(
+            val saved = SessionStore.upsert(
                 appContext,
                 buildSessionRecord(
                     appContext, localSessionId, batchDir, refPngPath, params, cloudEnabled,
@@ -326,8 +351,10 @@ class AnalysisViewModel : ViewModel() {
                     persistedRawNames,
                 ),
             )
-
-            if (cloudEnabled) {
+            if (!saved) {
+                // Race: limit filled between the pre-check and persist.
+                engineErrorCode = ERROR_SESSION_LIMIT
+            } else if (cloudEnabled) {
                 // Everything the worker needs now lives in the SessionRecord.
                 CloudSync.enqueueUpload(appContext, localSessionId)
             } else {

@@ -45,6 +45,10 @@
                 android:resource="@xml/share_paths" />
         </provider>
         <activity android:name=".ui.auth.PendingApprovalActivity" android:exported="false" />
+        <activity
+            android:name=".ui.SessionLimitActivity"
+            android:exported="false"
+            android:launchMode="singleTop" />
         <activity android:name=".ui.viewer.ResultViewerActivity" />
 
         <activity

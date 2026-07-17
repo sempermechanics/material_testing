@@ -177,7 +177,8 @@
                 android:id="@+id/btnMainAction"
                 style="@style/Widget.IndicVision.Button.Cta"
                 android:layout_width="match_parent"
-                android:layout_height="55dp"
+                android:layout_height="wrap_content"
+                android:minHeight="55dp"
                 android:text="@string/secure_login" />
 
             <ProgressBar

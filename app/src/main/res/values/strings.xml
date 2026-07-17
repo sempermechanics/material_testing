@@ -109,6 +109,13 @@
 
     <!-- Extracted from layouts (Day 1 strings sweep) -->
     <string name="secure_access_portal">Secure Access Portal</string>
+    <string name="auth_sign_in">Sign in</string>
+    <string name="auth_create_account">Create account</string>
+    <string name="auth_toggle_to_register">Need an account? Create one</string>
+    <string name="auth_toggle_to_login">Have an account? Sign in</string>
+    <string name="auth_email_link">Email me a sign-in link (no password)</string>
+    <string name="auth_link_sent">Sign-in link sent to %1$s. Open it on this device to finish.</string>
+    <string name="auth_google_unconfigured">Google sign-in isn\'t set up yet. Use email instead.</string>
     <string name="email_address">Email Address</string>
     <string name="password_min_6_characters">Password (min 6 characters)</string>
     <string name="confirm_password">Confirm Password</string>
@@ -237,6 +244,10 @@
     <string name="roi_custom_fmt">%1$d × %2$d px at (%3$d, %4$d)</string>
     <string name="picker_select_reference">Select the reference — a photo, or a video of the deformation</string>
     <string name="picker_select_deformed">Select the deformed frames</string>
+    <string name="source_photos">Photos</string>
+    <string name="source_photos_sub">Gallery and Google Photos</string>
+    <string name="source_files">Files</string>
+    <string name="source_files_sub">Downloads, Drive, on-device storage</string>
     <string name="results_title">Results</string>
     <string name="action_share">Share</string>
     <string name="viewer_back_desc">Back to settings</string>
@@ -298,6 +309,22 @@
     <string name="admin_action_error">Action failed: %1$s</string>
     <string name="support_email">support@indicvision.com</string>
     <string name="request_access_subject">inDIC access request</string>
+
+    <!-- First-login beta / data-use declaration (shown once per account on Home) -->
+    <string name="beta_notice_title">Beta notice</string>
+    <string name="beta_notice_body">To help improve the app and its services, analysis data generated while using the app will be collected and used to enhance performance, reliability, and future features. The user has the right to access, update, or delete their data at any time.</string>
+    <string name="beta_notice_ack">I understand</string>
+
+    <!-- Session/analysis quota limit screen -->
+    <string name="limit_title">Analysis limit reached</string>
+    <string name="limit_body">You\'ve reached the maximum number of saved analyses on your account. New cloud analyses are blocked until the limit is raised.\n\nPlease email %1$s to request a higher limit. You can also delete an existing analysis, then tap Re-check limit.</string>
+    <string name="limit_quota_fmt">Using %1$d of %2$d analyses</string>
+    <string name="limit_email_support">Email support@indicvision.com</string>
+    <string name="limit_recheck">Re-check limit</string>
+    <string name="limit_back">Back to my analyses</string>
+    <string name="limit_subject">inDIC — request higher analysis limit</string>
+    <string name="limit_still_full">Still at the limit. Delete an analysis or email support@indicvision.com.</string>
+    <string name="limit_cleared">You\'re under the limit again.</string>
     <string name="request_access_none">No email app found. Please email %1$s to request access.</string>
     <string name="dot_separator">" · "</string>
     <string name="error_email_required">Enter your email address</string>

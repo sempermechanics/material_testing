@@ -11,7 +11,7 @@ from fastapi import Header, HTTPException, Request
 
 from . import audit, firestore_repo as repo
 from .config import settings
-from .google_auth import verify_google_id_token
+from .google_auth import verify_id_token
 
 log = logging.getLogger("indic.auth")
 
@@ -43,7 +43,7 @@ async def current_user(
                     bool(authorization), bool(x_forwarded_authorization))
         raise HTTPException(401, "missing_bearer")
     try:
-        claims = verify_google_id_token(bearer[7:])
+        claims = verify_id_token(bearer[7:])
     except Exception as e:  # noqa: BLE001
         log.warning("id_token verify FAILED (x_forwarded_present=%s): %s",
                     bool(x_forwarded_authorization), e)

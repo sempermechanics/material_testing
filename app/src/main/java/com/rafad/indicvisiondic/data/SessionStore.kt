@@ -1,6 +1,7 @@
 package com.rafad.indicvisiondic.data
 
 import android.content.Context
+import com.rafad.indicvisiondic.data.net.TokenStore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -106,9 +107,33 @@ object SessionStore {
 
     fun get(context: Context, id: String): SessionRecord? = list(context).firstOrNull { it.id == id }
 
-    fun upsert(context: Context, record: SessionRecord) = synchronized(lock) {
-        val rest = list(context).filterNot { it.id == record.id }
-        write(context, rest + record)
+    /**
+     * Insert or update a session row. New sessions are hard-stopped when the
+     * account is at its analysis quota — re-runs of an existing id still upsert.
+     * @param allowOverLimit true for cloud restore (session already counts against quota).
+     * @return false if a new session was refused because the limit is reached.
+     */
+    fun upsert(
+        context: Context,
+        record: SessionRecord,
+        allowOverLimit: Boolean = false,
+    ): Boolean = synchronized(lock) {
+        val existing = list(context)
+        val isNew = existing.none { it.id == record.id }
+        if (isNew && !allowOverLimit) {
+            val max = TokenStore.effectiveQuotaMax(context)
+            val used = maxOf(TokenStore.quotaUsed(context), existing.size)
+            if (used >= max) {
+                TokenStore.setSessionLimitReached(context, true)
+                TokenStore.setQuota(context, used, max, existing.size)
+                Timber.w("Hard stop: refusing new session (at %d/%d)", used, max)
+                return false
+            }
+        }
+        val next = existing.filterNot { it.id == record.id } + record
+        write(context, next)
+        TokenStore.refreshSessionLimit(context, next.size)
+        true
     }
 
     fun rename(context: Context, id: String, newName: String) = synchronized(lock) {
@@ -151,6 +176,7 @@ object SessionStore {
     fun delete(context: Context, id: String) = synchronized(lock) {
         write(context, list(context).filterNot { it.id == id })
         dirFor(context, id).deleteRecursively()
+        TokenStore.refreshSessionLimit(context, list(context).size)
     }
 
     /**
@@ -160,6 +186,7 @@ object SessionStore {
     fun deleteAll(context: Context) = synchronized(lock) {
         root(context).deleteRecursively()
         root(context).mkdirs()
+        TokenStore.refreshSessionLimit(context, 0)
     }
 
     private fun write(context: Context, records: List<SessionRecord>) {

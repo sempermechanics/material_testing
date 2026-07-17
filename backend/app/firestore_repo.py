@@ -26,34 +26,55 @@ def _now():
 
 # ---------------- users ----------------
 def _is_admin_email(claims: dict) -> bool:
-    return claims.get("email", "").lower() in settings.ADMIN_EMAILS
+    # Never grant admin off an unverified email — an email/password user could
+    # otherwise claim an admin address without proving they own it.
+    return bool(claims.get("email_verified")) and \
+        claims.get("email", "").lower() in settings.ADMIN_EMAILS
 
 
 def _auto_approved(claims: dict) -> bool:
-    """Admins, blanket AUTO_APPROVE, or the verified email is in AUTO_APPROVE_HD."""
-    if settings.AUTO_APPROVE or _is_admin_email(claims):
+    """Admins, blanket AUTO_APPROVE, or a *verified* email in AUTO_APPROVE_HD.
+
+    Auto-approval always requires a verified email. Email-link and Google/
+    Microsoft sign-ins are verified by construction; a new email/password user
+    is not verified until they confirm, so they land PENDING until then.
+    """
+    if _is_admin_email(claims):
+        return True
+    if not claims.get("email_verified"):
+        return False
+    if settings.AUTO_APPROVE:
         return True
     hd = settings.AUTO_APPROVE_HD
     if not hd:
         return False
-    email = claims.get("email", "")
-    return claims.get("hd") == hd or email.endswith("@" + hd)
+    return claims.get("email", "").lower().endswith("@" + hd)
 
 
 def get_or_create_user(claims: dict) -> dict:
     uid = claims["sub"]
     ref = db().collection("users").document(uid)
     snap = ref.get()
+    verified = bool(claims.get("email_verified"))
+    provider = (claims.get("firebase") or {}).get("sign_in_provider")
     if snap.exists:
+        cur = snap.to_dict()
+        patch = {"lastSeenAt": firestore.SERVER_TIMESTAMP, "emailVerified": verified}
+        if provider:
+            patch["signInProvider"] = provider
         # Keep admin role in sync with ADMIN_EMAILS for pre-existing users.
-        patch = {"lastSeenAt": firestore.SERVER_TIMESTAMP}
-        if _is_admin_email(claims) and snap.to_dict().get("role") != "admin":
+        if _is_admin_email(claims) and cur.get("role") != "admin":
             patch["role"] = "admin"
+        # A previously-PENDING user who has since verified a domain email (or been
+        # made admin) is auto-approved on this sign-in.
+        if cur.get("access_status") == "PENDING" and _auto_approved(claims):
+            patch["access_status"] = "APPROVED"
         ref.update(patch)
-        return {**snap.to_dict(), **patch, "uid": uid}
+        return {**cur, **patch, "uid": uid}
     data = {
         "email": claims.get("email"),
-        "hd": claims.get("hd"),
+        "emailVerified": verified,
+        "signInProvider": provider,
         "displayName": claims.get("name"),
         "role": "admin" if _is_admin_email(claims) else "user",
         "access_status": "APPROVED" if _auto_approved(claims) else "PENDING",

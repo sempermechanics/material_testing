@@ -1,51 +1,43 @@
 package com.rafad.indicvisiondic.data.net
 
 import android.content.Context
-import android.util.Base64
-import org.json.JSONObject
-import timber.log.Timber
+import com.google.firebase.auth.FirebaseAuth
 
 /**
- * Lightweight session cache for the GCP backend: the current Google ID token
- * (short-lived, ~1 h) plus identity/status parsed from it.
+ * Local session cache alongside Firebase Auth: the signed-in identity plus the
+ * backend-confirmed role/status/quota.
  *
- * No refresh tokens are stored (a stated security requirement) — when the ID
- * token expires the app re-obtains one from Google Identity, silently when
- * possible. The token is a short-lived bearer credential; it lives in app-
- * private SharedPreferences.
+ * Firebase owns the actual credential (the ID token, auto-refreshed) — we no
+ * longer store any token here. This holds only the cached identity and the
+ * app-layer state the backend tells us (approval status, admin role, quota).
  */
 object TokenStore {
 
     private const val PREFS = "indic_session"
-    private const val K_ID_TOKEN = "id_token"
+    /** Survives sign-out so a per-account beta ack is not re-prompted on every login. */
+    private const val ONBOARDING_PREFS = "indic_onboarding"
     private const val K_UID = "uid"
     private const val K_EMAIL = "email"
     private const val K_STATUS = "last_status" // last server-confirmed access_status
     private const val K_ROLE = "role"          // "admin" | "user"
     private const val K_DEVICE_REGISTERED = "device_registered"
-
-    // Refresh a little before the hard expiry so a request in flight doesn't 401.
-    private const val EXPIRY_SKEW_SEC = 120L
+    private const val K_QUOTA_USED = "quota_used"
+    private const val K_QUOTA_MAX = "quota_max"
+    private const val K_LIMIT_REACHED = "session_limit_reached"
+    private const val K_BETA_ACKED_PREFIX = "beta_notice_acked_"
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    /** Persist a freshly obtained Google ID token and the identity it carries. */
-    fun saveToken(context: Context, idToken: String) {
-        val claims = decodeJwtClaims(idToken)
-        prefs(context).edit()
-            .putString(K_ID_TOKEN, idToken)
-            .putString(K_UID, claims?.optString("sub"))
-            .putString(K_EMAIL, claims?.optString("email"))
-            .apply()
-    }
+    private fun onboardingPrefs(context: Context) =
+        context.applicationContext.getSharedPreferences(ONBOARDING_PREFS, Context.MODE_PRIVATE)
 
-    /** The stored ID token if still valid (with skew), else null. */
-    fun validIdToken(context: Context): String? {
-        val token = prefs(context).getString(K_ID_TOKEN, null) ?: return null
-        val exp = decodeJwtClaims(token)?.optLong("exp", 0L) ?: 0L
-        val now = System.currentTimeMillis() / 1000L
-        return if (exp - EXPIRY_SKEW_SEC > now) token else null
+    /** Cache the signed-in identity (from the Firebase user) for offline UI. */
+    fun saveIdentity(context: Context, uid: String?, email: String?) {
+        prefs(context).edit()
+            .putString(K_UID, uid)
+            .putString(K_EMAIL, email)
+            .apply()
     }
 
     fun cachedUid(context: Context): String? = prefs(context).getString(K_UID, null)
@@ -66,19 +58,67 @@ object TokenStore {
     fun setDeviceRegistered(context: Context, v: Boolean) =
         prefs(context).edit().putBoolean(K_DEVICE_REGISTERED, v).apply()
 
-    fun hasSession(context: Context): Boolean =
-        prefs(context).getString(K_ID_TOKEN, null) != null
+    // ── Cloud analysis quota (max sessions per account) ──────────────────
+    /**
+     * Client hard-stop default when the backend hasn't reported a max yet.
+     * Keep in sync with backend `MAX_SESSIONS_PER_USER` default.
+     */
+    const val DEFAULT_MAX_SESSIONS = 4
 
-    /** Wipe the local session (sign-out). Keystore device key is left intact. */
-    fun clear(context: Context) = prefs(context).edit().clear().apply()
+    fun quotaUsed(context: Context): Int = prefs(context).getInt(K_QUOTA_USED, 0)
+    fun quotaMax(context: Context): Int = prefs(context).getInt(K_QUOTA_MAX, 0)
 
-    /** Decode the (unverified) payload of a JWT. Verification happens server-side. */
-    private fun decodeJwtClaims(jwt: String): JSONObject? = try {
-        val payload = jwt.split(".").getOrNull(1) ?: return null
-        val json = String(Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING))
-        JSONObject(json)
-    } catch (e: Exception) {
-        Timber.w(e, "Could not decode ID token claims")
-        null
+    /** Backend max if known, otherwise [DEFAULT_MAX_SESSIONS]. */
+    fun effectiveQuotaMax(context: Context): Int {
+        val max = quotaMax(context)
+        return if (max > 0) max else DEFAULT_MAX_SESSIONS
     }
+
+    /**
+     * Update stored quota and the hard-stop flag. [localCount] is folded in so
+     * the client blocks new analyses even before the next cloud reconcile.
+     */
+    fun setQuota(context: Context, used: Int, max: Int, localCount: Int = 0) {
+        val effectiveMax = if (max > 0) max else DEFAULT_MAX_SESSIONS
+        val effectiveUsed = maxOf(used, localCount)
+        prefs(context).edit()
+            .putInt(K_QUOTA_USED, effectiveUsed)
+            .putInt(K_QUOTA_MAX, effectiveMax)
+            .putBoolean(K_LIMIT_REACHED, effectiveUsed >= effectiveMax)
+            .apply()
+    }
+
+    /** Recompute the hard-stop flag from local session count (+ cached cloud used). */
+    fun refreshSessionLimit(context: Context, localCount: Int) {
+        setQuota(context, quotaUsed(context), effectiveQuotaMax(context), localCount)
+    }
+
+    /** Force the limit flag (e.g. an upload rejected 409 without fresh numbers). */
+    fun setSessionLimitReached(context: Context, v: Boolean) =
+        prefs(context).edit().putBoolean(K_LIMIT_REACHED, v).apply()
+
+    /** True when the account may not create another analysis (hard stop). */
+    fun isSessionLimitReached(context: Context): Boolean =
+        prefs(context).getBoolean(K_LIMIT_REACHED, false)
+
+    /** A signed-in Firebase user exists (session restored across launches by the SDK). */
+    fun hasSession(context: Context): Boolean =
+        FirebaseAuth.getInstance().currentUser != null
+
+    /**
+     * Whether the current account has acknowledged the beta / data-use notice.
+     * Stored outside the session prefs so it survives [clear].
+     */
+    fun hasAckedBetaNotice(context: Context): Boolean {
+        val uid = cachedUid(context) ?: return false
+        return onboardingPrefs(context).getBoolean(K_BETA_ACKED_PREFIX + uid, false)
+    }
+
+    fun setBetaNoticeAcked(context: Context) {
+        val uid = cachedUid(context) ?: return
+        onboardingPrefs(context).edit().putBoolean(K_BETA_ACKED_PREFIX + uid, true).apply()
+    }
+
+    /** Wipe the local session cache (sign-out). Keystore device key is left intact. */
+    fun clear(context: Context) = prefs(context).edit().clear().apply()
 }

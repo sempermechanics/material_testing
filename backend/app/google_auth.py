@@ -1,20 +1,31 @@
-"""Keyless Google auth: verify inbound ID tokens, mint Drive-scoped tokens.
+"""Keyless auth: verify inbound Firebase ID tokens, mint Drive-scoped tokens.
 
-No service-account JSON keys are used anywhere. On Cloud Run, credentials come
-from the metadata server (ADC); the Drive scope is layered on by having the
-runtime SA impersonate *itself* via the IAM Credentials API.
+Identity is federated through **Firebase Authentication** (email-link, Google,
+email/password). The client signs in with Firebase and sends a Firebase ID
+token; we verify it here. No service-account JSON keys anywhere — on Cloud Run,
+credentials come from the metadata server (ADC); the Drive scope is layered on
+by having the runtime SA impersonate *itself* via the IAM Credentials API.
 """
 import functools
 
+import firebase_admin
 import google.auth
+from firebase_admin import auth as fb_auth
 from google.auth import impersonated_credentials
 from google.auth.transport.requests import Request as GRequest
-from google.oauth2 import id_token as google_id_token
 
 from .config import settings
 
 _request = GRequest()
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
+
+# Initialize the Firebase Admin SDK once, using ADC (the Cloud Run SA). The
+# project id is needed so verify_id_token can check the token's audience/issuer.
+try:
+    firebase_admin.get_app()
+except ValueError:
+    _fb_project = settings.FIREBASE_PROJECT_ID
+    firebase_admin.initialize_app(options={"projectId": _fb_project} if _fb_project else None)
 
 
 @functools.lru_cache(maxsize=1)
@@ -46,16 +57,15 @@ def drive_access_token() -> str:
     return _drive_creds.token
 
 
-def verify_google_id_token(token: str) -> dict:
-    """Verify signature/exp/aud, then enforce corporate claims. Raises on failure."""
-    # Checks signature against Google certs, exp, and aud == WEB_CLIENT_ID.
-    claims = google_id_token.verify_oauth2_token(token, _request, settings.WEB_CLIENT_ID)
-    if claims.get("iss") not in ("accounts.google.com", "https://accounts.google.com"):
-        raise PermissionError("bad_issuer")
-    if not claims.get("email_verified"):
-        raise PermissionError("email_unverified")
-    if settings.ALLOWED_HD:
-        email = claims.get("email", "")
-        if claims.get("hd") != settings.ALLOWED_HD or not email.endswith("@" + settings.ALLOWED_HD):
-            raise PermissionError("wrong_domain")
-    return claims
+def verify_id_token(token: str) -> dict:
+    """Verify a **Firebase** ID token; raises on failure.
+
+    firebase-admin checks the signature (against Google's rotating public certs),
+    expiry, audience (== project id) and issuer. The returned claims include
+    ``uid``/``sub`` (the stable Firebase user id, same across all providers for
+    one account), ``email``, ``email_verified``, ``name`` and
+    ``firebase.sign_in_provider``. Domain gating and the email-verified rule are
+    applied later, in get_or_create_user, so unverified users can still sign in
+    and land PENDING.
+    """
+    return fb_auth.verify_id_token(token)

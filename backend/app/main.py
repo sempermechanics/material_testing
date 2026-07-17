@@ -18,7 +18,8 @@ app = FastAPI(title="inDIC API", version="1.0")
 
 @app.on_event("startup")
 def _startup():
-    missing = [k for k in ("WEB_CLIENT_ID", "SERVICE_ACCOUNT_EMAIL", "SHARED_DRIVE_ID")
+    # GCP_PROJECT is required for Firebase ID-token verification (token audience).
+    missing = [k for k in ("GCP_PROJECT", "SERVICE_ACCOUNT_EMAIL", "SHARED_DRIVE_ID")
                if not getattr(settings, k)]
     if missing:
         log.warning("Missing env vars: %s", ", ".join(missing))
@@ -127,11 +128,18 @@ async def delete_account(ctx=Depends(verified_device)):
 @app.post("/v1/devices/register", status_code=201)
 async def register_device(body: DeviceReg, user=Depends(current_user)):
     active = user.get("activeDeviceId")
-    # A different active device = a real device switch → requires a reset/rebind.
-    # The SAME device id re-registering (reinstall wipes the Keystore key) is
-    # allowed and simply heals the stored public key.
+    # This ACCOUNT is already bound to a different device → real device switch,
+    # needs a reset/rebind. (Same device id re-registering after a reinstall is
+    # fine — it just heals the stored public key.)
     if active and active != body.deviceId:
         raise HTTPException(409, "device_conflict")
+    # This DEVICE is already bound to a different account. Enforces one-account-
+    # per-device: a second person can't sign in on someone else's phone.
+    existing = repo.get_device(body.deviceId)
+    if existing and existing.get("status") == "ACTIVE" and existing.get("uid") != user["uid"]:
+        audit.record(user["uid"], body.deviceId, action="DEVICE_IN_USE", outcome="DENIED",
+                     detail={"owner": existing.get("uid")})
+        raise HTTPException(409, "device_in_use")
     healed = active == body.deviceId
     repo.register_device(user["uid"], body)  # upsert: refreshes the public key
     audit.record(user["uid"], body.deviceId,

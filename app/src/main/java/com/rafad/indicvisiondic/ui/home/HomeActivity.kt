@@ -30,6 +30,7 @@ import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
+import com.rafad.indicvisiondic.ui.SessionLimitActivity
 import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
 import com.rafad.indicvisiondic.ui.auth.AuthActivity
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
@@ -55,18 +56,35 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private val adapter = SessionAdapter()
 
+    /** Source A: the system Photo Picker (gallery / Google Photos). */
     private val pickReference =
         registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            if (uri == null) return@registerForActivityResult
-            val mime = contentResolver.getType(uri) ?: ""
-            val intent = Intent(this, StaticAnalysisActivity::class.java)
-            if (mime.startsWith("video/")) {
-                intent.putExtra(DicKeys.PICKED_VIDEO_URI, uri.toString())
-            } else {
-                intent.putExtra(DicKeys.PICKED_REF_URI, uri.toString())
-            }
-            startActivity(intent)
+            routePickedMedia(uri)
         }
+
+    /** Source B: the Storage Access Framework (Downloads, Drive, on-device files). */
+    private val pickDocument =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            routePickedMedia(uri)
+        }
+
+    /**
+     * Route a picked photo/video into the analysis screen. Shared by both source
+     * pickers so the two entry points behave identically; the mime type decides
+     * whether we hand off a single reference image or a video to sample frames
+     * from.
+     */
+    private fun routePickedMedia(uri: android.net.Uri?) {
+        if (uri == null) return
+        val mime = contentResolver.getType(uri) ?: ""
+        val intent = Intent(this, StaticAnalysisActivity::class.java)
+        if (mime.startsWith("video/")) {
+            intent.putExtra(DicKeys.PICKED_VIDEO_URI, uri.toString())
+        } else {
+            intent.putExtra(DicKeys.PICKED_REF_URI, uri.toString())
+        }
+        startActivity(intent)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,17 +105,66 @@ class HomeActivity : AppCompatActivity() {
         list.adapter = adapter
 
         findViewById<FloatingActionButton>(R.id.fabNewAnalysis).setOnClickListener {
-            android.widget.Toast.makeText(this, R.string.picker_select_reference, android.widget.Toast.LENGTH_LONG).show()
-            pickReference.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
-            )
+            // At the account's analysis limit, block new work behind the persistent
+            // limit screen (email support) instead of letting it fail on upload.
+            if (TokenStore.isSessionLimitReached(this)) {
+                openSessionLimitScreen()
+                return@setOnClickListener
+            }
+            showSourceChooser()
         }
         findViewById<ImageButton>(R.id.btnHomeSettings).setOnClickListener { showSettingsDrawer() }
+
+        maybeShowBetaNotice()
+        // Cold start / return with an already-full quota → persistent support screen.
+        TokenStore.refreshSessionLimit(this, SessionStore.list(this).size)
+        if (TokenStore.isSessionLimitReached(this)) openSessionLimitScreen()
     }
 
     override fun onResume() {
         super.onResume()
         refresh()
+    }
+
+    /** One-time beta / data-use declaration after the account first reaches Home. */
+    private fun maybeShowBetaNotice() {
+        if (TokenStore.hasAckedBetaNotice(this)) return
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.beta_notice_title)
+            .setMessage(R.string.beta_notice_body)
+            .setCancelable(false)
+            .setPositiveButton(R.string.beta_notice_ack) { _, _ ->
+                TokenStore.setBetaNoticeAcked(this)
+            }
+            .show()
+    }
+
+    private fun openSessionLimitScreen() {
+        startActivity(Intent(this, SessionLimitActivity::class.java))
+    }
+
+    /**
+     * Ask where to pick the reference from, in a styled sheet we control, before
+     * opening the system picker. The system Photo Picker runs in its own window
+     * and can't be labelled or overlaid, so the instruction and source choice
+     * live here instead — Photos routes to the Photo Picker, Files to the Storage
+     * Access Framework (Downloads, Drive, on-device storage).
+     */
+    private fun showSourceChooser() {
+        val sheet = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.sheet_new_analysis, null)
+        view.findViewById<android.view.View>(R.id.rowSourcePhotos).setOnClickListener {
+            sheet.dismiss()
+            pickReference.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+            )
+        }
+        view.findViewById<android.view.View>(R.id.rowSourceFiles).setOnClickListener {
+            sheet.dismiss()
+            pickDocument.launch(arrayOf("image/*", "video/*"))
+        }
+        sheet.setContentView(view)
+        sheet.show()
     }
 
     /**
@@ -109,6 +176,8 @@ class HomeActivity : AppCompatActivity() {
             val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
             adapter.submit(sessions)
             emptyState.isVisible = sessions.isEmpty()
+            // Local count alone can trip the hard-stop flag (before cloud reconcile).
+            TokenStore.refreshSessionLimit(this@HomeActivity, sessions.size)
             try {
                 reconcileWithCloud(deep)
             } finally {
@@ -131,6 +200,15 @@ class HomeActivity : AppCompatActivity() {
     private suspend fun reconcileWithCloud(deep: Boolean) {
         when (val outcome = CloudSync.reconcile(this@HomeActivity, deep = deep)) {
             is CloudSync.Outcome.Ok -> {
+                // Record the account's quota so the new-analysis gate and the
+                // limit screen reflect the latest server truth.
+                val wasLimited = TokenStore.isSessionLimitReached(this)
+                val localCount = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity).size }
+                TokenStore.setQuota(this, outcome.quotaUsed, outcome.quotaMax, localCount)
+                // Newly at the cap → open the persistent "email support" screen.
+                if (!wasLimited && TokenStore.isSessionLimitReached(this)) {
+                    openSessionLimitScreen()
+                }
                 if (outcome.repaired > 0) {
                     // The rows changed underneath us — show the corrected state.
                     val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
@@ -377,6 +455,7 @@ class HomeActivity : AppCompatActivity() {
         }
         view.findViewById<android.view.View>(R.id.btnSignOut).setOnClickListener {
             sheet.dismiss()
+            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
             TokenStore.clear(this)
             routeToSignIn()
         }

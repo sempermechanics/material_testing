@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "171818100029",
+    "project_id": "indicvision-dic-app-auth",
+    "storage_bucket": "indicvision-dic-app-auth.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:171818100029:android:f349f0ff04a0102d161154",
+        "android_client_info": {
+          "package_name": "com.rafad.indicvisiondic"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "171818100029-rj82srrvl8d9crt882qh3ehkribu98cs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rafad.indicvisiondic",
+            "certificate_hash": "920fd8d7acf4c3461363f29e7b82d3dd96842be2"
+          }
+        },
+        {
+          "client_id": "171818100029-buljk26gokn5v473ouc7f120obgurhj2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0_VDq5JJjUMnWS8WZAzn1a73mFgnAuwQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "171818100029-buljk26gokn5v473ouc7f120obgurhj2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

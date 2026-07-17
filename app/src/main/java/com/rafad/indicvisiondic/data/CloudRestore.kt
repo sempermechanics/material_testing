@@ -135,7 +135,11 @@ object CloudRestore {
         }
 
         // 3. Rebuild the index row from the blueprint.
-        SessionStore.upsert(appContext, recordFrom(meta, localId, sessionDir, refPath))
+        SessionStore.upsert(
+            appContext,
+            recordFrom(meta, localId, sessionDir, refPath),
+            allowOverLimit = true, // already counted in the cloud quota
+        )
         Timber.i("Restored analysis %s from cloud session %s (%d files)", localId, sessionId, total)
         localId
     }

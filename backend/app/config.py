@@ -2,8 +2,9 @@ import os
 
 
 class Settings:
-    # Audience of the Google ID token = the OAuth *Web* client ID the Android
-    # app uses (BuildConfig.GOOGLE_WEB_CLIENT_ID). Must match exactly.
+    # Deprecated: with Firebase Auth the token audience is the Firebase project
+    # id (verified by firebase-admin), not this Web client id. Kept only so old
+    # deployments don't error on the env var; unused by verification.
     WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID", "")
 
     # Hard sign-in gate. If set (e.g. "company.com") ONLY that hosted domain may
@@ -20,7 +21,7 @@ class Settings:
     # Per-user quotas. MAX_SESSIONS_PER_USER = how many analyses a user may keep
     # in the cloud; MAX_FILES_PER_SESSION bounds one analysis (150 frames x
     # raw+dat+csv + reference + report + metadata ≈ 460, so 600 gives headroom).
-    MAX_SESSIONS_PER_USER = int(os.environ.get("MAX_SESSIONS_PER_USER", "50"))
+    MAX_SESSIONS_PER_USER = int(os.environ.get("MAX_SESSIONS_PER_USER", "4"))
     MAX_FILES_PER_SESSION = int(os.environ.get("MAX_FILES_PER_SESSION", "600"))
 
     # Comma-separated emails that are treated as admins (role=admin, always
@@ -42,6 +43,12 @@ class Settings:
     ROOT_FOLDER_ID = os.environ.get("ROOT_FOLDER_ID", "") or SHARED_DRIVE_ID
 
     GCP_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+
+    # The Firebase project whose ID tokens we accept (their audience). Usually
+    # the same as GCP_PROJECT, but can differ if Firebase Auth lives in a
+    # separate project — e.g. when org policy blocks adding Firebase to the main
+    # one. Verification only needs the project id, not that project's resources.
+    FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "") or GCP_PROJECT
 
     # --- pilot / testing switches (turn OFF for production) ---
     # 1 = skip ID-token + device-signature checks entirely. Lets you smoke-test

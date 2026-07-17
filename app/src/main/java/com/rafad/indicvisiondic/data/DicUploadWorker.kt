@@ -1,6 +1,7 @@
 package com.rafad.indicvisiondic.data
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
@@ -20,6 +21,7 @@ import com.rafad.indicvisiondic.report.FieldResult
 import com.rafad.indicvisiondic.report.PdfReportGenerator
 import com.rafad.indicvisiondic.report.ReportBuilder
 import com.rafad.indicvisiondic.report.RoiData
+import com.rafad.indicvisiondic.ui.SessionLimitActivity
 import com.rafad.indicvisiondic.ui.analysis.AnalysisViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -364,6 +366,20 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 // 409 = analysis quota reached, 413 = too many files: retrying won't help.
                 e.code == 409 || e.code == 413 -> {
                     Timber.e("Upload rejected (%d): %s", e.code, e.detail)
+                    // 409 means the account's analysis quota is full — raise the
+                    // persistent limit gate so the user is told to email support.
+                    if (e.code == 409) {
+                        TokenStore.setSessionLimitReached(applicationContext, true)
+                        applicationContext.startActivity(
+                            Intent(applicationContext, SessionLimitActivity::class.java).apply {
+                                addFlags(
+                                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                                )
+                            },
+                        )
+                    }
                     SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
                     stagingDir.deleteRecursively()
                     Result.failure()

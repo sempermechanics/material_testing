@@ -13,6 +13,7 @@ import com.rafad.indicvisiondic.data.net.IndicApi
 import com.rafad.indicvisiondic.data.net.TokenProvider
 import com.rafad.indicvisiondic.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.IOException
@@ -200,7 +201,13 @@ object CloudSync {
             }
         }
 
-        // Cloud is gone (or was never configured): now wipe this device.
+        // Cloud is gone (or was never configured): now wipe this device and the
+        // Firebase identity itself (best-effort — needs recent sign-in; falls back
+        // to sign-out so the app returns to the login screen regardless).
+        val fbUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        runCatching { fbUser?.delete()?.await() }
+            .onFailure { Timber.w(it, "Firebase user delete failed; signing out instead") }
+        com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
         SessionStore.deleteAll(appContext)
         TokenStore.clear(appContext)
         Timber.i("Account erased and local data wiped")

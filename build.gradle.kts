@@ -2,6 +2,7 @@
 plugins {
     alias(libs.plugins.android.application) apply false
     id("com.diffplug.spotless") version "8.0.0"
+    id("com.google.gms.google-services") version "4.5.0" apply false
 }
 
 // Formatting gate: `./gradlew spotlessCheck` (CI) / `./gradlew spotlessApply` (fix).

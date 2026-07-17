@@ -27,7 +27,11 @@ import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.IndicVisionNativeLib
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.DicSettings
+import com.rafad.indicvisiondic.data.SessionStore
+import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.SessionLimitActivity
+import com.rafad.indicvisiondic.ui.TopMessage
 import com.rafad.indicvisiondic.ui.Motion
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
@@ -271,7 +275,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         refDropzone.setOnClickListener { pickRef.launch("image/*") }
         findViewById<View>(R.id.btnRefChange).setOnClickListener { pickRef.launch("image/*") }
         val launchDefPicker = {
-            Toast.makeText(this, R.string.picker_select_deformed, Toast.LENGTH_LONG).show()
+            TopMessage.show(this, R.string.picker_select_deformed)
             pickDefBatch.launch("image/*")
         }
         defDropzone.setOnClickListener { launchDefPicker() }
@@ -718,6 +722,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
             return
         }
 
+        // Hard stop: do not start a new analysis when the session quota is full.
+        // Re-runs that update an existing Home row are still allowed.
+        if (viewModel.wouldCreateNewSession(this)) {
+            TokenStore.refreshSessionLimit(this, SessionStore.list(this).size)
+            if (TokenStore.isSessionLimitReached(this)) {
+                startActivity(Intent(this, SessionLimitActivity::class.java))
+                return
+            }
+        }
+
         isProcessing = true
         checkReady()
         processingStartTime = System.currentTimeMillis()
@@ -803,6 +817,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         // User cancelled: stay on settings, nothing to report.
                         tvTimer.visibility = View.GONE
                         checkReady()
+                    } else if (outcome.engineErrorCode == AnalysisViewModel.ERROR_SESSION_LIMIT) {
+                        tvTimer.visibility = View.GONE
+                        checkReady()
+                        startActivity(Intent(this@StaticAnalysisActivity, SessionLimitActivity::class.java))
                     } else if (outcome.engineErrorCode < 0) {
                         val errorMsg = when (outcome.engineErrorCode) {
                             -1 -> "Feature Extraction Failed (AKAZE). The speckle pattern might be too fine, out of focus, or destroyed by scaling."
