@@ -517,6 +517,17 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     private fun buildSessionBundle(payload: List<Artifact>, out: File) {
         ZipOutputStream(BufferedOutputStream(out.outputStream())).use { zip ->
             payload.forEach { art ->
+                // JPEG/PNG/PDF are already compressed — deflating them again
+                // burns CPU (they're ~90% of the payload bytes) for ~0% gain.
+                // Level 0 stores them; .dat/.csv/.json/TIFF still compress.
+                val precompressed = art.name.substringAfterLast('.').lowercase(Locale.US) in NO_RECOMPRESS
+                zip.setLevel(
+                    if (precompressed) {
+                        java.util.zip.Deflater.NO_COMPRESSION
+                    } else {
+                        java.util.zip.Deflater.DEFAULT_COMPRESSION
+                    },
+                )
                 zip.putNextEntry(ZipEntry("${art.role}/${art.name}"))
                 art.file.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
@@ -567,7 +578,25 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val processedDir = File(stagingDir, "processed").apply { mkdirs() }
         var reports = 0
         var processed = 0
+        if (record.imgW <= 0 || record.imgH <= 0) {
+            Timber.e("Bad image dimensions for %s — skipping reports", record.id)
+            return@withContext BundleCounts(0, 0)
+        }
+
+        // The reference is the SAME image in every frame's report — decode and
+        // scale it once for the whole session, not once per frame. On a long
+        // analysis the repeated full-resolution decodes used to be the single
+        // largest CPU cost of staging after the PDF rendering itself.
+        val originalBaseImg = BitmapFactory.decodeFile(refFile.absolutePath)
+        if (originalBaseImg == null) {
+            Timber.e("Cannot decode reference %s — skipping reports", refFile.absolutePath)
+            return@withContext BundleCounts(0, 0)
+        }
+        val baseImg = Bitmap.createScaledBitmap(originalBaseImg, record.imgW, record.imgH, true)
+        if (baseImg !== originalBaseImg) originalBaseImg.recycle()
+
         val scratch = File(applicationContext.cacheDir, "upload_${record.id}_frame.pdf")
+        val ctx = RenderContext(record, baseImg, scratch)
         try {
             record.defNames.forEachIndexed { index, defName ->
                 val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
@@ -577,7 +606,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 val frameName = "Frame_${index + 1}"
                 val defFile = File(rawDeformedDir, defName)
 
-                val ok = renderFrame(data, refFile, defFile, frameName, record, scratch) { fields ->
+                val ok = renderFrame(ctx, data, defFile, frameName) { fields ->
                     // Same bitmaps the PDF just used — write them out before
                     // they're recycled.
                     fields.forEach { field ->
@@ -597,44 +626,54 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             }
         } finally {
             scratch.delete()
+            baseImg.recycle()
         }
         Timber.i("Staged %d frame reports and %d processed images", reports, processed)
         BundleCounts(reports, processed)
     }
 
+    /** Per-session state shared by every frame's report render. */
+    private class RenderContext(
+        val record: SessionRecord,
+        /** Reference image, already scaled to engine dimensions. NOT owned by renderFrame. */
+        val baseImg: Bitmap,
+        /** Scratch PDF file, reused per frame. */
+        val scratch: File,
+    )
+
     /**
-     * Build one frame's report: writes the classic single-frame PDF to [pdfOut]
-     * and hands the freshly baked per-field heatmaps to [onFieldHeatmaps] before
-     * they are recycled.
+     * Build one frame's report: writes the classic single-frame PDF to
+     * [RenderContext.scratch] and hands the freshly baked per-field heatmaps to
+     * [onFieldHeatmaps] before they are recycled. The reference bitmap comes
+     * pre-scaled from the context and is shared across frames — never recycled
+     * here.
      */
     private suspend fun renderFrame(
+        ctx: RenderContext,
         data: FloatArray,
-        refFile: File,
         defFile: File,
         frameName: String,
-        record: SessionRecord,
-        pdfOut: File,
         onFieldHeatmaps: (List<FieldResult>) -> Unit,
     ): Boolean = withContext(Dispatchers.Default) {
-        val imgW = record.imgW
-        val imgH = record.imgH
-        if (imgW <= 0 || imgH <= 0) return@withContext false
+        val record = ctx.record
 
-        val originalBaseImg = BitmapFactory.decodeFile(refFile.absolutePath) ?: return@withContext false
         // The deformed original is only the cover image; fall back to the
         // reference rather than losing the whole report over it.
         val originalDefImg = BitmapFactory.decodeFile(defFile.absolutePath)
-        val baseImg = Bitmap.createScaledBitmap(originalBaseImg, imgW, imgH, true)
-        val defImg = Bitmap.createScaledBitmap(originalDefImg ?: originalBaseImg, imgW, imgH, true)
+        val defImg = if (originalDefImg != null) {
+            Bitmap.createScaledBitmap(originalDefImg, record.imgW, record.imgH, true)
+        } else {
+            ctx.baseImg
+        }
 
         val statsArray = FloatArray(ENGINE_STATS_SIZE) { record.engineStats.getOrElse(it) { 0f } }
         val reportData = ReportBuilder.buildReport(
             ReportBuilder.ReportBuildParams(
                 data = data,
-                baseImg = baseImg,
+                baseImg = ctx.baseImg,
                 defImgForCover = defImg,
-                imgW = imgW,
-                imgH = imgH,
+                imgW = record.imgW,
+                imgH = record.imgH,
                 step = record.step,
                 sessionId = record.id,
                 specimenName = record.refName,
@@ -652,7 +691,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
         var ok = true
         try {
-            pdfOut.outputStream().use { stream ->
+            ctx.scratch.outputStream().use { stream ->
                 PdfReportGenerator.generate(reportData, stream).collect { progress ->
                     if (progress is PdfReportGenerator.Progress.Error) {
                         Timber.e(progress.ex, "PDF generation failed for %s", frameName)
@@ -664,10 +703,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         } finally {
             reportData.fieldResults.forEach { it.bakedHeatmap.recycle() }
             reportData.znssdHeatmap.recycle()
-            defImg.recycle()
-            originalDefImg?.recycle()
-            baseImg.recycle()
-            originalBaseImg.recycle()
+            if (defImg !== ctx.baseImg && defImg !== originalDefImg) defImg.recycle()
+            if (originalDefImg !== null && originalDefImg !== defImg) originalDefImg.recycle()
         }
         ok
     }
@@ -678,5 +715,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
         /** Files uploaded concurrently. Keeps the link busy without thrashing. */
         const val UPLOAD_CONCURRENCY = 4
+
+        /** Extensions that are already compressed — stored, not re-deflated, in Session.zip. */
+        val NO_RECOMPRESS = setOf("jpg", "jpeg", "png", "pdf", "webp", "zip")
     }
 }

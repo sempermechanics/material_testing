@@ -193,7 +193,9 @@ class AuthRepository(context: Context) {
         const val K_PENDING_EMAIL = "pending_email"
         // Where the email link returns to. Must be an Authorized Domain in the
         // Firebase project and handled as an App Link by this app (see docs).
-        const val EMAIL_LINK_CONTINUE_URL = "https://indicvision-dic-app-7ad97.firebaseapp.com/finishSignIn"
+        // Keep in sync with the backend's FIREBASE_PROJECT_ID — this is that
+        // project's default hosting domain.
+        const val EMAIL_LINK_CONTINUE_URL = "https://indicvision-dic-app-auth.firebaseapp.com/finishSignIn"
     }
 }
 

@@ -94,7 +94,10 @@ class SessionLimitActivity : AppCompatActivity() {
     private fun recheck() {
         setLoading(true)
         lifecycleScope.launch {
-            CloudSync.reconcile(this@SessionLimitActivity)
+            // deep=true: the user explicitly tapped Recheck, so bypass the
+            // reconcile throttle — a silently skipped check would report
+            // "still full" from stale data.
+            CloudSync.reconcile(this@SessionLimitActivity, deep = true)
             setLoading(false)
             if (!TokenStore.isSessionLimitReached(this@SessionLimitActivity)) {
                 Toast.makeText(this@SessionLimitActivity, R.string.limit_cleared, Toast.LENGTH_SHORT).show()

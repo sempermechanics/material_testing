@@ -250,7 +250,7 @@ def list_pending_uploads(sid: str) -> list:
         out.append({
             "fileId": d.id,
             "uploadUrl": url,
-            "chunkSize": 8 * 1024 * 1024,
+            "chunkSize": 32 * 1024 * 1024,  # keep in sync with create_session
             "name": f.get("name"),
             "role": f.get("role"),
             "sizeBytes": f.get("sizeBytes", 0),

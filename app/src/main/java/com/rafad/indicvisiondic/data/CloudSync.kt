@@ -55,6 +55,9 @@ object CloudSync {
         /** No connectivity or no usable token. Expected for an offline-first app; stay quiet. */
         data object Offline : Outcome
 
+        /** Checked recently — throttled to protect the Firestore read budget. Stay quiet. */
+        data object Skipped : Outcome
+
         /** The backend answered, and the answer was wrong. The user needs to know. */
         data class Failed(val reason: String) : Outcome
     }
@@ -73,6 +76,17 @@ object CloudSync {
             val appContext = context.applicationContext
             val api = IndicApi(appContext)
             if (!api.enabled) return@withContext Outcome.Disabled
+
+            // Every screen resume lands here, and each check costs one Firestore
+            // read per cloud session. A successful check stays fresh for a few
+            // minutes; an explicit pull-to-refresh (deep) always goes through.
+            val prefs = appContext.getSharedPreferences("indic_cloudsync", Context.MODE_PRIVATE)
+            val sinceLast = System.currentTimeMillis() - prefs.getLong(K_LAST_RECONCILE_AT, 0L)
+            if (!deep && sinceLast in 0 until RECONCILE_MIN_INTERVAL_MS) {
+                Timber.d("Reconcile skipped — last successful check %d s ago", sinceLast / MS_PER_SECOND)
+                return@withContext Outcome.Skipped
+            }
+
             val token = TokenProvider.usableIdToken() ?: return@withContext Outcome.Offline
 
             val cloud = try {
@@ -107,6 +121,7 @@ object CloudSync {
                     if (reupload) enqueueUpload(appContext, record.id)
                 }
             }
+            prefs.edit().putLong(K_LAST_RECONCILE_AT, System.currentTimeMillis()).apply()
             Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
         }
 
@@ -252,4 +267,7 @@ object CloudSync {
     }
 
     private const val BACKOFF_SECONDS = 30L
+    private const val K_LAST_RECONCILE_AT = "last_reconcile_at"
+    private const val RECONCILE_MIN_INTERVAL_MS = 5 * 60 * 1000L
+    private const val MS_PER_SECOND = 1000L
 }

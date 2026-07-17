@@ -303,8 +303,11 @@ async def create_session(body: SessionCreate, ctx=Depends(verified_device)):
         session_uri = drive.init_resumable(token, folders[f.role], f.name, f.bytes)
         file_id = f"{sid}_{f.role}_{f.name}"
         repo.create_file(sid, user["uid"], file_id, f, session_uri)
+        # 32 MiB (a 256 KiB multiple, as Drive requires): a session is now one
+        # large Session.zip, so throughput is chunk-size × round-trips — small
+        # chunks leave the link idle waiting on RTTs.
         uploads.append({"fileId": file_id, "uploadUrl": session_uri,
-                        "chunkSize": 8 * 1024 * 1024})
+                        "chunkSize": 32 * 1024 * 1024})
 
     repo.create_session(sid, user, device, body, folders)
     audit.record(user["uid"], device.get("deviceId"), action="SESSION_CREATE",

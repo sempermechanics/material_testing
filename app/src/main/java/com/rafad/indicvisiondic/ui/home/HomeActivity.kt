@@ -222,8 +222,9 @@ class HomeActivity : AppCompatActivity() {
                     getString(R.string.cloud_check_failed_fmt, outcome.reason),
                     Toast.LENGTH_LONG,
                 ).show()
-            // Normal for an offline-first app — don't nag.
-            CloudSync.Outcome.Offline, CloudSync.Outcome.Disabled -> Unit
+            // Normal for an offline-first app — don't nag. Skipped = checked
+            // recently (reconcile is throttled to protect the Firestore budget).
+            CloudSync.Outcome.Offline, CloudSync.Outcome.Disabled, CloudSync.Outcome.Skipped -> Unit
         }
     }
 

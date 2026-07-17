@@ -20,6 +20,12 @@ import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
+/** Drive resumable chunks must be 256 KiB multiples (except the final one). */
+private const val MIN_CHUNK_BYTES = 256 * 1024
+
+/** Upper bound on the per-chunk buffer allocation, whatever the server says. */
+private const val MAX_CHUNK_BYTES = 32 * 1024 * 1024
+
 /**
  * Client for the inDIC GCP backend (Cloud Run / FastAPI).
  *
@@ -336,6 +342,10 @@ class IndicApi(context: Context) {
     suspend fun uploadResumable(uploadUrl: String, file: java.io.File, chunkSize: Int): Pair<String, String?> =
         withContext(Dispatchers.IO) {
             val total = file.length()
+            // The buffer is allocated at chunk size — clamp what the server
+            // sent so a misconfigured value can never OOM the app. Drive needs
+            // chunks in 256 KiB multiples (except the last).
+            val chunk = chunkSize.coerceIn(MIN_CHUNK_BYTES, MAX_CHUNK_BYTES)
 
             // Where does Drive want us to continue — or does it already have the
             // whole file? A file fully uploaded in a prior attempt (but whose
@@ -346,10 +356,10 @@ class IndicApi(context: Context) {
             var offset = probe.offset
 
             RandomAccessFile(file, "r").use { raf ->
-                val buf = ByteArray(chunkSize)
+                val buf = ByteArray(chunk)
                 while (offset < total) {
                     raf.seek(offset)
-                    val n = raf.read(buf, 0, minOf(chunkSize.toLong(), total - offset).toInt())
+                    val n = raf.read(buf, 0, minOf(chunk.toLong(), total - offset).toInt())
                     if (n <= 0) throw IOException("unexpected EOF at $offset/$total")
                     val end = offset + n - 1
                     val req = Request.Builder().url(uploadUrl)
