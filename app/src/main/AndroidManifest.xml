@@ -46,7 +46,7 @@
         </provider>
         <activity android:name=".ui.auth.PendingApprovalActivity" android:exported="false" />
         <activity
-            android:name=".ui.SessionLimitActivity"
+            android:name=".ui.limit.SessionLimitActivity"
             android:exported="false"
             android:launchMode="singleTop" />
         <activity android:name=".ui.viewer.ResultViewerActivity" />

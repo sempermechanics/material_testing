@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /**
  * Wire DTOs for the inDIC GCP backend (FastAPI on Cloud Run). Field names match
  * the JSON contract in backend/app/models.py exactly. See
- * docs/CLOUD_ARCHITECTURE_GCP.md for the full API.
+ * docs/backend/CLOUD_ARCHITECTURE_GCP.md for the full API.
  */
 
 @Serializable

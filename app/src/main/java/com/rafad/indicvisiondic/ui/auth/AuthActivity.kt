@@ -13,7 +13,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
-import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.home.HomeActivity
 import kotlinx.coroutines.launch
 
@@ -59,7 +59,10 @@ class AuthActivity : AppCompatActivity() {
         btnGoogle.visibility = if (GoogleSignInHelper.isConfigured(this)) View.VISIBLE else View.GONE
 
         btnMain.setOnClickListener { onMainAction() }
-        tvToggle.setOnClickListener { registerMode = !registerMode; updateMode() }
+        tvToggle.setOnClickListener {
+            registerMode = !registerMode
+            updateMode()
+        }
         tvEmailLink.setOnClickListener { onSendEmailLink() }
         btnGoogle.setOnClickListener { onGoogleSignIn() }
         updateMode()
@@ -90,14 +93,19 @@ class AuthActivity : AppCompatActivity() {
         val password = etPassword.text.toString()
         if (!validEmail(email)) return
         if (password.length < MIN_PASSWORD) {
-            showSnackbar(getString(R.string.error_password_short), isError = true); return
+            showSnackbar(getString(R.string.error_password_short), isError = true)
+            return
         }
         if (registerMode && password != etConfirm.text.toString()) {
-            showSnackbar("Passwords do not match.", isError = true); return
+            showSnackbar("Passwords do not match.", isError = true)
+            return
         }
         runAuth {
-            if (registerMode) authRepo.signUpWithPassword(email, password)
-            else authRepo.signInWithPassword(email, password)
+            if (registerMode) {
+                authRepo.signUpWithPassword(email, password)
+            } else {
+                authRepo.signInWithPassword(email, password)
+            }
         }
     }
 

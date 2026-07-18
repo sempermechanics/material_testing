@@ -11,7 +11,6 @@ import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.report.EngineStats
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -55,6 +54,7 @@ class AnalysisViewModel : ViewModel() {
     var refBytes: ByteArray? = null
     var roiMaskBytes: ByteArray? = null
     var defFilePaths: List<String> = emptyList()
+
     /** Original picked filenames, index-aligned with [defFilePaths]. */
     var defOriginalNames: List<String> = emptyList()
 
@@ -464,5 +464,4 @@ class AnalysisViewModel : ViewModel() {
             syncState = if (cloudEnabled) SessionRecord.SyncState.PENDING else SessionRecord.SyncState.LOCAL_ONLY,
         )
     }
-
 }

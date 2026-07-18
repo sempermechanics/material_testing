@@ -1,7 +1,6 @@
 package com.rafad.indicvisiondic.data.net
 
 import android.content.Context
-import com.google.firebase.auth.FirebaseAuth
 
 /**
  * Local session cache alongside Firebase Auth: the signed-in identity plus the
@@ -14,20 +13,20 @@ import com.google.firebase.auth.FirebaseAuth
 object TokenStore {
 
     private const val PREFS = "indic_session"
+
     /** Survives sign-out so a per-account beta ack is not re-prompted on every login. */
     private const val ONBOARDING_PREFS = "indic_onboarding"
     private const val K_UID = "uid"
     private const val K_EMAIL = "email"
     private const val K_STATUS = "last_status" // last server-confirmed access_status
-    private const val K_ROLE = "role"          // "admin" | "user"
+    private const val K_ROLE = "role" // "admin" | "user"
     private const val K_DEVICE_REGISTERED = "device_registered"
     private const val K_QUOTA_USED = "quota_used"
     private const val K_QUOTA_MAX = "quota_max"
     private const val K_LIMIT_REACHED = "session_limit_reached"
     private const val K_BETA_ACKED_PREFIX = "beta_notice_acked_"
 
-    private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun onboardingPrefs(context: Context) =
         context.applicationContext.getSharedPreferences(ONBOARDING_PREFS, Context.MODE_PRIVATE)
@@ -44,19 +43,17 @@ object TokenStore {
     fun cachedEmail(context: Context): String? = prefs(context).getString(K_EMAIL, null)
 
     fun cachedStatus(context: Context): String? = prefs(context).getString(K_STATUS, null)
-    fun setStatus(context: Context, status: String) =
-        prefs(context).edit().putString(K_STATUS, status).apply()
+    fun setStatus(context: Context, status: String) = prefs(context).edit().putString(K_STATUS, status).apply()
 
     fun cachedRole(context: Context): String? = prefs(context).getString(K_ROLE, null)
-    fun setRole(context: Context, role: String?) =
-        prefs(context).edit().putString(K_ROLE, role).apply()
+    fun setRole(context: Context, role: String?) = prefs(context).edit().putString(K_ROLE, role).apply()
 
     fun isAdmin(context: Context): Boolean = cachedRole(context) == "admin"
 
-    fun isDeviceRegistered(context: Context): Boolean =
-        prefs(context).getBoolean(K_DEVICE_REGISTERED, false)
-    fun setDeviceRegistered(context: Context, v: Boolean) =
+    fun isDeviceRegistered(context: Context): Boolean = prefs(context).getBoolean(K_DEVICE_REGISTERED, false)
+    fun setDeviceRegistered(context: Context, v: Boolean) {
         prefs(context).edit().putBoolean(K_DEVICE_REGISTERED, v).apply()
+    }
 
     // ── Cloud analysis quota (max sessions per account) ──────────────────
     /**
@@ -94,12 +91,12 @@ object TokenStore {
     }
 
     /** Force the limit flag (e.g. an upload rejected 409 without fresh numbers). */
-    fun setSessionLimitReached(context: Context, v: Boolean) =
+    fun setSessionLimitReached(context: Context, v: Boolean) {
         prefs(context).edit().putBoolean(K_LIMIT_REACHED, v).apply()
+    }
 
     /** True when the account may not create another analysis (hard stop). */
-    fun isSessionLimitReached(context: Context): Boolean =
-        prefs(context).getBoolean(K_LIMIT_REACHED, false)
+    fun isSessionLimitReached(context: Context): Boolean = prefs(context).getBoolean(K_LIMIT_REACHED, false)
 
     /**
      * Whether the current account has acknowledged the beta / data-use notice.

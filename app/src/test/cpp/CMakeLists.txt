@@ -38,20 +38,35 @@ if (DIC_SANITIZER AND NOT MSVC)
     add_link_options(-fsanitize=${DIC_SANITIZER})
 endif ()
 
-add_executable(dic_tests
-        test_main.cpp
-        test_simd_kernels.cpp
-        test_image.cpp
-        test_subset_precomputer.cpp
-        test_optimization_engine.cpp
-        test_strain_calculator.cpp
-        test_robustness.cpp
+# Test sources are grouped by scope (see docs/TESTING.md):
+#   unit/        — one engine component in isolation, checked against a
+#                  double-precision oracle or a mathematical identity.
+#   integration/ — the assembled engine end-to-end (full ICGN solve) plus
+#                  robustness/failure and concurrency behaviour.
+set(DIC_UNIT_TESTS
+        unit/test_simd_kernels.cpp
+        unit/test_image.cpp
+        unit/test_subset_precomputer.cpp
+        unit/test_strain_calculator.cpp
+)
+set(DIC_INTEGRATION_TESTS
+        integration/test_optimization_engine.cpp
+        integration/test_robustness.cpp
+)
 
-        # Production sources under test — compiled as-is, no test doubles
+# Production sources under test — compiled as-is, no test doubles.
+set(DIC_ENGINE_SOURCES
         ${ENGINE_DIR}/preprocessing/ImageProcessor.cpp
         ${ENGINE_DIR}/preprocessing/SubsetPrecomputer.cpp
         ${ENGINE_DIR}/core/OptimizationEngine.cpp
         ${ENGINE_DIR}/postprocessing/StrainCalculator.cpp
+)
+
+add_executable(dic_tests
+        test_main.cpp                # micro-framework runner entry point
+        ${DIC_UNIT_TESTS}
+        ${DIC_INTEGRATION_TESTS}
+        ${DIC_ENGINE_SOURCES}
 )
 
 target_include_directories(dic_tests PRIVATE

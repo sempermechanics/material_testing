@@ -13,7 +13,7 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.IndicVisionNativeLib
 import com.rafad.indicvisiondic.R
-import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.common.Insets
 import java.io.File
 import kotlin.math.roundToInt
 

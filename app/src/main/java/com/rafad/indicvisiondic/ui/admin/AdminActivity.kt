@@ -16,7 +16,7 @@ import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.net.AdminUserDto
 import com.rafad.indicvisiondic.data.net.IndicApi
 import com.rafad.indicvisiondic.data.net.TokenProvider
-import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.common.Insets
 import kotlinx.coroutines.launch
 
 /**

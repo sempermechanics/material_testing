@@ -1,4 +1,4 @@
-package com.rafad.indicvisiondic.ui
+package com.rafad.indicvisiondic.ui.limit
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -17,6 +17,7 @@ import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.CloudSync
 import com.rafad.indicvisiondic.data.DeviceKeyManager
 import com.rafad.indicvisiondic.data.net.TokenStore
+import com.rafad.indicvisiondic.ui.common.Insets
 import kotlinx.coroutines.launch
 
 /**

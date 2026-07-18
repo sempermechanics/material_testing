@@ -19,10 +19,11 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
  */
 object GoogleSignInHelper {
 
-    class NotConfigured : Exception(
-        "Google sign-in isn't configured: add your app's SHA-1 to the Firebase project " +
-            "and re-download google-services.json.",
-    )
+    class NotConfigured :
+        Exception(
+            "Google sign-in isn't configured: add your app's SHA-1 to the Firebase project " +
+                "and re-download google-services.json.",
+        )
 
     /** The Firebase web client id, or null if the SHA-1/OAuth client isn't set up yet. */
     fun webClientId(context: Context): String? {

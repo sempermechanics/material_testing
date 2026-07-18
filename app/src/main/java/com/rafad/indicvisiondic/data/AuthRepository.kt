@@ -96,8 +96,7 @@ class AuthRepository(context: Context) {
         return result
     }
 
-    private fun linkPrefs() =
-        appContext.getSharedPreferences("indic_emaillink", Context.MODE_PRIVATE)
+    private fun linkPrefs() = appContext.getSharedPreferences("indic_emaillink", Context.MODE_PRIVATE)
 
     /** Re-check the account status for the currently signed-in Firebase user. */
     suspend fun refreshStatus(): Result<String> = withContext(Dispatchers.IO) {
@@ -119,32 +118,31 @@ class AuthRepository(context: Context) {
     // ------------------------------------------------------------------ internal
 
     /** Run a Firebase sign-in, cache identity, then resolve backend access status. */
-    private suspend fun firebaseThen(signIn: suspend () -> Any?): Result<String> =
-        withContext(Dispatchers.IO) {
-            if (!api.enabled) {
-                return@withContext Result.failure(
-                    Exception("Cloud backend is not configured (INDIC_API_BASE_URL)."),
-                )
-            }
-            try {
-                signIn()
-            } catch (e: FirebaseAuthWeakPasswordException) {
-                return@withContext Result.failure(Exception("Password is too weak (min 6 characters)."))
-            } catch (e: FirebaseAuthUserCollisionException) {
-                return@withContext Result.failure(Exception("An account already exists for this email. Sign in instead."))
-            } catch (e: FirebaseAuthInvalidUserException) {
-                return@withContext Result.failure(Exception("No account for this email."))
-            } catch (e: FirebaseAuthInvalidCredentialsException) {
-                return@withContext Result.failure(Exception("Incorrect email or password."))
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                Timber.w(e, "Firebase sign-in failed")
-                return@withContext Result.failure(Exception(e.message ?: "Sign-in failed."))
-            }
-            val user = auth.currentUser
-                ?: return@withContext Result.failure(Exception("Sign-in did not complete."))
-            TokenStore.saveIdentity(appContext, user.uid, user.email)
-            resolveStatus()
+    private suspend fun firebaseThen(signIn: suspend () -> Any?): Result<String> = withContext(Dispatchers.IO) {
+        if (!api.enabled) {
+            return@withContext Result.failure(
+                Exception("Cloud backend is not configured (INDIC_API_BASE_URL)."),
+            )
         }
+        try {
+            signIn()
+        } catch (e: FirebaseAuthWeakPasswordException) {
+            return@withContext Result.failure(Exception("Password is too weak (min 6 characters)."))
+        } catch (e: FirebaseAuthUserCollisionException) {
+            return@withContext Result.failure(Exception("An account already exists for this email. Sign in instead."))
+        } catch (e: FirebaseAuthInvalidUserException) {
+            return@withContext Result.failure(Exception("No account for this email."))
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
+            return@withContext Result.failure(Exception("Incorrect email or password."))
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Firebase sign-in failed")
+            return@withContext Result.failure(Exception(e.message ?: "Sign-in failed."))
+        }
+        val user = auth.currentUser
+            ?: return@withContext Result.failure(Exception("Sign-in did not complete."))
+        TokenStore.saveIdentity(appContext, user.uid, user.email)
+        resolveStatus()
+    }
 
     private suspend fun resolveStatus(): Result<String> {
         val token = TokenProvider.usableIdToken() ?: return offlineOrExpired()
@@ -182,15 +180,15 @@ class AuthRepository(context: Context) {
         Timber.d("Device registered with backend")
     }
 
-    private fun offlineOrExpired(): Result<String> =
-        if (TokenStore.cachedStatus(appContext) == "APPROVED") {
-            Result.success("OFFLINE_CACHE_APPROVED")
-        } else {
-            Result.failure(Exception("Could not verify account. Check your connection and sign in again."))
-        }
+    private fun offlineOrExpired(): Result<String> = if (TokenStore.cachedStatus(appContext) == "APPROVED") {
+        Result.success("OFFLINE_CACHE_APPROVED")
+    } else {
+        Result.failure(Exception("Could not verify account. Check your connection and sign in again."))
+    }
 
     private companion object {
         const val K_PENDING_EMAIL = "pending_email"
+
         // Where the email link returns to. Must be an Authorized Domain in the
         // Firebase project and handled as an App Link by this app (see docs).
         // Keep in sync with the backend's FIREBASE_PROJECT_ID — this is that
@@ -198,4 +196,3 @@ class AuthRepository(context: Context) {
         const val EMAIL_LINK_CONTINUE_URL = "https://indicvision-dic-app-auth.firebaseapp.com/finishSignIn"
     }
 }
-

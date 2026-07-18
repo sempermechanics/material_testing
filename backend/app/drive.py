@@ -191,7 +191,7 @@ def stream_file(token: str, drive_file_id: str, chunk_size: int = 256 * 1024):
     Drive offers no anonymous signed download, so restore bytes must be proxied
     through here. That costs egress and is the main argument for moving blobs to
     GCS (signed URLs) if downloads ever become common. See
-    docs/CLOUD_ARCHITECTURE_GCP.md §0 and §19.
+    docs/backend/CLOUD_ARCHITECTURE_GCP.md §0 and §19.
     """
     r = requests.get(
         f"{API}/files/{drive_file_id}",

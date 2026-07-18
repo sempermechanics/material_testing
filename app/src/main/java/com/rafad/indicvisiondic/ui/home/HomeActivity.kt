@@ -7,13 +7,16 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -22,18 +25,15 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
-import android.widget.Toast
-import androidx.core.content.FileProvider
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.rafad.indicvisiondic.data.CloudSync
 import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
-import com.rafad.indicvisiondic.ui.MediaSourceChooser
-import com.rafad.indicvisiondic.ui.SessionLimitActivity
 import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
 import com.rafad.indicvisiondic.ui.auth.AuthActivity
+import com.rafad.indicvisiondic.ui.common.MediaSourceChooser
+import com.rafad.indicvisiondic.ui.limit.SessionLimitActivity
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -93,7 +93,7 @@ class HomeActivity : AppCompatActivity() {
 
         // Edge-to-edge (enforced on API 35+): drop the header below the status
         // bar, otherwise the bar swallows taps on the settings gear.
-        com.rafad.indicvisiondic.ui.Insets.padTop(findViewById(R.id.homeTopBar))
+        com.rafad.indicvisiondic.ui.common.Insets.padTop(findViewById(R.id.homeTopBar))
 
         list = findViewById(R.id.sessionList)
         emptyState = findViewById(R.id.emptyState)
@@ -345,7 +345,9 @@ class HomeActivity : AppCompatActivity() {
                 return@launch
             }
             val uri = FileProvider.getUriForFile(
-                this@HomeActivity, "$packageName.fileprovider", file,
+                this@HomeActivity,
+                "$packageName.fileprovider",
+                file,
             )
             val send = Intent(Intent.ACTION_SEND).apply {
                 type = "application/json"

@@ -19,7 +19,7 @@ import com.rafad.indicvisiondic.report.ReportBuilder
 import com.rafad.indicvisiondic.report.ReportData
 import com.rafad.indicvisiondic.report.RoiData
 import com.rafad.indicvisiondic.report.VisualizationEngine
-import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.common.Insets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -78,6 +78,7 @@ class ResultViewerActivity : AppCompatActivity() {
     // Batch Data State
     private var batchFiles: List<File> = emptyList()
     private var originalDefNames: List<String> = emptyList()
+
     // Raw image sources for the export bundle (best-effort; may be absent on reopen)
     private var refImagePath: String? = null
     private var defImagePaths: List<String> = emptyList()
@@ -712,15 +713,19 @@ class ResultViewerActivity : AppCompatActivity() {
             if (roiW > 0 && roiH > 0) {
                 add(
                     getString(R.string.setting_roi) to getString(
-                        R.string.setting_roi_fmt, roiW, roiH,
-                        intent.getIntExtra(DicKeys.ROI_X, 0), intent.getIntExtra(DicKeys.ROI_Y, 0),
+                        R.string.setting_roi_fmt,
+                        roiW,
+                        roiH,
+                        intent.getIntExtra(DicKeys.ROI_X, 0),
+                        intent.getIntExtra(DicKeys.ROI_Y, 0),
                     ),
                 )
             }
             add(
                 getString(R.string.setting_image_size) to getString(
                     R.string.setting_size_fmt,
-                    intent.getIntExtra(DicKeys.IMG_W, 0), intent.getIntExtra(DicKeys.IMG_H, 0),
+                    intent.getIntExtra(DicKeys.IMG_W, 0),
+                    intent.getIntExtra(DicKeys.IMG_H, 0),
                 ),
             )
         }
@@ -736,7 +741,8 @@ class ResultViewerActivity : AppCompatActivity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
             )
         }
         row.addView(
@@ -760,8 +766,12 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun settingsDivider(): View = View(this).apply {
         layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 1,
-        ).apply { topMargin = SETTINGS_DIVIDER_MARGIN; bottomMargin = SETTINGS_DIVIDER_MARGIN }
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            1,
+        ).apply {
+            topMargin = SETTINGS_DIVIDER_MARGIN
+            bottomMargin = SETTINGS_DIVIDER_MARGIN
+        }
         setBackgroundColor(getColor(R.color.surface_outline))
     }
 

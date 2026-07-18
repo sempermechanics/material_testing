@@ -153,6 +153,46 @@ TEST_CASE(Engine, General6DOF_Recovered) {
     CHECK_NEAR(res.vy, truth.vy, TOL_GRAD);
 }
 
+// --- DICe-style field consistency: many subsets, one rigid motion -----
+// Pattern from DICe's custom_app regression test (dicengine/dice): solve a
+// GRID of subsets under a single rigid translation and require every one to
+// recover the same answer. The rest of this suite solves only the center
+// subset, which cannot see position-dependent defects — coordinate-origin
+// mistakes, asymmetric boundary handling, or row-stride bugs that grow with
+// distance from the center.
+TEST_CASE(Engine, MultiSubsetGrid_ConsistentRigidTranslation) {
+    const float u_true = 0.40f, v_true = -0.25f; // DICe's canonical ~0.4 px
+
+    // TOL_TRANS (0.02 px) is calibrated at the CENTER subset. Off-center
+    // subsets see a different local speckle realization, and measured error
+    // varies to ~0.024 px at individual POIs (seed-dependent, direction-free —
+    // sampling variance, not a positional defect). 0.03 px still fails hard on
+    // anything structural: a stride/origin bug shows up as whole pixels.
+    const float TOL_GRID = 0.03f;
+
+    dictest::SpeckleField field(1234, W, H);
+    Image ref = dictest::make_reference_image(field, W, H);
+    Image def = dictest::make_deformed_image(field, W, H,
+                                             centered(u_true, v_true));
+
+    const int poi[] = {40, 80, 120}; // 3x3 grid spanning the field
+    for (int py : poi) {
+        for (int px : poi) {
+            SubsetData subset;
+            SubsetPrecomputer::precompute_subset(subset, ref, px, py, DIM);
+            REQUIRE(subset.is_initialized);
+
+            OptimizationEngine engine;
+            auto res = engine.calculate_deformation(subset, def, 0.0f, 0.0f,
+                                                    0.0f, 0.0f, 0.0f, 0.0f,
+                                                    INIT_NO_SIMPLEX);
+            REQUIRE(res.status == 0);
+            CHECK_NEAR(res.u, u_true, TOL_GRID);
+            CHECK_NEAR(res.v, v_true, TOL_GRID);
+        }
+    }
+}
+
 // --- Auto-search path: engine must find a LARGE unknown translation ---
 TEST_CASE(Engine, AutoSearch_FindsLargeTranslation) {
     // No guess given (0,0): the coarse SSD search (±15 px) + simplex +

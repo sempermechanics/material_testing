@@ -21,7 +21,7 @@ val indicApiBaseUrl =
     }
 // Google OAuth *Web* client ID (from Google Cloud console). Used by the
 // Credential Manager one-tap flow to obtain a Google ID token that the backend
-// verifies. See docs/GOOGLE_SSO_SETUP.md. Empty = SSO button shows a setup hint.
+// verifies. See docs/backend/GOOGLE_SSO_SETUP.md. Empty = SSO button shows a setup hint.
 val googleWebClientId =
     if (localPropertiesFile.exists()) {
         localPropertiesFile
@@ -48,19 +48,20 @@ android {
         buildConfigField("String", "INDIC_API_BASE_URL", "\"$indicApiBaseUrl\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
 
-        // 🚀 ARCHITECTURE-ADAPTIVE: No hardcoded abiFilters here.
-        // The native C++/OpenCV code is compiled for every supported ABI
-        // (arm64-v8a, armeabi-v7a, x86, x86_64) so the app runs natively on
-        // any physical device AND any emulator without changing the build.
-        // At install time Android extracts only the matching architecture's
-        // .so, so each device transparently uses its own native code.
+        // Ship arm64-v8a only. Every Android phone from ~2019 onward is 64-bit
+        // ARM, so a 2022+ target needs nothing else; armeabi-v7a (32-bit) and
+        // x86/x86_64 (emulators only) would just triple the OpenCV build and
+        // bloat the APK with native code no real device runs. "Test what you
+        // ship": CI builds exactly this ABI.
         //
-        // CI override: -PabiFilters=x86_64 (comma-separated) restricts the
-        // native build so e.g. the emulator smoke job doesn't compile
-        // OpenCV four times. Never set for release builds.
-        (project.findProperty("abiFilters") as String?)
-            ?.takeIf { it.isNotBlank() }
-            ?.let { filters -> ndk { abiFilters.addAll(filters.split(",")) } }
+        // Local override: -PabiFilters=x86_64 builds for an emulator instead
+        // (comma-separated for several). Defaults to arm64-v8a when unset.
+        val requestedAbis =
+            (project.findProperty("abiFilters") as String?)
+                ?.takeIf { it.isNotBlank() }
+                ?.split(",")
+                ?: listOf("arm64-v8a")
+        ndk { abiFilters.addAll(requestedAbis) }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -81,18 +82,9 @@ android {
         }
     }
 
-    // 🚀 ADAPTIVE DELIVERY: Build one optimized APK per architecture so each
-    // device gets only the native code it can actually run (smaller, faster),
-    // plus a universal APK that runs anywhere. `installDebug` / Android Studio
-    // automatically install the APK matching the connected device's ABI.
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
-            isUniversalApk = true
-        }
-    }
+    // No ABI splits: the app targets a single ABI (arm64-v8a, see abiFilters
+    // above), so each build produces one APK (e.g. app-debug.apk) — there is
+    // nothing to split per architecture.
 
     // 🚀 NEW: Ensures C++ debug symbols are physically stripped from the final APK
     packaging {
@@ -110,6 +102,13 @@ android {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
+        }
+    }
+
+    testOptions {
+        unitTests {
+            // Robolectric (UploadResumableTest) needs the real resource table.
+            isIncludeAndroidResources = true
         }
     }
 
@@ -140,6 +139,11 @@ dependencies {
     // Pull-to-refresh on the Home list (re-checks cloud backup state on demand)
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     testImplementation(libs.junit)
+    // JVM tests for the network layer: MockWebServer fakes the backend/Drive,
+    // Robolectric supplies a real Context + org.json without a device.
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core-ktx:1.6.1")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 

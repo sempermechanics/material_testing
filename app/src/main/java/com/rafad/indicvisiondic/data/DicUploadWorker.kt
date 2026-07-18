@@ -21,8 +21,8 @@ import com.rafad.indicvisiondic.report.FieldResult
 import com.rafad.indicvisiondic.report.PdfReportGenerator
 import com.rafad.indicvisiondic.report.ReportBuilder
 import com.rafad.indicvisiondic.report.RoiData
-import com.rafad.indicvisiondic.ui.SessionLimitActivity
 import com.rafad.indicvisiondic.ui.analysis.AnalysisViewModel
+import com.rafad.indicvisiondic.ui.limit.SessionLimitActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -125,7 +125,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             if (art == null || art.file.length() != u.sizeBytes) {
                 Timber.w(
                     "Session %s incompatible: pending %s/%s (declared %d B) has no matching artifact",
-                    cloudSessionId, u.role, u.name, u.sizeBytes,
+                    cloudSessionId,
+                    u.role,
+                    u.name,
+                    u.sizeBytes,
                 )
                 return Resume.Rebuild
             }
@@ -263,7 +266,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             } else {
                 Timber.e(
                     "Skipping reports for %s — reference exists=%s, frames=%d",
-                    localId, refFile.exists(), record.defNames.size,
+                    localId,
+                    refFile.exists(),
+                    record.defNames.size,
                 )
             }
 
@@ -312,7 +317,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     is Resume.Continue -> {
                         Timber.i(
                             "Resuming session %s — %d of %d files still to upload",
-                            existingId, r.work.size, uploadSet.size,
+                            existingId,
+                            r.work.size,
+                            uploadSet.size,
                         )
                         Plan(existingId, r.work)
                     }
@@ -355,12 +362,14 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                             // Re-read the token: a long upload can outlive it.
                             val tk = TokenProvider.usableIdToken() ?: idToken
                             api.completeFile(
-                                tk, job.fileId,
+                                tk,
+                                job.fileId,
                                 FileCompleteRequest(plan.sessionId, driveId, job.file.length(), md5),
                             )
                             setProgress(
                                 androidx.work.workDataOf(
-                                    "done" to done.incrementAndGet(), "total" to total,
+                                    "done" to done.incrementAndGet(),
+                                    "total" to total,
                                 ),
                             )
                         }
@@ -415,8 +424,11 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 // The session is unrecoverable: drop the pointer + staged files so
                 // the next run rebuilds a fresh session that matches.
                 e.code == 400 -> {
-                    Timber.e("Upload 400 (%s) — discarding stale session %s, rebuilding",
-                        e.detail, record.cloudSessionId)
+                    Timber.e(
+                        "Upload 400 (%s) — discarding stale session %s, rebuilding",
+                        e.detail,
+                        record.cloudSessionId,
+                    )
                     // Erase the half-uploaded session so it doesn't orphan and
                     // eat a quota slot, then rebuild fresh next run.
                     runCatching {
@@ -462,34 +474,27 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             .put("capturedAtUtc", iso)
             .put("frameCount", record.frameCount)
             .put("frames", frames)
-            .put("app", JSONObject()
-                .put("versionName", BuildConfig.VERSION_NAME)
-                .put("versionCode", BuildConfig.VERSION_CODE))
-            .put("device", JSONObject()
-                .put("id", DeviceKeyManager(applicationContext).getDeviceId())
-                .put("manufacturer", Build.MANUFACTURER)
-                .put("model", Build.MODEL)
-                .put("os", "Android ${Build.VERSION.RELEASE}")
-                .put("sdkInt", Build.VERSION.SDK_INT))
-            .put("user", JSONObject()
-                .put("uid", TokenStore.cachedUid(applicationContext))
-                .put("email", TokenStore.cachedEmail(applicationContext)))
-            .put("engine", JSONObject()
-                .put("subset", record.subset)
-                .put("step", record.step)
-                .put("strainWindow", record.strainWindow)
-                .put("strainMethod", record.strainMethod)
-                .put("use6x6", record.use6x6)
-                .put("imageWidth", record.imgW)
-                .put("imageHeight", record.imgH)
-                .put("roi", JSONObject()
-                    .put("x", record.roiX).put("y", record.roiY)
-                    .put("w", record.roiW).put("h", record.roiH))
-                .put("stats", JSONArray(record.engineStats)))
-            .put("metrics", JSONObject()
-                .put("pointsConverged", record.pointsConverged)
-                .put("avgIterations", record.avgIterations.toDouble())
-                .put("executionTimeMs", record.executionTimeMs))
+            .put(
+                "app",
+                JSONObject()
+                    .put("versionName", BuildConfig.VERSION_NAME)
+                    .put("versionCode", BuildConfig.VERSION_CODE),
+            )
+            .put("device", deviceJson(applicationContext))
+            .put(
+                "user",
+                JSONObject()
+                    .put("uid", TokenStore.cachedUid(applicationContext))
+                    .put("email", TokenStore.cachedEmail(applicationContext)),
+            )
+            .put("engine", engineJson(record))
+            .put(
+                "metrics",
+                JSONObject()
+                    .put("pointsConverged", record.pointsConverged)
+                    .put("avgIterations", record.avgIterations.toDouble())
+                    .put("executionTimeMs", record.executionTimeMs),
+            )
             .toString(2)
     }
 
@@ -720,3 +725,29 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val NO_RECOMPRESS = setOf("jpg", "jpeg", "png", "pdf", "webp", "zip")
     }
 }
+
+// metadata.json sections — file-level so they don't count against the worker
+// class's function budget; they only shape JSON and touch no worker state.
+
+private fun deviceJson(context: Context): JSONObject = JSONObject()
+    .put("id", DeviceKeyManager(context).getDeviceId())
+    .put("manufacturer", Build.MANUFACTURER)
+    .put("model", Build.MODEL)
+    .put("os", "Android ${Build.VERSION.RELEASE}")
+    .put("sdkInt", Build.VERSION.SDK_INT)
+
+private fun engineJson(record: SessionRecord): JSONObject = JSONObject()
+    .put("subset", record.subset)
+    .put("step", record.step)
+    .put("strainWindow", record.strainWindow)
+    .put("strainMethod", record.strainMethod)
+    .put("use6x6", record.use6x6)
+    .put("imageWidth", record.imgW)
+    .put("imageHeight", record.imgH)
+    .put(
+        "roi",
+        JSONObject()
+            .put("x", record.roiX).put("y", record.roiY)
+            .put("w", record.roiW).put("h", record.roiH),
+    )
+    .put("stats", JSONArray(record.engineStats))

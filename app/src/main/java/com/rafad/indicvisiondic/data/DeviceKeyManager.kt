@@ -30,6 +30,7 @@ class DeviceKeyManager(private val context: Context) {
         const val KEY_ALIAS = "IndicDeviceKeyEc"
         const val PREFS = "indic_device"
         const val K_DEVICE_ID = "device_id"
+
         // The infamous Android 2.2 bug value shared by many devices — never use it.
         const val LEGACY_BAD_ANDROID_ID = "9774d56d682e549c"
     }
@@ -64,7 +65,8 @@ class DeviceKeyManager(private val context: Context) {
     @Suppress("HardwareIds") // ANDROID_ID is app-scoped, not a hardware identifier
     fun getDeviceId(): String {
         val androidId = Settings.Secure.getString(
-            context.contentResolver, Settings.Secure.ANDROID_ID,
+            context.contentResolver,
+            Settings.Secure.ANDROID_ID,
         )
         if (!androidId.isNullOrBlank() && androidId != LEGACY_BAD_ANDROID_ID) {
             return "and-$androidId"

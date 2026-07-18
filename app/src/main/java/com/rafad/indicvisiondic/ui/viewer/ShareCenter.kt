@@ -97,8 +97,11 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 if (saveMode) {
                     // SAF saves one document; bundle multi-file exports into a zip first.
                     val save = withContext(Dispatchers.Default) {
-                        if (files.size == 1) files[0] to mime
-                        else zipInto(files, "inDIC_export.zip") to "application/zip"
+                        if (files.size == 1) {
+                            files[0] to mime
+                        } else {
+                            zipInto(files, "inDIC_export.zip") to "application/zip"
+                        }
                     }
                     progress.dismiss()
                     host.saveFileToDevice(save.first, save.second)

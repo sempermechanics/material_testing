@@ -1,4 +1,4 @@
-package com.rafad.indicvisiondic.ui
+package com.rafad.indicvisiondic.ui.common
 
 import android.app.Activity
 import android.view.View

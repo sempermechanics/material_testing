@@ -20,6 +20,12 @@ spotless {
                 "ktlint_standard_filename" to "disabled",
                 "ktlint_standard_property-naming" to "disabled",
                 "ktlint_standard_function-naming" to "disabled",
+                // These two JOIN wrapped declarations onto one line. With
+                // max_line_length off they produce >120-char lines that the
+                // detekt gate (MaxLineLength 120) then rejects — the two gates
+                // must not fight over the same lines.
+                "ktlint_standard_function-signature" to "disabled",
+                "ktlint_standard_function-expression-body" to "disabled",
             ),
         )
     }

@@ -30,10 +30,10 @@ import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
-import com.rafad.indicvisiondic.ui.Insets
-import com.rafad.indicvisiondic.ui.MediaSourceChooser
-import com.rafad.indicvisiondic.ui.SessionLimitActivity
-import com.rafad.indicvisiondic.ui.Motion
+import com.rafad.indicvisiondic.ui.common.Insets
+import com.rafad.indicvisiondic.ui.common.MediaSourceChooser
+import com.rafad.indicvisiondic.ui.common.Motion
+import com.rafad.indicvisiondic.ui.limit.SessionLimitActivity
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher

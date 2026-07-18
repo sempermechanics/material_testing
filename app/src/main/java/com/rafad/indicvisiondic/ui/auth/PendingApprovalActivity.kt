@@ -17,7 +17,7 @@ import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.data.DeviceKeyManager
-import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.home.HomeActivity
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -43,7 +43,7 @@ class PendingApprovalActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_pending_approval)
 
-        com.rafad.indicvisiondic.ui.Insets.padVertical(findViewById(R.id.pendingRoot))
+        com.rafad.indicvisiondic.ui.common.Insets.padVertical(findViewById(R.id.pendingRoot))
 
         keyManager = DeviceKeyManager(this)
 

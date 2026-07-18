@@ -71,8 +71,8 @@ object CloudSync {
      * Drive. It costs a Drive call per session, so it's reserved for an explicit
      * pull-to-refresh; screen resumes use the cheap index check.
      */
-    suspend fun reconcile(context: Context, reupload: Boolean = true, deep: Boolean = false): Outcome =
-        withContext(Dispatchers.IO) {
+    suspend fun reconcile(context: Context, reupload: Boolean = true, deep: Boolean = false): Outcome {
+        return withContext(Dispatchers.IO) {
             val appContext = context.applicationContext
             val api = IndicApi(appContext)
             if (!api.enabled) return@withContext Outcome.Disabled
@@ -124,6 +124,7 @@ object CloudSync {
             prefs.edit().putLong(K_LAST_RECONCILE_AT, System.currentTimeMillis()).apply()
             Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
         }
+    }
 
     /** Outcome of an erase request, so the UI can tell the user what happened. */
     enum class EraseResult {
@@ -143,32 +144,31 @@ object CloudSync {
      * can't be reached we do NOT delete locally either, so the user is never
      * told "erased everywhere" when it isn't.
      */
-    suspend fun eraseEverywhere(context: Context, localSessionId: String): EraseResult =
-        withContext(Dispatchers.IO) {
-            val appContext = context.applicationContext
-            val record = SessionStore.get(appContext, localSessionId)
-            val api = IndicApi(appContext)
+    suspend fun eraseEverywhere(context: Context, localSessionId: String): EraseResult = withContext(Dispatchers.IO) {
+        val appContext = context.applicationContext
+        val record = SessionStore.get(appContext, localSessionId)
+        val api = IndicApi(appContext)
 
-            val neverSynced = record == null ||
-                (record.syncState == SessionRecord.SyncState.LOCAL_ONLY && record.cloudSessionId.isBlank())
-            if (!api.enabled || neverSynced) {
-                SessionStore.delete(appContext, localSessionId)
-                return@withContext EraseResult.ERASED_EVERYWHERE
-            }
-
-            val token = TokenProvider.usableIdToken()
-                ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
-            try {
-                val cloudId = resolveCloudId(api, token, record!!)
-                if (cloudId != null) api.deleteSession(token, cloudId)
-                SessionStore.delete(appContext, localSessionId)
-                Timber.i("Erased analysis %s locally and in the cloud", localSessionId)
-                EraseResult.ERASED_EVERYWHERE
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                Timber.e(e, "Cloud erase failed for %s — leaving local copy intact", localSessionId)
-                EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
-            }
+        val neverSynced = record == null ||
+            (record.syncState == SessionRecord.SyncState.LOCAL_ONLY && record.cloudSessionId.isBlank())
+        if (!api.enabled || neverSynced) {
+            SessionStore.delete(appContext, localSessionId)
+            return@withContext EraseResult.ERASED_EVERYWHERE
         }
+
+        val token = TokenProvider.usableIdToken()
+            ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+        try {
+            val cloudId = resolveCloudId(api, token, record!!)
+            if (cloudId != null) api.deleteSession(token, cloudId)
+            SessionStore.delete(appContext, localSessionId)
+            Timber.i("Erased analysis %s locally and in the cloud", localSessionId)
+            EraseResult.ERASED_EVERYWHERE
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.e(e, "Cloud erase failed for %s — leaving local copy intact", localSessionId)
+            EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+        }
+    }
 
     /**
      * GDPR data export (Art. 20 portability): fetch everything the backend

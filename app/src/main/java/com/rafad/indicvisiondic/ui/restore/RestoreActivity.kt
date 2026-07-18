@@ -20,7 +20,7 @@ import com.rafad.indicvisiondic.data.CloudRestore
 import com.rafad.indicvisiondic.data.DicRestoreWorker
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.CloudSessionDto
-import com.rafad.indicvisiondic.ui.Insets
+import com.rafad.indicvisiondic.ui.common.Insets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

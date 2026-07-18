@@ -1,5 +1,26 @@
 name: CI
 
+# =====================================================================
+# Test pyramid — cheapest/fastest first, so failures surface early.
+# All jobs run in parallel; the ordering below is conceptual, not temporal.
+#
+#   Tier          Job                        Runs on      Proves
+#   ------------  -------------------------  -----------  ----------------------
+#   1 unit        native-tests               host         engine math (host CMake
+#                                                          suite: unit/ + integration/)
+#   2 unit+san    native-tests-sanitized     host         no UB / races (ASan+UBSan, TSan)
+#   3 jvm+gates   android-kotlin             host         Kotlin unit tests +
+#                                                          spotless/detekt/lint/R8
+#   4 build       android-native-arm64       host+NDK     engine compiles for the
+#                                                          shipped ABI (arm64-v8a)
+#
+# Tiers 1-3 are fast (~minutes, no NDK). Tier 4 is the slow from-source
+# OpenCV build. The app ships arm64-v8a only (every 2022+ phone is 64-bit
+# ARM), so CI builds exactly what users get — "test what you ship". x86/x86_64
+# are emulator-only and the on-device runtime check are both covered by LOCAL
+# emulator testing, not CI. See docs/engine/TESTING.md for the test catalog.
+# =====================================================================
+
 on:
   push:
     branches: [damodar, feature/hybrid-delaunay-dic, main]
@@ -19,25 +40,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/dic-submodules
 
-      # Tests only need Eigen + OpenCV's universal-intrinsics headers.
-      - name: Fetch submodules
-        run: |
-          git submodule update --init --depth 1 \
-            app/src/main/cpp/third_party/eigen \
-            app/src/main/cpp/third_party/opencv \
-          || git submodule update --init \
-            app/src/main/cpp/third_party/eigen \
-            app/src/main/cpp/third_party/opencv
-
+      # Build OUT of the source tree (repo-level build/, gitignored) so the
+      # test folder stays pure sources.
       - name: Configure
-        run: cmake -S app/src/test/cpp -B app/src/test/cpp/build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S app/src/test/cpp -B build/native-tests -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build app/src/test/cpp/build -j
+        run: cmake --build build/native-tests -j
 
       - name: Run tests
-        run: ./app/src/test/cpp/build/dic_tests
+        run: ./build/native-tests/dic_tests
 
   # ===================================================================
   # 2. Same suite under sanitizers.
@@ -54,27 +68,19 @@ jobs:
         sanitizer: ['address,undefined', 'thread']
     steps:
       - uses: actions/checkout@v4
-
-      - name: Fetch submodules
-        run: |
-          git submodule update --init --depth 1 \
-            app/src/main/cpp/third_party/eigen \
-            app/src/main/cpp/third_party/opencv \
-          || git submodule update --init \
-            app/src/main/cpp/third_party/eigen \
-            app/src/main/cpp/third_party/opencv
+      - uses: ./.github/actions/dic-submodules
 
       - name: Configure
         run: >
-          cmake -S app/src/test/cpp -B app/src/test/cpp/build
+          cmake -S app/src/test/cpp -B build/native-tests
           -DCMAKE_BUILD_TYPE=Release
           -DDIC_SANITIZER=${{ matrix.sanitizer }}
 
       - name: Build
-        run: cmake --build app/src/test/cpp/build -j
+        run: cmake --build build/native-tests -j
 
       - name: Run tests
-        run: ./app/src/test/cpp/build/dic_tests
+        run: ./build/native-tests/dic_tests
 
   # ===================================================================
   # 3. Kotlin compilation + JVM unit tests (no NDK needed).
@@ -108,16 +114,16 @@ jobs:
         run: ./gradlew :app:minifyReleaseWithR8 --console=plain
 
   # ===================================================================
-  # 4. Full cross-ABI native build: OpenCV + engine compiled for
-  #    arm64-v8a, armeabi-v7a, x86, x86_64. This is the "does the
-  #    SIMD/OpenMP code build for every mobile processor" gate —
-  #    NEON universal intrinsics on both ARM ABIs, SSE on both x86
-  #    ABIs, Carotene on ARM, static OpenMP linking everywhere.
+  # 4. Native compile gate for the shipped ABI: OpenCV + engine built for
+  #    arm64-v8a — the only architecture the app ships, and what every
+  #    2022+ phone runs. Proves the SIMD/OpenMP code compiles and links
+  #    (NEON, static OpenMP). x86/x86_64 (emulator-only) and the on-device
+  #    runtime smoke test are covered by LOCAL emulator testing, not CI.
   # ===================================================================
-  android-native-all-abis:
-    name: Android native build (all ABIs)
+  android-native-arm64:
+    name: Android native build (arm64-v8a)
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -136,78 +142,22 @@ jobs:
         with:
           validate-wrappers: false
 
-      # The from-source OpenCV build dominates; cache per-ABI object dirs
-      # keyed on everything that can change the native build.
+      # The from-source OpenCV build dominates; cache the object dir keyed on
+      # everything that can change the native build.
       - name: Cache native build (.cxx)
         uses: actions/cache@v4
         with:
           path: app/.cxx
-          key: cxx-all-abis-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', '.gitmodules', 'app/src/main/cpp/**/*.cpp', 'app/src/main/cpp/**/*.h') }}
-          restore-keys: cxx-all-abis-
+          key: cxx-arm64-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', '.gitmodules', 'app/src/main/cpp/**/*.cpp', 'app/src/main/cpp/**/*.h') }}
+          restore-keys: cxx-arm64-
 
-      - name: Assemble debug APK (all ABIs)
-        run: ./gradlew :app:assembleDebug --console=plain
+      # arm64-v8a is the default ABI now, but pass it explicitly so the job is
+      # self-documenting and independent of the gradle default.
+      - name: Assemble debug APK (arm64-v8a)
+        run: ./gradlew :app:assembleDebug -PabiFilters=arm64-v8a --console=plain
 
-      # ABI splits are enabled, so outputs are per-ABI APKs + a universal one.
-      - name: Verify all four ABIs are packaged
+      - name: Verify the arm64-v8a .so is packaged
         run: |
-          UNIVERSAL=$(ls app/build/outputs/apk/debug/*universal*.apk)
-          unzip -l "$UNIVERSAL" | grep 'libindicvision_core.so' | tee /tmp/abis.txt
-          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
-            grep -q "lib/$abi/libindicvision_core.so" /tmp/abis.txt || { echo "MISSING ABI: $abi"; exit 1; }
-          done
-
-  # ===================================================================
-  # 5. Emulator smoke test: loads the real stripped .so on an Android
-  #    runtime and runs the FULL parallel pipeline (OpenMP pre-pass,
-  #    AKAZE seeding, threaded RGDIC) on a synthetic pair with known
-  #    displacement. Catches what no host test can: System.loadLibrary
-  #    failures, static-OpenMP runtime issues, JNI marshalling bugs.
-  # ===================================================================
-  emulator-smoke:
-    name: Emulator smoke test (x86_64)
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      # See the all-ABIs job: OpenCV submodule ships wrapper jars that
-      # fail checksum validation; ours is validated in android-kotlin.
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          validate-wrappers: false
-
-      - name: Cache native build (.cxx)
-        uses: actions/cache@v4
-        with:
-          path: app/.cxx
-          key: cxx-x86_64-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', '.gitmodules', 'app/src/main/cpp/**/*.cpp', 'app/src/main/cpp/**/*.h') }}
-          restore-keys: cxx-x86_64-
-
-      - name: Enable KVM group perms
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Run instrumented smoke test
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: x86_64
-          disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 --console=plain
-
-      - name: Upload instrumentation results
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: connected-test-reports
-          path: app/build/reports/androidTests/
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libindicvision_core.so" \
+            || { echo "MISSING arm64-v8a native lib"; exit 1; }
