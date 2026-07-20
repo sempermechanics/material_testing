@@ -52,6 +52,8 @@ set(DIC_UNIT_TESTS
 set(DIC_INTEGRATION_TESTS
         integration/test_optimization_engine.cpp
         integration/test_robustness.cpp
+        integration/test_dice_parity.cpp      # DICe parity on our synthetic images
+        integration/test_dice_realimage.cpp   # DICe parity on DICe's real images (fixtures/dice)
 )
 
 # Production sources under test — compiled as-is, no test doubles.
@@ -77,6 +79,11 @@ target_include_directories(dic_tests PRIVATE
         ${ENGINE_DIR}/third_party/opencv/modules/core/include  # OpenCV universal intrinsics (submodule, header-only)
         # shim/ (added below) supplies the generated opencv2/opencv_modules.hpp + cvconfig.h
 )
+
+# Absolute path to the third-party DICe cross-validation fixtures (BSD-3, see
+# fixtures/dice/), so the real-image test locates them regardless of build dir.
+target_compile_definitions(dic_tests PRIVATE
+        DICE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dice")
 
 # Quiet the intentional LOGD redefinitions in engine sources (Clang-only flag)
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
