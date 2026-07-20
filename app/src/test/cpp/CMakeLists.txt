@@ -88,6 +88,31 @@ target_include_directories(dic_tests PRIVATE
 target_compile_definitions(dic_tests PRIVATE
         DICE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dice")
 
+# ---------------------------------------------------------------------
+# OPTIONAL: OpenCV, used only to decode fixture images (.tif) so they can be
+# vendored in DICe's original format instead of converted.
+#
+# It is compiled into its OWN target: the engine TUs include OpenCV's
+# universal-intrinsics headers from the git submodule, so the system opencv2/
+# tree is scoped to image_io.cpp alone and never mixes with them.
+#
+# Without OpenCV the image-backed tests compile out (DIC_HAVE_OPENCV undefined)
+# and the rest of the suite still builds with just a C++17 compiler.
+# ---------------------------------------------------------------------
+find_package(OpenCV QUIET COMPONENTS core imgcodecs)
+if (OpenCV_FOUND)
+    message(STATUS "OpenCV ${OpenCV_VERSION} found — image-backed DICe tests enabled")
+    add_library(dic_test_imageio STATIC framework/image_io.cpp)
+    target_include_directories(dic_test_imageio PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}   # framework/image_io.h
+            ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(dic_test_imageio PRIVATE ${OpenCV_LIBS})
+    target_compile_definitions(dic_tests PRIVATE DIC_HAVE_OPENCV=1)
+    target_link_libraries(dic_tests PRIVATE dic_test_imageio ${OpenCV_LIBS})
+else ()
+    message(STATUS "OpenCV not found — image-backed DICe tests will be skipped")
+endif ()
+
 # Quiet the intentional LOGD redefinitions in engine sources (Clang-only flag)
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(dic_tests PRIVATE -Wno-macro-redefined)

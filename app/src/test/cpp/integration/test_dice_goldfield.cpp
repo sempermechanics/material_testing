@@ -32,7 +32,7 @@
 //   Coordinates: (0,0) upper-left, x right, y down
 // =====================================================================
 #include "framework/test_framework.h"
-#include "framework/pgm.h"
+#include "framework/image_io.h"
 #include "core/OptimizationEngine.h"
 #include "preprocessing/ImageProcessor.h"
 #include "preprocessing/SubsetPrecomputer.h"
@@ -44,14 +44,16 @@
 #include <string>
 #include <vector>
 
+#if defined(DIC_HAVE_OPENCV)
+
 using IndicVision::Image;
 using IndicVision::SubsetData;
 using IndicVision::SubsetPrecomputer;
 using IndicVision::OptimizationEngine;
 using IndicVision::AnalysisResult;
 using IndicVision::INIT_NO_SIMPLEX;
-using dictest::Pgm;
-using dictest::load_pgm;
+using dictest::GrayImage;
+using dictest::load_gray;
 
 namespace {
 
@@ -97,9 +99,9 @@ namespace {
 } // namespace
 
 TEST_CASE(DiceGoldField, OhtCfrp_AgreesWithDiceSolution) {
-    Pgm r, d;
-    REQUIRE(load_pgm(std::string(DICE_FIXTURES_DIR) + "/oht_cfrp_00.pgm", r));
-    REQUIRE(load_pgm(std::string(DICE_FIXTURES_DIR) + "/oht_cfrp_01.pgm", d));
+    GrayImage r, d;
+    REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/oht_cfrp_00.tiff", r));
+    REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/oht_cfrp_01.tiff", d));
     Image ref(r.w, r.h, r.px.data());
     ref.prepare_data(false);
     Image def(d.w, d.h, d.px.data());
@@ -147,3 +149,5 @@ TEST_CASE(DiceGoldField, OhtCfrp_AgreesWithDiceSolution) {
     CHECK(std::fabs(maxdu) < MAX_TOL);
     CHECK(std::fabs(maxdv) < MAX_TOL);
 }
+
+#endif // DIC_HAVE_OPENCV

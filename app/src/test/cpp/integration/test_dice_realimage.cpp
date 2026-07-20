@@ -2,7 +2,7 @@
 // SUITE: DiceRealImage — cross-validation on DICe's REAL test images
 //
 // Companion to DiceParity (which uses our analytic synthetic images): this
-// runs OUR engine on DICe's ACTUAL data — fixtures/dice/ref.pgm + def.pgm,
+// runs OUR engine on DICe's ACTUAL data — fixtures/dice/ref.tif + def.tif,
 // the 512x512 speckle pair from DICe's tests/examples/custom_app (BSD-3, see
 // fixtures/dice/LICENSE.DICe). DICe's example asserts ONLY the X component:
 // each of four subsets recovers U = 0.4 px within 0.1 px (its errorTol; see
@@ -30,7 +30,7 @@
 // real run.
 // =====================================================================
 #include "framework/test_framework.h"
-#include "framework/pgm.h"
+#include "framework/image_io.h"
 #include "core/OptimizationEngine.h"
 #include "preprocessing/ImageProcessor.h"
 #include "preprocessing/SubsetPrecomputer.h"
@@ -38,14 +38,16 @@
 #include <cstdio>
 #include <string>
 
+#if defined(DIC_HAVE_OPENCV)
+
 using IndicVision::Image;
 using IndicVision::SubsetData;
 using IndicVision::SubsetPrecomputer;
 using IndicVision::OptimizationEngine;
 using IndicVision::AnalysisResult;
 using IndicVision::INIT_NO_SIMPLEX;
-using dictest::Pgm;
-using dictest::load_pgm;
+using dictest::GrayImage;
+using dictest::load_gray;
 
 namespace {
 
@@ -60,9 +62,9 @@ namespace {
 TEST_CASE(DiceRealImage, CustomApp_0p4px_RealSpeckle) {
     const std::string dir = DICE_FIXTURES_DIR;
 
-    Pgm r, d;
-    REQUIRE(load_pgm(dir + "/ref.pgm", r));
-    REQUIRE(load_pgm(dir + "/def.pgm", d));
+    GrayImage r, d;
+    REQUIRE(load_gray(dir + "/ref.tif", r));
+    REQUIRE(load_gray(dir + "/def.tif", d));
     REQUIRE(r.w == 512);
     REQUIRE(r.h == 512);
     REQUIRE(d.w == r.w);
@@ -102,3 +104,5 @@ TEST_CASE(DiceRealImage, CustomApp_0p4px_RealSpeckle) {
     }
     CHECK(solved == 4);
 }
+
+#endif // DIC_HAVE_OPENCV

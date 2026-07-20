@@ -3,8 +3,8 @@
 //
 // Extends the real-image cross-validation beyond rigid translation to STRAIN,
 // the way the DIC Challenge's synthetic samples do: take real speckle (DICe's
-// ref.pgm) and apply a KNOWN homogeneous strain by resampling
-// (fixtures/dice/def_exx.pgm = ref warped by exx = 0.01, i.e. 1% uniaxial in
+// ref.tif) and apply a KNOWN homogeneous strain by resampling
+// (fixtures/dice/def_exx.tif = ref warped by exx = 0.01, i.e. 1% uniaxial in
 // X, centered so displacements stay small). Truth is analytic — in reference
 // coordinates u(x) = 0.01*(x - 256), so du/dx = ux = 0.01 exactly — while the
 // texture is real. Note: DICe's own dic_challenge_12 (oht_cfrp) is a real
@@ -26,7 +26,7 @@
 // Strain suite.)
 // =====================================================================
 #include "framework/test_framework.h"
-#include "framework/pgm.h"
+#include "framework/image_io.h"
 #include "core/OptimizationEngine.h"
 #include "preprocessing/ImageProcessor.h"
 #include "preprocessing/SubsetPrecomputer.h"
@@ -35,14 +35,16 @@
 #include <cstdio>
 #include <string>
 
+#if defined(DIC_HAVE_OPENCV)
+
 using IndicVision::Image;
 using IndicVision::SubsetData;
 using IndicVision::SubsetPrecomputer;
 using IndicVision::OptimizationEngine;
 using IndicVision::AnalysisResult;
 using IndicVision::INIT_NO_SIMPLEX;
-using dictest::Pgm;
-using dictest::load_pgm;
+using dictest::GrayImage;
+using dictest::load_gray;
 
 namespace {
     constexpr int SUBSET_SIZE = 27;
@@ -61,9 +63,9 @@ namespace {
 } // namespace
 
 TEST_CASE(DiceStrain, RealSpeckle_UniaxialStrain_1pct) {
-    Pgm r, d;
-    REQUIRE(load_pgm(std::string(DICE_FIXTURES_DIR) + "/ref.pgm", r));
-    REQUIRE(load_pgm(std::string(DICE_FIXTURES_DIR) + "/def_exx.pgm", d));
+    GrayImage r, d;
+    REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/ref.tif", r));
+    REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/def_exx.tif", d));
     Image ref(r.w, r.h, r.px.data());
     ref.prepare_data(false);
     Image def(d.w, d.h, d.px.data());
@@ -123,3 +125,5 @@ TEST_CASE(DiceStrain, RealSpeckle_UniaxialStrain_1pct) {
     // a blow-up here means the solve degraded, not just that strain is noisy.
     CHECK(rms_ux < RMS_MAX);
 }
+
+#endif // DIC_HAVE_OPENCV
