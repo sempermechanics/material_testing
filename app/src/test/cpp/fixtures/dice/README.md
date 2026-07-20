@@ -24,6 +24,14 @@ Engine, https://github.com/dicengine/dice), directory
   `du/dx = 0.01`. Used by `integration/test_dice_strain.cpp` to validate strain
   recovery on real texture.
 
-Consumed by `integration/test_dice_realimage.cpp` (translation), `_strain.cpp`
-(strain), and `_field_regression.cpp` (full-field gold), which run **our**
-engine on these images. No DICe source code is used.
+- **DICe's own solved field:** `oht_cfrp_00.pgm` / `oht_cfrp_01.pgm` (400×1040,
+  converted from DICe's `tests/regression/dic_challenge_12/images/*.tiff`) plus
+  `DICe_solution_01.txt` — DICe's solved displacement field for that pair
+  (subset 27, step 35, ZNSSD, KEYS_FOURTH). This is an **open-hole-tension CFRP
+  experiment**, so there is *no analytic truth*: DICe's field is a reference
+  **result**, and `test_dice_goldfield.cpp` measures inter-code **agreement**
+  against it — the standard being DICe's data, not our own output.
+
+Consumed by `integration/test_dice_realimage.cpp` (translation),
+`_dice_strain.cpp` (strain), and `_dice_goldfield.cpp` (field vs DICe's
+solution). All run **our** engine on DICe's data. No DICe source code is used.
