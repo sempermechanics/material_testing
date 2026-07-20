@@ -52,6 +52,7 @@ using IndicVision::SubsetPrecomputer;
 using IndicVision::OptimizationEngine;
 using IndicVision::AnalysisResult;
 using IndicVision::INIT_NO_SIMPLEX;
+using IndicVision::INIT_AUTO_SEARCH;
 using dictest::GrayImage;
 using dictest::load_gray;
 
@@ -148,6 +149,90 @@ TEST_CASE(DiceGoldField, OhtCfrp_AgreesWithDiceSolution) {
     CHECK(rms_v < RMS_TOL);
     CHECK(std::fabs(maxdu) < MAX_TOL);
     CHECK(std::fabs(maxdv) < MAX_TOL);
+}
+
+// ---------------------------------------------------------------------
+// Load-step ladder. DICe ships a solved field for every step of the same
+// experiment, so the deformation grows while the reference stays fixed:
+//
+//   step 01 -> max |d| ~  0.9 px      step 06 -> max |d| ~  6.6 px
+//   step 03 -> max |d| ~  3.2 px      step 11 -> max |d| ~ 12.0 px
+//
+// Only step 01 is within a zero-guess ICGN's ~1 px pull-in range, so the rest
+// exercise the COARSE SEARCH path (INIT_AUTO_SEARCH) — the seeding behaviour
+// the rest of the host suite never touches. Each rung is measured against
+// DICe's own field, and per-rung agreement is reported so the bounds stay
+// evidence-based.
+// ---------------------------------------------------------------------
+namespace {
+    struct Rung {
+        const char *image;
+        const char *gold;
+        double max_disp_px; // from DICe's own field, for context in the log
+    };
+
+    // Agreement bounds for searched (multi-pixel) rungs. Looser than step 01:
+    // the coarse search lands on a slightly different basin than DICe's
+    // neighbour-seeded guess, and these are real experimental images.
+    constexpr double LADDER_RMS_TOL = 0.05;
+    constexpr double LADDER_MIN_FRACTION = 0.90;
+} // namespace
+
+TEST_CASE(DiceGoldField, OhtCfrp_LoadStepLadder) {
+    GrayImage r;
+    REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/oht_cfrp_00.tiff", r));
+    Image ref(r.w, r.h, r.px.data());
+    ref.prepare_data(false);
+
+    const Rung rungs[] = {
+        {"/oht_cfrp_03.tiff", "/DICe_solution_03.txt", 3.16},
+        {"/oht_cfrp_06.tiff", "/DICe_solution_06.txt", 6.61},
+        {"/oht_cfrp_11.tiff", "/DICe_solution_11.txt", 12.03},
+    };
+
+    for (const auto &rung : rungs) {
+        GrayImage d;
+        REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + rung.image, d));
+        Image def(d.w, d.h, d.px.data());
+        def.prepare_data(false);
+
+        std::vector<GoldPt> gold;
+        REQUIRE(load_dice_gold(std::string(DICE_FIXTURES_DIR) + rung.gold, gold));
+
+        int compared = 0;
+        double su2 = 0, sv2 = 0, maxd = 0;
+        for (const auto &g : gold) {
+            SubsetData subset;
+            SubsetPrecomputer::precompute_subset(subset, ref, g.x, g.y, SUBSET_SIZE);
+            if (!subset.is_initialized) continue;
+
+            OptimizationEngine engine;
+            engine.use_6x6_interpolator = true;
+            // No prior knowledge: the engine must FIND a multi-pixel shift.
+            AnalysisResult res = engine.calculate_deformation(
+                subset, def, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, INIT_AUTO_SEARCH);
+            if (res.status != 0) continue;
+
+            const double du = static_cast<double>(res.u) - g.u;
+            const double dv = static_cast<double>(res.v) - g.v;
+            su2 += du * du;
+            sv2 += dv * dv;
+            maxd = std::max(maxd, std::max(std::fabs(du), std::fabs(dv)));
+            ++compared;
+        }
+
+        REQUIRE(compared > 0);
+        const double frac = static_cast<double>(compared) / static_cast<double>(gold.size());
+        const double rms_u = std::sqrt(su2 / compared), rms_v = std::sqrt(sv2 / compared);
+        std::printf("  DiceGoldField ladder %s (DICe max|d|=%.2f px):"
+                    " converged %d/%zu (%.0f%%)  rms du=%.4f dv=%.4f  max|d|=%.4f\n",
+                    rung.gold, rung.max_disp_px, compared, gold.size(),
+                    frac * 100.0, rms_u, rms_v, maxd);
+
+        CHECK(frac >= LADDER_MIN_FRACTION);
+        CHECK(rms_u < LADDER_RMS_TOL);
+        CHECK(rms_v < LADDER_RMS_TOL);
+    }
 }
 
 #endif // DIC_HAVE_OPENCV

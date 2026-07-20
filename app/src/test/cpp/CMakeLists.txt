@@ -55,7 +55,14 @@ set(DIC_INTEGRATION_TESTS
         integration/test_dice_parity.cpp      # DICe parity on our synthetic images
         integration/test_dice_realimage.cpp   # DICe parity on DICe's real images (fixtures/dice)
         integration/test_dice_strain.cpp      # strain recovery on real speckle, known truth
-        integration/test_dice_goldfield.cpp   # our field vs DICe's OWN solved field
+        integration/test_dice_goldfield.cpp   # our field vs DICe's OWN solved field (+ load-step ladder)
+        integration/test_vsg_realimage.cpp    # the VSG strain pipeline on real speckle
+)
+
+# perf/ mirrors DICe's tests/performance tier: throughput is reported for
+# tracking, guarded only against catastrophic regressions (CI timing is noisy).
+set(DIC_PERF_TESTS
+        perf/test_throughput.cpp
 )
 
 # Production sources under test — compiled as-is, no test doubles.
@@ -70,6 +77,7 @@ add_executable(dic_tests
         test_main.cpp                # micro-framework runner entry point
         ${DIC_UNIT_TESTS}
         ${DIC_INTEGRATION_TESTS}
+        ${DIC_PERF_TESTS}
         ${DIC_ENGINE_SOURCES}
 )
 
