@@ -52,7 +52,7 @@ namespace {
     constexpr double VSG_RMS_MAX = 2.0e-3;
 } // namespace
 
-TEST_CASE(VsgRealImage, UniaxialStrain_ThroughStrainCalculator) {
+TEST_CASE(DiceStrainVsg, UniaxialStrain_ThroughStrainCalculator) {
     GrayImage r, d;
     REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/ref.tif", r));
     REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/def_exx.tif", d));
@@ -116,7 +116,7 @@ TEST_CASE(VsgRealImage, UniaxialStrain_ThroughStrainCalculator) {
     REQUIRE(n > 0);
 
     const double mean = sum / n, rms = std::sqrt(sq / n);
-    std::printf("  VsgRealImage: %d/%d subsets solved, %d VSG points\n"
+    std::printf("  DiceStrainVsg: %d/%d subsets solved, %d VSG points\n"
                 "     exx mean=%.5f (truth %.5f)  rms dev=%.5f  worst=%.5f\n",
                 solved, GRID_N * GRID_N, n, mean, (double) EXX_TRUE, rms, worst);
 

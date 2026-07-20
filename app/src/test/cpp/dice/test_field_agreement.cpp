@@ -84,7 +84,7 @@ namespace {
 
 } // namespace
 
-TEST_CASE(DiceGoldField, OhtCfrp_AgreesWithDiceSolution) {
+TEST_CASE(DiceFieldAgreement, OhtCfrp_AgreesWithDiceSolution) {
     GrayImage r, d;
     REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/oht_cfrp_00.tiff", r));
     REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/oht_cfrp_01.tiff", d));
@@ -95,7 +95,7 @@ TEST_CASE(DiceGoldField, OhtCfrp_AgreesWithDiceSolution) {
 
     std::vector<GoldPt> gold;
     REQUIRE(load_dice_gold(std::string(DICE_FIXTURES_DIR) + "/DICe_solution_01.txt", gold));
-    std::printf("  DiceGoldField: %zu DICe reference points\n", gold.size());
+    std::printf("  DiceFieldAgreement: %zu DICe reference points\n", gold.size());
 
     int compared = 0;
     double su = 0, sv = 0, su2 = 0, sv2 = 0, maxdu = 0, maxdv = 0;
@@ -122,7 +122,7 @@ TEST_CASE(DiceGoldField, OhtCfrp_AgreesWithDiceSolution) {
     REQUIRE(compared > 0);
     const double frac = static_cast<double>(compared) / static_cast<double>(gold.size());
     const double rms_u = std::sqrt(su2 / compared), rms_v = std::sqrt(sv2 / compared);
-    std::printf("  DiceGoldField: compared %d/%zu (%.0f%%)\n"
+    std::printf("  DiceFieldAgreement: compared %d/%zu (%.0f%%)\n"
                 "     du: mean=%+.4f rms=%.4f max=%+.4f\n"
                 "     dv: mean=%+.4f rms=%.4f max=%+.4f\n",
                 compared, gold.size(), frac * 100.0,
@@ -163,7 +163,7 @@ namespace {
     constexpr double LADDER_MIN_FRACTION = 0.90;
 } // namespace
 
-TEST_CASE(DiceGoldField, OhtCfrp_LoadStepLadder) {
+TEST_CASE(DiceFieldAgreement, OhtCfrp_LoadStepLadder) {
     GrayImage r;
     REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/oht_cfrp_00.tiff", r));
     Image ref(r.w, r.h, r.px.data());
@@ -209,7 +209,7 @@ TEST_CASE(DiceGoldField, OhtCfrp_LoadStepLadder) {
         REQUIRE(compared > 0);
         const double frac = static_cast<double>(compared) / static_cast<double>(gold.size());
         const double rms_u = std::sqrt(su2 / compared), rms_v = std::sqrt(sv2 / compared);
-        std::printf("  DiceGoldField ladder %s (DICe max|d|=%.2f px):"
+        std::printf("  DiceFieldAgreement ladder %s (DICe max|d|=%.2f px):"
                     " converged %d/%zu (%.0f%%)  rms du=%.4f dv=%.4f  max|d|=%.4f\n",
                     rung.gold, rung.max_disp_px, compared, gold.size(),
                     frac * 100.0, rms_u, rms_v, maxd);

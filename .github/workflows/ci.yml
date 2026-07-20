@@ -43,15 +43,35 @@ jobs:
       - uses: ./.github/actions/dic-submodules
 
       # OpenCV decodes the DICe fixtures, letting them stay vendored in their
-      # ORIGINAL .tif form rather than converted. Without it the image-backed
-      # tests compile out (CMake leaves DIC_HAVE_OPENCV undefined).
+      # ORIGINAL .tif form rather than converted. The .deb archives are cached
+      # so repeat runs install from disk instead of re-downloading ~100 MB;
+      # apt is pointed at a user-owned dir because /var/cache/apt is root-owned
+      # and actions/cache cannot restore into it.
+      - name: Cache OpenCV packages
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-cache
+          key: apt-libopencv-dev-${{ runner.os }}-v1
+
       - name: Install OpenCV (fixture decoding)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libopencv-dev
+        run: |
+          mkdir -p ~/apt-cache/partial
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            -o Dir::Cache::archives="$HOME/apt-cache" libopencv-dev
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-cache
 
       # Build OUT of the source tree (repo-level build/, gitignored) so the
       # test folder stays pure sources.
+      #
+      # DIC_REQUIRE_OPENCV=ON: if OpenCV were missing, the image-backed DICe
+      # tests would compile out and this job would still pass — green CI with
+      # our most valuable coverage silently gone. Fail configure instead.
       - name: Configure
-        run: cmake -S app/src/test/cpp -B build/native-tests -DCMAKE_BUILD_TYPE=Release
+        run: >
+          cmake -S app/src/test/cpp -B build/native-tests
+          -DCMAKE_BUILD_TYPE=Release
+          -DDIC_REQUIRE_OPENCV=ON
 
       - name: Build
         run: cmake --build build/native-tests -j

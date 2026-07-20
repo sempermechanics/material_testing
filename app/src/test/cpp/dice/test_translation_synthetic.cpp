@@ -3,7 +3,7 @@
 // Reproduces the scenario from DICe tests/examples/custom_app — rigid 0.4 px
 // X-shift, subset size 27, four subsets, |U - 0.4| <= 0.1 px — but on the
 // analytic speckle field (framework/synthetic.h), where ground truth is exact
-// by construction. test_real_image.cpp runs the same contract on DICe's actual
+// by construction. test_translation_real_image.cpp runs the same contract on DICe's actual
 // images; this one isolates solver accuracy from image noise.
 //
 // No DICe code is used, only its published scenario and tolerance.
@@ -30,7 +30,7 @@ namespace {
 // independent subset locations, each within DICe's 0.1 px tolerance. Our
 // engine typically lands ~5x tighter (see Engine.PureTranslation_Subpixel,
 // 0.02 px), but the assertion mirrors DICe's published contract exactly.
-TEST_CASE(DiceParity, PureTranslation_0p4px_FourSubsets) {
+TEST_CASE(DiceTranslationSynthetic, PureTranslation_0p4px_FourSubsets) {
     dictest::SpeckleField field(/*seed=*/4242, W, H);
 
     dictest::AffineDeformation def;

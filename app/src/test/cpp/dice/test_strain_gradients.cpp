@@ -9,7 +9,7 @@
 // displacement at 1% strain, so a single raw gradient is inherently noisy
 // (~0.006..0.016 scatter) — which is why production DIC uses a virtual strain
 // gauge instead. The mean is the unbiased, low-variance estimator; an RMS bound
-// catches a genuine solve blow-up. test_vsg_strain.cpp covers the VSG pipeline.
+// catches a genuine solve blow-up. test_strain_vsg.cpp covers the VSG pipeline.
 #include "framework/test_framework.h"
 #include "framework/image_io.h"
 #include "core/OptimizationEngine.h"
@@ -47,7 +47,7 @@ namespace {
     constexpr int MIN_SUBSETS = 60;      // of 81 grid points
 } // namespace
 
-TEST_CASE(DiceStrain, RealSpeckle_UniaxialStrain_1pct) {
+TEST_CASE(DiceStrainGradients, RealSpeckle_UniaxialStrain_1pct) {
     GrayImage r, d;
     REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/ref.tif", r));
     REQUIRE(load_gray(std::string(DICE_FIXTURES_DIR) + "/def_exx.tif", d));
@@ -72,7 +72,7 @@ TEST_CASE(DiceStrain, RealSpeckle_UniaxialStrain_1pct) {
                 subset, def, guess_u, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, INIT_NO_SIMPLEX);
             if (res.status != 0) continue;
 
-            std::printf("  DiceStrain (%3d,%3d): ux=%.5f uy=%.5f vx=%.5f vy=%.5f  v=%.4f\n",
+            std::printf("  DiceStrainGradients (%3d,%3d): ux=%.5f uy=%.5f vx=%.5f vy=%.5f  v=%.4f\n",
                         x, y, (double) res.ux, (double) res.uy,
                         (double) res.vx, (double) res.vy, (double) res.v);
 
@@ -95,7 +95,7 @@ TEST_CASE(DiceStrain, RealSpeckle_UniaxialStrain_1pct) {
     const double mean_vx = vx_sum / solved;
     const double mean_vy = vy_sum / solved;
     const double rms_ux = std::sqrt(ux_sq_dev / solved);
-    std::printf("  DiceStrain: N=%d  mean ux=%.5f (truth %.5f)  rms dev=%.5f\n"
+    std::printf("  DiceStrainGradients: N=%d  mean ux=%.5f (truth %.5f)  rms dev=%.5f\n"
                 "              mean uy=%.5f  vx=%.5f  vy=%.5f\n",
                 solved, mean_ux, (double) EXX_TRUE, rms_ux,
                 mean_uy, mean_vx, mean_vy);

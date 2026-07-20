@@ -5,13 +5,13 @@
 # (Windows/Linux/macOS) and links them with the micro test framework.
 # Android's <android/log.h> is satisfied by the shim/ directory.
 #
-# Build & run:
-#   cd app/src/test/cpp
-#   cmake -B build -DCMAKE_BUILD_TYPE=Release
-#   cmake --build build
-#   ./build/dic_tests            (all)   ./build/dic_tests Engine   (one suite)
+# Build & run (out of the source tree, from the repo root):
+#   cmake -S app/src/test/cpp -B build/native-tests -DCMAKE_BUILD_TYPE=Release
+#   cmake --build build/native-tests
+#   ./build/native-tests/dic_tests          (all)
+#   ./build/native-tests/dic_tests Engine   (one suite)
 #
-# See docs/TESTING.md for the full catalog of tests.
+# See README.md for the layout and docs/engine/TESTING.md for the test catalog.
 # =====================================================================
 cmake_minimum_required(VERSION 3.16)
 project(indicvision_tests CXX)
@@ -57,14 +57,14 @@ set(DIC_INTEGRATION_TESTS
         integration/test_robustness.cpp
 )
 
-# dice/ — measured against DICe, the external reference implementation.
-# Needs OpenCV (fixture decoding) except test_parity.cpp, which is synthetic.
+# dice/ — measured against DICe, the external reference implementation. All of
+# these need OpenCV to decode the fixtures except test_translation_synthetic.
 set(DIC_DICE_TESTS
-        dice/test_parity.cpp      # DICe's 0.4 px contract, synthetic speckle
-        dice/test_real_image.cpp  # same contract, DICe's real speckle
-        dice/test_strain.cpp      # prescribed strain, raw ICGN gradients
-        dice/test_vsg_strain.cpp  # prescribed strain, through the VSG pipeline
-        dice/test_gold_field.cpp  # our field vs DICe's solved field + load ladder
+        dice/test_translation_synthetic.cpp   # DICe's 0.4 px contract, synthetic speckle
+        dice/test_translation_real_image.cpp  # the same contract, DICe's real speckle
+        dice/test_strain_gradients.cpp        # prescribed strain, raw ICGN gradients
+        dice/test_strain_vsg.cpp              # prescribed strain, through the VSG pipeline
+        dice/test_field_agreement.cpp         # our field vs DICe's, incl. load-step ladder
 )
 
 # perf/ mirrors DICe's tests/performance tier: throughput is reported for
@@ -116,6 +116,13 @@ target_compile_definitions(dic_tests PRIVATE
 # Without OpenCV the image-backed tests compile out (DIC_HAVE_OPENCV undefined)
 # and the rest of the suite still builds with just a C++17 compiler.
 # ---------------------------------------------------------------------
+#
+# CI passes -DDIC_REQUIRE_OPENCV=ON. Without it, a broken or changed OpenCV
+# package would make find_package fail silently, the image tests would compile
+# out, and CI would still go GREEN while quietly dropping the DICe coverage —
+# the most valuable tests in the suite. Fail loudly there instead.
+option(DIC_REQUIRE_OPENCV "Fail configure if OpenCV is missing (CI sets this)" OFF)
+
 find_package(OpenCV QUIET COMPONENTS core imgcodecs)
 if (OpenCV_FOUND)
     message(STATUS "OpenCV ${OpenCV_VERSION} found — image-backed DICe tests enabled")
@@ -126,6 +133,11 @@ if (OpenCV_FOUND)
     target_link_libraries(dic_test_imageio PRIVATE ${OpenCV_LIBS})
     target_compile_definitions(dic_tests PRIVATE DIC_HAVE_OPENCV=1)
     target_link_libraries(dic_tests PRIVATE dic_test_imageio ${OpenCV_LIBS})
+elseif (DIC_REQUIRE_OPENCV)
+    message(FATAL_ERROR
+            "DIC_REQUIRE_OPENCV=ON but OpenCV (core, imgcodecs) was not found. "
+            "The image-backed DICe tests would silently compile out. "
+            "Install it (Debian/Ubuntu: libopencv-dev) or unset the flag.")
 else ()
     message(STATUS "OpenCV not found — image-backed DICe tests will be skipped")
 endif ()

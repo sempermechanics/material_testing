@@ -11,10 +11,10 @@ copyright notice, conditions, and disclaimer are retained here per clause 1.
 
 | File | Source | Used by |
 |---|---|---|
-| `ref.tif`, `def.tif` | `tests/examples/custom_app` (512×512) | `dice/test_real_image.cpp` |
-| `def_exx.tif` | **Derived here** — `ref.tif` resampled by a known 1% uniaxial strain | `dice/test_strain.cpp`, `dice/test_vsg_strain.cpp` |
-| `oht_cfrp_00/01/03/06/11.tiff` | `tests/regression/dic_challenge_12/images` (400×1040) | `dice/test_gold_field.cpp` |
-| `DICe_solution_01/03/06/11.txt` | `tests/regression/dic_challenge_12/gold` | `dice/test_gold_field.cpp` |
+| `ref.tif`, `def.tif` | `tests/examples/custom_app` (512×512) | `dice/test_translation_real_image.cpp` |
+| `def_exx.tif` | **Derived here** — `ref.tif` resampled by a known 1% uniaxial strain | `dice/test_strain_gradients.cpp`, `dice/test_strain_vsg.cpp` |
+| `oht_cfrp_00/01/03/06/11.tiff` | `tests/regression/dic_challenge_12/images` (400×1040) | `dice/test_field_agreement.cpp` |
+| `DICe_solution_01/03/06/11.txt` | `tests/regression/dic_challenge_12/gold` | `dice/test_field_agreement.cpp` |
 
 ## What counts as truth
 
