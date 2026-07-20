@@ -4,8 +4,16 @@
 // Companion to DiceParity (which uses our analytic synthetic images): this
 // runs OUR engine on DICe's ACTUAL data — fixtures/dice/ref.pgm + def.pgm,
 // the 512x512 speckle pair from DICe's tests/examples/custom_app (BSD-3, see
-// fixtures/dice/LICENSE.DICe). DICe defines def as ref shifted +0.4 px in X
-// and asserts each of four subsets recovers that within 0.1 px.
+// fixtures/dice/LICENSE.DICe). DICe's example asserts ONLY the X component:
+// each of four subsets recovers U = 0.4 px within 0.1 px (its errorTol; see
+// its subsets.txt / custom_app main.cpp — "no Y-displacement values are
+// checked"). We assert exactly that, DICe's published contract.
+//
+// Empirically `def` is a DIAGONAL ~(0.4, 0.4) shift, not pure-X: our engine
+// recovers V ~ 0.4 too (see the printed values), a Y component DICe's own
+// example does not validate. We deliberately do NOT assert on V — there is no
+// independent published Y ground truth, so checking it would only be checking
+// our engine against itself. The X assertion is the real cross-validation.
 //
 // Passing means our ICGN solver reproduces a reference DIC engine's published
 // result on real speckle WE did not generate, against a target WE did not
@@ -108,12 +116,13 @@ TEST_CASE(DiceRealImage, CustomApp_0p4px_RealSpeckle) {
             subset, def, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, INIT_NO_SIMPLEX);
 
         // Echo the recovered solution so the CI log shows the actual numbers.
+        // V is printed (def is a diagonal shift, V ~ 0.4) but NOT asserted —
+        // DICe publishes no Y ground truth for this pair.
         std::printf("  DiceRealImage (%3d,%3d): status=%d  U=%.4f  V=%.4f\n",
                     p[0], p[1], res.status, (double) res.u, (double) res.v);
 
         CHECK(res.status == 0);
-        CHECK_NEAR(res.u, U_TRUE, DICE_TOL);   // DICe assertion: |U - 0.4| <= 0.1
-        CHECK_NEAR(res.v, 0.0f, DICE_TOL);
+        CHECK_NEAR(res.u, U_TRUE, DICE_TOL);   // DICe's contract: |U - 0.4| <= 0.1
         if (res.status == 0) ++solved;
     }
     CHECK(solved == 4);
