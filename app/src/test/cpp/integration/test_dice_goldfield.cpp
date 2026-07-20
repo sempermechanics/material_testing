@@ -57,12 +57,15 @@ namespace {
 
     constexpr int SUBSET_SIZE = 27;      // DICe gold header: "Subset size: 27"
 
-    // Inter-code agreement bounds (px). Deliberately generous on the max — a
-    // few subsets near the hole/edges legitimately diverge between codes — while
-    // the RMS bound is what actually constrains bulk agreement.
-    constexpr double RMS_TOL = 0.10;
-    constexpr double MAX_TOL = 0.50;
-    constexpr double MIN_COMPARED_FRACTION = 0.80;
+    // Inter-code agreement bounds (px), set from the MEASURED spread rather than
+    // guessed. Our engine reproduces DICe's field on this pair to
+    // rms 0.0006 px / max 0.0033 px, converging at 230/230 of its points — so
+    // these bounds keep ~8x headroom (and far exceed the <=1e-4 px cross-build
+    // fast-math drift documented in docs/engine/TESTING.md) while still being
+    // tight enough to actually catch a regression.
+    constexpr double RMS_TOL = 0.005;
+    constexpr double MAX_TOL = 0.02;
+    constexpr double MIN_COMPARED_FRACTION = 0.95;
 
     struct GoldPt {
         int x, y;
