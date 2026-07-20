@@ -55,6 +55,7 @@ set(DIC_INTEGRATION_TESTS
         integration/test_dice_parity.cpp      # DICe parity on our synthetic images
         integration/test_dice_realimage.cpp   # DICe parity on DICe's real images (fixtures/dice)
         integration/test_field_regression.cpp # full-field gold/regression (fixtures/gold)
+        integration/test_dice_strain.cpp      # strain recovery on real speckle, known truth
 )
 
 # Production sources under test — compiled as-is, no test doubles.

@@ -18,6 +18,12 @@ Engine, https://github.com/dicengine/dice), directory
   engine recovers V ~ 0.4 as well — but DICe publishes no Y ground truth, so
   only X is cross-validated.
 
-Consumed only by `integration/test_dice_realimage.cpp`, which runs **our**
-engine on these images and checks it meets DICe's published contract. No DICe
-source code is used.
+- **Derived:** `def_exx.pgm` is `ref.pgm` warped by a known **1% uniaxial
+  strain** in X (centered at 256, bicubic resample) — a prescribed-deformation
+  fixture in the DIC-Challenge synthetic style, with analytic truth
+  `du/dx = 0.01`. Used by `integration/test_dice_strain.cpp` to validate strain
+  recovery on real texture.
+
+Consumed by `integration/test_dice_realimage.cpp` (translation), `_strain.cpp`
+(strain), and `_field_regression.cpp` (full-field gold), which run **our**
+engine on these images. No DICe source code is used.
