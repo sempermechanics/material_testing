@@ -54,6 +54,7 @@ set(DIC_INTEGRATION_TESTS
         integration/test_robustness.cpp
         integration/test_dice_parity.cpp      # DICe parity on our synthetic images
         integration/test_dice_realimage.cpp   # DICe parity on DICe's real images (fixtures/dice)
+        integration/test_field_regression.cpp # full-field gold/regression (fixtures/gold)
 )
 
 # Production sources under test — compiled as-is, no test doubles.
@@ -80,10 +81,12 @@ target_include_directories(dic_tests PRIVATE
         # shim/ (added below) supplies the generated opencv2/opencv_modules.hpp + cvconfig.h
 )
 
-# Absolute path to the third-party DICe cross-validation fixtures (BSD-3, see
-# fixtures/dice/), so the real-image test locates them regardless of build dir.
+# Absolute paths to test fixtures, so the image/gold tests locate them
+# regardless of the (out-of-tree) build directory. fixtures/dice = third-party
+# DICe images (BSD-3); fixtures/gold = our own frozen full-field baselines.
 target_compile_definitions(dic_tests PRIVATE
-        DICE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dice")
+        DICE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dice"
+        GOLD_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/gold")
 
 # Quiet the intentional LOGD redefinitions in engine sources (Clang-only flag)
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")

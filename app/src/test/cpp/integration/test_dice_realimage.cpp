@@ -30,15 +30,13 @@
 // real run.
 // =====================================================================
 #include "framework/test_framework.h"
+#include "framework/pgm.h"
 #include "core/OptimizationEngine.h"
 #include "preprocessing/ImageProcessor.h"
 #include "preprocessing/SubsetPrecomputer.h"
 
-#include <cstdint>
 #include <cstdio>
-#include <fstream>
 #include <string>
-#include <vector>
 
 using IndicVision::Image;
 using IndicVision::SubsetData;
@@ -46,33 +44,10 @@ using IndicVision::SubsetPrecomputer;
 using IndicVision::OptimizationEngine;
 using IndicVision::AnalysisResult;
 using IndicVision::INIT_NO_SIMPLEX;
+using dictest::Pgm;
+using dictest::load_pgm;
 
 namespace {
-
-    struct Pgm {
-        int w = 0, h = 0;
-        std::vector<uint8_t> px;
-    };
-
-    // Minimal, standard binary-PGM (P5) reader. Pillow writes
-    // "P5\n<w> <h>\n<max>\n<raw bytes>" with no comments, so `>>` (which skips
-    // whitespace) parses the header; one get() consumes the final separator.
-    bool load_pgm(const std::string &path, Pgm &out) {
-        std::ifstream f(path, std::ios::binary);
-        if (!f) return false;
-        std::string magic;
-        f >> magic;
-        if (magic != "P5") return false;
-        int w = 0, h = 0, maxv = 0;
-        if (!(f >> w >> h >> maxv)) return false;
-        if (w <= 0 || h <= 0 || maxv != 255) return false;
-        f.get(); // the single whitespace between the header and the pixel data
-        out.w = w;
-        out.h = h;
-        out.px.resize((size_t) w * h);
-        f.read(reinterpret_cast<char *>(out.px.data()), (std::streamsize) out.px.size());
-        return f.gcount() == (std::streamsize) out.px.size();
-    }
 
     constexpr int SUBSET_SIZE = 27;   // DICe input.xml: subset_size = 27
     constexpr float U_TRUE = 0.4f;    // DICe: def = ref shifted +0.4 px in X
