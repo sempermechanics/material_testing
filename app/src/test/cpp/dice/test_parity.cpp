@@ -1,26 +1,12 @@
-// =====================================================================
-// SUITE: DiceParity — cross-validation against the DICe reference engine
+// DICe's published translation contract, on our synthetic speckle.
 //
-// DICe (Digital Image Correlation Engine, https://github.com/dicengine/dice)
-// is an established open-source DIC implementation. Its
-// `tests/examples/custom_app` correlates a reference image against a copy
-// rigidly shifted 0.4 px in X and asserts every subset recovers that shift
-// within 0.1 px:
+// Reproduces the scenario from DICe tests/examples/custom_app — rigid 0.4 px
+// X-shift, subset size 27, four subsets, |U - 0.4| <= 0.1 px — but on the
+// analytic speckle field (framework/synthetic.h), where ground truth is exact
+// by construction. test_real_image.cpp runs the same contract on DICe's actual
+// images; this one isolates solver accuracy from image noise.
 //
-//     subset_size = 27           (input.xml)
-//     4 subsets                  (subsets.txt / local_num_subsets()==4)
-//     |U - 0.4| <= 0.1  (px)     (errorTol = 0.1)
-//
-// This suite reproduces that INPUT→OUTPUT CONTRACT on OUR engine. No DICe
-// code is used — only the published scenario and tolerance — so it shows
-// our ICGN solver matches a reference implementation's accuracy on the
-// canonical rigid-translation case, and it runs in milliseconds on a
-// laptop rather than needing DICe's Trilinos/MPI stack.
-//
-// The scenario is adapted from DICe (MIT-licensed); the implementation
-// below is entirely our own, built on the analytic synthetic framework
-// (framework/synthetic.h) so ground truth is exact by construction.
-// =====================================================================
+// No DICe code is used, only its published scenario and tolerance.
 #include "framework/test_framework.h"
 #include "framework/synthetic.h"
 #include "core/OptimizationEngine.h"

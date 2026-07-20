@@ -1,37 +1,33 @@
-# DICe cross-validation fixtures
+# DICe fixtures
 
-Third-party test data from the **DICe** project (Digital Image Correlation
-Engine, https://github.com/dicengine/dice), directory
-`tests/examples/custom_app`.
+Third-party test data from **DICe** (Digital Image Correlation Engine,
+https://github.com/dicengine/dice), vendored unmodified in its original format.
 
-- **License:** BSD 3-Clause — see [`LICENSE.DICe`](LICENSE.DICe). Copyright 2015
-  National Technology & Engineering Solutions of Sandia, LLC (NTESS). The
-  copyright notice, conditions, and disclaimer are retained here per clause 1.
-- **Provenance:** `ref.pgm` / `def.pgm` are lossless 8-bit-grayscale PGM (P5)
-  conversions of DICe's `ref.tif` / `def.tif` (512×512, 8-bit) via Pillow
-  `convert("L")`. Only the container changed (TIFF → PGM); pixel values are
-  unchanged. PGM is used because the host test build has no image codec.
-- **Ground truth:** DICe's `custom_app` asserts each subset recovers
-  **U = 0.4 px in X** within 0.1 px (`errorTol = 0.1`, `subset_size = 27`,
-  subsets at (100,100), (200,200), (300,300), (400,400)). It checks the X
-  component only. Empirically `def` is a **diagonal ~(0.4, 0.4)** shift — our
-  engine recovers V ~ 0.4 as well — but DICe publishes no Y ground truth, so
-  only X is cross-validated.
+**License:** BSD 3-Clause — see [`LICENSE.DICe`](LICENSE.DICe). Copyright 2015
+National Technology & Engineering Solutions of Sandia, LLC (NTESS). The
+copyright notice, conditions, and disclaimer are retained here per clause 1.
 
-- **Derived:** `def_exx.pgm` is `ref.pgm` warped by a known **1% uniaxial
-  strain** in X (centered at 256, bicubic resample) — a prescribed-deformation
-  fixture in the DIC-Challenge synthetic style, with analytic truth
-  `du/dx = 0.01`. Used by `integration/test_dice_strain.cpp` to validate strain
-  recovery on real texture.
+## Contents
 
-- **DICe's own solved field:** `oht_cfrp_00.pgm` / `oht_cfrp_01.pgm` (400×1040,
-  converted from DICe's `tests/regression/dic_challenge_12/images/*.tiff`) plus
-  `DICe_solution_01.txt` — DICe's solved displacement field for that pair
-  (subset 27, step 35, ZNSSD, KEYS_FOURTH). This is an **open-hole-tension CFRP
-  experiment**, so there is *no analytic truth*: DICe's field is a reference
-  **result**, and `test_dice_goldfield.cpp` measures inter-code **agreement**
-  against it — the standard being DICe's data, not our own output.
+| File | Source | Used by |
+|---|---|---|
+| `ref.tif`, `def.tif` | `tests/examples/custom_app` (512×512) | `dice/test_real_image.cpp` |
+| `def_exx.tif` | **Derived here** — `ref.tif` resampled by a known 1% uniaxial strain | `dice/test_strain.cpp`, `dice/test_vsg_strain.cpp` |
+| `oht_cfrp_00/01/03/06/11.tiff` | `tests/regression/dic_challenge_12/images` (400×1040) | `dice/test_gold_field.cpp` |
+| `DICe_solution_01/03/06/11.txt` | `tests/regression/dic_challenge_12/gold` | `dice/test_gold_field.cpp` |
 
-Consumed by `integration/test_dice_realimage.cpp` (translation),
-`_dice_strain.cpp` (strain), and `_dice_goldfield.cpp` (field vs DICe's
-solution). All run **our** engine on DICe's data. No DICe source code is used.
+## What counts as truth
+
+- **`custom_app` (ref/def)** — a constructed 0.4 px shift with a published
+  assertion (`|U − 0.4| ≤ 0.1`, subset 27, four subsets). Real known answer,
+  for X only: the pair is actually a diagonal ~(0.4, 0.4) shift, but DICe
+  publishes no Y reference.
+- **`def_exx.tif`** — our own prescribed deformation, so truth is analytic:
+  `du/dx = 0.01` exactly, on real texture.
+- **`oht_cfrp` + `DICe_solution_*`** — an open-hole-tension CFRP *experiment*.
+  There is **no analytic truth**; DICe's field is a reference *result*, so the
+  test measures inter-code **agreement**, not correctness. The solutions span
+  load steps with growing deformation (~0.9, 3.2, 6.6, 12.0 px), which is what
+  exercises the coarse-search path.
+
+No DICe source code is used — only its data and published contracts.

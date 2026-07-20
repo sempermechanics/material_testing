@@ -43,6 +43,9 @@ endif ()
 #                  double-precision oracle or a mathematical identity.
 #   integration/ — the assembled engine end-to-end (full ICGN solve) plus
 #                  robustness/failure and concurrency behaviour.
+#   dice/        — measured against DICe, the external reference implementation.
+#   perf/        — throughput, printed for tracking.
+# See README.md for the full layout.
 set(DIC_UNIT_TESTS
         unit/test_simd_kernels.cpp
         unit/test_image.cpp
@@ -52,11 +55,16 @@ set(DIC_UNIT_TESTS
 set(DIC_INTEGRATION_TESTS
         integration/test_optimization_engine.cpp
         integration/test_robustness.cpp
-        integration/test_dice_parity.cpp      # DICe parity on our synthetic images
-        integration/test_dice_realimage.cpp   # DICe parity on DICe's real images (fixtures/dice)
-        integration/test_dice_strain.cpp      # strain recovery on real speckle, known truth
-        integration/test_dice_goldfield.cpp   # our field vs DICe's OWN solved field (+ load-step ladder)
-        integration/test_vsg_realimage.cpp    # the VSG strain pipeline on real speckle
+)
+
+# dice/ — measured against DICe, the external reference implementation.
+# Needs OpenCV (fixture decoding) except test_parity.cpp, which is synthetic.
+set(DIC_DICE_TESTS
+        dice/test_parity.cpp      # DICe's 0.4 px contract, synthetic speckle
+        dice/test_real_image.cpp  # same contract, DICe's real speckle
+        dice/test_strain.cpp      # prescribed strain, raw ICGN gradients
+        dice/test_vsg_strain.cpp  # prescribed strain, through the VSG pipeline
+        dice/test_gold_field.cpp  # our field vs DICe's solved field + load ladder
 )
 
 # perf/ mirrors DICe's tests/performance tier: throughput is reported for
@@ -77,6 +85,7 @@ add_executable(dic_tests
         test_main.cpp                # micro-framework runner entry point
         ${DIC_UNIT_TESTS}
         ${DIC_INTEGRATION_TESTS}
+        ${DIC_DICE_TESTS}
         ${DIC_PERF_TESTS}
         ${DIC_ENGINE_SOURCES}
 )

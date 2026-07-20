@@ -1,36 +1,21 @@
-// =====================================================================
-// SUITE: DiceGoldField — our field vs DICe's OWN solved field
+// Our displacement field vs DICe's own solved field.
 //
-// The standard here is DICe's data, not ours. DICe ships the solved
-// displacement field for its `dic_challenge_12` regression case (an open-hole
-// tension test on CFRP) as DICe_solution_01.txt; we vendor that file and the
-// two images it references, run OUR engine at DICe's own subset coordinates,
-// and diff the fields.
+// DICe ships solved fields for its dic_challenge_12 regression case (open-hole
+// tension on CFRP) as DICe_solution_NN.txt. We run our engine at DICe's exact
+// subset coordinates and diff. Because DICe's gold is fixed and external, this
+// both anchors us to the reference implementation and detects drift in ours.
 //
-// Why this supersedes a self-generated baseline: DICe's gold is FIXED and
-// EXTERNAL, so diffing against it both anchors us to the reference
-// implementation AND detects any drift in our engine — a baseline made from
-// our own output could only ever do the latter, and would enshrine our own
-// error if we had one.
+// The metric is AGREEMENT, not correctness: oht_cfrp is a real experiment with
+// no analytic truth, so DICe's field is a reference result. Independent DIC
+// codes legitimately differ, so the bounds below are inter-code agreement
+// bounds taken from the measured spread.
 //
-// Honest limits of this comparison:
-//  * oht_cfrp is a REAL experiment — there is no analytic truth. DICe's field
-//    is a reference *result*, not ground truth. So agreement is the metric.
-//  * Independent DIC codes legitimately differ (interpolant, shape function,
-//    convergence criteria); quantifying that spread is the DIC Challenge's
-//    whole purpose. The tolerance below is therefore an INTER-CODE agreement
-//    bound, set from the measured spread — not a correctness tolerance.
+// Matched to DICe where possible (subset 27, Keys-fourth, its coordinates).
+// It used translation + normal-strain shape functions and neighbour seeding;
+// we solve full 6-DOF affine.
 //
-// We match DICe's setup where we can (subset 27, ZNSSD, Keys-fourth
-// interpolation, its exact subset coordinates). Remaining differences: DICe
-// used translation + normal-strain shape functions and neighbour-seeded
-// guesses; we solve full 6-DOF affine from a zero guess (displacements here
-// are sub-pixel, so it converges).
-//
-// Config, verbatim from the gold header:
-//   Subset size: 27 | Step: 35 | ZNSSD | Interpolation: KEYS_FOURTH
-//   Coordinates: (0,0) upper-left, x right, y down
-// =====================================================================
+// From the gold header: subset 27 | step 35 | ZNSSD | KEYS_FOURTH |
+// (0,0) upper-left, x right, y down.
 #include "framework/test_framework.h"
 #include "framework/image_io.h"
 #include "core/OptimizationEngine.h"

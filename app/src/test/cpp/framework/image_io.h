@@ -1,23 +1,17 @@
 #ifndef INDICVISION_TEST_IMAGE_IO_H
 #define INDICVISION_TEST_IMAGE_IO_H
 
-// Image loading for host tests, backed by OpenCV — so fixtures can be vendored
-// in their ORIGINAL format (DICe ships .tif/.tiff) rather than converted, and
-// we use a real decoder instead of a hand-rolled parser.
+// Fixture image loading, so fixtures stay vendored in DICe's original .tif.
 //
-// IMPORTANT: this header deliberately exposes NO OpenCV types and includes NO
-// OpenCV headers. The engine sources already pull OpenCV's universal-intrinsics
-// headers from the git submodule; letting a *system* opencv2/ tree into the
-// same translation unit would mix two header trees at potentially different
-// versions. The implementation therefore lives in image_io.cpp, which is the
-// only place system OpenCV is included (see CMakeLists: it is compiled into a
-// separate target with the OpenCV include dirs scoped to it).
+// This header exposes no OpenCV types on purpose: the engine sources include
+// OpenCV's universal-intrinsics headers from the git submodule, and letting a
+// system opencv2/ tree into those same translation units would mix two header
+// trees. The implementation is confined to image_io.cpp, the only file CMake
+// gives the system OpenCV includes to.
 //
-// OpenCV is OPTIONAL for the suite: the engine/unit tests need only a C++17
-// compiler and the header-only submodules (see docs/engine/TESTING.md), so
-// CMake defines DIC_HAVE_OPENCV only when OpenCV is present. Image-backed tests
-// compile out otherwise, keeping the core suite buildable anywhere. CI installs
-// libopencv-dev, so they always run there.
+// OpenCV is optional. CMake defines DIC_HAVE_OPENCV only when it is present;
+// image-backed tests compile out otherwise, so the rest of the suite still
+// builds with just a C++17 compiler. CI installs libopencv-dev.
 
 #include <cstdint>
 #include <string>

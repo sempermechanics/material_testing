@@ -1,23 +1,13 @@
-// =====================================================================
-// SUITE: VsgRealImage — the STRAIN PIPELINE on real speckle, known truth
+// The VSG strain pipeline on real speckle, against a prescribed strain.
 //
-// DiceStrain validates the raw per-subset ICGN gradient (and has to assert on
-// the field mean, because a single 27 px subset's gradient is inherently
-// noisy). This test validates what the app actually ships: the displacement
-// field is fed through StrainCalculator's virtual strain gauge (VSG) — the
-// same post-processor a real analysis uses — and the smoothed strain is
-// compared against the known applied value.
+// Where test_strain.cpp reads raw per-subset ICGN gradients, this feeds the
+// displacement field through StrainCalculator's virtual strain gauge — the
+// post-processor a real analysis actually uses — and checks the smoothed exx
+// against the known applied 1% strain (def_exx.tif, truth exx = 0.01).
 //
-// Input: DICe's real speckle (ref.tif) warped by a prescribed 1% uniaxial
-// strain (def_exx.tif), so truth is analytic: exx = 0.01, eyy = exy = 0.
-// The Strain suite already proves VSG is exact on synthetic linear fields;
-// this proves the pipeline holds up on real texture with real correlation
-// noise feeding it.
-//
-// Expectation: VSG should be markedly TIGHTER than the raw per-subset scatter
-// (~0.004 rms in DiceStrain) — smoothing over a window is precisely why
-// production DIC computes strain this way.
-// =====================================================================
+// The Strain unit suite proves VSG is exact on synthetic linear fields; this
+// proves it holds up with real correlation noise feeding it. Smoothing over a
+// window should be markedly tighter than the raw per-subset scatter.
 #include "framework/test_framework.h"
 #include "framework/image_io.h"
 #include "core/OptimizationEngine.h"

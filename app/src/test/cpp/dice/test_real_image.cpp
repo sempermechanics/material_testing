@@ -1,34 +1,12 @@
-// =====================================================================
-// SUITE: DiceRealImage — cross-validation on DICe's REAL test images
+// DICe's published translation contract, on DICe's real speckle.
 //
-// Companion to DiceParity (which uses our analytic synthetic images): this
-// runs OUR engine on DICe's ACTUAL data — fixtures/dice/ref.tif + def.tif,
-// the 512x512 speckle pair from DICe's tests/examples/custom_app (BSD-3, see
-// fixtures/dice/LICENSE.DICe). DICe's example asserts ONLY the X component:
-// each of four subsets recovers U = 0.4 px within 0.1 px (its errorTol; see
-// its subsets.txt / custom_app main.cpp — "no Y-displacement values are
-// checked"). We assert exactly that, DICe's published contract.
+// Source: DICe tests/examples/custom_app — ref.tif/def.tif (512x512), four
+// subsets, subset size 27. Its assertion is |U - 0.4| <= 0.1 px.
 //
-// Empirically `def` is a DIAGONAL ~(0.4, 0.4) shift, not pure-X: our engine
-// recovers V ~ 0.4 too (see the printed values), a Y component DICe's own
-// example does not validate. We deliberately do NOT assert on V — there is no
-// independent published Y ground truth, so checking it would only be checking
-// our engine against itself. The X assertion is the real cross-validation.
-//
-// Passing means our ICGN solver reproduces a reference DIC engine's published
-// result on real speckle WE did not generate, against a target WE did not
-// compute — real-texture robustness plus independence — in milliseconds on a
-// laptop, not DICe's Trilinos/MPI stack.
-//
-// The fixtures directory is injected by CMake as DICE_FIXTURES_DIR.
-//
-// NOTE (verification): this test could not be RUN on the authoring machine
-// (a Device Guard / WDAC policy blocks executing locally-built unsigned
-// binaries). It is written defensively — stack objects only, every step
-// REQUIRE-guarded, recovered values printed — so a failure on CI produces a
-// readable assertion, not a crash. CI (Linux, no Device Guard) is the first
-// real run.
-// =====================================================================
+// Only U is asserted, because only U has published truth. `def` is actually a
+// diagonal ~(0.4, 0.4) shift and our engine recovers V ~ 0.4 as well (printed
+// below), but DICe publishes no Y reference — asserting V would just be
+// checking our engine against itself.
 #include "framework/test_framework.h"
 #include "framework/image_io.h"
 #include "core/OptimizationEngine.h"

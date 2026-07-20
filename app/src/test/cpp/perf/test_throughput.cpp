@@ -1,23 +1,12 @@
-// =====================================================================
-// SUITE: Perf — solver throughput (mirrors DICe's tests/performance tier)
+// Solver throughput — precompute and solve rates, printed for tracking.
 //
-// Reports how fast the engine precomputes subsets and solves them, so a
-// performance regression is visible in the CI log next to the correctness
-// results. Uses the analytic synthetic speckle, so it needs no fixtures and
-// runs everywhere the suite builds.
+// NOT a benchmark gate. CI runners are noisy and this same binary is built
+// under ASan/UBSan/TSan, where everything is several times slower, so a
+// subsets/sec assertion would be flaky and meaningless. The measured rate is
+// printed for humans to compare across commits; the only assertion is a
+// generous wall-clock ceiling that catches a hang or catastrophic regression.
 //
-// DELIBERATELY NOT A TIGHT BENCHMARK GATE. Shared CI runners have noisy,
-// unpredictable throughput, and this same binary is also built under
-// ASan/UBSan/TSan where everything is several times slower. A tight
-// subsets/sec assertion would therefore produce flaky red builds that say
-// nothing about the engine. Instead we:
-//   * always PRINT the measured rate (the number a human tracks over time), and
-//   * assert only a generous wall-clock ceiling, which catches a catastrophic
-//     regression or a hang while tolerating a heavily instrumented build.
-//
-// If you want real benchmarking, run this locally on a quiet machine and
-// compare the printed rate across commits.
-// =====================================================================
+// For real benchmarking, run this locally on a quiet machine.
 #include "framework/test_framework.h"
 #include "framework/synthetic.h"
 #include "core/OptimizationEngine.h"

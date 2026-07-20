@@ -1,30 +1,15 @@
-// =====================================================================
-// SUITE: DiceStrain — strain recovery on REAL speckle, known truth
+// Raw ICGN strain gradients on real speckle, against a prescribed strain.
 //
-// Extends the real-image cross-validation beyond rigid translation to STRAIN,
-// the way the DIC Challenge's synthetic samples do: take real speckle (DICe's
-// ref.tif) and apply a KNOWN homogeneous strain by resampling
-// (fixtures/dice/def_exx.tif = ref warped by exx = 0.01, i.e. 1% uniaxial in
-// X, centered so displacements stay small). Truth is analytic — in reference
-// coordinates u(x) = 0.01*(x - 256), so du/dx = ux = 0.01 exactly — while the
-// texture is real. Note: DICe's own dic_challenge_12 (oht_cfrp) is a real
-// experiment with NO analytic truth, validated only against DICe's gold; a
-// prescribed strain on real speckle is the rigorous alternative.
+// def_exx.tif is DICe's ref.tif resampled by a known 1% uniaxial strain, so in
+// reference coordinates u(x) = 0.01*(x - 256) and du/dx = 0.01 exactly. Each
+// subset is seeded with its expected translation (as RGDIC propagation would);
+// the gradient itself starts at zero, so the strain really is measured.
 //
-// Each subset is seeded with its expected translation (u = 0.01*(x-256)) — as
-// RGDIC propagation would supply in a real run — but the STRAIN gradient is
-// recovered from zero, so this genuinely tests strain measurement, not the seed.
-//
-// We validate the FIELD, not each subset. A single 27 px subset sees only
-// ~0.27 px of displacement variation across a 1% strain, so its raw ICGN
-// gradient is inherently noisy (individual ux scatter ~0.006..0.016 on real
-// speckle) — which is precisely why production DIC derives strain from a
-// virtual-strain-gauge window over many subsets, not from one. For a
-// homogeneous field the MEAN gradient is the unbiased, low-variance estimator
-// (std ~ per-subset/sqrt(N)); we assert on it, plus a scatter bound to catch
-// gross breakage. (Per-subset VSG accuracy is covered analytically by the
-// Strain suite.)
-// =====================================================================
+// Asserts the FIELD mean, not per subset. A 27 px subset spans only ~0.27 px of
+// displacement at 1% strain, so a single raw gradient is inherently noisy
+// (~0.006..0.016 scatter) — which is why production DIC uses a virtual strain
+// gauge instead. The mean is the unbiased, low-variance estimator; an RMS bound
+// catches a genuine solve blow-up. test_vsg_strain.cpp covers the VSG pipeline.
 #include "framework/test_framework.h"
 #include "framework/image_io.h"
 #include "core/OptimizationEngine.h"
