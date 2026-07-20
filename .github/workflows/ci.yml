@@ -42,10 +42,36 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/dic-submodules
 
+      # OpenCV decodes the DICe fixtures, letting them stay vendored in their
+      # ORIGINAL .tif form rather than converted. The .deb archives are cached
+      # so repeat runs install from disk instead of re-downloading ~100 MB;
+      # apt is pointed at a user-owned dir because /var/cache/apt is root-owned
+      # and actions/cache cannot restore into it.
+      - name: Cache OpenCV packages
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-cache
+          key: apt-libopencv-dev-${{ runner.os }}-v1
+
+      - name: Install OpenCV (fixture decoding)
+        run: |
+          mkdir -p ~/apt-cache/partial
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            -o Dir::Cache::archives="$HOME/apt-cache" libopencv-dev
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-cache
+
       # Build OUT of the source tree (repo-level build/, gitignored) so the
       # test folder stays pure sources.
+      #
+      # DIC_REQUIRE_OPENCV=ON: if OpenCV were missing, the image-backed DICe
+      # tests would compile out and this job would still pass — green CI with
+      # our most valuable coverage silently gone. Fail configure instead.
       - name: Configure
-        run: cmake -S app/src/test/cpp -B build/native-tests -DCMAKE_BUILD_TYPE=Release
+        run: >
+          cmake -S app/src/test/cpp -B build/native-tests
+          -DCMAKE_BUILD_TYPE=Release
+          -DDIC_REQUIRE_OPENCV=ON
 
       - name: Build
         run: cmake --build build/native-tests -j
@@ -58,6 +84,13 @@ jobs:
   #    - address,undefined: memory bugs (OOB, use-after-free, UB)
   #    - thread: data races in the shared-read parallel solve pattern
   #      (Robustness.ConcurrentSolves is the race detector's workload)
+  #
+  #    OpenCV is deliberately NOT installed here, so the image-backed DICe
+  #    tests compile out. Linking an uninstrumented third-party library into a
+  #    sanitized build invites LSan leak reports and TSan noise from OpenCV's
+  #    internal thread pool — flaky red CI for no gain, since these sanitizers
+  #    exist to find bugs in OUR engine, and the synthetic suites already
+  #    exercise exactly the same engine code paths.
   # ===================================================================
   native-tests-sanitized:
     name: Sanitized (${{ matrix.sanitizer }})
@@ -96,7 +129,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Gradle dependency/build cache. setup-gradle caches ~/.gradle by default
+      # but is READ-ONLY off the default branch, so day-to-day branches would
+      # never seed it and would re-resolve dependencies every run. Allow writes
+      # from the long-lived dev branches (PRs stay read-only, so they reuse the
+      # cache without churning it).
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
 
       - name: Compile Kotlin and run unit tests
         run: ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest --console=plain
@@ -141,6 +181,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           validate-wrappers: false
+          # Same rationale as the Kotlin job: let the dev branches seed the
+          # Gradle cache so the NDK build isn't re-resolving deps every run.
+          cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
 
       # The from-source OpenCV build dominates; cache the object dir keyed on
       # everything that can change the native build.
