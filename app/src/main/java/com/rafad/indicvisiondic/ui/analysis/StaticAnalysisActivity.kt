@@ -11,6 +11,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.*
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.PickVisualMediaRequest
@@ -100,10 +102,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
     private lateinit var rgInterpolator: MaterialButtonToggleGroup // ADDED // Added for Secure Exit
 
-    // Live value labels for the parameter sliders
-    private lateinit var tvSubsetValue: TextView
-    private lateinit var tvStepValue: TextView
-    private lateinit var tvStrainValue: TextView
+    // Editable value fields for the parameter sliders (typing and dragging
+    // both drive the same slider value)
+    private lateinit var tvSubsetValue: EditText
+    private lateinit var tvStepValue: EditText
+    private lateinit var tvStrainValue: EditText
 
     // Two-step wizard: page 1 = load images, page 2 = settings + run
     private lateinit var scrollStepImages: View
@@ -345,6 +348,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         btnCalculateFullField.setOnClickListener {
+            // A field still holding focus has not committed its typed value yet.
+            commitParamFields()
             startBatchAnalysis()
         }
     }
@@ -968,18 +973,71 @@ class StaticAnalysisActivity : AppCompatActivity() {
         return result ?: "Image_File"
     }
 
+    /**
+     * Snaps [raw] into [slider]'s range and onto its step grid. Subset size and
+     * strain window use stepSize 2 from an odd valueFrom, so a typed even value
+     * lands on the nearest odd one.
+     */
+    private fun snapToSlider(slider: Slider, raw: Int): Int {
+        val from = slider.valueFrom.toInt()
+        val to = slider.valueTo.toInt()
+        val step = slider.stepSize.toInt().coerceAtLeast(1)
+        val offset = raw.coerceIn(from, to) - from
+        return (from + (offset + step / 2) / step * step).coerceIn(from, to)
+    }
+
+    /** Flushes any in-progress typing into the sliders (focus loss commits). */
+    private fun commitParamFields() {
+        tvSubsetValue.clearFocus()
+        tvStepValue.clearFocus()
+        tvStrainValue.clearFocus()
+    }
+
+    /** Two-way binds a numeric field to its slider; commits on Done or focus loss. */
+    private fun bindParamField(field: EditText, slider: Slider) {
+        val commit = {
+            val typed = field.text.toString().trim().toIntOrNull()
+            val value = if (typed == null) slider.value.toInt() else snapToSlider(slider, typed)
+            slider.value = value.toFloat()
+            field.setText(value.toString())
+            field.setSelection(field.text.length)
+            updateAdvancedSummary?.invoke()
+        }
+        field.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                commit()
+                field.clearFocus()
+                getSystemService(InputMethodManager::class.java)
+                    ?.hideSoftInputFromWindow(field.windowToken, 0)
+                true
+            } else {
+                false
+            }
+        }
+        field.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commit() }
+    }
+
     // ------------------------------------------------------------------
-    // Parameter sliders: keep the live "N px" labels in sync. Values are
-    // read via slider.value everywhere the old EditTexts were parsed.
+    // Parameter sliders: the value fields are editable, so dragging writes
+    // into them and typing writes back into the slider. Values are still
+    // read via slider.value everywhere.
     // ------------------------------------------------------------------
     private fun setupParameterControls() {
+        // Never overwrite a field mid-edit; its own commit handles that.
+        val render = { field: EditText, value: Int ->
+            if (!field.hasFocus()) field.setText(value.toString())
+        }
         val updateLabels = {
-            tvSubsetValue.text = "${etSubsetSize.value.toInt()} px"
-            tvStepValue.text = "${etStepSize.value.toInt()} px"
-            tvStrainValue.text = "${etStrainWindow.value.toInt()} px"
+            render(tvSubsetValue, etSubsetSize.value.toInt())
+            render(tvStepValue, etStepSize.value.toInt())
+            render(tvStrainValue, etStrainWindow.value.toInt())
             updateAdvancedSummary?.invoke()
         }
         updateLabels()
+
+        bindParamField(tvSubsetValue, etSubsetSize)
+        bindParamField(tvStepValue, etStepSize)
+        bindParamField(tvStrainValue, etStrainWindow)
 
         // Advanced expander: collapsed by default; header toggles, summary
         // chip shows current values (+ "defaults" marker when untouched).
@@ -999,6 +1057,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         @Suppress("MagicNumber") // the documented defaults: 41 / 5 / 15
         findViewById<View>(R.id.btnAdvancedReset).setOnClickListener {
+            // Drop focus first so the fields accept the reset values.
+            commitParamFields()
             etSubsetSize.value = 41f
             etStepSize.value = 5f
             etStrainWindow.value = 15f

@@ -493,11 +493,27 @@
                                     android:layout_width="0dp"
                                     android:layout_height="1dp"
                                     android:layout_weight="1" />
-                                <TextView
+                                <EditText
                                     android:id="@+id/tvSubsetValue"
+                                    android:layout_width="52dp"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="end"
+                                    android:hint="@string/subset_size"
+                                    android:imeOptions="actionDone"
+                                    android:importantForAutofill="no"
+                                    android:inputType="number"
+                                    android:maxLength="3"
+                                    android:paddingTop="0dp"
+                                    android:paddingBottom="0dp"
+                                    android:text="@string/label_41"
+                                    android:textColor="@color/sky_primary"
+                                    android:textStyle="bold" />
+
+                                <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="@string/label_41_px"
+                                    android:layout_marginStart="4dp"
+                                    android:text="@string/scale_unit_px"
                                     android:textColor="@color/sky_primary"
                                     android:textStyle="bold" />
                             </LinearLayout>
@@ -538,11 +554,27 @@
                                     android:layout_width="0dp"
                                     android:layout_height="1dp"
                                     android:layout_weight="1" />
-                                <TextView
+                                <EditText
                                     android:id="@+id/tvStepValue"
+                                    android:layout_width="52dp"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="end"
+                                    android:hint="@string/step_size_density"
+                                    android:imeOptions="actionDone"
+                                    android:importantForAutofill="no"
+                                    android:inputType="number"
+                                    android:maxLength="3"
+                                    android:paddingTop="0dp"
+                                    android:paddingBottom="0dp"
+                                    android:text="@string/label_5"
+                                    android:textColor="@color/sky_primary"
+                                    android:textStyle="bold" />
+
+                                <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="@string/label_5_px"
+                                    android:layout_marginStart="4dp"
+                                    android:text="@string/scale_unit_px"
                                     android:textColor="@color/sky_primary"
                                     android:textStyle="bold" />
                             </LinearLayout>
@@ -583,11 +615,27 @@
                                     android:layout_width="0dp"
                                     android:layout_height="1dp"
                                     android:layout_weight="1" />
-                                <TextView
+                                <EditText
                                     android:id="@+id/tvStrainValue"
+                                    android:layout_width="52dp"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="end"
+                                    android:hint="@string/strain_window"
+                                    android:imeOptions="actionDone"
+                                    android:importantForAutofill="no"
+                                    android:inputType="number"
+                                    android:maxLength="3"
+                                    android:paddingTop="0dp"
+                                    android:paddingBottom="0dp"
+                                    android:text="@string/label_15"
+                                    android:textColor="@color/sky_primary"
+                                    android:textStyle="bold" />
+
+                                <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="@string/label_15_px"
+                                    android:layout_marginStart="4dp"
+                                    android:text="@string/scale_unit_px"
                                     android:textColor="@color/sky_primary"
                                     android:textStyle="bold" />
                             </LinearLayout>
