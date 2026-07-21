@@ -69,19 +69,24 @@ class SplashActivity : AppCompatActivity() {
                     when (status) {
                         "APPROVED" -> navigateTo(HomeActivity::class.java)
                         "OFFLINE_CACHE_APPROVED" -> {
-                            android.widget.Toast.makeText(this, "Offline Mode", android.widget.Toast.LENGTH_LONG).show()
+                            android.widget.Toast.makeText(
+                                this,
+                                R.string.status_offline_mode,
+                                android.widget.Toast.LENGTH_LONG,
+                            ).show()
                             navigateTo(HomeActivity::class.java)
                         }
                         "PENDING" -> navigateTo(PendingApprovalActivity::class.java)
-                        else -> navigateTo(AuthActivity::class.java, "System error: Unknown account status.")
+                        else -> navigateTo(AuthActivity::class.java, getString(R.string.error_unknown_status))
                     }
                 },
                 onFailure = { exception ->
-                    navigateTo(AuthActivity::class.java, exception.message ?: "Could not verify account securely.")
+                    val message = exception.message ?: getString(R.string.error_verify_failed)
+                    navigateTo(AuthActivity::class.java, message)
                 },
             )
         } catch (e: Exception) {
-            navigateTo(AuthActivity::class.java, "A critical system error occurred during startup.")
+            navigateTo(AuthActivity::class.java, getString(R.string.error_startup_failed))
         }
     }
 

@@ -11,13 +11,12 @@ you are changing `backend/` or the sync path in `app/.../data/`.
 | Follow a request end to end | [§2 auth](#2-authentication-flow) → [§4 upload](#4-upload-sequence-5-gb-resumable-keyless) |
 | Find the code for a concept | [§7 backend map](#7-implementation-map) · [§8 Android map](#8-android-client-map) |
 | Know the data shape | [§5 Firestore](#5-firestore-schema) · [§6 Drive layout](#6-google-drive-folder-hierarchy) |
-| Fix sign-in | [GOOGLE_SSO_SETUP.md](GOOGLE_SSO_SETUP.md) |
+| Fix sign-in | [AUTH_SETUP.md](AUTH_SETUP.md) |
 
 > **Status / scope.** This document specifies the **GCP-native** backend:
-> Google Identity → Cloud Run (FastAPI) → Firestore → Google Drive, with **no
+> Firebase Auth → Cloud Run (FastAPI) → Firestore → Google Drive, with **no
 > service-account JSON keys anywhere** and **no image processing in the cloud**.
-> It replaced the earlier Supabase design, whose docs and code have been
-> removed — this is now the only backend. The on-device engine
+> This is the only backend. The on-device engine
 > ([ARCHITECTURE.md](../engine/ARCHITECTURE.md)) is unchanged — the cloud only does
 > identity, metadata, orchestration, and audit.
 
@@ -29,7 +28,7 @@ you are changing `backend/` or the sync path in `app/.../data/`.
 | Developer is not a Workspace admin | The only admin-gated step is a one-time "allow adding a service account to a Shared Drive" toggle. Everything else is a normal-user or Cloud-project action. |
 | Storage stays in company Google Drive (5 TB) | The Cloud Run SA is a **Manager** of a company **Shared Drive**; writes count against the org pool. (Manager, not Content manager: `files.delete` requires organizer rights, so erasure fails otherwise.) |
 | Cloud never processes images | Cloud Run only creates folders, initiates resumable sessions, and records metadata. **Bytes never transit Cloud Run** — the client PUTs directly to Drive's resumable session URI. |
-| No secrets in Android | Android holds only public config (OAuth *web* client ID). Private key lives in Android Keystore and never leaves the device. |
+| No secrets in Android | Android holds only public config (`google-services.json`, which ships in every APK by design). The device private key lives in Android Keystore and never leaves the device. |
 | $0 during pilot | Scale-to-zero Cloud Run, Firestore free tier, no egress through the backend. |
 
 ---
@@ -61,7 +60,7 @@ change (see §19).
                          ┌───────────────────────────────────────────┐
                          │             Android device                 │
                          │  Jetpack Compose UI                        │
-                         │  ├─ Google Identity Services (ID token)    │
+                         │  ├─ Firebase Auth (Firebase ID token)      │
                          │  ├─ Android Keystore (device private key)  │
                          │  ├─ WorkManager CoroutineWorker            │
                          │  └─ OkHttp streaming (chunked resumable)   │
@@ -71,8 +70,8 @@ change (see §19).
                                          ▼
               ┌────────────────────── Google Cloud project ──────────────────────┐
               │                                                                   │
-              │   ┌──────────────┐   verify ID token (Google certs, aud, iss,    │
-              │   │  Cloud Run   │◀── hd, email_verified) + verify device sig    │
+              │   ┌──────────────┐   verify ID token (firebase-admin: certs,     │
+              │   │  Cloud Run   │◀── aud, iss, exp) + verify device signature   │
               │   │  FastAPI     │                                               │
               │   │  (scale→0)   │──▶ Firestore (users, devices, sessions,       │
               │   │  runs as SA  │        files, audit_logs)                     │
@@ -97,8 +96,8 @@ change (see §19).
               └───────────────────────────────────────────────┘
 ```
 
-**Trust boundaries.** (1) Device↔Cloud Run: mutually authenticated (Google ID
-token proves *user*; Keystore signature proves *device*). (2) Cloud
+**Trust boundaries.** (1) Device↔Cloud Run: mutually authenticated (the
+Firebase ID token proves *user*; the Keystore signature proves *device*). (2) Cloud
 Run↔Google APIs: keyless, via the metadata server + IAM Credentials. (3)
 Device↔Drive: capability-scoped — the resumable session URI authorizes writes
 to *exactly one file*, nothing else.
@@ -107,27 +106,31 @@ to *exactly one file*, nothing else.
 
 ## 2. Authentication flow
 
-Google ID tokens are OIDC JWTs signed by Google, valid ~1 hour. We **re-verify
-on every request** (stateless, zero server-side key management). The client
-silently refreshes via Google Identity Services.
+Identity is federated through **Firebase Authentication** — Google, email link,
+or email/password, all producing one **Firebase ID token** (a JWT, ~1 hour).
+The backend **re-verifies on every request** with `firebase-admin`: stateless,
+with zero server-side key management. The client refreshes silently through the
+Firebase SDK.
 
 ```mermaid
 sequenceDiagram
     participant A as Android
-    participant G as Google Identity
+    participant F as Firebase Auth
     participant R as Cloud Run (FastAPI)
-    A->>G: Credential Manager sign-in (web client ID)
-    G-->>A: ID token (JWT, aud=web client ID, hd=company.com)
+    A->>F: sign in (Google / email link / password)
+    F-->>A: Firebase ID token (aud = firebase project id)
     A->>R: GET /v1/me  (Authorization: Bearer <ID token>)
-    R->>G: fetch Google public certs (cached, ~daily rotation)
-    R->>R: verify signature, exp/nbf
-    R->>R: assert aud == WEB_CLIENT_ID
-    R->>R: assert iss ∈ {accounts.google.com, https://accounts.google.com}
-    R->>R: assert email_verified == true
-    R->>R: assert hd == "company.com"   ← corporate gate
+    R->>F: fetch Google public certs (cached, rotating)
+    R->>R: firebase_admin.verify_id_token: signature, exp, iss, aud
+    R->>R: get_or_create_user(claims) → role + access_status
+    R->>R: reject unless access_status == APPROVED
     R-->>A: 200 {user profile, access_status}
-    Note over R: On any failed check → 401, audit-logged
+    Note over R: verify failure → 401 · not approved → 403 · both audit-logged
 ```
+
+Claims consumed downstream: `sub` (the stable Firebase uid, identical across
+providers for one account), `email`, `email_verified`, `name`, and
+`firebase.sign_in_provider`.
 
 **Why re-verify vs. minting our own session JWT.** Re-verifying needs **no
 signing secret** — perfectly aligned with "no secrets." If per-request cert
@@ -135,11 +138,22 @@ verification ever becomes a latency concern, mint a short-lived backend session
 JWT using **IAM Credentials `signJwt`** (Google signs it; verifiable via the
 SA's public JWKS) — still keyless. Not needed at pilot scale.
 
-**Corporate-only enforcement is layered** (never trust `hd` alone — it can be
-absent for consumer accounts):
-1. `hd == company.com` **and**
-2. `email` domain suffix `@company.com` **and**
-3. `access_status == APPROVED` in Firestore (admin-gated allow-list).
+**Access control is a separate decision from authentication.** Verification
+proves identity; it does not grant entry. `get_or_create_user`
+([firestore_repo.py](../../backend/app/firestore_repo.py)) assigns:
+
+1. `role = admin` if a **verified** email is in `ADMIN_EMAILS`;
+2. `access_status = APPROVED` if admin, or `AUTO_APPROVE=1`, or a **verified**
+   email at `AUTO_APPROVE_HD`;
+3. otherwise `PENDING` — authenticated but refused with `403 not_approved`
+   until an admin approves them.
+
+Auto-approval always requires `email_verified`, so a fresh email/password
+signup cannot claim a privileged domain it does not own.
+
+> **There is no hosted-domain gate on sign-in.** `ALLOWED_HD` exists in
+> `config.py` but is read by no code path; any Google account can authenticate.
+> The `PENDING`/`APPROVED` status is the control that actually holds.
 
 ---
 
@@ -620,24 +634,4 @@ become direct signed URLs, eliminating the Drive download-brokering problem.
 **Design payoff:** the abstraction that makes Drive tolerable today
 (opaque upload URL + standard resumable protocol) is the *same* abstraction that
 makes the GCS migration a config flag tomorrow.
-
----
-
-## Appendix A — what changed from the retired Supabase design
-
-Kept as a record of why the current shape is what it is; none of the "old"
-column exists in the repo any more.
-
-| Topic | Old (Supabase, removed) | This design |
-|---|---|---|
-| Auth | Supabase GoTrue | Google Identity + OIDC verify in Cloud Run |
-| Backend | Supabase Edge Functions | FastAPI on Cloud Run |
-| DB | Postgres + RLS | Firestore (server-only writes) |
-| Drive auth | **SA JSON key** (`GDRIVE_SA_JSON`) | **Keyless** ADC + IAM impersonation |
-| Blob layout | single `.dic.zip` | real `raw/processed/reports/metadata` tree |
-| Device binding | none | Keystore challenge-response, admin rebind |
-
-The two auth systems were never run in parallel — the Supabase path was
-retired outright rather than bridged, to avoid the security and maintenance
-liability of two live identity systems.
 

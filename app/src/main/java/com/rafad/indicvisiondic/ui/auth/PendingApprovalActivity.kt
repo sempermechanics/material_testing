@@ -73,7 +73,7 @@ class PendingApprovalActivity : AppCompatActivity() {
 
     /** Opens the user's email app pre-filled to support so they can request access. */
     private fun requestAccessByEmail() {
-        val email = authRepo.cachedEmail() ?: "(unknown account)"
+        val email = authRepo.cachedEmail() ?: getString(R.string.pending_unknown_account)
         val deviceId = keyManager.getDeviceId()
         val body = buildString {
             append("I'd like access to inDIC.\n\n")
@@ -102,8 +102,8 @@ class PendingApprovalActivity : AppCompatActivity() {
         val email = authRepo.cachedEmail()
         val deviceId = keyManager.getDeviceId()
 
-        tvUserEmail.text = email ?: "Unknown User"
-        tvDeviceId.text = "Device ID: ${deviceId.take(8)}...${deviceId.takeLast(4)}"
+        tvUserEmail.text = email ?: getString(R.string.pending_unknown_user)
+        tvDeviceId.text = getString(R.string.pending_device_id_fmt, deviceId.take(8), deviceId.takeLast(4))
     }
 
     private fun checkStatusAgain() {
@@ -116,24 +116,33 @@ class PendingApprovalActivity : AppCompatActivity() {
                     when (status) {
                         "APPROVED", "OFFLINE_CACHE_APPROVED" -> {
                             // The admin approved them! Route to the Main App.
-                            Toast.makeText(this@PendingApprovalActivity, "Access Granted!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                this@PendingApprovalActivity,
+                                R.string.status_access_granted,
+                                Toast.LENGTH_SHORT,
+                            ).show()
                             val intent = Intent(this@PendingApprovalActivity, HomeActivity::class.java)
                             startActivity(intent)
                             finish()
                         }
                         "PENDING" -> {
                             // Still waiting.
-                            Toast.makeText(this@PendingApprovalActivity, "Account is still pending approval.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                this@PendingApprovalActivity,
+                                R.string.status_still_pending,
+                                Toast.LENGTH_SHORT,
+                            ).show()
                         }
                         else -> {
                             // Something went wrong (e.g., REVOKED). The repo already signed them out.
-                            routeToLogin("Your access status has changed. Please log in again.")
+                            routeToLogin(getString(R.string.status_changed_relogin))
                         }
                     }
                 },
                 onFailure = { exception ->
                     setLoadingState(false)
-                    Toast.makeText(this@PendingApprovalActivity, exception.message ?: "Network error. Try again.", Toast.LENGTH_LONG).show()
+                    val message = exception.message ?: getString(R.string.error_network_retry)
+                    Toast.makeText(this@PendingApprovalActivity, message, Toast.LENGTH_LONG).show()
                 },
             )
         }
@@ -141,12 +150,12 @@ class PendingApprovalActivity : AppCompatActivity() {
 
     private fun showLogoutConfirmation() {
         AlertDialog.Builder(this)
-            .setTitle("Log Out?")
-            .setMessage("Are you sure you want to log out of inDIC on this device?")
-            .setPositiveButton("Log Out") { _, _ ->
+            .setTitle(R.string.logout_confirm_title)
+            .setMessage(R.string.logout_confirm_body)
+            .setPositiveButton(R.string.action_log_out) { _, _ ->
                 performLogout()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
@@ -158,7 +167,7 @@ class PendingApprovalActivity : AppCompatActivity() {
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "Logout cleanup failed, forcing local exit.")
             } finally {
-                routeToLogin("You have been successfully logged out.")
+                routeToLogin(getString(R.string.logout_success))
             }
         }
     }
@@ -179,7 +188,7 @@ class PendingApprovalActivity : AppCompatActivity() {
             tvLogout.isEnabled = false
             progressLoading.visibility = View.VISIBLE
         } else {
-            btnRefreshStatus.text = "CHECK STATUS"
+            btnRefreshStatus.text = getString(R.string.action_check_status)
             btnRefreshStatus.isEnabled = true
             tvLogout.isEnabled = true
             progressLoading.visibility = View.GONE

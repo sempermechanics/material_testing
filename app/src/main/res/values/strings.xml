@@ -336,4 +336,34 @@
     <string name="info_subset">The pixel window tracked at each grid point. Bigger = more robust on weak speckle, but smooths out sharp strain gradients.</string>
     <string name="info_step">Spacing between tracked points. Smaller = denser results and longer analysis time.</string>
     <string name="info_strain_window">How many neighboring points are fitted to turn displacement into strain. Bigger = smoother strain, less local detail.</string>
+
+    <!-- Auth: sign-in errors -->
+    <string name="error_passwords_mismatch">Passwords do not match.</string>
+    <string name="auth_link_send_failed">Could not send the link.</string>
+    <string name="auth_link_wrong_device">Open the sign-in link on the device that requested it.</string>
+    <string name="auth_google_no_account">No Google account available on this device.</string>
+    <string name="auth_google_failed">Google sign-in failed.</string>
+    <string name="auth_sign_in_failed">Sign-in failed.</string>
+
+    <!-- Auth: startup routing -->
+    <string name="status_offline_mode">Offline Mode</string>
+    <string name="error_unknown_status">System error: Unknown account status.</string>
+    <string name="error_verify_failed">Could not verify account securely.</string>
+    <string name="error_startup_failed">A critical system error occurred during startup.</string>
+
+    <!-- Pending approval screen -->
+    <string name="pending_unknown_account">(unknown account)</string>
+    <string name="pending_unknown_user">Unknown User</string>
+    <string name="pending_device_id_fmt">Device ID: %1$s…%2$s</string>
+    <string name="action_check_status">CHECK STATUS</string>
+    <string name="status_access_granted">Access Granted!</string>
+    <string name="status_still_pending">Account is still pending approval.</string>
+    <string name="status_changed_relogin">Your access status has changed. Please log in again.</string>
+    <string name="error_network_retry">Network error. Try again.</string>
+
+    <!-- Log out confirmation -->
+    <string name="logout_confirm_title">Log Out?</string>
+    <string name="logout_confirm_body">Are you sure you want to log out of inDIC on this device?</string>
+    <string name="action_log_out">Log Out</string>
+    <string name="logout_success">You have been successfully logged out.</string>
 </resources>

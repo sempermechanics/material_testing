@@ -9,7 +9,7 @@ without a backend; do this only if you are deploying the cloud side yourself.
 - Prefer clicking to typing? → [BACKEND_SETUP_CONSOLE.md](BACKEND_SETUP_CONSOLE.md)
   covers Parts A–B in the browser, then send you back here for Part C.
 - Want to know *why* it is shaped this way? → [CLOUD_ARCHITECTURE_GCP.md](CLOUD_ARCHITECTURE_GCP.md)
-- Sign-in trouble specifically? → [GOOGLE_SSO_SETUP.md](GOOGLE_SSO_SETUP.md)
+- Sign-in trouble specifically? → [AUTH_SETUP.md](AUTH_SETUP.md)
 
 | Part | What you get | Needs |
 |---|---|---|
@@ -39,9 +39,9 @@ without a backend; do this only if you are deploying the cloud side yourself.
 - A **GCP project** you can create resources in (company creates it if needed).
 - The **Shared Drive** `inDIC-Research-Storage` (or any Shared Drive you own)
   and its **`SHARED_DRIVE_ID`**.
-- The **OAuth Web client ID** the Android app already uses
-  (`BuildConfig.GOOGLE_WEB_CLIENT_ID` — see [GOOGLE_SSO_SETUP.md](GOOGLE_SSO_SETUP.md)).
-  Same Google Sign-In client works regardless of backend.
+- A **Firebase project** with sign-in providers enabled and its
+  `google-services.json` in `app/` — see [AUTH_SETUP.md](AUTH_SETUP.md). Note
+  its **project id**: the backend accepts ID tokens issued by it.
 - `curl` + `python` (3.12) for the smoke test.
 
 ```bash
@@ -123,10 +123,15 @@ gcloud run deploy indic-api \
   --allow-unauthenticated \
   --min-instances 0 --max-instances 10 \
   --concurrency 40 --cpu 1 --memory 512Mi --timeout 120 \
-  --set-env-vars "WEB_CLIENT_ID=$WEB_CLIENT_ID,ALLOWED_HD=company.com,SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT"
+  --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com"
 ```
+> `FIREBASE_PROJECT_ID` can be omitted when Firebase Auth lives in the same
+> project as the backend — it defaults to `GOOGLE_CLOUD_PROJECT`. See
+> [AUTH_SETUP.md](AUTH_SETUP.md) §3 for what `AUTO_APPROVE_HD` and
+> `ADMIN_EMAILS` do.
+
 > `--allow-unauthenticated` is correct here: the service is public at the network
-> layer, and **auth is enforced in the app layer** (Google ID token + device
+> layer, and **auth is enforced in the app layer** (Firebase ID token + device
 > signature). Nothing sensitive is reachable without a valid token.
 
 Grab the URL:
@@ -195,7 +200,7 @@ gcloud auth application-default login                    # user ADC (no key)
 # let your user mint Drive tokens for the SA:
 gcloud iam service-accounts add-iam-policy-binding $API_SA \
   --member="user:$(gcloud config get-value account)" --role="roles/iam.serviceAccountTokenCreator"
-export GOOGLE_CLOUD_PROJECT=$PROJECT WEB_CLIENT_ID=$WEB_CLIENT_ID \
+export GOOGLE_CLOUD_PROJECT=$PROJECT FIREBASE_PROJECT_ID=$FIREBASE_PROJECT \
        SERVICE_ACCOUNT_EMAIL=$API_SA SHARED_DRIVE_ID=$SHARED_DRIVE_ID \
        DEV_INSECURE_AUTH=1 AUTO_APPROVE=1
 uvicorn app.main:app --reload --port 8080
@@ -208,13 +213,13 @@ Then use `URL=http://localhost:8080` in the B2 steps.
 
 > **The client code is implemented.** `data/net/` (IndicApi, TokenStore,
 > TokenProvider, ApiDtos), the EC-P256 `DeviceKeyManager` (challenge-response),
-> the rewritten `AuthRepository` (Google-only) and `DicUploadWorker` (resumable
-> PUT direct to Drive) are all in the app. Supabase is removed. This part is now
-> the **operational** steps to point the app at your live backend and test it.
+> `AuthRepository` (Google-only sign-in) and `DicUploadWorker` (resumable PUT
+> direct to Drive) are all in the app. This part is the **operational** steps
+> to point the app at your live backend and test it.
 
 ### C0. Make the service reachable by the app (**do this first**)
 
-The app authenticates users with a **Google ID token**, which is *not* a Cloud
+The app authenticates users with a **Firebase ID token**, which is *not* a Cloud
 Run **invoker** token. So a **private** Cloud Run service is unreachable by the
 app — every call gets Google's HTML `403 Forbidden`. It needs a public front
 door.
@@ -238,7 +243,7 @@ the API Gateway workaround below.
 A managed **public** endpoint whose reachability is *not* granted via `allUsers`
 IAM, so DRS doesn't block it. The gateway invokes Cloud Run using **its own
 service account** (an org-internal principal DRS permits); Cloud Run stays
-private. Your FastAPI app-layer auth (Google ID token + hd/approval + device
+private. Your FastAPI app-layer auth (Firebase ID token + approval + device
 signature) runs unchanged — the client token arrives as
 `X-Forwarded-Authorization` (already handled in `deps.py`).
 
@@ -281,17 +286,17 @@ the gateway gets through. In **C1**, set `INDIC_API_BASE_URL` to
 
 In `local.properties`:
 ```properties
-GOOGLE_WEB_CLIENT_ID=<your web client id>.apps.googleusercontent.com
 INDIC_API_BASE_URL=https://indic-api-xxxx.a.run.app
 ```
 Blank `INDIC_API_BASE_URL` = offline-only (cloud disabled). Rebuild after editing.
 
-### C2. Register the Android OAuth client (so Google Sign-In works on-device)
+### C2. Make sure Google sign-in works on-device
 
-In Google Cloud → **APIs & Services → Credentials**, ensure an **OAuth client ID
-→ Android** exists with package `com.rafad.indicvisiondic` and your build's
-**SHA-1** (debug keystore SHA-1 for a debug build). See
-[GOOGLE_SSO_SETUP.md](GOOGLE_SSO_SETUP.md).
+In the **Firebase console** → Project settings → your Android app, confirm the
+**SHA-1** of the keystore you are building with is registered (debug keystore
+for a debug build), and that `app/google-services.json` is current. Firebase
+creates the matching Android OAuth client for you. Full steps in
+[AUTH_SETUP.md](AUTH_SETUP.md).
 
 ### C3. Configure the access model
 
@@ -304,9 +309,11 @@ gcloud run services update indic-api --region asia-south1 \
   longer work; test via the app).
 - `AUTO_APPROVE_HD=indicvision.com` → `@indicvision.com` accounts are **APPROVED**
   on first sign-in.
-- `ALLOWED_HD` **removed** → any Google account may sign in; non-domain accounts
-  land **PENDING** and use the in-app **Request access** button (emails
-  `support@indicvision.com`), then an admin approves them individually.
+- Any Google account may sign in regardless — there is no domain gate on
+  authentication (`ALLOWED_HD` is defined in `config.py` but read by nothing;
+  removing it changes no behavior). Non-domain accounts land **PENDING** and
+  use the in-app **Request access** button (emails `support@indicvision.com`),
+  then an admin approves them individually.
 - `AUTO_APPROVE` (blanket approve-everyone) **removed**.
 
 Designate admins with `ADMIN_EMAILS` (comma-separated) — they're always
@@ -381,6 +388,6 @@ accounts.) The approved user taps **Check now** and is let in.
 | `403 PERMISSION_DENIED` minting Drive token | SA missing `serviceAccountTokenCreator` **on itself** (A4), or `iamcredentials` API not enabled (A1). |
 | `iam.serviceAccounts.getAccessToken` denied locally | Your user lacks `tokenCreator` on the SA — see the local-run block. |
 | Firestore `NOT_FOUND` / `PermissionDenied` | Firestore DB not created (A2) or `datastore.user` not granted (A4). |
-| `401 invalid_token` from the app | ID token `aud` ≠ `WEB_CLIENT_ID`, or `hd` ≠ `ALLOWED_HD`. Check the deployed env vars. |
+| `401 invalid_token` from the app | Token audience is not the project in `FIREBASE_PROJECT_ID` (defaults to `GOOGLE_CLOUD_PROJECT`), or the token expired. Check the deployed env vars. |
 | `403 not_approved` | User is `PENDING`; set `access_status: APPROVED` in Firestore, or deploy with `AUTO_APPROVE=1` during pilot. |
 | `409 device_conflict` on register | User already has an active device — needs admin rebind (revoke old device in Firestore). |
