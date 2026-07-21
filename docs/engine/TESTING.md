@@ -1,7 +1,9 @@
-# IndicVision DIC — Test Suite Reference
+# Test suite reference
 
 Complete catalog of the automated tests: what each one proves, why it exists,
-and how to run everything. Companion doc: [ARCHITECTURE.md](ARCHITECTURE.md).
+and how to run everything. The engine it exercises is described in
+[ARCHITECTURE.md](ARCHITECTURE.md); what of this runs in CI is in
+[ops/CI.md](../ops/CI.md).
 
 ---
 
@@ -35,7 +37,7 @@ g++ -std=c++17 -O2 -ffast-math \
   -Iapp/src/main/cpp/third_party/eigen \
   -Iapp/src/main/cpp/third_party/opencv/modules/core/include \
   app/src/test/cpp/test_main.cpp \
-  app/src/test/cpp/unit/*.cpp app/src/test/cpp/integration/*.cpp \n  app/src/test/cpp/dice/test_parity.cpp app/src/test/cpp/perf/*.cpp \
+  app/src/test/cpp/unit/*.cpp app/src/test/cpp/integration/*.cpp \n  app/src/test/cpp/dice/test_translation_synthetic.cpp app/src/test/cpp/perf/*.cpp \
   app/src/main/cpp/preprocessing/*.cpp app/src/main/cpp/core/OptimizationEngine.cpp \
   app/src/main/cpp/postprocessing/StrainCalculator.cpp -o dic_tests
 ```
@@ -127,7 +129,7 @@ end-to-end (ICGN, Simplex, auto-search, guards).
 | `RepeatSolve_BitIdentical` | The same solve twice is bit-identical | Threading race, uninitialized buffer, or run-to-run nondeterminism |
 | `SuccessfulSolve_CorrelationNonNegative` | Successful solves report ZNSSD ≥ 0 | Sentinel contract broken — the JNI layer marks failed/skipped points with `CORR_INVALID = -1`, so a real score must never be negative |
 
-## Suite: `DiceParity` — `dice/test_parity.cpp`
+## Suite: `DiceTranslationSynthetic` — `dice/test_translation_synthetic.cpp`
 
 Cross-validation against **DICe** (Digital Image Correlation Engine,
 [github.com/dicengine/dice](https://github.com/dicengine/dice), BSD 3-Clause),
@@ -143,13 +145,13 @@ case, in milliseconds on a laptop (no Trilinos/MPI).
 |---|---|---|
 | `PureTranslation_0p4px_FourSubsets` | All 4 subsets recover the 0.4 px shift within DICe's 0.1 px tolerance (we actually land ≤ 0.02 px — see `Engine.PureTranslation_Subpixel`) | Our engine no longer agrees with a reference DIC implementation on rigid translation — a correlation/interpolation regression, or accuracy fallen below the field's accepted bar |
 
-## Suite: `DiceRealImage` — `dice/test_real_image.cpp`
+## Suite: `DiceTranslationReal` — `dice/test_translation_real_image.cpp`
 
-The real-image companion to `DiceParity`: same 0.4 px / 0.1 px contract, but on
+The real-image companion to `DiceTranslationSynthetic`: same 0.4 px / 0.1 px contract, but on
 DICe's **actual** 512×512 speckle images (`fixtures/dice/ref.tif`, `def.tif` —
 their `custom_app` `ref.tif`/`def.tif`, BSD-3, see
 [`fixtures/dice/LICENSE.DICe`](../../app/src/test/cpp/fixtures/dice/LICENSE.DICe)).
-Where `DiceParity` proves accuracy on math-perfect synthetic texture, this adds
+Where `DiceTranslationSynthetic` proves accuracy on math-perfect synthetic texture, this adds
 **real-speckle robustness** and **independence** — an image we did not generate,
 a target we did not compute. The fixtures path is injected by CMake as
 `DICE_FIXTURES_DIR`; a minimal P5 reader loads the PGMs (the host build has no
