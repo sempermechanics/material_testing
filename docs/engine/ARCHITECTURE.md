@@ -1,14 +1,20 @@
-# IndicVision DIC — Engine Architecture
+# Engine architecture
 
-API-style reference for the native Digital Image Correlation (DIC) engine and its
-Android integration. Written for developers who need to modify, extend, or debug
-the pipeline.
+API-style reference for the native Digital Image Correlation (DIC) engine and
+its Android integration — module by module, with the invariants each one
+depends on. Written for developers modifying, extending, or debugging the
+pipeline.
+
+New to DIC? Read the [five-minute primer](../README.md#dic-in-five-minutes)
+first. For the derivations behind the code see
+[MATHEMATICS.md](MATHEMATICS.md); for how it's verified,
+[TESTING.md](TESTING.md).
 
 ```
 ┌─────────────────────────  Kotlin / Android  ─────────────────────────┐
 │ StaticAnalysisActivity ──▶ IndicVisionNativeLib (JNI surface)        │
 │        │                          │                                  │
-│  AuthActivity/Splash        DicUploadWorker ──▶ Supabase             │
+│  AuthActivity/Splash        DicUploadWorker ──▶ Cloud Run ─▶ Drive   │
 └───────────────────────────────────┼──────────────────────────────────┘
                                     ▼  JNI (bridge/IndicVisionJNI.cpp)
 ┌─────────────────────────── C++ Engine ───────────────────────────────┐
@@ -53,6 +59,9 @@ The engine's answer for one subset.
 Everything precomputed about one reference subset. Invariants:
 
 - `x_offsets/y_offsets` (and `_f` float mirrors): relative coords in `[-dim/2, +dim/2]`, row-major, length `n = dim²`.
+  **`dim` must be odd** — the offsets are built symmetrically around the center
+  pixel, so an even `dim` yields an off-center subset. The UI enforces this
+  (see [Parameters from the app](#parameters-from-the-app)); direct callers must.
 - `norm_ref_intensities[i] = (ref_intensities[i] − mean_intensity) / std_dev`.
 - `H` = Σ sd·sdᵀ (6×6 Gauss-Newton Hessian), `H_inv` = its inverse.
 - `steepest_descent_images[i]` = `[gx, gy, gx·x, gx·y, gy·x, gy·y] / std_dev` (Eigen 6×1, AoS).
@@ -238,6 +247,24 @@ Key behaviors:
 Threading contract: **one `OptimizationEngine` + one `SubsetData` per OMP
 thread**; `SubsetData` buffers are reused across grid points via the
 `precompute_subset_fast` pool.
+
+### Parameters from the app
+
+`StaticAnalysisActivity` ("Advanced parameters" in the setup wizard) is the
+only producer of the three solve parameters. Each has a slider plus an
+editable numeric field; both write the same slider value, which is what
+`currentSubsetSize()` / `currentStepSize()` / `currentStrainWindow()` read.
+
+| Parameter | JNI argument | Default | Range | Step |
+|---|---|---|---|---|
+| Subset size | `subsetSize` → `dim` | 41 | 15–101 | 2 (**odd only**) |
+| Step size | `stepSize` → grid spacing | 5 | 1–30 | 1 |
+| Strain window | `strainWindow` → `window_pixels` | 15 | 5–51 | 2 (**odd only**) |
+
+Typed input is clamped to the range and snapped onto the slider's step grid
+by `snapToSlider`, so the odd-`dim` invariant above holds for hand-entered
+values too. Fields commit on IME "Done", on focus loss, and before the solve
+starts — a pending edit can never reach the engine uncommitted.
 
 ---
 

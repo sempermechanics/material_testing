@@ -135,11 +135,11 @@
     <string name="reference_image_preview">Reference image preview</string>
     <string name="parameters">Parameters</string>
     <string name="subset_size">Subset size</string>
-    <string name="label_41_px">41 px</string>
+    <string name="label_41">41</string>
     <string name="step_size_density">Step size (density)</string>
-    <string name="label_5_px">5 px</string>
+    <string name="label_5">5</string>
     <string name="strain_window">Strain window</string>
-    <string name="label_15_px">15 px</string>
+    <string name="label_15">15</string>
     <string name="sub_pixel_interpolation_kernel">Sub-pixel interpolation kernel</string>
     <string name="label_4_4_bicubic">4×4 Bicubic</string>
     <string name="label_6_6_keys">6×6 Keys</string>

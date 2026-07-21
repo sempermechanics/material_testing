@@ -44,8 +44,8 @@ namespace IndicVision {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
         int x_idx, y_idx;
-        float u, v, ux, uy, vx, vy; // Changed to float
-        float correlation_score;    // Changed to float
+        float u, v, ux, uy, vx, vy;
+        float correlation_score;
 
         SeedNode() : x_idx(0), y_idx(0), u(0.0f), v(0.0f), ux(0.0f), uy(0.0f), vx(0.0f), vy(0.0f), correlation_score(0.0f) {}
 
