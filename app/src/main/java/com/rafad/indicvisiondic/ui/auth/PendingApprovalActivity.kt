@@ -47,7 +47,6 @@ class PendingApprovalActivity : AppCompatActivity() {
 
         keyManager = DeviceKeyManager(this)
 
-        // Bind UI
         tvUserEmail = findViewById(R.id.tvUserEmail)
         tvDeviceId = findViewById(R.id.tvDeviceId)
         btnRequestAccess = findViewById(R.id.btnRequestAccess)
@@ -139,8 +138,6 @@ class PendingApprovalActivity : AppCompatActivity() {
             )
         }
     }
-
-    // --- SECURE EXIT PROTOCOL ---
 
     private fun showLogoutConfirmation() {
         AlertDialog.Builder(this)

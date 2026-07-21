@@ -100,7 +100,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             elapsedHandler.postDelayed(this, 1000)
         }
     }
-    private lateinit var rgInterpolator: MaterialButtonToggleGroup // ADDED // Added for Secure Exit
+    private lateinit var rgInterpolator: MaterialButtonToggleGroup
 
     // Editable value fields for the parameter sliders (typing and dragging
     // both drive the same slider value)
@@ -147,9 +147,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
             },
         )
-        // ---------------------------------------------
 
-        // Bind UI Components
         progressBar = findViewById(R.id.pbAnalysis)
         tvTimer = findViewById(R.id.tvTimer)
         computeOverlay = findViewById(R.id.computeOverlay)
@@ -353,14 +351,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             startBatchAnalysis()
         }
     }
-
-    // ==========================================
-    // --- SECURE EXIT PROTOCOL FUNCTIONS ---
-    // ==========================================
-
-    // ==========================================
-    // --- NATIVE ENGINE FUNCTIONS (UNTOUCHED) ---
-    // ==========================================
 
     private fun handleReferenceImage(uri: Uri) {
         val name = getFileName(uri)

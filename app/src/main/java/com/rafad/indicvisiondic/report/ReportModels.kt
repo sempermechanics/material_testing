@@ -23,9 +23,9 @@ data class ReportData(
     val fieldResults: List<FieldResult>,
     val engineStats: EngineStats,
 
-    // NEW DIAGNOSTIC MAPS
+    // Correlation-quality diagnostics
     val znssdHeatmap: Bitmap,
-    val solverPathMap: Bitmap, // Future-proofing for path scatter plot
+    val solverPathMap: Bitmap,
     val globalAvgZnssd: Float,
 
     /** Traceability, e.g. "v1.4 (12) • arm64-v8a". Null when unavailable. */
