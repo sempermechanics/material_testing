@@ -2,16 +2,11 @@ import os
 
 
 class Settings:
-    # Deprecated: with Firebase Auth the token audience is the Firebase project
-    # id (verified by firebase-admin), not this Web client id. Kept only so old
-    # deployments don't error on the env var; unused by verification.
-    WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID", "")
-
-    # Hard sign-in gate. If set (e.g. "company.com") ONLY that hosted domain may
-    # sign in. Empty = any Google account may sign in (and lands PENDING unless
-    # auto-approved below) — used for the "outside collaborators request access"
-    # model.
-    ALLOWED_HD = os.environ.get("ALLOWED_HD", "")
+    # There is deliberately no sign-in domain gate. Any account Firebase Auth
+    # accepts may authenticate; whether it may *use* anything is decided by
+    # access_status (see AUTO_APPROVE_HD / ADMIN_EMAILS below and
+    # get_or_create_user). Earlier revisions carried WEB_CLIENT_ID and
+    # ALLOWED_HD settings that no code read — do not reintroduce them.
 
     # Accounts whose verified email is in this domain are created APPROVED
     # automatically (e.g. "indicvision.com"). Everyone else is created PENDING
@@ -52,8 +47,16 @@ class Settings:
 
     # --- pilot / testing switches (turn OFF for production) ---
     # 1 = skip ID-token + device-signature checks entirely. Lets you smoke-test
-    # the Drive + Firestore path with curl before wiring the app. NEVER in prod.
+    # the Drive + Firestore path with curl before wiring the app. NEVER in prod:
+    # it hands every caller the dev identity, which carries role=admin.
     DEV_INSECURE_AUTH = os.environ.get("DEV_INSECURE_AUTH", "") == "1"
+
+    # Cloud Run always sets K_SERVICE, so this tells "deployed" from "on my
+    # laptop". Bypassing auth on a deployed service additionally requires the
+    # acknowledgement below, so a stray DEV_INSECURE_AUTH=1 cannot quietly ship
+    # a wide-open backend — startup fails loudly instead (see main._startup).
+    ON_CLOUD_RUN = bool(os.environ.get("K_SERVICE"))
+    INSECURE_AUTH_ACK = os.environ.get("INSECURE_AUTH_I_ACCEPT_THE_RISK", "") == "1"
     # 1 = new users are created APPROVED instead of PENDING (smooth pilot).
     AUTO_APPROVE = os.environ.get("AUTO_APPROVE", "") == "1"
 

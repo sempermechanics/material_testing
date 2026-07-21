@@ -151,9 +151,12 @@ proves identity; it does not grant entry. `get_or_create_user`
 Auto-approval always requires `email_verified`, so a fresh email/password
 signup cannot claim a privileged domain it does not own.
 
-> **There is no hosted-domain gate on sign-in.** `ALLOWED_HD` exists in
-> `config.py` but is read by no code path; any Google account can authenticate.
-> The `PENDING`/`APPROVED` status is the control that actually holds.
+> **There is no hosted-domain gate on sign-in, by design.** Any account
+> Firebase Auth accepts can authenticate; the `PENDING`/`APPROVED` status is
+> the control that holds. This is what makes the "outside collaborator requests
+> access" flow work. (Earlier revisions carried an `ALLOWED_HD` setting that no
+> code read — it has been removed rather than left to imply a gate that was
+> never there.)
 
 ---
 

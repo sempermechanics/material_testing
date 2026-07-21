@@ -24,12 +24,22 @@ def _startup():
     if missing:
         log.warning("Missing env vars: %s", ", ".join(missing))
     if settings.DEV_INSECURE_AUTH:
+        if settings.ON_CLOUD_RUN and not settings.INSECURE_AUTH_ACK:
+            raise RuntimeError(
+                "DEV_INSECURE_AUTH=1 on a deployed Cloud Run service: user and "
+                "device authentication would be bypassed and every caller would "
+                "act as an admin. Refusing to start. For a throwaway smoke-test "
+                "deployment set INSECURE_AUTH_I_ACCEPT_THE_RISK=1 as well; "
+                "otherwise remove DEV_INSECURE_AUTH."
+            )
         log.warning("=== DEV_INSECURE_AUTH=1 : auth is BYPASSED. Never use in production. ===")
 
 
 @app.get("/healthz")
 def healthz():
-    return {"ok": True, "dev_insecure_auth": settings.DEV_INSECURE_AUTH}
+    # Unauthenticated endpoint: it must not report the service's auth posture.
+    # Whether the bypass is on is visible in the startup logs, to operators.
+    return {"ok": True}
 
 
 @app.get("/v1/me")

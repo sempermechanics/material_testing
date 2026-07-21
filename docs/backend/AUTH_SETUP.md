@@ -70,10 +70,12 @@ admin approves them via `POST /v1/admin/users/{uid}/approve`. Auto-approval
 always requires a verified email, so a fresh email/password signup cannot
 self-approve into a privileged domain.
 
-> **There is no domain restriction on *signing in*.** The `ALLOWED_HD` env var
-> appears in `config.py` but is never read by any code path — do not rely on it
-> as a gate. Any Google account can authenticate; the control that actually
-> holds is the `PENDING`/`APPROVED` status above.
+> **There is no domain restriction on *signing in*, deliberately.** Any account
+> Firebase Auth accepts can authenticate — that is what lets an outside
+> collaborator sign in and land in the approval queue. The control that holds
+> is the `PENDING`/`APPROVED` status above. An `ALLOWED_HD` setting that no
+> code read used to sit in `config.py`; it has been removed, so don't go
+> looking for it.
 
 ## 4. App config — local.properties
 

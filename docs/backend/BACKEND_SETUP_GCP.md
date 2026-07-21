@@ -139,7 +139,7 @@ Grab the URL:
 export URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
 echo $URL
 ```
-**Check:** `curl -s $URL/healthz` → `{"ok":true,"dev_insecure_auth":false}`.
+**Check:** `curl -s $URL/healthz` → `{"ok":true}`.
 
 ### B2. Redeploy in **insecure dev mode** to smoke-test Drive + Firestore
 
@@ -148,7 +148,7 @@ in [config.py](../../backend/app/config.py)) so you can prove the storage path w
 plain curl, before any Android work. **Never leave this on.**
 ```bash
 gcloud run services update indic-api --region $REGION \
-  --update-env-vars "DEV_INSECURE_AUTH=1,AUTO_APPROVE=1"
+  --update-env-vars "DEV_INSECURE_AUTH=1,INSECURE_AUTH_I_ACCEPT_THE_RISK=1,AUTO_APPROVE=1"
 ```
 
 **B2a. Create a session** (declare one tiny file):
@@ -187,7 +187,7 @@ curl -s -X POST "$URL/v1/files/$FID/complete" -H "content-type: application/json
 ### B3. Turn dev mode OFF
 ```bash
 gcloud run services update indic-api --region $REGION \
-  --remove-env-vars "DEV_INSECURE_AUTH,AUTO_APPROVE"
+  --remove-env-vars "DEV_INSECURE_AUTH,INSECURE_AUTH_I_ACCEPT_THE_RISK,AUTO_APPROVE"
 ```
 **Check:** `curl -s $URL/v1/me` (no token) → `401 missing_bearer`.
 
@@ -303,17 +303,16 @@ creates the matching Android OAuth client for you. Full steps in
 ```bash
 gcloud run services update indic-api --region asia-south1 \
   --update-env-vars AUTO_APPROVE_HD=indicvision.com \
-  --remove-env-vars DEV_INSECURE_AUTH,AUTO_APPROVE,ALLOWED_HD
+  --remove-env-vars DEV_INSECURE_AUTH,INSECURE_AUTH_I_ACCEPT_THE_RISK,AUTO_APPROVE
 ```
 - `DEV_INSECURE_AUTH` **off** → real device auth (after this, curl smoke tests no
   longer work; test via the app).
 - `AUTO_APPROVE_HD=indicvision.com` → `@indicvision.com` accounts are **APPROVED**
   on first sign-in.
-- Any Google account may sign in regardless — there is no domain gate on
-  authentication (`ALLOWED_HD` is defined in `config.py` but read by nothing;
-  removing it changes no behavior). Non-domain accounts land **PENDING** and
-  use the in-app **Request access** button (emails `support@indicvision.com`),
-  then an admin approves them individually.
+- Any account may sign in regardless — there is no domain gate on
+  authentication, deliberately. Non-domain accounts land **PENDING** and use
+  the in-app **Request access** button (emails `support@indicvision.com`), then
+  an admin approves them individually.
 - `AUTO_APPROVE` (blanket approve-everyone) **removed**.
 
 Designate admins with `ADMIN_EMAILS` (comma-separated) — they're always

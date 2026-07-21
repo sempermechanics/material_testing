@@ -105,15 +105,17 @@ Auth lives in the same project as this backend, you can skip the
 
 ## 9. Verify in the browser
 1. Visit `https://<your-url>/healthz` → you should see
-   `{"ok":true,"dev_insecure_auth":false}`.
+   `{"ok":true}`.
 2. Visit `https://<your-url>/docs` → the interactive API page loads. (Calls will
    return 401 until dev mode is on — next step.)
 
 ## 10. Prove Drive + Firestore work (browser only, no curl)
 Temporarily enable dev mode so you can call the API without a signed request:
 1. **Cloud Run** → click **indic-api** → **Edit & deploy new revision**.
-2. **Variables & Secrets** → add `DEV_INSECURE_AUTH` = `1` and `AUTO_APPROVE` =
-   `1` → **Deploy**.
+2. **Variables & Secrets** → add `DEV_INSECURE_AUTH` = `1`,
+   `INSECURE_AUTH_I_ACCEPT_THE_RISK` = `1`, and `AUTO_APPROVE` = `1` →
+   **Deploy**. The second variable is required on a deployed service: without
+   it the container refuses to start, so nobody bypasses auth by accident.
 3. Open `https://<your-url>/docs` → expand **POST /v1/sessions** → **Try it out**
    → paste this body → **Execute**:
    ```json
@@ -140,7 +142,8 @@ Temporarily enable dev mode so you can call the API without a signed request:
 
 ## 11. Turn dev mode OFF (important)
 Cloud Run → **indic-api** → **Edit & deploy new revision** → **Variables &
-Secrets** → delete `DEV_INSECURE_AUTH` and `AUTO_APPROVE` → **Deploy**.
+Secrets** → delete `DEV_INSECURE_AUTH`, `INSECURE_AUTH_I_ACCEPT_THE_RISK` and
+`AUTO_APPROVE` → **Deploy**.
 Confirm `https://<your-url>/v1/me` now returns **401**.
 
 ---

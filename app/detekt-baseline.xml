@@ -234,8 +234,6 @@
     <ID>MaxLineLength:PdfLayoutEngine.kt$PdfLayoutEngine$canvas?.drawText("inDIC Metrology Report • Page $pageNumber", pageWidth / 2f, pageHeight - (margin / 2f), footerPaint)</ID>
     <ID>MaxLineLength:PdfLayoutEngine.kt$PdfLayoutEngine$if (rowIndex % 2 == 1) canvas?.drawRect(margin, cursorY, pageWidth - margin, cursorY + rowHeight, rowBgZebra)</ID>
     <ID>MaxLineLength:PdfLayoutEngine.kt$PdfLayoutEngine$val paint = if (i == 0) tableHeaderPaint else Paint(tableHeaderPaint).apply { textAlign = Paint.Align.RIGHT }</ID>
-    <ID>MaxLineLength:PendingApprovalActivity.kt$PendingApprovalActivity$Toast.makeText(this@PendingApprovalActivity, "Account is still pending approval.", Toast.LENGTH_SHORT).show()</ID>
-    <ID>MaxLineLength:PendingApprovalActivity.kt$PendingApprovalActivity$Toast.makeText(this@PendingApprovalActivity, exception.message ?: "Network error. Try again.", Toast.LENGTH_LONG).show()</ID>
     <ID>MaxLineLength:ReportBuilder.kt$ReportBuilder$fun appBuildLabel(): String</ID>
     <ID>MaxLineLength:ResultViewerActivity.kt$ResultViewerActivity$com.google.android.material.snackbar.Snackbar.make(findViewById(android.R.id.content), R.string.no_batch_data, com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show()</ID>
     <ID>MaxLineLength:ResultViewerActivity.kt$ResultViewerActivity$tvInspectorData.text = "Loc: ($actualX, $actualY)\n$currentTypeString: ${ReportBuilder.formatMetric(value)} $unit"</ID>
