@@ -185,8 +185,17 @@ jobs:
           # Gradle cache so the NDK build isn't re-resolving deps every run.
           cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
 
-      # The from-source OpenCV build dominates; cache the object dir keyed on
-      # everything that can change the native build.
+      # The from-source OpenCV build dominates this job. Two caches cover it:
+      #
+      #  .cxx    — the CMake/ninja tree, so configure output is reused.
+      #  ccache  — the compiled objects.
+      #
+      # ccache is what actually saves the time. The .cxx cache alone does not:
+      # actions/cache restores object files with fresh mtimes, and ninja is
+      # mtime-driven, so a run could hit the .cxx key and still recompile every
+      # translation unit (measured: 6.5 min on a primary-key hit). ccache keys
+      # on preprocessed source content, which no amount of timestamp churn can
+      # invalidate.
       - name: Cache native build (.cxx)
         uses: actions/cache@v4
         with:
@@ -194,10 +203,43 @@ jobs:
           key: cxx-arm64-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', '.gitmodules', 'app/src/main/cpp/**/*.cpp', 'app/src/main/cpp/**/*.h') }}
           restore-keys: cxx-arm64-
 
-      # arm64-v8a is the default ABI now, but pass it explicitly so the job is
-      # self-documenting and independent of the gradle default.
+      - name: Install ccache
+        run: sudo apt-get install -y -qq ccache
+
+      # Rolling key: every run saves a fresh entry (a bare content key would
+      # hit and then skip saving, freezing the cache at its first contents and
+      # never accumulating objects for newly changed files).
+      - name: Cache ccache objects
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-arm64-${{ github.sha }}
+          restore-keys: ccache-arm64-
+
+      # arm64-v8a is the default ABI for release; the debug type also carries
+      # x86_64 for emulators, so pass the filter explicitly to keep this job
+      # building exactly the shipped ABI (and only it).
       - name: Assemble debug APK (arm64-v8a)
-        run: ./gradlew :app:assembleDebug -PabiFilters=arm64-v8a --console=plain
+        env:
+          # Absolute, because env values are not shell-expanded — a literal
+          # "~/.ccache" would create a directory named "~".
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_MAXSIZE: 1G
+          # Compare preprocessed content, not compiler mtime: the NDK is
+          # reinstalled on every runner, so an mtime check would miss on
+          # every run.
+          CCACHE_COMPILERCHECK: content
+        run: ./gradlew :app:assembleDebug -PabiFilters=arm64-v8a -PnativeCompilerLauncher=ccache --console=plain
+
+      # Hit rate in the job log: if this trends toward 0 the cache is not
+      # doing its job and the step above is silently paying full price.
+      - name: ccache statistics
+        if: always()
+        env:
+          # Absolute, because env values are not shell-expanded — a literal
+          # "~/.ccache" would create a directory named "~".
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+        run: ccache --show-stats
 
       - name: Verify the arm64-v8a .so is packaged
         run: |
