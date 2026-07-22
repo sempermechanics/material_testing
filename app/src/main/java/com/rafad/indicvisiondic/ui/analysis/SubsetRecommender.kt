@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.Rect
 import android.os.Build
+import com.rafad.indicvisiondic.IndicVisionNativeLib
 import timber.log.Timber
 
 /**
@@ -56,6 +57,9 @@ object SubsetRecommender {
     private const val LUMA_B = 0.114f
 
     private const val BYTES_PER_RGBA_PIXEL = 4
+
+    /** ~32 MP, i.e. 128 MB as ARGB_8888 — the ceiling for a whole-image decode. */
+    private const val MAX_FULL_DECODE_PIXELS = 32L * 1024 * 1024
     private const val CHANNEL_MASK = 0xFF
     private const val RED_SHIFT = 16
     private const val GREEN_SHIFT = 8
@@ -218,12 +222,27 @@ object SubsetRecommender {
                 BitmapRegionDecoder.newInstance(bytes, 0, bytes.size, false)
             }
             if (decoder != null) return RegionSource(decoder)
-        }.onFailure { Timber.d(it, "Region decoding unavailable; falling back to full decode") }
+        }.onFailure {
+            // Some formats (like TIFF) are supported by OpenCV but not by
+            // BitmapRegionDecoder. We'll try to decode the whole bitmap.
+            Timber.d("Region decoding unavailable (format not supported?); falling back to full decode")
+        }
+
+        // Whole-bitmap fallbacks hold w*h*4 bytes at once. Past the budget the
+        // suggestion is not worth an OOM — the slider keeps its default.
+        if (w.toLong() * h.toLong() > MAX_FULL_DECODE_PIXELS) {
+            Timber.d("Reference too large (%d x %d) to decode whole; no subset suggestion", w, h)
+            return null
+        }
 
         val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
-        val bmp = runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) }
-            .getOrNull() ?: return null
-        return BitmapSource(bmp)
+        val bmp: Bitmap? = runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) }.getOrNull()
+            // Last resort: OpenCV decodes what the platform cannot (TIFF above
+            // all). Full width, so the gradients stay at native resolution.
+            // JNI — the caller must already be on the native dispatcher.
+            ?: runCatching { IndicVisionNativeLib.getPreviewFromBytes(bytes, w) }.getOrNull()
+
+        return bmp?.let { BitmapSource(it) }
     }
 
     private fun grayFromPixels(pixels: IntArray, count: Int): FloatArray {

@@ -217,6 +217,7 @@
     <string name="frames_capped_fmt">First %1$d frames kept — raise Max frames in Settings</string>
     <string name="advanced_parameters">Advanced parameters</string>
     <string name="advanced_summary_fmt">Subset %1$d · Step %2$d · VSG %3$d</string>
+    <string name="frames_size_mismatch_fmt">❌ %1$d frame(s) are not %2$d × %3$d like the reference. Deformed frames must match the reference exactly — reload matching frames to continue.</string>
     <string name="subset_recommend_running">Sizing the subset from the speckle pattern…</string>
     <string name="subset_recommend_fmt">Suggested %1$d px from the speckle pattern (SSSIG criterion)</string>
     <string name="subset_recommend_low_texture_fmt">Speckle contrast is low — %1$d px is the largest allowed subset and still falls short of 0.007 px accuracy</string>

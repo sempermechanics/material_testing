@@ -7,6 +7,27 @@ plugins {
 
 // 🚀 PURE KOTLIN BYPASS: Reads the file without needing 'java.util'
 val localPropertiesFile = rootProject.file("local.properties")
+
+/** Value of [key] in local.properties, or null when the file/key is absent. */
+fun localProperty(key: String): String? =
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile
+            .readLines()
+            .find { it.startsWith("$key=") }
+            ?.substringAfter("=")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+    } else {
+        null
+    }
+
+// Debug-only convenience: on an emulator, skip sign-in and run the app as a
+// local-only dev account, even when INDIC_API_BASE_URL is set. Cloud calls are
+// switched off along with it (see DevAuth), so nothing hits the backend
+// unauthenticated. Release builds never get this — the field is hardcoded false
+// below. Put INDIC_DEV_AUTH_BYPASS=false in local.properties to exercise the
+// real sign-in flow on an emulator.
+val devAuthBypass = localProperty("INDIC_DEV_AUTH_BYPASS") != "false"
 // Base URL of the inDIC GCP backend (Cloud Run). Empty = cloud sync disabled;
 // the app still runs fully offline. e.g. https://indic-api-xxxx.a.run.app
 val indicApiBaseUrl =
@@ -47,15 +68,21 @@ android {
         // 🚀 SECURE INJECTION: Uses our pure Kotlin variables
         buildConfigField("String", "INDIC_API_BASE_URL", "\"$indicApiBaseUrl\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
+        // Overridden per build type below; the default keeps the flag defined
+        // for any variant that doesn't set it (androidTest, lint models).
+        buildConfigField("boolean", "DEV_AUTH_BYPASS", "false")
 
         // Ship arm64-v8a only. Every Android phone from ~2019 onward is 64-bit
         // ARM, so a 2022+ target needs nothing else; armeabi-v7a (32-bit) and
-        // x86/x86_64 (emulators only) would just triple the OpenCV build and
-        // bloat the APK with native code no real device runs. "Test what you
-        // ship": CI builds exactly this ABI.
+        // x86/x86_64 (emulators only) would just bloat the release APK with
+        // native code no real device runs. "Test what you ship": CI builds
+        // exactly this ABI, and so does the release build type.
         //
-        // Local override: -PabiFilters=x86_64 builds for an emulator instead
-        // (comma-separated for several). Defaults to arm64-v8a when unset.
+        // The debug build type adds x86_64 on top of this (see buildTypes) so
+        // emulator runs work without anyone having to remember a flag.
+        //
+        // Local override: -PabiFilters=x86_64 pins the build to one ABI
+        // (comma-separated for several), for a faster single-target build.
         val requestedAbis =
             (project.findProperty("abiFilters") as String?)
                 ?.takeIf { it.isNotBlank() }
@@ -64,6 +91,19 @@ android {
         ndk { abiFilters.addAll(requestedAbis) }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                // Vendored OpenCV defaults ENABLE_CCACHE to ON for Ninja builds,
+                // and when it finds a ccache on PATH it installs it as a GLOBAL
+                // RULE_LAUNCH_COMPILE — so it wraps our targets too, not just
+                // OpenCV's. Upstream hardcodes IS_CCACHE_WORKS=1 (its own check
+                // is commented out as non-functional), so a ccache that fails to
+                // start takes down every translation unit with no compiler
+                // diagnostic at all. Not a trade we want for a cache.
+                arguments += "-DENABLE_CCACHE=OFF"
+            }
+        }
     }
 
     buildFeatures {
@@ -72,7 +112,25 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "DEV_AUTH_BYPASS", "$devAuthBypass")
+
+            // Emulators are x86_64. An arm64-only APK does install there and
+            // runs under ARM translation (berberis), but libomp aborts inside
+            // __kmp_parallel_initialize the moment the engine opens a parallel
+            // region — SIGABRT with no usable diagnostic. Carrying x86_64 in
+            // every debug APK means the emulator runs native code whatever
+            // installs it, including Android Studio's Run button, which cannot
+            // pass -PabiFilters. Costs one extra OpenCV compile (cached after
+            // the first) and APK size that never reaches a user; opt out with
+            // -PabiFilters=arm64-v8a.
+            if (project.findProperty("abiFilters") == null) {
+                ndk { abiFilters.add("x86_64") }
+            }
+        }
         release {
+            // Never in a shipped build, whatever local.properties says.
+            buildConfigField("boolean", "DEV_AUTH_BYPASS", "false")
             isMinifyEnabled = true // 🚀 THE SHREDDER IS NOW ON
             isShrinkResources = true // 🚀 Destroys unused files
             proguardFiles(

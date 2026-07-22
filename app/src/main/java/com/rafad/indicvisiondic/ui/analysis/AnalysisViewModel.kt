@@ -11,7 +11,6 @@ import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.report.EngineStats
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -19,8 +18,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 /**
  * Holds analysis inputs/state across configuration changes and runs the
@@ -41,15 +38,8 @@ class AnalysisViewModel : ViewModel() {
         const val RAW_DEFORMED_SUBDIR = "raw_deformed"
     }
 
-    // NATIVE THREAD PINNING: A single persistent OS thread for ALL JNI/OpenMP calls.
-    val nativeExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
-        Thread(r, "IndicVision-NativeThread").also { it.isDaemon = true }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        nativeExecutor.shutdown()
-    }
+    // NATIVE THREAD PINNING: All JNI/OpenMP calls are routed through the global
+    // IndicVisionNativeLib.nativeDispatcher to ensure thread affinity.
 
     var refBytes: ByteArray? = null
     var roiMaskBytes: ByteArray? = null
@@ -57,6 +47,22 @@ class AnalysisViewModel : ViewModel() {
 
     /** Original picked filenames, index-aligned with [defFilePaths]. */
     var defOriginalNames: List<String> = emptyList()
+
+    /**
+     * Pixel size of each deformed frame, keyed by its path in [defFilePaths].
+     * Measured once at import (the bytes are already in hand there) so the
+     * match against the reference costs nothing to re-check later.
+     *
+     * The engine clamps its AKAZE search window to the *reference* size and
+     * then applies that same window to the deformed image, so a frame of a
+     * different size makes OpenCV throw — swallowed by a `catch (...)` in the
+     * JNI layer, which silently degrades seeding. [frameSizeError] is what
+     * stops such a batch from ever reaching the engine.
+     */
+    var defFrameSizes: Map<String, Pair<Int, Int>> = emptyMap()
+
+    /** Set when loaded frames do not all match the reference; blocks Compute. */
+    var frameSizeError: String? = null
 
     /**
      * Whether [defFilePaths] came from sampling a video rather than picked
@@ -179,13 +185,13 @@ class AnalysisViewModel : ViewModel() {
     )
 
     /**
-     * Full-field batch compute + offline upload queue. All JNI calls run on [nativeExecutor].
+     * Full-field batch compute + offline upload queue. All JNI calls run on the native dispatcher.
      */
     suspend fun runBatchAnalysis(
         appContext: Context,
         params: BatchAnalysisParams,
         onProgress: (BatchProgressUpdate) -> Unit,
-    ): BatchAnalysisOutcome = withContext(nativeExecutor.asCoroutineDispatcher()) {
+    ): BatchAnalysisOutcome = withContext(IndicVisionNativeLib.nativeDispatcher) {
         // Hard stop before any native work: new sessions cannot exceed the quota.
         // Re-runs of an existing workingLocalId are still allowed.
         if (wouldCreateNewSession(appContext)) {

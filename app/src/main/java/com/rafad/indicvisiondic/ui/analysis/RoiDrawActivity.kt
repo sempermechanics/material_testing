@@ -7,6 +7,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.switchmaterial.SwitchMaterial
@@ -14,6 +15,8 @@ import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.IndicVisionNativeLib
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.ui.common.Insets
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -64,22 +67,27 @@ class RoiDrawActivity : AppCompatActivity() {
             if (file.exists()) {
                 val bytes = file.readBytes()
                 val screenWidth = resources.displayMetrics.widthPixels
-                val bitmap = IndicVisionNativeLib.getPreviewFromBytes(bytes, screenWidth)
+                
+                lifecycleScope.launch {
+                    val bitmap = withContext(IndicVisionNativeLib.nativeDispatcher) {
+                        IndicVisionNativeLib.getPreviewFromBytes(bytes, screenWidth)
+                    }
 
-                if (bitmap == null) {
-                    Toast.makeText(this, R.string.roi_decode_failed, Toast.LENGTH_LONG).show()
-                } else {
-                    imgRoiCanvas.setImageBitmap(bitmap)
-                    imgRoiCanvas.post {
-                        overlayRoi.imageView = imgRoiCanvas
+                    if (bitmap == null) {
+                        Toast.makeText(this@RoiDrawActivity, R.string.roi_decode_failed, Toast.LENGTH_LONG).show()
+                    } else {
+                        imgRoiCanvas.setImageBitmap(bitmap)
+                        imgRoiCanvas.post {
+                            overlayRoi.imageView = imgRoiCanvas
 
-                        if (savedInstanceState != null) {
-                            val left = savedInstanceState.getFloat(DicKeys.ROI_L, -1f)
-                            if (left != -1f) {
-                                val top = savedInstanceState.getFloat(DicKeys.ROI_T)
-                                val right = savedInstanceState.getFloat(DicKeys.ROI_R)
-                                val bottom = savedInstanceState.getFloat(DicKeys.ROI_B)
-                                overlayRoi.restoreRelativeRoi(RectF(left, top, right, bottom))
+                            if (savedInstanceState != null) {
+                                val left = savedInstanceState.getFloat(DicKeys.ROI_L, -1f)
+                                if (left != -1f) {
+                                    val top = savedInstanceState.getFloat(DicKeys.ROI_T)
+                                    val right = savedInstanceState.getFloat(DicKeys.ROI_R)
+                                    val bottom = savedInstanceState.getFloat(DicKeys.ROI_B)
+                                    overlayRoi.restoreRelativeRoi(RectF(left, top, right, bottom))
+                                }
                             }
                         }
                     }

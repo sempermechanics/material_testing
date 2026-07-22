@@ -42,6 +42,19 @@ OpenCV from source — slow once, then cached. **No API keys or accounts are
 required**; without them, cloud sync simply stays off and everything else
 works.
 
+Running on an **emulator**? Build for its ABI and sign-in is skipped
+automatically:
+
+```bash
+./gradlew :app:installDebug -PabiFilters=x86_64
+```
+
+A debug build on an emulator boots straight to Home as a local-only dev
+account, with cloud calls switched off for the run (so nothing hits the backend
+unauthenticated). It cannot happen in a release build or on a physical device.
+To exercise the real sign-in flow on an emulator, put
+`INDIC_DEV_AUTH_BYPASS=false` in `local.properties`.
+
 ## How it works
 
 ```
@@ -73,7 +86,7 @@ the value field next to it — the two stay in sync.
 
 | Parameter | Default | Range | Notes |
 |---|---|---|---|
-| Subset size | 41 px | 15–101, **odd only** | The tracked window. Bigger = more robust, less spatial detail |
+| Subset size | measured (41 px fallback) | 15–101, **odd only** | The tracked window. Bigger = more robust, less spatial detail. The starting value is measured from the reference speckle (SSSIG criterion, below) |
 | Step size | 5 px | 1–30 | Grid spacing between tracked points. Smaller = denser field, slower |
 | Strain window | 15 px | 5–51, **odd only** | VSG gauge length for the displacement→strain fit |
 
@@ -81,6 +94,17 @@ The two window sizes are odd because the engine indexes a subset as
 `[−dim/2, +dim/2]` around its center pixel; an even width would sit
 off-center. A typed even value snaps to the nearest odd one, and any value
 outside the range is clamped.
+
+**Subset size is suggested, not guessed.** When a reference image is loaded,
+the app applies the SSSIG criterion of Pan et al., *Opt. Express* **16**, 7037
+(2008): the standard-deviation error of a measured displacement is
+`σ = √(D(η) / SSSIG)`, where `D(η)` is the image-noise variance and SSSIG is
+the sum of squared intensity gradients over the subset. Inverting it for a
+noise variance of 4 gray levels² and a target accuracy of 0.007 px gives the
+SSSIG a subset must reach; the app grows the subset by 2 px at a grid of points
+across the ROI until both directions clear it, and suggests the median. Weak
+speckle therefore asks for a bigger window than strong speckle, automatically.
+Change the value and yours is kept — Reset returns to the suggestion.
 
 ## Repository map
 

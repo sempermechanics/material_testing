@@ -26,12 +26,14 @@ import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.CloudSync
+import com.rafad.indicvisiondic.data.DevAuth
 import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
 import com.rafad.indicvisiondic.ui.auth.AuthActivity
+import com.rafad.indicvisiondic.ui.auth.SplashActivity
 import com.rafad.indicvisiondic.ui.common.MediaSourceChooser
 import com.rafad.indicvisiondic.ui.limit.SessionLimitActivity
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
@@ -325,7 +327,10 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun routeToSignIn() {
-        val intent = Intent(this@HomeActivity, AuthActivity::class.java)
+        // Under the emulator dev bypass there is nothing to sign in to: go back
+        // through the splash, which re-seeds the dev session and returns Home.
+        val target = if (DevAuth.active) SplashActivity::class.java else AuthActivity::class.java
+        val intent = Intent(this@HomeActivity, target)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
         finish()

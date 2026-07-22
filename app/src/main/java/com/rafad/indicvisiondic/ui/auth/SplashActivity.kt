@@ -7,6 +7,7 @@ import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
+import com.rafad.indicvisiondic.data.DevAuth
 import com.rafad.indicvisiondic.ui.home.HomeActivity
 import kotlinx.coroutines.launch
 
@@ -48,13 +49,8 @@ class SplashActivity : AppCompatActivity() {
 
     private suspend fun performRoutingCheck() {
         try {
-            // Offline dev convenience: skip auth ONLY when no backend is
-            // configured. With INDIC_API_BASE_URL set, always run real auth
-            // (so device testing exercises the full sign-in + upload path).
-            if (BuildConfig.DEBUG && !authRepo.cloudConfigured) {
-                navigateTo(HomeActivity::class.java)
-                return
-            }
+            // Dev shortcuts: emulator bypass, or no backend configured at all.
+            if (routeDevShortcut()) return
 
             // 1. Is there a saved backend session on this device?
             if (!authRepo.hasSession()) {
@@ -83,6 +79,31 @@ class SplashActivity : AppCompatActivity() {
         } catch (e: Exception) {
             navigateTo(AuthActivity::class.java, "A critical system error occurred during startup.")
         }
+    }
+
+    /**
+     * Debug-build routes that skip sign-in. Returns true when one applied and
+     * the user has already been sent on to Home.
+     *
+     *  1. Emulator dev run: boot as a local-only dev account (see [DevAuth],
+     *     which also switches the cloud off for the run).
+     *  2. No backend configured: skip auth ONLY then. With INDIC_API_BASE_URL
+     *     set on a real device, always run real auth so device testing
+     *     exercises the full sign-in + upload path.
+     */
+    private fun routeDevShortcut(): Boolean {
+        if (DevAuth.active) {
+            DevAuth.install(this)
+            android.widget.Toast.makeText(
+                this,
+                "Dev sign-in bypass (emulator) — cloud disabled",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        } else if (!(BuildConfig.DEBUG && !authRepo.cloudConfigured)) {
+            return false
+        }
+        navigateTo(HomeActivity::class.java)
+        return true
     }
 
     private fun navigateTo(targetActivity: Class<*>, errorMessage: String? = null) {

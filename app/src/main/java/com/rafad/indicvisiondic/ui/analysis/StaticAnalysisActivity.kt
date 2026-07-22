@@ -38,7 +38,6 @@ import com.rafad.indicvisiondic.ui.common.Motion
 import com.rafad.indicvisiondic.ui.limit.SessionLimitActivity
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -368,52 +367,64 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
 
-        try {
-            contentResolver.openInputStream(uri)?.use { stream ->
-                var bytes: ByteArray
-                var previewBmp: Bitmap? = null
+        lifecycleScope.launch {
+            try {
+                contentResolver.openInputStream(uri)?.use { stream ->
+                    var bytes: ByteArray
+                    var previewBmp: Bitmap? = null
 
-                if (isRaw) {
-                    val bitmap = android.graphics.BitmapFactory.decodeStream(stream)
-                    if (bitmap != null) {
-                        viewModel.realRefWidth = bitmap.width
-                        viewModel.realRefHeight = bitmap.height
+                    if (isRaw) {
+                        val bitmap = android.graphics.BitmapFactory.decodeStream(stream)
+                        if (bitmap != null) {
+                            viewModel.realRefWidth = bitmap.width
+                            viewModel.realRefHeight = bitmap.height
 
-                        val buffer = java.nio.ByteBuffer.allocate(bitmap.width * bitmap.height * 4)
-                        bitmap.copyPixelsToBuffer(buffer)
-                        bytes = buffer.array()
+                            val buffer = java.nio.ByteBuffer.allocate(bitmap.width * bitmap.height * 4)
+                            bitmap.copyPixelsToBuffer(buffer)
+                            bytes = buffer.array()
 
-                        val ratio = 1000f / bitmap.width
-                        previewBmp = android.graphics.Bitmap.createScaledBitmap(bitmap, 1000, (bitmap.height * ratio).toInt(), true)
+                            val ratio = 1000f / bitmap.width
+                            previewBmp = android.graphics.Bitmap.createScaledBitmap(bitmap, 1000, (bitmap.height * ratio).toInt(), true)
+                        } else {
+                            Toast.makeText(
+                                this@StaticAnalysisActivity,
+                                R.string.failed_decode_raw,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            return@launch
+                        }
                     } else {
-                        Toast.makeText(this, R.string.failed_decode_raw, Toast.LENGTH_SHORT).show()
-                        return
+                        bytes = stream.readBytes()
+                        val result = withContext(IndicVisionNativeLib.nativeDispatcher) {
+                            val dims = IndicVisionNativeLib.getImageDimensions(bytes)
+                            val preview = IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000)
+                            dims to preview
+                        }
+                        viewModel.realRefWidth = result.first[0]
+                        viewModel.realRefHeight = result.first[1]
+                        previewBmp = result.second
                     }
-                } else {
-                    bytes = stream.readBytes()
-                    val dims = IndicVisionNativeLib.getImageDimensions(bytes)
-                    viewModel.realRefWidth = dims[0]
-                    viewModel.realRefHeight = dims[1]
-                    previewBmp = IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000)
-                }
 
-                viewModel.refName = "Ref: $name"
-                viewModel.refBytes = bytes
-                refPreviewBmp = previewBmp
-                refreshRefSlot()
+                    viewModel.refName = "Ref: $name"
+                    viewModel.refBytes = bytes
+                    refPreviewBmp = previewBmp
+                    refreshRefSlot()
 
-                if (!viewModel.hasCustomRoi) {
-                    viewModel.roiX = 0
-                    viewModel.roiY = 0
-                    viewModel.roiW = viewModel.realRefWidth
-                    viewModel.roiH = viewModel.realRefHeight
+                    if (!viewModel.hasCustomRoi) {
+                        viewModel.roiX = 0
+                        viewModel.roiY = 0
+                        viewModel.roiW = viewModel.realRefWidth
+                        viewModel.roiH = viewModel.realRefHeight
+                    }
+                    // Frames may have been loaded before this reference.
+                    validateFrameSizes()
+                    checkReady()
+                    requestSubsetRecommendation()
                 }
-                checkReady()
-                requestSubsetRecommendation()
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to load reference image")
+                Toast.makeText(this@StaticAnalysisActivity, R.string.failed_load_reference, Toast.LENGTH_LONG).show()
             }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to load reference image")
-            Toast.makeText(this, R.string.failed_load_reference, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -448,6 +459,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 // Temp path → original picked filename, kept so exports can use the
                 // user's real (default) names instead of the sanitized temp names.
                 val originalByPath = mutableMapOf<String, String>()
+                // Temp path → pixel size, so the reference-match check is free later.
+                val sizeByPath = mutableMapOf<String, Pair<Int, Int>>()
 
                 withContext(Dispatchers.Main) {
                     tvResult.text = "Caching images..."
@@ -456,6 +469,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 for ((index, uri) in uris.withIndex()) {
                     var bytes: ByteArray? = null
                     var previewBmp: Bitmap? = null
+                    var frameSize: Pair<Int, Int>? = null
 
                     val originalName = getFileName(uri)
 
@@ -468,6 +482,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                                 val buffer = java.nio.ByteBuffer.allocate(bitmap.width * bitmap.height * 4)
                                 bitmap.copyPixelsToBuffer(buffer)
                                 bytes = buffer.array()
+                                frameSize = bitmap.width to bitmap.height
 
                                 if (index == 0) {
                                     val ratio = 1000f / bitmap.width
@@ -475,9 +490,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
                                 }
                             }
                         } else {
-                            bytes = stream.readBytes()
-                            if (index == 0 && bytes != null) {
-                                previewBmp = IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000)
+                            val frameBytes = stream.readBytes()
+                            bytes = frameBytes
+                            // JNI must stay on the pinned native thread.
+                            withContext(IndicVisionNativeLib.nativeDispatcher) {
+                                val dims = IndicVisionNativeLib.getImageDimensions(frameBytes)
+                                frameSize = dims[0] to dims[1]
+                                if (index == 0) {
+                                    previewBmp = IndicVisionNativeLib.getPreviewFromBytes(frameBytes, 1000)
+                                }
                             }
                         }
                     }
@@ -490,16 +511,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     file.writeBytes(bytes)
                     filePaths.add(file.absolutePath)
                     originalByPath[file.absolutePath] = originalName
+                    frameSize?.let { sizeByPath[file.absolutePath] = it }
                 }
 
                 val sortedPaths = filePaths.sorted()
                 viewModel.defFilePaths = sortedPaths
                 viewModel.defOriginalNames = sortedPaths.map { originalByPath[it] ?: File(it).name }
+                viewModel.defFrameSizes = sizeByPath
                 viewModel.defFromVideo = false
 
                 withContext(Dispatchers.Main) {
                     tvResult.text = ""
                     refreshDefSlot()
+                    validateFrameSizes()
                     checkReady()
                 }
             } catch (e: Exception) {
@@ -717,6 +741,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 viewModel.defFilePaths = sortedDefPaths
                 viewModel.defOriginalNames =
                     sortedDefPaths.mapIndexed { idx, _ -> String.format("frame_%04d.png", idx + 1) }
+                // Every frame comes out of the same decoder, so they all share
+                // the reference's size by construction — recorded so the check
+                // has data for this path too.
+                val videoFrameSize = viewModel.realRefWidth to viewModel.realRefHeight
+                viewModel.defFrameSizes = sortedDefPaths.associateWith { videoFrameSize }
                 viewModel.defFromVideo = true
 
                 withContext(Dispatchers.Main) {
@@ -724,6 +753,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     refPreview?.let { refPreviewBmp = it }
                     refreshRefSlot()
                     refreshDefSlot()
+                    validateFrameSizes()
                     checkReady()
                     requestSubsetRecommendation()
                     Toast.makeText(
@@ -758,6 +788,34 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // and stops seeding the slider once the user sets a size of their own.
     // ------------------------------------------------------------------
 
+    /**
+     * Every deformed frame must match the reference pixel for pixel. The engine
+     * clamps its AKAZE search window to the reference size and then indexes the
+     * deformed image with it, so a mismatch throws inside OpenCV — and the JNI
+     * layer swallows that exception, leaving a silently under-seeded solve.
+     * Catching it here turns a bad result into a clear, fixable message.
+     *
+     * Costs nothing: the sizes were measured during import.
+     */
+    private fun validateFrameSizes() {
+        val refW = viewModel.realRefWidth
+        val refH = viewModel.realRefHeight
+        val sizes = viewModel.defFrameSizes
+        viewModel.frameSizeError = if (refW <= 0 || refH <= 0 || sizes.isEmpty()) {
+            null
+        } else {
+            val mismatched = viewModel.defFilePaths.count { path ->
+                val size = sizes[path]
+                size != null && size != (refW to refH)
+            }
+            if (mismatched == 0) {
+                null
+            } else {
+                getString(R.string.frames_size_mismatch_fmt, mismatched, refW, refH)
+            }
+        }
+    }
+
     /** Region the recommendation samples: the ROI when set, else the frame. */
     private fun currentSamplingRoi(): android.graphics.Rect? {
         val w = viewModel.realRefWidth
@@ -789,22 +847,27 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvSubsetHint.visibility = View.VISIBLE
         tvSubsetHint.text = getString(R.string.subset_recommend_running)
 
-        lifecycleScope.launch {
-            val result = withContext(Dispatchers.Default) {
-                runCatching {
-                    SubsetRecommender.recommend(
-                        refBytes = bytes,
-                        imgW = viewModel.realRefWidth,
-                        imgH = viewModel.realRefHeight,
-                        roi = roi,
-                        sizes = etSubsetSize.valueFrom.toInt()..etSubsetSize.valueTo.toInt(),
-                    )
-                }.onFailure { Timber.w(it, "Subset recommendation failed") }.getOrNull()
-            }
+        // Read off the slider here: the measurement runs on the native thread,
+        // which must not touch views.
+        val sizes = etSubsetSize.valueFrom.toInt()..etSubsetSize.valueTo.toInt()
+
+        lifecycleScope.launch(IndicVisionNativeLib.nativeDispatcher) {
+            val result = runCatching {
+                SubsetRecommender.recommend(
+                    refBytes = bytes,
+                    imgW = viewModel.realRefWidth,
+                    imgH = viewModel.realRefHeight,
+                    roi = roi,
+                    sizes = sizes,
+                )
+            }.onFailure { Timber.w(it, "Subset recommendation failed") }.getOrNull()
+
             // A newer reference/ROI landed while we were measuring.
-            if (viewModel.subsetRecommendationKey != key) return@launch
-            viewModel.subsetRecommendation = result
-            applySubsetRecommendation()
+            withContext(Dispatchers.Main) {
+                if (viewModel.subsetRecommendationKey != key) return@withContext
+                viewModel.subsetRecommendation = result
+                applySubsetRecommendation()
+            }
         }
     }
 
@@ -911,7 +974,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (!debugDir.exists()) debugDir.mkdirs()
         IndicVisionNativeLib.setDebugOutputDir(debugDir.absolutePath)
 
-        lifecycleScope.launch(viewModel.nativeExecutor.asCoroutineDispatcher()) {
+        lifecycleScope.launch(IndicVisionNativeLib.nativeDispatcher) {
             try {
                 val params = AnalysisViewModel.BatchAnalysisParams(
                     cacheDir = cacheDir,
@@ -1287,8 +1350,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
             else -> ""
         }
 
+        // Frames that don't match the reference would reach the engine as a
+        // silently degraded solve — say so instead, and hold Compute.
+        val sizeError = viewModel.frameSizeError
+        if (sizeError != null) tvResult.text = sizeError
+
         // Page-2 gate: Compute needs images AND the settings page visited
-        val computeEnabled = ready && viewModel.settingsReviewed && !isProcessing
+        val computeEnabled = ready && viewModel.settingsReviewed && !isProcessing && sizeError == null
         btnCalculateFullField.isEnabled = computeEnabled
         btnCalculateFullField.alpha = if (computeEnabled) 1.0f else 0.4f
 

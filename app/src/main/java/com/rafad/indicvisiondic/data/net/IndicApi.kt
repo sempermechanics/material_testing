@@ -2,6 +2,7 @@ package com.rafad.indicvisiondic.data.net
 
 import android.content.Context
 import com.rafad.indicvisiondic.BuildConfig
+import com.rafad.indicvisiondic.data.DevAuth
 import com.rafad.indicvisiondic.data.DeviceKeyManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -47,7 +48,13 @@ class IndicApi(context: Context) {
     }
 
     private val base = BuildConfig.INDIC_API_BASE_URL.trimEnd('/')
-    val enabled: Boolean get() = base.isNotBlank()
+
+    /**
+     * Cloud calls are possible: a base URL is configured and we are not running
+     * under the debug emulator sign-in bypass (which has no Firebase user, so
+     * every authenticated call would fail — see [DevAuth]).
+     */
+    val enabled: Boolean get() = base.isNotBlank() && !DevAuth.active
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
