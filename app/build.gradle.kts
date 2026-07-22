@@ -91,6 +91,21 @@ android {
                 // start takes down every translation unit with no compiler
                 // diagnostic at all. Not a trade we want for a cache.
                 arguments += "-DENABLE_CCACHE=OFF"
+
+                // ...but an explicitly requested launcher is a different
+                // matter: CI opts in with -PnativeCompilerLauncher=ccache,
+                // where the cache is content-addressed and so survives the
+                // fresh mtimes that actions/cache gives every restored object
+                // file (which is what made the .cxx cache hit and still
+                // recompile everything). Unset locally, so nothing changes for
+                // developers unless they ask for it.
+                val launcher =
+                    (project.findProperty("nativeCompilerLauncher") as String?)
+                        ?.takeIf { it.isNotBlank() }
+                if (launcher != null) {
+                    arguments += "-DCMAKE_C_COMPILER_LAUNCHER=$launcher"
+                    arguments += "-DCMAKE_CXX_COMPILER_LAUNCHER=$launcher"
+                }
             }
         }
     }

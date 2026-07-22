@@ -264,8 +264,27 @@ jobs:
           key: cxx-arm64-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', '.gitmodules', 'app/src/main/cpp/**/*.cpp', 'app/src/main/cpp/**/*.h') }}
           restore-keys: cxx-arm64-
 
-      # arm64-v8a is the default ABI now, but pass it explicitly so the job is
-      # self-documenting and independent of the gradle default.
+      # Required by the -PnativeCompilerLauncher=ccache below. Without it the
+      # launcher is a no-op and the assemble step silently pays full compile
+      # price — which is exactly what happened when a merge dropped these two
+      # steps: the build "passed" in 8m33s and only `ccache --show-stats`
+      # (exit 127) revealed the binary was never there.
+      - name: Install ccache
+        run: sudo apt-get install -y -qq ccache
+
+      # Rolling key: every run saves a fresh entry (a bare content key would
+      # hit and then skip saving, freezing the cache at its first contents and
+      # never accumulating objects for newly changed files).
+      - name: Cache ccache objects
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-arm64-${{ github.sha }}
+          restore-keys: ccache-arm64-
+
+      # arm64-v8a is the default ABI for release; the debug type also carries
+      # x86_64 for emulators, so pass the filter explicitly to keep this job
+      # building exactly the shipped ABI (and only it).
       - name: Assemble debug APK (arm64-v8a)
         env:
           # Absolute, because env values are not shell-expanded — a literal
