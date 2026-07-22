@@ -38,8 +38,15 @@ jobs:
   native-tests:
     name: Native engine tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Absolute: env values are not shell-expanded, so a literal "~/.ccache"
+      # would create a directory named "~".
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPILERCHECK: content
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/dic-submodules
 
       # OpenCV decodes the DICe fixtures, letting them stay vendored in their
@@ -48,18 +55,29 @@ jobs:
       # apt is pointed at a user-owned dir because /var/cache/apt is root-owned
       # and actions/cache cannot restore into it.
       - name: Cache OpenCV packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/apt-cache
           key: apt-libopencv-dev-${{ runner.os }}-v1
 
-      - name: Install OpenCV (fixture decoding)
+      - name: Install OpenCV (fixture decoding) + ccache
         run: |
           mkdir -p ~/apt-cache/partial
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
-            -o Dir::Cache::archives="$HOME/apt-cache" libopencv-dev
+            -o Dir::Cache::archives="$HOME/apt-cache" libopencv-dev ccache
           sudo chown -R "$(id -u):$(id -g)" ~/apt-cache
+
+      # Same reasoning as the NDK job: the engine sources are recompiled from
+      # scratch on every runner, and ccache turns that into a content lookup.
+      # Rolling key so each run saves a fresh entry instead of freezing the
+      # cache at whatever the first run happened to contain.
+      - name: Cache ccache objects
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-host-tests-${{ github.sha }}
+          restore-keys: ccache-host-tests-
 
       # Build OUT of the source tree (repo-level build/, gitignored) so the
       # test folder stays pure sources.
@@ -72,12 +90,18 @@ jobs:
           cmake -S app/src/test/cpp -B build/native-tests
           -DCMAKE_BUILD_TYPE=Release
           -DDIC_REQUIRE_OPENCV=ON
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build build/native-tests -j
 
       - name: Run tests
         run: ./build/native-tests/dic_tests
+
+      - name: ccache statistics
+        if: always()
+        run: ccache --show-stats
 
   # ===================================================================
   # 2. Same suite under sanitizers.
@@ -95,19 +119,44 @@ jobs:
   native-tests-sanitized:
     name: Sanitized (${{ matrix.sanitizer }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: ['address,undefined', 'thread']
+        # `id` mirrors `sanitizer` in a form usable as a cache key — GitHub
+        # rejects keys containing commas, and "address,undefined" has one.
+        include:
+          - sanitizer: 'address,undefined'
+            id: asan-ubsan
+          - sanitizer: 'thread'
+            id: tsan
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPILERCHECK: content
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/dic-submodules
+
+      - name: Install ccache
+        run: sudo apt-get install -y -qq ccache
+
+      # One cache per sanitizer: instrumented objects are not interchangeable
+      # between ASan/UBSan and TSan, nor with the uninstrumented job's.
+      - name: Cache ccache objects
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-san-${{ matrix.id }}-${{ github.sha }}
+          restore-keys: ccache-san-${{ matrix.id }}-
 
       - name: Configure
         run: >
           cmake -S app/src/test/cpp -B build/native-tests
           -DCMAKE_BUILD_TYPE=Release
           -DDIC_SANITIZER=${{ matrix.sanitizer }}
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build build/native-tests -j
@@ -115,16 +164,21 @@ jobs:
       - name: Run tests
         run: ./build/native-tests/dic_tests
 
+      - name: ccache statistics
+        if: always()
+        run: ccache --show-stats
+
   # ===================================================================
   # 3. Kotlin compilation + JVM unit tests (no NDK needed).
   # ===================================================================
   android-kotlin:
     name: Kotlin compile + unit tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -134,24 +188,31 @@ jobs:
       # never seed it and would re-resolve dependencies every run. Allow writes
       # from the long-lived dev branches (PRs stay read-only, so they reuse the
       # cache without churning it).
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
 
-      - name: Compile Kotlin and run unit tests
-        run: ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest --console=plain
-
-      # Style & static-analysis gates (Kotlin only; cpp/ is out of scope).
-      # Existing findings are frozen in detekt-baseline.xml / lint-baseline.xml;
-      # only NEW issues fail. Fix formatting locally with `spotlessApply`.
-      - name: Code quality gates (spotless + detekt + lint)
-        run: ./gradlew spotlessCheck :app:detekt :app:lintDebug --console=plain
-
-      # R8/ProGuard pass for the release variant (no native build needed).
-      # Catches missing keep rules and shrinker config breakage that would
-      # otherwise only surface as runtime failures in shipped builds.
-      - name: Release minification (R8) check
-        run: ./gradlew :app:minifyReleaseWithR8 --console=plain
+      # One invocation, not three: each ./gradlew costs a JVM start plus a full
+      # configuration pass, and the three used to re-do each other's work.
+      #
+      #   testDebugUnitTest  — JVM tests (pulls in compileDebugKotlin)
+      #   spotless/detekt/lint — style + static analysis. Existing findings are
+      #     frozen in detekt-baseline.xml / lint-baseline.xml, so only NEW ones
+      #     fail. `spotlessCheck` covers *.gradle.kts too — fix with
+      #     `./gradlew spotlessApply`.
+      #   minifyReleaseWithR8 — catches missing keep rules and shrinker config
+      #     breakage that would otherwise only appear in a shipped build.
+      #
+      # --continue: run every gate before failing, so one violation doesn't
+      # hide the others and force a second round trip.
+      - name: Build, test and quality gates
+        run: >
+          ./gradlew --continue --console=plain
+          :app:testDebugUnitTest
+          spotlessCheck
+          :app:detekt
+          :app:lintDebug
+          :app:minifyReleaseWithR8
 
   # ===================================================================
   # 4. Native compile gate for the shipped ABI: OpenCV + engine built for
@@ -165,11 +226,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -178,26 +239,68 @@ jobs:
       # OpenCV's repo bundles its own (ancient) gradle-wrapper.jar files
       # that fail checksum validation. Our own wrapper is validated by the
       # android-kotlin job, which has no submodules.
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           validate-wrappers: false
           # Same rationale as the Kotlin job: let the dev branches seed the
           # Gradle cache so the NDK build isn't re-resolving deps every run.
           cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
 
-      # The from-source OpenCV build dominates; cache the object dir keyed on
-      # everything that can change the native build.
+      # The from-source OpenCV build dominates this job. Two caches cover it:
+      #
+      #  .cxx    — the CMake/ninja tree, so configure output is reused.
+      #  ccache  — the compiled objects.
+      #
+      # ccache is what actually saves the time. The .cxx cache alone does not:
+      # actions/cache restores object files with fresh mtimes, and ninja is
+      # mtime-driven, so a run could hit the .cxx key and still recompile every
+      # translation unit (measured: 6.5 min on a primary-key hit). ccache keys
+      # on preprocessed source content, which no amount of timestamp churn can
+      # invalidate.
       - name: Cache native build (.cxx)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: app/.cxx
           key: cxx-arm64-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', '.gitmodules', 'app/src/main/cpp/**/*.cpp', 'app/src/main/cpp/**/*.h') }}
           restore-keys: cxx-arm64-
 
-      # arm64-v8a is the default ABI now, but pass it explicitly so the job is
-      # self-documenting and independent of the gradle default.
+      - name: Install ccache
+        run: sudo apt-get install -y -qq ccache
+
+      # Rolling key: every run saves a fresh entry (a bare content key would
+      # hit and then skip saving, freezing the cache at its first contents and
+      # never accumulating objects for newly changed files).
+      - name: Cache ccache objects
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-arm64-${{ github.sha }}
+          restore-keys: ccache-arm64-
+
+      # arm64-v8a is the default ABI for release; the debug type also carries
+      # x86_64 for emulators, so pass the filter explicitly to keep this job
+      # building exactly the shipped ABI (and only it).
       - name: Assemble debug APK (arm64-v8a)
-        run: ./gradlew :app:assembleDebug -PabiFilters=arm64-v8a --console=plain
+        env:
+          # Absolute, because env values are not shell-expanded — a literal
+          # "~/.ccache" would create a directory named "~".
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_MAXSIZE: 1G
+          # Compare preprocessed content, not compiler mtime: the NDK is
+          # reinstalled on every runner, so an mtime check would miss on
+          # every run.
+          CCACHE_COMPILERCHECK: content
+        run: ./gradlew :app:assembleDebug -PabiFilters=arm64-v8a -PnativeCompilerLauncher=ccache --console=plain
+
+      # Hit rate in the job log: if this trends toward 0 the cache is not
+      # doing its job and the step above is silently paying full price.
+      - name: ccache statistics
+        if: always()
+        env:
+          # Absolute, because env values are not shell-expanded — a literal
+          # "~/.ccache" would create a directory named "~".
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+        run: ccache --show-stats
 
       - name: Verify the arm64-v8a .so is packaged
         run: |
