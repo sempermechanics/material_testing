@@ -67,7 +67,7 @@ class RoiDrawActivity : AppCompatActivity() {
             if (file.exists()) {
                 val bytes = file.readBytes()
                 val screenWidth = resources.displayMetrics.widthPixels
-                
+
                 lifecycleScope.launch {
                     val bitmap = withContext(IndicVisionNativeLib.nativeDispatcher) {
                         IndicVisionNativeLib.getPreviewFromBytes(bytes, screenWidth)

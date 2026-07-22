@@ -71,10 +71,16 @@ class SubsetRecommenderTest {
     @Test
     fun `low contrast needs a larger subset than high contrast`() {
         val strong = SubsetRecommender.subsetSizeForPatch(
-            randomPatch(seed = 3, amplitude = 255f), side, 15, maxSize,
+            randomPatch(seed = 3, amplitude = 255f),
+            side,
+            15,
+            maxSize,
         )
         val weak = SubsetRecommender.subsetSizeForPatch(
-            randomPatch(seed = 3, amplitude = 40f), side, 15, maxSize,
+            randomPatch(seed = 3, amplitude = 40f),
+            side,
+            15,
+            maxSize,
         )
         assertTrue("weak speckle ($weak) must not beat strong speckle ($strong)", weak > strong)
     }
