@@ -63,9 +63,13 @@ the app at your deployment.
 3. Get the **Shared Drive ID**: open the Shared Drive; the browser URL is
    `https://drive.google.com/drive/folders/<THIS_IS_THE_ID>`. Copy it.
 
-## 7. Find your OAuth Web client ID
-☰ → **APIs & Services → Credentials** → under **OAuth 2.0 Client IDs**, copy the
-**Web application** client ID (same value as `GOOGLE_WEB_CLIENT_ID` in the app).
+## 7. Note your Firebase project id
+Sign-in runs on Firebase Authentication, and the backend accepts ID tokens
+issued by that project. Open the [Firebase console](https://console.firebase.google.com)
+→ your project → **Project settings**, and copy the **Project ID**. If Firebase
+Auth lives in the same project as this backend, you can skip the
+`FIREBASE_PROJECT_ID` variable below entirely. Setup details:
+[AUTH_SETUP.md](AUTH_SETUP.md).
 
 ## 8. Deploy to Cloud Run from GitHub
 1. ☰ → **Cloud Run** → **Create service**.
@@ -88,11 +92,12 @@ the app at your deployment.
 
      | Name | Value |
      |---|---|
-     | `WEB_CLIENT_ID` | your Web client ID (step 7) |
-     | `ALLOWED_HD` | `company.com` |
      | `SERVICE_ACCOUNT_EMAIL` | `indic-api@<project-id>.iam.gserviceaccount.com` |
      | `SHARED_DRIVE_ID` | the ID from step 6 |
      | `GOOGLE_CLOUD_PROJECT` | your Project ID |
+     | `FIREBASE_PROJECT_ID` | the Firebase project id from step 7 — omit if it is the same as above |
+     | `AUTO_APPROVE_HD` | your domain, e.g. `yourdomain.com` — verified emails there are approved on first sign-in |
+     | `ADMIN_EMAILS` | comma-separated admin addresses |
 
    - (Resources) CPU 1, Memory 512 MiB, Min instances 0, Max 10.
 7. **Create.** Wait for the build+deploy to finish; copy the service **URL**
@@ -100,15 +105,17 @@ the app at your deployment.
 
 ## 9. Verify in the browser
 1. Visit `https://<your-url>/healthz` → you should see
-   `{"ok":true,"dev_insecure_auth":false}`.
+   `{"ok":true}`.
 2. Visit `https://<your-url>/docs` → the interactive API page loads. (Calls will
    return 401 until dev mode is on — next step.)
 
 ## 10. Prove Drive + Firestore work (browser only, no curl)
 Temporarily enable dev mode so you can call the API without a signed request:
 1. **Cloud Run** → click **indic-api** → **Edit & deploy new revision**.
-2. **Variables & Secrets** → add `DEV_INSECURE_AUTH` = `1` and `AUTO_APPROVE` =
-   `1` → **Deploy**.
+2. **Variables & Secrets** → add `DEV_INSECURE_AUTH` = `1`,
+   `INSECURE_AUTH_I_ACCEPT_THE_RISK` = `1`, and `AUTO_APPROVE` = `1` →
+   **Deploy**. The second variable is required on a deployed service: without
+   it the container refuses to start, so nobody bypasses auth by accident.
 3. Open `https://<your-url>/docs` → expand **POST /v1/sessions** → **Try it out**
    → paste this body → **Execute**:
    ```json
@@ -135,7 +142,8 @@ Temporarily enable dev mode so you can call the API without a signed request:
 
 ## 11. Turn dev mode OFF (important)
 Cloud Run → **indic-api** → **Edit & deploy new revision** → **Variables &
-Secrets** → delete `DEV_INSECURE_AUTH` and `AUTO_APPROVE` → **Deploy**.
+Secrets** → delete `DEV_INSECURE_AUTH`, `INSECURE_AUTH_I_ACCEPT_THE_RISK` and
+`AUTO_APPROVE` → **Deploy**.
 Confirm `https://<your-url>/v1/me` now returns **401**.
 
 ---
@@ -150,6 +158,6 @@ Confirm `https://<your-url>/v1/me` now returns **401**.
 | `403 PERMISSION_DENIED` minting Drive token | SA missing `serviceAccountTokenCreator` **on itself** (step 5), or `iamcredentials` API not enabled (step 2). |
 | `iam.serviceAccounts.getAccessToken` denied locally | Your user lacks `tokenCreator` on the SA — see the local-run block. |
 | Firestore `NOT_FOUND` / `PermissionDenied` | Firestore DB not created (step 3) or `datastore.user` not granted (step 4). |
-| `401 invalid_token` from the app | ID token `aud` ≠ `WEB_CLIENT_ID`, or `hd` ≠ `ALLOWED_HD`. Check the deployed env vars. |
+| `401 invalid_token` from the app | Token audience is not the project in `FIREBASE_PROJECT_ID` (defaults to `GOOGLE_CLOUD_PROJECT`), or the token expired. Check the deployed env vars. |
 | `403 not_approved` | User is `PENDING`; set `access_status: APPROVED` in Firestore, or deploy with `AUTO_APPROVE=1` during pilot. |
 | `409 device_conflict` on register | User already has an active device — needs admin rebind (revoke old device in Firestore). |

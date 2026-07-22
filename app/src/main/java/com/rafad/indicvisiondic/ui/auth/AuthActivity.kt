@@ -75,7 +75,7 @@ class AuthActivity : AppCompatActivity() {
         }
 
         intent.getStringExtra(DicKeys.ROUTING_ERROR)?.let { msg ->
-            showSnackbar(msg, isError = !msg.contains("successfully logged out"))
+            showSnackbar(msg, isError = msg != getString(R.string.logout_success))
         }
     }
 
@@ -97,7 +97,7 @@ class AuthActivity : AppCompatActivity() {
             return
         }
         if (registerMode && password != etConfirm.text.toString()) {
-            showSnackbar("Passwords do not match.", isError = true)
+            showSnackbar(getString(R.string.error_passwords_mismatch), isError = true)
             return
         }
         runAuth {
@@ -118,7 +118,9 @@ class AuthActivity : AppCompatActivity() {
             setLoading(false)
             result.fold(
                 onSuccess = { showSnackbar(getString(R.string.auth_link_sent, email), isError = false) },
-                onFailure = { showSnackbar(it.message ?: "Could not send the link.", isError = true) },
+                onFailure = {
+                    showSnackbar(it.message ?: getString(R.string.auth_link_send_failed), isError = true)
+                },
             )
         }
     }
@@ -136,10 +138,10 @@ class AuthActivity : AppCompatActivity() {
                 setLoading(false)
             } catch (e: androidx.credentials.exceptions.NoCredentialException) {
                 setLoading(false)
-                showSnackbar("No Google account available on this device.", isError = true)
+                showSnackbar(getString(R.string.auth_google_no_account), isError = true)
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 setLoading(false)
-                showSnackbar(e.message ?: "Google sign-in failed.", isError = true)
+                showSnackbar(e.message ?: getString(R.string.auth_google_failed), isError = true)
             }
         }
     }
@@ -147,7 +149,7 @@ class AuthActivity : AppCompatActivity() {
     private fun completeEmailLink(link: String) {
         val email = authRepo.pendingLinkEmail()
         if (email.isNullOrBlank()) {
-            showSnackbar("Open the sign-in link on the device that requested it.", isError = true)
+            showSnackbar(getString(R.string.auth_link_wrong_device), isError = true)
             return
         }
         runAuth { authRepo.completeEmailLink(email, link) }
@@ -173,7 +175,7 @@ class AuthActivity : AppCompatActivity() {
                 startActivity(Intent(this, target))
                 finish()
             },
-            onFailure = { showSnackbar(it.message ?: "Sign-in failed.", isError = true) },
+            onFailure = { showSnackbar(it.message ?: getString(R.string.auth_sign_in_failed), isError = true) },
         )
     }
 

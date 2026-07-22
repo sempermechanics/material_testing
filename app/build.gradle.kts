@@ -5,7 +5,8 @@ plugins {
     id("com.google.gms.google-services")
 }
 
-// 🚀 PURE KOTLIN BYPASS: Reads the file without needing 'java.util'
+// Read local.properties directly rather than via java.util.Properties, so the
+// build script stays pure Kotlin.
 val localPropertiesFile = rootProject.file("local.properties")
 
 /** Value of [key] in local.properties, or null when the file/key is absent. */
@@ -30,24 +31,14 @@ fun localProperty(key: String): String? =
 val devAuthBypass = localProperty("INDIC_DEV_AUTH_BYPASS") != "false"
 // Base URL of the inDIC GCP backend (Cloud Run). Empty = cloud sync disabled;
 // the app still runs fully offline. e.g. https://indic-api-xxxx.a.run.app
+// The Google client ID is NOT read here: Firebase Auth supplies it via the
+// google-services plugin as the default_web_client_id resource.
+// See docs/backend/AUTH_SETUP.md.
 val indicApiBaseUrl =
     if (localPropertiesFile.exists()) {
         localPropertiesFile
             .readLines()
             .find { it.startsWith("INDIC_API_BASE_URL=") }
-            ?.substringAfter("=")
-            ?.trim() ?: ""
-    } else {
-        ""
-    }
-// Google OAuth *Web* client ID (from Google Cloud console). Used by the
-// Credential Manager one-tap flow to obtain a Google ID token that the backend
-// verifies. See docs/backend/GOOGLE_SSO_SETUP.md. Empty = SSO button shows a setup hint.
-val googleWebClientId =
-    if (localPropertiesFile.exists()) {
-        localPropertiesFile
-            .readLines()
-            .find { it.startsWith("GOOGLE_WEB_CLIENT_ID=") }
             ?.substringAfter("=")
             ?.trim() ?: ""
     } else {
@@ -65,9 +56,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // 🚀 SECURE INJECTION: Uses our pure Kotlin variables
         buildConfigField("String", "INDIC_API_BASE_URL", "\"$indicApiBaseUrl\"")
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         // Overridden per build type below; the default keeps the flag defined
         // for any variant that doesn't set it (androidTest, lint models).
         buildConfigField("boolean", "DEV_AUTH_BYPASS", "false")

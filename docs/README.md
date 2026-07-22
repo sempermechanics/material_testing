@@ -15,7 +15,7 @@ build it. This page routes you to the rest.
 | Cut a release | [ops/RELEASING.md](ops/RELEASING.md) |
 | Work on the cloud backend | [backend/CLOUD_ARCHITECTURE_GCP.md](backend/CLOUD_ARCHITECTURE_GCP.md) |
 | Deploy the backend myself | [backend/BACKEND_SETUP_GCP.md](backend/BACKEND_SETUP_GCP.md) (CLI) or [BACKEND_SETUP_CONSOLE.md](backend/BACKEND_SETUP_CONSOLE.md) (browser) |
-| Fix Google sign-in | [backend/GOOGLE_SSO_SETUP.md](backend/GOOGLE_SSO_SETUP.md) |
+| Fix sign-in / set up auth | [backend/AUTH_SETUP.md](backend/AUTH_SETUP.md) |
 
 Nothing in `backend/` is needed to build, run, or contribute to the app — the
 analysis engine is entirely on-device and offline.

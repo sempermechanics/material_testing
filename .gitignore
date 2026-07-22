@@ -3,7 +3,7 @@
 build/
 gradle/gradle-daemon-jvm.properties
 
-# === Local config (SDK path + GOOGLE_WEB_CLIENT_ID + backend URL — NEVER commit) ===
+# === Local config (SDK path + INDIC_API_BASE_URL — NEVER commit) ===
 local.properties
 
 # === Android Studio / IntelliJ ===
