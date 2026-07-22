@@ -51,6 +51,11 @@ import java.io.File
  */
 class StaticAnalysisActivity : AppCompatActivity() {
 
+    private companion object {
+        /** Subset shown before a reference image is available to measure. */
+        const val FALLBACK_SUBSET_SIZE = 41
+    }
+
     private val viewModel: AnalysisViewModel by viewModels()
 
     // UI Components
@@ -107,6 +112,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var tvSubsetValue: EditText
     private lateinit var tvStepValue: EditText
     private lateinit var tvStrainValue: EditText
+
+    /** Inline note carrying the SSSIG-based subset suggestion. */
+    private lateinit var tvSubsetHint: TextView
 
     // Two-step wizard: page 1 = load images, page 2 = settings + run
     private lateinit var scrollStepImages: View
@@ -186,6 +194,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvSubsetValue = findViewById(R.id.tvSubsetValue)
         tvStepValue = findViewById(R.id.tvStepValue)
         tvStrainValue = findViewById(R.id.tvStrainValue)
+        tvSubsetHint = findViewById(R.id.tvSubsetHint)
         setupParameterControls()
 
         // --- Two-step wizard wiring ---
@@ -279,6 +288,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     }
 
                     checkReady()
+                    requestSubsetRecommendation()
                 }
             } else {
                 tvInstruction.text = "❌ ROI Selection Cancelled"
@@ -342,6 +352,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 viewModel.roiMaskBytes = null
                 tvInstruction.text = "✅ Using Full Image"
                 checkReady()
+                requestSubsetRecommendation()
             }
         }
 
@@ -398,6 +409,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     viewModel.roiH = viewModel.realRefHeight
                 }
                 checkReady()
+                requestSubsetRecommendation()
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to load reference image")
@@ -713,6 +725,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     refreshRefSlot()
                     refreshDefSlot()
                     checkReady()
+                    requestSubsetRecommendation()
                     Toast.makeText(
                         this@StaticAnalysisActivity,
                         getString(R.string.video_loaded_frames, defPaths.size),
@@ -737,6 +750,95 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun currentStepSize(): Int = etStepSize.value.toInt()
     private fun currentStrainWindow(): Int = etStrainWindow.value.toInt()
     private fun currentUseKeysInterpolator(): Boolean = rgInterpolator.checkedButtonId == R.id.rbKeys
+
+    // ------------------------------------------------------------------
+    // Initial subset size from the SSSIG criterion (Pan et al., Opt. Express
+    // 16, 7037 (2008)) — see [SubsetRecommender]. The reference speckle decides
+    // it, so it is measured whenever the reference image or the ROI changes,
+    // and stops seeding the slider once the user sets a size of their own.
+    // ------------------------------------------------------------------
+
+    /** Region the recommendation samples: the ROI when set, else the frame. */
+    private fun currentSamplingRoi(): android.graphics.Rect? {
+        val w = viewModel.realRefWidth
+        val h = viewModel.realRefHeight
+        if (w <= 0 || h <= 0) return null
+        return if (viewModel.hasCustomRoi && viewModel.roiW > 0 && viewModel.roiH > 0) {
+            android.graphics.Rect(
+                viewModel.roiX,
+                viewModel.roiY,
+                viewModel.roiX + viewModel.roiW,
+                viewModel.roiY + viewModel.roiH,
+            )
+        } else {
+            android.graphics.Rect(0, 0, w, h)
+        }
+    }
+
+    @Suppress("ReturnCount")
+    private fun requestSubsetRecommendation() {
+        val bytes = viewModel.refBytes ?: return
+        val roi = currentSamplingRoi() ?: return
+        val key = "${viewModel.refName}|${bytes.size}|${roi.toShortString()}"
+        if (key == viewModel.subsetRecommendationKey) {
+            applySubsetRecommendation()
+            return
+        }
+        viewModel.subsetRecommendationKey = key
+        viewModel.subsetRecommendation = null
+        tvSubsetHint.visibility = View.VISIBLE
+        tvSubsetHint.text = getString(R.string.subset_recommend_running)
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                runCatching {
+                    SubsetRecommender.recommend(
+                        refBytes = bytes,
+                        imgW = viewModel.realRefWidth,
+                        imgH = viewModel.realRefHeight,
+                        roi = roi,
+                        sizes = etSubsetSize.valueFrom.toInt()..etSubsetSize.valueTo.toInt(),
+                    )
+                }.onFailure { Timber.w(it, "Subset recommendation failed") }.getOrNull()
+            }
+            // A newer reference/ROI landed while we were measuring.
+            if (viewModel.subsetRecommendationKey != key) return@launch
+            viewModel.subsetRecommendation = result
+            applySubsetRecommendation()
+        }
+    }
+
+    /**
+     * The subset size an untouched form shows: the SSSIG recommendation for
+     * the loaded reference image, or the historical 41 px before one exists.
+     */
+    private fun defaultSubsetSize(): Int {
+        val rec = viewModel.subsetRecommendation ?: return FALLBACK_SUBSET_SIZE
+        return snapToSlider(etSubsetSize, rec.subsetSize)
+    }
+
+    /** Seeds the slider (until the user overrides it) and shows the note. */
+    private fun applySubsetRecommendation() {
+        val rec = viewModel.subsetRecommendation
+        if (rec == null) {
+            tvSubsetHint.visibility = View.GONE
+            return
+        }
+        if (!viewModel.subsetUserModified) {
+            val snapped = snapToSlider(etSubsetSize, rec.subsetSize)
+            if (etSubsetSize.value.toInt() != snapped) {
+                commitParamFields()
+                etSubsetSize.value = snapped.toFloat()
+            }
+        }
+        tvSubsetHint.visibility = View.VISIBLE
+        tvSubsetHint.text = if (rec.lowTexture) {
+            getString(R.string.subset_recommend_low_texture_fmt, rec.subsetSize)
+        } else {
+            getString(R.string.subset_recommend_fmt, rec.subsetSize)
+        }
+        updateAdvancedSummary?.invoke()
+    }
 
     private fun startBatchAnalysis() {
         if (!viewModel.isReadyToCompute()) return
@@ -983,14 +1085,20 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvStrainValue.clearFocus()
     }
 
-    /** Two-way binds a numeric field to its slider; commits on Done or focus loss. */
-    private fun bindParamField(field: EditText, slider: Slider) {
+    /**
+     * Two-way binds a numeric field to its slider; commits on Done or focus
+     * loss. [onUserChange] fires only when the commit actually moves the
+     * slider, so tabbing through a field is not mistaken for an edit.
+     */
+    private fun bindParamField(field: EditText, slider: Slider, onUserChange: (() -> Unit)? = null) {
         val commit = {
+            val previous = slider.value.toInt()
             val typed = field.text.toString().trim().toIntOrNull()
-            val value = if (typed == null) slider.value.toInt() else snapToSlider(slider, typed)
+            val value = if (typed == null) previous else snapToSlider(slider, typed)
             slider.value = value.toFloat()
             field.setText(value.toString())
             field.setSelection(field.text.length)
+            if (value != previous) onUserChange?.invoke()
             updateAdvancedSummary?.invoke()
         }
         field.setOnEditorActionListener { _, actionId, _ ->
@@ -1025,7 +1133,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
         updateLabels()
 
-        bindParamField(tvSubsetValue, etSubsetSize)
+        bindParamField(tvSubsetValue, etSubsetSize) { viewModel.subsetUserModified = true }
         bindParamField(tvStepValue, etStepSize)
         bindParamField(tvStrainValue, etStrainWindow)
 
@@ -1039,7 +1147,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val s = currentSubsetSize()
             val st = currentStepSize()
             val w = currentStrainWindow()
-            val isDefaults = s == 41 && st == 5 && w == 15 && !currentUseKeysInterpolator()
+            val isDefaults = s == defaultSubsetSize() && st == 5 && w == 15 &&
+                !currentUseKeysInterpolator()
             tvAdvancedSummary.text = getString(R.string.advanced_summary_fmt, s, st, w) +
                 if (isDefaults) getString(R.string.advanced_defaults_suffix) else ""
         }
@@ -1049,7 +1158,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnAdvancedReset).setOnClickListener {
             // Drop focus first so the fields accept the reset values.
             commitParamFields()
-            etSubsetSize.value = 41f
+            // Reset hands the subset back to the SSSIG recommendation when one
+            // was measured for this reference image.
+            viewModel.subsetUserModified = false
+            etSubsetSize.value = defaultSubsetSize().toFloat()
             etStepSize.value = 5f
             etStrainWindow.value = 15f
             rgInterpolator.check(R.id.rbBicubic)
@@ -1076,7 +1188,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             advancedChevron.rotation = if (expanded) 0f else 180f
         }
 
-        etSubsetSize.addOnChangeListener { _, _, _ -> updateLabels() }
+        etSubsetSize.addOnChangeListener { _, _, fromUser ->
+            if (fromUser) viewModel.subsetUserModified = true
+            updateLabels()
+        }
         etStepSize.addOnChangeListener { _, _, _ -> updateLabels() }
         etStrainWindow.addOnChangeListener { _, _, _ -> updateLabels() }
     }
@@ -1111,6 +1226,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (forward) {
             refreshInputsCard()
             updateRoiSummary()
+            // Cheap no-op when the reference/ROI have not changed since the
+            // last measurement; covers inputs that arrived before this page.
+            requestSubsetRecommendation()
         }
 
         // Bottom nav: Next drives page 1, Back appears on page 2
@@ -1187,6 +1305,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         refreshRefSlot()
         refreshDefSlot()
         checkReady()
+        // Survives rotation: the measurement is already in the ViewModel.
+        applySubsetRecommendation()
     }
 
     /** Reference slot: dropzone when empty, summary card when filled. */

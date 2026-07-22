@@ -217,6 +217,9 @@
     <string name="frames_capped_fmt">First %1$d frames kept — raise Max frames in Settings</string>
     <string name="advanced_parameters">Advanced parameters</string>
     <string name="advanced_summary_fmt">Subset %1$d · Step %2$d · VSG %3$d</string>
+    <string name="subset_recommend_running">Sizing the subset from the speckle pattern…</string>
+    <string name="subset_recommend_fmt">Suggested %1$d px from the speckle pattern (SSSIG criterion)</string>
+    <string name="subset_recommend_low_texture_fmt">Speckle contrast is low — %1$d px is the largest allowed subset and still falls short of 0.007 px accuracy</string>
     <string name="advanced_defaults_suffix"> · defaults</string>
     <string name="run_points_solved">points solved</string>
     <string name="run_convergence">convergence</string>
@@ -333,7 +336,7 @@
     <string name="extract_n_frames_fmt">Extract %1$d frames</string>
     <string name="video_capped_suffix">" (capped — raise Max frames in Settings)"</string>
     <string name="video_first_frame_note">First frame becomes the reference</string>
-    <string name="info_subset">The pixel window tracked at each grid point. Bigger = more robust on weak speckle, but smooths out sharp strain gradients.</string>
+    <string name="info_subset">The pixel window tracked at each grid point. Bigger = more robust on weak speckle, but smooths out sharp strain gradients.\n\nThe starting value is measured from your reference image using the SSSIG criterion of Pan et al., Opt. Express 16, 7037 (2008): the subset grows until the sum of squared intensity gradients supports a displacement accuracy of 0.007 px at an image-noise variance of 4 gray levels². Change it freely — your value is kept.</string>
     <string name="info_step">Spacing between tracked points. Smaller = denser results and longer analysis time.</string>
     <string name="info_strain_window">How many neighboring points are fitted to turn displacement into strain. Bigger = smoother strain, less local detail.</string>
 </resources>

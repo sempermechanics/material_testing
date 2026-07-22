@@ -91,6 +91,19 @@ class AnalysisViewModel : ViewModel() {
     var wizardStep: Int = 1
     var settingsReviewed: Boolean = false
 
+    /**
+     * Subset size suggested by [SubsetRecommender] for the current reference
+     * image + ROI, or null while it has not been computed. It seeds the subset
+     * slider until [subsetUserModified] says the user has taken it over.
+     */
+    var subsetRecommendation: SubsetRecommender.Result? = null
+
+    /** Identifies the inputs [subsetRecommendation] was computed for. */
+    var subsetRecommendationKey: String? = null
+
+    /** Set once the user drags or types a subset size; suppresses re-seeding. */
+    var subsetUserModified: Boolean = false
+
     fun isReadyToCompute(): Boolean = refBytes != null && defFilePaths.isNotEmpty()
 
     fun getDefDisplayName(): String = when {
