@@ -33,42 +33,6 @@
     <string name="roi_full_image_selected">Full image selected</string>
     <string name="roi_invalid_size">Invalid ROI size</string>
 
-    <!-- Manual / mathematical ROI dialog -->
-    <string name="manual_roi_title">Define mathematical ROI</string>
-    <string name="manual_roi_select_shape">Select ROI shape</string>
-    <string name="manual_roi_x_offset">X offset (left)</string>
-    <string name="manual_roi_y_offset">Y offset (top)</string>
-    <string name="manual_roi_width">Width</string>
-    <string name="manual_roi_height">Height</string>
-    <string name="manual_roi_center_x">Center X</string>
-    <string name="manual_roi_center_y">Center Y</string>
-    <string name="manual_roi_radius">Radius</string>
-    <string name="manual_roi_radius_x">Radius X (horizontal)</string>
-    <string name="manual_roi_radius_y">Radius Y (vertical)</string>
-    <string name="manual_roi_point_1">Point 1 (top usually)</string>
-    <string name="manual_roi_point_2">Point 2 (bottom left)</string>
-    <string name="manual_roi_point_3">Point 3 (bottom right)</string>
-    <string name="manual_roi_x1">X1</string>
-    <string name="manual_roi_y1">Y1</string>
-    <string name="manual_roi_x2">X2</string>
-    <string name="manual_roi_y2">Y2</string>
-    <string name="manual_roi_x3">X3</string>
-    <string name="manual_roi_y3">Y3</string>
-    <string name="manual_roi_max_width">Max: %1$d</string>
-    <string name="manual_roi_max_height">Max: %1$d</string>
-    <string name="manual_roi_dims_positive">Dimensions must be positive.</string>
-    <string name="manual_roi_out_of_bounds">Shape is out of bounds.\nMax size: %1$d×%2$d.\nYour shape ends at: %3$d×%4$d</string>
-    <string name="manual_roi_complex_applied">Complex shape ROI applied</string>
-    <string name="manual_roi_rect_set">Rectangular ROI set: %1$d × %2$d px</string>
-    <string name="manual_roi_load_ref_first">Load a reference image first.</string>
-
-    <string-array name="manual_roi_shapes">
-        <item>Rectangle / square</item>
-        <item>Circle</item>
-        <item>Ellipse</item>
-        <item>Triangle</item>
-    </string-array>
-
     <!-- Static analysis -->
     <string name="analysis_running_back_blocked">Analysis running. Please wait or cancel first.</string>
     <string name="exit_indic_title">Exit inDIC engine?</string>
@@ -78,8 +42,6 @@
     <string name="load_image_first">Load an image first.</string>
     <string name="failed_decode_raw">Failed to decode RAW image.</string>
     <string name="failed_load_reference">Failed to load reference image. Please try another file.</string>
-    <string name="failed_load_mask">Failed to load ROI mask. Please try another file.</string>
-    <string name="mask_uploaded">Custom ROI mask uploaded</string>
     <string name="roi_too_small">ROI is too small. It must be larger than the subset size.</string>
     <string name="analysis_failed_title">Analysis failed</string>
     <string name="video_read_failed">Could not read this video.</string>
@@ -103,9 +65,6 @@
     <string name="scale_unit_px">px</string>
     <string name="scale_unit_strain">mε</string>
     <string name="invalid_scale_inputs">Invalid scale inputs.</string>
-
-
-
 
     <!-- Extracted from layouts (Day 1 strings sweep) -->
     <string name="secure_access_portal">Secure Access Portal</string>
@@ -173,6 +132,18 @@
     <string name="session_data_gone_body">This analysis was cleaned up locally. If it was synced, the files are still in your cloud folder.</string>
     <string name="action_rename">Rename</string>
     <string name="action_delete">Delete</string>
+
+    <!-- Home multi-select -->
+    <string name="selection_count_fmt">%1$d selected</string>
+    <string name="selection_clear">Clear selection</string>
+    <string name="selection_select_all">Select all</string>
+    <string name="selection_selected_desc">Selected</string>
+    <string name="delete_confirm_title_multi">Delete %1$d analyses?</string>
+    <string name="delete_confirm_body_local_multi">Permanently removes them from your phone. This can\'t be undone.</string>
+    <string name="delete_confirm_body_cloud_multi">%1$d of these are backed up. Deleting everywhere permanently erases the selected analyses from your phone and from cloud storage — the images, results, reports and their details. This can\'t be undone.</string>
+    <string name="delete_multi_working">Deleting %1$d analyses…</string>
+    <string name="delete_multi_done">%1$d analyses deleted.</string>
+    <string name="delete_multi_partial">%1$d deleted · %2$d still in the cloud (couldn\'t reach it).</string>
     <string name="delete_confirm_title">Delete this analysis?</string>
     <string name="delete_confirm_body_local">Permanently removes this analysis from your phone. This can\'t be undone.</string>
     <string name="delete_confirm_body_cloud">This analysis is backed up. Deleting everywhere permanently erases it from your phone and from cloud storage — the images, results, reports and their details. This can\'t be undone.</string>

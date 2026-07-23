@@ -2,6 +2,7 @@
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/homeRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -38,6 +39,88 @@
                 android:contentDescription="@string/home_settings"
                 android:src="@drawable/ic_settings_gear"
                 app:tint="@color/text_primary" />
+        </LinearLayout>
+
+        <!-- Contextual bar: replaces the title row while rows are selected, and
+             deliberately mirrors its geometry — same 20dp/14dp padding, same
+             surface, same 24sp bold heading, same 48dp text_primary icon
+             buttons — so the screen keeps its shape when selection starts.
+             Rename only makes sense for one row, so it hides above a single
+             selection (see HomeActivity.updateSelectionBar). -->
+        <LinearLayout
+            android:id="@+id/homeSelectionBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="20dp"
+            android:paddingTop="14dp"
+            android:paddingBottom="10dp"
+            android:visibility="gone">
+
+            <!-- Row 1 matches the title row exactly: 48dp buttons, 24sp bold
+                 heading, every glyph on the same 32dp inset as the settings
+                 gear, so nothing shifts when the two bars swap. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageButton
+                    android:id="@+id/btnSelectionClose"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/selection_clear"
+                    android:src="@drawable/ic_close"
+                    app:tint="@color/text_primary" />
+
+                <TextView
+                    android:id="@+id/tvSelectionCount"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/text_primary"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    tools:text="2 selected" />
+
+                <ImageButton
+                    android:id="@+id/btnSelectionRename"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/action_rename"
+                    android:src="@drawable/ic_edit"
+                    app:tint="@color/text_primary" />
+
+                <ImageButton
+                    android:id="@+id/btnSelectionDelete"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/action_delete"
+                    android:src="@drawable/ic_delete"
+                    app:tint="@color/text_primary" />
+            </LinearLayout>
+
+            <!-- Row 2: the 12dp start margin puts the tick box on the same
+                 32dp inset as the ✕ glyph above it. minWidth/minHeight 0 strips
+                 the stock 48dp minimum, which would otherwise pad the box away
+                 from that alignment. -->
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/cbSelectionAll"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:text="@string/selection_select_all"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp" />
         </LinearLayout>
 
         <!-- Pull down to re-check cloud backup state on demand. -->

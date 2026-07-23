@@ -59,6 +59,23 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private val adapter = SessionAdapter()
 
+    // --- Selection mode -------------------------------------------------
+    // Long-press starts it, tap toggles rows while it lasts, and it ends when
+    // the last row is deselected. Ids rather than indices, so the set survives
+    // a refresh() that reorders or drops rows.
+    private lateinit var topBar: android.view.View
+    private lateinit var selectionBar: android.view.View
+    private lateinit var selectionCount: TextView
+    private lateinit var btnSelectionRename: ImageButton
+    private lateinit var selectAllBox: com.google.android.material.checkbox.MaterialCheckBox
+    private lateinit var fab: FloatingActionButton
+    private val selectedIds = linkedSetOf<String>()
+    private val inSelectionMode: Boolean get() = selectedIds.isNotEmpty()
+
+    private val backCallback = object : androidx.activity.OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() = clearSelection()
+    }
+
     /** Source A: the system Photo Picker (gallery / Google Photos). */
     private val pickReference =
         registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -107,7 +124,8 @@ class HomeActivity : AppCompatActivity() {
         list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
 
-        findViewById<FloatingActionButton>(R.id.fabNewAnalysis).setOnClickListener {
+        fab = findViewById(R.id.fabNewAnalysis)
+        fab.setOnClickListener {
             // At the account's analysis limit, block new work behind the persistent
             // limit screen (email support) instead of letting it fail on upload.
             if (TokenStore.isSessionLimitReached(this)) {
@@ -117,6 +135,29 @@ class HomeActivity : AppCompatActivity() {
             showSourceChooser()
         }
         findViewById<ImageButton>(R.id.btnHomeSettings).setOnClickListener { showSettingsDrawer() }
+
+        topBar = findViewById(R.id.homeTopBar)
+        selectionBar = findViewById(R.id.homeSelectionBar)
+        selectionCount = findViewById(R.id.tvSelectionCount)
+        btnSelectionRename = findViewById(R.id.btnSelectionRename)
+        findViewById<ImageButton>(R.id.btnSelectionClose).setOnClickListener { clearSelection() }
+        findViewById<ImageButton>(R.id.btnSelectionDelete).setOnClickListener { confirmDeleteSelected() }
+        selectAllBox = findViewById(R.id.cbSelectionAll)
+        // setOnClickListener, not setOnCheckedChangeListener: updateSelectionBar
+        // drives the checked state, and a change listener would re-enter here
+        // every time it did.
+        selectAllBox.setOnClickListener {
+            // Unticking means "none", which empties the selection and therefore
+            // ends selection mode — the same as clearing it.
+            if (selectAllBox.isChecked) selectAll() else clearSelection()
+        }
+        btnSelectionRename.setOnClickListener {
+            adapter.selectedRecords().singleOrNull()?.let { promptRename(it) }
+        }
+
+        // Back leaves selection mode before it leaves the screen. Enabled only
+        // while something is selected, so normal back still exits Home.
+        onBackPressedDispatcher.addCallback(this, backCallback)
 
         maybeShowBetaNotice()
         // Cold start / return with an already-full quota → persistent support screen.
@@ -174,6 +215,8 @@ class HomeActivity : AppCompatActivity() {
             val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
             adapter.submit(sessions)
             emptyState.isVisible = sessions.isEmpty()
+            // A refresh can drop rows out from under a selection.
+            updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
             TokenStore.refreshSessionLimit(this@HomeActivity, sessions.size)
             try {
@@ -263,17 +306,123 @@ class HomeActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    private fun showRowActions(record: SessionRecord) {
-        val actions = arrayOf(getString(R.string.action_rename), getString(R.string.action_delete))
-        MaterialAlertDialogBuilder(this)
-            .setTitle(record.name)
-            .setItems(actions) { _, which ->
-                when (which) {
-                    0 -> promptRename(record)
-                    1 -> confirmDelete(record)
+    // ------------------------------------------------------------------
+    // Selection mode
+    // ------------------------------------------------------------------
+
+    /** Long-press on an unselected list: enters selection mode with that row. */
+    private fun startSelection(record: SessionRecord) {
+        selectedIds.add(record.id)
+        adapter.notifyDataSetChanged()
+        updateSelectionBar()
+    }
+
+    /** Toggles one row; entering/leaving selection mode falls out of the count. */
+    private fun toggleSelection(record: SessionRecord) {
+        if (!selectedIds.remove(record.id)) selectedIds.add(record.id)
+        adapter.notifyDataSetChanged()
+        updateSelectionBar()
+    }
+
+    private fun clearSelection() {
+        if (selectedIds.isEmpty()) return
+        selectedIds.clear()
+        adapter.notifyDataSetChanged()
+        updateSelectionBar()
+    }
+
+    private fun selectAll() {
+        selectedIds.addAll(adapter.allIds())
+        adapter.notifyDataSetChanged()
+        updateSelectionBar()
+    }
+
+    /**
+     * Swaps the title row for the contextual bar and keeps the FAB out of the
+     * way. Rename needs exactly one target, so it only appears for a single
+     * selection.
+     */
+    private fun updateSelectionBar() {
+        // Rows can disappear under a selection (a refresh, a delete elsewhere);
+        // drop ids that no longer exist so the count never lies.
+        selectedIds.retainAll(adapter.allIds().toSet())
+
+        val active = inSelectionMode
+        selectionBar.isVisible = active
+        topBar.isVisible = !active
+        backCallback.isEnabled = active
+        if (active) fab.hide() else fab.show()
+        selectionCount.text = getString(R.string.selection_count_fmt, selectedIds.size)
+        btnSelectionRename.isVisible = selectedIds.size == 1
+        // Ticked only when every row is in the selection, so the box reports
+        // the real state rather than just what was last tapped.
+        val allIds = adapter.allIds()
+        selectAllBox.isChecked = allIds.isNotEmpty() && selectedIds.size == allIds.size
+    }
+
+    /**
+     * Bulk delete. Reuses the single-row semantics: full erasure is the primary
+     * action, and a device-only option appears when any of the selection has a
+     * cloud copy that would otherwise be silently left behind.
+     */
+    private fun confirmDeleteSelected() {
+        val records = adapter.selectedRecords()
+        if (records.isEmpty()) return
+        if (records.size == 1) {
+            confirmDelete(records.first())
+            return
+        }
+
+        val backedUp = records.count {
+            it.syncState == SessionRecord.SyncState.SYNCED || it.cloudSessionId.isNotBlank()
+        }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.delete_confirm_title_multi, records.size))
+            .setNegativeButton(R.string.action_cancel, null)
+
+        if (backedUp == 0) {
+            dialog.setMessage(R.string.delete_confirm_body_local_multi)
+                .setPositiveButton(R.string.action_delete) { _, _ -> eraseSelected(records, cloudToo = true) }
+        } else {
+            dialog.setMessage(getString(R.string.delete_confirm_body_cloud_multi, backedUp))
+                .setPositiveButton(R.string.delete_everywhere) { _, _ -> eraseSelected(records, cloudToo = true) }
+                .setNeutralButton(R.string.delete_device_only) { _, _ -> eraseSelected(records, cloudToo = false) }
+        }
+        dialog.show()
+    }
+
+    private fun eraseSelected(records: List<SessionRecord>, cloudToo: Boolean) {
+        lifecycleScope.launch {
+            Toast.makeText(
+                this@HomeActivity,
+                getString(R.string.delete_multi_working, records.size),
+                Toast.LENGTH_SHORT,
+            ).show()
+
+            // Sequential, not parallel: each erase is a cloud round-trip, and
+            // the backend is happier with one at a time than N at once.
+            var stillInCloud = 0
+            for (record in records) {
+                if (cloudToo) {
+                    val result = CloudSync.eraseEverywhere(this@HomeActivity, record.id)
+                    if (result == CloudSync.EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE) stillInCloud++
+                } else {
+                    CloudSync.eraseLocalOnly(this@HomeActivity, record.id)
                 }
             }
-            .show()
+
+            // Report what actually happened — never imply a cloud copy is gone
+            // when the backend could not be reached.
+            val message = if (stillInCloud > 0) {
+                getString(R.string.delete_multi_partial, records.size, stillInCloud)
+            } else {
+                getString(R.string.delete_multi_done, records.size)
+            }
+            Toast.makeText(this@HomeActivity, message, Toast.LENGTH_LONG).show()
+
+            clearSelection()
+            refresh()
+        }
     }
 
     private fun promptRename(record: SessionRecord) {
@@ -486,8 +635,16 @@ class HomeActivity : AppCompatActivity() {
             notifyDataSetChanged()
         }
 
+        fun allIds(): List<String> = items.map { it.id }
+
+        /** The selected rows, in list order. */
+        fun selectedRecords(): List<SessionRecord> = items.filter { it.id in selectedIds }
+
         inner class Holder(v: android.view.View) : RecyclerView.ViewHolder(v) {
+            val card: com.google.android.material.card.MaterialCardView =
+                v.findViewById(R.id.sessionCard)
             val thumb: ImageView = v.findViewById(R.id.sessionThumb)
+            val check: ImageView = v.findViewById(R.id.sessionCheck)
             val title: TextView = v.findViewById(R.id.sessionTitle)
             val subtitle: TextView = v.findViewById(R.id.sessionSubtitle)
             val badge: TextView = v.findViewById(R.id.sessionBadge)
@@ -534,9 +691,21 @@ class HomeActivity : AppCompatActivity() {
                 holder.thumb.setImageDrawable(null)
             }
 
-            holder.itemView.setOnClickListener { openSession(r) }
+            val selected = r.id in selectedIds
+            holder.check.isVisible = selected
+            holder.card.setCardBackgroundColor(
+                getColor(if (selected) R.color.sky_container else R.color.surface_muted),
+            )
+            holder.card.strokeColor =
+                getColor(if (selected) R.color.sky_primary else R.color.surface_outline)
+
+            // Outside selection mode a tap opens the analysis and a long-press
+            // starts selecting; inside it, every tap just toggles a row.
+            holder.itemView.setOnClickListener {
+                if (inSelectionMode) toggleSelection(r) else openSession(r)
+            }
             holder.itemView.setOnLongClickListener {
-                showRowActions(r)
+                if (inSelectionMode) toggleSelection(r) else startSelection(r)
                 true
             }
         }
