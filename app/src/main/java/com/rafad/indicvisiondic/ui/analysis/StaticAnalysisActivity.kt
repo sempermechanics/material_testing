@@ -3,10 +3,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -24,8 +20,6 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.IndicVisionNativeLib
 import com.rafad.indicvisiondic.R
@@ -1102,21 +1096,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    @Suppress("UnusedPrivateMember", "unused") // P5: rehome inside the ROI editor
-    private fun handleMaskSelection(uri: Uri) {
-        try {
-            contentResolver.openInputStream(uri)?.use { stream ->
-                viewModel.roiMaskBytes = stream.readBytes()
-                Toast.makeText(this, R.string.mask_uploaded, Toast.LENGTH_SHORT).show()
-                viewModel.hasCustomRoi = true
-                checkReady()
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to load ROI mask")
-            Toast.makeText(this, R.string.failed_load_mask, Toast.LENGTH_LONG).show()
-        }
-    }
-
     @SuppressLint("Range")
     private fun getFileName(uri: Uri): String {
         var result: String? = null
@@ -1210,7 +1189,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val s = currentSubsetSize()
             val st = currentStepSize()
             val w = currentStrainWindow()
-            val isDefaults = s == defaultSubsetSize() && st == 5 && w == 15 &&
+            val isDefaults = s == defaultSubsetSize() &&
+                st == 5 &&
+                w == 15 &&
                 !currentUseKeysInterpolator()
             tvAdvancedSummary.text = getString(R.string.advanced_summary_fmt, s, st, w) +
                 if (isDefaults) getString(R.string.advanced_defaults_suffix) else ""
@@ -1441,171 +1422,5 @@ class StaticAnalysisActivity : AppCompatActivity() {
             viewModel.refName.endsWith(".jpeg", true) ||
             viewModel.defFilePaths.any { it.endsWith(".jpg", true) || it.endsWith(".jpeg", true) }
         jpegWarnRow.visibility = if (jpeg) View.VISIBLE else View.GONE
-    }
-
-    // P5: rehome inside the ROI editor
-    @Suppress("UnusedPrivateMember", "unused", "LongMethod", "CyclomaticComplexMethod")
-    private fun showShapeRoiDialog() {
-        if (viewModel.refBytes == null) {
-            Toast.makeText(this, R.string.manual_roi_load_ref_first, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val dialogView = layoutInflater.inflate(R.layout.dialog_manual_roi, null)
-        val imgW = viewModel.realRefWidth
-        val imgH = viewModel.realRefHeight
-
-        val spinner = dialogView.findViewById<Spinner>(R.id.spinnerShape)
-        val layoutRect = dialogView.findViewById<View>(R.id.layoutRect)
-        val layoutCircle = dialogView.findViewById<View>(R.id.layoutCircle)
-        val layoutEllipse = dialogView.findViewById<View>(R.id.layoutEllipse)
-        val layoutTri = dialogView.findViewById<View>(R.id.layoutTri)
-
-        val etRectX = dialogView.findViewById<TextInputEditText>(R.id.etRectX)
-        val etRectY = dialogView.findViewById<TextInputEditText>(R.id.etRectY)
-        val etRectW = dialogView.findViewById<TextInputEditText>(R.id.etRectW)
-        val etRectH = dialogView.findViewById<TextInputEditText>(R.id.etRectH)
-
-        etRectX.setText(viewModel.roiX.toString())
-        etRectY.setText(viewModel.roiY.toString())
-        etRectW.setText(if (viewModel.roiW > 0) viewModel.roiW.toString() else imgW.toString())
-        etRectH.setText(if (viewModel.roiH > 0) viewModel.roiH.toString() else imgH.toString())
-
-        dialogView.findViewById<TextInputLayout>(R.id.tilRectW).helperText =
-            getString(R.string.manual_roi_max_width, imgW)
-        dialogView.findViewById<TextInputLayout>(R.id.tilRectH).helperText =
-            getString(R.string.manual_roi_max_height, imgH)
-
-        val shapes = resources.getStringArray(R.array.manual_roi_shapes)
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, shapes).apply {
-            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        }
-
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p0: AdapterView<*>?, p1: View?, pos: Int, p3: Long) {
-                layoutRect.visibility = if (pos == 0) View.VISIBLE else View.GONE
-                layoutCircle.visibility = if (pos == 1) View.VISIBLE else View.GONE
-                layoutEllipse.visibility = if (pos == 2) View.VISIBLE else View.GONE
-                layoutTri.visibility = if (pos == 3) View.VISIBLE else View.GONE
-            }
-            override fun onNothingSelected(p0: AdapterView<*>?) {}
-        }
-
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.manual_roi_title)
-            .setView(dialogView)
-            .setPositiveButton(R.string.apply, null)
-            .setNegativeButton(R.string.cancel, null)
-            .create()
-
-        dialog.show()
-
-        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            var finalX = 0
-            var finalY = 0
-            var finalW = 0
-            var finalH = 0
-            var requiresMask = false
-
-            val maskBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(maskBitmap)
-            canvas.drawColor(Color.BLACK)
-            val paint = Paint().apply {
-                color = Color.WHITE
-                style = Paint.Style.FILL
-            }
-
-            when (spinner.selectedItemPosition) {
-                0 -> {
-                    finalX = etRectX.text.toString().toIntOrNull() ?: 0
-                    finalY = etRectY.text.toString().toIntOrNull() ?: 0
-                    finalW = etRectW.text.toString().toIntOrNull() ?: 0
-                    finalH = etRectH.text.toString().toIntOrNull() ?: 0
-                    viewModel.roiMaskBytes = null
-                }
-                1 -> {
-                    requiresMask = true
-                    val cx = dialogView.findViewById<TextInputEditText>(R.id.etCircCx).text.toString().toFloatOrNull() ?: (imgW / 2f)
-                    val cy = dialogView.findViewById<TextInputEditText>(R.id.etCircCy).text.toString().toFloatOrNull() ?: (imgH / 2f)
-                    val r = dialogView.findViewById<TextInputEditText>(R.id.etCircR).text.toString().toFloatOrNull() ?: 100f
-
-                    canvas.drawCircle(cx, cy, r, paint)
-
-                    finalX = (cx - r).toInt()
-                    finalY = (cy - r).toInt()
-                    finalW = (r * 2).toInt()
-                    finalH = (r * 2).toInt()
-                }
-                2 -> {
-                    requiresMask = true
-                    val cx = dialogView.findViewById<TextInputEditText>(R.id.etEllCx).text.toString().toFloatOrNull() ?: (imgW / 2f)
-                    val cy = dialogView.findViewById<TextInputEditText>(R.id.etEllCy).text.toString().toFloatOrNull() ?: (imgH / 2f)
-                    val rx = dialogView.findViewById<TextInputEditText>(R.id.etEllRx).text.toString().toFloatOrNull() ?: 150f
-                    val ry = dialogView.findViewById<TextInputEditText>(R.id.etEllRy).text.toString().toFloatOrNull() ?: 100f
-
-                    canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, paint)
-
-                    finalX = (cx - rx).toInt()
-                    finalY = (cy - ry).toInt()
-                    finalW = (rx * 2).toInt()
-                    finalH = (ry * 2).toInt()
-                }
-                3 -> {
-                    requiresMask = true
-                    val x1 = dialogView.findViewById<TextInputEditText>(R.id.etTriX1).text.toString().toFloatOrNull() ?: 0f
-                    val y1 = dialogView.findViewById<TextInputEditText>(R.id.etTriY1).text.toString().toFloatOrNull() ?: 0f
-                    val x2 = dialogView.findViewById<TextInputEditText>(R.id.etTriX2).text.toString().toFloatOrNull() ?: 0f
-                    val y2 = dialogView.findViewById<TextInputEditText>(R.id.etTriY2).text.toString().toFloatOrNull() ?: 0f
-                    val x3 = dialogView.findViewById<TextInputEditText>(R.id.etTriX3).text.toString().toFloatOrNull() ?: 0f
-                    val y3 = dialogView.findViewById<TextInputEditText>(R.id.etTriY3).text.toString().toFloatOrNull() ?: 0f
-
-                    val path = Path().apply {
-                        moveTo(x1, y1)
-                        lineTo(x2, y2)
-                        lineTo(x3, y3)
-                        close()
-                    }
-                    canvas.drawPath(path, paint)
-
-                    finalX = minOf(x1, x2, x3).toInt()
-                    finalY = minOf(y1, y2, y3).toInt()
-                    finalW = (maxOf(x1, x2, x3) - finalX).toInt()
-                    finalH = (maxOf(y1, y2, y3) - finalY).toInt()
-                }
-            }
-
-            if (finalX < 0 || finalY < 0 || (finalX + finalW) > imgW || (finalY + finalH) > imgH || finalW <= 0 || finalH <= 0) {
-                val errorMsg = if (finalW <= 0 || finalH <= 0) {
-                    getString(R.string.manual_roi_dims_positive)
-                } else {
-                    getString(
-                        R.string.manual_roi_out_of_bounds,
-                        imgW,
-                        imgH,
-                        finalX + finalW,
-                        finalY + finalH,
-                    )
-                }
-                Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
-            } else {
-                if (requiresMask) {
-                    val stream = java.io.ByteArrayOutputStream()
-                    maskBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-                    viewModel.roiMaskBytes = stream.toByteArray()
-                    tvInstruction.text = getString(R.string.manual_roi_complex_applied)
-                } else {
-                    tvInstruction.text = getString(R.string.manual_roi_rect_set, finalW, finalH)
-                }
-
-                viewModel.roiX = finalX
-                viewModel.roiY = finalY
-                viewModel.roiW = finalW
-                viewModel.roiH = finalH
-                viewModel.hasCustomRoi = true
-
-                checkReady()
-                dialog.dismiss()
-            }
-        }
     }
 }

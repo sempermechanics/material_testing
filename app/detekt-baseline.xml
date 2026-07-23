@@ -3,7 +3,6 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ComplexCondition:ResultViewerActivity.kt$ResultViewerActivity$x &lt; 0 || x &gt; imgW || y &lt; 0 || y &gt; imgH</ID>
-    <ID>ComplexCondition:StaticAnalysisActivity.kt$StaticAnalysisActivity$finalX &lt; 0 || finalY &lt; 0 || (finalX + finalW) &gt; imgW || (finalY + finalH) &gt; imgH || finalW &lt;= 0 || finalH &lt;= 0</ID>
     <ID>ComplexCondition:TouchImageView.kt$TouchImageView$trueImageWidth &lt;= 0f || trueImageHeight &lt;= 0f || viewWidth &lt;= 0 || viewHeight &lt;= 0</ID>
     <ID>ComplexCondition:VisualizationEngine.kt$VisualizationEngine$!v00.isNaN() &amp;&amp; !v10.isNaN() &amp;&amp; !v01.isNaN() &amp;&amp; !v11.isNaN()</ID>
     <ID>ConstructorParameterNaming:ApiDtos.kt$AdminUserDto$val access_status: String? = null</ID>
@@ -22,7 +21,6 @@
     <ID>CyclomaticComplexMethod:StudioOverlayView.kt$StudioOverlayView$override fun onTouchEvent(event: MotionEvent): Boolean</ID>
     <ID>CyclomaticComplexMethod:StudioOverlayView.kt$StudioOverlayView$private fun getTouchState(x: Float, y: Float): TouchState</ID>
     <ID>CyclomaticComplexMethod:VisualizationEngine.kt$VisualizationEngine$fun generateHeatmap( data: FloatArray, imgW: Int, imgH: Int, valIndex: Int, step: Int, customMin: Float? = null, // Optional Custom Bounds customMax: Float? = null, ): Triple&lt;Bitmap, Float, Float&gt;</ID>
-    <ID>EmptyFunctionBlock:StaticAnalysisActivity.kt$StaticAnalysisActivity.&lt;no name provided&gt;${}</ID>
     <ID>ImplicitDefaultLocale:AnalysisViewModel.kt$AnalysisViewModel$String.format("%04d_%s", frameIndex, rawName)</ID>
     <ID>ImplicitDefaultLocale:AnalysisViewModel.kt$AnalysisViewModel$String.format("frame_%04d.dat", frameIndex)</ID>
     <ID>ImplicitDefaultLocale:PdfLayoutEngine.kt$PdfLayoutEngine$String.format("%.2e", value)</ID>
@@ -48,8 +46,6 @@
     <ID>LongMethod:StudioOverlayView.kt$StudioOverlayView$override fun onTouchEvent(event: MotionEvent): Boolean</ID>
     <ID>LongMethod:VisualizationEngine.kt$VisualizationEngine$fun generateHeatmap( data: FloatArray, imgW: Int, imgH: Int, valIndex: Int, step: Int, customMin: Float? = null, // Optional Custom Bounds customMax: Float? = null, ): Triple&lt;Bitmap, Float, Float&gt;</ID>
     <ID>LongParameterList:AnalysisViewModel.kt$AnalysisViewModel$( appContext: Context, localSessionId: String, batchDir: File, refPngPath: String, params: BatchAnalysisParams, cloudEnabled: Boolean, pointsConverged: Int, avgIterations: Float, executionTimeMs: Int, persistedRawNames: List&lt;String&gt;, )</ID>
-    <ID>LongParameterList:DicUploadWorker.kt$DicUploadWorker$( data: FloatArray, refFile: File, defFile: File, frameName: String, record: SessionRecord, pdfOut: File, onFieldHeatmaps: (List&lt;FieldResult&gt;) -&gt; Unit, )</ID>
-    <ID>LongParameterList:DicUploadWorker.kt$DicUploadWorker$( record: SessionRecord, sessionDir: File, refFile: File, rawDeformedDir: File, reportsZip: File, processedZip: File, )</ID>
     <ID>LongParameterList:IndicVisionNativeLib.kt$IndicVisionNativeLib$( refBytes: ByteArray, defBytes: ByteArray, maskData: ByteArray, roiX: Int, roiY: Int, roiW: Int, roiH: Int, step: Int, subset: Int, strainWin: Int, useZNCC: Boolean, useICGN: Boolean, useSpline: Boolean, applyBlur: Boolean, useNlvc: Boolean, // UI toggle selecting the Keys 6x6 interpolation kernel use6x6Interpolator: Boolean, outputBuffer: ByteBuffer, callback: ProgressCallback, // 17-slot engine telemetry (see EngineStats.fromArray) outMetrics: FloatArray, )</ID>
     <ID>LongParameterList:IndicVisionNativeLib.kt$IndicVisionNativeLib$( refData: ByteArray, defData: ByteArray, roiX: Int, roiY: Int, subsetSize: Int, originalWidth: Int, originalHeight: Int, )</ID>
     <ID>LongParameterList:ReportBuilder.kt$ReportBuilder$( canvas: Canvas, width: Int, height: Int, minValRaw: Float, maxValRaw: Float, typeString: String, unit: String, maxIdx: Int, minIdx: Int, dataArray: FloatArray, drawMinMarker: Boolean = true, )</ID>
@@ -183,9 +179,7 @@
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$1000</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$1000.0</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$1000f</ID>
-    <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$100f</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$15</ID>
-    <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$150f</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$180f</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$2</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$270</ID>
@@ -193,12 +187,10 @@
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$30</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$30.0</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$4</ID>
-    <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$41</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$5</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$60</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity$90</ID>
     <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity.&lt;no name provided&gt;$1000</ID>
-    <ID>MagicNumber:StaticAnalysisActivity.kt$StaticAnalysisActivity.&lt;no name provided&gt;$3</ID>
     <ID>MagicNumber:StudioOverlayView.kt$StudioOverlayView$15f</ID>
     <ID>MagicNumber:StudioOverlayView.kt$StudioOverlayView$20f</ID>
     <ID>MagicNumber:StudioOverlayView.kt$StudioOverlayView$45f</ID>
@@ -220,7 +212,6 @@
     <ID>MagicNumber:VisualizationEngine.kt$VisualizationEngine$3.5f</ID>
     <ID>MagicNumber:VisualizationEngine.kt$VisualizationEngine$4.5f</ID>
     <ID>MagicNumber:VisualizationEngine.kt$VisualizationEngine$4f</ID>
-    <ID>MaxLineLength:AuthRepository.kt$AuthRepository$return@withContext Result.failure(Exception("An account already exists for this email. Sign in instead."))</ID>
     <ID>MaxLineLength:DicResult.kt$DicResult$fun isAcceptedPoint(corr: Float, includeCorrelationField: Boolean = false): Boolean</ID>
     <ID>MaxLineLength:DicSettings.kt$DicSettings$fun setKeepEveryRerun(context: Context, value: Boolean)</ID>
     <ID>MaxLineLength:DicSettings.kt$DicSettings$fun setSaveToCloud(context: Context, value: Boolean)</ID>
@@ -242,27 +233,12 @@
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$Toast.makeText(this@StaticAnalysisActivity, R.string.video_extract_insufficient, Toast.LENGTH_LONG).show()</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$Toast.makeText(this@StaticAnalysisActivity, getString(R.string.error_loading_images, e.message), Toast.LENGTH_LONG).show()</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$Toast.makeText(this@StaticAnalysisActivity, getString(R.string.video_read_error, e.message), Toast.LENGTH_LONG).show()</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$if</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$previewBmp = android.graphics.Bitmap.createScaledBitmap(bitmap, 1000, (bitmap.height * ratio).toInt(), true)</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(viewModel.defFilePaths.map { it.substringAfterLast('/') }))</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val cx = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etCircCx).text.toString().toFloatOrNull() ?: (imgW / 2f)</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val cx = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etEllCx).text.toString().toFloatOrNull() ?: (imgW / 2f)</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val cy = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etCircCy).text.toString().toFloatOrNull() ?: (imgH / 2f)</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val cy = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etEllCy).text.toString().toFloatOrNull() ?: (imgH / 2f)</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val frameCountMeta = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull()</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val r = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etCircR).text.toString().toFloatOrNull() ?: 100f</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val rx = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etEllRx).text.toString().toFloatOrNull() ?: 150f</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val ry = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etEllRy).text.toString().toFloatOrNull() ?: 100f</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val x1 = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etTriX1).text.toString().toFloatOrNull() ?: 0f</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val x2 = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etTriX2).text.toString().toFloatOrNull() ?: 0f</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val x3 = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etTriX3).text.toString().toFloatOrNull() ?: 0f</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val y1 = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etTriY1).text.toString().toFloatOrNull() ?: 0f</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val y2 = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etTriY2).text.toString().toFloatOrNull() ?: 0f</ID>
-    <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity$val y3 = dialogView.findViewById&lt;TextInputEditText&gt;(R.id.etTriY3).text.toString().toFloatOrNull() ?: 0f</ID>
     <ID>MaxLineLength:StaticAnalysisActivity.kt$StaticAnalysisActivity.&lt;no name provided&gt;$Toast.makeText(this@StaticAnalysisActivity, R.string.analysis_running_back_blocked, Toast.LENGTH_SHORT).show()</ID>
     <ID>NestedBlockDepth:ReportBuilder.kt$ReportBuilder$fun computeFieldExtrema( data: FloatArray, dataIndex: Int, absoluteStrainValues: Boolean = true, ): FieldExtrema</ID>
     <ID>NestedBlockDepth:ShareCenter.kt$ShareCenter$private fun batchCsv(): File</ID>
-    <ID>NestedBlockDepth:StaticAnalysisActivity.kt$StaticAnalysisActivity$private fun handleReferenceImage(uri: Uri)</ID>
     <ID>NestedBlockDepth:StudioOverlayView.kt$StudioOverlayView$override fun onTouchEvent(event: MotionEvent): Boolean</ID>
     <ID>NestedBlockDepth:VisualizationEngine.kt$VisualizationEngine$fun generateHeatmap( data: FloatArray, imgW: Int, imgH: Int, valIndex: Int, step: Int, customMin: Float? = null, // Optional Custom Bounds customMax: Float? = null, ): Triple&lt;Bitmap, Float, Float&gt;</ID>
     <ID>ReturnCount:AuthActivity.kt$AuthActivity$private fun onMainAction()</ID>

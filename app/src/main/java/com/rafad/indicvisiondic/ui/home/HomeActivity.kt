@@ -313,27 +313,30 @@ class HomeActivity : AppCompatActivity() {
     /** Long-press on an unselected list: enters selection mode with that row. */
     private fun startSelection(record: SessionRecord) {
         selectedIds.add(record.id)
-        adapter.notifyDataSetChanged()
+        adapter.rebindRow(record.id)
         updateSelectionBar()
     }
 
     /** Toggles one row; entering/leaving selection mode falls out of the count. */
     private fun toggleSelection(record: SessionRecord) {
         if (!selectedIds.remove(record.id)) selectedIds.add(record.id)
-        adapter.notifyDataSetChanged()
+        adapter.rebindRow(record.id)
         updateSelectionBar()
     }
 
     private fun clearSelection() {
         if (selectedIds.isEmpty()) return
+        val cleared = selectedIds.toList()
         selectedIds.clear()
-        adapter.notifyDataSetChanged()
+        cleared.forEach { adapter.rebindRow(it) }
         updateSelectionBar()
     }
 
     private fun selectAll() {
-        selectedIds.addAll(adapter.allIds())
-        adapter.notifyDataSetChanged()
+        // Only the rows that were not already selected change appearance.
+        val added = adapter.allIds().filterNot { it in selectedIds }
+        selectedIds.addAll(added)
+        added.forEach { adapter.rebindRow(it) }
         updateSelectionBar()
     }
 
@@ -636,6 +639,12 @@ class HomeActivity : AppCompatActivity() {
         }
 
         fun allIds(): List<String> = items.map { it.id }
+
+        /** Redraws one row by id — selection changes never touch the whole list. */
+        fun rebindRow(id: String) {
+            val index = items.indexOfFirst { it.id == id }
+            if (index >= 0) notifyItemChanged(index)
+        }
 
         /** The selected rows, in list order. */
         fun selectedRecords(): List<SessionRecord> = items.filter { it.id in selectedIds }
