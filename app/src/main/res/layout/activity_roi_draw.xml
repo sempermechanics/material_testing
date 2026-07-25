@@ -2,29 +2,128 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/viewer_canvas">
 
-    <!-- forceDarkAllowed=false: the specimen image and ROI strokes keep
-         their exact colors in dark mode. -->
+    <!-- Top chrome holds Cancel/Draw-Manual/Save and Crop/Erase so the canvas
+         never overlaps those controls (and never steals their taps). -->
+    <LinearLayout
+        android:id="@+id/headerChrome"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_viewer_panel"
+        android:orientation="vertical"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:id="@+id/topBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="4dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCancelRoi"
+                style="@style/Widget.IndicVision.Button.Text.Danger"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/cancel" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/rgEditMode"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="8dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                app:checkedButton="@+id/rbModeDraw"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rbModeDraw"
+                    style="@style/Widget.IndicVision.SegmentedButton.Dark"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/roi_mode_draw" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rbModeManual"
+                    style="@style/Widget.IndicVision.SegmentedButton.Dark"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/roi_mode_manual" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveRoi"
+                style="@style/Widget.IndicVision.Button.Cta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/save_roi" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="12dp"
+            android:paddingBottom="8dp">
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/rgCropErase"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                app:checkedButton="@+id/rbCrop"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rbCrop"
+                    style="@style/Widget.IndicVision.SegmentedButton.Dark"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:text="@string/roi_mode_crop" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rbErase"
+                    style="@style/Widget.IndicVision.SegmentedButton.Dark"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:text="@string/roi_mode_erase" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- forceDarkAllowed=false: specimen image and ROI strokes keep exact colors. -->
     <FrameLayout
         android:id="@+id/canvasFrame"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:forceDarkAllowed="false"
-        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toTopOf="@id/bottomToolbar"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintTop_toBottomOf="@id/headerChrome">
 
         <ImageView
             android:id="@+id/imgRoiCanvas"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:adjustViewBounds="true"
-            android:scaleType="fitCenter"
-            android:contentDescription="@string/roi_canvas_image" />
+            android:contentDescription="@string/roi_canvas_image"
+            android:scaleType="fitCenter" />
 
         <com.rafad.indicvisiondic.ui.analysis.StudioOverlayView
             android:id="@+id/overlayRoi"
@@ -36,58 +135,45 @@
         android:id="@+id/tvHud"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="8dp"
         android:background="@drawable/bg_viewer_panel"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="8dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp"
         android:text="@string/roi_hud_select_tool"
         android:textAppearance="@style/TextAppearance.IndicVision.Caption"
         android:textColor="@color/viewer_on_dark"
-        android:textSize="14sp"
+        android:textSize="13sp"
         android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/headerChrome"
+        tools:text="ROI: 1530 × 1530 px" />
 
-    <HorizontalScrollView
+    <!-- Bottom dock: Draw tools or Manual fields -->
+    <FrameLayout
         android:id="@+id/bottomToolbar"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_viewer_panel"
-        android:paddingHorizontal="8dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
-        android:scrollbars="none"
-        app:layout_constraintBottom_toBottomOf="parent">
+        android:paddingHorizontal="12dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:id="@+id/drawTools"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCancelRoi"
-                style="@style/Widget.IndicVision.Button.Text.Danger"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:text="@string/cancel" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnResetRoi"
-                style="@style/Widget.IndicVision.Button.Outlined"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="12dp"
-                android:text="@string/reset"
-                android:textColor="@color/viewer_on_dark"
-                app:strokeColor="#55FFFFFF" />
-
             <com.google.android.material.button.MaterialButtonToggleGroup
                 android:id="@+id/rgDrawMode"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 app:checkedButton="@+id/rbRect"
                 app:selectionRequired="true"
                 app:singleSelection="true">
@@ -95,36 +181,136 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/rbRect"
                     style="@style/Widget.IndicVision.SegmentedButton.Dark"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:text="@string/roi_mode_rect" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/rbSquare"
                     style="@style/Widget.IndicVision.SegmentedButton.Dark"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:text="@string/roi_mode_square" />
             </com.google.android.material.button.MaterialButtonToggleGroup>
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/switchSubtractMode"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnResetRoi"
+                style="@style/Widget.IndicVision.Button.Outlined"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
-                android:layout_marginEnd="8dp"
-                android:text="@string/roi_erase_holes"
+                android:text="@string/reset"
                 android:textColor="@color/viewer_on_dark"
-                app:thumbTint="@color/sky_bright"
-                app:trackTint="@color/viewer_chip_off" />
+                app:strokeColor="#55FFFFFF" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/manualTools"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilRoiX"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:hint="@string/roi_hint_x"
+                    app:boxStrokeColor="@color/sky_bright"
+                    app:hintTextColor="@color/viewer_on_dark">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etRoiX"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:textColor="@color/viewer_on_dark" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilRoiY"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:hint="@string/roi_hint_y"
+                    app:boxStrokeColor="@color/sky_bright"
+                    app:hintTextColor="@color/viewer_on_dark">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etRoiY"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:textColor="@color/viewer_on_dark" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilRoiW"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:hint="@string/roi_hint_w"
+                    app:boxStrokeColor="@color/sky_bright"
+                    app:hintTextColor="@color/viewer_on_dark">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etRoiW"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:textColor="@color/viewer_on_dark" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilRoiH"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:hint="@string/roi_hint_h"
+                    app:boxStrokeColor="@color/sky_bright"
+                    app:hintTextColor="@color/viewer_on_dark">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etRoiH"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:textColor="@color/viewer_on_dark" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSaveRoi"
-                style="@style/Widget.IndicVision.Button.Cta"
-                android:layout_width="wrap_content"
+                android:id="@+id/btnApplyManualRoi"
+                style="@style/Widget.IndicVision.Button.Outlined"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/save_roi" />
+                android:layout_marginTop="8dp"
+                android:text="@string/roi_apply_manual"
+                android:textColor="@color/viewer_on_dark"
+                app:strokeColor="#55FFFFFF" />
         </LinearLayout>
-    </HorizontalScrollView>
+    </FrameLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

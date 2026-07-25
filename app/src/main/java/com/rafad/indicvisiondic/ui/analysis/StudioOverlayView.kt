@@ -65,6 +65,81 @@ class StudioOverlayView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Places the main crop from image-pixel [x], [y], [width], [height].
+     * Clamps to the image; returns false if the size is non-positive or bounds
+     * are not ready yet.
+     */
+    fun applyImageRoi(x: Int, y: Int, width: Int, height: Int): Boolean {
+        val mapped = mapImageRectToView(x, y, width, height) ?: return false
+        roiRect.set(mapped)
+        hasValidRoi = true
+        mainRoiMode = when (currentMode) {
+            RoiMode.SQUARE -> RoiMode.SQUARE
+            else -> RoiMode.RECTANGLE
+        }
+        invalidate()
+        onRoiChangedListener?.invoke(getRelativeRoi())
+        return true
+    }
+
+    /**
+     * Adds an erase (hole) rect from image-pixel [x], [y], [width], [height].
+     * Same clamp rules as [applyImageRoi].
+     */
+    fun applyImageHole(x: Int, y: Int, width: Int, height: Int): Boolean {
+        val mapped = mapImageRectToView(x, y, width, height) ?: return false
+        val mode = when (currentMode) {
+            RoiMode.SQUARE -> RoiMode.SQUARE
+            else -> RoiMode.RECTANGLE
+        }
+        holes.add(Hole(mode, Path(), RectF(mapped)))
+        invalidate()
+        onRoiChangedListener?.invoke(getRelativeRoi())
+        return true
+    }
+
+    /** Image-pixel bounds of the last erase rect, or empty if there are none. */
+    fun lastHoleRelative(): RectF {
+        val hole = holes.lastOrNull() ?: return RectF()
+        return viewRectToImage(hole.rect)
+    }
+
+    private fun mapImageRectToView(x: Int, y: Int, width: Int, height: Int): RectF? {
+        if (realImageWidth <= 0 || realImageHeight <= 0 || imageBounds.isEmpty) return null
+        if (width <= 0 || height <= 0) return null
+
+        val leftPx = x.coerceIn(0, realImageWidth - 1)
+        val topPx = y.coerceIn(0, realImageHeight - 1)
+        val rightPx = (leftPx + width).coerceAtMost(realImageWidth)
+        val bottomPx = (topPx + height).coerceAtMost(realImageHeight)
+        if (rightPx <= leftPx || bottomPx <= topPx) return null
+
+        val scaleX = imageBounds.width() / realImageWidth.toFloat()
+        val scaleY = imageBounds.height() / realImageHeight.toFloat()
+        return RectF(
+            imageBounds.left + leftPx * scaleX,
+            imageBounds.top + topPx * scaleY,
+            imageBounds.left + rightPx * scaleX,
+            imageBounds.top + bottomPx * scaleY,
+        )
+    }
+
+    private fun viewRectToImage(viewRect: RectF): RectF {
+        if (imageBounds.isEmpty || imageBounds.width() == 0f) return RectF()
+        val scale = if (realImageWidth > 0) {
+            realImageWidth.toFloat() / imageBounds.width()
+        } else {
+            (imageView?.drawable?.intrinsicWidth?.toFloat() ?: 1f) / imageBounds.width()
+        }
+        return RectF(
+            (viewRect.left - imageBounds.left) * scale,
+            (viewRect.top - imageBounds.top) * scale,
+            (viewRect.right - imageBounds.left) * scale,
+            (viewRect.bottom - imageBounds.top) * scale,
+        )
+    }
+
     private fun applyPendingRestore() {
         pendingRestoreRoi?.let { saved ->
             // Map the physical image coordinates back to the scaled screen view
@@ -355,11 +430,16 @@ class StudioOverlayView @JvmOverloads constructor(
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
 
         // --- 1. DRAW THE MAIN ROI ---
-        if (hasValidRoi || (!isSubtractMode && isDrawing)) {
-            val drawMainRect = if (!isSubtractMode && isDrawing) {
-                RectF(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
-            } else {
-                roiRect
+        // Holes with no explicit crop still mean "full image minus holes". Clear
+        // imageBounds so the specimen stays visible instead of staying fully dimmed.
+        val implicitFullImage = !hasValidRoi && (holes.isNotEmpty() || (isDrawing && isSubtractMode))
+        if (hasValidRoi || (!isSubtractMode && isDrawing) || implicitFullImage) {
+            val drawMainRect = when {
+                !isSubtractMode && isDrawing -> {
+                    RectF(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
+                }
+                hasValidRoi -> roiRect
+                else -> RectF(imageBounds)
             }
 
             // Use current mode if actively drawing, otherwise use the saved mode
@@ -369,20 +449,26 @@ class StudioOverlayView @JvmOverloads constructor(
             when (modeToUse) {
                 RoiMode.RECTANGLE, RoiMode.SQUARE -> {
                     canvas.drawRect(drawMainRect, clearPaint)
-                    canvas.drawRect(drawMainRect, borderPaint)
+                    if (hasValidRoi || (!isSubtractMode && isDrawing)) {
+                        canvas.drawRect(drawMainRect, borderPaint)
+                    }
                 }
                 RoiMode.CIRCLE, RoiMode.ELLIPSE -> {
                     canvas.drawOval(drawMainRect, clearPaint)
-                    canvas.drawOval(drawMainRect, borderPaint)
+                    if (hasValidRoi || (!isSubtractMode && isDrawing)) {
+                        canvas.drawOval(drawMainRect, borderPaint)
+                    }
                 }
                 RoiMode.FREEFORM -> {
                     canvas.drawPath(pathToUse, clearPaint)
-                    canvas.drawPath(pathToUse, borderPaint)
+                    if (hasValidRoi || (!isSubtractMode && isDrawing)) {
+                        canvas.drawPath(pathToUse, borderPaint)
+                    }
                 }
             }
 
             // Draw Main ROI Handles (Only in Add Mode)
-            if (!isSubtractMode && modeToUse != RoiMode.FREEFORM) {
+            if (!isSubtractMode && modeToUse != RoiMode.FREEFORM && (hasValidRoi || isDrawing)) {
                 val r = 20f
                 canvas.drawCircle(drawMainRect.left, drawMainRect.top, r, handlePaint)
                 canvas.drawCircle(drawMainRect.right, drawMainRect.top, r, handlePaint)
