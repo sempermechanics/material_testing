@@ -275,7 +275,7 @@
             </LinearLayout>
         </ScrollView>
 
-        <!-- ============ PAGE 2: settings + run ============ -->
+        <!-- ============ PAGE 2: settings ============ -->
         <ScrollView
             android:id="@+id/scrollStepSettings"
             android:layout_width="match_parent"
@@ -357,7 +357,7 @@
                                 android:layout_width="24dp"
                                 android:layout_height="24dp"
                                 android:contentDescription="@string/region_of_interest"
-                                android:src="@drawable/ic_tune"
+                                android:src="@drawable/ic_crop"
                                 app:tint="@color/text_secondary" />
 
                             <LinearLayout
@@ -399,8 +399,76 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
+                <!-- Card: analysis mode — one setting, or a VSG study sweep -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/analysis_mode"
+                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+
+                            <View
+                                android:layout_width="0dp"
+                                android:layout_height="1dp"
+                                android:layout_weight="1" />
+
+                            <ImageButton
+                                android:id="@+id/btnSweepInfo"
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:background="?attr/selectableItemBackgroundBorderless"
+                                android:contentDescription="@string/info"
+                                android:scaleType="fitCenter"
+                                android:src="@drawable/ic_info_min"
+                                app:tint="@color/text_secondary" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/rgAnalysisMode"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            app:checkedButton="@+id/rbModeSingle"
+                            app:selectionRequired="true"
+                            app:singleSelection="true">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/rbModeSingle"
+                                style="@style/Widget.IndicVision.SegmentedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/mode_single" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/rbModeSweep"
+                                style="@style/Widget.IndicVision.SegmentedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/mode_sweep" />
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
                 <!-- Card: Analysis parameters (dedicated settings page) -->
                 <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/advancedParamsCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
 
@@ -709,7 +777,75 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Card: analysis mode — one setting, or a VSG study sweep -->
+                <!-- Compute + results -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCalculateFullField"
+                    style="@style/Widget.IndicVision.Button.Cta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/run_analysis"
+                    android:enabled="false" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingTop="14dp"
+                    android:gravity="center">
+
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/pbAnalysis"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone"
+                        app:trackColor="@color/sky_container"
+                        app:indicatorColor="@color/sky_primary"
+                        app:trackCornerRadius="4dp"
+                        android:max="100" />
+
+                    <TextView
+                        android:id="@+id/tvTimer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/elapsed_time_0s"
+                        android:visibility="gone"
+                        android:textColor="@color/text_secondary"
+                        android:textStyle="italic" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvStaticResult"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/result"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary"
+                    android:textAlignment="center"
+                    android:layout_marginTop="12dp"
+                    android:paddingBottom="20dp" />
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- ============ PAGE 3: parameter sweep setup ============ -->
+        <ScrollView
+            android:id="@+id/scrollStepSweep"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/sweepColumn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <!-- Collapsible: sweep settings -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
@@ -720,66 +856,65 @@
                         android:orientation="vertical">
 
                         <LinearLayout
+                            android:id="@+id/sweepSettingsHeader"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:background="?attr/selectableItemBackground"
                             android:gravity="center_vertical"
-                            android:orientation="horizontal">
+                            android:orientation="horizontal"
+                            android:paddingBottom="4dp">
 
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/analysis_mode"
-                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                            <ImageView
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:contentDescription="@string/sweep_settings"
+                                android:src="@drawable/ic_tune" />
 
-                            <View
+                            <LinearLayout
                                 android:layout_width="0dp"
-                                android:layout_height="1dp"
-                                android:layout_weight="1" />
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="10dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
 
-                            <ImageButton
-                                android:id="@+id/btnSweepInfo"
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
-                                android:background="?attr/selectableItemBackgroundBorderless"
-                                android:contentDescription="@string/info"
-                                android:scaleType="fitCenter"
-                                android:src="@drawable/ic_info_min"
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/sweep_settings"
+                                    android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+
+                                <TextView
+                                    android:id="@+id/tvSweepSettingsSummary"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/sweep_settings_summary"
+                                    android:textColor="@color/text_secondary"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+
+                            <ImageView
+                                android:id="@+id/ivSweepSettingsChevron"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:contentDescription="@string/sweep_settings"
+                                android:src="@android:drawable/arrow_down_float"
                                 app:tint="@color/text_secondary" />
                         </LinearLayout>
-
-                        <com.google.android.material.button.MaterialButtonToggleGroup
-                            android:id="@+id/rgAnalysisMode"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            app:checkedButton="@+id/rbModeSingle"
-                            app:selectionRequired="true"
-                            app:singleSelection="true">
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/rbModeSingle"
-                                style="@style/Widget.IndicVision.SegmentedButton"
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="@string/mode_single" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/rbModeSweep"
-                                style="@style/Widget.IndicVision.SegmentedButton"
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="@string/mode_sweep" />
-                        </com.google.android.material.button.MaterialButtonToggleGroup>
 
                         <LinearLayout
                             android:id="@+id/sweepBody"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
-                            android:paddingTop="10dp"
+                            android:paddingTop="8dp"
                             android:visibility="gone">
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:layout_marginBottom="8dp"
+                                android:background="@color/surface_outline" />
+
 
                             <TextView
                                 android:layout_width="match_parent"
@@ -1061,59 +1196,6 @@
                                 android:valueFrom="2"
                                 android:valueTo="6" />
 
-                            <!-- Line cut axis -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="10dp"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="@string/line_cut_axis"
-                                    android:textColor="@color/text_primary"
-                                    android:textStyle="bold" />
-
-                                <ImageButton
-                                    android:id="@+id/btnLineCutInfo"
-                                    android:layout_width="18dp"
-                                    android:layout_height="18dp"
-                                    android:layout_marginStart="6dp"
-                                    android:background="?attr/selectableItemBackgroundBorderless"
-                                    android:contentDescription="@string/info"
-                                    android:scaleType="fitCenter"
-                                    android:src="@drawable/ic_info_min"
-                                    app:tint="@color/text_secondary" />
-                            </LinearLayout>
-
-                            <com.google.android.material.button.MaterialButtonToggleGroup
-                                android:id="@+id/rgLineCutAxis"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="6dp"
-                                app:checkedButton="@+id/rbAxisX"
-                                app:selectionRequired="true"
-                                app:singleSelection="true">
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/rbAxisX"
-                                    style="@style/Widget.IndicVision.SegmentedButton"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/axis_x" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/rbAxisY"
-                                    style="@style/Widget.IndicVision.SegmentedButton"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/axis_y" />
-                            </com.google.android.material.button.MaterialButtonToggleGroup>
-
-                            <!-- The single frame every combination is solved against -->
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnPickSweepFrame"
                                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -1122,68 +1204,121 @@
                                 android:layout_marginTop="12dp"
                                 android:textColor="@color/sky_primary"
                                 tools:text="Frame 12" />
-
-                            <TextView
-                                android:id="@+id/tvSweepPlan"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="10dp"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="12sp"
-                                tools:text="8 analyses" />
                         </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Compute + results -->
+                <!-- Always visible: planned lattice -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/planned_lattice_heading"
+                            android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+
+                        <com.rafad.indicvisiondic.ui.analysis.VsgLatticeView
+                            android:id="@+id/sweepLatticePreview"
+                            android:layout_width="match_parent"
+                            android:layout_height="260dp"
+                            android:layout_marginTop="10dp" />
+
+                        <TextView
+                            android:id="@+id/tvSweepPlan"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            tools:text="8 analyses" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Always visible: line-cut axis preview -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/line_cut_preview_heading"
+                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+
+                            <ImageButton
+                                android:id="@+id/btnLineCutInfo"
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:layout_marginStart="6dp"
+                                android:background="?attr/selectableItemBackgroundBorderless"
+                                android:contentDescription="@string/info"
+                                android:scaleType="fitCenter"
+                                android:src="@drawable/ic_info_min"
+                                app:tint="@color/text_secondary" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/rgLineCutAxis"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            app:checkedButton="@+id/rbAxisX"
+                            app:selectionRequired="true"
+                            app:singleSelection="true">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/rbAxisX"
+                                style="@style/Widget.IndicVision.SegmentedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/axis_x" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/rbAxisY"
+                                style="@style/Widget.IndicVision.SegmentedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/axis_y" />
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <com.rafad.indicvisiondic.ui.analysis.LineCutPreviewView
+                            android:id="@+id/lineCutPreview"
+                            android:layout_width="match_parent"
+                            android:layout_height="220dp"
+                            android:layout_marginTop="10dp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnCalculateFullField"
+                    android:id="@+id/btnRunSweep"
                     style="@style/Widget.IndicVision.Button.Cta"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="@string/run_analysis"
-                    android:enabled="false" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:paddingTop="14dp"
-                    android:gravity="center">
-
-                    <com.google.android.material.progressindicator.LinearProgressIndicator
-                        android:id="@+id/pbAnalysis"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:visibility="gone"
-                        app:trackColor="@color/sky_container"
-                        app:indicatorColor="@color/sky_primary"
-                        app:trackCornerRadius="4dp"
-                        android:max="100" />
-
-                    <TextView
-                        android:id="@+id/tvTimer"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/elapsed_time_0s"
-                        android:visibility="gone"
-                        android:textColor="@color/text_secondary"
-                        android:textStyle="italic" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tvStaticResult"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/result"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary"
-                    android:textAlignment="center"
-                    android:layout_marginTop="12dp"
-                    android:paddingBottom="20dp" />
+                    android:enabled="false"
+                    android:text="@string/run_sweep" />
             </LinearLayout>
         </ScrollView>
     </FrameLayout>

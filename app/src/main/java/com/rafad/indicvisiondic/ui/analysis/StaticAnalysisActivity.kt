@@ -141,6 +141,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     // Parameter-sweep controls (see [VsgStudy])
     private lateinit var rgAnalysisMode: MaterialButtonToggleGroup
+    private lateinit var advancedParamsCard: View
     private lateinit var sweepBody: View
     private lateinit var rangeSubset: RangeSlider
     private lateinit var sliderVsgMax: Slider
@@ -156,6 +157,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var rgLineCutAxis: MaterialButtonToggleGroup
     private lateinit var btnPickSweepFrame: Button
     private lateinit var tvSweepPlan: TextView
+    private lateinit var lineCutPreview: LineCutPreviewView
+    private lateinit var sweepLatticePreview: VsgLatticeView
+    private lateinit var btnRunSweep: Button
 
     /** True while a suggestion/clamp is driving the sweep sliders, not the user. */
     private var bindingSweep = false
@@ -168,9 +172,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
      */
     private var sweepUserModified = false
 
-    // Two-step wizard: page 1 = load images, page 2 = settings + run
+    // Three-step wizard: images → settings → (sweep setup when Parameter sweep)
     private lateinit var scrollStepImages: View
     private lateinit var scrollStepSettings: View
+    private lateinit var scrollStepSweep: View
     private lateinit var btnNext: Button
     private lateinit var btnBack: Button
 
@@ -189,9 +194,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     if (isProcessing) {
                         // Block the back button completely if the C++ engine is running
                         Toast.makeText(this@StaticAnalysisActivity, R.string.analysis_running_back_blocked, Toast.LENGTH_SHORT).show()
-                    } else if (viewModel.wizardStep == 2) {
-                        // On the settings page, back returns to the images page
-                        goToStep(1, animate = true)
+                    } else if (viewModel.wizardStep > 1) {
+                        goToStep(viewModel.wizardStep - 1, animate = true)
                     } else if (viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty()) {
                         AlertDialog.Builder(this@StaticAnalysisActivity)
                             .setTitle(R.string.exit_indic_title)
@@ -249,17 +253,25 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvSubsetHint = findViewById(R.id.tvSubsetHint)
         setupParameterControls()
 
-        // --- Two-step wizard wiring ---
+        // --- Wizard wiring: images → settings → optional sweep page ---
         scrollStepImages = findViewById(R.id.scrollStepImages)
         scrollStepSettings = findViewById(R.id.scrollStepSettings)
+        scrollStepSweep = findViewById(R.id.scrollStepSweep)
         btnNext = findViewById(R.id.btnNext)
         btnBack = findViewById(R.id.btnBack)
 
         // After the wizard views exist: the sweep controls call checkReady().
         setupSweepControls()
 
-        btnNext.setOnClickListener { goToStep(2, animate = true) }
-        btnBack.setOnClickListener { goToStep(1, animate = true) }
+        btnNext.setOnClickListener {
+            when (viewModel.wizardStep) {
+                1 -> goToStep(2, animate = true)
+                2 -> if (viewModel.sweepMode) goToStep(3, animate = true)
+            }
+        }
+        btnBack.setOnClickListener {
+            if (viewModel.wizardStep > 1) goToStep(viewModel.wizardStep - 1, animate = true)
+        }
         goToStep(viewModel.wizardStep, animate = false)
 
         // Hand-off from Home's media picker: the selection type already
@@ -342,6 +354,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         tvInstruction.text = "✅ ROI Set: ${viewModel.roiW} x ${viewModel.roiH} px"
                     }
 
+                    refreshLineCutPreview()
                     checkReady()
                     requestSubsetRecommendation()
                 }
@@ -406,6 +419,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 viewModel.hasCustomRoi = false
                 viewModel.roiMaskBytes = null
                 tvInstruction.text = "✅ Using Full Image"
+                refreshLineCutPreview()
                 checkReady()
                 requestSubsetRecommendation()
             }
@@ -414,7 +428,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnCalculateFullField.setOnClickListener {
             // A field still holding focus has not committed its typed value yet.
             commitParamFields()
-            if (viewModel.sweepMode) startVsgSweep() else startBatchAnalysis()
+            if (!viewModel.sweepMode) startBatchAnalysis()
         }
     }
 
@@ -1367,6 +1381,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun setupSweepControls() {
         rgAnalysisMode = findViewById(R.id.rgAnalysisMode)
+        advancedParamsCard = findViewById(R.id.advancedParamsCard)
         sweepBody = findViewById(R.id.sweepBody)
         rangeSubset = findViewById(R.id.rangeSubset)
         sliderVsgMax = findViewById(R.id.sliderVsgMax)
@@ -1382,21 +1397,28 @@ class StaticAnalysisActivity : AppCompatActivity() {
         rgLineCutAxis = findViewById(R.id.rgLineCutAxis)
         btnPickSweepFrame = findViewById(R.id.btnPickSweepFrame)
         tvSweepPlan = findViewById(R.id.tvSweepPlan)
+        lineCutPreview = findViewById(R.id.lineCutPreview)
+        sweepLatticePreview = findViewById(R.id.sweepLatticePreview)
+        btnRunSweep = findViewById(R.id.btnRunSweep)
 
         rgAnalysisMode.check(if (viewModel.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
         rgAnalysisMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
             viewModel.sweepMode = checkedId == R.id.rbModeSweep
-            sweepBody.visibility = if (viewModel.sweepMode) View.VISIBLE else View.GONE
-            btnCalculateFullField.setText(
-                if (viewModel.sweepMode) R.string.run_sweep else R.string.run_analysis,
-            )
-            refreshSweepPlan()
+            // Leaving sweep mode while on the sweep page returns to settings.
+            if (!viewModel.sweepMode && viewModel.wizardStep == 3) {
+                goToStep(2, animate = true)
+            } else {
+                applyAnalysisModeUi()
+                refreshSweepPlan()
+            }
         }
 
         rgLineCutAxis.check(if (viewModel.lineCutHorizontal) R.id.rbAxisX else R.id.rbAxisY)
         rgLineCutAxis.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isChecked) viewModel.lineCutHorizontal = checkedId == R.id.rbAxisX
+            if (!isChecked) return@addOnButtonCheckedListener
+            viewModel.lineCutHorizontal = checkedId == R.id.rbAxisX
+            refreshLineCutPreview()
         }
 
         btnPickSweepFrame.setOnClickListener {
@@ -1406,14 +1428,39 @@ class StaticAnalysisActivity : AppCompatActivity() {
             }
         }
 
+        btnRunSweep.setOnClickListener {
+            commitParamFields()
+            startVsgSweep()
+        }
+
+        val sweepSettingsBody = sweepBody
+        val sweepChevron = findViewById<ImageView>(R.id.ivSweepSettingsChevron)
+        findViewById<View>(R.id.sweepSettingsHeader).setOnClickListener {
+            val expanded = sweepSettingsBody.visibility == View.VISIBLE
+            sweepSettingsBody.visibility = if (expanded) View.GONE else View.VISIBLE
+            sweepChevron.rotation = if (expanded) 0f else 180f
+        }
+
         wireSweepControls()
         wireSweepInfoButtons()
 
-        sweepBody.visibility = if (viewModel.sweepMode) View.VISIBLE else View.GONE
+        applyAnalysisModeUi()
         sliderSubsetSamples.value = viewModel.subsetSamples.toFloat()
         sliderVsgSamples.value = viewModel.vsgSamples.toFloat()
         sliderStepDepth.value = viewModel.stepDenominator.toFloat()
         seedSweepSuggestions()
+    }
+
+    /**
+     * Single setting keeps Advanced + Compute on page 2. Parameter sweep hides
+     * both and routes through Next → the sweep setup page.
+     */
+    private fun applyAnalysisModeUi() {
+        val sweep = viewModel.sweepMode
+        advancedParamsCard.visibility = if (sweep) View.GONE else View.VISIBLE
+        btnCalculateFullField.visibility = if (sweep) View.GONE else View.VISIBLE
+        updateWizardChrome()
+        checkReady()
     }
 
     // ------------------------------------------------------------------
@@ -1711,7 +1758,62 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 getString(R.string.sweep_plan_subset_too_big_fmt, maxSubsetForRoi())
             else -> getString(R.string.sweep_plan_empty)
         }
+        refreshLatticePreview(plan)
+        refreshLineCutPreview()
         checkReady()
+    }
+
+    /** Planned sweep lattice: every node drawn as filled (not yet run). */
+    private fun refreshLatticePreview(plan: List<VsgStudy.Point>) {
+        if (!::sweepLatticePreview.isInitialized) return
+        sweepLatticePreview.onNodeClick = null
+        sweepLatticePreview.setNodes(
+            plan.map { point ->
+                VsgLatticeView.Node(
+                    subset = point.subset,
+                    step = point.step,
+                    window = point.strainWindow,
+                    vsg = point.vsg,
+                    solved = true,
+                )
+            },
+        )
+    }
+
+    /** Centre-line cut over the reference image and current ROI. */
+    private fun refreshLineCutPreview() {
+        if (!::lineCutPreview.isInitialized) return
+        val w = viewModel.realRefWidth
+        val h = viewModel.realRefHeight
+        if (w <= 0 || h <= 0) {
+            lineCutPreview.setPreview(
+                bitmap = null,
+                imageW = 1,
+                imageH = 1,
+                roiX = 0,
+                roiY = 0,
+                roiW = 1,
+                roiH = 1,
+                horizontal = viewModel.lineCutHorizontal,
+                maskBytes = null,
+            )
+            return
+        }
+        val roiX = if (viewModel.hasCustomRoi) viewModel.roiX else 0
+        val roiY = if (viewModel.hasCustomRoi) viewModel.roiY else 0
+        val roiW = if (viewModel.hasCustomRoi && viewModel.roiW > 0) viewModel.roiW else w
+        val roiH = if (viewModel.hasCustomRoi && viewModel.roiH > 0) viewModel.roiH else h
+        lineCutPreview.setPreview(
+            bitmap = refPreviewBmp,
+            imageW = w,
+            imageH = h,
+            roiX = roiX,
+            roiY = roiY,
+            roiW = roiW,
+            roiH = roiH,
+            horizontal = viewModel.lineCutHorizontal,
+            maskBytes = viewModel.roiMaskBytes,
+        )
     }
 
     /** "N analyses = X subset × Y VSG · step 1/D · subset 41–61 px" for a plan. */
@@ -1887,22 +1989,29 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Wizard navigation: page 1 (images)  page 2 (settings + run)
+    // Wizard navigation: page 1 (images) → page 2 (settings) → page 3 (sweep)
     // ------------------------------------------------------------------
     private fun goToStep(step: Int, animate: Boolean) {
-        val forward = step == 2
-        viewModel.wizardStep = step
+        val previous = viewModel.wizardStep
+        // Sweep page only exists in parameter-sweep mode.
+        val target = when {
+            step >= 3 && !viewModel.sweepMode -> 2
+            step < 1 -> 1
+            else -> step.coerceAtMost(if (viewModel.sweepMode) 3 else 2)
+        }
+        viewModel.wizardStep = target
 
         // Reaching the settings page counts as reviewing the parameters —
         // they are all visible here — which satisfies the Compute gate.
-        if (forward) viewModel.settingsReviewed = true
+        if (target >= 2) viewModel.settingsReviewed = true
 
-        val showing = if (forward) scrollStepSettings else scrollStepImages
-        val hiding = if (forward) scrollStepImages else scrollStepSettings
-
-        hiding.visibility = View.GONE
-        showing.visibility = View.VISIBLE
-        if (animate) {
+        val pages = listOf(scrollStepImages, scrollStepSettings, scrollStepSweep)
+        val showing = pages[target - 1]
+        pages.forEach { page ->
+            page.visibility = if (page === showing) View.VISIBLE else View.GONE
+        }
+        if (animate && previous != target) {
+            val forward = target > previous
             showing.startAnimation(
                 android.view.animation.AnimationUtils.loadAnimation(
                     this,
@@ -1912,20 +2021,47 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).subtitle =
-            getString(R.string.step_of_fmt, step)
-        if (forward) {
+            getString(R.string.step_of_fmt, target, if (viewModel.sweepMode) 3 else 2)
+        if (target == 2) {
             refreshInputsCard()
             updateRoiSummary()
             // Cheap no-op when the reference/ROI have not changed since the
             // last measurement; covers inputs that arrived before this page.
             requestSubsetRecommendation()
         }
+        if (target == 3) {
+            refreshSweepPlan()
+        }
 
-        // Bottom nav: Next drives page 1, Back appears on page 2
-        btnNext.visibility = if (forward) View.GONE else View.VISIBLE
-        btnBack.visibility = if (forward) View.VISIBLE else View.GONE
-
+        updateWizardChrome()
         checkReady()
+    }
+
+    /** Bottom nav labels and visibility for the current wizard step + mode. */
+    private fun updateWizardChrome() {
+        if (!::btnNext.isInitialized) return
+        val step = viewModel.wizardStep
+        val sweep = viewModel.sweepMode
+        when (step) {
+            1 -> {
+                btnNext.visibility = View.VISIBLE
+                btnNext.setText(R.string.next_settings)
+                btnBack.visibility = View.GONE
+            }
+            2 -> {
+                btnBack.visibility = View.VISIBLE
+                if (sweep) {
+                    btnNext.visibility = View.VISIBLE
+                    btnNext.setText(R.string.next_sweep)
+                } else {
+                    btnNext.visibility = View.GONE
+                }
+            }
+            else -> {
+                btnBack.visibility = View.VISIBLE
+                btnNext.visibility = View.GONE
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -1967,7 +2103,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun checkReady() {
         val ready = viewModel.isReadyToCompute()
 
-        // Page-1 gate: Next stays disabled + visibly faded until both images are set
+        // Page-1 / page-2 (sweep) gate: Next stays disabled + faded until images are set
         val nextEnabled = ready && !isProcessing
         btnNext.isEnabled = nextEnabled
         btnNext.alpha = if (nextEnabled) 1.0f else 0.4f
@@ -1982,16 +2118,26 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val sizeError = viewModel.frameSizeError
         if (sizeError != null) tvResult.text = sizeError
 
-        // Page-2 gate: Compute needs images AND the settings page visited.
-        // A VSG study additionally needs a ladder to walk and two frames to
-        // walk it on (the zero-force and highest-gradient images).
+        // Single-setting Compute: images + settings visited.
         val computeEnabled = ready &&
             viewModel.settingsReviewed &&
             !isProcessing &&
             sizeError == null &&
-            (!viewModel.sweepMode || currentPlan().isNotEmpty())
+            !viewModel.sweepMode
         btnCalculateFullField.isEnabled = computeEnabled
         btnCalculateFullField.alpha = if (computeEnabled) 1.0f else 0.4f
+
+        // Sweep Run: same gates plus a non-empty planned lattice.
+        val sweepEnabled = ready &&
+            viewModel.settingsReviewed &&
+            !isProcessing &&
+            sizeError == null &&
+            viewModel.sweepMode &&
+            currentPlan().isNotEmpty()
+        if (::btnRunSweep.isInitialized) {
+            btnRunSweep.isEnabled = sweepEnabled
+            btnRunSweep.alpha = if (sweepEnabled) 1.0f else 0.4f
+        }
 
         btnDefineRoi.isEnabled = (viewModel.refBytes != null) && !isProcessing
         btnBack.isEnabled = !isProcessing
@@ -2066,6 +2212,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 viewModel.roiY,
             )
         }
+        refreshLineCutPreview()
     }
 
     /** Inline, non-blocking JPEG accuracy warning. */

@@ -25,6 +25,7 @@
     <color name="text_on_primary">#FFFFFF</color>
 
     <!-- Semantic -->
+    <color name="semantic_success">#4CAF50</color>
     <color name="semantic_danger">#E53935</color>
     <color name="semantic_warning">#F5A623</color>
 

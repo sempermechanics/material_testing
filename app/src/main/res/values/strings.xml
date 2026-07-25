@@ -236,6 +236,11 @@
     <string name="sweep_plan_empty">No combination fits this ceiling — raise Max VSG or lower the subset range.</string>
     <string name="sweep_plan_subset_too_big_fmt">Subset range starts above what this image and ROI can hold (max %1$d px). Lower the minimum subset, or draw a larger region of interest.</string>
     <string name="run_sweep">Run parameter sweep</string>
+    <string name="next_sweep">Next: Sweep →</string>
+    <string name="sweep_settings">Sweep settings</string>
+    <string name="sweep_settings_summary">Subset range, Max VSG, samples, step, frame</string>
+    <string name="line_cut_preview_heading">Line cut preview</string>
+    <string name="planned_lattice_heading">Planned lattice</string>
     <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · VSG %5$d</string>
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d · VSG %4$d</string>
     <string name="sweep_failed">The parameter sweep could not run.</string>
@@ -283,9 +288,9 @@
     <string name="jpeg_warning_inline">JPEG detected — lossless formats improve accuracy</string>
     <string name="next_reason_ref">add a reference image to continue</string>
     <string name="next_reason_def">add at least one deformed frame to continue</string>
-    <string name="run_analysis">Run analysis</string>
+    <string name="run_analysis">Compute</string>
     <string name="new_analysis_title">New analysis</string>
-    <string name="step_of_fmt">Step %1$d of 2</string>
+    <string name="step_of_fmt">Step %1$d of %2$d</string>
     <string name="reference_meta_fmt">Reference · %1$d × %2$d px</string>
     <string name="def_count_fmt">%1$d deformed frames</string>
     <string name="inputs_meta_fmt">Reference · %1$d deformed frames</string>
