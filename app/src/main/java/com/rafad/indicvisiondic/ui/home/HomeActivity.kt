@@ -34,6 +34,7 @@ import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
 import com.rafad.indicvisiondic.ui.auth.AuthActivity
 import com.rafad.indicvisiondic.ui.auth.SplashActivity
+import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.common.MediaSourceChooser
 import com.rafad.indicvisiondic.ui.limit.SessionLimitActivity
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
@@ -76,6 +77,18 @@ class HomeActivity : AppCompatActivity() {
         override fun handleOnBackPressed() = clearSelection()
     }
 
+    /** Confirm before leaving Home (and the app). Selection-mode back is separate. */
+    private val exitAppCallback = object : androidx.activity.OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            MaterialAlertDialogBuilder(this@HomeActivity)
+                .setTitle(R.string.exit_indic_title)
+                .setMessage(R.string.exit_indic_message)
+                .setPositiveButton(R.string.exit) { _, _ -> finish() }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+    }
+
     /** Source A: the system Photo Picker (gallery / Google Photos). */
     private val pickReference =
         registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -111,8 +124,10 @@ class HomeActivity : AppCompatActivity() {
         setContentView(R.layout.activity_home)
 
         // Edge-to-edge (enforced on API 35+): drop the header below the status
-        // bar, otherwise the bar swallows taps on the settings gear.
-        com.rafad.indicvisiondic.ui.common.Insets.padTop(findViewById(R.id.homeTopBar))
+        // bar, otherwise the bar swallows taps on the settings gear. The
+        // selection bar replaces the title row, so it needs the same inset.
+        Insets.padTop(findViewById(R.id.homeTopBar))
+        Insets.padTop(findViewById(R.id.homeSelectionBar))
 
         list = findViewById(R.id.sessionList)
         emptyState = findViewById(R.id.emptyState)
@@ -155,8 +170,9 @@ class HomeActivity : AppCompatActivity() {
             adapter.selectedRecords().singleOrNull()?.let { promptRename(it) }
         }
 
-        // Back leaves selection mode before it leaves the screen. Enabled only
-        // while something is selected, so normal back still exits Home.
+        // Exit confirm is always registered; selection back is layered on top and
+        // enabled only while something is selected (LIFO: last added runs first).
+        onBackPressedDispatcher.addCallback(this, exitAppCallback)
         onBackPressedDispatcher.addCallback(this, backCallback)
 
         maybeShowBetaNotice()

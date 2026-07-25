@@ -198,8 +198,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         goToStep(viewModel.wizardStep - 1, animate = true)
                     } else if (viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty()) {
                         AlertDialog.Builder(this@StaticAnalysisActivity)
-                            .setTitle(R.string.exit_indic_title)
-                            .setMessage(R.string.exit_indic_message)
+                            .setTitle(R.string.exit_analysis_title)
+                            .setMessage(R.string.exit_analysis_message)
                             .setPositiveButton(R.string.exit) { _, _ ->
                                 finish()
                             }

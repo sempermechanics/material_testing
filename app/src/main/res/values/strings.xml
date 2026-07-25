@@ -41,8 +41,10 @@
 
     <!-- Static analysis -->
     <string name="analysis_running_back_blocked">Analysis running. Please wait or cancel first.</string>
-    <string name="exit_indic_title">Exit inDIC engine?</string>
-    <string name="exit_indic_message">Are you sure you want to leave? All uncalculated setup and ROI definitions will be lost.</string>
+    <string name="exit_indic_title">Exit inDIC?</string>
+    <string name="exit_indic_message">Are you sure you want to exit the app?</string>
+    <string name="exit_analysis_title">Exit analysis?</string>
+    <string name="exit_analysis_message">Are you sure you want to leave? All uncalculated setup and ROI definitions will be lost.</string>
     <string name="no_images_selected">No images selected</string>
     <string name="failed_save_temp_file">Failed to save temporary file</string>
     <string name="load_image_first">Load an image first.</string>
