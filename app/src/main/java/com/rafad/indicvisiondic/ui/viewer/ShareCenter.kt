@@ -14,6 +14,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.rafad.indicvisiondic.DicResult
 import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.report.AnalysisCsvWriter
 import com.rafad.indicvisiondic.report.PdfReportGenerator
 import com.rafad.indicvisiondic.report.ReportBuilder
 import com.rafad.indicvisiondic.report.VisualizationEngine
@@ -164,14 +165,19 @@ class ShareCenter(private val host: ResultViewerActivity) {
     // ── Generators ───────────────────────────────────────────────────────
 
     /** Annotated PNG of one field for one frame's data. */
-    private fun renderAnnotated(data: FloatArray, dataIndex: Int, typeString: String): Bitmap {
+    private fun renderAnnotated(
+        data: FloatArray,
+        dataIndex: Int,
+        typeString: String,
+        frameIndex: Int,
+    ): Bitmap {
         val s = snap!!
         val (heatmap, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
             data,
             s.imgW,
             s.imgH,
             dataIndex,
-            s.step,
+            s.stepAt(frameIndex),
             null,
             null,
         )
@@ -199,7 +205,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
     private fun currentPhoto(): File {
         val s = snap!!
         return writePng(
-            renderAnnotated(s.data, s.dataIndex, s.typeString),
+            renderAnnotated(s.data, s.dataIndex, s.typeString, s.frameIndex),
             "inDIC_${s.typeString}_frame${s.frameIndex + 1}.png",
         )
     }
@@ -208,43 +214,51 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val s = snap!!
         return FIELDS.map { (label, idx) ->
             writePng(
-                renderAnnotated(s.data, idx, label),
+                renderAnnotated(s.data, idx, label, s.frameIndex),
                 "inDIC_${label}_frame${s.frameIndex + 1}.png",
             )
         }
     }
 
+    /**
+     * One CSV covering every frame's solved points, via the shared
+     * [AnalysisCsvWriter] the cloud upload uses too. A sweep leads each row with
+     * its settings columns; an ordinary analysis leads with the image name.
+     */
     private fun batchCsv(): File {
         val s = snap!!
-        val f = File(shareDir(), "inDIC_analysis_data.csv")
-        f.bufferedWriter().use { w ->
-            w.write("Image_Name,X,Y,U_Displacement,V_Displacement,Exx_Strain,Eyy_Strain,Exy_Shear,Correlation\n")
-            for ((index, file) in s.batchFiles.withIndex()) {
-                val data = DicResult.decodeDatBytes(file.readBytes()) ?: continue
-                val name = s.defNames.getOrNull(index) ?: "Frame_${index + 1}"
-                var i = 0
-                while (i < data.size) {
-                    if (DicResult.isSolvedPoint(data[i + DicResult.IDX_ZNSSD])) {
-                        w.write("$name,${DicResult.csvRow(data, i)}\n")
-                    }
-                    i += DicResult.STRIDE
-                }
-            }
+        val sweep = s.stepPerFrame != null
+        // A sweep ran every combination against the one image; a batch has one
+        // image per frame.
+        val sweepImage = s.defImagePaths.firstOrNull()?.let { File(it).name } ?: "image"
+        val frames = s.batchFiles.mapIndexed { index, file ->
+            AnalysisCsvWriter.Frame(
+                image = if (sweep) sweepImage else s.defNames.getOrNull(index) ?: "Frame_${index + 1}",
+                subset = s.subsetPerFrame?.getOrNull(index) ?: 0,
+                step = s.stepPerFrame?.getOrNull(index) ?: 0,
+                strainWindow = s.strainWindowPerFrame?.getOrNull(index) ?: 0,
+                data = { DicResult.decodeDatBytes(file.readBytes()) },
+            )
         }
+        val f = File(shareDir(), "inDIC_analysis_data.csv")
+        AnalysisCsvWriter.write(f, sweep, frames)
         return f
     }
 
-    /** One PDF covering every frame: cover + chapter per frame + telemetry. */
+    /**
+     * One PDF holding every frame's full report, concatenated: each frame gets
+     * the same cover / field-pages structure a single-frame report has, and one
+     * telemetry page closes the document.
+     */
     private suspend fun allFramesPdf(): File {
         val s = snap!!
-        val cover = s.buildReport() ?: error("report data unavailable")
         val f = File(shareDir(), "inDIC_report_all_frames.pdf")
         f.outputStream().use { out ->
             PdfReportGenerator.generateBatch(
-                cover = cover,
                 frameCount = s.batchFiles.size,
-                chapterAt = { index -> buildChapter(index) },
+                dataAt = { index -> frameReport(index) },
                 outputStream = out,
+                frameTitle = { index -> frameTitle(index) },
             ).collect { progress ->
                 // generateBatch reports failures as a Flow event rather than
                 // throwing; surface it so the share job actually fails (and logs)
@@ -252,28 +266,27 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 if (progress is PdfReportGenerator.Progress.Error) throw progress.ex
             }
         }
-        cover.fieldResults.forEach { it.bakedHeatmap.recycle() }
-        cover.znssdHeatmap.recycle()
         return f
     }
 
-    private fun buildChapter(index: Int): PdfReportGenerator.FrameChapter {
+    /**
+     * The frame's own report data. Built one frame at a time — the generator
+     * recycles each frame's bitmaps before asking for the next.
+     */
+    private fun frameReport(index: Int): com.rafad.indicvisiondic.report.ReportData? {
         val s = snap!!
-        val data = DicResult.decodeDatBytes(s.batchFiles[index].readBytes())
-            ?: return PdfReportGenerator.FrameChapter("Frame ${index + 1} (unreadable)", null, emptyList())
-        val name = s.defNames.getOrNull(index) ?: "Frame_${index + 1}"
-        val image = renderAnnotated(data, s.dataIndex, s.typeString)
-        val rows = FIELDS.map { (label, idx) ->
-            val stats = DicResult.fieldStats(data, idx) ?: floatArrayOf(0f, 0f, 0f)
-            val unit = if (DicResult.isStrainFieldIndex(idx)) "mε" else "px"
-            listOf(
-                "$label [$unit]",
-                ReportBuilder.formatMetric(stats[0]),
-                ReportBuilder.formatMetric(stats[1]),
-                ReportBuilder.formatMetric(stats[2]),
-            )
+        val data = DicResult.decodeDatBytes(s.batchFiles[index].readBytes()) ?: return null
+        return s.buildReportAt(index, data)
+    }
+
+    private fun frameTitle(index: Int): String {
+        val s = snap!!
+        val name = s.defNames.getOrNull(index)?.takeIf { it.isNotBlank() }
+        return if (name == null) {
+            "DIC Analysis Report — Frame ${index + 1}"
+        } else {
+            "DIC Analysis Report — $name"
         }
-        return PdfReportGenerator.FrameChapter(name, image, rows)
     }
 
     /**
@@ -344,7 +357,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             for ((label, idx) in FIELDS) {
                 var bmp: Bitmap? = null
                 try {
-                    bmp = renderAnnotated(data, idx, label)
+                    bmp = renderAnnotated(data, idx, label, index)
                     zip.putNextEntry(ZipEntry("$folder/inDIC_$label.png"))
                     bmp.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, zip)
                     zip.closeEntry()
@@ -367,17 +380,38 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val imgW: Int,
         val imgH: Int,
         val step: Int,
+        /**
+         * Per-frame step sizes for a parameter sweep, where each frame is a
+         * different settings combination. Null for an ordinary analysis, whose
+         * frames all share [step]. Its non-null-ness marks a sweep, which the
+         * CSV export splits into subset/step/window/VSG columns.
+         */
+        val stepPerFrame: IntArray?,
+        /** Per-frame subset sizes for a sweep; index-aligned with the frames. */
+        val subsetPerFrame: IntArray?,
+        /** Per-frame strain windows for a sweep; index-aligned with the frames. */
+        val strainWindowPerFrame: IntArray?,
         val dataIndex: Int,
         val typeString: String,
         val baseImage: Bitmap,
         val refImagePath: String?,
         val defImagePaths: List<String>,
-        val buildReport: () -> com.rafad.indicvisiondic.report.ReportData?,
-    )
+        /**
+         * Report data for one frame, given that frame's index and decoded
+         * field. Index-driven so an all-frames report can build each frame's
+         * own cover — its parameters and its deformed image — rather than
+         * reusing the one on screen.
+         */
+        val buildReportAt: (Int, FloatArray) -> com.rafad.indicvisiondic.report.ReportData?,
+    ) {
+        /** Grid pitch of frame [index] — what rendering that frame depends on. */
+        fun stepAt(index: Int): Int = stepPerFrame?.getOrNull(index) ?: step
+    }
 
     private companion object {
         const val HEATMAP_ALPHA = 180
         const val PNG_QUALITY = 100
+
         val FIELDS = listOf(
             "U" to DicResult.IDX_U,
             "V" to DicResult.IDX_V,

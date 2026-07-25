@@ -284,14 +284,33 @@ class HomeActivity : AppCompatActivity() {
                 .show()
             return
         }
-        val intent = Intent(this, ResultViewerActivity::class.java).apply {
+        // A sweep session opens on the interactive lattice, which forwards these
+        // same extras to the result viewer when a node is tapped.
+        val target = if (record.isSweep) {
+            com.rafad.indicvisiondic.ui.analysis.VsgLatticeActivity::class.java
+        } else {
+            ResultViewerActivity::class.java
+        }
+        val intent = Intent(this, target).apply {
             putExtra(DicKeys.IMG_W, record.imgW)
             putExtra(DicKeys.IMG_H, record.imgH)
             putExtra(DicKeys.STEP, record.step)
             putExtra(DicKeys.REF_NAME, record.refName)
             putExtra(DicKeys.REF_PATH, record.refPath)
             putExtra(DicKeys.BATCH_DIR_PATH, record.sessionDir)
-            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(record.defNames))
+            // A sweep names its frames after the combination behind them, and
+            // needs each frame's own settings to render and describe it.
+            val frameNames = if (record.isSweep) record.sweepLabels else record.defNames
+            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(frameNames))
+            if (record.isSweep) {
+                putExtra(DicKeys.SWEEP_SUBSETS, record.sweepSubsets.toIntArray())
+                putExtra(DicKeys.SWEEP_STEPS, record.sweepSteps.toIntArray())
+                putExtra(DicKeys.SWEEP_STRAIN_WINS, record.sweepStrainWindows.toIntArray())
+                putExtra(DicKeys.LINE_CUT_HORIZONTAL, record.lineCutHorizontal)
+                putExtra(DicKeys.SWEEP_SKIP_SUBSETS, record.sweepSkipSubsets.toIntArray())
+                putExtra(DicKeys.SWEEP_SKIP_STEPS, record.sweepSkipSteps.toIntArray())
+                putExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS, record.sweepSkipStrainWindows.toIntArray())
+            }
             putExtra(DicKeys.SESSION_ID, record.id)
             putExtra(DicKeys.SESSION_LOCAL_ID, record.id)
             putExtra(DicKeys.SUBSET_SIZE, record.subset)
@@ -670,9 +689,13 @@ class HomeActivity : AppCompatActivity() {
             val r = items[position]
             holder.title.text = r.name
             holder.subtitle.text = buildString {
-                append(dateFmt.format(Date(r.updatedAt)))
+                append(dateFmt.format(Date(r.createdAt)))
                 append(" · ")
-                append(getString(R.string.session_frames_fmt, r.frameCount))
+                if (r.isSweep) {
+                    append(getString(R.string.session_sweep_kind))
+                } else {
+                    append(getString(R.string.session_frames_fmt, r.frameCount))
+                }
                 if (r.headline.isNotBlank()) {
                     append(" · ")
                     append(r.headline)

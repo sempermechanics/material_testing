@@ -49,7 +49,43 @@ data class SessionRecord(
     /** Backend session id of the cloud copy — needed to erase it. Blank if never synced. */
     val cloudSessionId: String = "",
     val syncState: SyncState = SyncState.LOCAL_ONLY,
+
+    // ── Parameter sweep (VsgStudy)
+    // A sweep varies the settings instead of the image, so [subset], [step] and
+    // [strainWindow] above only describe its first frame. These carry the rest,
+    // and their emptiness is what marks an ordinary analysis.
+
+    /** Per-frame subset sizes; empty unless this session is a sweep. */
+    val sweepSubsets: List<Int> = emptyList(),
+
+    /** Per-frame step sizes. Rendering a frame depends on its own pitch. */
+    val sweepSteps: List<Int> = emptyList(),
+
+    /** Per-frame strain windows. */
+    val sweepStrainWindows: List<Int> = emptyList(),
+
+    /** Labels naming each combination, shown in the viewer and the report. */
+    val sweepLabels: List<String> = emptyList(),
+
+    /** True when the sweep's line cut runs along x. */
+    val lineCutHorizontal: Boolean = true,
+
+    // Combinations the engine could not solve — kept so the lattice still
+    // shows hollow nodes after a Home reopen (and after a cloud restore).
+    val sweepSkipSubsets: List<Int> = emptyList(),
+    val sweepSkipSteps: List<Int> = emptyList(),
+    val sweepSkipStrainWindows: List<Int> = emptyList(),
 ) {
+    /** True when the frames are parameter combinations rather than images. */
+    val isSweep: Boolean get() = sweepSteps.isNotEmpty()
+
+    /** Planned combinations that never produced a frame. */
+    val sweepSkipCount: Int get() = minOf(
+        sweepSkipSubsets.size,
+        sweepSkipSteps.size,
+        sweepSkipStrainWindows.size,
+    )
+
     @Serializable
     enum class SyncState {
         LOCAL_ONLY,
@@ -98,7 +134,7 @@ object SessionStore {
         try {
             @Suppress("TooGenericExceptionCaught") // corrupt index must never crash Home
             json.decodeFromString<List<SessionRecord>>(f.readText())
-                .sortedByDescending { it.updatedAt }
+                .sortedByDescending { it.createdAt }
         } catch (e: Exception) {
             Timber.e(e, "Session index unreadable; starting fresh")
             emptyList()

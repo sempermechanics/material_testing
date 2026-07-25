@@ -20,75 +20,61 @@ object PdfReportGenerator {
         data class Error(val ex: Exception) : Progress()
     }
 
-    /** One chapter of the all-frames report: heatmap + per-field stats. */
-    data class FrameChapter(
-        val title: String,
-        val image: android.graphics.Bitmap?,
-        // rows: field / max / min / mean
-        val statRows: List<List<String>>,
-    )
+    /** Field visualisations are laid out strictly two to a page. */
+    private const val FIELD_BLOCK_HEIGHT = 1604f
+
+    // Progress budget: the frames share the middle of the bar, leaving a little
+    // at each end for setup and the closing telemetry page.
+    private const val FRAMES_PROGRESS_START = 2
+    private const val FRAMES_PROGRESS_SPAN = 92
+    private const val TELEMETRY_PROGRESS = 96
 
     /**
-     * The whole-analysis PDF: cover with parameters, one chapter per frame
-     * (annotated heatmap of the on-screen field + a five-field stats table),
-     * and the engine telemetry of the first frame at the end. Chapters are
-     * built lazily and their bitmaps recycled page-by-page, so a 50-frame
-     * report never holds more than one frame's bitmap in memory.
+     * The all-frames PDF: the single-frame report of [generate], repeated once
+     * per frame and concatenated, with one engine-telemetry page at the end.
+     *
+     * Each frame therefore gets the full treatment — its own cover with the
+     * parameters and input images it was solved with, then its five field
+     * blocks two to a page and the ZNSSD diagnostic — rather than a condensed
+     * summary. That is what makes the frames of a batch, and the parameter
+     * combinations of a sweep, directly comparable page for page.
+     *
+     * [dataAt] is called one frame at a time and each frame's bitmaps are
+     * recycled before the next is built, so a 50-frame report never holds more
+     * than one frame's images in memory. It returns null for a frame that
+     * cannot be read, which is skipped.
      */
     fun generateBatch(
-        cover: ReportData,
         frameCount: Int,
-        chapterAt: (Int) -> FrameChapter,
+        dataAt: (Int) -> ReportData?,
         outputStream: OutputStream,
+        frameTitle: (Int) -> String = { "DIC Analysis Report — Frame ${it + 1}" },
     ): Flow<Progress> = flow {
         val pdfDocument = PdfDocument()
         val layout = PdfLayoutEngine(pdfDocument)
         try {
-            emit(Progress.Status("Building cover…", 2))
-            layout.newPage()
-            layout.drawTitle("DIC Analysis Report — All Frames")
-            layout.drawSectionHeader("Session Details")
-            layout.drawKeyValue("Specimen / Target:", cover.specimenName)
-            layout.drawKeyValue("Date Generated:", cover.analysisDate)
-            layout.drawKeyValue("Session ID:", cover.sessionId)
-            layout.drawKeyValue("Frames:", frameCount.toString())
-            cover.appBuild?.let { layout.drawKeyValue("App Build:", it) }
-            layout.advanceY(40f)
-            layout.drawSectionHeader("Algorithm Parameters")
-            layout.drawKeyValue("Subset Size:", "${cover.subsetSize} px")
-            layout.drawKeyValue("Step Size:", "${cover.stepSize} px")
-            layout.drawKeyValue("Strain Method:", cover.strainMethod)
-            layout.drawKeyValue("Strain Window:", "${cover.strainWindow} subsets")
-            layout.advanceY(40f)
-            layout.drawSectionHeader("Analysis Region (ROI)")
-            layout.drawKeyValue("Origin (X, Y):", "(${cover.roiData.startX}, ${cover.roiData.startY})")
-            layout.drawKeyValue("Dimensions:", "${cover.roiData.width} x ${cover.roiData.height} px")
+            // Telemetry is per-analysis, not per-frame, so one page closes the
+            // document. Holds no bitmaps, so it survives the recycling below.
+            var telemetrySource: ReportData? = null
 
             for (index in 0 until frameCount) {
-                emit(Progress.Status("Frame ${index + 1} of $frameCount…", 5 + (index * 90 / frameCount)))
-                val chapter = chapterAt(index)
-                layout.newPage()
-                layout.drawTitle(chapter.title)
-                if (chapter.statRows.isNotEmpty()) {
-                    layout.drawTable(
-                        headers = listOf("Field", "Max", "Min", "Mean"),
-                        rows = chapter.statRows,
-                        colWeights = listOf(0.31f, 0.23f, 0.23f, 0.23f),
-                    )
-                }
-                chapter.image?.let { bmp ->
-                    layout.advanceY(30f)
-                    layout.drawDiagnosticBlock("", bmp, 2100f)
-                    bmp.recycle()
-                }
+                val percent = FRAMES_PROGRESS_START + (index * FRAMES_PROGRESS_SPAN / frameCount)
+                emit(Progress.Status("Frame ${index + 1} of $frameCount…", percent))
+                val data = dataAt(index) ?: continue
+                if (telemetrySource == null) telemetrySource = data
+
+                drawCoverPage(layout, data, frameTitle(index), frameCount)
+                drawFieldPages(layout, data)
+                recycleImages(data)
             }
 
-            emit(Progress.Status("Telemetry…", 96))
-            drawTelemetryPage(layout, cover)
+            telemetrySource?.let {
+                emit(Progress.Status("Compiling Engine Telemetry...", TELEMETRY_PROGRESS))
+                drawTelemetryPage(layout, it)
+            }
 
-            // Finish the still-open telemetry page before writing — PdfDocument
-            // rejects writeTo()/close() while any page is unfinished. (generate()
-            // does this too; generateBatch was missing it.)
+            // Finish the still-open page before writing — PdfDocument rejects
+            // writeTo()/close() while any page is unfinished.
             layout.finishCurrentPage()
             pdfDocument.writeTo(outputStream)
             emit(Progress.Complete)
@@ -104,65 +90,12 @@ object PdfReportGenerator {
         val layout = PdfLayoutEngine(pdfDocument)
 
         try {
-            // PAGE 1: METADATA & IMAGES
             emit(Progress.Status("Building Cover Page...", 10))
-            layout.newPage()
-            layout.drawTitle("Master DIC Analysis Report")
+            drawCoverPage(layout, data, "Master DIC Analysis Report", frameCount = null)
 
-            layout.drawSectionHeader("Session Details")
-            layout.drawKeyValue("Specimen / Target:", data.specimenName)
-            layout.drawKeyValue("Date Generated:", data.analysisDate)
-            layout.drawKeyValue("Session ID:", data.sessionId)
-            data.appBuild?.let { layout.drawKeyValue("App Build:", it) }
-            layout.advanceY(40f)
-
-            layout.drawSectionHeader("Algorithm Parameters")
-            layout.drawKeyValue("Subset Size:", "${data.subsetSize} px")
-            layout.drawKeyValue("Step Size:", "${data.stepSize} px")
-            layout.drawKeyValue("Strain Method:", data.strainMethod)
-            layout.drawKeyValue("Strain Window:", "${data.strainWindow} subsets")
-            layout.advanceY(40f)
-
-            // Add the ROI information explicitly to the first page!
-            layout.drawSectionHeader("Analysis Region (ROI)")
-            layout.drawKeyValue("Origin (X, Y):", "(${data.roiData.startX}, ${data.roiData.startY})")
-            layout.drawKeyValue("Dimensions:", "${data.roiData.width} x ${data.roiData.height} px")
-            layout.advanceY(40f)
-
-            layout.drawSectionHeader("Analyzed Images")
-            layout.drawInputVerificationCard(
-                data.referenceImage,
-                data.referenceImageName,
-                data.deformedImage,
-                data.deformedImageName,
-            )
-
-            // PAGES 2+: FIELD VISUALIZATIONS (Strictly 2 Per Page!)
             emit(Progress.Status("Rendering Visualization Maps...", 30))
+            drawFieldPages(layout, data)
 
-            val blockHeight = 1604f
-
-            // Chunking the 5 fields:
-            // Chunk 1 = U, V (Page 2)
-            // Chunk 2 = Exx, Eyy (Page 3)
-            // Chunk 3 = Exy (Page 4, top slot)
-            data.fieldResults.chunked(2).forEachIndexed { pageIndex, fieldsChunk ->
-                layout.newPage()
-
-                fieldsChunk.forEachIndexed { index, field ->
-                    emit(Progress.Status("Rendering ${field.fieldName}...", 30 + (pageIndex * 2 + index) * 10))
-                    layout.drawFieldBlock(field, blockHeight)
-                }
-
-                // Fill the empty slot! If this chunk only has 1 item (Exy Shear),
-                // we have exactly enough space left on the page to print the ZNSSD Heatmap.
-                if (fieldsChunk.size == 1) {
-                    emit(Progress.Status("Rendering Diagnostic ZNSSD Map...", 85))
-                    layout.drawDiagnosticBlock("ZNSSD Correlation Quality", data.znssdHeatmap, blockHeight)
-                }
-            }
-
-            // FINAL PAGE: TELEMETRY & HARDWARE LOG
             emit(Progress.Status("Compiling Engine Telemetry...", 90))
             drawTelemetryPage(layout, data)
 
@@ -177,6 +110,79 @@ object PdfReportGenerator {
             pdfDocument.close()
         }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * Page 1 of a report: session metadata, the parameters it was solved with,
+     * the ROI, and the reference/deformed pair it was solved from.
+     *
+     * @param frameCount total frames, shown only in an all-frames report
+     */
+    private fun drawCoverPage(
+        layout: PdfLayoutEngine,
+        data: ReportData,
+        title: String,
+        frameCount: Int?,
+    ) {
+        layout.newPage()
+        layout.drawTitle(title)
+
+        layout.drawSectionHeader("Session Details")
+        layout.drawKeyValue("Specimen / Target:", data.specimenName)
+        layout.drawKeyValue("Date Generated:", data.analysisDate)
+        layout.drawKeyValue("Session ID:", data.sessionId)
+        frameCount?.let { layout.drawKeyValue("Frames:", it.toString()) }
+        data.appBuild?.let { layout.drawKeyValue("App Build:", it) }
+        layout.advanceY(40f)
+
+        layout.drawSectionHeader("Algorithm Parameters")
+        layout.drawKeyValue("Subset Size:", "${data.subsetSize} px")
+        layout.drawKeyValue("Step Size:", "${data.stepSize} px")
+        layout.drawKeyValue("Strain Method:", data.strainMethod)
+        layout.drawKeyValue("Strain Window:", "${data.strainWindow} subsets")
+        layout.advanceY(40f)
+
+        layout.drawSectionHeader("Analysis Region (ROI)")
+        layout.drawKeyValue("Origin (X, Y):", "(${data.roiData.startX}, ${data.roiData.startY})")
+        layout.drawKeyValue("Dimensions:", "${data.roiData.width} x ${data.roiData.height} px")
+        layout.advanceY(40f)
+
+        layout.drawSectionHeader("Analyzed Images")
+        layout.drawInputVerificationCard(
+            data.referenceImage,
+            data.referenceImageName,
+            data.deformedImage,
+            data.deformedImageName,
+        )
+    }
+
+    /**
+     * Pages 2+: the five field blocks, two to a page — U and V, then Exx and
+     * Eyy, then Exy. Exy leaves a free slot, which the ZNSSD correlation-quality
+     * map fills exactly.
+     */
+    private fun drawFieldPages(layout: PdfLayoutEngine, data: ReportData) {
+        data.fieldResults.chunked(2).forEach { fieldsChunk ->
+            layout.newPage()
+            fieldsChunk.forEach { field -> layout.drawFieldBlock(field, FIELD_BLOCK_HEIGHT) }
+            if (fieldsChunk.size == 1) {
+                layout.drawDiagnosticBlock("ZNSSD Correlation Quality", data.znssdHeatmap, FIELD_BLOCK_HEIGHT)
+            }
+        }
+    }
+
+    /**
+     * Frees one frame's page images once it has been drawn. Every bitmap in a
+     * [ReportData] is a private downscaled copy made by ReportBuilder — none
+     * alias the caller's originals — so all of them are ours to release. Without
+     * this a 50-frame report would hold 50 frames' images at once.
+     */
+    private fun recycleImages(data: ReportData) {
+        data.fieldResults.forEach { it.bakedHeatmap.recycle() }
+        data.znssdHeatmap.recycle()
+        data.solverPathMap.recycle()
+        data.referenceImage.recycle()
+        data.deformedImage.recycle()
+    }
 
     /** Final page: engine telemetry (shared by single and batch reports). */
     private fun drawTelemetryPage(layout: PdfLayoutEngine, data: ReportData) {

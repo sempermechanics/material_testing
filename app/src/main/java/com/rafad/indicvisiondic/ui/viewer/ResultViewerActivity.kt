@@ -19,6 +19,8 @@ import com.rafad.indicvisiondic.report.ReportBuilder
 import com.rafad.indicvisiondic.report.ReportData
 import com.rafad.indicvisiondic.report.RoiData
 import com.rafad.indicvisiondic.report.VisualizationEngine
+import com.rafad.indicvisiondic.ui.analysis.VsgPlotView
+import com.rafad.indicvisiondic.ui.analysis.VsgStudy
 import com.rafad.indicvisiondic.ui.common.Insets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -62,7 +64,27 @@ class ResultViewerActivity : AppCompatActivity() {
     private var rawData: FloatArray? = null
     private var imgW = 0
     private var imgH = 0
+
+    /**
+     * Step size of the frame on screen. A parameter sweep varies it from frame
+     * to frame — rendering, point picking and the report all key off it — so it
+     * is re-read whenever a frame loads rather than fixed at launch.
+     */
     private var step = 5
+
+    /** Step size for an ordinary analysis, where every frame shares one. */
+    private var baseStep = 5
+
+    // A sweep hands over one setting triple per frame; null for a normal run.
+    private var sweepSubsets: IntArray? = null
+    private var sweepSteps: IntArray? = null
+    private var sweepStrainWins: IntArray? = null
+
+    /** Axis of the study's line cut through the ROI centre. */
+    private var lineCutHorizontal = true
+
+    /** True when the frames are parameter combinations rather than images. */
+    private val isSweep: Boolean get() = sweepSteps != null
 
     // ROI Tracking Variables for the PDF
     private var roiX = 0
@@ -151,6 +173,10 @@ class ResultViewerActivity : AppCompatActivity() {
             lastMinIdx = savedInstanceState.getInt("LAST_MIN_IDX", -1)
             isMaxMinActive = savedInstanceState.getBoolean("MAX_MIN_ACTIVE", false)
             currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
+        } else {
+            // A lattice node tap asks to open on a specific frame; clamped once
+            // the batch is loaded below.
+            currentFrameIndex = intent.getIntExtra(DicKeys.START_FRAME, 0)
         }
 
         imgMain = findViewById(R.id.imgBaseResult)
@@ -181,7 +207,12 @@ class ResultViewerActivity : AppCompatActivity() {
 
         imgW = intent.getIntExtra(DicKeys.IMG_W, 0)
         imgH = intent.getIntExtra(DicKeys.IMG_H, 0)
-        step = intent.getIntExtra(DicKeys.STEP, 5)
+        baseStep = intent.getIntExtra(DicKeys.STEP, 5)
+        step = baseStep
+        sweepSubsets = intent.getIntArrayExtra(DicKeys.SWEEP_SUBSETS)
+        sweepSteps = intent.getIntArrayExtra(DicKeys.SWEEP_STEPS)
+        sweepStrainWins = intent.getIntArrayExtra(DicKeys.SWEEP_STRAIN_WINS)
+        lineCutHorizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
 
         roiX = intent.getIntExtra(DicKeys.ROI_X, 0)
         roiY = intent.getIntExtra(DicKeys.ROI_Y, 0)
@@ -218,6 +249,8 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         if (batchFiles.isNotEmpty()) {
+            // A START_FRAME (or restored index) past the batch would load nothing.
+            currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
             loadFrameData(currentFrameIndex)
             updateNavButtons()
         } else {
@@ -327,6 +360,9 @@ class ResultViewerActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         // Keep the Home row's headline in sync with what was on screen.
+        // Sweeps already carry a stable caption (image + solved count) — don't
+        // overwrite it with the last field's peak reading.
+        if (isSweep) return
         intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)?.let { localId ->
             val data = rawData ?: return@let
             val stats = DicResult.fieldStats(data, currentDataIndex) ?: return@let
@@ -375,6 +411,8 @@ class ResultViewerActivity : AppCompatActivity() {
 
                 withContext(Dispatchers.Main) {
                     rawData = data
+                    // A sweep's frames each have their own grid pitch.
+                    step = sweepSteps?.getOrNull(index) ?: baseStep
                     val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
                     tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
                     updateVisualization(currentDataIndex)
@@ -611,9 +649,23 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    private fun buildReportData(): ReportData? {
+    private fun buildReportData(): ReportData? =
+        rawData?.let { buildReportData(currentFrameIndex, it) }
+
+    /**
+     * Report data for [frameIndex] built from its own [data]. Everything that
+     * varies frame to frame is read by index — the step size a sweep changes
+     * per combination, the settings its cover quotes, and the deformed image
+     * name — so an all-frames report describes each frame correctly instead of
+     * repeating the one on screen.
+     */
+    private fun buildReportData(frameIndex: Int, data: FloatArray): ReportData? {
         val baseImg = cachedBaseImage ?: return null
-        val data = rawData ?: return null
+
+        val frameStep = sweepSteps?.getOrNull(frameIndex) ?: baseStep
+        val frameSubset = sweepSubsets?.getOrNull(frameIndex) ?: intent.getIntExtra(DicKeys.SUBSET_SIZE, 41)
+        val frameStrainWin = sweepStrainWins?.getOrNull(frameIndex)
+            ?: intent.getIntExtra(DicKeys.STRAIN_WINDOW, 15)
 
         val statsArray = intent.getFloatArrayExtra(DicKeys.ENGINE_STATS) ?: FloatArray(16)
         val engineStats = if (statsArray.size >= 16) {
@@ -624,6 +676,32 @@ class ResultViewerActivity : AppCompatActivity() {
 
         val realDefImg = currentDefPath?.let { BitmapFactory.decodeFile(it) } ?: baseImg
 
+        // buildReport keeps only a downscaled copy of the cover images, so the
+        // full-size decode above is ours to free — and an all-frames report
+        // calls this once per frame.
+        return buildReportWith(
+            data,
+            baseImg,
+            realDefImg,
+            frameIndex,
+            frameStep,
+            frameSubset,
+            frameStrainWin,
+            engineStats,
+        ).also { if (realDefImg !== baseImg) realDefImg.recycle() }
+    }
+
+    @Suppress("LongParameterList") // one call site; all of it is per-frame state
+    private fun buildReportWith(
+        data: FloatArray,
+        baseImg: Bitmap,
+        realDefImg: Bitmap,
+        frameIndex: Int,
+        frameStep: Int,
+        frameSubset: Int,
+        frameStrainWin: Int,
+        engineStats: EngineStats,
+    ): ReportData {
         return ReportBuilder.buildReport(
             ReportBuilder.ReportBuildParams(
                 data = data,
@@ -631,17 +709,17 @@ class ResultViewerActivity : AppCompatActivity() {
                 defImgForCover = realDefImg,
                 imgW = imgW,
                 imgH = imgH,
-                step = step,
+                step = frameStep,
                 sessionId = intent.getStringExtra(DicKeys.SESSION_ID) ?: "Local_Offline_Mode",
                 specimenName = intent.getStringExtra(DicKeys.REF_NAME)?.substringBeforeLast(".") ?: "Batch Analysis",
                 analysisDate = ReportBuilder.currentAnalysisDate(),
-                subsetSize = intent.getIntExtra(DicKeys.SUBSET_SIZE, 41),
-                strainWindow = intent.getIntExtra(DicKeys.STRAIN_WINDOW, 15),
+                subsetSize = frameSubset,
+                strainWindow = frameStrainWin,
                 strainMethod = intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG",
                 roiData = RoiData(roiX, roiY, roiW, roiH),
                 engineStats = engineStats,
                 referenceImageName = intent.getStringExtra(DicKeys.REF_NAME) ?: "reference.png",
-                deformedImageName = originalDefNames.getOrNull(currentFrameIndex) ?: "Frame_${currentFrameIndex + 1}",
+                deformedImageName = originalDefNames.getOrNull(frameIndex) ?: "Frame_${frameIndex + 1}",
             ),
         )
     }
@@ -658,12 +736,15 @@ class ResultViewerActivity : AppCompatActivity() {
             imgW = imgW,
             imgH = imgH,
             step = step,
+            stepPerFrame = sweepSteps,
+            subsetPerFrame = sweepSubsets,
+            strainWindowPerFrame = sweepStrainWins,
             dataIndex = currentDataIndex,
             typeString = currentTypeString,
             baseImage = base,
             refImagePath = refImagePath,
             defImagePaths = defImagePaths,
-            buildReport = { buildReportData() },
+            buildReportAt = { index, frameData -> buildReportData(index, frameData) },
         )
     }
 
@@ -692,19 +773,27 @@ class ResultViewerActivity : AppCompatActivity() {
         val roiW = intent.getIntExtra(DicKeys.ROI_W, 0)
         val roiH = intent.getIntExtra(DicKeys.ROI_H, 0)
 
+        // A sweep varies the settings frame by frame, so the sheet must describe
+        // the combination on screen rather than the one the run started with.
+        val frame = currentFrameIndex
+        val subset = sweepSubsets?.getOrNull(frame) ?: intent.getIntExtra(DicKeys.SUBSET_SIZE, 0)
+        val strainWin = sweepStrainWins?.getOrNull(frame) ?: intent.getIntExtra(DicKeys.STRAIN_WINDOW, 0)
+
         val entries = buildList {
-            add(
-                getString(R.string.setting_subset) to
-                    getString(R.string.setting_px_fmt, intent.getIntExtra(DicKeys.SUBSET_SIZE, 0)),
-            )
-            add(
-                getString(R.string.setting_step) to
-                    getString(R.string.setting_px_fmt, intent.getIntExtra(DicKeys.STEP, 0)),
-            )
+            add(getString(R.string.setting_subset) to getString(R.string.setting_px_fmt, subset))
+            add(getString(R.string.setting_step) to getString(R.string.setting_px_fmt, step))
             add(
                 getString(R.string.setting_strain_window) to
-                    getString(R.string.setting_subsets_fmt, intent.getIntExtra(DicKeys.STRAIN_WINDOW, 0)),
+                    getString(R.string.setting_subsets_fmt, strainWin),
             )
+            if (isSweep) {
+                add(
+                    getString(R.string.setting_vsg) to getString(
+                        R.string.setting_px_fmt,
+                        VsgStudy.vsgFor(step, strainWin),
+                    ),
+                )
+            }
             add(
                 getString(R.string.setting_strain_method) to
                     (intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG"),
@@ -734,7 +823,71 @@ class ResultViewerActivity : AppCompatActivity() {
             if (index > 0) rows.addView(settingsDivider())
             rows.addView(settingsRow(label, value))
         }
+        if (isSweep) populateLineCut(view)
         sheet.show()
+    }
+
+    /**
+     * Strain along the cut through the centre of the ROI, all three components
+     * at once (guide step 4). The cut is the same physical line for every
+     * combination of the sweep, so scrubbing frames compares like with like.
+     */
+    private fun populateLineCut(sheetView: View) {
+        val data = rawData ?: return
+        val section = sheetView.findViewById<View>(R.id.lineCutSection)
+        val plot = sheetView.findViewById<VsgPlotView>(R.id.plotLineCut)
+        val line = VsgStudy.centreLine(roiX, roiY, roiW, roiH, lineCutHorizontal)
+        val tolerance = step / 2f
+
+        val labels = listOf(R.string.field_exx, R.string.field_eyy, R.string.field_exy)
+        val series = VsgStudy.STRAIN_COMPONENTS.mapIndexed { slot, component ->
+            VsgPlotView.Series(
+                label = getString(labels[slot]),
+                color = plot.paletteColor(slot),
+                points = VsgStudy.profileAlong(data, component, line, tolerance),
+                markers = false,
+            )
+        }
+        if (series.all { it.points.isEmpty() }) {
+            section.visibility = View.GONE
+            return
+        }
+
+        section.visibility = View.VISIBLE
+        sheetView.findViewById<TextView>(R.id.tvLineCutTitle).setText(R.string.line_cut_title)
+        sheetView.findViewById<TextView>(R.id.tvLineCutLegend).text = lineCutLegend(
+            getString(if (lineCutHorizontal) R.string.axis_x else R.string.axis_y),
+            line.position,
+            plot,
+        )
+        plot.setData(
+            series,
+            getString(if (lineCutHorizontal) R.string.line_cut_axis_x else R.string.line_cut_axis_y),
+            getString(R.string.line_cut_axis_strain),
+        )
+    }
+
+    /** Prefix plus colour-matched Exx / Eyy / Exy labels for the line-cut plot. */
+    private fun lineCutLegend(axis: String, position: Float, plot: VsgPlotView): CharSequence {
+        val prefix = getString(R.string.line_cut_legend_prefix_fmt, axis, position)
+        val parts = listOf(
+            getString(R.string.line_cut_legend_exx) to plot.paletteColor(0),
+            getString(R.string.line_cut_legend_eyy) to plot.paletteColor(1),
+            getString(R.string.line_cut_legend_exy) to plot.paletteColor(2),
+        )
+        val spanned = android.text.SpannableStringBuilder(prefix).append(' ')
+        parts.forEachIndexed { index, (label, color) ->
+            if (index > 0) spanned.append(" · ")
+            val start = spanned.length
+            spanned.append(label)
+            spanned.setSpan(
+                android.text.style.ForegroundColorSpan(color),
+                start,
+                spanned.length,
+                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
+        return spanned
     }
 
     private fun settingsRow(label: String, value: String): View {

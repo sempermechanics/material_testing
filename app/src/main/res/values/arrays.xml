@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Initial thumbs for the subset-range slider; replaced at runtime by the
+         suggested range once the reference image is measured. -->
+    <array name="subset_range_default">
+        <item>41.0</item>
+        <item>61.0</item>
+    </array>
+</resources>

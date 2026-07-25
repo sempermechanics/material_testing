@@ -105,27 +105,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/roi_mode_square" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/rbCircle"
-                    style="@style/Widget.IndicVision.SegmentedButton.Dark"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/roi_mode_circle" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/rbEllipse"
-                    style="@style/Widget.IndicVision.SegmentedButton.Dark"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/roi_mode_ellipse" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/rbFreeform"
-                    style="@style/Widget.IndicVision.SegmentedButton.Dark"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/roi_mode_freeform" />
             </com.google.android.material.button.MaterialButtonToggleGroup>
 
             <com.google.android.material.switchmaterial.SwitchMaterial

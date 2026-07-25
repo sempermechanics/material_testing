@@ -16,6 +16,7 @@ import com.rafad.indicvisiondic.data.net.IndicApi
 import com.rafad.indicvisiondic.data.net.SessionCreateRequest
 import com.rafad.indicvisiondic.data.net.TokenProvider
 import com.rafad.indicvisiondic.data.net.TokenStore
+import com.rafad.indicvisiondic.report.AnalysisCsvWriter
 import com.rafad.indicvisiondic.report.EngineStats
 import com.rafad.indicvisiondic.report.FieldResult
 import com.rafad.indicvisiondic.report.PdfReportGenerator
@@ -62,9 +63,9 @@ import java.util.zip.ZipOutputStream
  * session/<sid>/metadata.json   device, time, engine params, frame list
  *               Session.zip     raw/… (reference + deformed images),
  *                               dat/frame_%04d.dat  ← enables full restore,
- *                               csv/Data_Frame_N.csv,
- *                               reports/Master_Report_Frame_N.pdf,
- *                               processed/Frame_N_<field>.png
+ *                               csv/analysis_data.csv  (one combined file),
+ *                               reports/Master_Report_<frame>.pdf,
+ *                               processed/<frame>/<field>.png
  * ```
  */
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -156,6 +157,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             "avgIterations" to record.avgIterations,
             "executionTimeMs" to record.executionTimeMs.toFloat(),
             "frameCount" to record.frameCount.toFloat(),
+            "isSweep" to if (record.isSweep) 1f else 0f,
+            "sweepSkipped" to record.sweepSkipCount.toFloat(),
         )
         val session = api.createSession(
             idToken,
@@ -220,34 +223,45 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             }
 
             // ── per frame: original image, .dat, csv ────────────────────────
+            // A sweep repeats the one image it ran on across every frame, so the
+            // raw image is bundled once — a second identical `raw/<name>` entry
+            // would make Session.zip throw a duplicate-entry exception.
+            val addedRaw = HashSet<String>()
             record.defNames.forEachIndexed { index, defName ->
                 val frameName = "Frame_${index + 1}"
 
                 val defOriginal = File(rawDeformedDir, defName)
                 if (defOriginal.exists() && defOriginal.length() > 0) {
-                    artifacts += Artifact("raw", defName, defOriginal)
+                    if (addedRaw.add(defName)) {
+                        artifacts += Artifact("raw", defName, defOriginal)
+                    }
                 } else {
                     Timber.w("Deformed image missing for %s: %s", frameName, defOriginal.absolutePath)
                 }
 
+                // The .dat is bundled so a restored session is fully viewable in
+                // the app (the heatmap viewer reads it); it also feeds the CSV
+                // and reports. The CSV is one combined file (below), not per frame.
                 val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
-                if (!datFile.exists()) {
-                    Timber.w("No .dat for %s (%s) — skipping its csv/report", frameName, datFile.name)
-                    return@forEachIndexed
+                if (datFile.exists()) {
+                    artifacts += Artifact("dat", datFile.name, datFile)
+                } else {
+                    Timber.w("No .dat for %s (%s)", frameName, datFile.name)
                 }
-                artifacts += Artifact("dat", datFile.name, datFile)
-
-                val csvFile = File(stagingDir, "Data_$frameName.csv")
-                if (!csvFile.exists()) {
-                    DicResult.decodeDatBytes(datFile.readBytes())?.let { writeCsv(it, csvFile) }
-                }
-                if (csvFile.length() > 0) artifacts += Artifact("csv", "Data_$frameName.csv", csvFile)
             }
+
+            // ── one combined CSV for the whole analysis, via the same writer the
+            //    app's share/export uses, instead of a bare file per frame ──────
+            val analysisCsv = File(stagingDir, "analysis_data.csv")
+            if (!analysisCsv.exists()) {
+                AnalysisCsvWriter.write(analysisCsv, record.isSweep, csvFrames(record, sessionDir))
+            }
+            if (analysisCsv.length() > 0) artifacts += Artifact("csv", "analysis_data.csv", analysisCsv)
 
             // ── per-frame reports + heatmaps (generated once, as plain files:
             // Session.zip compresses the whole payload, so nesting archives
             // inside it would just deflate already-deflated bytes) ───────────
-            if (refFile.exists() && record.defNames.isNotEmpty()) {
+            if (record.defNames.isNotEmpty()) {
                 val reportsDir = File(stagingDir, "reports")
                 val processedDir = File(stagingDir, "processed")
                 // Marker written only after a COMPLETE generation pass — a dir
@@ -258,18 +272,18 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     bundlesDone.createNewFile()
                 }
                 val pdfs = reportsDir.listFiles()?.sortedBy { it.name }.orEmpty()
-                val pngs = processedDir.listFiles()?.sortedBy { it.name }.orEmpty()
                 pdfs.forEach { artifacts += Artifact("reports", it.name, it) }
-                pngs.forEach { artifacts += Artifact("processed", it.name, it) }
+                // Heatmaps now sit in per-frame subfolders; walk them and keep the
+                // "<frame>/<field>.png" relative path as the artifact name, so the
+                // bundle entry becomes processed/<frame>/<field>.png.
+                val pngs = processedDir.walkTopDown().filter { it.isFile }.sortedBy { it.path }.toList()
+                pngs.forEach {
+                    artifacts += Artifact("processed", it.relativeTo(processedDir).invariantSeparatorsPath, it)
+                }
                 if (pdfs.isEmpty()) Timber.e("No frame reports generated for %s", localId)
                 if (pngs.isEmpty()) Timber.e("No processed heatmaps generated for %s", localId)
             } else {
-                Timber.e(
-                    "Skipping reports for %s — reference exists=%s, frames=%d",
-                    localId,
-                    refFile.exists(),
-                    record.defNames.size,
-                )
+                Timber.e("Skipping reports for %s — no frames in the record", localId)
             }
 
             if (artifacts.isEmpty()) {
@@ -451,20 +465,51 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 
     /** Session-level metadata: device, time, engine params, and the frame list. */
+    /** One JSON object per frame: its label, files, and (for a sweep) its settings. */
+    private fun framesJson(record: SessionRecord): JSONArray {
+        val frames = JSONArray()
+        record.defNames.forEachIndexed { index, name ->
+            val frameObj = JSONObject()
+                .put("index", index)
+                .put(
+                    "frame",
+                    if (record.isSweep) {
+                        record.sweepLabels.getOrElse(index) { "Combination_${index + 1}" }
+                    } else {
+                        "Frame_${index + 1}"
+                    },
+                )
+                .put("image", name)
+                .put("dat", String.format(Locale.US, "frame_%04d.dat", index))
+            if (record.isSweep) {
+                val subset = record.sweepSubsets.getOrElse(index) { record.subset }
+                val step = record.sweepSteps.getOrElse(index) { record.step }
+                val window = record.sweepStrainWindows.getOrElse(index) { record.strainWindow }
+                frameObj
+                    .put("subset", subset)
+                    .put("step", step)
+                    .put("strainWindow", window)
+                    .put("vsg", (window - 1) * step + 1)
+            }
+            frames.put(frameObj)
+        }
+        return frames
+    }
+
     private fun buildMetadataJson(record: SessionRecord): String {
         val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
             .apply { timeZone = TimeZone.getTimeZone("UTC") }
             .format(Date())
-        val frames = JSONArray()
-        record.defNames.forEachIndexed { index, name ->
-            frames.put(
-                JSONObject()
-                    .put("index", index)
-                    .put("frame", "Frame_${index + 1}")
-                    .put("image", name)
-                    .put("dat", String.format(Locale.US, "frame_%04d.dat", index))
-                    .put("csv", "Data_Frame_${index + 1}.csv"),
-            )
+        val frames = framesJson(record)
+        val metrics = JSONObject()
+            .put("pointsConverged", record.pointsConverged)
+            .put("avgIterations", record.avgIterations.toDouble())
+            .put("executionTimeMs", record.executionTimeMs)
+        if (record.isSweep) {
+            metrics
+                .put("isSweep", true)
+                .put("sweepSolved", record.frameCount)
+                .put("sweepSkipped", record.sweepSkipCount)
         }
         return JSONObject()
             .put("schema", "indic.session.metadata/2")
@@ -473,6 +518,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             .put("specimen", record.refName)
             .put("capturedAtUtc", iso)
             .put("frameCount", record.frameCount)
+            .put("analysisKind", if (record.isSweep) "vsg_study" else "batch")
+            // One combined CSV for the whole analysis (every frame's points, keyed
+            // by the leading columns) rather than a file per frame.
+            .put("csv", "analysis_data.csv")
             .put("frames", frames)
             .put(
                 "app",
@@ -488,27 +537,26 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     .put("email", TokenStore.cachedEmail(applicationContext)),
             )
             .put("engine", engineJson(record))
-            .put(
-                "metrics",
-                JSONObject()
-                    .put("pointsConverged", record.pointsConverged)
-                    .put("avgIterations", record.avgIterations.toDouble())
-                    .put("executionTimeMs", record.executionTimeMs),
-            )
+            .put("metrics", metrics)
             .toString(2)
     }
 
-    private fun writeCsv(data: FloatArray, out: File) {
-        out.bufferedWriter().use { w ->
-            w.write("X,Y,U_Displacement,V_Displacement,Exx_Strain,Eyy_Strain,Exy_Shear,Correlation\n")
-            var i = 0
-            while (i < data.size) {
-                if (DicResult.isSolvedPoint(data[i + DicResult.IDX_ZNSSD])) {
-                    w.write(DicResult.csvRow(data, i))
-                    w.write("\n")
-                }
-                i += DicResult.STRIDE
-            }
+    /**
+     * The frames for the combined analysis CSV. A sweep leads each row with its
+     * per-combination settings and shares the one image it ran on; a batch leads
+     * with each frame's own image.
+     */
+    private fun csvFrames(record: SessionRecord, sessionDir: File): List<AnalysisCsvWriter.Frame> {
+        val sweepImage = record.defNames.firstOrNull().orEmpty()
+        return record.defNames.indices.map { index ->
+            val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
+            AnalysisCsvWriter.Frame(
+                image = if (record.isSweep) sweepImage else record.defNames.getOrElse(index) { "Frame_${index + 1}" },
+                subset = record.sweepSubsets.getOrElse(index) { record.subset },
+                step = record.sweepSteps.getOrElse(index) { record.step },
+                strainWindow = record.sweepStrainWindows.getOrElse(index) { record.strainWindow },
+                data = { if (datFile.exists()) DicResult.decodeDatBytes(datFile.readBytes()) else null },
+            )
         }
     }
 
@@ -591,10 +639,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         // The reference is the SAME image in every frame's report — decode and
         // scale it once for the whole session, not once per frame. On a long
         // analysis the repeated full-resolution decodes used to be the single
-        // largest CPU cost of staging after the PDF rendering itself.
-        val originalBaseImg = BitmapFactory.decodeFile(refFile.absolutePath)
+        // largest CPU cost of staging after the PDF rendering itself. Falls back
+        // to a deformed frame if the reference won't decode, so a bad reference
+        // does not take the whole session's reports and heatmaps down with it.
+        val originalBaseImg = decodeBaseImage(refFile, rawDeformedDir, record.defNames.firstOrNull())
         if (originalBaseImg == null) {
-            Timber.e("Cannot decode reference %s — skipping reports", refFile.absolutePath)
+            Timber.e("No decodable base image (reference %s) — skipping reports", refFile.absolutePath)
             return@withContext BundleCounts(0, 0)
         }
         val baseImg = Bitmap.createScaledBitmap(originalBaseImg, record.imgW, record.imgH, true)
@@ -608,17 +658,24 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 if (!datFile.exists()) return@forEachIndexed
                 val data = DicResult.decodeDatBytes(datFile.readBytes()) ?: return@forEachIndexed
 
-                val frameName = "Frame_${index + 1}"
+                val frameName = if (record.isSweep) {
+                    record.sweepLabels.getOrElse(index) { "Combination_${index + 1}" }
+                        .replace('/', '-').replace('\\', '-')
+                } else {
+                    "Frame_${index + 1}"
+                }
                 val defFile = File(rawDeformedDir, defName)
 
-                val ok = renderFrame(ctx, data, defFile, frameName) { fields ->
-                    // Same bitmaps the PDF just used — write them out before
-                    // they're recycled.
+                // One processed/<frame>/ subfolder per combination, so its five
+                // field maps stay together instead of all frames' maps landing
+                // flat in processed/.
+                val frameDir = File(processedDir, frameName)
+                frameDir.mkdirs()
+                val ok = renderFrame(ctx, data, defFile, frameName, index) { fields ->
                     fields.forEach { field ->
-                        File(processedDir, "${frameName}_${field.fieldKey}.png")
-                            .outputStream().buffered().use { out ->
-                                field.bakedHeatmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out)
-                            }
+                        File(frameDir, "${field.fieldKey}.png").outputStream().buffered().use { out ->
+                            field.bakedHeatmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out)
+                        }
                         processed++
                     }
                 }
@@ -653,11 +710,13 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
      * pre-scaled from the context and is shared across frames — never recycled
      * here.
      */
+    @Suppress("LongParameterList") // per-frame render inputs plus the heatmap callback
     private suspend fun renderFrame(
         ctx: RenderContext,
         data: FloatArray,
         defFile: File,
         frameName: String,
+        frameIndex: Int,
         onFieldHeatmaps: (List<FieldResult>) -> Unit,
     ): Boolean = withContext(Dispatchers.Default) {
         val record = ctx.record
@@ -672,6 +731,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         }
 
         val statsArray = FloatArray(ENGINE_STATS_SIZE) { record.engineStats.getOrElse(it) { 0f } }
+        val frameSubset = record.sweepSubsets.getOrElse(frameIndex) { record.subset }
+        val frameStep = record.sweepSteps.getOrElse(frameIndex) { record.step }
+        val frameWindow = record.sweepStrainWindows.getOrElse(frameIndex) { record.strainWindow }
         val reportData = ReportBuilder.buildReport(
             ReportBuilder.ReportBuildParams(
                 data = data,
@@ -679,12 +741,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 defImgForCover = defImg,
                 imgW = record.imgW,
                 imgH = record.imgH,
-                step = record.step,
+                step = frameStep,
                 sessionId = record.id,
                 specimenName = record.refName,
                 analysisDate = ReportBuilder.currentAnalysisDate(),
-                subsetSize = record.subset,
-                strainWindow = record.strainWindow,
+                subsetSize = frameSubset,
+                strainWindow = frameWindow,
                 strainMethod = record.strainMethod.ifBlank { "VSG" },
                 roiData = RoiData(record.roiX, record.roiY, record.roiW, record.roiH),
                 engineStats = EngineStats.fromArray(statsArray),
@@ -726,8 +788,13 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 }
 
-// metadata.json sections — file-level so they don't count against the worker
-// class's function budget; they only shape JSON and touch no worker state.
+// File-level helpers — kept off the worker class so they don't count against
+// its function budget; they touch no worker state.
+
+/** The base image for a session's reports: the reference, or a deformed frame if the reference won't decode. */
+private fun decodeBaseImage(refFile: File, rawDeformedDir: File, defName: String?): Bitmap? =
+    BitmapFactory.decodeFile(refFile.absolutePath)
+        ?: defName?.let { BitmapFactory.decodeFile(File(rawDeformedDir, it).absolutePath) }
 
 private fun deviceJson(context: Context): JSONObject = JSONObject()
     .put("id", DeviceKeyManager(context).getDeviceId())
@@ -736,18 +803,39 @@ private fun deviceJson(context: Context): JSONObject = JSONObject()
     .put("os", "Android ${Build.VERSION.RELEASE}")
     .put("sdkInt", Build.VERSION.SDK_INT)
 
-private fun engineJson(record: SessionRecord): JSONObject = JSONObject()
-    .put("subset", record.subset)
-    .put("step", record.step)
-    .put("strainWindow", record.strainWindow)
-    .put("strainMethod", record.strainMethod)
-    .put("use6x6", record.use6x6)
-    .put("imageWidth", record.imgW)
-    .put("imageHeight", record.imgH)
-    .put(
-        "roi",
-        JSONObject()
-            .put("x", record.roiX).put("y", record.roiY)
-            .put("w", record.roiW).put("h", record.roiH),
-    )
-    .put("stats", JSONArray(record.engineStats))
+private fun engineJson(record: SessionRecord): JSONObject {
+    val engine = JSONObject()
+        .put("subset", record.subset)
+        .put("step", record.step)
+        .put("strainWindow", record.strainWindow)
+        .put("strainMethod", record.strainMethod)
+        .put("use6x6", record.use6x6)
+        .put("imageWidth", record.imgW)
+        .put("imageHeight", record.imgH)
+        .put(
+            "roi",
+            JSONObject()
+                .put("x", record.roiX).put("y", record.roiY)
+                .put("w", record.roiW).put("h", record.roiH),
+        )
+        .put("stats", JSONArray(record.engineStats))
+    if (record.isSweep) {
+        engine.put(
+            "sweep",
+            JSONObject()
+                .put("lineCutHorizontal", record.lineCutHorizontal)
+                .put("subsets", JSONArray(record.sweepSubsets))
+                .put("steps", JSONArray(record.sweepSteps))
+                .put("strainWindows", JSONArray(record.sweepStrainWindows))
+                .put("labels", JSONArray(record.sweepLabels))
+                .put(
+                    "skipped",
+                    JSONObject()
+                        .put("subsets", JSONArray(record.sweepSkipSubsets))
+                        .put("steps", JSONArray(record.sweepSkipSteps))
+                        .put("strainWindows", JSONArray(record.sweepSkipStrainWindows)),
+                ),
+        )
+    }
+    return engine
+}

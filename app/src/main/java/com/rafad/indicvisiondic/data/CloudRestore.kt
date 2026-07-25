@@ -14,6 +14,7 @@ import com.rafad.indicvisiondic.data.net.TokenProvider
 import com.rafad.indicvisiondic.ui.analysis.AnalysisViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
 import java.io.File
@@ -36,6 +37,7 @@ import java.util.concurrent.TimeUnit
  * <sessionDir>/raw_deformed/<original image name>
  * ```
  */
+@Suppress("TooManyFunctions") // one cohesive restore pipeline: fetch, parse, write, index
 object CloudRestore {
 
     /** Input key for [DicRestoreWorker]: which cloud session to pull down. */
@@ -237,6 +239,8 @@ object CloudRestore {
         }
 
         val now = System.currentTimeMillis()
+        val sweep = engine.optJSONObject("sweep")
+        val skipped = sweep?.optJSONObject("skipped")
         return SessionRecord(
             id = localId,
             name = meta.optString("name").ifBlank { meta.optString("specimen", "Restored") },
@@ -257,7 +261,7 @@ object CloudRestore {
             refName = meta.optString("specimen", "Reference"),
             sessionDir = sessionDir.absolutePath,
             defNames = defNames,
-            headline = String.format(java.util.Locale.US, "%.1f%% converged", stats.getOrElse(15) { 0f }),
+            headline = restoredHeadline(meta, engine, defNames, stats),
             engineStats = stats,
             strainMethod = engine.optString("strainMethod", "VSG"),
             pointsConverged = metrics.optInt("pointsConverged", 0),
@@ -265,6 +269,53 @@ object CloudRestore {
             executionTimeMs = metrics.optInt("executionTimeMs", 0),
             // It came from the cloud, so it is by definition backed up.
             syncState = SessionRecord.SyncState.SYNCED,
+            sweepSubsets = intList(sweep?.optJSONArray("subsets")),
+            sweepSteps = intList(sweep?.optJSONArray("steps")),
+            sweepStrainWindows = intList(sweep?.optJSONArray("strainWindows")),
+            sweepLabels = stringList(sweep?.optJSONArray("labels")),
+            lineCutHorizontal = sweep?.optBoolean("lineCutHorizontal", true) ?: true,
+            sweepSkipSubsets = intList(skipped?.optJSONArray("subsets")),
+            sweepSkipSteps = intList(skipped?.optJSONArray("steps")),
+            sweepSkipStrainWindows = intList(skipped?.optJSONArray("strainWindows")),
         )
+    }
+
+    /**
+     * The Home-list headline for a restored session: for a sweep, the specimen
+     * plus solved/total and subset span; otherwise the converged percentage.
+     */
+    private fun restoredHeadline(
+        meta: JSONObject,
+        engine: JSONObject,
+        defNames: List<String>,
+        stats: List<Float>,
+    ): String {
+        val sweep = engine.optJSONObject("sweep")
+            ?: return String.format(java.util.Locale.US, "%.1f%% converged", stats.getOrElse(15) { 0f })
+        val solved = meta.optInt("frameCount", defNames.size)
+        val skipCount = sweep.optJSONObject("skipped")?.optJSONArray("subsets")?.length() ?: 0
+        val image = defNames.firstOrNull().orEmpty().ifBlank { meta.optString("specimen", "frame") }
+        val subsets = intList(sweep.optJSONArray("subsets"))
+        val lo = subsets.minOrNull() ?: engine.optInt("subset", 0)
+        val hi = subsets.maxOrNull() ?: lo
+        return String.format(
+            java.util.Locale.US,
+            "%s · %d of %d solved · subset %d–%d",
+            image,
+            solved,
+            solved + skipCount,
+            lo,
+            hi,
+        )
+    }
+
+    private fun intList(arr: JSONArray?): List<Int> = buildList {
+        if (arr == null) return@buildList
+        for (i in 0 until arr.length()) add(arr.optInt(i))
+    }
+
+    private fun stringList(arr: JSONArray?): List<String> = buildList {
+        if (arr == null) return@buildList
+        for (i in 0 until arr.length()) add(arr.optString(i))
     }
 }

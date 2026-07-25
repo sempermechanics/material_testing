@@ -18,9 +18,6 @@
     <string name="roi_hud_select_tool">Select tool and draw</string>
     <string name="roi_mode_rect">Rect</string>
     <string name="roi_mode_square">Square</string>
-    <string name="roi_mode_circle">Circle</string>
-    <string name="roi_mode_ellipse">Ellipse</string>
-    <string name="roi_mode_freeform">Draw</string>
     <string name="roi_erase_holes">Erase (holes)</string>
     <string name="save_roi">Save ROI</string>
     <string name="roi_decode_failed">Failed to decode image.</string>
@@ -128,6 +125,9 @@
     <string name="badge_pending">upload pending</string>
     <string name="badge_local">local only</string>
     <string name="session_frames_fmt">%1$d frames</string>
+    <string name="session_sweep_kind">VSG study</string>
+    <string name="session_sweep_name_fmt">VSG study · %1$s · %2$s</string>
+    <string name="session_sweep_headline_fmt">%1$s · %2$d of %3$d solved · subset %4$d–%5$d</string>
     <string name="session_data_gone_title">Data no longer on this device</string>
     <string name="session_data_gone_body">This analysis was cleaned up locally. If it was synced, the files are still in your cloud folder.</string>
     <string name="action_rename">Rename</string>
@@ -193,6 +193,71 @@
     <string name="subset_recommend_fmt">Suggested %1$d px from the speckle pattern (SSSIG criterion)</string>
     <string name="subset_recommend_low_texture_fmt">Speckle contrast is low — %1$d px is the largest allowed subset and still falls short of 0.007 px accuracy</string>
     <string name="advanced_defaults_suffix"> · defaults</string>
+
+    <!-- Parameter sweep / virtual strain gauge study (Good Practices Guide §5.4.5) -->
+    <string name="analysis_mode">Analysis mode</string>
+    <string name="mode_single">Single setting</string>
+    <string name="mode_sweep">Parameter sweep</string>
+    <string name="info_analysis_mode">Single setting solves every deformed frame once, at the parameters above. Parameter sweep instead solves ONE frame many times, over a range of subset sizes and the VSG ladder each one allows — the virtual strain gauge study of §5.4.5 of the DIC Good Practices Guide. Every combination lands in the result viewer as its own specimen, so you can scrub through them and compare the strain fields directly.</string>
+    <string name="sweep_blurb">Subset size sweeps across the range you set; for each subset the step size sweeps 1/6–1/3 of it and the strain window follows from VSG = (window − 1) × step + 1.</string>
+
+    <string name="subset_min">Subset size (min)</string>
+    <string name="subset_max">Subset size (max)</string>
+    <string name="subset_range">Subset size range</string>
+    <string name="subset_samples">Subset samples</string>
+    <string name="vsg_samples">VSG samples</string>
+    <string name="step_depth">Step size</string>
+    <string name="step_depth_value_fmt">subset ÷ %1$d</string>
+    <string name="info_subset_samples">The number of analyses is subset samples × VSG samples.\n\nSubset samples: how many subset sizes to sample across the range above (x).\nVSG samples: how many virtual strain gauge sizes to sample, up to Max VSG (y).\n\nStep size is fixed for the whole sweep, so it does not multiply the count.</string>
+    <string name="info_step_depth">The one step size the whole sweep uses, as a fraction of the subset. ½ steps by half the subset (coarsest, fastest); 1/6 steps by a sixth (finest, densest correlation). The step is fixed, so it does not multiply the number of analyses.</string>
+    <string name="info_subset_range">The smallest and largest subset the sweep tries, in pixels. The app suggests a range around the recommended subset — override either end freely; only odd sizes are solved, and the maximum is capped to what the image and region of interest can hold. How many analyses actually run is set by \"Analyses to run\", not by the width of this range.</string>
+    <string name="vsg_max">Max VSG size</string>
+    <string name="info_vsg_max">The largest virtual strain gauge the sweep will try, in pixels. The app suggests a few times the subset size; you can override it, within a sensible range. Sizes above this are assumed to over-smooth. Each subset\'s ladder runs from its smallest reachable VSG up to this ceiling.</string>
+
+    <string name="line_cut_axis">Line cut axis</string>
+    <string name="info_line_cut_axis">Strain is read along a straight cut through the centre of the region of interest. Pick the axis that crosses your strain gradient — the cut is the same physical line for every combination, so the profiles can be laid over each other.</string>
+    <string name="axis_x">X</string>
+    <string name="axis_y">Y</string>
+
+    <string name="sweep_frame">Frame to sweep</string>
+    <string name="sweep_frame_btn_fmt">Frame %1$d</string>
+    <string name="info_sweep_frame">The deformed frame every combination is solved against — usually the most deformed one, where the strain gradients are steepest.</string>
+    <string name="sweep_plan_fmt">%1$d analyses · subset %2$d–%3$d px · VSG %4$d–%5$d px</string>
+    <string name="sweep_plan_grid_fmt">%1$d analyses = %2$d subset × %3$d VSG · step subset÷%4$d · subset %5$d–%6$d px</string>
+    <string name="sweep_plan_empty">No combination fits this ceiling — raise Max VSG or lower the subset range.</string>
+    <string name="sweep_plan_subset_too_big_fmt">Subset range starts above what this image and ROI can hold (max %1$d px). Lower the minimum subset, or draw a larger region of interest.</string>
+    <string name="run_sweep">Run parameter sweep</string>
+    <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · VSG %5$d</string>
+    <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d · VSG %4$d</string>
+    <string name="sweep_failed">The parameter sweep could not run.</string>
+    <string name="sweep_partial_fmt">%1$d of %2$d combinations could not be solved and were skipped — the rest are shown.</string>
+    <string name="sweep_fail_features">No combination could be solved: the engine could not match the two images (AKAZE feature extraction failed).\n\nThis is almost always the image pair rather than the settings. The deformed frame must be the same scene, framed the same way as the reference — same camera position, distance and rotation. Re-shoot on a tripod so only the specimen moves, and check the speckle is in focus and not blurred.</string>
+    <string name="sweep_fail_roi">No combination could be solved: the region of interest contains no valid points. Redraw the ROI over the speckled area, or use the full image.</string>
+    <string name="sweep_fail_init">No combination could be solved: the engine could not start (one of the images could not be decoded). Try re-importing them as PNG or TIFF.</string>
+    <string name="sweep_fail_unknown">No combination could be solved. The engine returned error %1$d.</string>
+
+    <!-- Sweep lattice staging screen (VsgLatticeActivity) -->
+    <string name="vsg_lattice_title">Parameter sweep</string>
+    <string name="vsg_lattice_heading">Swept parameter space</string>
+    <string name="vsg_lattice_summary_fmt">%1$d combinations · %2$d solved · %3$d skipped · step subset÷%4$d</string>
+    <string name="vsg_lattice_summary_short_fmt">%1$d combinations · %2$d solved · %3$d skipped</string>
+    <string name="vsg_lattice_caption">Each node is one analysis. Every subset size carries its own ladder of virtual strain gauge sizes, set by sweeping the step size and strain window. Tap a node to open that analysis, or view all results below.</string>
+    <string name="vsg_lattice_axis_subset">Subset size (px)</string>
+    <string name="vsg_lattice_axis_vsg">VSG size (px)</string>
+    <string name="vsg_lattice_legend_solved">Solved</string>
+    <string name="vsg_lattice_legend_skipped">Skipped</string>
+    <string name="vsg_lattice_view_results">View results</string>
+
+    <string name="setting_vsg">Virtual strain gauge</string>
+    <string name="line_cut_title">Strain along the centre line cut</string>
+    <string name="line_cut_legend_prefix_fmt">Cut along %1$s through the ROI centre at %2$.0f px.</string>
+    <string name="line_cut_legend_exx">Exx</string>
+    <string name="line_cut_legend_eyy">Eyy</string>
+    <string name="line_cut_legend_exy">Exy</string>
+    <string name="line_cut_axis_x">Position along X (px)</string>
+    <string name="line_cut_axis_y">Position along Y (px)</string>
+    <string name="line_cut_axis_strain">Strain (mε)</string>
+
     <string name="run_points_solved">points solved</string>
     <string name="run_convergence">convergence</string>
     <string name="cancel_run_title">Cancel this analysis?</string>

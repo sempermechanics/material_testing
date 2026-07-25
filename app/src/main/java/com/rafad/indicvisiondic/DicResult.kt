@@ -2,6 +2,10 @@ package com.rafad.indicvisiondic
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.text.FieldPosition
+import java.util.Locale
 
 /** Binary layout constants for native full-field `.dat` output (8 floats × 4 bytes per point). */
 object DicResult {
@@ -67,9 +71,48 @@ object DicResult {
         return if (n == 0) null else floatArrayOf(maxV, minV, (sum / n).toFloat())
     }
 
-    /** One solved point as a CSV fragment: `X,Y,U,V,Exx,Eyy,Exy,ZNSSD` (raw units). */
-    fun csvRow(data: FloatArray, i: Int): String {
-        val head = "${data[i + IDX_X]},${data[i + IDX_Y]},${data[i + IDX_U]},${data[i + IDX_V]}"
-        return "$head,${data[i + IDX_EXX]},${data[i + IDX_EYY]},${data[i + IDX_EXY]},${data[i + IDX_ZNSSD]}"
+    // ------------------------------------------------------------------
+    // CSV export — one format shared by every writer (share sheet, cloud
+    // upload). Coordinates are grid integers, displacements/ZNSSD fixed to a
+    // few decimals, strains in scientific form (they are ~1e-4).
+    // ------------------------------------------------------------------
+
+    /** Header for the per-point columns every CSV export ends with. */
+    const val CSV_POINT_HEADER = "x_px,y_px,u_px,v_px,exx,eyy,exy,znssd"
+
+    /** Buffer sizes a CSV writer should use for a large (~10 MB) export. */
+    const val CSV_ROW_CAPACITY = 128
+    const val CSV_BUFFER_BYTES = 64 * 1024
+
+    /**
+     * Formats DIC points into CSV columns, reusing its formatters and the
+     * caller's buffer so a large export allocates almost nothing per point.
+     * **Not thread-safe** — use one per writing loop. Output is always
+     * [Locale.US], so the decimal separator is `.` on any device.
+     */
+    class CsvPointFormatter {
+        private val fixed = DecimalFormat(FIXED_PATTERN, DecimalFormatSymbols(Locale.US))
+        private val sci = DecimalFormat(SCI_PATTERN, DecimalFormatSymbols(Locale.US))
+        private val pos = FieldPosition(0)
+
+        /** Appends `x,y,u,v,exx,eyy,exy,znssd` for point [i] (no trailing newline). */
+        fun appendPoint(row: StringBuffer, data: FloatArray, i: Int) {
+            row.append(data[i + IDX_X].toInt()).append(',')
+            row.append(data[i + IDX_Y].toInt()).append(',')
+            fixed.format(data[i + IDX_U].toDouble(), row, pos).append(',')
+            fixed.format(data[i + IDX_V].toDouble(), row, pos).append(',')
+            sci.format(data[i + IDX_EXX].toDouble(), row, pos).append(',')
+            sci.format(data[i + IDX_EYY].toDouble(), row, pos).append(',')
+            sci.format(data[i + IDX_EXY].toDouble(), row, pos).append(',')
+            fixed.format(data[i + IDX_ZNSSD].toDouble(), row, pos)
+        }
+
+        private companion object {
+            /** Up to six decimals, trailing zeros trimmed (px displacements, ZNSSD). */
+            const val FIXED_PATTERN = "0.######"
+
+            /** Six significant figures in scientific form (the tiny strain values). */
+            const val SCI_PATTERN = "0.######E0"
+        }
     }
 }

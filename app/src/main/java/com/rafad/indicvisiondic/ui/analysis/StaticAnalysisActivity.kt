@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.slider.RangeSlider
 import com.google.android.material.slider.Slider
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.IndicVisionNativeLib
@@ -47,6 +48,35 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private companion object {
         /** Subset shown before a reference image is available to measure. */
         const val FALLBACK_SUBSET_SIZE = 41
+
+        /** Index of the height in the `[x, y, w, h]` array [resolveRoi] returns. */
+        const val ROI_H_INDEX = 3
+
+        /** Width of the subset window a fresh sweep suggests, centred on the recommendation. */
+        const val SUGGESTED_SUBSET_SPAN = 20
+
+        /** Suggested Max VSG, as a multiple of the largest subset in the sweep. */
+        const val VSG_SUGGESTION_FACTOR = 3
+
+        /** Hard bounds on Max VSG — the guardrail against a mistyped huge number. */
+        const val VSG_MIN_INPUT = 21
+        const val VSG_MAX_INPUT = 501
+
+        // Native engine failure codes, shared with the single-analysis path.
+        const val ENGINE_ERROR_FEATURES = -1
+        const val ENGINE_ERROR_ROI = -2
+        const val ENGINE_ERROR_INIT = -3
+
+        /**
+         * Clearance the engine demands around a grid point on top of half its
+         * subset: 4 px of interpolation buffer plus a 15 px deformation buffer
+         * (IndicVisionJNI.cpp, `absolute_boundary_buffer`). Points inside it are
+         * dropped, and a solve with no points left returns [ENGINE_ERROR_ROI].
+         */
+        const val ENGINE_EDGE_BUFFER_PX = 19
+
+        /** Slack [resolveRoi] adds beyond half a subset when insetting a frame. */
+        const val ROI_MARGIN_SLACK_PX = 10
     }
 
     private val viewModel: AnalysisViewModel by viewModels()
@@ -108,6 +138,35 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Inline note carrying the SSSIG-based subset suggestion. */
     private lateinit var tvSubsetHint: TextView
+
+    // Parameter-sweep controls (see [VsgStudy])
+    private lateinit var rgAnalysisMode: MaterialButtonToggleGroup
+    private lateinit var sweepBody: View
+    private lateinit var rangeSubset: RangeSlider
+    private lateinit var sliderVsgMax: Slider
+    private lateinit var sliderSubsetSamples: Slider
+    private lateinit var sliderVsgSamples: Slider
+    private lateinit var sliderStepDepth: Slider
+    private lateinit var etSubsetMinValue: EditText
+    private lateinit var etSubsetMaxValue: EditText
+    private lateinit var etVsgMaxValue: EditText
+    private lateinit var tvSubsetSamplesValue: TextView
+    private lateinit var tvVsgSamplesValue: TextView
+    private lateinit var tvStepDepthValue: TextView
+    private lateinit var rgLineCutAxis: MaterialButtonToggleGroup
+    private lateinit var btnPickSweepFrame: Button
+    private lateinit var tvSweepPlan: TextView
+
+    /** True while a suggestion/clamp is driving the sweep sliders, not the user. */
+    private var bindingSweep = false
+
+    /**
+     * Set once the user edits any sweep control. Until then the three sweep
+     * inputs — min subset, max subset, Max VSG — follow the app's suggestions,
+     * which track the SSSIG recommendation. After it, the user is in charge and
+     * the app only clamps their input to safe bounds.
+     */
+    private var sweepUserModified = false
 
     // Two-step wizard: page 1 = load images, page 2 = settings + run
     private lateinit var scrollStepImages: View
@@ -195,6 +254,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         scrollStepSettings = findViewById(R.id.scrollStepSettings)
         btnNext = findViewById(R.id.btnNext)
         btnBack = findViewById(R.id.btnBack)
+
+        // After the wizard views exist: the sweep controls call checkReady().
+        setupSweepControls()
 
         btnNext.setOnClickListener { goToStep(2, animate = true) }
         btnBack.setOnClickListener { goToStep(1, animate = true) }
@@ -352,7 +414,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnCalculateFullField.setOnClickListener {
             // A field still holding focus has not committed its typed value yet.
             commitParamFields()
-            startBatchAnalysis()
+            if (viewModel.sweepMode) startVsgSweep() else startBatchAnalysis()
         }
     }
 
@@ -895,6 +957,34 @@ class StaticAnalysisActivity : AppCompatActivity() {
             getString(R.string.subset_recommend_fmt, rec.subsetSize)
         }
         updateAdvancedSummary?.invoke()
+        // A new recommendation re-seeds the sweep's suggested inputs (unless the
+        // user has already set their own).
+        onRecommendationChanged()
+    }
+
+    /**
+     * The rectangle the engine solves over, as `[x, y, w, h]`: the drawn ROI,
+     * or the whole frame inset by half a subset (plus slack) so no subset hangs
+     * off the edge. Null — with the user told why — when it cannot hold one
+     * subset.
+     */
+    private fun resolveRoi(subset: Int): IntArray? {
+        val roi = if (viewModel.hasCustomRoi) {
+            intArrayOf(viewModel.roiX, viewModel.roiY, viewModel.roiW, viewModel.roiH)
+        } else {
+            val margin = (subset / 2) + ROI_MARGIN_SLACK_PX
+            intArrayOf(
+                margin,
+                margin,
+                viewModel.realRefWidth - (2 * margin),
+                viewModel.realRefHeight - (2 * margin),
+            )
+        }
+        if (roi[2] < subset || roi[3] < subset) {
+            Toast.makeText(this, R.string.roi_too_small, Toast.LENGTH_LONG).show()
+            return null
+        }
+        return roi
     }
 
     private fun startBatchAnalysis() {
@@ -904,23 +994,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val step = currentStepSize()
         val strainWin = currentStrainWindow()
 
-        var finalRectX = viewModel.roiX
-        var finalRectY = viewModel.roiY
-        var finalRectW = viewModel.roiW
-        var finalRectH = viewModel.roiH
-
-        if (!viewModel.hasCustomRoi) {
-            val margin = (subset / 2) + 10
-            finalRectX = margin
-            finalRectY = margin
-            finalRectW = viewModel.realRefWidth - (2 * margin)
-            finalRectH = viewModel.realRefHeight - (2 * margin)
-        }
-
-        if (finalRectW < subset || finalRectH < subset) {
-            Toast.makeText(this, R.string.roi_too_small, Toast.LENGTH_LONG).show()
-            return
-        }
+        val roi = resolveRoi(subset) ?: return
+        val (finalRectX, finalRectY, finalRectW) = roi
+        val finalRectH = roi[ROI_H_INDEX]
 
         // Hard stop: do not start a new analysis when the session quota is full.
         // Re-runs that update an existing Home row are still allowed.
@@ -1064,8 +1140,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
     }
 
-    private fun openResultViewer() {
-        val intent = Intent(this, ResultViewerActivity::class.java).apply {
+    /**
+     * @param sweep true when the frames are parameter combinations rather than
+     *   deformed images. The viewer needs each frame's own settings then — the
+     *   step size alone changes how a frame renders — and names the frames
+     *   after the combination instead of after an image file.
+     */
+    private fun openResultViewer(sweep: Boolean = false) {
+        val plan = viewModel.sweepPlan
+        // A sweep opens the interactive lattice first; it forwards these same
+        // extras on to the result viewer when a node (or "View results") is
+        // tapped, and stays on the back stack so Back returns to it.
+        val target = if (sweep) VsgLatticeActivity::class.java else ResultViewerActivity::class.java
+        val intent = Intent(this, target).apply {
             putExtra(DicKeys.IMG_W, viewModel.realRefWidth)
             putExtra(DicKeys.IMG_H, viewModel.realRefHeight)
             putExtra(DicKeys.STEP, viewModel.lastStep)
@@ -1076,8 +1163,25 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
             putExtra(DicKeys.DEF_PATH, viewModel.lastDefPath)
             putExtra(DicKeys.BATCH_DIR_PATH, viewModel.lastBatchDirPath)
-            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(viewModel.defFilePaths.map { it.substringAfterLast('/') }))
+            val frameNames = if (sweep) {
+                plan.map { combinationLabel(it) }
+            } else {
+                viewModel.defFilePaths.map { it.substringAfterLast('/') }
+            }
+            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(frameNames))
             putStringArrayListExtra(DicKeys.DEF_FILE_PATHS, ArrayList(viewModel.defFilePaths))
+
+            if (sweep) {
+                putExtra(DicKeys.SWEEP_SUBSETS, plan.map { it.subset }.toIntArray())
+                putExtra(DicKeys.SWEEP_STEPS, plan.map { it.step }.toIntArray())
+                putExtra(DicKeys.SWEEP_STRAIN_WINS, plan.map { it.strainWindow }.toIntArray())
+                putExtra(DicKeys.LINE_CUT_HORIZONTAL, viewModel.lineCutHorizontal)
+                // Skipped combinations show as hollow nodes on the lattice.
+                val skipped = viewModel.sweepSkipped
+                putExtra(DicKeys.SWEEP_SKIP_SUBSETS, skipped.map { it.subset }.toIntArray())
+                putExtra(DicKeys.SWEEP_SKIP_STEPS, skipped.map { it.step }.toIntArray())
+                putExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS, skipped.map { it.strainWindow }.toIntArray())
+            }
 
             // PDF GENERATOR DATA
             putExtra(DicKeys.SESSION_ID, viewModel.currentSessionId)
@@ -1120,11 +1224,21 @@ class StaticAnalysisActivity : AppCompatActivity() {
         return (from + (offset + step / 2) / step * step).coerceIn(from, to)
     }
 
+    /** Shows [value] in [field], unless the user is mid-edit in it. */
+    private fun renderParamField(field: EditText, value: Int) {
+        if (!field.hasFocus()) field.setText(value.toString())
+    }
+
     /** Flushes any in-progress typing into the sliders (focus loss commits). */
     private fun commitParamFields() {
         tvSubsetValue.clearFocus()
         tvStepValue.clearFocus()
         tvStrainValue.clearFocus()
+        if (::etSubsetMinValue.isInitialized) {
+            etSubsetMinValue.clearFocus()
+            etSubsetMaxValue.clearFocus()
+            etVsgMaxValue.clearFocus()
+        }
     }
 
     /**
@@ -1163,14 +1277,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // read via slider.value everywhere.
     // ------------------------------------------------------------------
     private fun setupParameterControls() {
-        // Never overwrite a field mid-edit; its own commit handles that.
-        val render = { field: EditText, value: Int ->
-            if (!field.hasFocus()) field.setText(value.toString())
-        }
         val updateLabels = {
-            render(tvSubsetValue, etSubsetSize.value.toInt())
-            render(tvStepValue, etStepSize.value.toInt())
-            render(tvStrainValue, etStrainWindow.value.toInt())
+            renderParamField(tvSubsetValue, etSubsetSize.value.toInt())
+            renderParamField(tvStepValue, etStepSize.value.toInt())
+            renderParamField(tvStrainValue, etStrainWindow.value.toInt())
             updateAdvancedSummary?.invoke()
         }
         updateLabels()
@@ -1210,6 +1320,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
             etStrainWindow.value = 15f
             rgInterpolator.check(R.id.rbBicubic)
             updateAdvancedSummary?.invoke()
+            // Reset also hands the sweep back to its suggested inputs.
+            sweepUserModified = false
+            seedSweepSuggestions()
         }
 
         fun infoDialog(titleRes: Int, bodyRes: Int): (View) -> Unit = {
@@ -1235,9 +1348,542 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etSubsetSize.addOnChangeListener { _, _, fromUser ->
             if (fromUser) viewModel.subsetUserModified = true
             updateLabels()
+            // Moving the single-setting subset re-seeds the sweep's suggestion,
+            // until the user sets their own sweep inputs.
+            if (fromUser) onRecommendationChanged()
         }
         etStepSize.addOnChangeListener { _, _, _ -> updateLabels() }
         etStrainWindow.addOnChangeListener { _, _, _ -> updateLabels() }
+    }
+
+    // ------------------------------------------------------------------
+    // Parameter sweep — the virtual strain gauge study of §5.4.5 of the DIC
+    // Good Practices Guide. The user gives a subset *range* and a ceiling on
+    // the VSG; [VsgStudy] derives the step sizes (1/6 to 1/3 of each subset)
+    // and the strain windows that follow from VSG = (window - 1) * step + 1.
+    // Every surviving combination is solved against one frame and lands in the
+    // result viewer as its own specimen.
+    // ------------------------------------------------------------------
+
+    private fun setupSweepControls() {
+        rgAnalysisMode = findViewById(R.id.rgAnalysisMode)
+        sweepBody = findViewById(R.id.sweepBody)
+        rangeSubset = findViewById(R.id.rangeSubset)
+        sliderVsgMax = findViewById(R.id.sliderVsgMax)
+        sliderSubsetSamples = findViewById(R.id.sliderSubsetSamples)
+        sliderVsgSamples = findViewById(R.id.sliderVsgSamples)
+        sliderStepDepth = findViewById(R.id.sliderStepDepth)
+        etSubsetMinValue = findViewById(R.id.etSubsetMinValue)
+        etSubsetMaxValue = findViewById(R.id.etSubsetMaxValue)
+        etVsgMaxValue = findViewById(R.id.etVsgMaxValue)
+        tvSubsetSamplesValue = findViewById(R.id.tvSubsetSamplesValue)
+        tvVsgSamplesValue = findViewById(R.id.tvVsgSamplesValue)
+        tvStepDepthValue = findViewById(R.id.tvStepDepthValue)
+        rgLineCutAxis = findViewById(R.id.rgLineCutAxis)
+        btnPickSweepFrame = findViewById(R.id.btnPickSweepFrame)
+        tvSweepPlan = findViewById(R.id.tvSweepPlan)
+
+        rgAnalysisMode.check(if (viewModel.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
+        rgAnalysisMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            viewModel.sweepMode = checkedId == R.id.rbModeSweep
+            sweepBody.visibility = if (viewModel.sweepMode) View.VISIBLE else View.GONE
+            btnCalculateFullField.setText(
+                if (viewModel.sweepMode) R.string.run_sweep else R.string.run_analysis,
+            )
+            refreshSweepPlan()
+        }
+
+        rgLineCutAxis.check(if (viewModel.lineCutHorizontal) R.id.rbAxisX else R.id.rbAxisY)
+        rgLineCutAxis.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) viewModel.lineCutHorizontal = checkedId == R.id.rbAxisX
+        }
+
+        btnPickSweepFrame.setOnClickListener {
+            pickFrame(R.string.sweep_frame, resolvedSweepFrame()) { index ->
+                viewModel.vsgFrameIndex = index
+                refreshSweepPlan()
+            }
+        }
+
+        wireSweepControls()
+        wireSweepInfoButtons()
+
+        sweepBody.visibility = if (viewModel.sweepMode) View.VISIBLE else View.GONE
+        sliderSubsetSamples.value = viewModel.subsetSamples.toFloat()
+        sliderVsgSamples.value = viewModel.vsgSamples.toFloat()
+        sliderStepDepth.value = viewModel.stepDenominator.toFloat()
+        seedSweepSuggestions()
+    }
+
+    // ------------------------------------------------------------------
+    // The three sweep inputs — min subset, max subset, Max VSG — are the
+    // user's to set. The app suggests sensible starting values (see
+    // [seedSweepSuggestions]); after that every edit funnels through a commit
+    // that clamps it to safe bounds. Sliders and text fields share those
+    // commits, so the two never disagree, and the slider ranges are fixed —
+    // no cross-slider re-ranging, which is what used to re-enter the planner
+    // mid-update.
+    // ------------------------------------------------------------------
+
+    private fun wireSweepControls() {
+        // The range slider carries both subset ends; a thumb drag commits both.
+        rangeSubset.addOnChangeListener { slider, _, fromUser ->
+            onSliderInput(fromUser) { commitSubsetRange(slider.values[0].toInt(), slider.values[1].toInt()) }
+        }
+        sliderVsgMax.addOnChangeListener { _, value, fromUser ->
+            onSliderInput(fromUser) { commitVsgMax(value.toInt()) }
+        }
+        sliderSubsetSamples.addOnChangeListener { _, value, fromUser ->
+            onSliderInput(fromUser) {
+                viewModel.subsetSamples = value.toInt()
+                refreshSweepPlan()
+            }
+        }
+        sliderVsgSamples.addOnChangeListener { _, value, fromUser ->
+            onSliderInput(fromUser) {
+                viewModel.vsgSamples = value.toInt()
+                refreshSweepPlan()
+            }
+        }
+        sliderStepDepth.addOnChangeListener { _, value, fromUser ->
+            onSliderInput(fromUser) {
+                viewModel.stepDenominator = value.toInt()
+                refreshSweepPlan()
+            }
+        }
+
+        wireSweepField(etSubsetMinValue, { viewModel.subsetMin }) { commitSubsetMin(it) }
+        wireSweepField(etSubsetMaxValue, { viewModel.subsetMax }) { commitSubsetMax(it) }
+        wireSweepField(etVsgMaxValue, { viewModel.vsgMax }) { commitVsgMax(it) }
+    }
+
+    /** Runs [body] for a genuine input, ignoring the echo of our own writes. */
+    private inline fun onSliderInput(fromUser: Boolean, body: () -> Unit) {
+        if (bindingSweep) return
+        if (fromUser) sweepUserModified = true
+        body()
+    }
+
+    /**
+     * A numeric field the user can type into. Non-numeric input reverts to the
+     * current value ([current]); a number is committed (and clamped) via
+     * [commit]. Commit on Done or focus loss, mirroring the analysis fields.
+     */
+    private fun wireSweepField(field: EditText, current: () -> Int, commit: (Int) -> Unit) {
+        // Commit on focus loss only. Done just drops focus, which fires this —
+        // so the field is unfocused by the time we write the clamped value back,
+        // and the displayed text always reflects what was actually applied.
+        field.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) return@setOnFocusChangeListener
+            val typed = field.text.toString().trim().toIntOrNull()
+            if (typed == null) {
+                renderParamField(field, current())
+            } else {
+                sweepUserModified = true
+                commit(typed)
+            }
+        }
+        field.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                field.clearFocus()
+                getSystemService(InputMethodManager::class.java)
+                    ?.hideSoftInputFromWindow(field.windowToken, 0)
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    /** Largest subset the sweep may use: the slider ceiling, capped to the ROI. */
+    private fun effectiveSubsetCeiling(): Int =
+        minOf(SubsetRecommender.MAX_SUBSET, maxSubsetForRoi())
+
+    /** Rounds [raw] to an odd subset inside the slider's range. */
+    private fun oddSubset(raw: Int): Int =
+        raw.coerceIn(SubsetRecommender.MIN_SUBSET, SubsetRecommender.MAX_SUBSET) or 1
+
+    /** Commits both ends of the subset range together (a range-slider drag). */
+    private fun commitSubsetRange(rawLo: Int, rawHi: Int) {
+        val ceiling = effectiveSubsetCeiling()
+        val lo = oddSubset(rawLo).coerceIn(SubsetRecommender.MIN_SUBSET, ceiling)
+        val hi = oddSubset(rawHi).coerceIn(lo, ceiling)
+        viewModel.subsetMin = lo
+        viewModel.subsetMax = hi
+        writeSubsetRange(lo, hi)
+        refreshSweepPlan()
+    }
+
+    /**
+     * Min subset from its text field. Clamped to at least
+     * [SubsetRecommender.MIN_SUBSET] and no more than the current max — typing
+     * past the max simply pins it there.
+     */
+    private fun commitSubsetMin(raw: Int) {
+        val currentMax = viewModel.subsetMax.takeIf { it > 0 } ?: effectiveSubsetCeiling()
+        viewModel.subsetMin = oddSubset(raw).coerceAtMost(currentMax)
+        writeSubsetRange(viewModel.subsetMin, viewModel.subsetMax)
+        refreshSweepPlan()
+    }
+
+    /**
+     * Max subset from its text field. Clamped to at least the min and no more
+     * than the largest the image and ROI can hold — a huge typed value snaps
+     * down to that ceiling.
+     */
+    private fun commitSubsetMax(raw: Int) {
+        val floor = viewModel.subsetMin.coerceAtLeast(SubsetRecommender.MIN_SUBSET)
+        viewModel.subsetMax = oddSubset(raw).coerceIn(floor, effectiveSubsetCeiling())
+        writeSubsetRange(viewModel.subsetMin, viewModel.subsetMax)
+        refreshSweepPlan()
+    }
+
+    /** Max VSG. Clamped to the reasonable band; a mistyped huge number snaps in. */
+    private fun commitVsgMax(raw: Int) {
+        viewModel.vsgMax = raw.coerceIn(VSG_MIN_INPUT, VSG_MAX_INPUT)
+        writeField(sliderVsgMax, etVsgMaxValue, viewModel.vsgMax)
+        refreshSweepPlan()
+    }
+
+    /** Reflects the subset range onto the range slider and both text fields. */
+    private fun writeSubsetRange(lo: Int, hi: Int) {
+        bindingSweep = true
+        rangeSubset.values = listOf(
+            lo.toFloat().coerceIn(rangeSubset.valueFrom, rangeSubset.valueTo),
+            hi.toFloat().coerceIn(rangeSubset.valueFrom, rangeSubset.valueTo),
+        )
+        bindingSweep = false
+        renderParamField(etSubsetMinValue, lo)
+        renderParamField(etSubsetMaxValue, hi)
+    }
+
+    /** Reflects a committed value back onto its slider and field without echo. */
+    private fun writeField(slider: Slider, field: EditText, value: Int) {
+        bindingSweep = true
+        slider.value = value.toFloat().coerceIn(slider.valueFrom, slider.valueTo)
+        bindingSweep = false
+        renderParamField(field, value)
+    }
+
+    /**
+     * Seeds the sweep inputs with the app's suggestions — a subset window
+     * centred on the SSSIG recommendation and a Max VSG a few times the subset.
+     * Runs until the user edits a sweep control; after that their values stand.
+     */
+    private fun seedSweepSuggestions() {
+        if (!::rangeSubset.isInitialized) return
+        if (sweepUserModified) {
+            refreshSweepPlan()
+            return
+        }
+        val ceiling = effectiveSubsetCeiling()
+        val rec = currentSubsetSize().coerceIn(SubsetRecommender.MIN_SUBSET, ceiling)
+        val (lo, hi) = suggestedSubsetWindow(rec, ceiling)
+        viewModel.subsetMin = lo
+        viewModel.subsetMax = hi
+        viewModel.vsgMax = (VSG_SUGGESTION_FACTOR * hi).coerceIn(VSG_MIN_INPUT, VSG_MAX_INPUT)
+        writeSubsetRange(lo, hi)
+        writeField(sliderVsgMax, etVsgMaxValue, viewModel.vsgMax)
+        refreshSweepPlan()
+    }
+
+    /**
+     * A subset window of [SUGGESTED_SUBSET_SPAN] centred on [rec], shifted whole
+     * to fit inside `[MIN_SUBSET, ceiling]` so it never collapses to a single
+     * value unless the valid range itself is that narrow.
+     */
+    private fun suggestedSubsetWindow(rec: Int, ceiling: Int): Pair<Int, Int> {
+        val half = SUGGESTED_SUBSET_SPAN / 2
+        var lo = rec - half
+        var hi = rec + half
+        if (lo < SubsetRecommender.MIN_SUBSET) {
+            hi += SubsetRecommender.MIN_SUBSET - lo
+            lo = SubsetRecommender.MIN_SUBSET
+        }
+        if (hi > ceiling) {
+            lo -= hi - ceiling
+            hi = ceiling
+        }
+        return oddSubset(lo.coerceAtLeast(SubsetRecommender.MIN_SUBSET)) to oddSubset(hi)
+    }
+
+    /** Re-seeds the sweep from the current recommendation when the user hasn't taken over. */
+    private fun onRecommendationChanged() = seedSweepSuggestions()
+
+    private fun wireSweepInfoButtons() {
+        fun show(titleRes: Int, body: CharSequence): (View) -> Unit = {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(titleRes)
+                .setMessage(body)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+        findViewById<View>(R.id.btnSweepInfo)
+            .setOnClickListener(show(R.string.analysis_mode, getString(R.string.info_analysis_mode)))
+        findViewById<View>(R.id.btnSubsetRangeInfo)
+            .setOnClickListener(show(R.string.subset_range, getString(R.string.info_subset_range)))
+        findViewById<View>(R.id.btnVsgMaxInfo)
+            .setOnClickListener(show(R.string.vsg_max, getString(R.string.info_vsg_max)))
+        findViewById<View>(R.id.btnSamplesInfo)
+            .setOnClickListener(show(R.string.subset_samples, getString(R.string.info_subset_samples)))
+        findViewById<View>(R.id.btnStepDepthInfo)
+            .setOnClickListener(show(R.string.step_depth, getString(R.string.info_step_depth)))
+        findViewById<View>(R.id.btnLineCutInfo)
+            .setOnClickListener(show(R.string.line_cut_axis, getString(R.string.info_line_cut_axis)))
+    }
+
+    /** Defaults to the last frame — the most deformed one in a monotonic test. */
+    private fun resolvedSweepFrame(): Int {
+        val last = maxOf(0, viewModel.defCount - 1)
+        val stored = viewModel.vsgFrameIndex
+        return if (stored < 0 || stored > last) last else stored
+    }
+
+    private fun frameLabel(index: Int): String =
+        viewModel.defOriginalNames.getOrNull(index)?.substringAfterLast('/')
+            ?: getString(R.string.sweep_frame_btn_fmt, index + 1)
+
+    private fun pickFrame(titleRes: Int, current: Int, onPicked: (Int) -> Unit) {
+        val labels = List(viewModel.defCount) { frameLabel(it) }.toTypedArray()
+        if (labels.isEmpty()) return
+        MaterialAlertDialogBuilder(this)
+            .setTitle(titleRes)
+            .setSingleChoiceItems(labels, current.coerceIn(labels.indices)) { dialog, which ->
+                onPicked(which)
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Largest subset the loaded image and ROI can actually hold.
+     *
+     * The engine drops any grid point whose subset box comes within
+     * [ENGINE_EDGE_BUFFER_PX] of the image edge, and refuses a solve that
+     * leaves no points at all. Capping the sweep here keeps it from asking for
+     * a subset the ROI cannot fit and bailing out before the first solve.
+     */
+    private fun maxSubsetForRoi(): Int {
+        val w = viewModel.realRefWidth
+        val h = viewModel.realRefHeight
+        if (w <= 0 || h <= 0) return SubsetRecommender.MAX_SUBSET
+        val fits = if (viewModel.hasCustomRoi) {
+            minOf(viewModel.roiW, viewModel.roiH) - 2 * ENGINE_EDGE_BUFFER_PX
+        } else {
+            // Full frame is inset by (subset/2 + slack) a side and must still be
+            // one subset wide: imgW - 2*(s/2 + slack) >= s  =>  s <= imgW/2 - slack.
+            minOf(w, h) / 2 - ROI_MARGIN_SLACK_PX
+        }
+        // Keep it odd and inside the slider's range.
+        return (fits - 1 or 1).coerceIn(SubsetRecommender.MIN_SUBSET, SubsetRecommender.MAX_SUBSET)
+    }
+
+    /**
+     * The sweep grid the current inputs describe, capped to the subsets the ROI
+     * can hold: x subset sizes × y VSG sizes × z step sizes.
+     */
+    private fun currentPlan(): List<VsgStudy.Point> {
+        val ceiling = maxSubsetForRoi()
+        if (viewModel.subsetMin > ceiling) return emptyList()
+        return VsgStudy.plan(
+            subsetMin = viewModel.subsetMin,
+            subsetMax = viewModel.subsetMax.coerceAtMost(ceiling),
+            subsetSamples = viewModel.subsetSamples,
+            vsgMax = viewModel.vsgMax,
+            vsgSamples = viewModel.vsgSamples,
+            stepDenominator = viewModel.stepDenominator,
+        )
+    }
+
+    private fun refreshSweepPlan() {
+        if (!::tvSweepPlan.isInitialized) return
+        tvSubsetSamplesValue.text = sliderSubsetSamples.value.toInt().toString()
+        tvVsgSamplesValue.text = sliderVsgSamples.value.toInt().toString()
+        tvStepDepthValue.text = getString(R.string.step_depth_value_fmt, sliderStepDepth.value.toInt())
+        btnPickSweepFrame.text = getString(R.string.sweep_frame_btn_fmt, resolvedSweepFrame() + 1)
+
+        val plan = currentPlan()
+        tvSweepPlan.text = when {
+            plan.isNotEmpty() -> planSummary(plan)
+            viewModel.subsetMin > maxSubsetForRoi() ->
+                getString(R.string.sweep_plan_subset_too_big_fmt, maxSubsetForRoi())
+            else -> getString(R.string.sweep_plan_empty)
+        }
+        checkReady()
+    }
+
+    /** "N analyses = X subset × Y VSG · step 1/D · subset 41–61 px" for a plan. */
+    private fun planSummary(plan: List<VsgStudy.Point>): String = getString(
+        R.string.sweep_plan_grid_fmt,
+        plan.size,
+        plan.map { it.subset }.distinct().size,
+        viewModel.vsgSamples,
+        viewModel.stepDenominator,
+        plan.minOf { it.subset },
+        plan.maxOf { it.subset },
+    )
+
+    /** Short per-combination label; becomes the frame name in viewer and report. */
+    private fun combinationLabel(point: VsgStudy.Point): String = getString(
+        R.string.sweep_frame_label_fmt,
+        point.subset,
+        point.step,
+        point.strainWindow,
+        point.vsg,
+    )
+
+    @Suppress("ReturnCount") // each precondition bails out on the spot
+    private fun startVsgSweep() {
+        if (!viewModel.isReadyToCompute()) return
+        val plan = currentPlan()
+        if (plan.isEmpty()) return
+        // Every combination shares the ROI, so the largest subset has to fit it.
+        val roi = resolveRoi(plan.maxOf { it.subset }) ?: return
+
+        if (viewModel.wouldCreateNewSession(this)) {
+            TokenStore.refreshSessionLimit(this, SessionStore.list(this).size)
+            if (TokenStore.isSessionLimitReached(this)) {
+                startActivity(Intent(this, SessionLimitActivity::class.java))
+                return
+            }
+        }
+
+        isProcessing = true
+        checkReady()
+        processingStartTime = System.currentTimeMillis()
+        showComputeOverlay(getString(R.string.mode_sweep), planSummary(plan))
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        wireSweepCancelButton()
+
+        val debugDir = File(cacheDir, "dic_debug").apply { mkdirs() }
+        val use6x6 = currentUseKeysInterpolator()
+
+        lifecycleScope.launch {
+            val outcome = runCatching {
+                val request = AnalysisViewModel.SweepRequest(
+                    plan = plan,
+                    labels = plan.map { combinationLabel(it) },
+                    roi = roi,
+                    use6x6 = use6x6,
+                    debugDir = debugDir,
+                )
+                viewModel.runVsgSweep(applicationContext, request) { progress ->
+                    showSweepProgress(progress)
+                }
+            }.onFailure { Timber.e(it, "Parameter sweep failed") }.getOrNull()
+
+            isProcessing = false
+            hideComputeOverlay()
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            progressBar.visibility = View.GONE
+            checkReady()
+            onSweepFinished(outcome)
+        }
+    }
+
+    private fun wireSweepCancelButton() {
+        findViewById<View>(R.id.btnRunCancel).apply {
+            isEnabled = true
+            setOnClickListener {
+                MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
+                    .setTitle(R.string.cancel_run_title)
+                    .setMessage(R.string.cancel_run_body)
+                    .setPositiveButton(R.string.action_cancel) { _, _ ->
+                        VsgStudyRunner.cancelRequested = true
+                        isEnabled = false
+                    }
+                    .setNegativeButton(R.string.keep_running, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun showSweepProgress(progress: VsgStudyRunner.Progress) {
+        setComputeProgress(progress.percent)
+        setComputeStatus(
+            getString(
+                R.string.sweep_running_fmt,
+                progress.runIndex + 1,
+                progress.totalRuns,
+                progress.point.subset,
+                progress.point.step,
+                progress.point.vsg,
+            ),
+        )
+        runOnUiThread {
+            overlayTitle.text = getString(R.string.mode_sweep)
+            if (progress.pointsSolved > 0) {
+                findViewById<TextView>(R.id.tvRunPoints).text =
+                    String.format(java.util.Locale.US, "%,d", progress.pointsSolved)
+            }
+            if (progress.convergencePercent >= 0f) {
+                findViewById<TextView>(R.id.tvRunConvergence).text =
+                    String.format(java.util.Locale.US, "%.1f%%", progress.convergencePercent)
+            }
+        }
+    }
+
+    /**
+     * A finished sweep is an ordinary session whose frames happen to be
+     * settings rather than images, so it opens in the normal result viewer.
+     */
+    @Suppress("ReturnCount") // one branch per way a sweep can end
+    private fun onSweepFinished(outcome: AnalysisViewModel.BatchAnalysisOutcome?) {
+        if (outcome == null) {
+            Toast.makeText(this, R.string.sweep_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+        if (outcome.engineErrorCode == AnalysisViewModel.ERROR_SESSION_LIMIT) {
+            startActivity(Intent(this, SessionLimitActivity::class.java))
+            return
+        }
+        if (outcome.totalFrames == 0) {
+            // Nothing completed: a cancel is the user's own doing, anything
+            // else is an engine failure the user needs the reason for.
+            if (outcome.engineErrorCode != VsgStudyRunner.ERROR_CANCELLED) {
+                showSweepFailureDialog(outcome.engineErrorCode)
+            }
+            return
+        }
+        val skipped = viewModel.sweepSkipped.size
+        if (skipped > 0) {
+            // Partial sweeps are still worth browsing; say what was dropped.
+            Toast.makeText(
+                this,
+                getString(R.string.sweep_partial_fmt, skipped, skipped + outcome.totalFrames),
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+
+        viewModel.lastDefPath = viewModel.defFilePaths.getOrNull(resolvedSweepFrame()) ?: ""
+        viewModel.lastBatchDirPath = outcome.batchDirPath
+        viewModel.hasCompletedAnalysis = true
+        checkReady()
+        // Stage the swept parameter space on the interactive lattice; it opens
+        // the result viewer from there.
+        openResultViewer(sweep = true)
+    }
+
+    /**
+     * Why a sweep produced nothing. The engine's codes are the same ones a
+     * single analysis reports, and every one of them points at the images or
+     * the ROI rather than at the settings — so the message names the cause
+     * instead of saying the sweep failed.
+     */
+    private fun showSweepFailureDialog(engineErrorCode: Int) {
+        val reason = when (engineErrorCode) {
+            ENGINE_ERROR_FEATURES -> R.string.sweep_fail_features
+            ENGINE_ERROR_ROI -> R.string.sweep_fail_roi
+            ENGINE_ERROR_INIT -> R.string.sweep_fail_init
+            else -> R.string.sweep_fail_unknown
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.analysis_failed_title)
+            .setMessage(getString(reason, engineErrorCode))
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     // ------------------------------------------------------------------
@@ -1336,8 +1982,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val sizeError = viewModel.frameSizeError
         if (sizeError != null) tvResult.text = sizeError
 
-        // Page-2 gate: Compute needs images AND the settings page visited
-        val computeEnabled = ready && viewModel.settingsReviewed && !isProcessing && sizeError == null
+        // Page-2 gate: Compute needs images AND the settings page visited.
+        // A VSG study additionally needs a ladder to walk and two frames to
+        // walk it on (the zero-force and highest-gradient images).
+        val computeEnabled = ready &&
+            viewModel.settingsReviewed &&
+            !isProcessing &&
+            sizeError == null &&
+            (!viewModel.sweepMode || currentPlan().isNotEmpty())
         btnCalculateFullField.isEnabled = computeEnabled
         btnCalculateFullField.alpha = if (computeEnabled) 1.0f else 0.4f
 

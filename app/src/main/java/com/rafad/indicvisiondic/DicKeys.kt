@@ -60,4 +60,30 @@ object DicKeys {
     const val ROI_H = "ROI_H"
     const val FRAME_NAME = "FRAME_NAME"
     const val DAT_PATH = "DAT_PATH"
+
+    // ── Parameter sweep (VsgStudy) → ResultViewerActivity
+    // A sweep varies the settings instead of the image, so each frame of the
+    // result carries its own subset/step/strain window. Absent for an ordinary
+    // analysis, which is what tells the viewer it is not looking at a sweep.
+
+    /** Per-frame subset sizes, index-aligned with the frames. */
+    const val SWEEP_SUBSETS = "SWEEP_SUBSETS"
+
+    /** Per-frame step sizes. Also drives rendering, which is step-dependent. */
+    const val SWEEP_STEPS = "SWEEP_STEPS"
+
+    /** Per-frame strain windows. */
+    const val SWEEP_STRAIN_WINS = "SWEEP_STRAIN_WINS"
+
+    /** True when the study's line cut runs along x; false for along y. */
+    const val LINE_CUT_HORIZONTAL = "LINE_CUT_HORIZONTAL"
+
+    // Sweep combinations the engine could not solve, for the lattice staging
+    // screen (VsgLatticeActivity). Index-aligned with each other.
+    const val SWEEP_SKIP_SUBSETS = "SWEEP_SKIP_SUBSETS"
+    const val SWEEP_SKIP_STEPS = "SWEEP_SKIP_STEPS"
+    const val SWEEP_SKIP_STRAIN_WINS = "SWEEP_SKIP_STRAIN_WINS"
+
+    /** Frame the result viewer opens on — a lattice node tap picks one. */
+    const val START_FRAME = "START_FRAME"
 }
