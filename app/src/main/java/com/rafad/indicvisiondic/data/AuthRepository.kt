@@ -83,6 +83,27 @@ class AuthRepository(context: Context) {
         }
     }
 
+    /**
+     * Password recovery: email a reset link. This is a pure Firebase identity
+     * operation — it does not sign in and does not touch the backend, so it
+     * works whether or not the cloud is configured. The user follows the link,
+     * sets a new password, then returns here to sign in.
+     *
+     * A missing account is reported as success on purpose: surfacing "no account
+     * for this email" here would let anyone probe which emails are registered.
+     */
+    suspend fun sendPasswordReset(email: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            auth.sendPasswordResetEmail(email.trim()).await()
+            Result.success(Unit)
+        } catch (e: FirebaseAuthInvalidUserException) {
+            Result.success(Unit) // don't reveal whether the email is registered
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Could not send password reset")
+            Result.failure(Exception(e.message ?: "Could not send the reset email."))
+        }
+    }
+
     /** True if [link] is a Firebase email sign-in link. */
     fun isEmailSignInLink(link: String): Boolean = auth.isSignInWithEmailLink(link)
 

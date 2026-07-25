@@ -29,6 +29,49 @@ object Insets {
     /** Pad both top and bottom (e.g. a full-screen root with its own bars). */
     fun padVertical(view: View) = applyInsets(view, top = true, bottom = true)
 
+    /**
+     * For a scroll container that hosts text fields: pad the top by the
+     * status-bar inset and the bottom by whichever is larger — the navigation
+     * bar or the IME (keyboard). When the keyboard opens, the extra bottom
+     * padding shrinks the scroll viewport so the focused field can scroll clear
+     * of the keyboard instead of being covered by it. Apply this to the
+     * scrolling view itself (e.g. the ScrollView), not its inner content.
+     */
+    fun padTopAndImeBottom(view: View) {
+        val startTop = view.paddingTop
+        val startBottom = view.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, windowInsets ->
+            val bars = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+            )
+            val ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            v.updatePadding(
+                top = startTop + bars.top,
+                bottom = startBottom + maxOf(bars.bottom, ime),
+            )
+            windowInsets
+        }
+        if (ViewCompat.isAttachedToWindow(view)) ViewCompat.requestApplyInsets(view)
+    }
+
+    /**
+     * Pad the bottom of a scroll container by the IME (keyboard) inset only, on
+     * top of any padding already declared. Use for a scroll view that sits above
+     * its own bottom chrome (e.g. a wizard nav bar that already handles the
+     * navigation-bar inset): when the keyboard opens, the added padding shrinks
+     * the scroll viewport so a focused field can scroll clear of the keyboard;
+     * when it closes, the inset returns to zero and the padding with it.
+     */
+    fun padImeBottom(view: View) {
+        val startBottom = view.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, windowInsets ->
+            val ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            v.updatePadding(bottom = startBottom + ime)
+            windowInsets
+        }
+        if (ViewCompat.isAttachedToWindow(view)) ViewCompat.requestApplyInsets(view)
+    }
+
     private fun applyInsets(view: View, top: Boolean = false, bottom: Boolean = false) {
         // Capture the padding declared in XML so we ADD the inset to it
         // rather than overwrite it (idempotent across re-dispatches).

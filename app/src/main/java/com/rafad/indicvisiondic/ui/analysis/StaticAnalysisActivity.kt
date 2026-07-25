@@ -142,24 +142,22 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // Parameter-sweep controls (see [VsgStudy])
     private lateinit var rgAnalysisMode: MaterialButtonToggleGroup
     private lateinit var advancedParamsCard: View
+    private lateinit var lineCutPreviewCard: View
     private lateinit var sweepBody: View
     private lateinit var rangeSubset: RangeSlider
-    private lateinit var sliderVsgMax: Slider
-    private lateinit var sliderSubsetSamples: Slider
-    private lateinit var sliderVsgSamples: Slider
-    private lateinit var sliderStepDepth: Slider
     private lateinit var etSubsetMinValue: EditText
     private lateinit var etSubsetMaxValue: EditText
     private lateinit var etVsgMaxValue: EditText
-    private lateinit var tvSubsetSamplesValue: TextView
-    private lateinit var tvVsgSamplesValue: TextView
-    private lateinit var tvStepDepthValue: TextView
+    private lateinit var etStepDepthValue: EditText
+    private lateinit var etSubsetSamplesValue: EditText
+    private lateinit var etVsgSamplesValue: EditText
     private lateinit var rgLineCutAxis: MaterialButtonToggleGroup
     private lateinit var btnPickSweepFrame: Button
     private lateinit var tvSweepPlan: TextView
     private lateinit var lineCutPreview: LineCutPreviewView
     private lateinit var sweepLatticePreview: VsgLatticeView
     private lateinit var btnRunSweep: Button
+    private lateinit var latticeSamplesBody: View
 
     /** True while a suggestion/clamp is driving the sweep sliders, not the user. */
     private var bindingSweep = false
@@ -298,6 +296,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvDefDropHint.text = getString(R.string.def_formats_hint_fmt, DicSettings.maxFrames(this))
         Insets.padBottom(findViewById(R.id.bottomNav))
 
+        // Keyboard: the settings/sweep pages hold number fields; pad their scroll
+        // viewports by the IME inset so a focused field scrolls clear of the
+        // keyboard instead of hiding behind it.
+        Insets.padImeBottom(findViewById(R.id.scrollStepSettings))
+        Insets.padImeBottom(findViewById(R.id.scrollStepSweep))
+
         // Gentle entrance: cards cascade in on first show only (not on rotation)
         if (savedInstanceState == null) {
             Motion.enterStaggered(findViewById(R.id.contentColumn))
@@ -346,20 +350,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     }
 
                     // FIX FULL IMAGE OVERRIDE: If it's exactly the image bounds, unset custom ROI
-                    if (viewModel.roiW == viewModel.realRefWidth && viewModel.roiH == viewModel.realRefHeight) {
-                        viewModel.hasCustomRoi = false
-                        tvInstruction.text = "✅ Full Image Analysis Set"
-                    } else {
-                        viewModel.hasCustomRoi = true
-                        tvInstruction.text = "✅ ROI Set: ${viewModel.roiW} x ${viewModel.roiH} px"
-                    }
+                    viewModel.hasCustomRoi =
+                        !(viewModel.roiW == viewModel.realRefWidth && viewModel.roiH == viewModel.realRefHeight)
+                    updateRoiSummary()
 
                     refreshLineCutPreview()
                     checkReady()
                     requestSubsetRecommendation()
                 }
             } else {
-                tvInstruction.text = "❌ ROI Selection Cancelled"
+                updateRoiSummary()
             }
         }
 
@@ -418,7 +418,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (viewModel.realRefWidth > 0) {
                 viewModel.hasCustomRoi = false
                 viewModel.roiMaskBytes = null
-                tvInstruction.text = "✅ Using Full Image"
+                updateRoiSummary()
                 refreshLineCutPreview()
                 checkReady()
                 requestSubsetRecommendation()
@@ -1382,24 +1382,22 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun setupSweepControls() {
         rgAnalysisMode = findViewById(R.id.rgAnalysisMode)
         advancedParamsCard = findViewById(R.id.advancedParamsCard)
+        lineCutPreviewCard = findViewById(R.id.lineCutPreviewCard)
         sweepBody = findViewById(R.id.sweepBody)
         rangeSubset = findViewById(R.id.rangeSubset)
-        sliderVsgMax = findViewById(R.id.sliderVsgMax)
-        sliderSubsetSamples = findViewById(R.id.sliderSubsetSamples)
-        sliderVsgSamples = findViewById(R.id.sliderVsgSamples)
-        sliderStepDepth = findViewById(R.id.sliderStepDepth)
         etSubsetMinValue = findViewById(R.id.etSubsetMinValue)
         etSubsetMaxValue = findViewById(R.id.etSubsetMaxValue)
         etVsgMaxValue = findViewById(R.id.etVsgMaxValue)
-        tvSubsetSamplesValue = findViewById(R.id.tvSubsetSamplesValue)
-        tvVsgSamplesValue = findViewById(R.id.tvVsgSamplesValue)
-        tvStepDepthValue = findViewById(R.id.tvStepDepthValue)
+        etStepDepthValue = findViewById(R.id.etStepDepthValue)
+        etSubsetSamplesValue = findViewById(R.id.etSubsetSamplesValue)
+        etVsgSamplesValue = findViewById(R.id.etVsgSamplesValue)
         rgLineCutAxis = findViewById(R.id.rgLineCutAxis)
         btnPickSweepFrame = findViewById(R.id.btnPickSweepFrame)
         tvSweepPlan = findViewById(R.id.tvSweepPlan)
         lineCutPreview = findViewById(R.id.lineCutPreview)
         sweepLatticePreview = findViewById(R.id.sweepLatticePreview)
         btnRunSweep = findViewById(R.id.btnRunSweep)
+        latticeSamplesBody = findViewById(R.id.latticeSamplesBody)
 
         rgAnalysisMode.check(if (viewModel.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
         rgAnalysisMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
@@ -1421,12 +1419,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             refreshLineCutPreview()
         }
 
-        btnPickSweepFrame.setOnClickListener {
-            pickFrame(R.string.sweep_frame, resolvedSweepFrame()) { index ->
-                viewModel.vsgFrameIndex = index
-                refreshSweepPlan()
-            }
-        }
+        btnPickSweepFrame.setOnClickListener { pickSweepFrameWithPreview() }
 
         btnRunSweep.setOnClickListener {
             commitParamFields()
@@ -1441,24 +1434,30 @@ class StaticAnalysisActivity : AppCompatActivity() {
             sweepChevron.rotation = if (expanded) 0f else 180f
         }
 
+        findViewById<View>(R.id.btnLatticeSamples).setOnClickListener {
+            val expanded = latticeSamplesBody.visibility == View.VISIBLE
+            latticeSamplesBody.visibility = if (expanded) View.GONE else View.VISIBLE
+        }
+
         wireSweepControls()
         wireSweepInfoButtons()
 
         applyAnalysisModeUi()
-        sliderSubsetSamples.value = viewModel.subsetSamples.toFloat()
-        sliderVsgSamples.value = viewModel.vsgSamples.toFloat()
-        sliderStepDepth.value = viewModel.stepDenominator.toFloat()
+        renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
+        renderParamField(etVsgSamplesValue, viewModel.vsgSamples)
+        renderParamField(etStepDepthValue, viewModel.stepDenominator)
         seedSweepSuggestions()
     }
 
     /**
      * Single setting keeps Advanced + Compute on page 2. Parameter sweep hides
-     * both and routes through Next → the sweep setup page.
+     * Advanced, shows the line-cut preview, and routes through Next → page 3.
      */
     private fun applyAnalysisModeUi() {
         val sweep = viewModel.sweepMode
         advancedParamsCard.visibility = if (sweep) View.GONE else View.VISIBLE
-        btnCalculateFullField.visibility = if (sweep) View.GONE else View.VISIBLE
+        lineCutPreviewCard.visibility = if (sweep) View.VISIBLE else View.GONE
+        if (sweep) refreshLineCutPreview()
         updateWizardChrome()
         checkReady()
     }
@@ -1478,31 +1477,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
         rangeSubset.addOnChangeListener { slider, _, fromUser ->
             onSliderInput(fromUser) { commitSubsetRange(slider.values[0].toInt(), slider.values[1].toInt()) }
         }
-        sliderVsgMax.addOnChangeListener { _, value, fromUser ->
-            onSliderInput(fromUser) { commitVsgMax(value.toInt()) }
-        }
-        sliderSubsetSamples.addOnChangeListener { _, value, fromUser ->
-            onSliderInput(fromUser) {
-                viewModel.subsetSamples = value.toInt()
-                refreshSweepPlan()
-            }
-        }
-        sliderVsgSamples.addOnChangeListener { _, value, fromUser ->
-            onSliderInput(fromUser) {
-                viewModel.vsgSamples = value.toInt()
-                refreshSweepPlan()
-            }
-        }
-        sliderStepDepth.addOnChangeListener { _, value, fromUser ->
-            onSliderInput(fromUser) {
-                viewModel.stepDenominator = value.toInt()
-                refreshSweepPlan()
-            }
-        }
 
         wireSweepField(etSubsetMinValue, { viewModel.subsetMin }) { commitSubsetMin(it) }
         wireSweepField(etSubsetMaxValue, { viewModel.subsetMax }) { commitSubsetMax(it) }
         wireSweepField(etVsgMaxValue, { viewModel.vsgMax }) { commitVsgMax(it) }
+        wireSweepField(etStepDepthValue, { viewModel.stepDenominator }) { commitStepDepth(it) }
+        wireSweepField(etSubsetSamplesValue, { viewModel.subsetSamples }) { commitSubsetSamples(it) }
+        wireSweepField(etVsgSamplesValue, { viewModel.vsgSamples }) { commitVsgSamples(it) }
     }
 
     /** Runs [body] for a genuine input, ignoring the echo of our own writes. */
@@ -1589,7 +1570,28 @@ class StaticAnalysisActivity : AppCompatActivity() {
     /** Max VSG. Clamped to the reasonable band; a mistyped huge number snaps in. */
     private fun commitVsgMax(raw: Int) {
         viewModel.vsgMax = raw.coerceIn(VSG_MIN_INPUT, VSG_MAX_INPUT)
-        writeField(sliderVsgMax, etVsgMaxValue, viewModel.vsgMax)
+        renderParamField(etVsgMaxValue, viewModel.vsgMax)
+        refreshSweepPlan()
+    }
+
+    /** Sweep step denominator (subset ÷ N), clamped to the former slider band 2–6. */
+    private fun commitStepDepth(raw: Int) {
+        viewModel.stepDenominator = raw.coerceIn(2, 6)
+        renderParamField(etStepDepthValue, viewModel.stepDenominator)
+        refreshSweepPlan()
+    }
+
+    /** How many subset sizes to sample across the range (lattice x). */
+    private fun commitSubsetSamples(raw: Int) {
+        viewModel.subsetSamples = raw.coerceIn(VsgStudy.MIN_SAMPLES, VsgStudy.MAX_SAMPLES)
+        renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
+        refreshSweepPlan()
+    }
+
+    /** How many VSG sizes to sample up to Max VSG (lattice y). */
+    private fun commitVsgSamples(raw: Int) {
+        viewModel.vsgSamples = raw.coerceIn(VsgStudy.MIN_SAMPLES, VsgStudy.MAX_SAMPLES)
+        renderParamField(etVsgSamplesValue, viewModel.vsgSamples)
         refreshSweepPlan()
     }
 
@@ -1603,14 +1605,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         bindingSweep = false
         renderParamField(etSubsetMinValue, lo)
         renderParamField(etSubsetMaxValue, hi)
-    }
-
-    /** Reflects a committed value back onto its slider and field without echo. */
-    private fun writeField(slider: Slider, field: EditText, value: Int) {
-        bindingSweep = true
-        slider.value = value.toFloat().coerceIn(slider.valueFrom, slider.valueTo)
-        bindingSweep = false
-        renderParamField(field, value)
     }
 
     /**
@@ -1631,7 +1625,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         viewModel.subsetMax = hi
         viewModel.vsgMax = (VSG_SUGGESTION_FACTOR * hi).coerceIn(VSG_MIN_INPUT, VSG_MAX_INPUT)
         writeSubsetRange(lo, hi)
-        writeField(sliderVsgMax, etVsgMaxValue, viewModel.vsgMax)
+        renderParamField(etVsgMaxValue, viewModel.vsgMax)
         refreshSweepPlan()
     }
 
@@ -1691,14 +1685,52 @@ class StaticAnalysisActivity : AppCompatActivity() {
         viewModel.defOriginalNames.getOrNull(index)?.substringAfterLast('/')
             ?: getString(R.string.sweep_frame_btn_fmt, index + 1)
 
-    private fun pickFrame(titleRes: Int, current: Int, onPicked: (Int) -> Unit) {
-        val labels = List(viewModel.defCount) { frameLabel(it) }.toTypedArray()
-        if (labels.isEmpty()) return
+    /**
+     * Multi-frame sweep picker: preview of the highlighted frame while choosing,
+     * then collapse to name + Frame N of M on the settings row.
+     */
+    private fun pickSweepFrameWithPreview() {
+        val count = viewModel.defCount
+        if (count <= 1) return
+        var selected = resolvedSweepFrame().coerceIn(0, count - 1)
+        val header = layoutInflater.inflate(R.layout.dialog_sweep_frame_pick, null)
+        val preview = header.findViewById<ImageView>(R.id.ivSweepFrameDialogPreview)
+        val caption = header.findViewById<TextView>(R.id.tvSweepFrameDialogCaption)
+
+        fun bindPreview(index: Int) {
+            caption.text = getString(R.string.sweep_frame_of_fmt, index + 1, count)
+            val path = viewModel.defFilePaths.getOrNull(index)
+            if (path.isNullOrBlank()) {
+                preview.setImageDrawable(null)
+                return
+            }
+            val bmp = android.graphics.BitmapFactory.decodeFile(path)
+            if (bmp != null) {
+                val maxEdge = 480
+                val scale = minOf(1f, maxEdge.toFloat() / maxOf(bmp.width, bmp.height))
+                val w = (bmp.width * scale).toInt().coerceAtLeast(1)
+                val h = (bmp.height * scale).toInt().coerceAtLeast(1)
+                preview.setImageBitmap(
+                    if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(bmp, w, h, true)
+                    else bmp,
+                )
+            } else {
+                preview.setImageDrawable(null)
+            }
+        }
+        bindPreview(selected)
+
+        val labels = Array(count) { frameLabel(it) }
         MaterialAlertDialogBuilder(this)
-            .setTitle(titleRes)
-            .setSingleChoiceItems(labels, current.coerceIn(labels.indices)) { dialog, which ->
-                onPicked(which)
-                dialog.dismiss()
+            .setTitle(R.string.sweep_frame)
+            .setView(header)
+            .setSingleChoiceItems(labels, selected) { _, which ->
+                selected = which
+                bindPreview(which)
+            }
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                viewModel.vsgFrameIndex = selected
+                refreshSweepPlan()
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -1746,10 +1778,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun refreshSweepPlan() {
         if (!::tvSweepPlan.isInitialized) return
-        tvSubsetSamplesValue.text = sliderSubsetSamples.value.toInt().toString()
-        tvVsgSamplesValue.text = sliderVsgSamples.value.toInt().toString()
-        tvStepDepthValue.text = getString(R.string.step_depth_value_fmt, sliderStepDepth.value.toInt())
-        btnPickSweepFrame.text = getString(R.string.sweep_frame_btn_fmt, resolvedSweepFrame() + 1)
+        renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
+        renderParamField(etVsgSamplesValue, viewModel.vsgSamples)
+        renderParamField(etStepDepthValue, viewModel.stepDenominator)
+        refreshSweepFrameUi()
 
         val plan = currentPlan()
         tvSweepPlan.text = when {
@@ -1761,6 +1793,24 @@ class StaticAnalysisActivity : AppCompatActivity() {
         refreshLatticePreview(plan)
         refreshLineCutPreview()
         checkReady()
+    }
+
+    /** Collapsed frame summary when 2+ deformed frames; hidden for a single frame. */
+    private fun refreshSweepFrameUi() {
+        if (!::btnPickSweepFrame.isInitialized) return
+        val count = viewModel.defCount
+        if (count <= 1) {
+            btnPickSweepFrame.visibility = View.GONE
+            return
+        }
+        val index = resolvedSweepFrame()
+        btnPickSweepFrame.visibility = View.VISIBLE
+        btnPickSweepFrame.text = getString(
+            R.string.sweep_frame_summary_fmt,
+            frameLabel(index),
+            index + 1,
+            count,
+        )
     }
 
     /** Planned sweep lattice: every node drawn as filled (not yet run). */
@@ -1816,15 +1866,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
     }
 
-    /** "N analyses = X subset × Y VSG · step 1/D · subset 41–61 px" for a plan. */
+    /** "N analyses · subset a–b px · VSG c–d px" for a plan. */
     private fun planSummary(plan: List<VsgStudy.Point>): String = getString(
         R.string.sweep_plan_grid_fmt,
         plan.size,
-        plan.map { it.subset }.distinct().size,
-        viewModel.vsgSamples,
-        viewModel.stepDenominator,
         plan.minOf { it.subset },
         plan.maxOf { it.subset },
+        plan.minOf { it.vsg },
+        plan.maxOf { it.vsg },
     )
 
     /** Short per-combination label; becomes the frame name in viewer and report. */
@@ -1982,7 +2031,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             else -> R.string.sweep_fail_unknown
         }
         MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.analysis_failed_title)
+            .setTitle(R.string.sweep_fail_title)
             .setMessage(getString(reason, engineErrorCode))
             .setPositiveButton(android.R.string.ok, null)
             .show()
@@ -2047,19 +2096,26 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 btnNext.visibility = View.VISIBLE
                 btnNext.setText(R.string.next_settings)
                 btnBack.visibility = View.GONE
+                btnCalculateFullField.visibility = View.GONE
+                btnRunSweep.visibility = View.GONE
             }
             2 -> {
                 btnBack.visibility = View.VISIBLE
                 if (sweep) {
                     btnNext.visibility = View.VISIBLE
                     btnNext.setText(R.string.next_sweep)
+                    btnCalculateFullField.visibility = View.GONE
                 } else {
                     btnNext.visibility = View.GONE
+                    btnCalculateFullField.visibility = View.VISIBLE
                 }
+                btnRunSweep.visibility = View.GONE
             }
             else -> {
                 btnBack.visibility = View.VISIBLE
                 btnNext.visibility = View.GONE
+                btnCalculateFullField.visibility = View.GONE
+                btnRunSweep.visibility = View.VISIBLE
             }
         }
     }

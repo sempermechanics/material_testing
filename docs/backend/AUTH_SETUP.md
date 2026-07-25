@@ -13,8 +13,18 @@ Three providers are wired in
 | **Email link** | Firebase emails a sign-in link; tapping it completes sign-in | Yes, by construction |
 | **Email + password** | Standard Firebase email/password | Not until the user confirms |
 
-Sign-in works without any backend: cloud *sync* is what needs
-`INDIC_API_BASE_URL`.
+Forgot a password? The sign-in screen also offers **Forgot password?**, which
+emails a Firebase reset link (`sendPasswordReset` in
+[AuthRepository.kt](../../app/src/main/java/com/rafad/indicvisiondic/data/AuthRepository.kt)).
+It is identity-only — no backend call — and reports success even for an unknown
+email so the screen can't be used to probe which addresses are registered.
+
+> **Sign-in requires `INDIC_API_BASE_URL`.** `AuthRepository.firebaseThen`
+> short-circuits when the cloud base URL is blank, so Google and email/password
+> sign-in both fail without it. (Password *reset* and *sending* an email link are
+> the exceptions — they are pure Firebase calls.) Once a user has been APPROVED,
+> later launches fall back to an offline-approved cache, but the first sign-in
+> needs the backend reachable.
 
 ## 1. Firebase project
 
@@ -39,6 +49,35 @@ Sign-in works without any backend: cloud *sync* is what needs
 > Adding the SHA-1 in Firebase creates the matching Android OAuth client in the
 > underlying Google Cloud project automatically. You do not need to create
 > OAuth clients by hand.
+
+## 1a. Email-link App Link (required for passwordless sign-in)
+
+The passwordless link only signs the user in if tapping it **reopens this app**.
+Firebase mails a link back to the continue URL
+`https://indicvision-dic-app-auth.firebaseapp.com/finishSignIn`
+(`EMAIL_LINK_CONTINUE_URL` in
+[AuthRepository.kt](../../app/src/main/java/com/rafad/indicvisiondic/data/AuthRepository.kt)),
+and `AuthActivity` declares a matching App Link `intent-filter` for that
+host + path. For Android to route the link to the app instead of a browser, the
+host must serve a **Digital Asset Links** file that names this app at
+`https://indicvision-dic-app-auth.firebaseapp.com/.well-known/assetlinks.json`.
+
+A ready-to-deploy Firebase Hosting project for that domain lives in
+[`firebase-hosting/`](../../firebase-hosting/) — it holds the `assetlinks.json`
+(debug fingerprint filled in, release fingerprint to be added) and the
+`/finishSignIn` landing page. Add the release SHA-256, then
+`cd firebase-hosting && firebase deploy --only hosting`. Full steps and the
+`adb` verification commands are in
+[`firebase-hosting/README.md`](../../firebase-hosting/README.md).
+
+Firebase Auth here uses **direct continue-URL handlers** (not the retired
+Dynamic Links), so the emailed link lands on `/finishSignIn` with the
+`oobCode`/`mode=signIn` params the app reads.
+
+Until the file is live, email + password sign-in still works; only the
+passwordless **link** flow is affected (the link opens in a browser and can't
+complete). Email/password reset links are read by the user in the browser and
+do **not** depend on this App Link.
 
 ## 2. Backend — which project's tokens to accept
 

@@ -38,6 +38,8 @@ class AuthActivity : AppCompatActivity() {
     private lateinit var etConfirm: EditText
     private lateinit var btnMain: Button
     private lateinit var tvToggle: TextView
+    private lateinit var recoveryLinks: View
+    private lateinit var tvForgotPassword: TextView
     private lateinit var tvEmailLink: TextView
     private lateinit var btnGoogle: Button
 
@@ -51,11 +53,12 @@ class AuthActivity : AppCompatActivity() {
         etConfirm = findViewById(R.id.etConfirmPassword)
         btnMain = findViewById(R.id.btnMainAction)
         tvToggle = findViewById(R.id.tvToggleMode)
-        tvEmailLink = findViewById(R.id.tvForgotPassword) // repurposed → passwordless link
+        recoveryLinks = findViewById(R.id.recoveryLinks)
+        tvForgotPassword = findViewById(R.id.tvForgotPassword)
+        tvEmailLink = findViewById(R.id.tvEmailLink)
         progressBar = findViewById(R.id.progressBar)
         btnGoogle = findViewById(R.id.btnGoogleSignIn)
 
-        tvEmailLink.text = getString(R.string.auth_email_link)
         btnGoogle.visibility = if (GoogleSignInHelper.isConfigured(this)) View.VISIBLE else View.GONE
 
         btnMain.setOnClickListener { onMainAction() }
@@ -63,25 +66,40 @@ class AuthActivity : AppCompatActivity() {
             registerMode = !registerMode
             updateMode()
         }
+        tvForgotPassword.setOnClickListener { onForgotPassword() }
         tvEmailLink.setOnClickListener { onSendEmailLink() }
         btnGoogle.setOnClickListener { onGoogleSignIn() }
         updateMode()
 
-        Insets.padVertical(findViewById(R.id.authColumn))
+        // Pad the scroll container (not the inner column) so the keyboard inset
+        // shrinks the viewport and the focused field scrolls clear of the IME.
+        Insets.padTopAndImeBottom(findViewById(R.id.rootLayout))
 
         // Arriving via a tapped email sign-in link?
-        intent?.data?.toString()?.let { link ->
-            if (authRepo.isEmailSignInLink(link)) completeEmailLink(link)
-        }
+        maybeCompleteEmailLink(intent)
 
         intent.getStringExtra(DicKeys.ROUTING_ERROR)?.let { msg ->
             showSnackbar(msg, isError = msg != getString(R.string.logout_success))
         }
     }
 
+    /** The email sign-in link may arrive while this activity is already open. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        maybeCompleteEmailLink(intent)
+    }
+
+    private fun maybeCompleteEmailLink(intent: Intent?) {
+        val link = intent?.data?.toString() ?: return
+        if (authRepo.isEmailSignInLink(link)) completeEmailLink(link)
+    }
+
     private fun updateMode() {
         findViewById<TextView>(R.id.tvSubtitle).text = getString(R.string.secure_access_portal)
         layoutConfirm.visibility = if (registerMode) View.VISIBLE else View.GONE
+        // Password recovery and the sign-in link only make sense when signing in.
+        recoveryLinks.visibility = if (registerMode) View.GONE else View.VISIBLE
         btnMain.text = getString(if (registerMode) R.string.auth_create_account else R.string.auth_sign_in)
         tvToggle.text = getString(
             if (registerMode) R.string.auth_toggle_to_login else R.string.auth_toggle_to_register,
@@ -106,6 +124,22 @@ class AuthActivity : AppCompatActivity() {
             } else {
                 authRepo.signInWithPassword(email, password)
             }
+        }
+    }
+
+    private fun onForgotPassword() {
+        val email = etEmail.text.toString().trim()
+        if (!validEmail(email)) return
+        setLoading(true)
+        lifecycleScope.launch {
+            val result = authRepo.sendPasswordReset(email)
+            setLoading(false)
+            result.fold(
+                onSuccess = { showSnackbar(getString(R.string.auth_reset_sent, email), isError = false) },
+                onFailure = {
+                    showSnackbar(it.message ?: getString(R.string.auth_reset_failed), isError = true)
+                },
+            )
         }
     }
 
@@ -191,6 +225,7 @@ class AuthActivity : AppCompatActivity() {
         progressBar.visibility = if (loading) View.VISIBLE else View.GONE
         btnMain.isEnabled = !loading
         btnGoogle.isEnabled = !loading
+        tvForgotPassword.isEnabled = !loading
         tvEmailLink.isEnabled = !loading
     }
 

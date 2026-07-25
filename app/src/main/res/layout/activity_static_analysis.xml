@@ -466,6 +466,76 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
+                <!-- Line-cut preview: Parameter sweep only -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/lineCutPreviewCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/line_cut_preview_heading"
+                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+
+                            <ImageButton
+                                android:id="@+id/btnLineCutInfo"
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:layout_marginStart="6dp"
+                                android:background="?attr/selectableItemBackgroundBorderless"
+                                android:contentDescription="@string/info"
+                                android:scaleType="fitCenter"
+                                android:src="@drawable/ic_info_min"
+                                app:tint="@color/text_secondary" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/rgLineCutAxis"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            app:checkedButton="@+id/rbAxisX"
+                            app:selectionRequired="true"
+                            app:singleSelection="true">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/rbAxisX"
+                                style="@style/Widget.IndicVision.SegmentedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/axis_x" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/rbAxisY"
+                                style="@style/Widget.IndicVision.SegmentedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/axis_y" />
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <com.rafad.indicvisiondic.ui.analysis.LineCutPreviewView
+                            android:id="@+id/lineCutPreview"
+                            android:layout_width="match_parent"
+                            android:layout_height="220dp"
+                            android:layout_marginTop="10dp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
                 <!-- Card: Analysis parameters (dedicated settings page) -->
                 <com.google.android.material.card.MaterialCardView
                     android:id="@+id/advancedParamsCard"
@@ -777,15 +847,7 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Compute + results -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnCalculateFullField"
-                    style="@style/Widget.IndicVision.Button.Cta"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:text="@string/run_analysis"
-                    android:enabled="false" />
+                <!-- Results chrome (Compute is in bottomNav) -->
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -889,7 +951,8 @@
                                     android:layout_height="wrap_content"
                                     android:text="@string/sweep_settings_summary"
                                     android:textColor="@color/text_secondary"
-                                    android:textSize="12sp" />
+                                    android:textSize="12sp"
+                                    android:visibility="gone" />
                             </LinearLayout>
 
                             <ImageView
@@ -897,6 +960,7 @@
                                 android:layout_width="24dp"
                                 android:layout_height="24dp"
                                 android:contentDescription="@string/sweep_settings"
+                                android:rotation="180"
                                 android:src="@android:drawable/arrow_down_float"
                                 app:tint="@color/text_secondary" />
                         </LinearLayout>
@@ -907,21 +971,13 @@
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
                             android:paddingTop="8dp"
-                            android:visibility="gone">
+                            android:visibility="visible">
 
                             <View
                                 android:layout_width="match_parent"
                                 android:layout_height="1dp"
                                 android:layout_marginBottom="8dp"
                                 android:background="@color/surface_outline" />
-
-
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="@string/sweep_blurb"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="12sp" />
 
                             <!-- Subset size range: min text | range slider | max text -->
                             <LinearLayout
@@ -960,6 +1016,7 @@
                                     android:id="@+id/etSubsetMinValue"
                                     android:layout_width="46dp"
                                     android:layout_height="wrap_content"
+                                    android:background="@android:color/transparent"
                                     android:gravity="center"
                                     android:hint="@string/subset_min"
                                     android:imeOptions="actionDone"
@@ -986,6 +1043,7 @@
                                     android:id="@+id/etSubsetMaxValue"
                                     android:layout_width="46dp"
                                     android:layout_height="wrap_content"
+                                    android:background="@android:color/transparent"
                                     android:gravity="center"
                                     android:hint="@string/subset_max"
                                     android:imeOptions="actionDone"
@@ -999,203 +1057,86 @@
                                     tools:text="61" />
                             </LinearLayout>
 
-                            <!-- Max VSG -->
+                            <!-- Max VSG + step size on one row (Material outlined fields) -->
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="8dp"
+                                android:layout_marginTop="10dp"
+                                android:gravity="center_vertical"
                                 android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="@string/vsg_max"
-                                    android:textColor="@color/text_primary"
-                                    android:textStyle="bold" />
 
                                 <ImageButton
                                     android:id="@+id/btnVsgMaxInfo"
                                     android:layout_width="18dp"
                                     android:layout_height="18dp"
-                                    android:layout_marginStart="6dp"
+                                    android:layout_marginEnd="4dp"
                                     android:background="?attr/selectableItemBackgroundBorderless"
                                     android:contentDescription="@string/info"
                                     android:scaleType="fitCenter"
                                     android:src="@drawable/ic_info_min"
                                     app:tint="@color/text_secondary" />
 
-                                <View
+                                <com.google.android.material.textfield.TextInputLayout
+                                    android:id="@+id/tilVsgMax"
+                                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
                                     android:layout_width="0dp"
-                                    android:layout_height="1dp"
-                                    android:layout_weight="1" />
-
-                                <EditText
-                                    android:id="@+id/etVsgMaxValue"
-                                    android:layout_width="60dp"
                                     android:layout_height="wrap_content"
-                                    android:gravity="end"
+                                    android:layout_marginEnd="6dp"
+                                    android:layout_weight="1"
                                     android:hint="@string/vsg_max"
-                                    android:imeOptions="actionDone"
-                                    android:importantForAutofill="no"
-                                    android:inputType="number"
-                                    android:maxLength="4"
-                                    android:paddingTop="0dp"
-                                    android:paddingBottom="0dp"
-                                    android:textColor="@color/sky_primary"
-                                    android:textStyle="bold"
-                                    tools:text="123" />
+                                    app:boxStrokeColor="@color/sky_primary"
+                                    app:hintTextColor="@color/text_secondary"
+                                    app:suffixText="@string/scale_unit_px">
 
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="4dp"
-                                    android:text="@string/scale_unit_px"
-                                    android:textColor="@color/sky_primary"
-                                    android:textStyle="bold" />
-                            </LinearLayout>
-
-                            <com.google.android.material.slider.Slider
-                                android:id="@+id/sliderVsgMax"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:stepSize="1"
-                                android:value="123"
-                                android:valueFrom="21"
-                                android:valueTo="501" />
-
-                            <!-- Samples: subset (x) -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="8dp"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="@string/subset_samples"
-                                    android:textColor="@color/text_primary"
-                                    android:textStyle="bold" />
-
-                                <ImageButton
-                                    android:id="@+id/btnSamplesInfo"
-                                    android:layout_width="18dp"
-                                    android:layout_height="18dp"
-                                    android:layout_marginStart="6dp"
-                                    android:background="?attr/selectableItemBackgroundBorderless"
-                                    android:contentDescription="@string/info"
-                                    android:scaleType="fitCenter"
-                                    android:src="@drawable/ic_info_min"
-                                    app:tint="@color/text_secondary" />
-
-                                <View
-                                    android:layout_width="0dp"
-                                    android:layout_height="1dp"
-                                    android:layout_weight="1" />
-
-                                <TextView
-                                    android:id="@+id/tvSubsetSamplesValue"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:textColor="@color/sky_primary"
-                                    android:textStyle="bold"
-                                    tools:text="3" />
-                            </LinearLayout>
-
-                            <com.google.android.material.slider.Slider
-                                android:id="@+id/sliderSubsetSamples"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:stepSize="1"
-                                android:value="3"
-                                android:valueFrom="1"
-                                android:valueTo="8" />
-
-                            <!-- Samples: VSG (y) -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="@string/vsg_samples"
-                                    android:textColor="@color/text_primary"
-                                    android:textStyle="bold" />
-
-                                <View
-                                    android:layout_width="0dp"
-                                    android:layout_height="1dp"
-                                    android:layout_weight="1" />
-
-                                <TextView
-                                    android:id="@+id/tvVsgSamplesValue"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:textColor="@color/sky_primary"
-                                    android:textStyle="bold"
-                                    tools:text="3" />
-                            </LinearLayout>
-
-                            <com.google.android.material.slider.Slider
-                                android:id="@+id/sliderVsgSamples"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:stepSize="1"
-                                android:value="3"
-                                android:valueFrom="1"
-                                android:valueTo="8" />
-
-                            <!-- Step depth (z) -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="@string/step_depth"
-                                    android:textColor="@color/text_primary"
-                                    android:textStyle="bold" />
+                                    <com.google.android.material.textfield.TextInputEditText
+                                        android:id="@+id/etVsgMaxValue"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:imeOptions="actionDone"
+                                        android:importantForAutofill="no"
+                                        android:inputType="number"
+                                        android:maxLength="4"
+                                        android:textColor="@color/text_primary"
+                                        tools:text="123" />
+                                </com.google.android.material.textfield.TextInputLayout>
 
                                 <ImageButton
                                     android:id="@+id/btnStepDepthInfo"
                                     android:layout_width="18dp"
                                     android:layout_height="18dp"
-                                    android:layout_marginStart="6dp"
+                                    android:layout_marginStart="2dp"
+                                    android:layout_marginEnd="4dp"
                                     android:background="?attr/selectableItemBackgroundBorderless"
                                     android:contentDescription="@string/info"
                                     android:scaleType="fitCenter"
                                     android:src="@drawable/ic_info_min"
                                     app:tint="@color/text_secondary" />
 
-                                <View
+                                <com.google.android.material.textfield.TextInputLayout
+                                    android:id="@+id/tilStepDepth"
+                                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
                                     android:layout_width="0dp"
-                                    android:layout_height="1dp"
-                                    android:layout_weight="1" />
-
-                                <TextView
-                                    android:id="@+id/tvStepDepthValue"
-                                    android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:textColor="@color/sky_primary"
-                                    android:textStyle="bold"
-                                    tools:text="1/2–1/3 · 2 steps" />
+                                    android:layout_weight="1"
+                                    android:hint="@string/step_depth"
+                                    app:boxStrokeColor="@color/sky_primary"
+                                    app:hintTextColor="@color/text_secondary"
+                                    app:prefixText="@string/step_depth_prefix">
+
+                                    <com.google.android.material.textfield.TextInputEditText
+                                        android:id="@+id/etStepDepthValue"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:imeOptions="actionDone"
+                                        android:importantForAutofill="no"
+                                        android:inputType="number"
+                                        android:maxLength="1"
+                                        android:textColor="@color/text_primary"
+                                        tools:text="3" />
+                                </com.google.android.material.textfield.TextInputLayout>
                             </LinearLayout>
 
-                            <com.google.android.material.slider.Slider
-                                android:id="@+id/sliderStepDepth"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:stepSize="1"
-                                android:value="3"
-                                android:valueFrom="2"
-                                android:valueTo="6" />
-
+                            <!-- Multi-frame only: collapsed summary (preview while picking) -->
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnPickSweepFrame"
                                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -1203,7 +1144,9 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="12dp"
                                 android:textColor="@color/sky_primary"
-                                tools:text="Frame 12" />
+                                android:visibility="gone"
+                                tools:text="img.png · Frame 3 of 12"
+                                tools:visibility="visible" />
                         </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -1219,11 +1162,101 @@
                         android:layout_height="wrap_content"
                         android:orientation="vertical">
 
-                        <TextView
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/planned_lattice_heading"
-                            android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/planned_lattice_heading"
+                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+
+                            <ImageButton
+                                android:id="@+id/btnLatticeSamples"
+                                android:layout_width="40dp"
+                                android:layout_height="40dp"
+                                android:background="?attr/selectableItemBackgroundBorderless"
+                                android:contentDescription="@string/lattice_samples_settings"
+                                android:src="@drawable/ic_settings_gear"
+                                app:tint="@color/text_secondary" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/latticeSamplesBody"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingTop="4dp"
+                            android:visibility="gone">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <ImageButton
+                                    android:id="@+id/btnSamplesInfo"
+                                    android:layout_width="18dp"
+                                    android:layout_height="18dp"
+                                    android:layout_marginEnd="4dp"
+                                    android:background="?attr/selectableItemBackgroundBorderless"
+                                    android:contentDescription="@string/info"
+                                    android:scaleType="fitCenter"
+                                    android:src="@drawable/ic_info_min"
+                                    app:tint="@color/text_secondary" />
+
+                                <com.google.android.material.textfield.TextInputLayout
+                                    android:id="@+id/tilSubsetSamples"
+                                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginEnd="6dp"
+                                    android:layout_weight="1"
+                                    android:hint="@string/subset_samples"
+                                    app:boxStrokeColor="@color/sky_primary"
+                                    app:hintTextColor="@color/text_secondary">
+
+                                    <com.google.android.material.textfield.TextInputEditText
+                                        android:id="@+id/etSubsetSamplesValue"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:imeOptions="actionDone"
+                                        android:importantForAutofill="no"
+                                        android:inputType="number"
+                                        android:maxLength="1"
+                                        android:textColor="@color/text_primary"
+                                        tools:text="3" />
+                                </com.google.android.material.textfield.TextInputLayout>
+
+                                <com.google.android.material.textfield.TextInputLayout
+                                    android:id="@+id/tilVsgSamples"
+                                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:hint="@string/vsg_samples"
+                                    app:boxStrokeColor="@color/sky_primary"
+                                    app:hintTextColor="@color/text_secondary">
+
+                                    <com.google.android.material.textfield.TextInputEditText
+                                        android:id="@+id/etVsgSamplesValue"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:imeOptions="actionDone"
+                                        android:importantForAutofill="no"
+                                        android:inputType="number"
+                                        android:maxLength="1"
+                                        android:textColor="@color/text_primary"
+                                        tools:text="3" />
+                                </com.google.android.material.textfield.TextInputLayout>
+                            </LinearLayout>
+                        </LinearLayout>
 
                         <com.rafad.indicvisiondic.ui.analysis.VsgLatticeView
                             android:id="@+id/sweepLatticePreview"
@@ -1242,83 +1275,7 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Always visible: line-cut axis preview -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp">
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/line_cut_preview_heading"
-                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
-
-                            <ImageButton
-                                android:id="@+id/btnLineCutInfo"
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
-                                android:layout_marginStart="6dp"
-                                android:background="?attr/selectableItemBackgroundBorderless"
-                                android:contentDescription="@string/info"
-                                android:scaleType="fitCenter"
-                                android:src="@drawable/ic_info_min"
-                                app:tint="@color/text_secondary" />
-                        </LinearLayout>
-
-                        <com.google.android.material.button.MaterialButtonToggleGroup
-                            android:id="@+id/rgLineCutAxis"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            app:checkedButton="@+id/rbAxisX"
-                            app:selectionRequired="true"
-                            app:singleSelection="true">
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/rbAxisX"
-                                style="@style/Widget.IndicVision.SegmentedButton"
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="@string/axis_x" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/rbAxisY"
-                                style="@style/Widget.IndicVision.SegmentedButton"
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="@string/axis_y" />
-                        </com.google.android.material.button.MaterialButtonToggleGroup>
-
-                        <com.rafad.indicvisiondic.ui.analysis.LineCutPreviewView
-                            android:id="@+id/lineCutPreview"
-                            android:layout_width="match_parent"
-                            android:layout_height="220dp"
-                            android:layout_marginTop="10dp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnRunSweep"
-                    style="@style/Widget.IndicVision.Button.Cta"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:enabled="false"
-                    android:text="@string/run_sweep" />
             </LinearLayout>
         </ScrollView>
     </FrameLayout>
@@ -1337,20 +1294,63 @@
             android:id="@+id/btnBack"
             style="@style/Widget.IndicVision.Button.Outlined"
             android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="48dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
             android:text="@string/back"
             android:visibility="gone" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnNext"
+            android:id="@+id/btnCalculateFullField"
+            style="@style/Widget.IndicVision.Button.Cta"
             android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginStart="6dp"
-            android:text="@string/next_settings"
-            android:enabled="false" />
+            android:layout_weight="1"
+            android:enabled="false"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="48dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:text="@string/run_analysis"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRunSweep"
+            style="@style/Widget.IndicVision.Button.Cta"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:enabled="false"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="48dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:text="@string/run_analysis"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnNext"
+            style="@style/Widget.IndicVision.Button.Cta"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:enabled="false"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="48dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:text="@string/next_settings" />
     </LinearLayout>
   </LinearLayout>
 

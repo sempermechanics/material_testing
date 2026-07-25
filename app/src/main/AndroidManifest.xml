@@ -30,7 +30,24 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".ui.auth.AuthActivity" android:exported="false" />
+        <activity
+            android:name=".ui.auth.AuthActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <!-- Firebase passwordless email-link sign-in returns to the app here as
+                 an App Link. Host + path must match EMAIL_LINK_CONTINUE_URL in
+                 AuthRepository. autoVerify needs a Digital Asset Links file served
+                 at the host (see docs/backend/AUTH_SETUP.md). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="indicvision-dic-app-auth.firebaseapp.com"
+                    android:path="/finishSignIn" />
+            </intent-filter>
+        </activity>
         <activity android:name=".ui.home.HomeActivity" android:exported="false" />
         <activity android:name=".ui.admin.AdminActivity" android:exported="false" />
         <activity android:name=".ui.restore.RestoreActivity" android:exported="false" />

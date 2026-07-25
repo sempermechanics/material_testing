@@ -82,6 +82,8 @@
     <string name="auth_toggle_to_login">Have an account? Sign in</string>
     <string name="auth_email_link">Email me a sign-in link (no password)</string>
     <string name="auth_link_sent">Sign-in link sent to %1$s. Open it on this device to finish.</string>
+    <string name="auth_reset_sent">If an account exists for %1$s, a password-reset link is on its way.</string>
+    <string name="auth_reset_failed">Could not send the reset email.</string>
     <string name="auth_google_unconfigured">Google sign-in isn\'t set up yet. Use email instead.</string>
     <string name="email_address">Email Address</string>
     <string name="password_min_6_characters">Password (min 6 characters)</string>
@@ -201,56 +203,59 @@
     <string name="advanced_summary_fmt">Subset %1$d · Step %2$d · VSG %3$d</string>
     <string name="frames_size_mismatch_fmt">❌ %1$d frame(s) are not %2$d × %3$d like the reference. Deformed frames must match the reference exactly — reload matching frames to continue.</string>
     <string name="subset_recommend_running">Sizing the subset from the speckle pattern…</string>
-    <string name="subset_recommend_fmt">Suggested %1$d px from the speckle pattern (SSSIG criterion)</string>
+    <string name="subset_recommend_fmt">Suggested %1$d px from the speckle pattern</string>
     <string name="subset_recommend_low_texture_fmt">Speckle contrast is low — %1$d px is the largest allowed subset and still falls short of 0.007 px accuracy</string>
     <string name="advanced_defaults_suffix"> · defaults</string>
 
     <!-- Parameter sweep / virtual strain gauge study (Good Practices Guide §5.4.5) -->
     <string name="analysis_mode">Analysis mode</string>
-    <string name="mode_single">Single setting</string>
-    <string name="mode_sweep">Parameter sweep</string>
-    <string name="info_analysis_mode">Single setting solves every deformed frame once, at the parameters above. Parameter sweep instead solves ONE frame many times, over a range of subset sizes and the VSG ladder each one allows — the virtual strain gauge study of §5.4.5 of the DIC Good Practices Guide. Every combination lands in the result viewer as its own specimen, so you can scrub through them and compare the strain fields directly.</string>
-    <string name="sweep_blurb">Subset size sweeps across the range you set; for each subset the step size sweeps 1/6–1/3 of it and the strain window follows from VSG = (window − 1) × step + 1.</string>
+    <string name="mode_single">Single</string>
+    <string name="mode_sweep">Sweep</string>
+    <string name="info_analysis_mode">Single: every frame once at the parameters below. Sweep: one frame many times across subset and VSG sizes so you can compare strain fields.</string>
 
     <string name="subset_min">Subset size (min)</string>
     <string name="subset_max">Subset size (max)</string>
     <string name="subset_range">Subset size range</string>
-    <string name="subset_samples">Subset samples</string>
-    <string name="vsg_samples">VSG samples</string>
+    <string name="subset_samples">No. of subsets</string>
+    <string name="vsg_samples">No. of VSGs</string>
     <string name="step_depth">Step size</string>
     <string name="step_depth_value_fmt">subset ÷ %1$d</string>
-    <string name="info_subset_samples">The number of analyses is subset samples × VSG samples.\n\nSubset samples: how many subset sizes to sample across the range above (x).\nVSG samples: how many virtual strain gauge sizes to sample, up to Max VSG (y).\n\nStep size is fixed for the whole sweep, so it does not multiply the count.</string>
-    <string name="info_step_depth">The one step size the whole sweep uses, as a fraction of the subset. ½ steps by half the subset (coarsest, fastest); 1/6 steps by a sixth (finest, densest correlation). The step is fixed, so it does not multiply the number of analyses.</string>
-    <string name="info_subset_range">The smallest and largest subset the sweep tries, in pixels. The app suggests a range around the recommended subset — override either end freely; only odd sizes are solved, and the maximum is capped to what the image and region of interest can hold. How many analyses actually run is set by \"Analyses to run\", not by the width of this range.</string>
+    <string name="info_subset_samples">Analyses = No. of subsets × No. of VSGs. Step size is fixed and does not multiply the count.</string>
+    <string name="info_step_depth">Fixed step for the whole sweep, as subset ÷ N. Larger N = finer grid and denser correlation.</string>
+    <string name="info_subset_range">Odd subset sizes from min to max (px), capped by the image/ROI. Sample count is set separately.</string>
     <string name="vsg_max">Max VSG size</string>
-    <string name="info_vsg_max">The largest virtual strain gauge the sweep will try, in pixels. The app suggests a few times the subset size; you can override it, within a sensible range. Sizes above this are assumed to over-smooth. Each subset\'s ladder runs from its smallest reachable VSG up to this ceiling.</string>
+    <string name="info_vsg_max">Ceiling for virtual strain gauge size (px). Each subset\'s ladder runs up to this value; larger tends to over-smooth.</string>
 
     <string name="line_cut_axis">Line cut axis</string>
-    <string name="info_line_cut_axis">Strain is read along a straight cut through the centre of the region of interest. Pick the axis that crosses your strain gradient — the cut is the same physical line for every combination, so the profiles can be laid over each other.</string>
+    <string name="info_line_cut_axis">Strain along a cut through the ROI centre. Pick the axis that crosses your gradient.</string>
     <string name="axis_x">X</string>
     <string name="axis_y">Y</string>
 
     <string name="sweep_frame">Frame to sweep</string>
     <string name="sweep_frame_btn_fmt">Frame %1$d</string>
-    <string name="info_sweep_frame">The deformed frame every combination is solved against — usually the most deformed one, where the strain gradients are steepest.</string>
-    <string name="sweep_plan_fmt">%1$d analyses · subset %2$d–%3$d px · VSG %4$d–%5$d px</string>
-    <string name="sweep_plan_grid_fmt">%1$d analyses = %2$d subset × %3$d VSG · step subset÷%4$d · subset %5$d–%6$d px</string>
+    <string name="info_sweep_frame">The deformed frame every combination uses — usually the most deformed one.</string>
+    <string name="sweep_plan_grid_fmt">%1$d analyses · subset %2$d–%3$d px · VSG %4$d–%5$d px</string>
     <string name="sweep_plan_empty">No combination fits this ceiling — raise Max VSG or lower the subset range.</string>
     <string name="sweep_plan_subset_too_big_fmt">Subset range starts above what this image and ROI can hold (max %1$d px). Lower the minimum subset, or draw a larger region of interest.</string>
     <string name="run_sweep">Run parameter sweep</string>
     <string name="next_sweep">Next: Sweep →</string>
     <string name="sweep_settings">Sweep settings</string>
-    <string name="sweep_settings_summary">Subset range, Max VSG, samples, step, frame</string>
-    <string name="line_cut_preview_heading">Line cut preview</string>
+    <string name="sweep_settings_summary">Subset range, Max VSG, step, frame</string>
+    <string name="step_depth_prefix">subset ÷ </string>
+    <string name="lattice_samples_settings">Sample counts</string>
+    <string name="sweep_frame_summary_fmt">%1$s · Frame %2$d of %3$d</string>
+    <string name="sweep_frame_of_fmt">Frame %1$d of %2$d</string>
+    <string name="line_cut_preview_heading">Line cut</string>
     <string name="planned_lattice_heading">Planned lattice</string>
     <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · VSG %5$d</string>
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d · VSG %4$d</string>
     <string name="sweep_failed">The parameter sweep could not run.</string>
     <string name="sweep_partial_fmt">%1$d of %2$d combinations could not be solved and were skipped — the rest are shown.</string>
-    <string name="sweep_fail_features">No combination could be solved: the engine could not match the two images (AKAZE feature extraction failed).\n\nThis is almost always the image pair rather than the settings. The deformed frame must be the same scene, framed the same way as the reference — same camera position, distance and rotation. Re-shoot on a tripod so only the specimen moves, and check the speckle is in focus and not blurred.</string>
-    <string name="sweep_fail_roi">No combination could be solved: the region of interest contains no valid points. Redraw the ROI over the speckled area, or use the full image.</string>
-    <string name="sweep_fail_init">No combination could be solved: the engine could not start (one of the images could not be decoded). Try re-importing them as PNG or TIFF.</string>
-    <string name="sweep_fail_unknown">No combination could be solved. The engine returned error %1$d.</string>
+    <string name="sweep_fail_title">Sweep couldn\'t solve</string>
+    <string name="sweep_fail_features">The engine couldn\'t match the two images (AKAZE feature extraction failed).\n\nThis is almost always the image pair, not the settings: the deformed frame must be the same scene, framed like the reference. Re-shoot on a tripod so only the specimen moves, with the speckle in focus.</string>
+    <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area, or use the full image.</string>
+    <string name="sweep_fail_init">The engine couldn\'t start — an image failed to decode. Re-import them as PNG or TIFF.</string>
+    <string name="sweep_fail_unknown">The engine returned error %1$d.</string>
 
     <!-- Sweep lattice staging screen (VsgLatticeActivity) -->
     <string name="vsg_lattice_title">Parameter sweep</string>
@@ -389,7 +394,7 @@
     <string name="extract_n_frames_fmt">Extract %1$d frames</string>
     <string name="video_capped_suffix">" (capped — raise Max frames in Settings)"</string>
     <string name="video_first_frame_note">First frame becomes the reference</string>
-    <string name="info_subset">The pixel window tracked at each grid point. Bigger = more robust on weak speckle, but smooths out sharp strain gradients.\n\nThe starting value is measured from your reference image using the SSSIG criterion of Pan et al., Opt. Express 16, 7037 (2008): the subset grows until the sum of squared intensity gradients supports a displacement accuracy of 0.007 px at an image-noise variance of 4 gray levels². Change it freely — your value is kept.</string>
+    <string name="info_subset">The pixel window tracked at each grid point. Bigger = more robust on weak speckle, but smooths sharp strain gradients.\n\nThe suggested value is fitted to your reference speckle (SSSIG criterion).</string>
     <string name="info_step">Spacing between tracked points. Smaller = denser results and longer analysis time.</string>
     <string name="info_strain_window">How many neighboring points are fitted to turn displacement into strain. Bigger = smoother strain, less local detail.</string>
 
