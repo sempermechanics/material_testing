@@ -35,6 +35,8 @@ cloud for authenticated testers.
 git clone https://github.com/shankar-indicvision/IndicVisionDIC
 cd IndicVisionDIC
 git submodule update --init      # Eigen + OpenCV sources (large, one-time)
+# Optional: drop unused OpenCV doc/samples/data/apps (~100+ MB)
+./scripts/sparse-opencv.sh       # or: .\scripts\sparse-opencv.ps1 on Windows
 ```
 
 Open the folder in Android Studio and press Run. The first build compiles
@@ -142,8 +144,9 @@ the test catalog is in [docs/engine/TESTING.md](docs/engine/TESTING.md).
 
 ## Contributing
 
-Read the [documentation index](docs/README.md) first — it has a five-minute DIC
-primer, the glossary you need to read the code, and the project conventions.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Start with the
+[documentation index](docs/README.md) for the DIC primer and glossary, and
+[docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md) for the Android UI map.
 You can contribute without knowing all of it: UI and docs work needs no C++,
 and the engine tests run on your PC with no Android at all. Issues tagged
 `good first issue` are scoped for newcomers.

@@ -278,6 +278,12 @@ binaries. Run `git submodule update --init --recursive` after cloning.
 | **Eigen** | `third_party/eigen` | 3.4.0 | header-only; added via `include_directories` |
 | **OpenCV** | `third_party/opencv` | 4.12.0 | **compiled from source** in the native build |
 
+**Sparse OpenCV checkout:** the full OpenCV repo includes `doc/`, `samples/`,
+`data/`, and `apps/` that this project never builds. After submodule init, run
+`scripts/sparse-opencv.sh` (or `scripts/sparse-opencv.ps1` on Windows) to drop
+those trees from the worktree (~100+ MB). CMake only needs `modules/`,
+`include/`, `3rdparty/`, `cmake/`, and the top-level `CMakeLists.txt`.
+
 **OpenCV from-source integration** (`app/src/main/cpp/CMakeLists.txt`):
 
 - `add_subdirectory(third_party/opencv …)` builds OpenCV as part of the app's

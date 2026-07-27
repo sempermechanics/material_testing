@@ -58,23 +58,14 @@ Firebase mails a link back to the continue URL
 (`EMAIL_LINK_CONTINUE_URL` in
 [AuthRepository.kt](../../app/src/main/java/com/rafad/indicvisiondic/data/AuthRepository.kt)),
 and `AuthActivity` declares a matching App Link `intent-filter` for that
-host + path. For Android to route the link to the app instead of a browser, the
-host must serve a **Digital Asset Links** file that names this app at
-`https://indicvision-dic-app-auth.firebaseapp.com/.well-known/assetlinks.json`.
+host + path.
 
-A ready-to-deploy Firebase Hosting project for that domain lives in
-[`firebase-hosting/`](../../firebase-hosting/) — it holds the `assetlinks.json`
-(debug fingerprint filled in, release fingerprint to be added) and the
-`/finishSignIn` landing page. Add the release SHA-256, then
-`cd firebase-hosting && firebase deploy --only hosting`. Full steps and the
-`adb` verification commands are in
-[`firebase-hosting/README.md`](../../firebase-hosting/README.md).
+**Procedure of record** (Digital Asset Links, deploy, `adb` verify): see
+[`firebase-hosting/README.md`](../../firebase-hosting/README.md). That folder
+holds the Hosting project for the auth domain; Firebase Hosting with
+`appAssociation: AUTO` serves the live `assetlinks.json`.
 
-Firebase Auth here uses **direct continue-URL handlers** (not the retired
-Dynamic Links), so the emailed link lands on `/finishSignIn` with the
-`oobCode`/`mode=signIn` params the app reads.
-
-Until the file is live, email + password sign-in still works; only the
+Until asset links verify, email + password sign-in still works; only the
 passwordless **link** flow is affected (the link opens in a browser and can't
 complete). Email/password reset links are read by the user in the browser and
 do **not** depend on this App Link.

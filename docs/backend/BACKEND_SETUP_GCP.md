@@ -213,7 +213,7 @@ Then use `URL=http://localhost:8080` in the B2 steps.
 
 > **The client code is implemented.** `data/net/` (IndicApi, TokenStore,
 > TokenProvider, ApiDtos), the EC-P256 `DeviceKeyManager` (challenge-response),
-> `AuthRepository` (Google-only sign-in) and `DicUploadWorker` (resumable PUT
+> `AuthRepository` (Google, email/password, or email-link sign-in) and `DicUploadWorker` (resumable PUT
 > direct to Drive) are all in the app. This part is the **operational** steps
 > to point the app at your live backend and test it.
 

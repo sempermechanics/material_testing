@@ -8,6 +8,7 @@ build it. This page routes you to the rest.
 | I want to… | Read |
 |---|---|
 | Understand DIC itself before touching anything | [DIC in five minutes](#dic-in-five-minutes) below |
+| Change the Android UI / understand app flow | [app/ARCHITECTURE.md](app/ARCHITECTURE.md) |
 | Change the correlation engine (C++) | [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md) |
 | Check the math, or write it up | [engine/MATHEMATICS.md](engine/MATHEMATICS.md) |
 | Add or run tests | [engine/TESTING.md](engine/TESTING.md) |
@@ -24,6 +25,7 @@ analysis engine is entirely on-device and offline.
 
 ```
 docs/
+  app/       Android UI layer — Activity flow, packages, session layout
   engine/    the C++ correlation engine — architecture, math, tests
   backend/   the optional GCP cloud side — architecture, setup, sign-in
   ops/       running the project — CI, releases

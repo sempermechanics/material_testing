@@ -12,13 +12,25 @@ Firebase Auth is configured to use **direct continue-URL handlers** (not the
 retired Dynamic Links), so the emailed link lands on `/finishSignIn` carrying
 the `oobCode`/`mode=signIn` params, and `AuthActivity` completes sign-in.
 
+## Digital Asset Links source of truth
+
+`firebase.json` sets `"appAssociation": "AUTO"`. That means **Firebase Hosting
+generates and serves** `/.well-known/assetlinks.json` from the Android apps
+registered on this Firebase project (package name + SHA-256 fingerprints in the
+Firebase / Play console). The live URL above is what Android verifies against.
+
+The checked-in [`public/.well-known/assetlinks.json`](public/.well-known/assetlinks.json)
+is a **local reference / template** of the fingerprints we expect — useful when
+adding a release key or debugging — not the deploy-time source of truth while
+`AUTO` is set. Keep the console fingerprints in sync with that file.
+
 ## Before you ship: add the release fingerprint
 
-`public/.well-known/assetlinks.json` currently lists the **debug** signing key
-plus a `REPLACE_WITH_RELEASE_SHA256_BEFORE_SHIPPING` placeholder. Replace that
-placeholder with the SHA-256 of the **release** signing key (or the Play App
-Signing key from the Play Console → *Setup → App signing*). Get a keystore's
-SHA-256 with:
+The template currently lists the **debug** signing key plus a
+`REPLACE_WITH_RELEASE_SHA256_BEFORE_SHIPPING` placeholder. Add that same
+SHA-256 on the Firebase Android app (or Play App Signing key from the Play
+Console → *Setup → App signing*), and update the template so local docs match.
+Get a keystore's SHA-256 with:
 
 ```bash
 keytool -list -v -keystore <path-to-release.keystore> -alias <alias>

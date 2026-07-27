@@ -61,3 +61,11 @@ here is needed for day-to-day contributions.
 - Watch Firestore (sessions collection) and Cloud Logging for the first synced sessions.
 - Open a milestone for the next version and triage incoming beta feedback
   against it.
+
+## History rewrite / re-clone
+
+If git history is rewritten (for example to purge the old prebuilt OpenCV SDK
+under `app/src/main/cpp/opencv/` from every commit), collaborators must
+**re-clone** or hard-reset to the rewritten tip. Force-pushed branches invalidate
+existing local clones' merge bases. Coordinate with the team before rewriting;
+document the rewrite in the PR / release notes.
