@@ -34,3 +34,6 @@ app/src/main/cpp/third_party/*
 # === Kotlin compiler session data ===
 .kotlin/
 backend/app/__pycache__/*
+
+# === Firebase Hosting CLI cache ===
+firebase-hosting/.firebase/

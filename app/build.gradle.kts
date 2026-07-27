@@ -222,10 +222,8 @@ dependencies {
     implementation("com.jakewharton.timber:timber:5.0.1")
 }
 
-// Static analysis gate: `./gradlew :app:detekt` (CI). Existing findings are
-// frozen in detekt-baseline.xml — only NEW issues fail the build. Regenerate
-// deliberately with `./gradlew :app:detektBaseline`.
+// Static analysis gate: `./gradlew :app:detekt` (CI). The codebase is kept
+// clean of findings, so there is no baseline — any new issue fails the build.
 detekt {
     buildUponDefaultConfig = true
-    baseline = file("detekt-baseline.xml")
 }
