@@ -21,6 +21,16 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/eigen)
 # ---------------------------------------------------------------------------
 set(OPENCV_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/opencv")
 
+# Sparse OpenCV checkouts omit doc/ and data/ (~600 MB). OpenCV's CMakeLists
+# always add_subdirectory() those paths, so plant no-op stubs when missing.
+foreach(_stub doc data)
+    if(NOT EXISTS "${OPENCV_SRC_DIR}/${_stub}/CMakeLists.txt")
+        file(MAKE_DIRECTORY "${OPENCV_SRC_DIR}/${_stub}")
+        file(WRITE "${OPENCV_SRC_DIR}/${_stub}/CMakeLists.txt"
+             "# Auto-generated stub for sparse OpenCV checkout (see scripts/sparse-opencv.*)\n")
+    endif()
+endforeach()
+
 # Curated module list (features2d / calib3d pull in flann automatically)
 set(BUILD_LIST "core,imgproc,imgcodecs,features2d,calib3d,flann" CACHE STRING "" FORCE)
 
@@ -57,6 +67,9 @@ endforeach()
 # ships with it enabled. It accelerates the imgproc/features2d internals the
 # pipeline leans on (resize, blur, AKAZE). No effect on x86/x86_64 ABIs.
 set(WITH_CAROTENE ON CACHE BOOL "" FORCE)
+# KleidiCV would download an external HAL at configure time and requires
+# hal/kleidicv; Carotene already covers our ARM NEON needs.
+set(WITH_KLEIDICV OFF CACHE BOOL "" FORCE)
 
 # We build no Python bindings, so skip OpenCV's host-Python detection entirely.
 # This removes any Python dependency from the build and sidesteps broken Windows

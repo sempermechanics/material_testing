@@ -35,7 +35,7 @@ cloud for authenticated testers.
 git clone https://github.com/shankar-indicvision/IndicVisionDIC
 cd IndicVisionDIC
 git submodule update --init      # Eigen + OpenCV sources (large, one-time)
-# Optional: drop unused OpenCV doc/samples/data/apps (~100+ MB)
+# Optional: drop unused OpenCV doc/samples/data/apps (keeps modules + hal for Carotene)
 ./scripts/sparse-opencv.sh       # or: .\scripts\sparse-opencv.ps1 on Windows
 ```
 
