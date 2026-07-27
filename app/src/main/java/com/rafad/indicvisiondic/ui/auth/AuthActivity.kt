@@ -1,3 +1,7 @@
+// Auth screen: one handler per sign-in path (Google, email link, password) plus
+// their validation guards, so TooManyFunctions / ReturnCount are suppressed here.
+@file:Suppress("TooManyFunctions", "ReturnCount")
+
 package com.rafad.indicvisiondic.ui.auth
 import android.content.Intent
 import android.graphics.Color
@@ -14,8 +18,8 @@ import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.ui.common.Insets
-import com.rafad.indicvisiondic.ui.home.HomeActivity
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * Sign-in screen backed by Firebase Auth. Three ways in:
@@ -58,8 +62,10 @@ class AuthActivity : AppCompatActivity() {
         tvEmailLink = findViewById(R.id.tvEmailLink)
         progressBar = findViewById(R.id.progressBar)
         btnGoogle = findViewById(R.id.btnGoogleSignIn)
-
-        btnGoogle.visibility = if (GoogleSignInHelper.isConfigured(this)) View.VISIBLE else View.GONE
+        val googleOrDivider = findViewById<View>(R.id.googleOrDivider)
+        val googleConfigured = GoogleSignInHelper.isConfigured(this)
+        btnGoogle.visibility = if (googleConfigured) View.VISIBLE else View.GONE
+        googleOrDivider.visibility = if (googleConfigured) View.VISIBLE else View.GONE
 
         btnMain.setOnClickListener { onMainAction() }
         tvToggle.setOnClickListener {
@@ -166,11 +172,14 @@ class AuthActivity : AppCompatActivity() {
                 val idToken = GoogleSignInHelper.getIdToken(this@AuthActivity)
                 routeResult(authRepo.signInWithGoogle(idToken))
             } catch (e: GoogleSignInHelper.NotConfigured) {
+                Timber.w(e, "Google sign-in is not configured")
                 setLoading(false)
                 showSnackbar(getString(R.string.auth_google_unconfigured), isError = true)
             } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+                Timber.d(e, "Google sign-in cancelled by user")
                 setLoading(false)
             } catch (e: androidx.credentials.exceptions.NoCredentialException) {
+                Timber.w(e, "No Google account available for sign-in")
                 setLoading(false)
                 showSnackbar(getString(R.string.auth_google_no_account), isError = true)
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -201,12 +210,7 @@ class AuthActivity : AppCompatActivity() {
         setLoading(false)
         result.fold(
             onSuccess = { status ->
-                val target = if (status == "PENDING") {
-                    PendingApprovalActivity::class.java
-                } else {
-                    HomeActivity::class.java // APPROVED / OFFLINE_CACHE_APPROVED
-                }
-                startActivity(Intent(this, target))
+                startActivity(Intent(this, AccessRouter.afterSignIn(status)))
                 finish()
             },
             onFailure = { showSnackbar(it.message ?: getString(R.string.auth_sign_in_failed), isError = true) },

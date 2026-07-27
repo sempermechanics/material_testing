@@ -89,10 +89,8 @@
     <string name="password_min_6_characters">Password (min 6 characters)</string>
     <string name="confirm_password">Confirm Password</string>
     <string name="forgot_password">Forgot Password?</string>
-    <string name="secure_login">Secure Login</string>
     <string name="or">or</string>
     <string name="continue_with_google">Continue with Google</string>
-    <string name="request_an_account">Request an account</string>
     <string name="x_y">X, Y</string>
     <string name="min_0_0">Min: 0.0</string>
     <string name="max_0_0">Max: 0.0</string>
@@ -219,7 +217,6 @@
     <string name="subset_samples">No. of subsets</string>
     <string name="vsg_samples">No. of VSGs</string>
     <string name="step_depth">Step size</string>
-    <string name="step_depth_value_fmt">subset ÷ %1$d</string>
     <string name="info_subset_samples">Analyses = No. of subsets × No. of VSGs. Step size is fixed and does not multiply the count.</string>
     <string name="info_step_depth">Fixed step for the whole sweep, as subset ÷ N. Larger N = finer grid and denser correlation.</string>
     <string name="info_subset_range">Odd subset sizes from min to max (px), capped by the image/ROI. Sample count is set separately.</string>
@@ -233,14 +230,11 @@
 
     <string name="sweep_frame">Frame to sweep</string>
     <string name="sweep_frame_btn_fmt">Frame %1$d</string>
-    <string name="info_sweep_frame">The deformed frame every combination uses — usually the most deformed one.</string>
     <string name="sweep_plan_grid_fmt">%1$d analyses · subset %2$d–%3$d px · VSG %4$d–%5$d px</string>
     <string name="sweep_plan_empty">No combination fits this ceiling — raise Max VSG or lower the subset range.</string>
     <string name="sweep_plan_subset_too_big_fmt">Subset range starts above what this image and ROI can hold (max %1$d px). Lower the minimum subset, or draw a larger region of interest.</string>
-    <string name="run_sweep">Run parameter sweep</string>
     <string name="next_sweep">Next: Sweep →</string>
     <string name="sweep_settings">Sweep settings</string>
-    <string name="sweep_settings_summary">Subset range, Max VSG, step, frame</string>
     <string name="step_depth_prefix">subset ÷ </string>
     <string name="lattice_samples_settings">Sample counts</string>
     <string name="sweep_frame_summary_fmt">%1$s · Frame %2$d of %3$d</string>

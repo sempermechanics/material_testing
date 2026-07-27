@@ -1,3 +1,8 @@
+// PDF assembly: literal DPI/page dimensions are inherent to layout, and the
+// broad catches guard a whole document render (any failure aborts that page),
+// so MagicNumber / TooGenericExceptionCaught are suppressed for this file.
+@file:Suppress("MagicNumber", "TooGenericExceptionCaught")
+
 package com.rafad.indicvisiondic.report
 
 import android.graphics.pdf.PdfDocument

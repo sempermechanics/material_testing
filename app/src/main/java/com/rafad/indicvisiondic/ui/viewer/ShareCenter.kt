@@ -1,9 +1,16 @@
+// Share/export hub: one method per export target (PNG, CSV, PDF, bundle) with
+// early-return guards and broad IO catches around file writes; literal quality
+// constants read clearest inline, so these rules are suppressed for this file.
+@file:Suppress("MagicNumber", "ReturnCount", "TooGenericExceptionCaught", "TooManyFunctions")
+
 package com.rafad.indicvisiondic.ui.viewer
 
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.net.Uri
 import android.view.View
 import android.widget.TextView
@@ -164,7 +171,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     // ── Generators ───────────────────────────────────────────────────────
 
-    /** Annotated PNG of one field for one frame's data. */
+    /** Annotated PNG of one field for one frame's data. Full-res heatmap + base. */
     private fun renderAnnotated(
         data: FloatArray,
         dataIndex: Int,
@@ -180,19 +187,32 @@ class ShareCenter(private val host: ResultViewerActivity) {
             s.stepAt(frameIndex),
             null,
             null,
+            maxLongEdge = null,
         )
-        val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex)
+        val base = loadFullResBase(s)
         val out = Bitmap.createBitmap(s.imgW, s.imgH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
-        canvas.drawBitmap(s.baseImage, 0f, 0f, null)
+        canvas.drawBitmap(base, null, Rect(0, 0, s.imgW, s.imgH), null)
         canvas.drawBitmap(heatmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
+        val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex)
         val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
         ReportBuilder.bakeAnnotationsToCanvas(
             canvas, s.imgW, s.imgH, actualMin, actualMax,
             typeString, unit, extrema.maxIdx, extrema.minIdx, data,
         )
         heatmap.recycle()
+        if (base !== s.baseImage) base.recycle()
         return out
+    }
+
+    /** Prefer the on-disk reference so export stays full-res when the viewer holds a display bitmap. */
+    private fun loadFullResBase(s: Snapshot): Bitmap {
+        s.refImagePath?.let { path ->
+            BitmapFactory.decodeFile(path)?.let { return it }
+        }
+        val display = s.baseImage ?: error("No reference image for export")
+        if (display.width == s.imgW && display.height == s.imgH) return display
+        return Bitmap.createScaledBitmap(display, s.imgW, s.imgH, true)
     }
 
     private fun writePng(bmp: Bitmap, name: String): File {
@@ -332,7 +352,9 @@ class ShareCenter(private val host: ResultViewerActivity) {
             // No persisted reference file (shouldn't happen) — fall back to the
             // in-memory base image so the folder is never empty.
             zip.putNextEntry(ZipEntry("$dir/reference.png"))
-            s.baseImage.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, zip)
+            val base = s.baseImage ?: loadFullResBase(s)
+            base.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, zip)
+            if (base !== s.baseImage) base.recycle()
             zip.closeEntry()
         }
 
@@ -393,7 +415,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val strainWindowPerFrame: IntArray?,
         val dataIndex: Int,
         val typeString: String,
-        val baseImage: Bitmap,
+        /** Display-scale bitmap (may be null while decode is in flight); exports prefer [refImagePath]. */
+        val baseImage: Bitmap?,
         val refImagePath: String?,
         val defImagePaths: List<String>,
         /**

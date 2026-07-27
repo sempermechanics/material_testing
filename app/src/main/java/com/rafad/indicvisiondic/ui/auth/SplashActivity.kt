@@ -6,10 +6,12 @@ import androidx.lifecycle.lifecycleScope
 import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.data.AccessStatus
 import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.data.DevAuth
 import com.rafad.indicvisiondic.ui.home.HomeActivity
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * App entry point: restores an existing backend session and routes to
@@ -62,18 +64,23 @@ class SplashActivity : AppCompatActivity() {
             //    offline bypass when previously approved).
             authRepo.refreshStatus().fold(
                 onSuccess = { status ->
-                    when (status) {
-                        "APPROVED" -> navigateTo(HomeActivity::class.java)
-                        "OFFLINE_CACHE_APPROVED" -> {
-                            android.widget.Toast.makeText(
-                                this,
-                                R.string.status_offline_mode,
-                                android.widget.Toast.LENGTH_LONG,
-                            ).show()
-                            navigateTo(HomeActivity::class.java)
+                    val target = AccessRouter.afterRefresh(status)
+                    when (target) {
+                        HomeActivity::class.java -> {
+                            if (status == AccessStatus.OFFLINE_CACHE_APPROVED) {
+                                android.widget.Toast.makeText(
+                                    this,
+                                    R.string.status_offline_mode,
+                                    android.widget.Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                            navigateTo(target)
                         }
-                        "PENDING" -> navigateTo(PendingApprovalActivity::class.java)
-                        else -> navigateTo(AuthActivity::class.java, getString(R.string.error_unknown_status))
+                        PendingApprovalActivity::class.java -> navigateTo(target)
+                        else -> navigateTo(
+                            AuthActivity::class.java,
+                            getString(R.string.error_unknown_status),
+                        )
                     }
                 },
                 onFailure = { exception ->
@@ -81,7 +88,8 @@ class SplashActivity : AppCompatActivity() {
                     navigateTo(AuthActivity::class.java, message)
                 },
             )
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Splash startup failed; routing to sign-in")
             navigateTo(AuthActivity::class.java, getString(R.string.error_startup_failed))
         }
     }

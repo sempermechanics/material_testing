@@ -26,6 +26,28 @@ private const val MIN_CHUNK_BYTES = 256 * 1024
 /** Upper bound on the per-chunk buffer allocation, whatever the server says. */
 private const val MAX_CHUNK_BYTES = 32 * 1024 * 1024
 
+/** How many times a truncated download may resume from the last byte. */
+private const val DOWNLOAD_MAX_ATTEMPTS = 5
+
+/** Copy buffer for proxied restore downloads. */
+private const val DOWNLOAD_COPY_BUFFER = 1 shl 16
+
+// HTTP status codes this client branches on.
+private const val HTTP_OK = 200
+private const val HTTP_CREATED = 201
+private const val HTTP_PARTIAL_CONTENT = 206
+private const val HTTP_RESUME_INCOMPLETE = 308
+private const val HTTP_FORBIDDEN = 403
+private const val HTTP_NOT_FOUND = 404
+private const val HTTP_CONFLICT = 409
+private const val HTTP_RANGE_NOT_SATISFIABLE = 416
+
+// OkHttp client timeouts, in seconds.
+private const val CONNECT_TIMEOUT_S = 30L
+private const val WRITE_TIMEOUT_S = 300L
+private const val READ_TIMEOUT_S = 60L
+private const val DOWNLOAD_READ_TIMEOUT_S = 300L
+
 /**
  * Client for the inDIC GCP backend (Cloud Run / FastAPI).
  *
@@ -34,6 +56,7 @@ private const val MAX_CHUNK_BYTES = 32 * 1024 * 1024
  * **directly to Google Drive** via the resumable session URI returned by the
  * broker — they never pass through this client's backend host.
  */
+@Suppress("TooManyFunctions") // one method per backend endpoint plus signing helpers
 class IndicApi(context: Context) {
 
     private val appContext = context.applicationContext
@@ -57,9 +80,14 @@ class IndicApi(context: Context) {
     val enabled: Boolean get() = base.isNotBlank() && !DevAuth.active
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(300, TimeUnit.SECONDS) // large chunk PUTs to Drive
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
+        .writeTimeout(WRITE_TIMEOUT_S, TimeUnit.SECONDS) // large chunk PUTs to Drive
+        .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
+        .build()
+
+    /** Longer read idle for large Session.zip / legacy restores through the proxy. */
+    private val downloadClient = client.newBuilder()
+        .readTimeout(DOWNLOAD_READ_TIMEOUT_S, TimeUnit.SECONDS)
         .build()
 
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
@@ -79,25 +107,39 @@ class IndicApi(context: Context) {
     class DeviceNotActiveException : IOException("device_not_active")
 
     /** Maps a failed signed-request response to the most specific exception. */
+    @Suppress("ThrowsCount") // one throw per distinct 409 sub-reason, then the fallback
     private fun failSigned(code: Int, body: String): Nothing {
-        if (code == 409 && body.contains("device_not_active")) throw DeviceNotActiveException()
-        if (code == 409 && body.contains("device_conflict")) throw DeviceConflictException()
+        if (code == HTTP_CONFLICT && body.contains("device_not_active")) throw DeviceNotActiveException()
+        if (code == HTTP_CONFLICT && body.contains("device_conflict")) throw DeviceConflictException()
         throw ApiException(code, body)
+    }
+
+    /**
+     * A bearer-authenticated GET. Returns the 200 body; on any other status
+     * defers to [onError], which throws the endpoint's most specific exception
+     * (the default is a plain [ApiException]).
+     */
+    private fun authedGet(
+        idToken: String,
+        url: String,
+        onError: (Int, String) -> Nothing = { code, body -> throw ApiException(code, body) },
+    ): String {
+        val req = Request.Builder().url(url)
+            .header("Authorization", "Bearer $idToken").get().build()
+        client.newCall(req).execute().use { resp ->
+            return if (resp.code == HTTP_OK) resp.body!!.string() else onError(resp.code, resp.bodyText())
+        }
     }
 
     // ---------------------------------------------------------------- identity
 
     /** GET /v1/me. Throws [NotApprovedException] for a PENDING/SUSPENDED user. */
     suspend fun me(idToken: String): MeResponse = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url("$base/v1/me")
-            .header("Authorization", "Bearer $idToken").get().build()
-        client.newCall(req).execute().use { resp ->
-            when (resp.code) {
-                200 -> json.decodeFromString(resp.body!!.string())
-                403 -> throw NotApprovedException()
-                else -> throw ApiException(resp.code, resp.bodyText())
-            }
-        }
+        json.decodeFromString(
+            authedGet(idToken, "$base/v1/me") { code, body ->
+                if (code == HTTP_FORBIDDEN) throw NotApprovedException() else throw ApiException(code, body)
+            },
+        )
     }
 
     /**
@@ -118,8 +160,8 @@ class IndicApi(context: Context) {
             .post(json.encodeToString(body).toRequestBody(jsonMedia)).build()
         client.newCall(req).execute().use { resp ->
             when (resp.code) {
-                201, 200 -> Unit
-                409 -> throw DeviceConflictException()
+                HTTP_CREATED, HTTP_OK -> Unit
+                HTTP_CONFLICT -> throw DeviceConflictException()
                 else -> throw ApiException(resp.code, resp.bodyText())
             }
         }
@@ -135,25 +177,27 @@ class IndicApi(context: Context) {
      * Firestore index alone can't see). It costs a Drive call per session, so
      * it's for explicit refreshes, not every resume.
      */
-    suspend fun listSessions(idToken: String, verify: Boolean = false): ListSessionsResponse = withContext(Dispatchers.IO) {
+    suspend fun listSessions(
+        idToken: String,
+        verify: Boolean = false,
+    ): ListSessionsResponse = withContext(Dispatchers.IO) {
         val url = if (verify) "$base/v1/sessions?verify=true" else "$base/v1/sessions"
-        val req = Request.Builder().url(url)
-            .header("Authorization", "Bearer $idToken").get().build()
-        client.newCall(req).execute().use { resp ->
-            when (resp.code) {
-                200 -> json.decodeFromString(resp.body!!.string())
-                403 -> throw NotApprovedException()
-                else -> throw ApiException(resp.code, resp.bodyText())
-            }
-        }
+        json.decodeFromString(
+            authedGet(idToken, url) { code, body ->
+                if (code == HTTP_FORBIDDEN) throw NotApprovedException() else throw ApiException(code, body)
+            },
+        )
     }
 
     /** POST /v1/sessions (device-signed). Initiates a session + one resumable target per file. */
-    suspend fun createSession(idToken: String, request: SessionCreateRequest): SessionCreateResponse = withContext(Dispatchers.IO) {
+    suspend fun createSession(
+        idToken: String,
+        request: SessionCreateRequest,
+    ): SessionCreateResponse = withContext(Dispatchers.IO) {
         val bodyBytes = json.encodeToString(request).toByteArray()
         val resp = signedPost(idToken, "/v1/sessions", bodyBytes)
         resp.use {
-            if (it.code == 200) {
+            if (it.code == HTTP_OK) {
                 json.decodeFromString(it.body!!.string())
             } else {
                 failSigned(it.code, it.bodyText())
@@ -168,53 +212,97 @@ class IndicApi(context: Context) {
      * instead of POSTing a new one (which would duplicate the Drive folder and
      * consume another slot of the analysis quota).
      */
-    suspend fun sessionUploads(idToken: String, sessionId: String): SessionUploadsResponse = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url("$base/v1/sessions/$sessionId/uploads")
-            .header("Authorization", "Bearer $idToken").get().build()
-        client.newCall(req).execute().use { resp ->
-            if (resp.code == 200) {
-                json.decodeFromString(resp.body!!.string())
-            } else {
-                throw ApiException(resp.code, resp.bodyText())
-            }
-        }
+    suspend fun sessionUploads(
+        idToken: String,
+        sessionId: String,
+    ): SessionUploadsResponse = withContext(Dispatchers.IO) {
+        json.decodeFromString(authedGet(idToken, "$base/v1/sessions/$sessionId/uploads"))
     }
 
     /** POST /v1/files/{id}/complete (device-signed). */
-    suspend fun completeFile(idToken: String, fileId: String, request: FileCompleteRequest) = withContext(Dispatchers.IO) {
+    suspend fun completeFile(
+        idToken: String,
+        fileId: String,
+        request: FileCompleteRequest,
+    ) = withContext(Dispatchers.IO) {
         val bodyBytes = json.encodeToString(request).toByteArray()
         val resp = signedPost(idToken, "/v1/files/$fileId/complete", bodyBytes)
-        resp.use { if (it.code != 200) failSigned(it.code, it.bodyText()) }
+        resp.use { if (it.code != HTTP_OK) failSigned(it.code, it.bodyText()) }
     }
 
     // ----------------------------------------------------------------- restore
 
     /** GET /v1/sessions/{sid}/files — the manifest for one cloud analysis. */
-    suspend fun listSessionFiles(idToken: String, sessionId: String): SessionFilesResponse = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url("$base/v1/sessions/$sessionId/files")
-            .header("Authorization", "Bearer $idToken").get().build()
-        client.newCall(req).execute().use { resp ->
-            if (resp.code == 200) {
-                json.decodeFromString(resp.body!!.string())
-            } else {
-                throw ApiException(resp.code, resp.bodyText())
-            }
-        }
+    suspend fun listSessionFiles(
+        idToken: String,
+        sessionId: String,
+    ): SessionFilesResponse = withContext(Dispatchers.IO) {
+        json.decodeFromString(authedGet(idToken, "$base/v1/sessions/$sessionId/files"))
     }
 
     /**
      * GET /v1/files/{id}/content — stream a file back from Drive into [dest].
      * These bytes are proxied by the backend (Drive has no anonymous download),
      * so this is the one path where the backend touches file content.
+     *
+     * Writes to a sibling `.part` file and renames on success. If the transfer
+     * drops mid-stream, retries with `Range: bytes=N-` so already-received
+     * bytes are kept (backend forwards Range to Drive and returns 206).
      */
+    @Suppress("CyclomaticComplexMethod") // one branch per HTTP status × resume/retry outcome
     suspend fun downloadFile(idToken: String, fileId: String, dest: java.io.File) = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url("$base/v1/files/$fileId/content")
-            .header("Authorization", "Bearer $idToken").get().build()
-        client.newCall(req).execute().use { resp ->
-            if (resp.code != 200) throw ApiException(resp.code, resp.bodyText())
-            dest.parentFile?.mkdirs()
-            resp.body!!.byteStream().use { input ->
-                dest.outputStream().use { output -> input.copyTo(output, 1 shl 16) }
+        dest.parentFile?.mkdirs()
+        val part = java.io.File(dest.parentFile, "${dest.name}.part")
+        var attempt = 0
+        while (true) {
+            attempt++
+            val offset = if (part.exists()) part.length() else 0L
+            try {
+                val builder = Request.Builder()
+                    .url("$base/v1/files/$fileId/content")
+                    .header("Authorization", "Bearer $idToken")
+                    .get()
+                if (offset > 0L) builder.header("Range", "bytes=$offset-")
+                downloadClient.newCall(builder.build()).execute().use { resp ->
+                    when (resp.code) {
+                        HTTP_OK, HTTP_PARTIAL_CONTENT -> {
+                            // 200 = full body (fresh start / proxy ignored Range) → overwrite;
+                            // 206 = partial → append to the bytes already on disk.
+                            val append = resp.code == HTTP_PARTIAL_CONTENT
+                            java.io.FileOutputStream(part, append).use { out ->
+                                resp.body!!.byteStream().use { input -> input.copyTo(out, DOWNLOAD_COPY_BUFFER) }
+                            }
+                        }
+                        HTTP_RANGE_NOT_SATISFIABLE -> {
+                            // Stale offset (partial longer than the object). Restart once.
+                            if (offset > 0L && attempt < DOWNLOAD_MAX_ATTEMPTS) {
+                                part.delete()
+                                throw IOException("range_not_satisfiable; restarting $fileId")
+                            }
+                            throw ApiException(resp.code, resp.bodyText())
+                        }
+                        else -> throw ApiException(resp.code, resp.bodyText())
+                    }
+                }
+                if (dest.exists() && !dest.delete()) {
+                    Timber.w("Could not replace existing download target %s", dest)
+                }
+                if (!part.renameTo(dest)) {
+                    part.copyTo(dest, overwrite = true)
+                    part.delete()
+                }
+                return@withContext
+            } catch (e: ApiException) {
+                throw e
+            } catch (e: IOException) {
+                if (attempt >= DOWNLOAD_MAX_ATTEMPTS) throw e
+                Timber.w(
+                    e,
+                    "download %s interrupted at %d bytes (attempt %d); resuming",
+                    fileId,
+                    if (part.exists()) part.length() else 0L,
+                    attempt,
+                )
             }
         }
     }
@@ -224,15 +312,15 @@ class IndicApi(context: Context) {
     /** GET /v1/admin/users?status=… (admin ID token; no device signature). */
     suspend fun listUsers(idToken: String, status: String = ""): List<AdminUserDto> = withContext(Dispatchers.IO) {
         val url = if (status.isBlank()) "$base/v1/admin/users" else "$base/v1/admin/users?status=$status"
-        val req = Request.Builder().url(url)
-            .header("Authorization", "Bearer $idToken").get().build()
-        client.newCall(req).execute().use { resp ->
-            when (resp.code) {
-                200 -> json.decodeFromString<AdminUsersResponse>(resp.body!!.string()).users
-                403 -> throw ApiException(403, "not_admin")
-                else -> throw ApiException(resp.code, resp.bodyText())
-            }
-        }
+        json.decodeFromString<AdminUsersResponse>(
+            authedGet(idToken, url) { code, body ->
+                if (code == HTTP_FORBIDDEN) {
+                    throw ApiException(HTTP_FORBIDDEN, "not_admin")
+                } else {
+                    throw ApiException(code, body)
+                }
+            },
+        ).users
     }
 
     /** POST /v1/admin/users/{uid}/{action} where action is "approve" or "revoke". */
@@ -241,7 +329,7 @@ class IndicApi(context: Context) {
             .header("Authorization", "Bearer $idToken")
             .post(ByteArray(0).toRequestBody(jsonMedia)).build()
         client.newCall(req).execute().use { resp ->
-            if (resp.code != 200) throw ApiException(resp.code, resp.bodyText())
+            if (resp.code != HTTP_OK) throw ApiException(resp.code, resp.bodyText())
         }
     }
 
@@ -275,15 +363,7 @@ class IndicApi(context: Context) {
      * file the user keeps.
      */
     suspend fun exportAccount(idToken: String): String = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url("$base/v1/me/export")
-            .header("Authorization", "Bearer $idToken").get().build()
-        client.newCall(req).execute().use { resp ->
-            if (resp.code == 200) {
-                resp.body!!.string()
-            } else {
-                throw ApiException(resp.code, resp.bodyText())
-            }
-        }
+        authedGet(idToken, "$base/v1/me/export")
     }
 
     /**
@@ -297,7 +377,7 @@ class IndicApi(context: Context) {
         // so a 404 means the route isn't reachable (e.g. not published on the
         // API Gateway). Treating that as success would wipe the local copy while
         // leaving every byte in the cloud.
-        resp.use { if (it.code != 200) failSigned(it.code, it.bodyText()) }
+        resp.use { if (it.code != HTTP_OK) failSigned(it.code, it.bodyText()) }
     }
 
     /**
@@ -308,13 +388,13 @@ class IndicApi(context: Context) {
     suspend fun deleteSession(idToken: String, sessionId: String) = withContext(Dispatchers.IO) {
         val resp = signedRequest(idToken, "DELETE", "/v1/sessions/$sessionId", ByteArray(0))
         resp.use {
-            if (it.code == 200) return@use
+            if (it.code == HTTP_OK) return@use
             val body = it.bodyText()
             // A 404 is only "already erased" when OUR backend says so
             // (`session_not_found`). A bare 404 means the route isn't reachable —
             // accepting that as success would delete the local copy and orphan
             // the cloud data forever.
-            if (it.code == 404 && body.contains("session_not_found")) return@use
+            if (it.code == HTTP_NOT_FOUND && body.contains("session_not_found")) return@use
             failSigned(it.code, body)
         }
     }
@@ -326,7 +406,7 @@ class IndicApi(context: Context) {
             .header("X-Device-Id", device.getDeviceId())
             .post(ByteArray(0).toRequestBody(jsonMedia)).build()
         client.newCall(req).execute().use { resp ->
-            if (resp.code != 200) throw ApiException(resp.code, resp.bodyText())
+            if (resp.code != HTTP_OK) throw ApiException(resp.code, resp.bodyText())
             val nonce: ChallengeResponse = json.decodeFromString(resp.body!!.string())
             return nonce.nonce
         }
@@ -357,7 +437,11 @@ class IndicApi(context: Context) {
      * (multiple of 256 KiB). Resumes from the server offset on reconnect. Bytes
      * go straight to Drive — not through the backend. Returns (driveFileId, md5).
      */
-    suspend fun uploadResumable(uploadUrl: String, file: java.io.File, chunkSize: Int): Pair<String, String?> = withContext(Dispatchers.IO) {
+    suspend fun uploadResumable(
+        uploadUrl: String,
+        file: java.io.File,
+        chunkSize: Int,
+    ): Pair<String, String?> = withContext(Dispatchers.IO) {
         val total = file.length()
         // The buffer is allocated at chunk size — clamp what the server
         // sent so a misconfigured value can never OOM the app. Drive needs
@@ -384,8 +468,8 @@ class IndicApi(context: Context) {
                     .put(buf.toRequestBody(octet, 0, n)).build()
                 client.newCall(req).execute().use { resp ->
                     when (resp.code) {
-                        308 -> offset = end + 1 // Resume Incomplete
-                        200, 201 -> {
+                        HTTP_RESUME_INCOMPLETE -> offset = end + 1
+                        HTTP_OK, HTTP_CREATED -> {
                             val bodyStr = resp.body?.string().orEmpty()
                             return@withContext parseDriveResult(bodyStr)
                         }
@@ -413,9 +497,10 @@ class IndicApi(context: Context) {
         client.newCall(req).execute().use { resp ->
             return when (resp.code) {
                 // Resume Incomplete: Range tells us the last byte received (may be absent = nothing yet).
-                308 -> UploadProbe(resp.header("Range")?.substringAfterLast('-')?.toLongOrNull()?.plus(1) ?: 0L, null)
+                HTTP_RESUME_INCOMPLETE ->
+                    UploadProbe(resp.header("Range")?.substringAfterLast('-')?.toLongOrNull()?.plus(1) ?: 0L, null)
                 // Already complete — the body is the Drive file resource.
-                200, 201 -> UploadProbe(total, parseDriveResult(resp.body?.string().orEmpty()))
+                HTTP_OK, HTTP_CREATED -> UploadProbe(total, parseDriveResult(resp.body?.string().orEmpty()))
                 // 404/410 = session expired; start fresh (caller re-inits on retry).
                 else -> UploadProbe(0L, null)
             }
@@ -431,7 +516,7 @@ class IndicApi(context: Context) {
 
     private fun Response.bodyText(): String = try {
         body?.string().orEmpty()
-    } catch (e: Exception) {
+    } catch (e: IOException) {
         Timber.w(e, "reading error body")
         ""
     }

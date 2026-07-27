@@ -1,3 +1,15 @@
+// Report rendering: literal page/table coordinates, paint sizes and long draw
+// calls are inherent to layout code and read clearest inline, so the structural
+// and magic-number rules are suppressed for this whole file.
+@file:Suppress(
+    "MagicNumber",
+    "MaxLineLength",
+    "LongMethod",
+    "CyclomaticComplexMethod",
+    "LongParameterList",
+    "NestedBlockDepth",
+)
+
 package com.rafad.indicvisiondic.report
 import android.graphics.Bitmap
 import android.graphics.Canvas

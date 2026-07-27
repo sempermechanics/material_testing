@@ -1,3 +1,7 @@
+// Binary record layout: the literal byte offsets and strides ARE the on-disk
+// format and read clearest inline, so MagicNumber / MaxLineLength are suppressed.
+@file:Suppress("MagicNumber", "MaxLineLength")
+
 package com.rafad.indicvisiondic
 
 import java.nio.ByteBuffer

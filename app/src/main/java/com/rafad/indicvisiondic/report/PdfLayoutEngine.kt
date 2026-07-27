@@ -1,7 +1,18 @@
+// PDF rendering code: page coordinates, paint sizes and long canvas draw calls
+// are literal by nature and read clearest inline, so MagicNumber / MaxLineLength
+// are suppressed for this whole file rather than named one offset at a time.
+@file:Suppress("MagicNumber", "MaxLineLength", "TooManyFunctions")
+
 package com.rafad.indicvisiondic.report
 
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import java.util.Locale
 
 class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
     val pageWidth = 2480f
@@ -57,9 +68,9 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
     private fun formatMetric(value: Float): String {
         val absVal = kotlin.math.abs(value)
         return if (absVal > 0f && (absVal < 0.001f || absVal >= 10000f)) {
-            String.format("%.2e", value)
+            String.format(Locale.US, "%.2e", value)
         } else {
-            String.format("%.5f", value)
+            String.format(Locale.US, "%.5f", value)
         }
     }
 

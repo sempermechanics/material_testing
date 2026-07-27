@@ -11,7 +11,6 @@ import androidx.work.WorkManager
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.data.net.IndicApi
 import com.rafad.indicvisiondic.data.net.TokenProvider
-import com.rafad.indicvisiondic.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -92,7 +91,7 @@ object CloudSync {
             val cloud = try {
                 api.listSessions(token, verify = deep)
             } catch (e: IndicApi.NotApprovedException) {
-                Timber.w("Cloud reconcile refused — account not approved")
+                Timber.w(e, "Cloud reconcile refused — account not approved")
                 return@withContext Outcome.Failed("your account isn't approved for cloud backup")
             } catch (e: IndicApi.ApiException) {
                 // The server responded — so this is a real fault (404 = route not
@@ -222,9 +221,9 @@ object CloudSync {
         val fbUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         runCatching { fbUser?.delete()?.await() }
             .onFailure { Timber.w(it, "Firebase user delete failed; signing out instead") }
-        com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
         SessionStore.deleteAll(appContext)
-        TokenStore.clear(appContext)
+        // Reuse the shared session clear (Firebase sign-out + TokenStore).
+        AuthRepository(appContext).signOut()
         Timber.i("Account erased and local data wiped")
         true
     }
@@ -247,13 +246,22 @@ object CloudSync {
     }
 
     /**
-     * Queue (or re-queue) the upload for one analysis. Everything the worker
-     * needs lives in [SessionStore], so only the id travels in the input Data.
+     * Queue the upload for one analysis. Everything the worker needs lives in
+     * [SessionStore], so only the id travels in the input Data.
+     *
+     * Uses [ExistingWorkPolicy.KEEP] so a reconcile pass cannot cancel an
+     * in-flight upload. Defaults to [NetworkType.UNMETERED] for background
+     * repair; pass [allowMetered] = true for an explicit post-analysis upload.
      */
-    fun enqueueUpload(context: Context, localSessionId: String) {
+    fun enqueueUpload(
+        context: Context,
+        localSessionId: String,
+        allowMetered: Boolean = false,
+    ) {
+        val network = if (allowMetered) NetworkType.CONNECTED else NetworkType.UNMETERED
         val work = OneTimeWorkRequestBuilder<DicUploadWorker>()
             .setConstraints(
-                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
+                Constraints.Builder().setRequiredNetworkType(network).build(),
             )
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
             .setInputData(Data.Builder().putString(DicKeys.SESSION_LOCAL_ID, localSessionId).build())
@@ -261,7 +269,7 @@ object CloudSync {
             .build()
         WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
             "upload-$localSessionId",
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             work,
         )
     }

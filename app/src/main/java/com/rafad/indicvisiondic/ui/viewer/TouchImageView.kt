@@ -1,6 +1,11 @@
+// Pan/zoom gesture view: literal touch thresholds and matrix math read clearest
+// inline, so MagicNumber / ComplexCondition are suppressed for this whole file.
+@file:Suppress("MagicNumber", "ComplexCondition")
+
 package com.rafad.indicvisiondic.ui.viewer
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.PointF
 import android.graphics.RectF
@@ -30,6 +35,10 @@ class TouchImageView @JvmOverloads constructor(
     private var trueImageWidth = 0f
     private var trueImageHeight = 0f
 
+    /** Maps display-bitmap pixels → true image space when the decode is downsampled. */
+    private var contentScaleX = 1f
+    private var contentScaleY = 1f
+
     var onMatrixChangedListener: (() -> Unit)? = null
 
     init {
@@ -58,19 +67,35 @@ class TouchImageView @JvmOverloads constructor(
                     mode = 0
                 }
             }
-            imageMatrix = matrix
-            invalidate()
-            onMatrixChangedListener?.invoke()
+            publishMatrix()
             true
         }
+    }
+
+    override fun setImageBitmap(bm: Bitmap?) {
+        super.setImageBitmap(bm)
+        updateContentScale(bm)
+        publishMatrix()
     }
 
     // --- NEW: Manually inject the known dimensions ---
     fun setTrueImageDimensions(width: Int, height: Int) {
         trueImageWidth = width.toFloat()
         trueImageHeight = height.toFloat()
+        val bm = (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+        updateContentScale(bm)
         post {
             if (viewWidth > 0 && viewHeight > 0) fitToScreen()
+        }
+    }
+
+    private fun updateContentScale(bm: Bitmap?) {
+        if (bm != null && trueImageWidth > 0f && bm.width > 0) {
+            contentScaleX = trueImageWidth / bm.width
+            contentScaleY = trueImageHeight / bm.height
+        } else {
+            contentScaleX = 1f
+            contentScaleY = 1f
         }
     }
 
@@ -95,9 +120,7 @@ class TouchImageView @JvmOverloads constructor(
         minScale = baseScale
         currentScale = baseScale
 
-        imageMatrix = matrix
-        invalidate()
-        onMatrixChangedListener?.invoke()
+        publishMatrix()
     }
 
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -165,5 +188,18 @@ class TouchImageView @JvmOverloads constructor(
         }
     }
 
-    fun getZoomMatrix(): Matrix = matrix
+    /** Logical zoom matrix in true image-pixel space (for overlays / inspect). */
+    fun getZoomMatrix(): Matrix = Matrix(matrix)
+
+    private fun publishMatrix() {
+        if (contentScaleX != 1f || contentScaleY != 1f) {
+            val draw = Matrix(matrix)
+            draw.preScale(contentScaleX, contentScaleY)
+            imageMatrix = draw
+        } else {
+            imageMatrix = matrix
+        }
+        invalidate()
+        onMatrixChangedListener?.invoke()
+    }
 }

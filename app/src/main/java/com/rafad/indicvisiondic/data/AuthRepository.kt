@@ -26,11 +26,12 @@ import java.io.IOException
  * verifies the Firebase ID token, enforces the APPROVED allow-list, and (on the
  * first approved call) registers the device key.
  *
- * Status strings returned:
- *  - "APPROVED"               → route to the app
- *  - "PENDING"                → route to the pending-approval screen
- *  - "OFFLINE_CACHE_APPROVED" → offline but previously approved (offline-first bypass)
+ * Status strings returned — see [AccessStatus]:
+ *  - [AccessStatus.APPROVED]               → route to the app
+ *  - [AccessStatus.PENDING]                → route to the pending-approval screen
+ *  - [AccessStatus.OFFLINE_CACHE_APPROVED] → offline but previously approved
  */
+@Suppress("TooManyFunctions") // one method per auth action (sign-in variants, reset, status, session)
 class AuthRepository(context: Context) {
 
     private val appContext = context.applicationContext
@@ -97,6 +98,7 @@ class AuthRepository(context: Context) {
             auth.sendPasswordResetEmail(email.trim()).await()
             Result.success(Unit)
         } catch (e: FirebaseAuthInvalidUserException) {
+            Timber.d(e, "Password reset for an unregistered email (existence not revealed)")
             Result.success(Unit) // don't reveal whether the email is registered
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.w(e, "Could not send password reset")
@@ -148,13 +150,15 @@ class AuthRepository(context: Context) {
         try {
             signIn()
         } catch (e: FirebaseAuthWeakPasswordException) {
-            return@withContext Result.failure(Exception("Password is too weak (min 6 characters)."))
+            return@withContext Result.failure(Exception("Password is too weak (min 6 characters).", e))
         } catch (e: FirebaseAuthUserCollisionException) {
-            return@withContext Result.failure(Exception("An account already exists for this email. Sign in instead."))
+            return@withContext Result.failure(
+                Exception("An account already exists for this email. Sign in instead.", e),
+            )
         } catch (e: FirebaseAuthInvalidUserException) {
-            return@withContext Result.failure(Exception("No account for this email."))
+            return@withContext Result.failure(Exception("No account for this email.", e))
         } catch (e: FirebaseAuthInvalidCredentialsException) {
-            return@withContext Result.failure(Exception("Incorrect email or password."))
+            return@withContext Result.failure(Exception("Incorrect email or password.", e))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.w(e, "Firebase sign-in failed")
             return@withContext Result.failure(Exception(e.message ?: "Sign-in failed."))
@@ -169,27 +173,30 @@ class AuthRepository(context: Context) {
         val token = TokenProvider.usableIdToken() ?: return offlineOrExpired()
         return try {
             val me = api.me(token) // 200 = APPROVED
-            TokenStore.setStatus(appContext, "APPROVED")
+            TokenStore.setStatus(appContext, AccessStatus.APPROVED)
             TokenStore.setRole(appContext, me.role ?: "user")
             ensureDeviceRegistered(token)
-            Result.success("APPROVED")
+            Result.success(AccessStatus.APPROVED)
         } catch (e: IndicApi.NotApprovedException) {
-            TokenStore.setStatus(appContext, "PENDING")
-            Result.success("PENDING")
+            Timber.d(e, "Account is pending approval")
+            TokenStore.setStatus(appContext, AccessStatus.PENDING)
+            Result.success(AccessStatus.PENDING)
         } catch (e: IndicApi.DeviceConflictException) {
             Result.failure(
                 Exception(
                     "This device is already linked to another account, or this account to " +
                         "another device. Sign in with that account, or ask an admin to reset the binding.",
+                    e,
                 ),
             )
         } catch (e: IndicApi.ApiException) {
-            if (e.code == 401) {
+            if (e.code == HTTP_UNAUTHORIZED) {
                 Result.failure(Exception("Session expired. Please sign in again."))
             } else {
                 Result.failure(Exception("Could not verify account (server error ${e.code})."))
             }
         } catch (e: IOException) {
+            Timber.d(e, "Status check failed offline; using cached status")
             offlineOrExpired()
         }
     }
@@ -201,13 +208,17 @@ class AuthRepository(context: Context) {
         Timber.d("Device registered with backend")
     }
 
-    private fun offlineOrExpired(): Result<String> = if (TokenStore.cachedStatus(appContext) == "APPROVED") {
-        Result.success("OFFLINE_CACHE_APPROVED")
-    } else {
-        Result.failure(Exception("Could not verify account. Check your connection and sign in again."))
-    }
+    private fun offlineOrExpired(): Result<String> =
+        if (TokenStore.cachedStatus(appContext) == AccessStatus.APPROVED) {
+            Result.success(AccessStatus.OFFLINE_CACHE_APPROVED)
+        } else {
+            Result.failure(Exception("Could not verify account. Check your connection and sign in again."))
+        }
 
     private companion object {
+        /** HTTP 401 from the backend: the session token is no longer valid. */
+        const val HTTP_UNAUTHORIZED = 401
+
         const val K_PENDING_EMAIL = "pending_email"
 
         // Where the email link returns to. Must be an Authorized Domain in the

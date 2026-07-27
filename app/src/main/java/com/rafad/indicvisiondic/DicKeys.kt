@@ -8,9 +8,8 @@ package com.rafad.indicvisiondic
  * Same-file keys (e.g. savedInstanceState) intentionally stay local.
  */
 object DicKeys {
-    // ── Auth  session hand-off (AuthActivity / SplashActivity / PendingApproval)
-    const val USER_ID = "USER_ID"
-    const val USER_EMAIL = "USER_EMAIL"
+    // Auth routing (e.g. PendingApproval → AuthActivity) uses [ROUTING_ERROR]
+    // below; identity lives in Firebase Auth / TokenStore, not Intent extras.
 
     // ── HomeActivity → StaticAnalysisActivity (media picker hand-off)
     const val PICKED_REF_URI = "PICKED_REF_URI"

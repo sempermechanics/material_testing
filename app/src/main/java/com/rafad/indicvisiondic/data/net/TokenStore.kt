@@ -1,3 +1,7 @@
+// Token/claims store: one small accessor per stored field, so TooManyFunctions
+// is suppressed for this whole file.
+@file:Suppress("TooManyFunctions")
+
 package com.rafad.indicvisiondic.data.net
 
 import android.content.Context

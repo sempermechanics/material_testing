@@ -1,7 +1,18 @@
+// runBatchAnalysis / runVsgSweep stream frames through the native engine in one
+// cohesive loop (per-frame persist, solve, progress, cancel); the method size,
+// branching, break/continue and broad per-frame catch are inherent to that
+// pipeline and its literal step constants, so those rules are suppressed here.
+@file:Suppress(
+    "MagicNumber",
+    "LongMethod",
+    "CyclomaticComplexMethod",
+    "LoopWithTooManyJumpStatements",
+    "TooGenericExceptionCaught",
+)
+
 package com.rafad.indicvisiondic.ui.analysis
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.lifecycle.ViewModel
 import com.rafad.indicvisiondic.DicResult
 import com.rafad.indicvisiondic.IndicVisionNativeLib
@@ -9,13 +20,18 @@ import com.rafad.indicvisiondic.ProgressCallback
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.CloudSync
 import com.rafad.indicvisiondic.data.DicSettings
+import com.rafad.indicvisiondic.data.SessionPaths
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.report.EngineStats
+import com.rafad.indicvisiondic.report.VisualizationEngine
+import com.rafad.indicvisiondic.ui.common.BitmapDecode
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -31,20 +47,14 @@ import java.util.UUID
 class AnalysisViewModel : ViewModel() {
 
     companion object {
-        /** Outcome code for a user-cancelled run (not an engine failure). */
-        const val ERROR_CANCELLED = -99
+        /** @see AnalysisRunCodes.ERROR_CANCELLED */
+        const val ERROR_CANCELLED = AnalysisRunCodes.ERROR_CANCELLED
 
-        /** Outcome code when a new session would exceed the account quota. */
-        const val ERROR_SESSION_LIMIT = -98
-
-        /** Session-dir subfolder holding the persisted raw deformed originals. */
-        const val RAW_DEFORMED_SUBDIR = "raw_deformed"
+        /** @see AnalysisRunCodes.ERROR_SESSION_LIMIT */
+        const val ERROR_SESSION_LIMIT = AnalysisRunCodes.ERROR_SESSION_LIMIT
 
         /** Index of the height in an `[x, y, w, h]` ROI array. */
         private const val ROI_H = 3
-
-        /** Engine-telemetry slot carrying the mean ICGN iteration count. */
-        private const val AVG_ITERS_SLOT = 8
     }
 
     // NATIVE THREAD PINNING: All JNI/OpenMP calls are routed through the global
@@ -86,7 +96,6 @@ class AnalysisViewModel : ViewModel() {
     var refName: String = "No image selected"
 
     val defCount: Int get() = defFilePaths.size
-    val batchMode: Boolean get() = defFilePaths.size > 1
 
     var hasCustomRoi: Boolean = false
     var roiX: Int = 0
@@ -188,7 +197,7 @@ class AnalysisViewModel : ViewModel() {
         val roi = request.roi
         val use6x6 = request.use6x6
         val debugDir = request.debugDir
-        val bytes = refBytes ?: throw IllegalStateException("Reference missing")
+        val bytes = refBytes ?: error("Reference missing")
         val startedAt = System.currentTimeMillis()
 
         val limited = sessionLimitOutcome(appContext, plan.size)
@@ -199,7 +208,7 @@ class AnalysisViewModel : ViewModel() {
         batchDir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
         lastBatchDirPath = batchDir.absolutePath
 
-        val frameIndex = vsgFrameIndex.let { if (it < 0 || it >= defFilePaths.size) defFilePaths.lastIndex else it }
+        val frameIndex = resolvedVsgFrameIndex()
         val result = VsgStudyRunner.run(
             bytes,
             realRefWidth,
@@ -260,19 +269,19 @@ class AnalysisViewModel : ViewModel() {
         executionTimeMs: Int,
     ) {
         val roi = request.roi
-        currentSessionId = "Pending_Cloud_Sync_" + UUID.randomUUID().toString().take(8)
+        currentSessionId = newPendingSessionId()
         val refPngPath = writeReferenceCopy(batchDir, refBytes)
         lastRefPath = refPngPath
         lastStep = result.runs.first().point.step
 
-        val frameIndex = vsgFrameIndex.let { if (it < 0 || it >= defFilePaths.size) defFilePaths.lastIndex else it }
+        val frameIndex = resolvedVsgFrameIndex()
         val rawName = copyRawDeformed(batchDir, frameIndex)
 
         val cloudEnabled = DicSettings.saveToCloud(appContext)
         val first = result.runs.first().point
         val defDisplay = rawName.ifBlank {
             defOriginalNames.getOrNull(frameIndex) ?: File(defFilePaths[frameIndex]).name
-        }.substringAfterLast('/').substringAfterLast('\\')
+        }.baseName()
         val skipped = result.skipped
         val summary = sweepSummary(appContext, localSessionId, result, request, defDisplay)
         val record = buildSessionRecord(
@@ -293,7 +302,7 @@ class AnalysisViewModel : ViewModel() {
             ),
             cloudEnabled = cloudEnabled,
             pointsConverged = result.runs.first().pointsSolved,
-            avgIterations = result.firstMetrics?.getOrNull(AVG_ITERS_SLOT) ?: 0f,
+            avgIterations = result.firstMetrics?.getOrNull(EngineStats.SLOT_AVG_ITERS) ?: 0f,
             executionTimeMs = executionTimeMs,
             frameCount = result.runs.size,
             // Every combination was solved against the same image, so they all
@@ -314,7 +323,7 @@ class AnalysisViewModel : ViewModel() {
             headline = summary.headline,
         )
         if (SessionStore.upsert(appContext, record) && cloudEnabled) {
-            CloudSync.enqueueUpload(appContext, localSessionId)
+            CloudSync.enqueueUpload(appContext, localSessionId, allowMetered = true)
         }
     }
 
@@ -338,7 +347,7 @@ class AnalysisViewModel : ViewModel() {
         val solvedLabels = result.runs.map { labelByPoint[it.point].orEmpty() }
         val totalPlanned = result.runs.size + result.skipped.size
         val existing = SessionStore.get(appContext, localSessionId)
-        val stamp = SimpleDateFormat("MMM d, HH:mm:ss", Locale.US).format(Date())
+        val stamp = timestamp(System.currentTimeMillis())
         val name = existing?.name ?: appContext.getString(
             R.string.session_sweep_name_fmt,
             defDisplay.substringBeforeLast('.').ifBlank { defDisplay },
@@ -357,24 +366,24 @@ class AnalysisViewModel : ViewModel() {
 
     /** Copies one deformed original into the session dir; returns its name. */
     private fun copyRawDeformed(batchDir: File, frameIndex: Int): String {
-        val rawDir = File(batchDir, RAW_DEFORMED_SUBDIR).apply {
+        val rawDir = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply {
             mkdirs()
             listFiles()?.forEach { it.delete() }
         }
         val name = (defOriginalNames.getOrNull(frameIndex) ?: File(defFilePaths[frameIndex]).name)
-            .substringAfterLast('/').substringAfterLast('\\')
+            .baseName()
         return runCatching {
-            File(rawDir, name).apply { writeBytes(File(defFilePaths[frameIndex]).readBytes()) }.name
+            val target = File(rawDir, name)
+            Files.copy(
+                File(defFilePaths[frameIndex]).toPath(),
+                target.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+            target.name
         }.onFailure { Timber.w(it, "Could not persist the sweep's deformed frame") }.getOrDefault("")
     }
 
     fun isReadyToCompute(): Boolean = refBytes != null && defFilePaths.isNotEmpty()
-
-    fun getDefDisplayName(): String = when {
-        defFilePaths.isEmpty() -> "No images selected"
-        defFilePaths.size == 1 -> "Def: ${defFilePaths[0].substringAfterLast('/')}"
-        else -> "${defFilePaths.size} images selected"
-    }
 
     fun clearPreviousResults() {
         lastBatchDirPath = null
@@ -423,6 +432,21 @@ class AnalysisViewModel : ViewModel() {
             current
         }
     }
+
+    /**
+     * The deformed frame a sweep is solved against: [vsgFrameIndex] when it
+     * points at a real frame, otherwise the last (most deformed) frame.
+     */
+    private fun resolvedVsgFrameIndex(): Int =
+        if (vsgFrameIndex < 0 || vsgFrameIndex >= defFilePaths.size) defFilePaths.lastIndex else vsgFrameIndex
+
+    /** Placeholder cloud id a session carries until the upload worker assigns the real one. */
+    private fun newPendingSessionId(): String =
+        "Pending_Cloud_Sync_" + UUID.randomUUID().toString().take(8)
+
+    /** The "MMM d, HH:mm:ss" stamp used in default session names. */
+    private fun timestamp(millis: Long): String =
+        SimpleDateFormat("MMM d, HH:mm:ss", Locale.US).format(Date(millis))
 
     /** The engine settings a session row records, shared by both run modes. */
     @Suppress("LongParameterList") // one row of the session index
@@ -500,7 +524,7 @@ class AnalysisViewModel : ViewModel() {
         IndicVisionNativeLib.setDebugOutputDir(params.debugDir.absolutePath)
 
         val totalFrames = defFilePaths.size
-        val refBytes = refBytes ?: throw IllegalStateException("Reference missing")
+        val refBytes = refBytes ?: error("Reference missing")
 
         var firstFrameValidPoints = 0
         var firstFrameAvgIters = 0f
@@ -527,7 +551,7 @@ class AnalysisViewModel : ViewModel() {
 
         // Persist the raw deformed originals alongside the reference so exports
         // (and reopened sessions) can bundle them. Cleared per re-run.
-        val rawDeformedDir = File(batchDir, RAW_DEFORMED_SUBDIR).apply {
+        val rawDeformedDir = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply {
             mkdirs()
             listFiles()?.forEach { it.delete() }
         }
@@ -555,15 +579,25 @@ class AnalysisViewModel : ViewModel() {
                 ),
             )
 
-            val defBytes = File(defPath).readBytes()
-            // Store the untouched original bytes (no re-encode) under the user's own
-            // filename so the export's raw photos keep their default names.
+            // Persist the untouched original under the user's own filename so
+            // exports keep default names — one read feeds both the session copy
+            // and the JNI buffer (avoids Files.copy + a second heap read).
+            val defBytes = try {
+                File(defPath).readBytes()
+            } catch (e: Exception) {
+                Timber.e(e, "Could not read deformed frame %d", frameIndex)
+                continue
+            }
             try {
                 val rawName = (defOriginalNames.getOrNull(frameIndex) ?: File(defPath).name)
-                    .substringAfterLast('/').substringAfterLast('\\')
+                    .baseName()
                 // Keep the default name; only index-prefix if it would collide.
                 val target = File(rawDeformedDir, rawName).let {
-                    if (it.exists()) File(rawDeformedDir, String.format("%04d_%s", frameIndex, rawName)) else it
+                    if (it.exists()) {
+                        File(rawDeformedDir, String.format(Locale.US, "%04d_%s", frameIndex, rawName))
+                    } else {
+                        it
+                    }
                 }
                 target.writeBytes(defBytes)
                 // Record the name we ACTUALLY wrote: the session index (and the
@@ -591,9 +625,11 @@ class AnalysisViewModel : ViewModel() {
             }
 
             outputBuffer.clear()
-            // 17 slots: 16 core metrics + mesh-seeding status. Slot 16 pre-set
-            // to "unknown" so an engine that only writes 16 leaves it valid.
-            val metricsCatcher = FloatArray(17).also { it[16] = EngineStats.MESH_SEEDING_UNKNOWN.toFloat() }
+            // 16 core metrics + optional mesh-seeding slot, pre-set to "unknown"
+            // so an engine that only writes the core slots leaves it valid.
+            val metricsCatcher = FloatArray(EngineStats.SLOT_COUNT).also {
+                it[EngineStats.SLOT_MESH_SEEDING] = EngineStats.MESH_SEEDING_UNKNOWN.toFloat()
+            }
 
             val validPointsCount = IndicVisionNativeLib.computeFullFieldDirect(
                 refBytes, defBytes, params.maskData,
@@ -611,12 +647,12 @@ class AnalysisViewModel : ViewModel() {
             if (frameIndex == 0) {
                 firstFrameValidPoints = validPointsCount
                 engineStatsArray = metricsCatcher.clone()
-                firstFrameAvgIters = metricsCatcher[8]
+                firstFrameAvgIters = metricsCatcher[EngineStats.SLOT_AVG_ITERS]
             }
 
             if (validPointsCount == 0) continue
 
-            val outputFile = File(batchDir, String.format("frame_%04d.dat", frameIndex))
+            val outputFile = File(batchDir, String.format(Locale.US, "frame_%04d.dat", frameIndex))
             outputFile.outputStream().use { fos ->
                 val bytes = ByteArray(validPointsCount * DicResult.BYTES_PER_POINT)
                 outputBuffer.position(0)
@@ -625,7 +661,7 @@ class AnalysisViewModel : ViewModel() {
             }
 
             totalPointsSolved += validPointsCount
-            lastConvergence = metricsCatcher[15]
+            lastConvergence = metricsCatcher[EngineStats.SLOT_CONVERGENCE]
             onProgress(
                 BatchProgressUpdate(
                     percent = (((frameIndex + 1).toFloat() / totalFrames) * 100).toInt(),
@@ -635,15 +671,12 @@ class AnalysisViewModel : ViewModel() {
                     convergencePercent = lastConvergence,
                 ),
             )
-
-            @Suppress("ExplicitGarbageCollectionCall")
-            System.gc()
         }
 
         val executionTimeMs = (System.currentTimeMillis() - params.processingStartTime).toInt()
 
         if (firstFrameValidPoints > 0 && engineErrorCode != ERROR_CANCELLED) {
-            currentSessionId = "Pending_Cloud_Sync_" + UUID.randomUUID().toString().take(8)
+            currentSessionId = newPendingSessionId()
 
             // Persist a viewable copy of the reference next to the frames —
             // the Home list and reopened sessions depend on it surviving.
@@ -678,8 +711,8 @@ class AnalysisViewModel : ViewModel() {
                     // session, exporting and cloud upload resolve images by these.
                     defNames = persistedRawNames.mapIndexed { i, persisted ->
                         persisted.ifBlank {
-                            (defOriginalNames.getOrNull(i) ?: defFilePaths[i].substringAfterLast('/'))
-                                .substringAfterLast('/').substringAfterLast('\\')
+                            (defOriginalNames.getOrNull(i) ?: defFilePaths[i])
+                                .baseName()
                         }
                     },
                 ),
@@ -689,7 +722,7 @@ class AnalysisViewModel : ViewModel() {
                 engineErrorCode = ERROR_SESSION_LIMIT
             } else if (cloudEnabled) {
                 // Everything the worker needs now lives in the SessionRecord.
-                CloudSync.enqueueUpload(appContext, localSessionId)
+                CloudSync.enqueueUpload(appContext, localSessionId, allowMetered = true)
             } else {
                 Timber.d("Save to cloud is off — session %s stays local only", localSessionId)
             }
@@ -704,18 +737,21 @@ class AnalysisViewModel : ViewModel() {
         )
     }
 
-    /** Writes a PNG copy of the reference into the session dir; returns its path. */
+    /**
+     * Writes a display-sized PNG of the reference into the session dir for Home
+     * list + viewer UI. The engine still uses full [refBytes] in memory.
+     */
     private fun writeReferenceCopy(sessionDir: File, refBytes: ByteArray): String {
         val refPngFile = File(sessionDir, "reference.png")
         var refBmp: Bitmap? = null
         try {
-            // Preview first (downscaled, fast), then a direct decode, and finally
-            // the raw bytes. Without a fallback a null preview left a 0-byte
-            // reference.png, which the cloud backup then skipped — and, being
-            // undecodable, took the whole session's reports and heatmaps down
-            // with it (report generation needs the reference as its base image).
-            refBmp = IndicVisionNativeLib.getPreviewFromBytes(refBytes, realRefWidth)
-                ?: BitmapFactory.decodeByteArray(refBytes, 0, refBytes.size)
+            // Cap longest edge for the on-disk display copy — full-width preview
+            // was wasteful for Home thumbs / viewer chrome. Fallback chain keeps
+            // a decodable file so cloud backup and report base images still work.
+            refBmp = IndicVisionNativeLib.getPreviewFromBytes(
+                refBytes,
+                VisualizationEngine.DISPLAY_MAX_EDGE,
+            ) ?: decodeDisplaySized(refBytes)
             val bmp = refBmp
             if (bmp != null) {
                 refPngFile.outputStream().use { out -> bmp.compress(Bitmap.CompressFormat.PNG, 100, out) }
@@ -731,6 +767,10 @@ class AnalysisViewModel : ViewModel() {
         return refPngFile.absolutePath
     }
 
+    /** Bounds-aware decode capped to [VisualizationEngine.DISPLAY_MAX_EDGE]. */
+    private fun decodeDisplaySized(refBytes: ByteArray): Bitmap? =
+        BitmapDecode.decodeByteArrayCapped(refBytes)
+
     @Suppress("LongParameterList") // one-shot assembly of the index row
     /**
      * Default name for a new analysis: the reference file's base name plus the
@@ -740,7 +780,7 @@ class AnalysisViewModel : ViewModel() {
      */
     private fun defaultSessionName(refFileName: String, now: Long): String {
         val base = refFileName.substringBeforeLast('.').ifBlank { "Analysis" }
-        val stamp = SimpleDateFormat("MMM d, HH:mm:ss", Locale.US).format(Date(now))
+        val stamp = timestamp(now)
         return "$base · $stamp"
     }
 
@@ -762,11 +802,10 @@ class AnalysisViewModel : ViewModel() {
         // Re-runs upsert over the same id: keep the original creation time
         // and any user-chosen name.
         val existing = SessionStore.get(appContext, localSessionId)
-        val cleanRefName = refName.removePrefix("Ref: ")
-        val convergence = engineStatsArray?.getOrNull(15) ?: 0f
+        val convergence = engineStatsArray?.getOrNull(EngineStats.SLOT_CONVERGENCE) ?: 0f
         return SessionRecord(
             id = localSessionId,
-            name = existing?.name ?: defaultSessionName(cleanRefName, now),
+            name = existing?.name ?: defaultSessionName(refName, now),
             createdAt = existing?.createdAt ?: now,
             updatedAt = now,
             frameCount = frameCount,
@@ -781,7 +820,7 @@ class AnalysisViewModel : ViewModel() {
             roiW = settings.roiW,
             roiH = settings.roiH,
             refPath = refPngPath,
-            refName = cleanRefName,
+            refName = refName,
             sessionDir = batchDir.absolutePath,
             defNames = defNames,
             headline = String.format(java.util.Locale.US, "%.1f%% converged", convergence),
@@ -794,3 +833,6 @@ class AnalysisViewModel : ViewModel() {
         )
     }
 }
+
+/** Filename without any directory prefix, handling both '/' and '\' separators. */
+private fun String.baseName(): String = substringAfterLast('/').substringAfterLast('\\')

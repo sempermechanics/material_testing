@@ -1,3 +1,17 @@
+// Analysis wizard Activity: it orchestrates the whole two/three-page setup flow
+// (image/video import, ROI, parameters, sweep, launch), so its size, per-control
+// methods, literal UI constants and broad import guards are inherent here.
+@file:Suppress(
+    "MagicNumber",
+    "MaxLineLength",
+    "LongMethod",
+    "CyclomaticComplexMethod",
+    "TooManyFunctions",
+    "LargeClass",
+    "ReturnCount",
+    "TooGenericExceptionCaught",
+)
+
 package com.rafad.indicvisiondic.ui.analysis
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -9,17 +23,19 @@ import android.provider.OpenableColumns
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.*
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ImageView
+import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.slider.RangeSlider
 import com.google.android.material.slider.Slider
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.IndicVisionNativeLib
@@ -49,34 +65,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
         /** Subset shown before a reference image is available to measure. */
         const val FALLBACK_SUBSET_SIZE = 41
 
-        /** Index of the height in the `[x, y, w, h]` array [resolveRoi] returns. */
-        const val ROI_H_INDEX = 3
-
-        /** Width of the subset window a fresh sweep suggests, centred on the recommendation. */
-        const val SUGGESTED_SUBSET_SPAN = 20
-
-        /** Suggested Max VSG, as a multiple of the largest subset in the sweep. */
-        const val VSG_SUGGESTION_FACTOR = 3
-
-        /** Hard bounds on Max VSG — the guardrail against a mistyped huge number. */
-        const val VSG_MIN_INPUT = 21
-        const val VSG_MAX_INPUT = 501
-
         // Native engine failure codes, shared with the single-analysis path.
         const val ENGINE_ERROR_FEATURES = -1
         const val ENGINE_ERROR_ROI = -2
         const val ENGINE_ERROR_INIT = -3
-
-        /**
-         * Clearance the engine demands around a grid point on top of half its
-         * subset: 4 px of interpolation buffer plus a 15 px deformation buffer
-         * (IndicVisionJNI.cpp, `absolute_boundary_buffer`). Points inside it are
-         * dropped, and a solve with no points left returns [ENGINE_ERROR_ROI].
-         */
-        const val ENGINE_EDGE_BUFFER_PX = 19
-
-        /** Slack [resolveRoi] adds beyond half a subset when insetting a frame. */
-        const val ROI_MARGIN_SLACK_PX = 10
     }
 
     private val viewModel: AnalysisViewModel by viewModels()
@@ -91,8 +83,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var etSubsetSize: Slider
     private lateinit var etStepSize: Slider
     private lateinit var etStrainWindow: Slider
-    private lateinit var progressBar: ProgressBar
-    private lateinit var tvTimer: TextView
     private var updateAdvancedSummary: (() -> Unit)? = null
 
     // Wireframe slots (load-frames page + confirm-settings page)
@@ -114,20 +104,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var btnCalculateFullField: Button
 
     // Prominent progress overlay (compute + video extraction)
-    private lateinit var computeOverlay: View
-    private lateinit var overlayTitle: TextView
-    private lateinit var overlayProgress: ProgressBar
-    private lateinit var overlayPercent: TextView
-    private lateinit var overlayStatus: TextView
-    private lateinit var overlayElapsed: TextView
-    private val elapsedHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val elapsedTicker = object : Runnable {
-        override fun run() {
-            val secs = (System.currentTimeMillis() - processingStartTime) / 1000
-            overlayElapsed.text = "Elapsed ${secs}s"
-            elapsedHandler.postDelayed(this, 1000)
-        }
-    }
+    private lateinit var overlayHelper: ComputeOverlayHelper
+    private lateinit var tvRunPoints: TextView
+    private lateinit var tvRunConvergence: TextView
     private lateinit var rgInterpolator: MaterialButtonToggleGroup
 
     // Editable value fields for the parameter sliders (typing and dragging
@@ -139,47 +118,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
     /** Inline note carrying the SSSIG-based subset suggestion. */
     private lateinit var tvSubsetHint: TextView
 
-    // Parameter-sweep controls (see [VsgStudy])
-    private lateinit var rgAnalysisMode: MaterialButtonToggleGroup
-    private lateinit var advancedParamsCard: View
-    private lateinit var lineCutPreviewCard: View
-    private lateinit var sweepBody: View
-    private lateinit var rangeSubset: RangeSlider
-    private lateinit var etSubsetMinValue: EditText
-    private lateinit var etSubsetMaxValue: EditText
-    private lateinit var etVsgMaxValue: EditText
-    private lateinit var etStepDepthValue: EditText
-    private lateinit var etSubsetSamplesValue: EditText
-    private lateinit var etVsgSamplesValue: EditText
-    private lateinit var rgLineCutAxis: MaterialButtonToggleGroup
-    private lateinit var btnPickSweepFrame: Button
-    private lateinit var tvSweepPlan: TextView
-    private lateinit var lineCutPreview: LineCutPreviewView
-    private lateinit var sweepLatticePreview: VsgLatticeView
-    private lateinit var btnRunSweep: Button
-    private lateinit var latticeSamplesBody: View
-
-    /** True while a suggestion/clamp is driving the sweep sliders, not the user. */
-    private var bindingSweep = false
-
-    /**
-     * Set once the user edits any sweep control. Until then the three sweep
-     * inputs — min subset, max subset, Max VSG — follow the app's suggestions,
-     * which track the SSSIG recommendation. After it, the user is in charge and
-     * the app only clamps their input to safe bounds.
-     */
-    private var sweepUserModified = false
-
     // Three-step wizard: images → settings → (sweep setup when Parameter sweep)
     private lateinit var scrollStepImages: View
     private lateinit var scrollStepSettings: View
     private lateinit var scrollStepSweep: View
     private lateinit var btnNext: Button
     private lateinit var btnBack: Button
+    private lateinit var wizardChrome: AnalysisWizardChrome
+    private lateinit var sweepHelper: SweepSetupHelper
 
     // State
     private var isProcessing = false
-    private var processingStartTime: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -195,7 +144,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     } else if (viewModel.wizardStep > 1) {
                         goToStep(viewModel.wizardStep - 1, animate = true)
                     } else if (viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty()) {
-                        AlertDialog.Builder(this@StaticAnalysisActivity)
+                        MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
                             .setTitle(R.string.exit_analysis_title)
                             .setMessage(R.string.exit_analysis_message)
                             .setPositiveButton(R.string.exit) { _, _ ->
@@ -210,14 +159,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
             },
         )
 
-        progressBar = findViewById(R.id.pbAnalysis)
-        tvTimer = findViewById(R.id.tvTimer)
-        computeOverlay = findViewById(R.id.computeOverlay)
-        overlayTitle = findViewById(R.id.overlayTitle)
-        overlayProgress = findViewById(R.id.overlayProgress)
-        overlayPercent = findViewById(R.id.overlayPercent)
-        overlayStatus = findViewById(R.id.overlayStatus)
-        overlayElapsed = findViewById(R.id.overlayElapsed)
+        tvRunPoints = findViewById(R.id.tvRunPoints)
+        tvRunConvergence = findViewById(R.id.tvRunConvergence)
+        overlayHelper = ComputeOverlayHelper(
+            overlay = findViewById(R.id.computeOverlay),
+            title = findViewById(R.id.overlayTitle),
+            progress = findViewById(R.id.overlayProgress),
+            percent = findViewById(R.id.overlayPercent),
+            status = findViewById(R.id.overlayStatus),
+            elapsed = findViewById(R.id.overlayElapsed),
+            runPoints = tvRunPoints,
+            runConvergence = tvRunConvergence,
+        )
         btnFullImage = findViewById(R.id.btnFullImage)
         btnDefineRoi = findViewById(R.id.btnDefineRoi)
         tvResult = findViewById(R.id.tvStaticResult)
@@ -242,7 +195,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etStepSize = findViewById(R.id.etStepSize)
         etStrainWindow = findViewById(R.id.etStrainWindow)
         btnCalculateFullField = findViewById(R.id.btnCalculateFullField)
-        rgInterpolator = findViewById(R.id.rgInterpolator) // BOUND
+        rgInterpolator = findViewById(R.id.rgInterpolator)
 
         // --- Parameter sliders: live value labels ---
         tvSubsetValue = findViewById(R.id.tvSubsetValue)
@@ -258,8 +211,41 @@ class StaticAnalysisActivity : AppCompatActivity() {
         btnNext = findViewById(R.id.btnNext)
         btnBack = findViewById(R.id.btnBack)
 
+        wizardChrome = AnalysisWizardChrome(
+            activity = this,
+            scrollStepImages = scrollStepImages,
+            scrollStepSettings = scrollStepSettings,
+            scrollStepSweep = scrollStepSweep,
+            btnNext = btnNext,
+            btnBack = btnBack,
+            btnCalculateFullField = btnCalculateFullField,
+            btnRunSweep = findViewById(R.id.btnRunSweep),
+            toolbar = findViewById(R.id.toolbar),
+        )
+
+        sweepHelper = SweepSetupHelper(
+            activity = this,
+            viewModel = viewModel,
+            callbacks = object : SweepSetupHelper.Callbacks {
+                override fun goToStep(step: Int, animate: Boolean) =
+                    this@StaticAnalysisActivity.goToStep(step, animate)
+                override fun updateWizardChrome() =
+                    wizardChrome.updateBottomNav(viewModel.wizardStep, viewModel.sweepMode)
+                override fun checkReady() = this@StaticAnalysisActivity.checkReady()
+                override fun showInfo(titleRes: Int, bodyRes: Int) =
+                    this@StaticAnalysisActivity.showInfo(titleRes, bodyRes)
+                override fun commitParamFields() =
+                    this@StaticAnalysisActivity.commitParamFields()
+                override fun startVsgSweep() = this@StaticAnalysisActivity.startVsgSweep()
+                override fun currentSubsetSize() = this@StaticAnalysisActivity.currentSubsetSize()
+                override fun maxSubsetForRoi() = this@StaticAnalysisActivity.maxSubsetForRoi()
+                override fun refPreviewBitmap() = refPreviewBmp
+                override fun renderParamField(field: EditText, value: Int) =
+                    this@StaticAnalysisActivity.renderParamField(field, value)
+            },
+        )
         // After the wizard views exist: the sweep controls call checkReady().
-        setupSweepControls()
+        sweepHelper.setup()
 
         btnNext.setOnClickListener {
             when (viewModel.wizardStep) {
@@ -340,7 +326,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     viewModel.roiW = data.getIntExtra(DicKeys.ROI_W, viewModel.realRefWidth)
                     viewModel.roiH = data.getIntExtra(DicKeys.ROI_H, viewModel.realRefHeight)
 
-                    // PIPELINE FIX: Actually read the mask file sent by RoiDrawActivity!
+                    // Load the freeform ROI mask RoiDrawActivity wrote to disk.
                     val maskPath = data.getStringExtra(DicKeys.MASK_FILE_PATH)
                     if (maskPath != null) {
                         val file = File(maskPath)
@@ -349,12 +335,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         }
                     }
 
-                    // FIX FULL IMAGE OVERRIDE: If it's exactly the image bounds, unset custom ROI
+                    // A selection covering the whole image counts as no custom ROI.
                     viewModel.hasCustomRoi =
                         !(viewModel.roiW == viewModel.realRefWidth && viewModel.roiH == viewModel.realRefHeight)
                     updateRoiSummary()
 
-                    refreshLineCutPreview()
+                    sweepHelper.refreshLineCutPreview()
                     checkReady()
                     requestSubsetRecommendation()
                 }
@@ -406,7 +392,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     intent.putExtra(DicKeys.IMAGE_HEIGHT, viewModel.realRefHeight)
                     roiStudioLauncher.launch(intent)
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Timber.e(e, "Failed to write temp ROI reference file")
                     Toast.makeText(this, R.string.failed_save_temp_file, Toast.LENGTH_SHORT).show()
                 }
             } else {
@@ -419,7 +405,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 viewModel.hasCustomRoi = false
                 viewModel.roiMaskBytes = null
                 updateRoiSummary()
-                refreshLineCutPreview()
+                sweepHelper.refreshLineCutPreview()
                 checkReady()
                 requestSubsetRecommendation()
             }
@@ -434,50 +420,30 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun handleReferenceImage(uri: Uri) {
         val name = getFileName(uri)
-
         val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
 
-        lifecycleScope.launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
-                contentResolver.openInputStream(uri)?.use { stream ->
-                    var bytes: ByteArray
-                    var previewBmp: Bitmap? = null
-
-                    if (isRaw) {
-                        val bitmap = android.graphics.BitmapFactory.decodeStream(stream)
-                        if (bitmap != null) {
-                            viewModel.realRefWidth = bitmap.width
-                            viewModel.realRefHeight = bitmap.height
-
-                            val buffer = java.nio.ByteBuffer.allocate(bitmap.width * bitmap.height * 4)
-                            bitmap.copyPixelsToBuffer(buffer)
-                            bytes = buffer.array()
-
-                            val ratio = 1000f / bitmap.width
-                            previewBmp = android.graphics.Bitmap.createScaledBitmap(bitmap, 1000, (bitmap.height * ratio).toInt(), true)
-                        } else {
-                            Toast.makeText(
-                                this@StaticAnalysisActivity,
-                                R.string.failed_decode_raw,
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                            return@launch
-                        }
-                    } else {
-                        bytes = stream.readBytes()
-                        val result = withContext(IndicVisionNativeLib.nativeDispatcher) {
-                            val dims = IndicVisionNativeLib.getImageDimensions(bytes)
-                            val preview = IndicVisionNativeLib.getPreviewFromBytes(bytes, 1000)
-                            dims to preview
-                        }
-                        viewModel.realRefWidth = result.first[0]
-                        viewModel.realRefHeight = result.first[1]
-                        previewBmp = result.second
+                val loaded = contentResolver.openInputStream(uri)?.use { stream ->
+                    loadReferenceFromStream(stream, isRaw)
+                }
+                if (loaded == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@StaticAnalysisActivity,
+                            if (isRaw) R.string.failed_decode_raw else R.string.failed_load_reference,
+                            Toast.LENGTH_SHORT,
+                        ).show()
                     }
+                    return@launch
+                }
 
-                    viewModel.refName = "Ref: $name"
-                    viewModel.refBytes = bytes
-                    refPreviewBmp = previewBmp
+                withContext(Dispatchers.Main) {
+                    viewModel.realRefWidth = loaded.width
+                    viewModel.realRefHeight = loaded.height
+                    viewModel.refName = name
+                    viewModel.refBytes = loaded.bytes
+                    refPreviewBmp = loaded.preview
                     refreshRefSlot()
 
                     if (!viewModel.hasCustomRoi) {
@@ -493,8 +459,39 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load reference image")
-                Toast.makeText(this@StaticAnalysisActivity, R.string.failed_load_reference, Toast.LENGTH_LONG).show()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@StaticAnalysisActivity, R.string.failed_load_reference, Toast.LENGTH_LONG).show()
+                }
             }
+        }
+    }
+
+    private data class LoadedReference(
+        val bytes: ByteArray,
+        val width: Int,
+        val height: Int,
+        val preview: Bitmap?,
+    )
+
+    /** Decode / dimension / preview work for a reference pick. Runs off Main. */
+    private suspend fun loadReferenceFromStream(
+        stream: java.io.InputStream,
+        isRaw: Boolean,
+    ): LoadedReference? {
+        if (isRaw) {
+            val decoded = com.rafad.indicvisiondic.ui.common.BitmapDecode.rgbaAndPreviewFromStream(stream)
+                ?: return null
+            return LoadedReference(decoded.rgba, decoded.width, decoded.height, decoded.preview)
+        }
+
+        val bytes = stream.readBytes()
+        return withContext(IndicVisionNativeLib.nativeDispatcher) {
+            val dims = IndicVisionNativeLib.getImageDimensions(bytes)
+            val preview = IndicVisionNativeLib.getPreviewFromBytes(
+                bytes,
+                com.rafad.indicvisiondic.ui.common.BitmapDecode.PREVIEW_MAX_EDGE,
+            )
+            LoadedReference(bytes, dims[0], dims[1], preview)
         }
     }
 
@@ -507,88 +504,40 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
     }
 
-    @Suppress("LongMethod", "CyclomaticComplexMethod") // legacy import pipeline; slated for P5 split
     private fun handleDeformedBatch(rawUris: List<Uri>) {
         // Frame cap (Home settings drawer): keep the first N and say so.
         val cap = DicSettings.maxFrames(this)
         val uris = if (rawUris.size > cap) {
             Toast.makeText(this, getString(R.string.frames_capped_fmt, cap), Toast.LENGTH_LONG).show()
-            rawUris.take(cap)
+            FrameImportHelper.cappedUris(rawUris, cap)
         } else {
             rawUris
         }
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val tempDir = File(cacheDir, "temp_deformed")
-                if (!tempDir.exists()) tempDir.mkdirs()
-                tempDir.listFiles()?.forEach { it.delete() }
-
-                viewModel.clearPreviousResults()
-
-                val filePaths = mutableListOf<String>()
-                // Temp path → original picked filename, kept so exports can use the
-                // user's real (default) names instead of the sanitized temp names.
-                val originalByPath = mutableMapOf<String, String>()
-                // Temp path → pixel size, so the reference-match check is free later.
-                val sizeByPath = mutableMapOf<String, Pair<Int, Int>>()
-
                 withContext(Dispatchers.Main) {
                     tvResult.text = "Caching images..."
                 }
 
-                for ((index, uri) in uris.withIndex()) {
-                    var bytes: ByteArray? = null
-                    var previewBmp: Bitmap? = null
-                    var frameSize: Pair<Int, Int>? = null
+                viewModel.clearPreviousResults()
 
-                    val originalName = getFileName(uri)
-
-                    val isRaw = originalName.endsWith(".dng", true) || originalName.endsWith(".raw", true)
-
-                    contentResolver.openInputStream(uri)?.use { stream ->
-                        if (isRaw) {
-                            val bitmap = android.graphics.BitmapFactory.decodeStream(stream)
-                            if (bitmap != null) {
-                                val buffer = java.nio.ByteBuffer.allocate(bitmap.width * bitmap.height * 4)
-                                bitmap.copyPixelsToBuffer(buffer)
-                                bytes = buffer.array()
-                                frameSize = bitmap.width to bitmap.height
-
-                                if (index == 0) {
-                                    val ratio = 1000f / bitmap.width
-                                    previewBmp = android.graphics.Bitmap.createScaledBitmap(bitmap, 1000, (bitmap.height * ratio).toInt(), true)
-                                }
-                            }
-                        } else {
-                            val frameBytes = stream.readBytes()
-                            bytes = frameBytes
-                            // JNI must stay on the pinned native thread.
-                            withContext(IndicVisionNativeLib.nativeDispatcher) {
-                                val dims = IndicVisionNativeLib.getImageDimensions(frameBytes)
-                                frameSize = dims[0] to dims[1]
-                                if (index == 0) {
-                                    previewBmp = IndicVisionNativeLib.getPreviewFromBytes(frameBytes, 1000)
-                                }
-                            }
-                        }
-                    }
-
-                    if (bytes == null) continue
-
-                    val sanitizedName = originalName.replace(Regex("[^a-zA-Z0-9.-]"), "_")
-                    val filename = String.format("%04d_%s", index, sanitizedName)
-                    val file = File(tempDir, filename)
-                    file.writeBytes(bytes)
-                    filePaths.add(file.absolutePath)
-                    originalByPath[file.absolutePath] = originalName
-                    frameSize?.let { sizeByPath[file.absolutePath] = it }
+                val batch = FrameImportHelper.importDeformedUris(
+                    context = this@StaticAnalysisActivity,
+                    uris = uris,
+                    cacheDir = cacheDir,
+                    displayName = ::getFileName,
+                )
+                if (batch != null) {
+                    viewModel.defFilePaths = batch.filePaths
+                    viewModel.defOriginalNames = batch.originalNames
+                    viewModel.defFrameSizes = batch.frameSizes
+                    viewModel.defFromVideo = batch.fromVideo
+                } else {
+                    viewModel.defFilePaths = emptyList()
+                    viewModel.defOriginalNames = emptyList()
+                    viewModel.defFrameSizes = emptyMap()
+                    viewModel.defFromVideo = false
                 }
-
-                val sortedPaths = filePaths.sorted()
-                viewModel.defFilePaths = sortedPaths
-                viewModel.defOriginalNames = sortedPaths.map { originalByPath[it] ?: File(it).name }
-                viewModel.defFrameSizes = sizeByPath
-                viewModel.defFromVideo = false
 
                 withContext(Dispatchers.Main) {
                     tvResult.text = ""
@@ -613,50 +562,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // Step 1: read metadata  show resolution/fps/length + sampling options.
     // Step 2: extract at the chosen frame rate over the chosen time segment.
     // ------------------------------------------------------------------
-    private data class VideoMeta(
-        val durationMs: Long,
-        val fps: Double,
-        val fpsKnown: Boolean,
-        val width: Int,
-        val height: Int,
-    )
-
-    private fun formatClock(ms: Long): String {
-        val totalSec = (ms / 1000).toInt()
-        return "%d:%02d".format(totalSec / 60, totalSec % 60)
-    }
-
     private fun handleVideo(uri: Uri) {
         lifecycleScope.launch(Dispatchers.IO) {
-            var meta = VideoMeta(0L, 30.0, false, 0, 0)
-            val retriever = android.media.MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(this@StaticAnalysisActivity, uri)
-                fun m(key: Int) = retriever.extractMetadata(key)
-                val durationMs = m(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-                var w = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
-                var h = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
-                val rot = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
-                if (rot == 90 || rot == 270) {
-                    val t = w
-                    w = h
-                    h = t
-                } // display orientation
-                val frameCountMeta = m(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull()
-                var fps = 30.0
-                var fpsKnown = false
-                if (frameCountMeta != null && frameCountMeta > 0 && durationMs > 0) {
-                    fps = frameCountMeta / (durationMs / 1000.0)
-                    fpsKnown = true
-                }
-                meta = VideoMeta(durationMs, fps, fpsKnown, w, h)
-            } catch (e: Exception) {
-                Timber.e(e, "Video metadata read failed")
-            } finally {
-                try {
-                    retriever.release()
-                } catch (_: Exception) {}
-            }
+            val meta = VideoFrameExtractor.readMeta(this@StaticAnalysisActivity, uri)
 
             if (meta.durationMs <= 0L) {
                 withContext(Dispatchers.Main) {
@@ -682,7 +590,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val info = mutableListOf<String>()
         if (meta.width > 0 && meta.height > 0) info.add("${meta.width}×${meta.height}")
         if (meta.fpsKnown) info.add("%.0f fps".format(meta.fps))
-        info.add(formatClock(meta.durationMs))
+        info.add(VideoFrameExtractor.formatClock(meta.durationMs))
         tvInfo.text = info.joinToString("   ·   ")
 
         // --- Frame-rate selector (capped at the source rate when known) ---
@@ -697,7 +605,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         range.valueFrom = 0f
         range.valueTo = durationSec
         range.values = listOf(0f, durationSec)
-        tvSegment.text = "${formatClock(0)} – ${formatClock(meta.durationMs)}"
+        tvSegment.text = "${VideoFrameExtractor.formatClock(0)} – ${VideoFrameExtractor.formatClock(meta.durationMs)}"
 
         val maxFrames = DicSettings.maxFrames(this@StaticAnalysisActivity)
         fun estimate(): Int {
@@ -721,7 +629,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         range.addOnChangeListener { s, _, _ ->
             val startMs = (s.values.first() * 1000).toLong()
             val endMs = (s.values.last() * 1000).toLong()
-            tvSegment.text = "${formatClock(startMs)} – ${formatClock(endMs)}"
+            tvSegment.text = "${VideoFrameExtractor.formatClock(startMs)} – ${VideoFrameExtractor.formatClock(endMs)}"
             refreshEstimate()
         }
         refreshEstimate()
@@ -741,86 +649,48 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Extracts frames at [fpsExtract] over [startMs, endMs] with the progress overlay. */
     private fun extractVideoFrames(uri: Uri, fpsExtract: Double, startMs: Long, endMs: Long) {
-        processingStartTime = System.currentTimeMillis()
-        showComputeOverlay(title = "Extracting Frames", status = "Reading video…")
+        overlayHelper.processingStartTime = System.currentTimeMillis()
+        overlayHelper.show(title = "Extracting Frames", status = "Reading video…")
 
         lifecycleScope.launch(Dispatchers.IO) {
-            val retriever = android.media.MediaMetadataRetriever()
             try {
-                retriever.setDataSource(this@StaticAnalysisActivity, uri)
-
-                val stepMs = 1000.0 / fpsExtract
-                val maxFrames = DicSettings.maxFrames(this@StaticAnalysisActivity)
-                val span = (endMs - startMs).coerceAtLeast(0L)
-                val count = ((span / stepMs).toInt() + 1).coerceIn(1, maxFrames)
-
-                val tempDir = File(cacheDir, "temp_deformed")
-                if (!tempDir.exists()) tempDir.mkdirs()
-                tempDir.listFiles()?.forEach { it.delete() }
                 viewModel.clearPreviousResults()
-
-                val defPaths = mutableListOf<String>()
-                var refPreview: Bitmap? = null
-                var firstDefPreview: Bitmap? = null
-
-                for (i in 0 until count) {
-                    val timeMs = startMs + i * stepMs
-                    if (timeMs > endMs + stepMs / 2) break
-                    val frame = retriever.getFrameAtTime(
-                        (timeMs * 1000).toLong(),
-                        android.media.MediaMetadataRetriever.OPTION_CLOSEST,
-                    ) ?: continue
-
-                    val png = java.io.ByteArrayOutputStream().use { out ->
-                        frame.compress(Bitmap.CompressFormat.PNG, 100, out)
-                        out.toByteArray()
-                    }
-
-                    if (i == 0) {
-                        viewModel.realRefWidth = frame.width
-                        viewModel.realRefHeight = frame.height
-                        viewModel.refBytes = png
-                        viewModel.refName = "Ref: video @ ${formatClock(startMs)}"
-                        refPreview = frame
-                        if (!viewModel.hasCustomRoi) {
-                            viewModel.roiX = 0
-                            viewModel.roiY = 0
-                            viewModel.roiW = frame.width
-                            viewModel.roiH = frame.height
-                        }
-                    } else {
-                        val f = File(tempDir, String.format("%04d_frame.png", i))
-                        f.writeBytes(png)
-                        defPaths.add(f.absolutePath)
-                        if (i == 1) firstDefPreview = frame
-                    }
-
-                    setComputeProgress((i + 1) * 100 / count)
-                    setComputeStatus("Extracting frame ${i + 1} of $count")
-                }
-
-                if (viewModel.refBytes == null || defPaths.isEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        hideComputeOverlay()
-                        Toast.makeText(this@StaticAnalysisActivity, R.string.video_extract_insufficient, Toast.LENGTH_LONG).show()
-                    }
-                    return@launch
-                }
-
-                val sortedDefPaths = defPaths.sorted()
-                viewModel.defFilePaths = sortedDefPaths
-                viewModel.defOriginalNames =
-                    sortedDefPaths.mapIndexed { idx, _ -> String.format("frame_%04d.png", idx + 1) }
-                // Every frame comes out of the same decoder, so they all share
-                // the reference's size by construction — recorded so the check
-                // has data for this path too.
-                val videoFrameSize = viewModel.realRefWidth to viewModel.realRefHeight
-                viewModel.defFrameSizes = sortedDefPaths.associateWith { videoFrameSize }
-                viewModel.defFromVideo = true
+                val result = VideoFrameExtractor.extract(
+                    context = this@StaticAnalysisActivity,
+                    uri = uri,
+                    fpsExtract = fpsExtract,
+                    startMs = startMs,
+                    endMs = endMs,
+                    maxFrames = DicSettings.maxFrames(this@StaticAnalysisActivity),
+                    cacheDir = cacheDir,
+                    onProgress = { percent, status ->
+                        overlayHelper.update(percent = percent, status = status)
+                    },
+                )
 
                 withContext(Dispatchers.Main) {
-                    hideComputeOverlay()
-                    refPreview?.let { refPreviewBmp = it }
+                    overlayHelper.hide()
+                    if (result == null) {
+                        Toast.makeText(this@StaticAnalysisActivity, R.string.video_extract_insufficient, Toast.LENGTH_LONG).show()
+                        return@withContext
+                    }
+
+                    viewModel.realRefWidth = result.refWidth
+                    viewModel.realRefHeight = result.refHeight
+                    viewModel.refBytes = result.refPng
+                    viewModel.refName = result.refName
+                    if (!viewModel.hasCustomRoi) {
+                        viewModel.roiX = 0
+                        viewModel.roiY = 0
+                        viewModel.roiW = result.refWidth
+                        viewModel.roiH = result.refHeight
+                    }
+                    viewModel.defFilePaths = result.batch.filePaths
+                    viewModel.defOriginalNames = result.batch.originalNames
+                    viewModel.defFrameSizes = result.batch.frameSizes
+                    viewModel.defFromVideo = result.batch.fromVideo
+
+                    result.refPreview?.let { refPreviewBmp = it }
                     refreshRefSlot()
                     refreshDefSlot()
                     validateFrameSizes()
@@ -828,20 +698,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     requestSubsetRecommendation()
                     Toast.makeText(
                         this@StaticAnalysisActivity,
-                        getString(R.string.video_loaded_frames, defPaths.size),
+                        getString(R.string.video_loaded_frames, result.batch.filePaths.size),
                         Toast.LENGTH_LONG,
                     ).show()
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error extracting video frames")
                 withContext(Dispatchers.Main) {
-                    hideComputeOverlay()
+                    overlayHelper.hide()
                     Toast.makeText(this@StaticAnalysisActivity, getString(R.string.video_read_error, e.message), Toast.LENGTH_LONG).show()
                 }
-            } finally {
-                try {
-                    retriever.release()
-                } catch (_: Exception) {}
             }
         }
     }
@@ -973,7 +839,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         updateAdvancedSummary?.invoke()
         // A new recommendation re-seeds the sweep's suggested inputs (unless the
         // user has already set their own).
-        onRecommendationChanged()
+        sweepHelper.onRecommendationChanged()
     }
 
     /**
@@ -983,23 +849,30 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * subset.
      */
     private fun resolveRoi(subset: Int): IntArray? {
-        val roi = if (viewModel.hasCustomRoi) {
-            intArrayOf(viewModel.roiX, viewModel.roiY, viewModel.roiW, viewModel.roiH)
-        } else {
-            val margin = (subset / 2) + ROI_MARGIN_SLACK_PX
-            intArrayOf(
-                margin,
-                margin,
-                viewModel.realRefWidth - (2 * margin),
-                viewModel.realRefHeight - (2 * margin),
-            )
-        }
-        if (roi[2] < subset || roi[3] < subset) {
+        val roi = RoiResolveHelper.resolve(
+            subset = subset,
+            hasCustomRoi = viewModel.hasCustomRoi,
+            roiX = viewModel.roiX,
+            roiY = viewModel.roiY,
+            roiW = viewModel.roiW,
+            roiH = viewModel.roiH,
+            realRefWidth = viewModel.realRefWidth,
+            realRefHeight = viewModel.realRefHeight,
+        )
+        if (roi == null) {
             Toast.makeText(this, R.string.roi_too_small, Toast.LENGTH_LONG).show()
-            return null
         }
         return roi
     }
+
+    /** Largest odd subset the loaded image and ROI can hold. */
+    private fun maxSubsetForRoi(): Int = RoiResolveHelper.maxSubsetForRoi(
+        hasCustomRoi = viewModel.hasCustomRoi,
+        roiW = viewModel.roiW,
+        roiH = viewModel.roiH,
+        realRefWidth = viewModel.realRefWidth,
+        realRefHeight = viewModel.realRefHeight,
+    )
 
     private fun startBatchAnalysis() {
         if (!viewModel.isReadyToCompute()) return
@@ -1009,43 +882,21 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val strainWin = currentStrainWindow()
 
         val roi = resolveRoi(subset) ?: return
-        val (finalRectX, finalRectY, finalRectW) = roi
-        val finalRectH = roi[ROI_H_INDEX]
+        val finalRectX = roi[0]
+        val finalRectY = roi[1]
+        val finalRectW = roi[2]
+        val finalRectH = roi[3]
 
         // Hard stop: do not start a new analysis when the session quota is full.
         // Re-runs that update an existing Home row are still allowed.
-        if (viewModel.wouldCreateNewSession(this)) {
-            TokenStore.refreshSessionLimit(this, SessionStore.list(this).size)
-            if (TokenStore.isSessionLimitReached(this)) {
-                startActivity(Intent(this, SessionLimitActivity::class.java))
-                return
-            }
-        }
+        if (!ensureSessionQuota()) return
 
         isProcessing = true
         checkReady()
-        processingStartTime = System.currentTimeMillis()
-        showComputeOverlay()
+        overlayHelper.processingStartTime = System.currentTimeMillis()
+        overlayHelper.show()
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        findViewById<View>(R.id.btnRunCancel).apply {
-            isEnabled = true
-            setOnClickListener {
-                MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                    .setTitle(R.string.cancel_run_title)
-                    .setMessage(R.string.cancel_run_body)
-                    .setPositiveButton(R.string.action_cancel) { _, _ ->
-                        viewModel.cancelRequested = true
-                        isEnabled = false
-                    }
-                    .setNegativeButton(R.string.keep_running, null)
-                    .show()
-            }
-        }
-        // Keep the legacy inline indicators in sync (hidden behind the overlay)
-        progressBar.visibility = View.VISIBLE
-        progressBar.progress = 0
-        tvTimer.visibility = View.VISIBLE
-        tvTimer.text = "Initializing Engine..."
+        wireCancelButton { viewModel.cancelRequested = true }
 
         // Pinned: strain is always VSG, blur always off (UI removed; the
         // native signature keeps both flags so C++ stays untouched).
@@ -1074,63 +925,37 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     use6x6 = use6x6,
                     maskData = maskData,
                     debugDir = debugDir,
-                    processingStartTime = processingStartTime,
+                    processingStartTime = overlayHelper.processingStartTime,
                 )
 
                 val outcome = viewModel.runBatchAnalysis(applicationContext, params) { progress ->
-                    setComputeProgress(progress.percent)
-                    setComputeStatus(progress.status)
-                    runOnUiThread { overlayTitle.text = progress.status }
-                    runOnUiThread {
-                        progressBar.progress = progress.percent
-                        tvTimer.text = progress.timerText
-                        if (progress.pointsSolved >= 0) {
-                            findViewById<TextView>(R.id.tvRunPoints).text =
-                                String.format(java.util.Locale.US, "%,d", progress.pointsSolved)
-                        }
-                        if (progress.convergencePercent >= 0f) {
-                            findViewById<TextView>(R.id.tvRunConvergence).text =
-                                String.format(java.util.Locale.US, "%.1f%%", progress.convergencePercent)
-                        }
-                    }
+                    overlayHelper.update(
+                        percent = progress.percent,
+                        status = progress.status,
+                        title = progress.status,
+                        pointsSolved = progress.pointsSolved,
+                        convergencePercent = progress.convergencePercent,
+                    )
                 }
-
-                val totalTime = outcome.executionTimeMs / 1000.0
 
                 withContext(Dispatchers.Main) {
                     isProcessing = false
-                    hideComputeOverlay()
+                    overlayHelper.hide()
                     window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                    progressBar.visibility = View.GONE
 
-                    if (outcome.engineErrorCode == AnalysisViewModel.ERROR_CANCELLED) {
+                    if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED) {
                         // User cancelled: stay on settings, nothing to report.
-                        tvTimer.visibility = View.GONE
                         checkReady()
-                    } else if (outcome.engineErrorCode == AnalysisViewModel.ERROR_SESSION_LIMIT) {
-                        tvTimer.visibility = View.GONE
+                    } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT) {
                         checkReady()
                         startActivity(Intent(this@StaticAnalysisActivity, SessionLimitActivity::class.java))
                     } else if (outcome.engineErrorCode < 0) {
-                        val errorMsg = when (outcome.engineErrorCode) {
-                            -1 -> "Feature Extraction Failed (AKAZE). The speckle pattern might be too fine, out of focus, or destroyed by scaling."
-                            -2 -> "Invalid ROI. The mask excluded the entire specimen (0 valid points)."
-                            -3 -> "Engine Initialization Failed (Null Pointers or Corrupt Image)."
-                            else -> "Unknown Engine Error (${outcome.engineErrorCode})"
-                        }
-                        tvTimer.text = "Analysis Aborted"
+                        val errorMsg = engineFailureMessage(outcome.engineErrorCode)
                         tvResult.text = "❌ Error: $errorMsg"
-
-                        android.app.AlertDialog.Builder(this@StaticAnalysisActivity)
-                            .setTitle(R.string.analysis_failed_title)
-                            .setMessage(errorMsg)
-                            .setPositiveButton("OK", null)
-                            .show()
+                        showEngineFailureDialog(outcome.engineErrorCode, R.string.analysis_failed_title)
                     } else if (outcome.firstFrameValidPoints <= 0) {
-                        tvTimer.text = "Analysis Failed"
                         tvResult.text = "❌ Engine returned no data"
                     } else {
-                        tvTimer.text = "Batch Done in %.2f s".format(totalTime)
                         tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
 
                         viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
@@ -1144,9 +969,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 Timber.e(e, "Batch processing failed")
                 withContext(Dispatchers.Main) {
                     isProcessing = false
-                    hideComputeOverlay()
-                    progressBar.visibility = View.GONE
-                    tvTimer.text = "Engine Error"
+                    overlayHelper.hide()
                     tvResult.text = "❌ Error: ${e.message}"
                     checkReady()
                 }
@@ -1170,15 +993,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
             putExtra(DicKeys.IMG_W, viewModel.realRefWidth)
             putExtra(DicKeys.IMG_H, viewModel.realRefHeight)
             putExtra(DicKeys.STEP, viewModel.lastStep)
-            putExtra(DicKeys.REF_NAME, viewModel.refName.removePrefix("Ref: "))
+            putExtra(DicKeys.REF_NAME, viewModel.refName)
 
-            // THE FIX: Pass the dynamic timestamped path stored in the ViewModel
+            // The persisted per-session reference copy, not the picked source.
             putExtra(DicKeys.REF_PATH, viewModel.lastRefPath ?: "")
 
             putExtra(DicKeys.DEF_PATH, viewModel.lastDefPath)
             putExtra(DicKeys.BATCH_DIR_PATH, viewModel.lastBatchDirPath)
             val frameNames = if (sweep) {
-                plan.map { combinationLabel(it) }
+                plan.map { sweepHelper.combinationLabel(it) }
             } else {
                 viewModel.defFilePaths.map { it.substringAfterLast('/') }
             }
@@ -1248,11 +1071,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvSubsetValue.clearFocus()
         tvStepValue.clearFocus()
         tvStrainValue.clearFocus()
-        if (::etSubsetMinValue.isInitialized) {
-            etSubsetMinValue.clearFocus()
-            etSubsetMaxValue.clearFocus()
-            etVsgMaxValue.clearFocus()
-        }
+        if (::sweepHelper.isInitialized) sweepHelper.clearSweepFieldFocus()
     }
 
     /**
@@ -1335,23 +1154,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
             rgInterpolator.check(R.id.rbBicubic)
             updateAdvancedSummary?.invoke()
             // Reset also hands the sweep back to its suggested inputs.
-            sweepUserModified = false
-            seedSweepSuggestions()
+            if (::sweepHelper.isInitialized) {
+                sweepHelper.resetUserModified()
+                sweepHelper.seedSweepSuggestions()
+            }
         }
 
-        fun infoDialog(titleRes: Int, bodyRes: Int): (View) -> Unit = {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(titleRes)
-                .setMessage(bodyRes)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
-        }
         findViewById<View>(R.id.btnSubsetInfo)
-            .setOnClickListener(infoDialog(R.string.subset_size, R.string.info_subset))
+            .setOnClickListener { showInfo(R.string.subset_size, R.string.info_subset) }
         findViewById<View>(R.id.btnStepInfo)
-            .setOnClickListener(infoDialog(R.string.step_size_density, R.string.info_step))
+            .setOnClickListener { showInfo(R.string.step_size_density, R.string.info_step) }
         findViewById<View>(R.id.btnStrainInfo)
-            .setOnClickListener(infoDialog(R.string.strain_window, R.string.info_strain_window))
+            .setOnClickListener { showInfo(R.string.strain_window, R.string.info_strain_window) }
 
         findViewById<View>(R.id.advancedParamsHeader).setOnClickListener {
             val expanded = advancedBody.visibility == View.VISIBLE
@@ -1364,549 +1178,29 @@ class StaticAnalysisActivity : AppCompatActivity() {
             updateLabels()
             // Moving the single-setting subset re-seeds the sweep's suggestion,
             // until the user sets their own sweep inputs.
-            if (fromUser) onRecommendationChanged()
+            if (fromUser && ::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
         }
         etStepSize.addOnChangeListener { _, _, _ -> updateLabels() }
         etStrainWindow.addOnChangeListener { _, _, _ -> updateLabels() }
     }
 
     // ------------------------------------------------------------------
-    // Parameter sweep — the virtual strain gauge study of §5.4.5 of the DIC
-    // Good Practices Guide. The user gives a subset *range* and a ceiling on
-    // the VSG; [VsgStudy] derives the step sizes (1/6 to 1/3 of each subset)
-    // and the strain windows that follow from VSG = (window - 1) * step + 1.
-    // Every surviving combination is solved against one frame and lands in the
-    // result viewer as its own specimen.
-    // ------------------------------------------------------------------
-
-    private fun setupSweepControls() {
-        rgAnalysisMode = findViewById(R.id.rgAnalysisMode)
-        advancedParamsCard = findViewById(R.id.advancedParamsCard)
-        lineCutPreviewCard = findViewById(R.id.lineCutPreviewCard)
-        sweepBody = findViewById(R.id.sweepBody)
-        rangeSubset = findViewById(R.id.rangeSubset)
-        etSubsetMinValue = findViewById(R.id.etSubsetMinValue)
-        etSubsetMaxValue = findViewById(R.id.etSubsetMaxValue)
-        etVsgMaxValue = findViewById(R.id.etVsgMaxValue)
-        etStepDepthValue = findViewById(R.id.etStepDepthValue)
-        etSubsetSamplesValue = findViewById(R.id.etSubsetSamplesValue)
-        etVsgSamplesValue = findViewById(R.id.etVsgSamplesValue)
-        rgLineCutAxis = findViewById(R.id.rgLineCutAxis)
-        btnPickSweepFrame = findViewById(R.id.btnPickSweepFrame)
-        tvSweepPlan = findViewById(R.id.tvSweepPlan)
-        lineCutPreview = findViewById(R.id.lineCutPreview)
-        sweepLatticePreview = findViewById(R.id.sweepLatticePreview)
-        btnRunSweep = findViewById(R.id.btnRunSweep)
-        latticeSamplesBody = findViewById(R.id.latticeSamplesBody)
-
-        rgAnalysisMode.check(if (viewModel.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
-        rgAnalysisMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (!isChecked) return@addOnButtonCheckedListener
-            viewModel.sweepMode = checkedId == R.id.rbModeSweep
-            // Leaving sweep mode while on the sweep page returns to settings.
-            if (!viewModel.sweepMode && viewModel.wizardStep == 3) {
-                goToStep(2, animate = true)
-            } else {
-                applyAnalysisModeUi()
-                refreshSweepPlan()
-            }
-        }
-
-        rgLineCutAxis.check(if (viewModel.lineCutHorizontal) R.id.rbAxisX else R.id.rbAxisY)
-        rgLineCutAxis.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (!isChecked) return@addOnButtonCheckedListener
-            viewModel.lineCutHorizontal = checkedId == R.id.rbAxisX
-            refreshLineCutPreview()
-        }
-
-        btnPickSweepFrame.setOnClickListener { pickSweepFrameWithPreview() }
-
-        btnRunSweep.setOnClickListener {
-            commitParamFields()
-            startVsgSweep()
-        }
-
-        val sweepSettingsBody = sweepBody
-        val sweepChevron = findViewById<ImageView>(R.id.ivSweepSettingsChevron)
-        findViewById<View>(R.id.sweepSettingsHeader).setOnClickListener {
-            val expanded = sweepSettingsBody.visibility == View.VISIBLE
-            sweepSettingsBody.visibility = if (expanded) View.GONE else View.VISIBLE
-            sweepChevron.rotation = if (expanded) 0f else 180f
-        }
-
-        findViewById<View>(R.id.btnLatticeSamples).setOnClickListener {
-            val expanded = latticeSamplesBody.visibility == View.VISIBLE
-            latticeSamplesBody.visibility = if (expanded) View.GONE else View.VISIBLE
-        }
-
-        wireSweepControls()
-        wireSweepInfoButtons()
-
-        applyAnalysisModeUi()
-        renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
-        renderParamField(etVsgSamplesValue, viewModel.vsgSamples)
-        renderParamField(etStepDepthValue, viewModel.stepDenominator)
-        seedSweepSuggestions()
-    }
-
-    /**
-     * Single setting keeps Advanced + Compute on page 2. Parameter sweep hides
-     * Advanced, shows the line-cut preview, and routes through Next → page 3.
-     */
-    private fun applyAnalysisModeUi() {
-        val sweep = viewModel.sweepMode
-        advancedParamsCard.visibility = if (sweep) View.GONE else View.VISIBLE
-        lineCutPreviewCard.visibility = if (sweep) View.VISIBLE else View.GONE
-        if (sweep) refreshLineCutPreview()
-        updateWizardChrome()
-        checkReady()
-    }
-
-    // ------------------------------------------------------------------
-    // The three sweep inputs — min subset, max subset, Max VSG — are the
-    // user's to set. The app suggests sensible starting values (see
-    // [seedSweepSuggestions]); after that every edit funnels through a commit
-    // that clamps it to safe bounds. Sliders and text fields share those
-    // commits, so the two never disagree, and the slider ranges are fixed —
-    // no cross-slider re-ranging, which is what used to re-enter the planner
-    // mid-update.
-    // ------------------------------------------------------------------
-
-    private fun wireSweepControls() {
-        // The range slider carries both subset ends; a thumb drag commits both.
-        rangeSubset.addOnChangeListener { slider, _, fromUser ->
-            onSliderInput(fromUser) { commitSubsetRange(slider.values[0].toInt(), slider.values[1].toInt()) }
-        }
-
-        wireSweepField(etSubsetMinValue, { viewModel.subsetMin }) { commitSubsetMin(it) }
-        wireSweepField(etSubsetMaxValue, { viewModel.subsetMax }) { commitSubsetMax(it) }
-        wireSweepField(etVsgMaxValue, { viewModel.vsgMax }) { commitVsgMax(it) }
-        wireSweepField(etStepDepthValue, { viewModel.stepDenominator }) { commitStepDepth(it) }
-        wireSweepField(etSubsetSamplesValue, { viewModel.subsetSamples }) { commitSubsetSamples(it) }
-        wireSweepField(etVsgSamplesValue, { viewModel.vsgSamples }) { commitVsgSamples(it) }
-    }
-
-    /** Runs [body] for a genuine input, ignoring the echo of our own writes. */
-    private inline fun onSliderInput(fromUser: Boolean, body: () -> Unit) {
-        if (bindingSweep) return
-        if (fromUser) sweepUserModified = true
-        body()
-    }
-
-    /**
-     * A numeric field the user can type into. Non-numeric input reverts to the
-     * current value ([current]); a number is committed (and clamped) via
-     * [commit]. Commit on Done or focus loss, mirroring the analysis fields.
-     */
-    private fun wireSweepField(field: EditText, current: () -> Int, commit: (Int) -> Unit) {
-        // Commit on focus loss only. Done just drops focus, which fires this —
-        // so the field is unfocused by the time we write the clamped value back,
-        // and the displayed text always reflects what was actually applied.
-        field.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) return@setOnFocusChangeListener
-            val typed = field.text.toString().trim().toIntOrNull()
-            if (typed == null) {
-                renderParamField(field, current())
-            } else {
-                sweepUserModified = true
-                commit(typed)
-            }
-        }
-        field.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                field.clearFocus()
-                getSystemService(InputMethodManager::class.java)
-                    ?.hideSoftInputFromWindow(field.windowToken, 0)
-                true
-            } else {
-                false
-            }
-        }
-    }
-
-    /** Largest subset the sweep may use: the slider ceiling, capped to the ROI. */
-    private fun effectiveSubsetCeiling(): Int =
-        minOf(SubsetRecommender.MAX_SUBSET, maxSubsetForRoi())
-
-    /** Rounds [raw] to an odd subset inside the slider's range. */
-    private fun oddSubset(raw: Int): Int =
-        raw.coerceIn(SubsetRecommender.MIN_SUBSET, SubsetRecommender.MAX_SUBSET) or 1
-
-    /** Commits both ends of the subset range together (a range-slider drag). */
-    private fun commitSubsetRange(rawLo: Int, rawHi: Int) {
-        val ceiling = effectiveSubsetCeiling()
-        val lo = oddSubset(rawLo).coerceIn(SubsetRecommender.MIN_SUBSET, ceiling)
-        val hi = oddSubset(rawHi).coerceIn(lo, ceiling)
-        viewModel.subsetMin = lo
-        viewModel.subsetMax = hi
-        writeSubsetRange(lo, hi)
-        refreshSweepPlan()
-    }
-
-    /**
-     * Min subset from its text field. Clamped to at least
-     * [SubsetRecommender.MIN_SUBSET] and no more than the current max — typing
-     * past the max simply pins it there.
-     */
-    private fun commitSubsetMin(raw: Int) {
-        val currentMax = viewModel.subsetMax.takeIf { it > 0 } ?: effectiveSubsetCeiling()
-        viewModel.subsetMin = oddSubset(raw).coerceAtMost(currentMax)
-        writeSubsetRange(viewModel.subsetMin, viewModel.subsetMax)
-        refreshSweepPlan()
-    }
-
-    /**
-     * Max subset from its text field. Clamped to at least the min and no more
-     * than the largest the image and ROI can hold — a huge typed value snaps
-     * down to that ceiling.
-     */
-    private fun commitSubsetMax(raw: Int) {
-        val floor = viewModel.subsetMin.coerceAtLeast(SubsetRecommender.MIN_SUBSET)
-        viewModel.subsetMax = oddSubset(raw).coerceIn(floor, effectiveSubsetCeiling())
-        writeSubsetRange(viewModel.subsetMin, viewModel.subsetMax)
-        refreshSweepPlan()
-    }
-
-    /** Max VSG. Clamped to the reasonable band; a mistyped huge number snaps in. */
-    private fun commitVsgMax(raw: Int) {
-        viewModel.vsgMax = raw.coerceIn(VSG_MIN_INPUT, VSG_MAX_INPUT)
-        renderParamField(etVsgMaxValue, viewModel.vsgMax)
-        refreshSweepPlan()
-    }
-
-    /** Sweep step denominator (subset ÷ N), clamped to the former slider band 2–6. */
-    private fun commitStepDepth(raw: Int) {
-        viewModel.stepDenominator = raw.coerceIn(2, 6)
-        renderParamField(etStepDepthValue, viewModel.stepDenominator)
-        refreshSweepPlan()
-    }
-
-    /** How many subset sizes to sample across the range (lattice x). */
-    private fun commitSubsetSamples(raw: Int) {
-        viewModel.subsetSamples = raw.coerceIn(VsgStudy.MIN_SAMPLES, VsgStudy.MAX_SAMPLES)
-        renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
-        refreshSweepPlan()
-    }
-
-    /** How many VSG sizes to sample up to Max VSG (lattice y). */
-    private fun commitVsgSamples(raw: Int) {
-        viewModel.vsgSamples = raw.coerceIn(VsgStudy.MIN_SAMPLES, VsgStudy.MAX_SAMPLES)
-        renderParamField(etVsgSamplesValue, viewModel.vsgSamples)
-        refreshSweepPlan()
-    }
-
-    /** Reflects the subset range onto the range slider and both text fields. */
-    private fun writeSubsetRange(lo: Int, hi: Int) {
-        bindingSweep = true
-        rangeSubset.values = listOf(
-            lo.toFloat().coerceIn(rangeSubset.valueFrom, rangeSubset.valueTo),
-            hi.toFloat().coerceIn(rangeSubset.valueFrom, rangeSubset.valueTo),
-        )
-        bindingSweep = false
-        renderParamField(etSubsetMinValue, lo)
-        renderParamField(etSubsetMaxValue, hi)
-    }
-
-    /**
-     * Seeds the sweep inputs with the app's suggestions — a subset window
-     * centred on the SSSIG recommendation and a Max VSG a few times the subset.
-     * Runs until the user edits a sweep control; after that their values stand.
-     */
-    private fun seedSweepSuggestions() {
-        if (!::rangeSubset.isInitialized) return
-        if (sweepUserModified) {
-            refreshSweepPlan()
-            return
-        }
-        val ceiling = effectiveSubsetCeiling()
-        val rec = currentSubsetSize().coerceIn(SubsetRecommender.MIN_SUBSET, ceiling)
-        val (lo, hi) = suggestedSubsetWindow(rec, ceiling)
-        viewModel.subsetMin = lo
-        viewModel.subsetMax = hi
-        viewModel.vsgMax = (VSG_SUGGESTION_FACTOR * hi).coerceIn(VSG_MIN_INPUT, VSG_MAX_INPUT)
-        writeSubsetRange(lo, hi)
-        renderParamField(etVsgMaxValue, viewModel.vsgMax)
-        refreshSweepPlan()
-    }
-
-    /**
-     * A subset window of [SUGGESTED_SUBSET_SPAN] centred on [rec], shifted whole
-     * to fit inside `[MIN_SUBSET, ceiling]` so it never collapses to a single
-     * value unless the valid range itself is that narrow.
-     */
-    private fun suggestedSubsetWindow(rec: Int, ceiling: Int): Pair<Int, Int> {
-        val half = SUGGESTED_SUBSET_SPAN / 2
-        var lo = rec - half
-        var hi = rec + half
-        if (lo < SubsetRecommender.MIN_SUBSET) {
-            hi += SubsetRecommender.MIN_SUBSET - lo
-            lo = SubsetRecommender.MIN_SUBSET
-        }
-        if (hi > ceiling) {
-            lo -= hi - ceiling
-            hi = ceiling
-        }
-        return oddSubset(lo.coerceAtLeast(SubsetRecommender.MIN_SUBSET)) to oddSubset(hi)
-    }
-
-    /** Re-seeds the sweep from the current recommendation when the user hasn't taken over. */
-    private fun onRecommendationChanged() = seedSweepSuggestions()
-
-    private fun wireSweepInfoButtons() {
-        fun show(titleRes: Int, body: CharSequence): (View) -> Unit = {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(titleRes)
-                .setMessage(body)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
-        }
-        findViewById<View>(R.id.btnSweepInfo)
-            .setOnClickListener(show(R.string.analysis_mode, getString(R.string.info_analysis_mode)))
-        findViewById<View>(R.id.btnSubsetRangeInfo)
-            .setOnClickListener(show(R.string.subset_range, getString(R.string.info_subset_range)))
-        findViewById<View>(R.id.btnVsgMaxInfo)
-            .setOnClickListener(show(R.string.vsg_max, getString(R.string.info_vsg_max)))
-        findViewById<View>(R.id.btnSamplesInfo)
-            .setOnClickListener(show(R.string.subset_samples, getString(R.string.info_subset_samples)))
-        findViewById<View>(R.id.btnStepDepthInfo)
-            .setOnClickListener(show(R.string.step_depth, getString(R.string.info_step_depth)))
-        findViewById<View>(R.id.btnLineCutInfo)
-            .setOnClickListener(show(R.string.line_cut_axis, getString(R.string.info_line_cut_axis)))
-    }
-
-    /** Defaults to the last frame — the most deformed one in a monotonic test. */
-    private fun resolvedSweepFrame(): Int {
-        val last = maxOf(0, viewModel.defCount - 1)
-        val stored = viewModel.vsgFrameIndex
-        return if (stored < 0 || stored > last) last else stored
-    }
-
-    private fun frameLabel(index: Int): String =
-        viewModel.defOriginalNames.getOrNull(index)?.substringAfterLast('/')
-            ?: getString(R.string.sweep_frame_btn_fmt, index + 1)
-
-    /**
-     * Multi-frame sweep picker: preview of the highlighted frame while choosing,
-     * then collapse to name + Frame N of M on the settings row.
-     */
-    private fun pickSweepFrameWithPreview() {
-        val count = viewModel.defCount
-        if (count <= 1) return
-        var selected = resolvedSweepFrame().coerceIn(0, count - 1)
-        val header = layoutInflater.inflate(R.layout.dialog_sweep_frame_pick, null)
-        val preview = header.findViewById<ImageView>(R.id.ivSweepFrameDialogPreview)
-        val caption = header.findViewById<TextView>(R.id.tvSweepFrameDialogCaption)
-
-        fun bindPreview(index: Int) {
-            caption.text = getString(R.string.sweep_frame_of_fmt, index + 1, count)
-            val path = viewModel.defFilePaths.getOrNull(index)
-            if (path.isNullOrBlank()) {
-                preview.setImageDrawable(null)
-                return
-            }
-            val bmp = android.graphics.BitmapFactory.decodeFile(path)
-            if (bmp != null) {
-                val maxEdge = 480
-                val scale = minOf(1f, maxEdge.toFloat() / maxOf(bmp.width, bmp.height))
-                val w = (bmp.width * scale).toInt().coerceAtLeast(1)
-                val h = (bmp.height * scale).toInt().coerceAtLeast(1)
-                preview.setImageBitmap(
-                    if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(bmp, w, h, true)
-                    else bmp,
-                )
-            } else {
-                preview.setImageDrawable(null)
-            }
-        }
-        bindPreview(selected)
-
-        val labels = Array(count) { frameLabel(it) }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.sweep_frame)
-            .setView(header)
-            .setSingleChoiceItems(labels, selected) { _, which ->
-                selected = which
-                bindPreview(which)
-            }
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                viewModel.vsgFrameIndex = selected
-                refreshSweepPlan()
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    /**
-     * Largest subset the loaded image and ROI can actually hold.
-     *
-     * The engine drops any grid point whose subset box comes within
-     * [ENGINE_EDGE_BUFFER_PX] of the image edge, and refuses a solve that
-     * leaves no points at all. Capping the sweep here keeps it from asking for
-     * a subset the ROI cannot fit and bailing out before the first solve.
-     */
-    private fun maxSubsetForRoi(): Int {
-        val w = viewModel.realRefWidth
-        val h = viewModel.realRefHeight
-        if (w <= 0 || h <= 0) return SubsetRecommender.MAX_SUBSET
-        val fits = if (viewModel.hasCustomRoi) {
-            minOf(viewModel.roiW, viewModel.roiH) - 2 * ENGINE_EDGE_BUFFER_PX
-        } else {
-            // Full frame is inset by (subset/2 + slack) a side and must still be
-            // one subset wide: imgW - 2*(s/2 + slack) >= s  =>  s <= imgW/2 - slack.
-            minOf(w, h) / 2 - ROI_MARGIN_SLACK_PX
-        }
-        // Keep it odd and inside the slider's range.
-        return (fits - 1 or 1).coerceIn(SubsetRecommender.MIN_SUBSET, SubsetRecommender.MAX_SUBSET)
-    }
-
-    /**
-     * The sweep grid the current inputs describe, capped to the subsets the ROI
-     * can hold: x subset sizes × y VSG sizes × z step sizes.
-     */
-    private fun currentPlan(): List<VsgStudy.Point> {
-        val ceiling = maxSubsetForRoi()
-        if (viewModel.subsetMin > ceiling) return emptyList()
-        return VsgStudy.plan(
-            subsetMin = viewModel.subsetMin,
-            subsetMax = viewModel.subsetMax.coerceAtMost(ceiling),
-            subsetSamples = viewModel.subsetSamples,
-            vsgMax = viewModel.vsgMax,
-            vsgSamples = viewModel.vsgSamples,
-            stepDenominator = viewModel.stepDenominator,
-        )
-    }
-
-    private fun refreshSweepPlan() {
-        if (!::tvSweepPlan.isInitialized) return
-        renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
-        renderParamField(etVsgSamplesValue, viewModel.vsgSamples)
-        renderParamField(etStepDepthValue, viewModel.stepDenominator)
-        refreshSweepFrameUi()
-
-        val plan = currentPlan()
-        tvSweepPlan.text = when {
-            plan.isNotEmpty() -> planSummary(plan)
-            viewModel.subsetMin > maxSubsetForRoi() ->
-                getString(R.string.sweep_plan_subset_too_big_fmt, maxSubsetForRoi())
-            else -> getString(R.string.sweep_plan_empty)
-        }
-        refreshLatticePreview(plan)
-        refreshLineCutPreview()
-        checkReady()
-    }
-
-    /** Collapsed frame summary when 2+ deformed frames; hidden for a single frame. */
-    private fun refreshSweepFrameUi() {
-        if (!::btnPickSweepFrame.isInitialized) return
-        val count = viewModel.defCount
-        if (count <= 1) {
-            btnPickSweepFrame.visibility = View.GONE
-            return
-        }
-        val index = resolvedSweepFrame()
-        btnPickSweepFrame.visibility = View.VISIBLE
-        btnPickSweepFrame.text = getString(
-            R.string.sweep_frame_summary_fmt,
-            frameLabel(index),
-            index + 1,
-            count,
-        )
-    }
-
-    /** Planned sweep lattice: every node drawn as filled (not yet run). */
-    private fun refreshLatticePreview(plan: List<VsgStudy.Point>) {
-        if (!::sweepLatticePreview.isInitialized) return
-        sweepLatticePreview.onNodeClick = null
-        sweepLatticePreview.setNodes(
-            plan.map { point ->
-                VsgLatticeView.Node(
-                    subset = point.subset,
-                    step = point.step,
-                    window = point.strainWindow,
-                    vsg = point.vsg,
-                    solved = true,
-                )
-            },
-        )
-    }
-
-    /** Centre-line cut over the reference image and current ROI. */
-    private fun refreshLineCutPreview() {
-        if (!::lineCutPreview.isInitialized) return
-        val w = viewModel.realRefWidth
-        val h = viewModel.realRefHeight
-        if (w <= 0 || h <= 0) {
-            lineCutPreview.setPreview(
-                bitmap = null,
-                imageW = 1,
-                imageH = 1,
-                roiX = 0,
-                roiY = 0,
-                roiW = 1,
-                roiH = 1,
-                horizontal = viewModel.lineCutHorizontal,
-                maskBytes = null,
-            )
-            return
-        }
-        val roiX = if (viewModel.hasCustomRoi) viewModel.roiX else 0
-        val roiY = if (viewModel.hasCustomRoi) viewModel.roiY else 0
-        val roiW = if (viewModel.hasCustomRoi && viewModel.roiW > 0) viewModel.roiW else w
-        val roiH = if (viewModel.hasCustomRoi && viewModel.roiH > 0) viewModel.roiH else h
-        lineCutPreview.setPreview(
-            bitmap = refPreviewBmp,
-            imageW = w,
-            imageH = h,
-            roiX = roiX,
-            roiY = roiY,
-            roiW = roiW,
-            roiH = roiH,
-            horizontal = viewModel.lineCutHorizontal,
-            maskBytes = viewModel.roiMaskBytes,
-        )
-    }
-
-    /** "N analyses · subset a–b px · VSG c–d px" for a plan. */
-    private fun planSummary(plan: List<VsgStudy.Point>): String = getString(
-        R.string.sweep_plan_grid_fmt,
-        plan.size,
-        plan.minOf { it.subset },
-        plan.maxOf { it.subset },
-        plan.minOf { it.vsg },
-        plan.maxOf { it.vsg },
-    )
-
-    /** Short per-combination label; becomes the frame name in viewer and report. */
-    private fun combinationLabel(point: VsgStudy.Point): String = getString(
-        R.string.sweep_frame_label_fmt,
-        point.subset,
-        point.step,
-        point.strainWindow,
-        point.vsg,
-    )
-
     @Suppress("ReturnCount") // each precondition bails out on the spot
     private fun startVsgSweep() {
         if (!viewModel.isReadyToCompute()) return
-        val plan = currentPlan()
+        val plan = sweepHelper.currentPlan()
         if (plan.isEmpty()) return
         // Every combination shares the ROI, so the largest subset has to fit it.
         val roi = resolveRoi(plan.maxOf { it.subset }) ?: return
 
-        if (viewModel.wouldCreateNewSession(this)) {
-            TokenStore.refreshSessionLimit(this, SessionStore.list(this).size)
-            if (TokenStore.isSessionLimitReached(this)) {
-                startActivity(Intent(this, SessionLimitActivity::class.java))
-                return
-            }
-        }
+        if (!ensureSessionQuota()) return
 
         isProcessing = true
         checkReady()
-        processingStartTime = System.currentTimeMillis()
-        showComputeOverlay(getString(R.string.mode_sweep), planSummary(plan))
+        overlayHelper.processingStartTime = System.currentTimeMillis()
+        overlayHelper.show(getString(R.string.mode_sweep), sweepHelper.planSummary(plan))
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        wireSweepCancelButton()
+        wireCancelButton { VsgStudyRunner.cancelRequested = true }
 
         val debugDir = File(cacheDir, "dic_debug").apply { mkdirs() }
         val use6x6 = currentUseKeysInterpolator()
@@ -1915,7 +1209,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val outcome = runCatching {
                 val request = AnalysisViewModel.SweepRequest(
                     plan = plan,
-                    labels = plan.map { combinationLabel(it) },
+                    labels = plan.map { sweepHelper.combinationLabel(it) },
                     roi = roi,
                     use6x6 = use6x6,
                     debugDir = debugDir,
@@ -1926,35 +1220,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
             }.onFailure { Timber.e(it, "Parameter sweep failed") }.getOrNull()
 
             isProcessing = false
-            hideComputeOverlay()
+            overlayHelper.hide()
             window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            progressBar.visibility = View.GONE
             checkReady()
             onSweepFinished(outcome)
         }
     }
 
-    private fun wireSweepCancelButton() {
-        findViewById<View>(R.id.btnRunCancel).apply {
-            isEnabled = true
-            setOnClickListener {
-                MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                    .setTitle(R.string.cancel_run_title)
-                    .setMessage(R.string.cancel_run_body)
-                    .setPositiveButton(R.string.action_cancel) { _, _ ->
-                        VsgStudyRunner.cancelRequested = true
-                        isEnabled = false
-                    }
-                    .setNegativeButton(R.string.keep_running, null)
-                    .show()
-            }
-        }
-    }
-
     private fun showSweepProgress(progress: VsgStudyRunner.Progress) {
-        setComputeProgress(progress.percent)
-        setComputeStatus(
-            getString(
+        overlayHelper.update(
+            percent = progress.percent,
+            status = getString(
                 R.string.sweep_running_fmt,
                 progress.runIndex + 1,
                 progress.totalRuns,
@@ -1962,18 +1238,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 progress.point.step,
                 progress.point.vsg,
             ),
+            title = getString(R.string.mode_sweep),
+            pointsSolved = if (progress.pointsSolved > 0) progress.pointsSolved else -1,
+            convergencePercent = progress.convergencePercent,
         )
-        runOnUiThread {
-            overlayTitle.text = getString(R.string.mode_sweep)
-            if (progress.pointsSolved > 0) {
-                findViewById<TextView>(R.id.tvRunPoints).text =
-                    String.format(java.util.Locale.US, "%,d", progress.pointsSolved)
-            }
-            if (progress.convergencePercent >= 0f) {
-                findViewById<TextView>(R.id.tvRunConvergence).text =
-                    String.format(java.util.Locale.US, "%.1f%%", progress.convergencePercent)
-            }
-        }
     }
 
     /**
@@ -1986,15 +1254,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.sweep_failed, Toast.LENGTH_LONG).show()
             return
         }
-        if (outcome.engineErrorCode == AnalysisViewModel.ERROR_SESSION_LIMIT) {
+        if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT) {
             startActivity(Intent(this, SessionLimitActivity::class.java))
             return
         }
         if (outcome.totalFrames == 0) {
             // Nothing completed: a cancel is the user's own doing, anything
             // else is an engine failure the user needs the reason for.
-            if (outcome.engineErrorCode != VsgStudyRunner.ERROR_CANCELLED) {
-                showSweepFailureDialog(outcome.engineErrorCode)
+            if (outcome.engineErrorCode != AnalysisRunCodes.ERROR_CANCELLED) {
+                showEngineFailureDialog(outcome.engineErrorCode, R.string.sweep_fail_title)
             }
             return
         }
@@ -2008,7 +1276,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             ).show()
         }
 
-        viewModel.lastDefPath = viewModel.defFilePaths.getOrNull(resolvedSweepFrame()) ?: ""
+        viewModel.lastDefPath = viewModel.defFilePaths.getOrNull(sweepHelper.resolvedSweepFrame()) ?: ""
         viewModel.lastBatchDirPath = outcome.batchDirPath
         viewModel.hasCompletedAnalysis = true
         checkReady()
@@ -2018,21 +1286,60 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     /**
-     * Why a sweep produced nothing. The engine's codes are the same ones a
-     * single analysis reports, and every one of them points at the images or
-     * the ROI rather than at the settings — so the message names the cause
-     * instead of saying the sweep failed.
+     * Why a run produced nothing. The engine's codes are the same for single
+     * analysis and sweep; messages reuse the sweep-path string resources.
      */
-    private fun showSweepFailureDialog(engineErrorCode: Int) {
+    private fun engineFailureMessage(engineErrorCode: Int): String {
         val reason = when (engineErrorCode) {
             ENGINE_ERROR_FEATURES -> R.string.sweep_fail_features
             ENGINE_ERROR_ROI -> R.string.sweep_fail_roi
             ENGINE_ERROR_INIT -> R.string.sweep_fail_init
             else -> R.string.sweep_fail_unknown
         }
+        return getString(reason, engineErrorCode)
+    }
+
+    private fun showEngineFailureDialog(engineErrorCode: Int, titleRes: Int) {
         MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.sweep_fail_title)
-            .setMessage(getString(reason, engineErrorCode))
+            .setTitle(titleRes)
+            .setMessage(engineFailureMessage(engineErrorCode))
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    /**
+     * Hard stop for a new session when quota is full. Returns false after
+     * navigating to the limit screen; re-runs of an existing session still pass.
+     */
+    private fun ensureSessionQuota(): Boolean {
+        if (!viewModel.wouldCreateNewSession(this)) return true
+        TokenStore.refreshSessionLimit(this, SessionStore.list(this).size)
+        if (!TokenStore.isSessionLimitReached(this)) return true
+        startActivity(Intent(this, SessionLimitActivity::class.java))
+        return false
+    }
+
+    private fun wireCancelButton(onConfirm: () -> Unit) {
+        findViewById<View>(R.id.btnRunCancel).apply {
+            isEnabled = true
+            setOnClickListener {
+                MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
+                    .setTitle(R.string.cancel_run_title)
+                    .setMessage(R.string.cancel_run_body)
+                    .setPositiveButton(R.string.action_cancel) { _, _ ->
+                        onConfirm()
+                        isEnabled = false
+                    }
+                    .setNegativeButton(R.string.keep_running, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun showInfo(titleRes: Int, bodyRes: Int) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(titleRes)
+            .setMessage(bodyRes)
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }
@@ -2042,35 +1349,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // ------------------------------------------------------------------
     private fun goToStep(step: Int, animate: Boolean) {
         val previous = viewModel.wizardStep
-        // Sweep page only exists in parameter-sweep mode.
-        val target = when {
-            step >= 3 && !viewModel.sweepMode -> 2
-            step < 1 -> 1
-            else -> step.coerceAtMost(if (viewModel.sweepMode) 3 else 2)
-        }
+        val target = wizardChrome.applyStep(
+            previous = previous,
+            requestedStep = step,
+            sweepMode = viewModel.sweepMode,
+            animate = animate,
+        )
         viewModel.wizardStep = target
 
         // Reaching the settings page counts as reviewing the parameters —
         // they are all visible here — which satisfies the Compute gate.
         if (target >= 2) viewModel.settingsReviewed = true
 
-        val pages = listOf(scrollStepImages, scrollStepSettings, scrollStepSweep)
-        val showing = pages[target - 1]
-        pages.forEach { page ->
-            page.visibility = if (page === showing) View.VISIBLE else View.GONE
-        }
-        if (animate && previous != target) {
-            val forward = target > previous
-            showing.startAnimation(
-                android.view.animation.AnimationUtils.loadAnimation(
-                    this,
-                    if (forward) R.anim.slide_in_right else R.anim.slide_in_left,
-                ),
-            )
-        }
-
-        findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).subtitle =
-            getString(R.string.step_of_fmt, target, if (viewModel.sweepMode) 3 else 2)
         if (target == 2) {
             refreshInputsCard()
             updateRoiSummary()
@@ -2079,81 +1369,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             requestSubsetRecommendation()
         }
         if (target == 3) {
-            refreshSweepPlan()
+            sweepHelper.refreshSweepPlan()
         }
 
-        updateWizardChrome()
         checkReady()
-    }
-
-    /** Bottom nav labels and visibility for the current wizard step + mode. */
-    private fun updateWizardChrome() {
-        if (!::btnNext.isInitialized) return
-        val step = viewModel.wizardStep
-        val sweep = viewModel.sweepMode
-        when (step) {
-            1 -> {
-                btnNext.visibility = View.VISIBLE
-                btnNext.setText(R.string.next_settings)
-                btnBack.visibility = View.GONE
-                btnCalculateFullField.visibility = View.GONE
-                btnRunSweep.visibility = View.GONE
-            }
-            2 -> {
-                btnBack.visibility = View.VISIBLE
-                if (sweep) {
-                    btnNext.visibility = View.VISIBLE
-                    btnNext.setText(R.string.next_sweep)
-                    btnCalculateFullField.visibility = View.GONE
-                } else {
-                    btnNext.visibility = View.GONE
-                    btnCalculateFullField.visibility = View.VISIBLE
-                }
-                btnRunSweep.visibility = View.GONE
-            }
-            else -> {
-                btnBack.visibility = View.VISIBLE
-                btnNext.visibility = View.GONE
-                btnCalculateFullField.visibility = View.GONE
-                btnRunSweep.visibility = View.VISIBLE
-            }
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Compute progress overlay control
-    // ------------------------------------------------------------------
-    private fun showComputeOverlay(
-        title: String = "Computing Strain Field",
-        status: String = "Initializing engine…",
-    ) {
-        overlayTitle.text = title
-        overlayProgress.progress = 0
-        overlayPercent.text = "0%"
-        overlayStatus.text = status
-        overlayElapsed.text = "Elapsed 0s"
-        computeOverlay.visibility = View.VISIBLE
-        elapsedHandler.removeCallbacks(elapsedTicker)
-        elapsedHandler.post(elapsedTicker)
-    }
-
-    private fun hideComputeOverlay() {
-        computeOverlay.visibility = View.GONE
-        elapsedHandler.removeCallbacks(elapsedTicker)
-    }
-
-    /** Update the overlay's ring + percentage. Safe to call from any thread. */
-    private fun setComputeProgress(percent: Int) {
-        runOnUiThread {
-            val p = percent.coerceIn(0, 100)
-            overlayProgress.progress = p
-            overlayPercent.text = "$p%"
-        }
-    }
-
-    /** Update the overlay's status line (e.g. "Processing frame 2/5"). */
-    private fun setComputeStatus(text: String) {
-        runOnUiThread { overlayStatus.text = text }
     }
 
     private fun checkReady() {
@@ -2189,10 +1408,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             !isProcessing &&
             sizeError == null &&
             viewModel.sweepMode &&
-            currentPlan().isNotEmpty()
-        if (::btnRunSweep.isInitialized) {
-            btnRunSweep.isEnabled = sweepEnabled
-            btnRunSweep.alpha = if (sweepEnabled) 1.0f else 0.4f
+            ::sweepHelper.isInitialized &&
+            sweepHelper.currentPlan().isNotEmpty()
+        if (::sweepHelper.isInitialized) {
+            sweepHelper.setRunSweepEnabled(sweepEnabled)
         }
 
         btnDefineRoi.isEnabled = (viewModel.refBytes != null) && !isProcessing
@@ -2202,14 +1421,29 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun restoreUiFromViewModel() {
-        viewModel.refBytes?.let {
-            refPreviewBmp = IndicVisionNativeLib.getPreviewFromBytes(it, 1000)
+        val bytes = viewModel.refBytes
+        if (bytes != null) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val preview = withContext(IndicVisionNativeLib.nativeDispatcher) {
+                    IndicVisionNativeLib.getPreviewFromBytes(
+                        bytes,
+                        com.rafad.indicvisiondic.ui.common.BitmapDecode.PREVIEW_MAX_EDGE,
+                    )
+                }
+                withContext(Dispatchers.Main) {
+                    refPreviewBmp = preview
+                    refreshRefSlot()
+                    refreshDefSlot()
+                    checkReady()
+                    applySubsetRecommendation()
+                }
+            }
+        } else {
+            refreshRefSlot()
+            refreshDefSlot()
+            checkReady()
+            applySubsetRecommendation()
         }
-        refreshRefSlot()
-        refreshDefSlot()
-        checkReady()
-        // Survives rotation: the measurement is already in the ViewModel.
-        applySubsetRecommendation()
     }
 
     /** Reference slot: dropzone when empty, summary card when filled. */
@@ -2218,7 +1452,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         refDropzone.visibility = if (hasRef) View.GONE else View.VISIBLE
         refCard.visibility = if (hasRef) View.VISIBLE else View.GONE
         if (hasRef) {
-            tvRefName.text = viewModel.refName.removePrefix("Ref: ")
+            tvRefName.text = viewModel.refName
             tvRefMeta.text = getString(
                 R.string.reference_meta_fmt,
                 viewModel.realRefWidth,
@@ -2250,7 +1484,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Confirm-settings inputs summary card. */
     private fun refreshInputsCard() {
-        tvInputsTitle.text = viewModel.refName.removePrefix("Ref: ")
+        tvInputsTitle.text = viewModel.refName
         tvInputsMeta.text = getString(R.string.inputs_meta_fmt, viewModel.defFilePaths.size)
         refPreviewBmp?.let { ivInputsThumb.setImageBitmap(it) }
     }
@@ -2268,7 +1502,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 viewModel.roiY,
             )
         }
-        refreshLineCutPreview()
+        sweepHelper.refreshLineCutPreview()
     }
 
     /** Inline, non-blocking JPEG accuracy warning. */

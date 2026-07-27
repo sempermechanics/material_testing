@@ -19,6 +19,7 @@ import com.rafad.indicvisiondic.data.DeviceKeyManager
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.common.Insets
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * Persistent gate shown when the account's cloud analysis quota is full. Unlike
@@ -87,6 +88,7 @@ class SessionLimitActivity : AppCompatActivity() {
         try {
             startActivity(intent)
         } catch (e: ActivityNotFoundException) {
+            Timber.w(e, "No email app to send the access request")
             Toast.makeText(this, getString(R.string.request_access_none, support), Toast.LENGTH_LONG).show()
         }
     }

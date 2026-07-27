@@ -1,3 +1,7 @@
+// Restore parsing: literal buffer sizes and manifest field offsets read clearest
+// inline, so MagicNumber is suppressed for this whole file.
+@file:Suppress("MagicNumber")
+
 package com.rafad.indicvisiondic.data
 
 import android.content.Context
@@ -8,17 +12,24 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.rafad.indicvisiondic.data.net.CloudFileDto
 import com.rafad.indicvisiondic.data.net.CloudSessionDto
 import com.rafad.indicvisiondic.data.net.IndicApi
 import com.rafad.indicvisiondic.data.net.TokenProvider
-import com.rafad.indicvisiondic.ui.analysis.AnalysisViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
 import java.io.File
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Rebuilds an analysis on this device from its cloud backup.
@@ -68,6 +79,9 @@ object CloudRestore {
 
     private const val BACKOFF_SECONDS = 30L
 
+    /** Concurrent GETs for legacy per-file restores (matches upload concurrency). */
+    private const val LEGACY_DOWNLOAD_CONCURRENCY = 4
+
     /** Cloud analyses available to restore (excludes ones already on this device). */
     suspend fun listRestorable(context: Context): List<CloudSessionDto> = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
@@ -111,7 +125,7 @@ object CloudRestore {
             manifest.localSessionId.ifBlank { "restored-" + sessionId.take(12) }
         }
         val sessionDir = SessionStore.dirFor(appContext, localId)
-        val rawDeformedDir = File(sessionDir, AnalysisViewModel.RAW_DEFORMED_SUBDIR).apply { mkdirs() }
+        val rawDeformedDir = File(sessionDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply { mkdirs() }
         metaTmp.copyTo(File(sessionDir, "metadata.json"), overwrite = true)
         metaTmp.delete()
 
@@ -152,21 +166,30 @@ object CloudRestore {
     private suspend fun restoreLegacyFiles(
         api: IndicApi,
         token: String,
-        files: List<com.rafad.indicvisiondic.data.net.CloudFileDto>,
+        files: List<CloudFileDto>,
         layout: Layout,
         onProgress: suspend (done: Int, total: Int) -> Unit,
     ): String {
-        var refPath = ""
         val rest = files.filter { it.role != "metadata" }
-        var done = 0
+        val done = AtomicInteger(0)
+        val refPath = AtomicReference("")
         onProgress(0, rest.size)
-        for (f in rest) {
-            val dest = destFor(f.role, f.name, layout)
-            api.downloadFile(token, f.fileId, dest)
-            if (dest.name == "reference.png") refPath = dest.absolutePath
-            onProgress(++done, rest.size)
+        // A few GETs in flight fill the link the way parallel Drive uploads do;
+        // one failure cancels siblings via coroutineScope (same as before: abort).
+        coroutineScope {
+            val gate = Semaphore(LEGACY_DOWNLOAD_CONCURRENCY)
+            rest.map { f ->
+                async {
+                    gate.withPermit {
+                        val dest = destFor(f.role, f.name, layout)
+                        api.downloadFile(token, f.fileId, dest)
+                        if (dest.name == "reference.png") refPath.set(dest.absolutePath)
+                        onProgress(done.incrementAndGet(), rest.size)
+                    }
+                }
+            }.awaitAll()
         }
-        return refPath
+        return refPath.get()
     }
 
     /**

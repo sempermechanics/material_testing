@@ -1,3 +1,6 @@
+// A few long preference-key / default-value lines read clearest unbroken.
+@file:Suppress("MaxLineLength")
+
 package com.rafad.indicvisiondic.data
 
 import android.content.Context

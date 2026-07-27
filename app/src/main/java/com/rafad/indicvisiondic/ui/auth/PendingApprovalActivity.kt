@@ -1,3 +1,6 @@
+// Pending-approval screen: literal poll interval / UI constants read clearest inline.
+@file:Suppress("MagicNumber")
+
 package com.rafad.indicvisiondic.ui.auth
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -43,7 +46,7 @@ class PendingApprovalActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_pending_approval)
 
-        com.rafad.indicvisiondic.ui.common.Insets.padVertical(findViewById(R.id.pendingRoot))
+        Insets.padVertical(findViewById(R.id.pendingRoot))
 
         keyManager = DeviceKeyManager(this)
 
@@ -93,6 +96,7 @@ class PendingApprovalActivity : AppCompatActivity() {
         try {
             startActivity(intent)
         } catch (e: ActivityNotFoundException) {
+            Timber.w(e, "No email app to send the access request")
             Toast.makeText(this, getString(R.string.request_access_none, support), Toast.LENGTH_LONG).show()
         }
     }
@@ -113,28 +117,26 @@ class PendingApprovalActivity : AppCompatActivity() {
             authRepo.refreshStatus().fold(
                 onSuccess = { status ->
                     setLoadingState(false)
-                    when (status) {
-                        "APPROVED", "OFFLINE_CACHE_APPROVED" -> {
-                            // The admin approved them! Route to the Main App.
-                            Toast.makeText(
-                                this@PendingApprovalActivity,
-                                R.string.status_access_granted,
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                            val intent = Intent(this@PendingApprovalActivity, HomeActivity::class.java)
-                            startActivity(intent)
-                            finish()
-                        }
-                        "PENDING" -> {
-                            // Still waiting.
+                    when (val target = AccessRouter.afterRefresh(status, stayOnPending = true)) {
+                        null -> {
+                            // Still PENDING — stay on this screen.
                             Toast.makeText(
                                 this@PendingApprovalActivity,
                                 R.string.status_still_pending,
                                 Toast.LENGTH_SHORT,
                             ).show()
                         }
+                        HomeActivity::class.java -> {
+                            Toast.makeText(
+                                this@PendingApprovalActivity,
+                                R.string.status_access_granted,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            startActivity(Intent(this@PendingApprovalActivity, target))
+                            finish()
+                        }
                         else -> {
-                            // Something went wrong (e.g., REVOKED). The repo already signed them out.
+                            // Unexpected status — force a clean re-login.
                             routeToLogin(getString(R.string.status_changed_relogin))
                         }
                     }

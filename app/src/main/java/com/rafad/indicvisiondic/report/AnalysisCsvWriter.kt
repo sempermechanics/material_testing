@@ -29,11 +29,36 @@ object AnalysisCsvWriter {
     private val HEADER_SINGLE = "image," + DicResult.CSV_POINT_HEADER
 
     fun write(out: File, sweep: Boolean, frames: List<Frame>) {
-        val row = StringBuffer(DicResult.CSV_ROW_CAPACITY)
-        val formatter = DicResult.CsvPointFormatter()
-        out.bufferedWriter(bufferSize = DicResult.CSV_BUFFER_BYTES).use { w ->
-            w.append(if (sweep) HEADER_SWEEP else HEADER_SINGLE).append('\n')
-            frames.forEach { writeFrame(w, it, sweep, row, formatter) }
+        open(out, sweep).use { appender ->
+            frames.forEach { appender.append(it) }
+        }
+    }
+
+    /**
+     * Streaming writer so a caller that already decoded a frame's `.dat` can
+     * append CSV rows without holding every frame in memory (upload staging
+     * shares one decode pass with report bake).
+     */
+    fun open(out: File, sweep: Boolean): Appender {
+        val w = out.bufferedWriter(bufferSize = DicResult.CSV_BUFFER_BYTES)
+        w.append(if (sweep) HEADER_SWEEP else HEADER_SINGLE).append('\n')
+        return Appender(w, sweep)
+    }
+
+    /** One open CSV file; call [append] per frame then [close]. */
+    class Appender internal constructor(
+        private val writer: Writer,
+        private val sweep: Boolean,
+    ) : AutoCloseable {
+        private val row = StringBuffer(DicResult.CSV_ROW_CAPACITY)
+        private val formatter = DicResult.CsvPointFormatter()
+
+        fun append(frame: Frame) {
+            writeFrame(writer, frame, sweep, row, formatter)
+        }
+
+        override fun close() {
+            writer.close()
         }
     }
 

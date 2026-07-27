@@ -1,7 +1,20 @@
+// Heatmap rendering / colour-mapping: literal colour stops, grid math and long
+// interpolation loops are inherent to the pixel work and read clearest inline,
+// so the structural and magic-number rules are suppressed for this whole file.
+@file:Suppress(
+    "MagicNumber",
+    "ComplexCondition",
+    "LongMethod",
+    "CyclomaticComplexMethod",
+    "LongParameterList",
+    "NestedBlockDepth",
+)
+
 package com.rafad.indicvisiondic.report
 import android.graphics.Bitmap
 import android.graphics.Color
 import com.rafad.indicvisiondic.DicResult
+import kotlin.math.max
 
 /**
  * Turns a full-field result array into heatmap bitmaps: grid interpolation,
@@ -9,6 +22,9 @@ import com.rafad.indicvisiondic.DicResult
  * viewer and the PDF report.
  */
 object VisualizationEngine {
+
+    /** Longest-edge cap for on-screen scrub heatmaps (export paths omit this). */
+    const val DISPLAY_MAX_EDGE = 1080
 
     // PRECOMPUTED LOOKUP TABLE: Jet Colormap (256 colors)
     private val JET_LUT = IntArray(256) { i ->
@@ -47,6 +63,11 @@ object VisualizationEngine {
         return Pair(finalMin, finalMax)
     }
 
+    /**
+     * @param maxLongEdge when set and smaller than the image's longest edge, the
+     *   bitmap is generated at display scale (viewer scrub). Pass null / omit for
+     *   full-resolution PDF and share export.
+     */
     fun generateHeatmap(
         data: FloatArray,
         imgW: Int,
@@ -55,7 +76,17 @@ object VisualizationEngine {
         step: Int,
         customMin: Float? = null, // Optional Custom Bounds
         customMax: Float? = null,
+        maxLongEdge: Int? = null,
     ): Triple<Bitmap, Float, Float> {
+        val longest = max(imgW, imgH).coerceAtLeast(1)
+        val scale = if (maxLongEdge != null && longest > maxLongEdge) {
+            maxLongEdge.toFloat() / longest
+        } else {
+            1f
+        }
+        val outW = (imgW * scale).toInt().coerceAtLeast(1)
+        val outH = (imgH * scale).toInt().coerceAtLeast(1)
+
         var minX = Int.MAX_VALUE
         var minY = Int.MAX_VALUE
         var maxX = Int.MIN_VALUE
@@ -79,7 +110,7 @@ object VisualizationEngine {
         }
 
         if (validValues.isEmpty()) {
-            return Triple(Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888), 0f, 0f)
+            return Triple(Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888), 0f, 0f)
         }
 
         // THE SCALING LOGIC: Use Custom Bounds if provided, else use Mean ± 3σ Statistical Clamping
@@ -96,7 +127,7 @@ object VisualizationEngine {
 
         val range = if (maxV - minV == 0f) 0.0001f else maxV - minV
 
-        val pixels = IntArray(imgW * imgH)
+        val pixels = IntArray(outW * outH)
         val cols = ((maxX - minX) / step) + 1
         val rows = ((maxY - minY) / step) + 1
         val grid = FloatArray(cols * rows) { Float.NaN }
@@ -114,8 +145,6 @@ object VisualizationEngine {
             }
         }
 
-        val weights = FloatArray(step) { it / step.toFloat() }
-
         for (r in 0 until rows - 1) {
             for (c in 0 until cols - 1) {
                 val v00 = grid[r * cols + c]
@@ -124,38 +153,37 @@ object VisualizationEngine {
                 val v11 = grid[(r + 1) * cols + (c + 1)]
 
                 if (!v00.isNaN() && !v10.isNaN() && !v01.isNaN() && !v11.isNaN()) {
-                    val pxStart = minX + c * step
-                    val pyStart = minY + r * step
+                    val x0 = minX + c * step
+                    val y0 = minY + r * step
+                    val x1 = x0 + step
+                    val y1 = y0 + step
 
-                    for (py in 0 until step) {
-                        val wy = weights[py]
-                        val absY = pyStart + py
-                        if (absY < 0 || absY >= imgH) continue
-                        val rowOffset = absY * imgW
+                    val ox0 = (x0 * scale).toInt().coerceIn(0, outW)
+                    val oy0 = (y0 * scale).toInt().coerceIn(0, outH)
+                    val ox1 = (x1 * scale).toInt().coerceIn(0, outW)
+                    val oy1 = (y1 * scale).toInt().coerceIn(0, outH)
+                    val dw = (ox1 - ox0).coerceAtLeast(1)
+                    val dh = (oy1 - oy0).coerceAtLeast(1)
 
+                    for (oy in oy0 until oy1) {
+                        val wy = (oy - oy0).toFloat() / dh
+                        val rowOffset = oy * outW
                         val leftEdgeV = v00 + wy * (v01 - v00)
                         val rightEdgeV = v10 + wy * (v11 - v10)
 
-                        for (px in 0 until step) {
-                            val absX = pxStart + px
-                            if (absX < 0 || absX >= imgW) continue
-                            val wx = weights[px]
-
+                        for (ox in ox0 until ox1) {
+                            val wx = (ox - ox0).toFloat() / dw
                             val v = leftEdgeV + wx * (rightEdgeV - leftEdgeV)
-
-                            // Color Mapping naturally clamps to Min/Max bounds!
                             val norm = ((v.coerceIn(minV, maxV) - minV) / range * 255).toInt()
-                            val color = JET_LUT[norm.coerceIn(0, 255)]
-
-                            pixels[rowOffset + absX] = color
+                            pixels[rowOffset + ox] = JET_LUT[norm.coerceIn(0, 255)]
                         }
                     }
                 }
             }
         }
 
-        val bitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
-        bitmap.setPixels(pixels, 0, imgW, 0, 0, imgW, imgH)
+        val bitmap = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(pixels, 0, outW, 0, 0, outW, outH)
 
         return Triple(bitmap, minV, maxV)
     }

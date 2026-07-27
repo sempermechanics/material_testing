@@ -1,12 +1,12 @@
+// Home screen wires many list/menu/callback bindings in onCreate; kept together
+// for locality, so LongMethod / TooManyFunctions are suppressed for this file.
+@file:Suppress("LongMethod", "TooManyFunctions")
+
 package com.rafad.indicvisiondic.ui.home
 
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.os.Bundle
-import android.widget.EditText
 import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,17 +17,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.google.android.material.slider.Slider
-import com.google.android.material.switchmaterial.SwitchMaterial
-import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.data.CloudSync
 import com.rafad.indicvisiondic.data.DevAuth
-import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
@@ -37,14 +33,9 @@ import com.rafad.indicvisiondic.ui.auth.SplashActivity
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.common.MediaSourceChooser
 import com.rafad.indicvisiondic.ui.limit.SessionLimitActivity
-import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Home: the record of every analysis done on this phone (metadata from
@@ -58,23 +49,12 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var list: RecyclerView
     private lateinit var emptyState: android.view.View
     private lateinit var swipeRefresh: SwipeRefreshLayout
-    private val adapter = SessionAdapter()
-
-    // --- Selection mode -------------------------------------------------
-    // Long-press starts it, tap toggles rows while it lasts, and it ends when
-    // the last row is deselected. Ids rather than indices, so the set survives
-    // a refresh() that reorders or drops rows.
-    private lateinit var topBar: android.view.View
-    private lateinit var selectionBar: android.view.View
-    private lateinit var selectionCount: TextView
-    private lateinit var btnSelectionRename: ImageButton
-    private lateinit var selectAllBox: com.google.android.material.checkbox.MaterialCheckBox
+    private lateinit var adapter: SessionListAdapter
+    private lateinit var selection: SessionSelectionController
     private lateinit var fab: FloatingActionButton
-    private val selectedIds = linkedSetOf<String>()
-    private val inSelectionMode: Boolean get() = selectedIds.isNotEmpty()
 
     private val backCallback = object : androidx.activity.OnBackPressedCallback(false) {
-        override fun handleOnBackPressed() = clearSelection()
+        override fun handleOnBackPressed() = selection.clearSelection()
     }
 
     /** Confirm before leaving Home (and the app). Selection-mode back is separate. */
@@ -137,7 +117,6 @@ class HomeActivity : AppCompatActivity() {
         // not just that the backend's index says so.
         swipeRefresh.setOnRefreshListener { refresh(deep = true) }
         list.layoutManager = LinearLayoutManager(this)
-        list.adapter = adapter
 
         fab = findViewById(R.id.fabNewAnalysis)
         fab.setOnClickListener {
@@ -149,26 +128,57 @@ class HomeActivity : AppCompatActivity() {
             }
             showSourceChooser()
         }
-        findViewById<ImageButton>(R.id.btnHomeSettings).setOnClickListener { showSettingsDrawer() }
+        findViewById<ImageButton>(R.id.btnHomeSettings).setOnClickListener {
+            HomeSettingsSheet.show(
+                this,
+                object : HomeSettingsSheet.Callbacks {
+                    override fun onSignOut() {
+                        AuthRepository(this@HomeActivity).signOut()
+                        routeToSignIn()
+                    }
 
-        topBar = findViewById(R.id.homeTopBar)
-        selectionBar = findViewById(R.id.homeSelectionBar)
-        selectionCount = findViewById(R.id.tvSelectionCount)
-        btnSelectionRename = findViewById(R.id.btnSelectionRename)
-        findViewById<ImageButton>(R.id.btnSelectionClose).setOnClickListener { clearSelection() }
-        findViewById<ImageButton>(R.id.btnSelectionDelete).setOnClickListener { confirmDeleteSelected() }
-        selectAllBox = findViewById(R.id.cbSelectionAll)
-        // setOnClickListener, not setOnCheckedChangeListener: updateSelectionBar
-        // drives the checked state, and a change listener would re-enter here
-        // every time it did.
-        selectAllBox.setOnClickListener {
-            // Unticking means "none", which empties the selection and therefore
-            // ends selection mode — the same as clearing it.
-            if (selectAllBox.isChecked) selectAll() else clearSelection()
+                    override fun onExportData() = exportMyData()
+                    override fun onDeleteAccount() = confirmDeleteAccount()
+                },
+            )
         }
-        btnSelectionRename.setOnClickListener {
-            adapter.selectedRecords().singleOrNull()?.let { promptRename(it) }
-        }
+
+        // Adapter callbacks close over selection; both must exist before the
+        // list attaches so a early bind cannot hit an uninitialized controller.
+        adapter = SessionListAdapter(
+            isSelected = { id -> selection.isSelected(id) },
+            onClick = { record ->
+                if (selection.inSelectionMode) {
+                    selection.toggleSelection(record)
+                } else {
+                    openSession(record)
+                }
+            },
+            onLongClick = { record ->
+                if (selection.inSelectionMode) {
+                    selection.toggleSelection(record)
+                } else {
+                    selection.startSelection(record)
+                }
+            },
+        )
+        selection = SessionSelectionController(
+            activity = this,
+            adapter = adapter,
+            topBar = findViewById(R.id.homeTopBar),
+            selectionBar = findViewById(R.id.homeSelectionBar),
+            selectionCount = findViewById(R.id.tvSelectionCount),
+            btnSelectionRename = findViewById(R.id.btnSelectionRename),
+            selectAllBox = findViewById(R.id.cbSelectionAll),
+            fab = fab,
+            backCallback = backCallback,
+            onRefresh = { refresh() },
+        )
+        selection.bindBarActions(
+            btnClose = findViewById(R.id.btnSelectionClose),
+            btnDelete = findViewById(R.id.btnSelectionDelete),
+        )
+        list.adapter = adapter
 
         // Exit confirm is always registered; selection back is layered on top and
         // enabled only while something is selected (LIFO: last added runs first).
@@ -232,7 +242,7 @@ class HomeActivity : AppCompatActivity() {
             adapter.submit(sessions)
             emptyState.isVisible = sessions.isEmpty()
             // A refresh can drop rows out from under a selection.
-            updateSelectionBar()
+            selection.updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
             TokenStore.refreshSessionLimit(this@HomeActivity, sessions.size)
             try {
@@ -300,217 +310,7 @@ class HomeActivity : AppCompatActivity() {
                 .show()
             return
         }
-        // A sweep session opens on the interactive lattice, which forwards these
-        // same extras to the result viewer when a node is tapped.
-        val target = if (record.isSweep) {
-            com.rafad.indicvisiondic.ui.analysis.VsgLatticeActivity::class.java
-        } else {
-            ResultViewerActivity::class.java
-        }
-        val intent = Intent(this, target).apply {
-            putExtra(DicKeys.IMG_W, record.imgW)
-            putExtra(DicKeys.IMG_H, record.imgH)
-            putExtra(DicKeys.STEP, record.step)
-            putExtra(DicKeys.REF_NAME, record.refName)
-            putExtra(DicKeys.REF_PATH, record.refPath)
-            putExtra(DicKeys.BATCH_DIR_PATH, record.sessionDir)
-            // A sweep names its frames after the combination behind them, and
-            // needs each frame's own settings to render and describe it.
-            val frameNames = if (record.isSweep) record.sweepLabels else record.defNames
-            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(frameNames))
-            if (record.isSweep) {
-                putExtra(DicKeys.SWEEP_SUBSETS, record.sweepSubsets.toIntArray())
-                putExtra(DicKeys.SWEEP_STEPS, record.sweepSteps.toIntArray())
-                putExtra(DicKeys.SWEEP_STRAIN_WINS, record.sweepStrainWindows.toIntArray())
-                putExtra(DicKeys.LINE_CUT_HORIZONTAL, record.lineCutHorizontal)
-                putExtra(DicKeys.SWEEP_SKIP_SUBSETS, record.sweepSkipSubsets.toIntArray())
-                putExtra(DicKeys.SWEEP_SKIP_STEPS, record.sweepSkipSteps.toIntArray())
-                putExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS, record.sweepSkipStrainWindows.toIntArray())
-            }
-            putExtra(DicKeys.SESSION_ID, record.id)
-            putExtra(DicKeys.SESSION_LOCAL_ID, record.id)
-            putExtra(DicKeys.SUBSET_SIZE, record.subset)
-            putExtra(DicKeys.STRAIN_WINDOW, record.strainWindow)
-            putExtra(DicKeys.STRAIN_METHOD, "VSG")
-            putExtra(DicKeys.ENGINE_STATS, record.engineStats.toFloatArray())
-            putExtra(DicKeys.ROI_X, record.roiX)
-            putExtra(DicKeys.ROI_Y, record.roiY)
-            putExtra(DicKeys.ROI_W, record.roiW)
-            putExtra(DicKeys.ROI_H, record.roiH)
-        }
-        startActivity(intent)
-    }
-
-    // ------------------------------------------------------------------
-    // Selection mode
-    // ------------------------------------------------------------------
-
-    /** Long-press on an unselected list: enters selection mode with that row. */
-    private fun startSelection(record: SessionRecord) {
-        selectedIds.add(record.id)
-        adapter.rebindRow(record.id)
-        updateSelectionBar()
-    }
-
-    /** Toggles one row; entering/leaving selection mode falls out of the count. */
-    private fun toggleSelection(record: SessionRecord) {
-        if (!selectedIds.remove(record.id)) selectedIds.add(record.id)
-        adapter.rebindRow(record.id)
-        updateSelectionBar()
-    }
-
-    private fun clearSelection() {
-        if (selectedIds.isEmpty()) return
-        val cleared = selectedIds.toList()
-        selectedIds.clear()
-        cleared.forEach { adapter.rebindRow(it) }
-        updateSelectionBar()
-    }
-
-    private fun selectAll() {
-        // Only the rows that were not already selected change appearance.
-        val added = adapter.allIds().filterNot { it in selectedIds }
-        selectedIds.addAll(added)
-        added.forEach { adapter.rebindRow(it) }
-        updateSelectionBar()
-    }
-
-    /**
-     * Swaps the title row for the contextual bar and keeps the FAB out of the
-     * way. Rename needs exactly one target, so it only appears for a single
-     * selection.
-     */
-    private fun updateSelectionBar() {
-        // Rows can disappear under a selection (a refresh, a delete elsewhere);
-        // drop ids that no longer exist so the count never lies.
-        selectedIds.retainAll(adapter.allIds().toSet())
-
-        val active = inSelectionMode
-        selectionBar.isVisible = active
-        topBar.isVisible = !active
-        backCallback.isEnabled = active
-        if (active) fab.hide() else fab.show()
-        selectionCount.text = getString(R.string.selection_count_fmt, selectedIds.size)
-        btnSelectionRename.isVisible = selectedIds.size == 1
-        // Ticked only when every row is in the selection, so the box reports
-        // the real state rather than just what was last tapped.
-        val allIds = adapter.allIds()
-        selectAllBox.isChecked = allIds.isNotEmpty() && selectedIds.size == allIds.size
-    }
-
-    /**
-     * Bulk delete. Reuses the single-row semantics: full erasure is the primary
-     * action, and a device-only option appears when any of the selection has a
-     * cloud copy that would otherwise be silently left behind.
-     */
-    private fun confirmDeleteSelected() {
-        val records = adapter.selectedRecords()
-        if (records.isEmpty()) return
-        if (records.size == 1) {
-            confirmDelete(records.first())
-            return
-        }
-
-        val backedUp = records.count {
-            it.syncState == SessionRecord.SyncState.SYNCED || it.cloudSessionId.isNotBlank()
-        }
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle(getString(R.string.delete_confirm_title_multi, records.size))
-            .setNegativeButton(R.string.action_cancel, null)
-
-        if (backedUp == 0) {
-            dialog.setMessage(R.string.delete_confirm_body_local_multi)
-                .setPositiveButton(R.string.action_delete) { _, _ -> eraseSelected(records, cloudToo = true) }
-        } else {
-            dialog.setMessage(getString(R.string.delete_confirm_body_cloud_multi, backedUp))
-                .setPositiveButton(R.string.delete_everywhere) { _, _ -> eraseSelected(records, cloudToo = true) }
-                .setNeutralButton(R.string.delete_device_only) { _, _ -> eraseSelected(records, cloudToo = false) }
-        }
-        dialog.show()
-    }
-
-    private fun eraseSelected(records: List<SessionRecord>, cloudToo: Boolean) {
-        lifecycleScope.launch {
-            Toast.makeText(
-                this@HomeActivity,
-                getString(R.string.delete_multi_working, records.size),
-                Toast.LENGTH_SHORT,
-            ).show()
-
-            // Sequential, not parallel: each erase is a cloud round-trip, and
-            // the backend is happier with one at a time than N at once.
-            var stillInCloud = 0
-            for (record in records) {
-                if (cloudToo) {
-                    val result = CloudSync.eraseEverywhere(this@HomeActivity, record.id)
-                    if (result == CloudSync.EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE) stillInCloud++
-                } else {
-                    CloudSync.eraseLocalOnly(this@HomeActivity, record.id)
-                }
-            }
-
-            // Report what actually happened — never imply a cloud copy is gone
-            // when the backend could not be reached.
-            val message = if (stillInCloud > 0) {
-                getString(R.string.delete_multi_partial, records.size, stillInCloud)
-            } else {
-                getString(R.string.delete_multi_done, records.size)
-            }
-            Toast.makeText(this@HomeActivity, message, Toast.LENGTH_LONG).show()
-
-            clearSelection()
-            refresh()
-        }
-    }
-
-    private fun promptRename(record: SessionRecord) {
-        val input = EditText(this).apply { setText(record.name) }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.action_rename)
-            .setView(input)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val newName = input.text.toString().trim()
-                if (newName.isNotEmpty()) {
-                    SessionStore.rename(this, record.id, newName)
-                    refresh()
-                }
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
-    }
-
-    /**
-     * Delete an analysis. When a cloud backup exists the user gets an explicit
-     * choice, with full erasure (device + cloud) as the primary action — the
-     * GDPR right-to-erasure path.
-     */
-    private fun confirmDelete(record: SessionRecord) {
-        val hasCloudCopy = record.syncState == SessionRecord.SyncState.SYNCED ||
-            record.cloudSessionId.isNotBlank()
-
-        if (!hasCloudCopy) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.delete_confirm_title)
-                .setMessage(R.string.delete_confirm_body_local)
-                .setPositiveButton(R.string.action_delete) { _, _ -> eraseEverywhere(record) }
-                .setNegativeButton(R.string.action_cancel, null)
-                .show()
-            return
-        }
-
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.delete_confirm_title)
-            .setMessage(R.string.delete_confirm_body_cloud)
-            .setPositiveButton(R.string.delete_everywhere) { _, _ -> eraseEverywhere(record) }
-            .setNeutralButton(R.string.delete_device_only) { _, _ ->
-                lifecycleScope.launch {
-                    CloudSync.eraseLocalOnly(this@HomeActivity, record.id)
-                    Toast.makeText(this@HomeActivity, R.string.delete_device_done, Toast.LENGTH_SHORT).show()
-                    refresh()
-                }
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
+        startActivity(SessionOpenHelper.intentFor(this, record))
     }
 
     private fun routeToSignIn() {
@@ -574,188 +374,8 @@ class HomeActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun eraseEverywhere(record: SessionRecord) {
-        lifecycleScope.launch {
-            when (CloudSync.eraseEverywhere(this@HomeActivity, record.id)) {
-                CloudSync.EraseResult.ERASED_EVERYWHERE ->
-                    Toast.makeText(this@HomeActivity, R.string.delete_everywhere_done, Toast.LENGTH_SHORT).show()
-                // Nothing was deleted — don't imply the cloud copy is gone.
-                CloudSync.EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE ->
-                    Toast.makeText(this@HomeActivity, R.string.delete_cloud_failed, Toast.LENGTH_LONG).show()
-            }
-            refresh()
-        }
-    }
-
-    // ── Settings drawer ──────────────────────────────────────────────────
-
-    private fun showSettingsDrawer() {
-        val sheet = BottomSheetDialog(this)
-        val view = layoutInflater.inflate(R.layout.sheet_home_settings, null)
-        sheet.setContentView(view)
-
-        view.findViewById<SwitchMaterial>(R.id.switchSaveCloud).apply {
-            isChecked = DicSettings.saveToCloud(this@HomeActivity)
-            setOnCheckedChangeListener { _, v -> DicSettings.setSaveToCloud(this@HomeActivity, v) }
-        }
-        view.findViewById<SwitchMaterial>(R.id.switchKeepRerun).apply {
-            isChecked = DicSettings.keepEveryRerun(this@HomeActivity)
-            setOnCheckedChangeListener { _, v -> DicSettings.setKeepEveryRerun(this@HomeActivity, v) }
-        }
-
-        val valueLabel = view.findViewById<TextView>(R.id.tvMaxFramesValue)
-        view.findViewById<Slider>(R.id.sliderMaxFrames).apply {
-            value = DicSettings.maxFrames(this@HomeActivity).toFloat()
-            valueLabel.text = value.toInt().toString()
-            addOnChangeListener { _, v, _ ->
-                valueLabel.text = v.toInt().toString()
-                DicSettings.setMaxFrames(this@HomeActivity, v.toInt())
-            }
-        }
-        view.findViewById<ImageButton>(R.id.btnMaxFramesInfo).setOnClickListener {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.setting_max_frames)
-                .setMessage(R.string.setting_max_frames_info)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
-        }
-
-        view.findViewById<TextView>(R.id.tvAccountEmail).text =
-            TokenStore.cachedEmail(this) ?: ""
-
-        view.findViewById<android.view.View>(R.id.btnRestoreCloud).setOnClickListener {
-            sheet.dismiss()
-            startActivity(Intent(this@HomeActivity, com.rafad.indicvisiondic.ui.restore.RestoreActivity::class.java))
-        }
-
-        // Admin entry: only for accounts whose backend role is admin.
-        view.findViewById<android.view.View>(R.id.btnAdmin).apply {
-            visibility = if (TokenStore.isAdmin(this@HomeActivity)) android.view.View.VISIBLE else android.view.View.GONE
-            setOnClickListener {
-                sheet.dismiss()
-                startActivity(Intent(this@HomeActivity, com.rafad.indicvisiondic.ui.admin.AdminActivity::class.java))
-            }
-        }
-
-        view.findViewById<android.view.View>(R.id.btnAbout).setOnClickListener {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.about_title)
-                .setMessage("inDIC v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
-        }
-        view.findViewById<android.view.View>(R.id.btnSignOut).setOnClickListener {
-            sheet.dismiss()
-            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
-            TokenStore.clear(this)
-            routeToSignIn()
-        }
-        view.findViewById<android.view.View>(R.id.btnExportData).setOnClickListener {
-            sheet.dismiss()
-            exportMyData()
-        }
-        view.findViewById<android.view.View>(R.id.btnDeleteAccount).setOnClickListener {
-            sheet.dismiss()
-            confirmDeleteAccount()
-        }
-
-        sheet.show()
-    }
-
-    // ── List adapter ─────────────────────────────────────────────────────
-
-    private inner class SessionAdapter : RecyclerView.Adapter<SessionAdapter.Holder>() {
-        private var items: List<SessionRecord> = emptyList()
-        private val dateFmt = SimpleDateFormat("MMM d", Locale.getDefault())
-
-        fun submit(newItems: List<SessionRecord>) {
-            items = newItems
-            notifyDataSetChanged()
-        }
-
-        fun allIds(): List<String> = items.map { it.id }
-
-        /** Redraws one row by id — selection changes never touch the whole list. */
-        fun rebindRow(id: String) {
-            val index = items.indexOfFirst { it.id == id }
-            if (index >= 0) notifyItemChanged(index)
-        }
-
-        /** The selected rows, in list order. */
-        fun selectedRecords(): List<SessionRecord> = items.filter { it.id in selectedIds }
-
-        inner class Holder(v: android.view.View) : RecyclerView.ViewHolder(v) {
-            val card: com.google.android.material.card.MaterialCardView =
-                v.findViewById(R.id.sessionCard)
-            val thumb: ImageView = v.findViewById(R.id.sessionThumb)
-            val check: ImageView = v.findViewById(R.id.sessionCheck)
-            val title: TextView = v.findViewById(R.id.sessionTitle)
-            val subtitle: TextView = v.findViewById(R.id.sessionSubtitle)
-            val badge: TextView = v.findViewById(R.id.sessionBadge)
-        }
-
-        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): Holder {
-            val v = layoutInflater.inflate(R.layout.item_session, parent, false)
-            return Holder(v)
-        }
-
-        override fun getItemCount() = items.size
-
-        override fun onBindViewHolder(holder: Holder, position: Int) {
-            val r = items[position]
-            holder.title.text = r.name
-            holder.subtitle.text = buildString {
-                append(dateFmt.format(Date(r.createdAt)))
-                append(" · ")
-                if (r.isSweep) {
-                    append(getString(R.string.session_sweep_kind))
-                } else {
-                    append(getString(R.string.session_frames_fmt, r.frameCount))
-                }
-                if (r.headline.isNotBlank()) {
-                    append(" · ")
-                    append(r.headline)
-                }
-            }
-            holder.badge.text = when (r.syncState) {
-                SessionRecord.SyncState.SYNCED -> getString(R.string.badge_synced)
-                SessionRecord.SyncState.PENDING -> getString(R.string.badge_pending)
-                SessionRecord.SyncState.LOCAL_ONLY -> getString(R.string.badge_local)
-                SessionRecord.SyncState.FAILED -> getString(R.string.badge_not_backed_up)
-            }
-            holder.badge.setTextColor(
-                if (r.syncState == SessionRecord.SyncState.FAILED) {
-                    getColor(R.color.semantic_danger)
-                } else {
-                    getColor(R.color.sky_on_container)
-                },
-            )
-
-            val refFile = File(r.refPath)
-            if (refFile.exists()) {
-                val opts = BitmapFactory.Options().apply { inSampleSize = 8 }
-                holder.thumb.setImageBitmap(BitmapFactory.decodeFile(r.refPath, opts))
-            } else {
-                holder.thumb.setImageDrawable(null)
-            }
-
-            val selected = r.id in selectedIds
-            holder.check.isVisible = selected
-            holder.card.setCardBackgroundColor(
-                getColor(if (selected) R.color.sky_container else R.color.surface_muted),
-            )
-            holder.card.strokeColor =
-                getColor(if (selected) R.color.sky_primary else R.color.surface_outline)
-
-            // Outside selection mode a tap opens the analysis and a long-press
-            // starts selecting; inside it, every tap just toggles a row.
-            holder.itemView.setOnClickListener {
-                if (inSelectionMode) toggleSelection(r) else openSession(r)
-            }
-            holder.itemView.setOnLongClickListener {
-                if (inSelectionMode) toggleSelection(r) else startSelection(r)
-                true
-            }
-        }
+    override fun onDestroy() {
+        if (::adapter.isInitialized) adapter.clearThumbCache()
+        super.onDestroy()
     }
 }

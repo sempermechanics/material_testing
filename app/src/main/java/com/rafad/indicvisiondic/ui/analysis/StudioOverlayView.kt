@@ -1,7 +1,28 @@
+// Custom ROI overlay view: literal handle sizes, stroke widths, colours and the
+// dense gesture/hit-testing logic are clearest inline, so the structural and
+// magic-number rules are suppressed for this whole file.
+@file:Suppress(
+    "MagicNumber",
+    "ComplexCondition",
+    "LongMethod",
+    "CyclomaticComplexMethod",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "TooManyFunctions",
+)
+
 package com.rafad.indicvisiondic.ui.analysis
 
 import android.content.Context
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View

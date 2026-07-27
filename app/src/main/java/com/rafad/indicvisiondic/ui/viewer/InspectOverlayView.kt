@@ -1,3 +1,7 @@
+// Custom overlay view: literal marker sizes, stroke widths and colours are
+// clearest inline, so MagicNumber is suppressed for this whole file.
+@file:Suppress("MagicNumber")
+
 package com.rafad.indicvisiondic.ui.viewer
 
 import android.content.Context

@@ -1,3 +1,6 @@
+// Restore UI: literal progress/animation constants read clearest inline.
+@file:Suppress("MagicNumber")
+
 package com.rafad.indicvisiondic.ui.restore
 
 import android.os.Bundle

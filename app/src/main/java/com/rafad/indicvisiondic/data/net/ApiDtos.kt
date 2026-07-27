@@ -1,5 +1,9 @@
+// A couple of default numeric literals (limits/versions) read clearest inline.
+@file:Suppress("MagicNumber")
+
 package com.rafad.indicvisiondic.data.net
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -13,7 +17,7 @@ data class MeResponse(
     val uid: String,
     val email: String? = null,
     val role: String? = null,
-    val access_status: String,
+    @SerialName("access_status") val accessStatus: String,
 )
 
 @Serializable
@@ -130,7 +134,7 @@ data class AdminUserDto(
     val email: String? = null,
     val displayName: String? = null,
     val role: String? = null,
-    val access_status: String? = null,
+    @SerialName("access_status") val accessStatus: String? = null,
     val activeDeviceId: String? = null,
 )
 

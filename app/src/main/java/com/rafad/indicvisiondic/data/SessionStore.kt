@@ -1,3 +1,8 @@
+// Session index store: one accessor per query/mutation of the on-disk index,
+// with broad catches around JSON/file IO so a corrupt entry never crashes the
+// list; hence TooManyFunctions / TooGenericExceptionCaught are suppressed here.
+@file:Suppress("TooManyFunctions", "TooGenericExceptionCaught")
+
 package com.rafad.indicvisiondic.data
 
 import android.content.Context
@@ -127,6 +132,10 @@ object SessionStore {
 
     /** Directory holding a session's .dat frames and reference copy. */
     fun dirFor(context: Context, id: String): File = File(root(context), id).apply { mkdirs() }
+
+    /** Subfolder under [sessionDir] for persisted raw deformed originals. */
+    fun rawDeformedDir(sessionDir: File): File =
+        File(sessionDir, SessionPaths.RAW_DEFORMED_SUBDIR)
 
     fun list(context: Context): List<SessionRecord> = synchronized(lock) {
         val f = indexFile(context)

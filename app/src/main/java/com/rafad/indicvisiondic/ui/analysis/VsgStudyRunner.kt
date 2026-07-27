@@ -24,18 +24,12 @@ import java.util.Locale
  */
 object VsgStudyRunner {
 
-    /** Outcome code for a user-cancelled sweep, matching AnalysisViewModel. */
-    const val ERROR_CANCELLED = AnalysisViewModel.ERROR_CANCELLED
+    /** Outcome code for a user-cancelled sweep. */
+    const val ERROR_CANCELLED = AnalysisRunCodes.ERROR_CANCELLED
 
     /** Engine returned no usable field for one of the sweep's combinations. */
     const val ERROR_ENGINE_FAILED = -97
 
-    /** 16 core metrics plus the mesh-seeding slot the engine may not write. */
-    private const val METRICS_SLOTS = 17
-    private const val MESH_SEEDING_SLOT = 16
-
-    /** Slot holding the percentage of points that converged. */
-    private const val CONVERGENCE_SLOT = 15
     private const val PERCENT = 100
 
     @Suppress("LongParameterList") // one-shot bundle of engine inputs
@@ -158,7 +152,7 @@ object VsgStudyRunner {
                     percent = (index + 1) * PERCENT / maxOf(1, total),
                     point = point,
                     pointsSolved = solved,
-                    convergencePercent = metrics[CONVERGENCE_SLOT],
+                    convergencePercent = metrics[EngineStats.SLOT_CONVERGENCE],
                 ),
             )
         }
@@ -173,8 +167,8 @@ object VsgStudyRunner {
         return Result(runs, firstMetrics, errorCode, skipped)
     }
 
-    private fun newMetrics() = FloatArray(METRICS_SLOTS).also {
-        it[MESH_SEEDING_SLOT] = EngineStats.MESH_SEEDING_UNKNOWN.toFloat()
+    private fun newMetrics() = FloatArray(EngineStats.SLOT_COUNT).also {
+        it[EngineStats.SLOT_MESH_SEEDING] = EngineStats.MESH_SEEDING_UNKNOWN.toFloat()
     }
 
     /**

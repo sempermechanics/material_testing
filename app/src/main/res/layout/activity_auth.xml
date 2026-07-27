@@ -54,8 +54,9 @@
             app:strokeColor="@color/surface_outline"
             app:rippleColor="#22000000" />
 
-        <!-- Divider with "or" -->
+        <!-- Divider with "or" (hidden with Google when Google is unconfigured) -->
         <LinearLayout
+            android:id="@+id/googleOrDivider"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
@@ -199,7 +200,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:minHeight="55dp"
-                android:text="@string/secure_login" />
+                android:text="@string/auth_sign_in" />
 
             <ProgressBar
                 android:id="@+id/progressBar"
@@ -217,7 +218,7 @@
             android:id="@+id/tvToggleMode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/request_an_account"
+            android:text="@string/auth_toggle_to_register"
             android:textColor="@color/text_secondary"
             android:textAlignment="center"
             android:textSize="15sp"

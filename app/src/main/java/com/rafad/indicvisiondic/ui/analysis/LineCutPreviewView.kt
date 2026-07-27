@@ -1,3 +1,8 @@
+// Custom preview view: literal geometry, stroke widths and the dense mask/line
+// rendering logic are clearest inline, so the structural and magic-number rules
+// are suppressed for this whole file.
+@file:Suppress("MagicNumber", "CyclomaticComplexMethod", "LongParameterList", "ReturnCount")
+
 package com.rafad.indicvisiondic.ui.analysis
 
 import android.content.Context
@@ -29,10 +34,13 @@ class LineCutPreviewView @JvmOverloads constructor(
         const val PAD_DP = 8f
         const val ROI_STROKE_DP = 2f
         const val CUT_STROKE_DP = 2.5f
+
         /** Semi-transparent green for the selected ROI fill. */
         const val ROI_FILL_ALPHA = 0x55
+
         /** Semi-transparent red for hole pixels in the overlay. */
         const val HOLE_FILL_ALPHA = 0x88
+
         /** Cap overlay resolution so large masks stay cheap to rebuild. */
         const val OVERLAY_MAX_EDGE = 512
     }

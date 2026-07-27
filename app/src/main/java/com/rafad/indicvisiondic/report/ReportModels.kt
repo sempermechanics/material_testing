@@ -91,8 +91,28 @@ data class EngineStats(
     companion object {
         const val MESH_SEEDING_UNKNOWN = -1
 
+        // The engine returns telemetry as a flat FloatArray whose slots have
+        // fixed meanings (see IndicVisionJNI.cpp). Most are read here in
+        // [fromArray]; these few are also read live during a run, so their
+        // indices live here as the single source of truth rather than as
+        // literals scattered across the analysis code.
+        /** Number of core metric slots (indices 0..15) every engine writes. */
+        const val CORE_SLOT_COUNT = 16
+
+        /** Mean ICGN iteration count. */
+        const val SLOT_AVG_ITERS = 8
+
+        /** Percentage of points that converged. */
+        const val SLOT_CONVERGENCE = 15
+
+        /** Mesh-seeding quality; optional, so a 16-slot array omits it. */
+        const val SLOT_MESH_SEEDING = 16
+
+        /** Full slot count including the optional mesh-seeding slot. */
+        const val SLOT_COUNT = 17
+
         /** Matches the float[] written by IndicVisionJNI.cpp (16 slots + optional slot 16) */
-        fun fromArray(a: FloatArray): EngineStats = if (a.size >= 16) {
+        fun fromArray(a: FloatArray): EngineStats = if (a.size >= CORE_SLOT_COUNT) {
             EngineStats(
                 totalPointsAttempted = a[0].toInt(),
                 totalPointsSolved = a[1].toInt(),
@@ -102,15 +122,15 @@ data class EngineStats(
                 simplexCalls = a[5].toInt(),
                 simplexSaved = a[6].toInt(),
                 finalDeadPoints = a[7].toInt(),
-                avgIcgnIterations = a[8],
+                avgIcgnIterations = a[SLOT_AVG_ITERS],
                 wallTimeMs = a[9],
                 akazeRansacMs = a[10],
                 hessianPrepassMs = a[11],
                 delaunayMs = a[12],
                 strainMs = a[13],
                 avgThroughputPtsPerMs = a[14],
-                convergencePercent = a[15],
-                meshSeedingQuality = if (a.size >= 17) a[16].toInt() else MESH_SEEDING_UNKNOWN,
+                convergencePercent = a[SLOT_CONVERGENCE],
+                meshSeedingQuality = if (a.size >= SLOT_COUNT) a[SLOT_MESH_SEEDING].toInt() else MESH_SEEDING_UNKNOWN,
             )
         } else {
             EngineStats(0, 0, 0, 0, 0, 0, 0, 0, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)

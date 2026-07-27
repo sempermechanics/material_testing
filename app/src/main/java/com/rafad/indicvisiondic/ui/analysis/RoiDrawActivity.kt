@@ -1,3 +1,7 @@
+// ROI drawing/editing: dense gesture hit-testing and canvas math read clearest
+// as cohesive methods, so the structural rules are suppressed for this file.
+@file:Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod")
+
 package com.rafad.indicvisiondic.ui.analysis
 
 import android.app.Activity
