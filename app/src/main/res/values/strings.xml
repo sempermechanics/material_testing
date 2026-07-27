@@ -179,7 +179,8 @@
     <string name="export_data">Export my data</string>
     <string name="export_data_share">Share your inDIC data export</string>
     <string name="export_data_working">Preparing your data export…</string>
-    <string name="export_data_failed">Couldn\'t prepare the export. Check your connection and try again.</string>
+    <string name="export_data_failed">Couldn\'t prepare the export. Free up some storage and try again.</string>
+    <string name="export_data_local_only">Cloud unreachable — exporting the analyses on this phone only.</string>
     <string name="delete_account">Delete my account and data</string>
     <string name="delete_account_title">Delete your account?</string>
     <string name="delete_account_body">This permanently erases your account and everything in it:\n\n• Every analysis on this phone\n• Every cloud backup — images, results, reports\n• Your profile and registered device\n\nThis cannot be undone and your data cannot be recovered.</string>

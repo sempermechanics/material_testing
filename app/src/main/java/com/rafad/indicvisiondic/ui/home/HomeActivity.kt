@@ -324,18 +324,23 @@ class HomeActivity : AppCompatActivity() {
     }
 
     /**
-     * GDPR data portability: fetch a machine-readable copy of everything the
-     * backend holds about this account and hand it to the share sheet, so the
-     * user can keep it wherever they like.
+     * GDPR data portability: a machine-readable copy of everything held about
+     * this account — the analyses on this phone plus the backend's copy —
+     * handed to the share sheet so the user can keep it wherever they like.
      */
     private fun exportMyData() {
         Toast.makeText(this, R.string.export_data_working, Toast.LENGTH_SHORT).show()
         lifecycleScope.launch {
-            val file = CloudSync.exportAccountData(this@HomeActivity)
-            if (file == null) {
+            val export = CloudSync.exportAccountData(this@HomeActivity)
+            if (export == null) {
                 Toast.makeText(this@HomeActivity, R.string.export_data_failed, Toast.LENGTH_LONG).show()
                 return@launch
             }
+            // Say so rather than passing off a partial export as the whole account.
+            if (!export.cloudIncluded) {
+                Toast.makeText(this@HomeActivity, R.string.export_data_local_only, Toast.LENGTH_LONG).show()
+            }
+            val file = export.file
             val uri = FileProvider.getUriForFile(
                 this@HomeActivity,
                 "$packageName.fileprovider",

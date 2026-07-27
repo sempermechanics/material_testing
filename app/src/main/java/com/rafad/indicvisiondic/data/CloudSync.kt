@@ -11,11 +11,23 @@ import androidx.work.WorkManager
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.data.net.IndicApi
 import com.rafad.indicvisiondic.data.net.TokenProvider
+import com.rafad.indicvisiondic.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.put
 import timber.log.Timber
+import java.io.File
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
@@ -169,28 +181,62 @@ object CloudSync {
         }
     }
 
+    /** Outcome of [exportAccountData]: the file to share, and how complete it is. */
+    data class ExportResult(val file: File, val cloudIncluded: Boolean)
+
     /**
-     * GDPR data export (Art. 20 portability): fetch everything the backend
-     * holds about this account and write it to a JSON file in the cache, ready
-     * to be shared/saved. Returns null if the cloud isn't reachable.
+     * GDPR data export (Art. 20 portability): everything the app holds about
+     * this account, as one JSON file ready to be shared or saved.
+     *
+     * The device half — the local session index — is always included, so the
+     * export still produces something usable when cloud sync is off or
+     * unreachable; [ExportResult.cloudIncluded] says whether the backend's copy
+     * made it in. Returns null only when the file itself couldn't be written.
+     *
+     * The file goes in `cache/share/` because that is the one directory the
+     * FileProvider publishes (see `res/xml/share_paths.xml`) — anywhere else
+     * and `getUriForFile` refuses to build a URI for it.
      */
-    suspend fun exportAccountData(context: Context): java.io.File? = withContext(Dispatchers.IO) {
+    suspend fun exportAccountData(context: Context): ExportResult? = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
-        val api = IndicApi(appContext)
-        if (!api.enabled) return@withContext null
-        val token = TokenProvider.usableIdToken() ?: return@withContext null
+        val cloud = fetchCloudExport(appContext)
+        val payload = buildJsonObject {
+            put("exportedAt", isoStamp())
+            put("account", TokenStore.cachedEmail(appContext) ?: "")
+            put("localSessions", exportJson.encodeToJsonElement(SessionStore.list(appContext)))
+            put("cloud", cloud ?: JsonNull)
+        }
         try {
-            val json = api.exportAccount(token)
-            val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)
-                .format(java.util.Date())
-            val out = java.io.File(appContext.cacheDir, "indic-data-export-$stamp.json")
-            out.writeText(json)
-            out
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            Timber.e(e, "Data export failed")
+            val dir = File(appContext.cacheDir, "share").apply { mkdirs() }
+            // Previous exports are stale the moment a new one is made, and each
+            // is a full copy of the account — don't leave them piling up.
+            dir.listFiles { f -> f.name.startsWith(EXPORT_PREFIX) }?.forEach { it.delete() }
+            val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
+            val out = File(dir, "$EXPORT_PREFIX$stamp.json")
+            out.writeText(exportJson.encodeToString(JsonObject.serializer(), payload))
+            ExportResult(out, cloud != null)
+        } catch (e: IOException) {
+            Timber.e(e, "Data export failed — could not write the export file")
             null
         }
     }
+
+    /** The backend's copy of the account, or null when the cloud can't answer. */
+    @Suppress("ReturnCount") // two "no cloud to ask" guards, then the answer
+    private suspend fun fetchCloudExport(appContext: Context): JsonElement? {
+        val api = IndicApi(appContext)
+        if (!api.enabled) return null
+        val token = TokenProvider.usableIdToken() ?: return null
+        return try {
+            Json.parseToJsonElement(api.exportAccount(token))
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.e(e, "Cloud half of the data export failed — exporting local data only")
+            null
+        }
+    }
+
+    private fun isoStamp(): String =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).format(Date())
 
     /**
      * GDPR account deletion: erase the account and every analysis from the
@@ -274,6 +320,10 @@ object CloudSync {
         )
     }
 
+    /** Readable on purpose: the export is a document the user keeps. */
+    private val exportJson = Json { prettyPrint = true; encodeDefaults = true }
+
+    private const val EXPORT_PREFIX = "indic-data-export-"
     private const val BACKOFF_SECONDS = 30L
     private const val K_LAST_RECONCILE_AT = "last_reconcile_at"
     private const val RECONCILE_MIN_INTERVAL_MS = 5 * 60 * 1000L
