@@ -82,7 +82,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var etSubsetSize: Slider
     private lateinit var etStepSize: Slider
     private lateinit var etStrainWindow: Slider
-    private var updateAdvancedSummary: (() -> Unit)? = null
 
     // Wireframe slots (load-frames page + confirm-settings page)
     private lateinit var refDropzone: View
@@ -824,7 +823,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         } else {
             getString(R.string.subset_recommend_fmt, rec.subsetSize)
         }
-        updateAdvancedSummary?.invoke()
         // A new recommendation re-seeds the sweep's suggested inputs (unless the
         // user has already set their own).
         sweepHelper.onRecommendationChanged()
@@ -1076,7 +1074,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             field.setText(value.toString())
             field.setSelection(field.text.length)
             if (value != previous) onUserChange?.invoke()
-            updateAdvancedSummary?.invoke()
         }
         field.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
@@ -1102,7 +1099,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             renderParamField(tvSubsetValue, etSubsetSize.value.toInt())
             renderParamField(tvStepValue, etStepSize.value.toInt())
             renderParamField(tvStrainValue, etStrainWindow.value.toInt())
-            updateAdvancedSummary?.invoke()
         }
         updateLabels()
 
@@ -1110,24 +1106,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         bindParamField(tvStepValue, etStepSize)
         bindParamField(tvStrainValue, etStrainWindow)
 
-        // Advanced expander: collapsed by default; header toggles, summary
-        // chip shows current values (+ "defaults" marker when untouched).
+        // Advanced expander: expanded by default; header toggles body visibility.
         val advancedBody = findViewById<View>(R.id.advancedParamsBody)
         val advancedChevron = findViewById<ImageView>(R.id.ivAdvancedChevron)
-        val tvAdvancedSummary = findViewById<TextView>(R.id.tvAdvancedSummary)
-
-        updateAdvancedSummary = {
-            val s = currentSubsetSize()
-            val st = currentStepSize()
-            val w = currentStrainWindow()
-            val isDefaults = s == defaultSubsetSize() &&
-                st == 5 &&
-                w == 15 &&
-                !currentUseKeysInterpolator()
-            tvAdvancedSummary.text = getString(R.string.advanced_summary_fmt, s, st, w) +
-                if (isDefaults) getString(R.string.advanced_defaults_suffix) else ""
-        }
-        updateAdvancedSummary?.invoke()
 
         @Suppress("MagicNumber") // the documented defaults: 41 / 5 / 15
         findViewById<View>(R.id.btnAdvancedReset).setOnClickListener {
@@ -1140,7 +1121,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             etStepSize.value = 5f
             etStrainWindow.value = 15f
             rgInterpolator.check(R.id.rbBicubic)
-            updateAdvancedSummary?.invoke()
             // Reset also hands the sweep back to its suggested inputs.
             if (::sweepHelper.isInitialized) {
                 sweepHelper.resetUserModified()

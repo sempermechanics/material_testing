@@ -554,32 +554,32 @@
                                 android:src="@drawable/ic_tune"
                                 android:contentDescription="@string/parameters" />
 
-                            <LinearLayout
+                            <TextView
                                 android:layout_width="0dp"
-                                android:layout_weight="1"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="10dp"
-                                android:orientation="vertical">
+                                android:layout_weight="1"
+                                android:text="@string/advanced_parameters"
+                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
 
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="@string/advanced_parameters"
-                                    android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
-
-                                <TextView
-                                    android:id="@+id/tvAdvancedSummary"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:textColor="@color/text_secondary"
-                                    android:textSize="12sp" />
-                            </LinearLayout>
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/btnAdvancedReset"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="4dp"
+                                android:text="@string/action_reset"
+                                android:textColor="@color/sky_primary"
+                                app:chipBackgroundColor="@color/sky_container"
+                                app:chipStrokeColor="@color/surface_outline"
+                                app:chipStrokeWidth="1dp"
+                                app:ensureMinTouchTargetSize="false" />
 
                             <ImageView
                                 android:id="@+id/ivAdvancedChevron"
                                 android:layout_width="24dp"
                                 android:layout_height="24dp"
                                 android:contentDescription="@string/advanced_parameters"
+                                android:rotation="180"
                                 android:src="@android:drawable/arrow_down_float"
                                 app:tint="@color/text_secondary" />
                         </LinearLayout>
@@ -590,7 +590,7 @@
                             android:id="@+id/advancedParamsBody"
                             android:orientation="vertical"
                             android:paddingTop="8dp"
-                            android:visibility="gone">
+                            android:visibility="visible">
 
                             <View
                                 android:layout_width="match_parent"
@@ -824,17 +824,6 @@
                                     android:layout_height="wrap_content"
                                     android:text="@string/label_6_6_keys" />
                             </com.google.android.material.button.MaterialButtonToggleGroup>
-                            <com.google.android.material.chip.Chip
-                                android:id="@+id/btnAdvancedReset"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_gravity="center_horizontal"
-                                android:layout_marginTop="10dp"
-                                android:text="@string/action_reset"
-                                android:textColor="@color/sky_primary"
-                                app:chipBackgroundColor="@color/sky_container"
-                                app:chipStrokeColor="@color/surface_outline"
-                                app:chipStrokeWidth="1dp" />
                         </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
