@@ -5,7 +5,10 @@ import com.rafad.indicvisiondic.ui.auth.AccessRouter
 import com.rafad.indicvisiondic.ui.auth.AuthActivity
 import com.rafad.indicvisiondic.ui.auth.PendingApprovalActivity
 import com.rafad.indicvisiondic.ui.home.HomeActivity
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AccessRouterTest {

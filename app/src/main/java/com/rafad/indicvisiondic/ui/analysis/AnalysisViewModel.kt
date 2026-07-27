@@ -30,8 +30,8 @@ import com.rafad.indicvisiondic.ui.common.BitmapDecode
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -374,11 +374,12 @@ class AnalysisViewModel : ViewModel() {
             .baseName()
         return runCatching {
             val target = File(rawDir, name)
-            Files.copy(
-                File(defFilePaths[frameIndex]).toPath(),
-                target.toPath(),
-                StandardCopyOption.REPLACE_EXISTING,
-            )
+            if (target.exists()) target.delete()
+            FileInputStream(File(defFilePaths[frameIndex])).use { input ->
+                FileOutputStream(target).use { output ->
+                    input.copyTo(output)
+                }
+            }
             target.name
         }.onFailure { Timber.w(it, "Could not persist the sweep's deformed frame") }.getOrDefault("")
     }
