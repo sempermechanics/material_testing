@@ -278,14 +278,20 @@ JVM tests live in `app/src/test/java/…` (package-mirrored, run by
 4. Document the test's *reason to exist* in this file. A test whose failure
    nobody can interpret is a liability.
 
+## Host vs JNI responsibility split
+
+- **Host C++ tests** (this suite) own algorithmic correctness: displacement
+  accuracy, strain math, SIMD equivalence, determinism, and robustness.
+- **Android JNI smoke** (`androidTest/.../pipeline/EnginePipelineSmokeTest`)
+  owns runtime/bridge correctness: `System.loadLibrary`, OpenMP threading on
+  the Android runtime, imgcodecs decode, and JNI buffer marshalling.
+- **JVM unit tests** own Kotlin orchestration and data contracts. They do not
+  re-assert displacement accuracy.
+
+See [app/TESTING.md](../app/TESTING.md) for the full workflow-chunk map.
+
 ## Known limitations / future work
 
-- **JNI bridge** (`IndicVisionJNI.cpp`) is not covered by host tests — it needs
-  a JVM + Android runtime. Recommended next step: a small instrumented test
-  that round-trips `getImageDimensions`/`initializeReference` on-device.
 - **Per-ABI numerical drift**: the host suite runs on x86 SSE. To compare ABIs,
   build the same suite with the NDK toolchain per-ABI and run on devices —
   tolerances are already set to absorb fast-math reassociation differences.
-- Kotlin auth *flows* (AuthRepository / IndicApi network paths) are untested —
-  they'd need a mock backend (e.g. OkHttp MockWebServer). No serialization-layer
-  contract test currently exists either (see the DTO suite note above).

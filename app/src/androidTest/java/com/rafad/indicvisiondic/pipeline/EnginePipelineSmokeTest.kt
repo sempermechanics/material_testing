@@ -1,4 +1,4 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.pipeline
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -8,6 +8,9 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.rafad.indicvisiondic.DicResult
+import com.rafad.indicvisiondic.IndicVisionNativeLib
+import com.rafad.indicvisiondic.ProgressCallback
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,7 +36,7 @@ import kotlin.random.Random
  * against prediction (median absolute error).
  */
 @RunWith(AndroidJUnit4::class)
-class DicEngineSmokeTest {
+class EnginePipelineSmokeTest {
 
     private companion object {
         const val W = 320

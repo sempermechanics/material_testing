@@ -14,46 +14,53 @@ here is needed for day-to-day contributions.
 
 1. **Green working tree** — all changes committed, branch merged to the
    release branch through a reviewed PR.
-2. **Local gates** (same as CI, faster feedback):
-
-   ```bash
-   ./gradlew spotlessCheck :app:detekt :app:lintDebug :app:testDebugUnitTest
-   ./gradlew :app:minifyReleaseWithR8
-   ```
-
-3. **Native engine tests** (engine changes only — the engine is frozen
-   during beta):
-
-   ```bash
-   cd app/src/test/cpp
-   cmake -B build && cmake --build build && ./build/dic_tests
-   ```
-
-4. **Write the release notes** — `git log <last-tag>..HEAD --oneline` is the
-   raw material; group it into what testers will notice.
-5. **Bump version** in [`app/build.gradle.kts`](../../app/build.gradle.kts)
+2. **Green CI** — `ci-ok` must be green on the commit you intend to release.
+3. **Bump version** in [`app/build.gradle.kts`](../../app/build.gradle.kts)
    (both `versionName` and `versionCode`), commit as `release: v<version>`.
-6. **Tag and push**:
+4. **Tag and push**:
 
    ```bash
    git tag v1.0-beta.1
    git push origin main --tags
    ```
 
-7. **CI must be fully green** on the tagged commit — all jobs: native
-   engine tests, both sanitizer runs, Kotlin compile + gates, the all-ABI
-   native build, and the emulator smoke test.
-8. **Build the signed release** locally (signing config is not in CI):
-
-   ```bash
-   ./gradlew :app:assembleRelease
-   ```
-
-   The universal APK lands under `app/build/outputs/apk/release/`.
-9. **Smoke the release build on a device** — clean install, sign in,
+5. **Run the Release workflow** — go to Actions → Release → Run workflow.
+   Provide the version tag, changelog, and channel (beta/stable). The
+   workflow requires `release` environment approval before publishing.
+6. **Smoke the release build on a device** — clean install, sign in,
    run one analysis, confirm the session syncs and each share target works.
-10. **Distribute** to the approved-tester group and announce in Discussions
-    with the release notes from step 4.
+7. **Distribute** to the approved-tester group and announce in Discussions.
+
+## CI-based release (workflow_dispatch)
+
+The [`release.yml`](../../.github/workflows/release.yml) workflow:
+
+1. Builds a **signed release APK** using repository secrets (keystore, alias,
+   passwords) stored in the `release` environment.
+2. Verifies the arm64-v8a `.so` is packaged.
+3. Creates a **GitHub Release** with the APK attached.
+
+### Required secrets (in the `release` environment)
+
+| Secret | Description |
+|--------|-------------|
+| `KEYSTORE_BASE64` | Base64-encoded release keystore |
+| `KEY_ALIAS` | Signing key alias |
+| `KEY_PASSWORD` | Key password |
+| `STORE_PASSWORD` | Keystore password |
+
+### Local gate before triggering release
+
+```bash
+./gradlew ciReleaseGate
+```
+
+This mirrors CI tiers 1–5 locally (quality gates + unit tests + R8 + release
+assemble). Run emulator smoke separately:
+
+```bash
+./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64
+```
 
 ## After the release
 

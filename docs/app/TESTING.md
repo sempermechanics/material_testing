@@ -1,0 +1,45 @@
+# App test suite — workflow chunks
+
+Tests are organized into chunks that mirror the user journey through the app.
+Each chunk owns one layer; no duplicate assertions across chunks.
+
+## Chunk map
+
+| Chunk | User journey | JVM tests (`app/src/test`) | Instrumented (`androidTest`) |
+|-------|--------------|---------------------------|------------------------------|
+| **auth** | Splash → Auth / Pending / Home | `auth/AccessRouterTest` | `auth/FirebaseAuthIntegrationTest` |
+| **session** | Home list, open session, disk layout | `session/SessionPathsTest` | — |
+| **analysis** | Import → ROI → batch/sweep | `analysis/VsgStudyTest`, `SubsetRecommenderTest`, `BitmapDecodeTest` | — |
+| **results** | `.dat` decode, CSV, heatmap, PDF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest` | — |
+| **cloud** | Upload, API, restore | `cloud/ApiDtosContractTest`, `UploadResumableTest`, `SessionUploadBundlerTest`, `CloudRestoreMappingTest` | — |
+| **e2e** | Full UI flows | — | `e2e/AppFlowEspressoTest` |
+| **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
+
+## Overlap rules
+
+- **Host C++ tests** own algorithmic displacement accuracy.
+- **Android JNI smoke** (`pipeline/`) owns runtime/bridge correctness —
+  `System.loadLibrary`, OpenMP threading, JNI marshalling.
+- **JVM tests** own Kotlin orchestration and data contracts. Do not add JVM
+  tests that re-assert displacement accuracy.
+
+## Running by chunk
+
+```bash
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.auth.*"
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.session.*"
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.analysis.*"
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.results.*"
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.cloud.*"
+```
+
+Emulator (all instrumented):
+```bash
+./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64
+```
+
+## What not to test here
+
+- Algorithm accuracy → host C++ suite ([docs/engine/TESTING.md](../engine/TESTING.md))
+- Backend API → backend pytest (`backend/tests/`)
+- Real Firebase Auth → `auth/FirebaseAuthIntegrationTest` (protected branches only)

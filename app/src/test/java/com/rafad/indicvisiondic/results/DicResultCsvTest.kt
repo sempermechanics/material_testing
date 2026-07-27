@@ -1,5 +1,6 @@
-package com.rafad.indicvisiondic
+package com.rafad.indicvisiondic.results
 
+import com.rafad.indicvisiondic.DicResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

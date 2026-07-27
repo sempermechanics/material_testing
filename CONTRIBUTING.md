@@ -54,16 +54,29 @@ rm -rf app/.cxx app/build
 ## Build and test
 
 ```bash
-# App (debug)
-./gradlew :app:assembleDebug
+# Full local push gate (mirrors CI tiers 1 + 5)
+./gradlew ciReleaseGate
 
-# Kotlin unit tests + quality gates
+# Individual steps
 ./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug
+
+# Per-chunk tests
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.auth.*"
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.session.*"
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.analysis.*"
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.results.*"
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.cloud.*"
 
 # Native engine tests (PC, no device)
 cmake -S app/src/test/cpp -B build/native-tests -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native-tests -j
 ./build/native-tests/dic_tests
+
+# Emulator smoke (needs x86_64 emulator running)
+./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64
+
+# Backend
+cd backend && pip install -r requirements-test.txt && pytest tests/ -v
 ```
 
 On Windows use `gradlew.bat` instead of `./gradlew`.
@@ -72,12 +85,23 @@ Cloud features need `INDIC_API_BASE_URL` in `local.properties` and Firebase
 setup — see [docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md). The engine
 and local analysis work without it.
 
+## CI
+
+CI is defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
+See [docs/ops/CI.md](docs/ops/CI.md) for the tier map and required checks.
+The single required status check is `ci-ok`.
+
+Warm full-matrix wall clock is ~45–60 min (emulator and signed release run in
+parallel). Kotlin/docs-only PRs run ~10–15 min via path filters.
+
 ## Where to change what
 
 | Area | Entry point |
 |---|---|
 | Android UI / sessions / viewer | [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md) |
+| App tests (workflow chunks) | [docs/app/TESTING.md](docs/app/TESTING.md) |
 | C++ correlation engine | [docs/engine/ARCHITECTURE.md](docs/engine/ARCHITECTURE.md) |
+| Engine tests | [docs/engine/TESTING.md](docs/engine/TESTING.md) |
 | Sign-in / allow-list | [docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md) |
 | GCP backend deploy | [docs/backend/BACKEND_SETUP_GCP.md](docs/backend/BACKEND_SETUP_GCP.md) |
 | CI / release | [docs/ops/CI.md](docs/ops/CI.md), [docs/ops/RELEASING.md](docs/ops/RELEASING.md) |

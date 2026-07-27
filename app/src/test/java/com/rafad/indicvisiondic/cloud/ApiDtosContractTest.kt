@@ -1,5 +1,14 @@
-package com.rafad.indicvisiondic.data.net
+package com.rafad.indicvisiondic.cloud
 
+import com.rafad.indicvisiondic.data.net.DeviceRegisterRequest
+import com.rafad.indicvisiondic.data.net.FileCompleteRequest
+import com.rafad.indicvisiondic.data.net.FileSpecDto
+import com.rafad.indicvisiondic.data.net.ListSessionsResponse
+import com.rafad.indicvisiondic.data.net.MeResponse
+import com.rafad.indicvisiondic.data.net.SessionCreateRequest
+import com.rafad.indicvisiondic.data.net.SessionCreateResponse
+import com.rafad.indicvisiondic.data.net.SessionFilesResponse
+import com.rafad.indicvisiondic.data.net.SessionUploadsResponse
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -31,7 +40,7 @@ class ApiDtosContractTest {
             """{"uid":"u1","email":"a@b.com","role":"user","access_status":"APPROVED"}""",
         )
         assertEquals("u1", me.uid)
-        assertEquals("APPROVED", me.access_status)
+        assertEquals("APPROVED", me.accessStatus)
     }
 
     @Test
@@ -152,6 +161,6 @@ class ApiDtosContractTest {
         val me = json.decodeFromString<MeResponse>(
             """{"uid":"u","access_status":"PENDING","brand_new_field":123}""",
         )
-        assertEquals("PENDING", me.access_status)
+        assertEquals("PENDING", me.accessStatus)
     }
 }

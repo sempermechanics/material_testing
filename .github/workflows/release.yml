@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v1.0-beta.2)'
+        required: true
+      changelog:
+        description: 'Release notes (markdown)'
+        required: true
+      channel:
+        description: 'Release channel'
+        required: true
+        default: beta
+        type: choice
+        options:
+          - beta
+          - stable
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    name: Build signed release
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          validate-wrappers: false
+
+      - name: Cache native build (.cxx) — arm64
+        uses: actions/cache@v6
+        with:
+          path: app/.cxx
+          key: cxx-arm64-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', '.gitmodules', 'app/src/main/cpp/**/*.cpp', 'app/src/main/cpp/**/*.h') }}
+          restore-keys: cxx-arm64-
+
+      - name: Install ccache
+        run: sudo apt-get install -y -qq ccache
+
+      - name: Cache ccache objects — arm64
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-release-arm64-${{ github.sha }}
+          restore-keys: |
+            ccache-release-arm64-
+            ccache-arm64-
+
+      - name: Decode keystore
+        run: echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Build signed release APK
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_MAXSIZE: 1G
+          CCACHE_COMPILERCHECK: content
+          SIGNING_KEYSTORE: app/release.keystore
+          SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        run: >
+          ./gradlew --console=plain
+          :app:minifyReleaseWithR8
+          :app:assembleRelease
+          -PabiFilters=arm64-v8a
+          -PnativeCompilerLauncher=ccache
+
+      - name: Verify arm64-v8a .so in release APK
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libindicvision_core.so" \
+            || { echo "MISSING arm64-v8a native lib"; exit 1; }
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: app/build/outputs/apk/release/*.apk
+
+      - name: ccache statistics
+        if: always()
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+        run: ccache --show-stats
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-release
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download release APK
+        uses: actions/download-artifact@v4
+        with:
+          name: release-apk
+          path: release-apk/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: ${{ github.event.inputs.version }}
+          body: ${{ github.event.inputs.changelog }}
+          prerelease: ${{ github.event.inputs.channel == 'beta' }}
+          files: release-apk/*.apk

@@ -1,5 +1,6 @@
-package com.rafad.indicvisiondic.ui.analysis
+package com.rafad.indicvisiondic.analysis
 
+import com.rafad.indicvisiondic.ui.analysis.SubsetRecommender
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

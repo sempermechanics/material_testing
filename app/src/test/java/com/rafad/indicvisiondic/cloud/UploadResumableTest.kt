@@ -1,7 +1,8 @@
-package com.rafad.indicvisiondic.data.net
+package com.rafad.indicvisiondic.cloud
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.rafad.indicvisiondic.data.net.IndicApi
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer

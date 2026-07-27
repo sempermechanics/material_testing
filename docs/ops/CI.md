@@ -1,81 +1,76 @@
 # CI — what runs on every push
 
-Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Four
-jobs run **in parallel** on every push to `main`, `damodar`, and
-`feature/hybrid-delaunay-dic`, and on every pull request. A new push to the
-same branch cancels the previous run.
+Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Six
+tiers run on every push to `main` and `damodar`, and on pull requests.
+Long-running tiers (emulator, signed release) start in parallel after tier 1 so
+the wall clock is the **max** of the two, not the sum.
 
-| Job | What it proves | Typical time |
-|---|---|---|
-| **Native engine tests** | The engine math is right — the host CMake suite (`unit/` + `integration/` + DICe fixtures) | ~2 min |
-| **Sanitized (address,undefined)** | No out-of-bounds, use-after-free, or undefined behavior | ~5 min |
-| **Sanitized (thread)** | No data races in the parallel solve (`Robustness.ConcurrentSolves` is the workload) | ~5 min |
-| **Kotlin compile + unit tests** | Kotlin builds, JVM tests pass, style/static-analysis gates hold, R8 shrinking works | ~5 min |
-| **Android native build (arm64-v8a)** | The engine compiles and links for the ABI users actually get | up to 90 min |
+```
+tier1-app-fast ──┬──> tier3-emulator-e2e ──┐
+                 └──> tier5-signed-release ─┤
+tier2-engine-host ──────────────────────────┤
+tier2-sanitizers ───────────────────────────┤
+tier4-backend ──────────────────────────────┤
+                                            └──> ci-ok
+```
+
+| Tier | Job | Proves | Typical (warm / cold) |
+|------|-----|--------|-----------------------|
+| **1** | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin` | ~5–8 / ~10 min |
+| **2a** | `tier2-engine-host` | Host C++ + OpenCV fixtures | ~2 / ~3 min |
+| **2b** | `tier2-sanitizers` | ASan+UBSan and TSan matrix | ~5 / ~8 min each |
+| **3** | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + Espresso UI | ~20–40 / ~60–90 min |
+| **4** | `tier4-backend` | Backend pytest + ruff lint | ~2–5 min |
+| **5** | `tier5-signed-release` | R8 + signed `assembleRelease` arm64 + `.so` check | ~15–40 / up to ~90 min |
+| **6** | `ci-ok` | Single required status check — all tiers passed/skipped | seconds |
+
+## Path filters
+
+On push to `main`/`damodar`, all tiers always run. On PRs, expensive tiers
+(emulator, signed release, engine) can be skipped when the change set does not
+affect them. Skipped jobs count as success for `ci-ok`.
+
+## Required check
+
+Set **`ci-ok`** as the single required status check in branch protection. It
+gates on all tiers and treats skipped jobs as passing.
 
 ## Reproducing a failure locally
 
-Each job maps to a command you can run yourself:
-
 ```bash
-# Native engine tests
-cmake -S app/src/test/cpp -B build/native-tests -DCMAKE_BUILD_TYPE=Release -DDIC_REQUIRE_OPENCV=ON
-cmake --build build/native-tests -j && ./build/native-tests/dic_tests
+# Full local gate (mirrors tiers 1 + 5, no emulator)
+./gradlew ciReleaseGate
 
-# Sanitizers (swap for -DDIC_SANITIZER=thread)
-cmake -S app/src/test/cpp -B build/san -DCMAKE_BUILD_TYPE=Release -DDIC_SANITIZER=address,undefined
-cmake --build build/san -j && ./build/san/dic_tests
-
-# Kotlin job, in order
-./gradlew :app:compileDebugKotlin :app:testDebugUnitTest
-./gradlew spotlessCheck :app:detekt :app:lintDebug
-./gradlew :app:minifyReleaseWithR8
-
-# Native build job
-./gradlew :app:assembleDebug -PabiFilters=arm64-v8a
+# Individual tiers
+./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug   # tier 1
+cmake -S app/src/test/cpp -B build/native-tests -DDIC_REQUIRE_OPENCV=ON && cmake --build build/native-tests -j && ./build/native-tests/dic_tests   # tier 2a
+cd backend && pip install -r requirements-test.txt && pytest tests/ -v   # tier 4
+./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64              # tier 3 (emulator)
 ```
 
-## Things that surprise people
+## Manual release
 
-**Only arm64-v8a is built.** Every phone from 2022 on is 64-bit ARM, so that
-is the only ABI the app ships — CI builds exactly what users get. Build for an
-emulator locally with `-PabiFilters=x86_64`.
-
-**The sanitizer jobs deliberately skip OpenCV.** Without it, the image-backed
-DICe tests compile out. Linking an uninstrumented third-party library into a
-sanitized build produces leak reports and thread-pool noise from inside OpenCV
-— flaky red CI for no gain, since these sanitizers exist to find bugs in *our*
-engine and the synthetic suites cover the same code paths.
-
-**The main native-test job forces `DIC_REQUIRE_OPENCV=ON`.** If OpenCV were
-missing, the image-backed tests would silently compile out and the job would
-still pass — green CI with the most valuable coverage gone. Configure fails
-instead.
-
-**Only *new* lint and detekt findings fail.** Existing ones are frozen in
-`detekt-baseline.xml` and `lint-baseline.xml`. Fix formatting with
-`./gradlew spotlessApply`.
-
-**Wrapper validation is off in the native job only.** It checks out
-submodules, and OpenCV's repo bundles its own ancient `gradle-wrapper.jar`
-files that fail checksum validation. Our wrapper is validated by the Kotlin
-job, which has no submodules.
+A separate `workflow_dispatch` workflow ([release.yml](../../.github/workflows/release.yml))
+builds a signed release APK and publishes it as a GitHub Release. Requires the
+`release` environment approval. See [RELEASING.md](RELEASING.md).
 
 ## Caching
 
-The slow parts are cached, so a repeat run is much faster than a cold one:
+| Cache | Key pattern | Purpose |
+|-------|-------------|---------|
+| `app/.cxx` | `cxx-{arm64,x86_64}-<hash>` | ABI-specific CMake/ninja tree |
+| `ccache` | `ccache-{arm64,x86_64,host-tests,san-*}-<sha>` | Compiled object cache (per ABI/sanitizer) |
+| `~/.gradle` | managed by `setup-gradle` | Dependency/build cache |
+| `~/apt-cache` | `apt-libopencv-dev-*` | libopencv-dev `.deb` archives |
 
-- `app/.cxx` — the from-source OpenCV build, keyed on the CMake files, C++
-  sources, and `.gitmodules`.
-- `~/.gradle` — dependencies. Writable from `main` and `damodar` only; PR runs
-  read the cache without churning it.
-- `~/apt-cache` — the `libopencv-dev` `.deb` archives (~100 MB).
+## Things that surprise people
 
-## What is not in CI
+**Only arm64-v8a is shipped.** Every phone from 2022 on is 64-bit ARM. CI builds
+exactly what users get. Build for an emulator locally with `-PabiFilters=x86_64`.
 
-- **Instrumented/emulator tests** — run locally; see
-  [TESTING.md](../engine/TESTING.md).
-- **Signed release builds** — the signing config is not in CI; see
-  [RELEASING.md](RELEASING.md).
-- **The backend** — `backend/` is deployed from source with `gcloud run
-  deploy`; see [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md).
+**Sanitizer jobs skip OpenCV.** Linking an uninstrumented third-party library
+produces leak/thread-pool noise. The synthetic suites cover the same engine paths.
+
+**Wrapper validation is off in NDK jobs only.** OpenCV's repo bundles ancient
+`gradle-wrapper.jar` files that fail checksum validation. Our wrapper is
+validated by tier 1.

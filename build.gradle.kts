@@ -5,6 +5,19 @@ plugins {
     id("com.google.gms.google-services") version "4.5.0" apply false
 }
 
+tasks.register("ciReleaseGate") {
+    group = "verification"
+    description = "Mirrors CI tiers 1–3 locally (fast app + release build). Run emulator smoke separately."
+    dependsOn(
+        "spotlessCheck",
+        ":app:detekt",
+        ":app:lintDebug",
+        ":app:testDebugUnitTest",
+        ":app:minifyReleaseWithR8",
+        ":app:assembleRelease",
+    )
+}
+
 // Formatting gate: `./gradlew spotlessCheck` (CI) / `./gradlew spotlessApply` (fix).
 // Kotlin only — the C++ engine under app/src/main/cpp is deliberately excluded.
 spotless {

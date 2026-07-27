@@ -11,7 +11,8 @@ build it. This page routes you to the rest.
 | Change the Android UI / understand app flow | [app/ARCHITECTURE.md](app/ARCHITECTURE.md) |
 | Change the correlation engine (C++) | [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md) |
 | Check the math, or write it up | [engine/MATHEMATICS.md](engine/MATHEMATICS.md) |
-| Add or run tests | [engine/TESTING.md](engine/TESTING.md) |
+| Add or run app tests | [app/TESTING.md](app/TESTING.md) |
+| Add or run engine tests | [engine/TESTING.md](engine/TESTING.md) |
 | Know why CI is red | [ops/CI.md](ops/CI.md) |
 | Cut a release | [ops/RELEASING.md](ops/RELEASING.md) |
 | Work on the cloud backend | [backend/CLOUD_ARCHITECTURE_GCP.md](backend/CLOUD_ARCHITECTURE_GCP.md) |
