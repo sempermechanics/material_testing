@@ -2,7 +2,8 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+import requests
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from . import audit, drive, firestore_repo as repo
@@ -260,11 +261,13 @@ async def list_session_files(sid: str, user=Depends(current_user)):
 
 
 @app.get("/v1/files/{file_id}/content")
-async def download_file(file_id: str, user=Depends(current_user)):
+async def download_file(file_id: str, request: Request, user=Depends(current_user)):
     """Stream one file back from Drive (restore).
 
     Drive has no anonymous signed download, so — unlike uploads, which go
     device→Drive directly — these bytes are proxied through Cloud Run.
+    Clients may send `Range: bytes=N-`; we forward it to Drive and return
+    206 + Content-Range so a truncated restore can resume into a partial file.
     """
     f = repo.get_file(file_id)
     if not f or f.get("uid") != user["uid"]:
@@ -274,13 +277,34 @@ async def download_file(file_id: str, user=Depends(current_user)):
         raise HTTPException(409, "file_not_uploaded")
     token = drive.access_token()
     audit.record(user["uid"], action="FILE_DOWNLOAD", target={"type": "file", "id": file_id})
+    byte_range = request.headers.get("range")
+    try:
+        dl = drive.open_download(token, drive_file_id, byte_range=byte_range)
+    except requests.HTTPError as e:
+        status = e.response.status_code if e.response is not None else 502
+        if status == 416:
+            raise HTTPException(416, "range_not_satisfiable") from e
+        log.error("drive download %s failed: HTTP %s", drive_file_id, status)
+        raise HTTPException(502, "drive_download_failed") from e
+
+    out_headers = {
+        "Content-Disposition": f'attachment; filename="{f.get("name", file_id)}"',
+        "Accept-Ranges": "bytes",
+    }
+    content_range = dl.headers.get("Content-Range")
+    if content_range:
+        out_headers["Content-Range"] = content_range
+    content_length = dl.headers.get("Content-Length")
+    if content_length:
+        out_headers["Content-Length"] = content_length
+    elif dl.status_code == 200 and f.get("sizeBytes"):
+        out_headers["Content-Length"] = str(f.get("sizeBytes", 0))
+
     return StreamingResponse(
-        drive.stream_file(token, drive_file_id),
+        dl.iter_chunks(),
+        status_code=dl.status_code,
         media_type="application/octet-stream",
-        headers={
-            "Content-Disposition": f'attachment; filename="{f.get("name", file_id)}"',
-            "Content-Length": str(f.get("sizeBytes", 0)),
-        },
+        headers=out_headers,
     )
 
 

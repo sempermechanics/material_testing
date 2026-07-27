@@ -111,8 +111,14 @@ paths:
           in: path
           required: true
           type: string
+        - name: Range
+          in: header
+          required: false
+          type: string
+          description: Optional byte range (e.g. bytes=1024-); proxied to Drive as 206.
       responses:
         '200': { description: OK }
+        '206': { description: Partial content }
   /v1/admin/users:
     get:
       operationId: adminListUsers

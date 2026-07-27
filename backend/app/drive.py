@@ -184,6 +184,50 @@ def delete_file(token: str, file_id: str) -> None:
     r.raise_for_status()
 
 
+class DriveDownload:
+    """Open Drive media response — status/headers for Range, then chunked body."""
+
+    def __init__(self, response: requests.Response):
+        self.status_code = response.status_code
+        self.headers = response.headers
+        self._response = response
+
+    def iter_chunks(self, chunk_size: int = 256 * 1024):
+        try:
+            for chunk in self._response.iter_content(chunk_size=chunk_size):
+                if chunk:
+                    yield chunk
+        finally:
+            self._response.close()
+
+
+def open_download(
+    token: str,
+    drive_file_id: str,
+    byte_range: str | None = None,
+) -> DriveDownload:
+    """Open a Drive file media stream, optionally with an HTTP Range.
+
+    Drive supports `Range` on `alt=media` and answers with 206 + Content-Range
+    when a range is honored. There is still no anonymous signed download URL,
+    so restore bytes remain proxied through Cloud Run — but clients can resume
+    a truncated transfer from the last byte instead of restarting.
+    """
+    headers = _headers(token)
+    if byte_range:
+        headers["Range"] = byte_range
+    r = requests.get(
+        f"{API}/files/{drive_file_id}",
+        headers=headers,
+        params={"alt": "media", "supportsAllDrives": "true"},
+        stream=True,
+        timeout=600,
+    )
+    if r.status_code not in (200, 206):
+        r.raise_for_status()
+    return DriveDownload(r)
+
+
 def stream_file(token: str, drive_file_id: str, chunk_size: int = 256 * 1024):
     """Yield a Drive file's bytes for restore/download.
 
@@ -193,17 +237,7 @@ def stream_file(token: str, drive_file_id: str, chunk_size: int = 256 * 1024):
     GCS (signed URLs) if downloads ever become common. See
     docs/backend/CLOUD_ARCHITECTURE_GCP.md §0 and §19.
     """
-    r = requests.get(
-        f"{API}/files/{drive_file_id}",
-        headers=_headers(token),
-        params={"alt": "media", "supportsAllDrives": "true"},
-        stream=True,
-        timeout=600,
-    )
-    r.raise_for_status()
-    for chunk in r.iter_content(chunk_size=chunk_size):
-        if chunk:
-            yield chunk
+    yield from open_download(token, drive_file_id).iter_chunks(chunk_size)
 
 
 def init_resumable(token: str, parent_folder_id: str, filename: str, size_bytes: int) -> str:
