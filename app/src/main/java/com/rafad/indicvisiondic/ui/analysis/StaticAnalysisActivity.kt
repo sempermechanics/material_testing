@@ -113,9 +113,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var tvStepValue: EditText
     private lateinit var tvStrainValue: EditText
 
-    /** Inline note carrying the SSSIG-based subset suggestion. */
-    private lateinit var tvSubsetHint: TextView
-
     // Three-step wizard: images → settings → (sweep setup when Parameter sweep)
     private lateinit var scrollStepImages: View
     private lateinit var scrollStepSettings: View
@@ -198,7 +195,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvSubsetValue = findViewById(R.id.tvSubsetValue)
         tvStepValue = findViewById(R.id.tvStepValue)
         tvStrainValue = findViewById(R.id.tvStrainValue)
-        tvSubsetHint = findViewById(R.id.tvSubsetHint)
         setupParameterControls()
 
         // --- Wizard wiring: images → settings → optional sweep page ---
@@ -767,8 +763,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
         viewModel.subsetRecommendationKey = key
         viewModel.subsetRecommendation = null
-        tvSubsetHint.visibility = View.VISIBLE
-        tvSubsetHint.text = getString(R.string.subset_recommend_running)
 
         // Read off the slider here: the measurement runs on the native thread,
         // which must not touch views.
@@ -803,25 +797,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
         return snapToSlider(etSubsetSize, rec.subsetSize)
     }
 
-    /** Seeds the slider (until the user overrides it) and shows the note. */
+    /** Seeds the slider with the recommendation, until the user overrides it. */
     private fun applySubsetRecommendation() {
-        val rec = viewModel.subsetRecommendation
-        if (rec == null) {
-            tvSubsetHint.visibility = View.GONE
-            return
-        }
+        val rec = viewModel.subsetRecommendation ?: return
         if (!viewModel.subsetUserModified) {
             val snapped = snapToSlider(etSubsetSize, rec.subsetSize)
             if (etSubsetSize.value.toInt() != snapped) {
                 commitParamFields()
                 etSubsetSize.value = snapped.toFloat()
             }
-        }
-        tvSubsetHint.visibility = View.VISIBLE
-        tvSubsetHint.text = if (rec.lowTexture) {
-            getString(R.string.subset_recommend_low_texture_fmt, rec.subsetSize)
-        } else {
-            getString(R.string.subset_recommend_fmt, rec.subsetSize)
         }
         // A new recommendation re-seeds the sweep's suggested inputs (unless the
         // user has already set their own).

@@ -658,15 +658,6 @@
                                 android:stepSize="2"
                                 android:value="41" />
 
-                            <TextView
-                                android:id="@+id/tvSubsetHint"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="12sp"
-                                android:visibility="gone"
-                                tools:text="Suggested 27 px from the speckle pattern (SSSIG criterion)" />
-
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
