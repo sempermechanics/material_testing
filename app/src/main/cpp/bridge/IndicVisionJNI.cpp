@@ -94,6 +94,9 @@
     static IndicVision::Image *g_refImg = nullptr;
     static int g_refWidth = 0;
     static int g_refHeight = 0;
+    // 8-bit gray reference for AKAZE — cloned once in initializeReference so
+    // computeFullFieldDirect never re-decodes refBytes every frame.
+    static cv::Mat g_refGray;
     static std::mutex jni_engine_mutex;
     static std::string g_debugDir = "";
     // 🚀 ADDED: Bulletproof AKAZE Reference Caching
@@ -296,11 +299,13 @@
     JNIEXPORT void JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_initializeReference(JNIEnv *env, jobject, jbyteArray refBytes, jbyteArray maskBytes, jint width, jint height, jboolean applyBlur) {
         std::lock_guard<std::mutex> engine_lock(jni_engine_mutex);
         if (g_refImg != nullptr) { delete g_refImg; g_refImg = nullptr; }
+        g_refGray.release();
         if (refBytes == nullptr) return;
         cv::Mat refMat = bytesToMat(env, refBytes, width, height);
         if (refMat.empty()) return;
 
         g_refWidth = refMat.cols; g_refHeight = refMat.rows;
+        g_refGray = refMat.clone();
         g_refImg = new IndicVision::Image(g_refWidth, g_refHeight, refMat.data);
 
         // 🚀 DICe BOUNDARY PARITY: "THE GHOST WALL"
@@ -335,34 +340,6 @@
         g_cached_ref_kp.clear();
         g_cached_ref_desc.release();
         g_current_akaze_scale = 0.25;
-    }
-
-    JNIEXPORT jfloatArray JNICALL Java_com_rafad_indicvisiondic_IndicVisionNativeLib_analyzeRawBytes(
-            JNIEnv *env, jobject, jbyteArray refBytes, jbyteArray defBytes, jint roiX,
-            jint roiY, jint subsetSize, jint originalWidth, jint originalHeight) {
-        cv::Mat refMat = bytesToMat(env, refBytes, originalWidth, originalHeight);
-        cv::Mat defMat = bytesToMat(env, defBytes, originalWidth, originalHeight);
-        if (refMat.empty() || defMat.empty()) {
-            jfloatArray fail = env->NewFloatArray(5);
-            jfloat temp[] = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
-            env->SetFloatArrayRegion(fail, 0, 5, temp);
-            return fail;
-        }
-        IndicVision::Image refImg(refMat.cols, refMat.rows, refMat.data);
-        IndicVision::Image defImg(defMat.cols, defMat.rows, defMat.data);
-        refImg.prepare_data(false); // Default to false for raw byte analysis
-        defImg.prepare_data(false);
-        IndicVision::SubsetData subset;
-        IndicVision::SubsetPrecomputer::precompute_subset(subset, refImg, roiX, roiY, subsetSize);
-        IndicVision::OptimizationEngine engine;
-        engine.use_6x6_interpolator = true; // Hardcoded default for raw byte analysis
-        IndicVision::AnalysisResult res =
-                engine.calculate_deformation(subset, defImg, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                             0.0f, IndicVision::INIT_AUTO_SEARCH);
-        jfloatArray output = env->NewFloatArray(5);
-        jfloat temp[5] = {res.u, res.v, 0.0f, res.ux, (jfloat)res.status};
-        env->SetFloatArrayRegion(output, 0, 5, temp);
-        return output;
     }
 
     // ==========================================
@@ -430,7 +407,11 @@
 
         if (rectWidth > 32 && rectHeight > 32) {
             try {
-                cv::Mat refMat = bytesToMat(env, refBytes, g_refWidth, g_refHeight);
+                // Prefer the cached gray reference from initializeReference; fall
+                // back to decoding refBytes only if that cache is missing.
+                cv::Mat refMat = g_refGray.empty()
+                        ? bytesToMat(env, refBytes, g_refWidth, g_refHeight)
+                        : g_refGray;
                 if (!refMat.empty()) {
 
                     // 🚀 PRIORITY 2: ADAPTIVE SCALE PYRAMID
