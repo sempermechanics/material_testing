@@ -217,11 +217,11 @@
     <string name="subset_samples">No. of subsets</string>
     <string name="vsg_samples">No. of VSGs</string>
     <string name="step_depth">Step size</string>
-    <string name="info_subset_samples">Analyses = No. of subsets × No. of VSGs. Step size is fixed and does not multiply the count.</string>
-    <string name="info_step_depth">Fixed step for the whole sweep, as subset ÷ N. Larger N = finer grid and denser correlation.</string>
-    <string name="info_subset_range">Odd subset sizes from min to max (px), capped by the image/ROI. Sample count is set separately.</string>
+    <string name="info_subset_samples">Total no of analyses = No. of subsets × No. of VSGs.</string>
+    <string name="info_step_depth">Step size that subset moves given as subset ÷ N(Larger N means finer grid and denser correlation).</string>
+    <string name="info_subset_range"> Min to Max (px) capped by the image/ROI(Odd subset sizes).</string>
     <string name="vsg_max">Max VSG size</string>
-    <string name="info_vsg_max">Ceiling for virtual strain gauge size (px). Each subset\'s ladder runs up to this value; larger tends to over-smooth.</string>
+    <string name="info_vsg_max">Ceiling for virtual strain gauge size sweep(larger tends to over-smooth).</string>
 
     <string name="line_cut_axis">Line cut axis</string>
     <string name="info_line_cut_axis">Strain along a cut through the ROI centre. Pick the axis that crosses your gradient.</string>
