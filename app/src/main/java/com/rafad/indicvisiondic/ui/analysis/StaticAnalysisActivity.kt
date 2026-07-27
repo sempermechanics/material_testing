@@ -1280,7 +1280,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * navigating to the limit screen; re-runs of an existing session still pass.
      */
     private fun ensureSessionQuota(): Boolean {
-        if (!viewModel.wouldCreateNewSession(this)) return true
+        if (!viewModel.wouldCreateNewSession()) return true
         TokenStore.refreshSessionLimit(this, SessionStore.list(this).size)
         if (!TokenStore.isSessionLimitReached(this)) return true
         startActivity(Intent(this, SessionLimitActivity::class.java))

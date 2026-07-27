@@ -190,8 +190,6 @@
     <string name="action_cancel">Cancel</string>
     <string name="setting_save_cloud">Save to cloud</string>
     <string name="setting_save_cloud_sub">Upload results when a network is available</string>
-    <string name="setting_keep_rerun">Keep every re-run</string>
-    <string name="setting_keep_rerun_sub">Each run in the exploration loop keeps its own row</string>
     <string name="setting_max_frames">Max frames</string>
     <string name="setting_max_frames_info">More frames = longer analysis and more memory. 50 suits most phones; raise it on a device with a fast processor and plenty of RAM, lower it if analyses feel slow or the app is killed mid-run.</string>
     <string name="info">Info</string>

@@ -844,17 +844,6 @@
     <issue
         id="UseKtx"
         message="Use the KTX extension function `SharedPreferences.edit` instead?"
-        errorLine1="    fun setKeepEveryRerun(context: Context, value: Boolean) = prefs(context).edit().putBoolean(KEY_KEEP_EVERY_RERUN, value).apply()"
-        errorLine2="                                                              ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/rafad/indicvisiondic/data/DicSettings.kt"
-            line="33"
-            column="63"/>
-    </issue>
-
-    <issue
-        id="UseKtx"
-        message="Use the KTX extension function `SharedPreferences.edit` instead?"
         errorLine1="    fun setMaxFrames(context: Context, value: Int) = prefs(context).edit()"
         errorLine2="                                                     ~~~~~~~~~~~~~~~~~~~~~">
         <location

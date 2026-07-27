@@ -20,7 +20,6 @@ object DicSettings {
 
     private const val PREFS = "dic_settings"
     private const val KEY_SAVE_TO_CLOUD = "save_to_cloud"
-    private const val KEY_KEEP_EVERY_RERUN = "keep_every_rerun"
     private const val KEY_MAX_FRAMES = "max_frames"
 
     private fun prefs(context: Context): SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -29,11 +28,6 @@ object DicSettings {
     fun saveToCloud(context: Context): Boolean = prefs(context).getBoolean(KEY_SAVE_TO_CLOUD, true)
 
     fun setSaveToCloud(context: Context, value: Boolean) = prefs(context).edit().putBoolean(KEY_SAVE_TO_CLOUD, value).apply()
-
-    /** On: every re-run in the exploration loop persists its own session row. */
-    fun keepEveryRerun(context: Context): Boolean = prefs(context).getBoolean(KEY_KEEP_EVERY_RERUN, false)
-
-    fun setKeepEveryRerun(context: Context, value: Boolean) = prefs(context).edit().putBoolean(KEY_KEEP_EVERY_RERUN, value).apply()
 
     /** Cap on deformed frames per analysis (picker + video extraction). */
     fun maxFrames(context: Context): Int = prefs(context).getInt(KEY_MAX_FRAMES, DEFAULT_MAX_FRAMES)

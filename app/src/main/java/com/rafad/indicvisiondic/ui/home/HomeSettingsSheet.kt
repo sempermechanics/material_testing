@@ -40,10 +40,6 @@ object HomeSettingsSheet {
             isChecked = DicSettings.saveToCloud(activity)
             setOnCheckedChangeListener { _, v -> DicSettings.setSaveToCloud(activity, v) }
         }
-        view.findViewById<SwitchMaterial>(R.id.switchKeepRerun).apply {
-            isChecked = DicSettings.keepEveryRerun(activity)
-            setOnCheckedChangeListener { _, v -> DicSettings.setKeepEveryRerun(activity, v) }
-        }
 
         val valueLabel = view.findViewById<TextView>(R.id.tvMaxFramesValue)
         view.findViewById<Slider>(R.id.sliderMaxFrames).apply {

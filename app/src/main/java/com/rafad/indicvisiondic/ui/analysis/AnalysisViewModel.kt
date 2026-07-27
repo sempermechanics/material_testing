@@ -203,7 +203,7 @@ class AnalysisViewModel : ViewModel() {
         val limited = sessionLimitOutcome(appContext, plan.size)
         if (limited != null) return@withContext limited
 
-        val localSessionId = resolveLocalSessionId(appContext)
+        val localSessionId = resolveLocalSessionId()
         val batchDir = SessionStore.dirFor(appContext, localSessionId)
         batchDir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
         lastBatchDirPath = batchDir.absolutePath
@@ -395,15 +395,14 @@ class AnalysisViewModel : ViewModel() {
     }
 
     /**
-     * Identity of the working session on the Home list. Re-runs reuse it so
-     * the row updates in place; with "Keep every re-run" enabled each run gets
-     * a fresh id (its own row). New inputs reset it via [clearPreviousResults].
+     * Identity of the working session on the Home list. Every re-run reuses it,
+     * so the exploration loop keeps updating one row instead of leaving a trail
+     * of near-identical ones. New inputs reset it via [clearPreviousResults].
      */
     var workingLocalId: String? = null
 
     /** True when the next completed run would create a new Home-list row. */
-    fun wouldCreateNewSession(appContext: Context): Boolean =
-        workingLocalId == null || DicSettings.keepEveryRerun(appContext)
+    fun wouldCreateNewSession(): Boolean = workingLocalId == null
 
     /**
      * Hard stop before any native work: a new session cannot exceed the account
@@ -412,7 +411,7 @@ class AnalysisViewModel : ViewModel() {
      */
     @Suppress("ReturnCount") // two independent all-clear checks, then the stop
     private fun sessionLimitOutcome(appContext: Context, totalFrames: Int): BatchAnalysisOutcome? {
-        if (!wouldCreateNewSession(appContext)) return null
+        if (!wouldCreateNewSession()) return null
         TokenStore.refreshSessionLimit(appContext, SessionStore.list(appContext).size)
         if (!TokenStore.isSessionLimitReached(appContext)) return null
         Timber.w("Hard stop: analysis blocked at session limit")
@@ -425,14 +424,8 @@ class AnalysisViewModel : ViewModel() {
         )
     }
 
-    private fun resolveLocalSessionId(appContext: Context): String {
-        val current = workingLocalId
-        return if (current == null || DicSettings.keepEveryRerun(appContext)) {
-            UUID.randomUUID().toString().take(12).also { workingLocalId = it }
-        } else {
-            current
-        }
-    }
+    private fun resolveLocalSessionId(): String =
+        workingLocalId ?: UUID.randomUUID().toString().take(12).also { workingLocalId = it }
 
     /**
      * The deformed frame a sweep is solved against: [vsgFrameIndex] when it
@@ -514,7 +507,7 @@ class AnalysisViewModel : ViewModel() {
 
         // Results live in app-private persistent storage (NOT cacheDir, which
         // the OS may evict): one directory per Home-list session.
-        val localSessionId = resolveLocalSessionId(appContext)
+        val localSessionId = resolveLocalSessionId()
         val batchDir = SessionStore.dirFor(appContext, localSessionId)
         batchDir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
 
