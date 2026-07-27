@@ -67,10 +67,40 @@ class StudioOverlayView @JvmOverloads constructor(
         val left = (viewWidth - scaledWidth) / 2f
         val top = (viewHeight - scaledHeight) / 2f
 
+        // Remap live geometry when letterboxing changes (toolbar/IME resize).
+        val liveRoi = if (!imageBounds.isEmpty && hasValidRoi && pendingRestoreRoi == null) {
+            getRelativeRoi()
+        } else {
+            null
+        }
+        val liveHoles = if (!imageBounds.isEmpty && holes.isNotEmpty()) {
+            holes.map { it.mode to viewRectToImage(it.rect) }
+        } else {
+            emptyList()
+        }
+
         imageBounds.set(left, top, left + scaledWidth, top + scaledHeight)
 
-        // If we survived a screen rotation, restore the box now that bounds are ready
+        if (liveRoi != null && liveRoi.width() > 0f && liveRoi.height() > 0f) {
+            pendingRestoreRoi = liveRoi
+        }
         applyPendingRestore()
+
+        if (liveHoles.isNotEmpty()) {
+            holes.clear()
+            for ((mode, img) in liveHoles) {
+                val mapped = mapImageRectToView(
+                    img.left.toInt(),
+                    img.top.toInt(),
+                    img.width().toInt().coerceAtLeast(1),
+                    img.height().toInt().coerceAtLeast(1),
+                )
+                if (mapped != null) {
+                    holes.add(Hole(mode, Path(), mapped))
+                }
+            }
+            invalidate()
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

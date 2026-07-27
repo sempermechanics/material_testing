@@ -74,7 +74,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private val viewModel: AnalysisViewModel by viewModels()
 
     // UI Components
-    private lateinit var btnFullImage: Button
     private lateinit var btnDefineRoi: Button
     private lateinit var tvResult: TextView
     private lateinit var tvInstruction: TextView
@@ -171,7 +170,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             runPoints = tvRunPoints,
             runConvergence = tvRunConvergence,
         )
-        btnFullImage = findViewById(R.id.btnFullImage)
         btnDefineRoi = findViewById(R.id.btnDefineRoi)
         tvResult = findViewById(R.id.tvStaticResult)
         refDropzone = findViewById(R.id.refDropzone)
@@ -345,7 +343,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     requestSubsetRecommendation()
                 }
             } else {
-                updateRoiSummary()
+                // Cancelled editor → fall back to full-image ROI.
+                applyFullImageRoi()
             }
         }
 
@@ -397,17 +396,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
             } else {
                 Toast.makeText(this, R.string.load_image_first, Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        btnFullImage.setOnClickListener {
-            if (viewModel.realRefWidth > 0) {
-                viewModel.hasCustomRoi = false
-                viewModel.roiMaskBytes = null
-                updateRoiSummary()
-                sweepHelper.refreshLineCutPreview()
-                checkReady()
-                requestSubsetRecommendation()
             }
         }
 
@@ -1503,6 +1491,21 @@ class StaticAnalysisActivity : AppCompatActivity() {
             )
         }
         sweepHelper.refreshLineCutPreview()
+    }
+
+    /** Clears a custom crop and treats the whole reference frame as the ROI. */
+    private fun applyFullImageRoi() {
+        if (viewModel.realRefWidth > 0) {
+            viewModel.hasCustomRoi = false
+            viewModel.roiMaskBytes = null
+            viewModel.roiX = 0
+            viewModel.roiY = 0
+            viewModel.roiW = viewModel.realRefWidth
+            viewModel.roiH = viewModel.realRefHeight
+        }
+        updateRoiSummary()
+        checkReady()
+        requestSubsetRecommendation()
     }
 
     /** Inline, non-blocking JPEG accuracy warning. */

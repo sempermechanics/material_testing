@@ -9,6 +9,7 @@ import android.content.Intent
 import android.graphics.RectF
 import android.os.Bundle
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -17,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.chip.Chip
 import com.google.android.material.textfield.TextInputEditText
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.IndicVisionNativeLib
@@ -44,6 +46,8 @@ class RoiDrawActivity : AppCompatActivity() {
     private lateinit var btnSaveRoi: MaterialButton
     private lateinit var btnCancelRoi: MaterialButton
     private lateinit var btnResetRoi: MaterialButton
+    private lateinit var btnResetManualRoi: MaterialButton
+    private lateinit var btnFullImageRoi: Chip
     private lateinit var btnApplyManualRoi: MaterialButton
     private lateinit var etRoiX: TextInputEditText
     private lateinit var etRoiY: TextInputEditText
@@ -71,6 +75,8 @@ class RoiDrawActivity : AppCompatActivity() {
         btnSaveRoi = findViewById(R.id.btnSaveRoi)
         btnCancelRoi = findViewById(R.id.btnCancelRoi)
         btnResetRoi = findViewById(R.id.btnResetRoi)
+        btnResetManualRoi = findViewById(R.id.btnResetManualRoi)
+        btnFullImageRoi = findViewById(R.id.btnFullImageRoi)
         btnApplyManualRoi = findViewById(R.id.btnApplyManualRoi)
         etRoiX = findViewById(R.id.etRoiX)
         etRoiY = findViewById(R.id.etRoiY)
@@ -164,11 +170,15 @@ class RoiDrawActivity : AppCompatActivity() {
 
         btnCancelRoi.setOnClickListener { finish() }
 
-        btnResetRoi.setOnClickListener {
+        val clearCanvas = {
             overlayRoi.reset()
             clearManualFields()
             tvHud.text = getString(R.string.roi_hud_canvas_cleared)
         }
+        btnResetRoi.setOnClickListener { clearCanvas() }
+        btnResetManualRoi.setOnClickListener { clearCanvas() }
+
+        btnFullImageRoi.setOnClickListener { saveFullImageAndFinish() }
 
         btnApplyManualRoi.setOnClickListener { applyManualFields() }
 
@@ -206,8 +216,13 @@ class RoiDrawActivity : AppCompatActivity() {
     }
 
     private fun setEditMode(manual: Boolean) {
-        drawTools.visibility = if (manual) View.GONE else View.VISIBLE
-        manualTools.visibility = if (manual) View.VISIBLE else View.GONE
+        // INVISIBLE (not GONE) keeps bottomToolbar height stable so the
+        // fitCenter image does not jump when switching Draw ↔ Manual.
+        drawTools.visibility = if (manual) View.INVISIBLE else View.VISIBLE
+        manualTools.visibility = if (manual) View.VISIBLE else View.INVISIBLE
+        if (!manual) {
+            hideSoftKeyboard()
+        }
         // Crop/Erase stays visible and keeps its selection in both modes.
         val erase = rgCropErase.checkedButtonId == R.id.rbErase
         overlayRoi.isSubtractMode = erase
@@ -221,6 +236,13 @@ class RoiDrawActivity : AppCompatActivity() {
                 if (erase) R.string.roi_hud_mode_erase else R.string.roi_hud_mode_crop,
             )
         }
+    }
+
+    private fun hideSoftKeyboard() {
+        val focus = currentFocus ?: return
+        val imm = getSystemService(InputMethodManager::class.java) ?: return
+        imm.hideSoftInputFromWindow(focus.windowToken, 0)
+        focus.clearFocus()
     }
 
     /** Prefill manual fields from the main crop or the last erase rect. */
@@ -279,6 +301,12 @@ class RoiDrawActivity : AppCompatActivity() {
         if (!ok) {
             Toast.makeText(this, R.string.roi_invalid_size, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun saveFullImageAndFinish() {
+        overlayRoi.reset()
+        clearManualFields()
+        saveAndFinish()
     }
 
     private fun saveAndFinish() {
