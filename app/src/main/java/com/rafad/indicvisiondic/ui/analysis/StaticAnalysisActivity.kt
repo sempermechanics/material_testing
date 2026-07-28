@@ -34,15 +34,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.IndicVisionNativeLib
 import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.data.CoachPrefs
 import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
+import com.rafad.indicvisiondic.ui.common.CoachMarkController
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.common.MediaSourceChooser
 import com.rafad.indicvisiondic.ui.common.Motion
@@ -72,6 +76,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private val viewModel: AnalysisViewModel by viewModels()
+    private lateinit var coach: CoachMarkController
 
     // UI Components
     private lateinit var btnDefineRoi: Button
@@ -94,6 +99,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var tvDefMeta: TextView
     private lateinit var tvDefDropHint: TextView
     private lateinit var jpegWarnRow: View
+    private lateinit var rvFrameOrder: RecyclerView
+    private lateinit var btnFrameOrderSort: ImageView
+    private lateinit var frameOrderAdapter: FrameOrderAdapter
 
     /** Inline speckle-quality warning from the SSSIG measurement. */
     private lateinit var lowTextureWarnRow: View
@@ -132,6 +140,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_static_analysis)
+        coach = CoachMarkController(this)
         // --- BACK BUTTON INTERCEPTOR (SAFETY LOCK) ---
         onBackPressedDispatcher.addCallback(
             this,
@@ -186,6 +195,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvDefMeta = findViewById(R.id.tvDefMeta)
         tvDefDropHint = findViewById(R.id.tvDefDropHint)
         jpegWarnRow = findViewById(R.id.jpegWarnRow)
+        rvFrameOrder = findViewById(R.id.rvFrameOrder)
+        btnFrameOrderSort = findViewById(R.id.btnFrameOrderSort)
+        setupFrameOrderStrip()
         lowTextureWarnRow = findViewById(R.id.lowTextureWarnRow)
         tvLowTextureWarning = findViewById(R.id.tvLowTextureWarning)
         tvNextReason = findViewById(R.id.tvNextReason)
@@ -504,7 +516,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun handleDeformedBatch(rawUris: List<Uri>) {
         // Frame cap (Home settings drawer): keep the first N and say so.
         val cap = DicSettings.maxFrames(this)
-        val uris = if (rawUris.size > cap) {
+        val capped = if (rawUris.size > cap) {
             Toast.makeText(this, getString(R.string.frames_capped_fmt, cap), Toast.LENGTH_LONG).show()
             FrameImportHelper.cappedUris(rawUris, cap)
         } else {
@@ -518,6 +530,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
                 viewModel.clearPreviousResults()
 
+                // Fresh pick keeps system picker order until the user chooses Name/Date/Manual.
+                viewModel.defOrderMode = FrameOrderMode.PICKER
+                viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
+                val meta = FrameOrderHelper.loadMeta(
+                    this@StaticAnalysisActivity,
+                    capped,
+                    ::getFileName,
+                )
+                val uris = meta.map { it.uri }
+                val datesByIndex = meta.map { it.dateMs }
+
                 val batch = FrameImportHelper.importDeformedUris(
                     context = this@StaticAnalysisActivity,
                     uris = uris,
@@ -528,11 +551,21 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     viewModel.defFilePaths = batch.filePaths
                     viewModel.defOriginalNames = batch.originalNames
                     viewModel.defFrameSizes = batch.frameSizes
+                    viewModel.defFrameDates = batch.filePaths.map { path ->
+                        val name = File(path).name
+                        val idx = name.take(4).toIntOrNull()
+                        if (idx != null && idx in datesByIndex.indices) {
+                            datesByIndex[idx]
+                        } else {
+                            Long.MAX_VALUE
+                        }
+                    }
                     viewModel.defFromVideo = batch.fromVideo
                 } else {
                     viewModel.defFilePaths = emptyList()
                     viewModel.defOriginalNames = emptyList()
                     viewModel.defFrameSizes = emptyMap()
+                    viewModel.defFrameDates = emptyList()
                     viewModel.defFromVideo = false
                 }
 
@@ -553,6 +586,117 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun setupFrameOrderStrip() {
+        rvFrameOrder.layoutManager =
+            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        frameOrderAdapter = FrameOrderAdapter { orderedPaths ->
+            applyManualFrameOrder(orderedPaths)
+        }
+        rvFrameOrder.adapter = frameOrderAdapter
+        FrameOrderAdapter.attachDrag(rvFrameOrder, frameOrderAdapter)
+
+        btnFrameOrderSort.setOnClickListener { anchor ->
+            showFrameOrderMenu(anchor)
+        }
+    }
+
+    private fun showFrameOrderMenu(anchor: View) {
+        val popup = androidx.appcompat.widget.PopupMenu(this, anchor)
+        popup.menuInflater.inflate(R.menu.menu_frame_order, popup.menu)
+        val checkedId = when {
+            viewModel.defOrderMode == FrameOrderMode.NAME &&
+                viewModel.defOrderDirection == FrameOrderDirection.ASCENDING ->
+                R.id.menu_frame_order_name_asc
+            viewModel.defOrderMode == FrameOrderMode.NAME &&
+                viewModel.defOrderDirection == FrameOrderDirection.DESCENDING ->
+                R.id.menu_frame_order_name_desc
+            viewModel.defOrderMode == FrameOrderMode.DATE &&
+                viewModel.defOrderDirection == FrameOrderDirection.ASCENDING ->
+                R.id.menu_frame_order_date_asc
+            viewModel.defOrderMode == FrameOrderMode.DATE &&
+                viewModel.defOrderDirection == FrameOrderDirection.DESCENDING ->
+                R.id.menu_frame_order_date_desc
+            viewModel.defOrderMode == FrameOrderMode.MANUAL ->
+                R.id.menu_frame_order_manual
+            else -> 0
+        }
+        if (checkedId != 0) {
+            popup.menu.findItem(checkedId)?.isChecked = true
+        }
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.menu_frame_order_name_asc ->
+                    applyFrameOrderMode(FrameOrderMode.NAME, FrameOrderDirection.ASCENDING)
+                R.id.menu_frame_order_name_desc ->
+                    applyFrameOrderMode(FrameOrderMode.NAME, FrameOrderDirection.DESCENDING)
+                R.id.menu_frame_order_date_asc ->
+                    applyFrameOrderMode(FrameOrderMode.DATE, FrameOrderDirection.ASCENDING)
+                R.id.menu_frame_order_date_desc ->
+                    applyFrameOrderMode(FrameOrderMode.DATE, FrameOrderDirection.DESCENDING)
+                R.id.menu_frame_order_manual ->
+                    applyFrameOrderMode(FrameOrderMode.MANUAL, viewModel.defOrderDirection)
+                else -> return@setOnMenuItemClickListener false
+            }
+            true
+        }
+        popup.show()
+    }
+
+    private fun applyFrameOrderMode(
+        mode: FrameOrderMode,
+        direction: FrameOrderDirection = FrameOrderDirection.ASCENDING,
+    ) {
+        if (viewModel.defFromVideo || viewModel.defFilePaths.size <= 1) return
+        viewModel.defOrderMode = mode
+        viewModel.defOrderDirection = direction
+        frameOrderAdapter.dragEnabled = mode == FrameOrderMode.MANUAL
+        if (mode == FrameOrderMode.MANUAL) {
+            Toast.makeText(this, R.string.frame_order_manual_hint, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val ordered = FrameOrderHelper.reorder(
+            paths = viewModel.defFilePaths,
+            names = viewModel.defOriginalNames,
+            dates = viewModel.defFrameDates,
+            sizes = viewModel.defFrameSizes,
+            mode = mode,
+            direction = direction,
+        )
+        val (paths, sizes) = FrameOrderHelper.reprefixTempFiles(
+            ordered.paths,
+            ordered.names,
+            ordered.sizes,
+        )
+        viewModel.defFilePaths = paths
+        viewModel.defOriginalNames = ordered.names
+        viewModel.defFrameDates = ordered.dates
+        viewModel.defFrameSizes = sizes
+        refreshDefSlot()
+        validateFrameSizes()
+    }
+
+    private fun applyManualFrameOrder(orderedPaths: List<String>) {
+        if (orderedPaths == viewModel.defFilePaths) return
+        val indexOf = viewModel.defFilePaths.withIndex().associate { it.value to it.index }
+        val order = orderedPaths.mapNotNull { indexOf[it] }
+        if (order.size != orderedPaths.size) return
+        val ordered = FrameOrderHelper.reorder(
+            paths = viewModel.defFilePaths,
+            names = viewModel.defOriginalNames,
+            dates = viewModel.defFrameDates,
+            sizes = viewModel.defFrameSizes,
+            mode = FrameOrderMode.MANUAL,
+            manualOrder = order,
+        )
+        // Keep file names as-is during drag; analysis uses list order, not path sort.
+        viewModel.defFilePaths = ordered.paths
+        viewModel.defOriginalNames = ordered.names
+        viewModel.defFrameDates = ordered.dates
+        viewModel.defFrameSizes = ordered.sizes
+        viewModel.defOrderMode = FrameOrderMode.MANUAL
+        validateFrameSizes()
     }
 
     // ------------------------------------------------------------------
@@ -693,6 +837,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     viewModel.defFilePaths = result.batch.filePaths
                     viewModel.defOriginalNames = result.batch.originalNames
                     viewModel.defFrameSizes = result.batch.frameSizes
+                    viewModel.defFrameDates = emptyList()
+                    viewModel.defOrderMode = FrameOrderMode.PICKER
+                    viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
                     viewModel.defFromVideo = result.batch.fromVideo
 
                     result.refPreview?.let { refPreviewBmp = it }
@@ -1125,17 +1272,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         bindParamField(tvStepValue, etStepSize)
         bindParamField(tvStrainValue, etStrainWindow)
 
-        // Advanced expander: expanded by default; header toggles body visibility.
-        val advancedBody = findViewById<View>(R.id.advancedParamsBody)
-        val advancedChevron = findViewById<ImageView>(R.id.ivAdvancedChevron)
+        // Advanced parameters: always visible (no collapse).
         val advancedReset = findViewById<View>(R.id.btnAdvancedReset)
-
-        fun applyAdvancedExpanded(expanded: Boolean) {
-            advancedBody.visibility = if (expanded) View.VISIBLE else View.GONE
-            advancedChevron.rotation = if (expanded) 180f else 0f
-            advancedReset.visibility = if (expanded) View.VISIBLE else View.GONE
-        }
-        applyAdvancedExpanded(true)
 
         @Suppress("MagicNumber") // the documented defaults: 41 / 5 / 15
         advancedReset.setOnClickListener {
@@ -1161,10 +1299,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             .setOnClickListener { showInfo(R.string.step_size_density, R.string.info_step) }
         findViewById<View>(R.id.btnStrainInfo)
             .setOnClickListener { showInfo(R.string.strain_window, R.string.info_strain_window) }
-
-        findViewById<View>(R.id.advancedParamsHeader).setOnClickListener {
-            applyAdvancedExpanded(advancedBody.visibility != View.VISIBLE)
-        }
 
         etSubsetSize.addOnChangeListener { _, _, fromUser ->
             if (fromUser) viewModel.subsetUserModified = true
@@ -1366,6 +1500,64 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         checkReady()
+        maybeShowWizardCoach(target)
+    }
+
+    private fun maybeShowWizardCoach(step: Int) {
+        // Leaving a page dismisses any open coach for that screen.
+        coach.dismiss(markSeen = true)
+        val root = findViewById<View>(android.R.id.content)
+        root.post {
+            when (step) {
+                1 -> coach.maybeShow(
+                    CoachPrefs.Screen.ANALYSIS_IMAGES,
+                    listOf(
+                        CoachMarkController.Step(
+                            refDropzone,
+                            getString(R.string.coach_analysis_ref),
+                        ),
+                        CoachMarkController.Step(
+                            defDropzone,
+                            getString(R.string.coach_analysis_def),
+                        ),
+                    ),
+                )
+                2 -> coach.maybeShow(
+                    CoachPrefs.Screen.ANALYSIS_SETTINGS,
+                    listOf(
+                        CoachMarkController.Step(
+                            findViewById(R.id.rgAnalysisMode),
+                            getString(R.string.coach_analysis_mode),
+                        ),
+                        CoachMarkController.Step(
+                            btnDefineRoi,
+                            getString(R.string.coach_analysis_roi),
+                        ),
+                        CoachMarkController.Step(
+                            findViewById(R.id.advancedParamsHeader),
+                            getString(R.string.coach_analysis_advanced),
+                        ),
+                    ),
+                )
+                3 -> coach.maybeShow(
+                    CoachPrefs.Screen.ANALYSIS_SWEEP,
+                    listOf(
+                        CoachMarkController.Step(
+                            findViewById(R.id.subsetRangeBlock),
+                            getString(R.string.coach_sweep_subset),
+                        ),
+                        CoachMarkController.Step(
+                            findViewById(R.id.plannedLatticeCard),
+                            getString(R.string.coach_sweep_lattice),
+                        ),
+                        CoachMarkController.Step(
+                            findViewById(R.id.btnRunSweep),
+                            getString(R.string.coach_sweep_run),
+                        ),
+                    ),
+                )
+            }
+        }
     }
 
     private fun checkReady() {
@@ -1456,7 +1648,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         updateJpegChip()
     }
 
-    /** Deformed slot: dropzone when empty, count card when filled. */
+    /** Deformed slot: dropzone when empty, count card + order strip when filled. */
     private fun refreshDefSlot() {
         val n = viewModel.defFilePaths.size
         defDropzone.visibility = if (n > 0) View.GONE else View.VISIBLE
@@ -1471,6 +1663,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
             ivDefIcon.setImageResource(
                 if (viewModel.defFromVideo) R.drawable.ic_video else R.drawable.ic_photos_share,
             )
+            rvFrameOrder.visibility = View.VISIBLE
+            frameOrderAdapter.submit(viewModel.defFilePaths)
+            val showSort = n > 1 && !viewModel.defFromVideo
+            btnFrameOrderSort.visibility = if (showSort) View.VISIBLE else View.GONE
+            frameOrderAdapter.dragEnabled =
+                showSort && viewModel.defOrderMode == FrameOrderMode.MANUAL
+        } else {
+            rvFrameOrder.visibility = View.GONE
+            btnFrameOrderSort.visibility = View.GONE
+            frameOrderAdapter.submit(emptyList())
         }
         updateJpegChip()
     }

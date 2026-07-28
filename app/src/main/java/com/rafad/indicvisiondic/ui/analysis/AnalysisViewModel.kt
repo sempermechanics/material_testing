@@ -80,6 +80,18 @@ class AnalysisViewModel : ViewModel() {
      */
     var defFrameSizes: Map<String, Pair<Int, Int>> = emptyMap()
 
+    /**
+     * Best-effort capture/creation time per deformed frame, index-aligned with
+     * [defFilePaths]. [Long.MAX_VALUE] means unknown (sorts last by date).
+     */
+    var defFrameDates: List<Long> = emptyList()
+
+    /** How the user wants deformed frames ordered (image batches only). */
+    var defOrderMode: FrameOrderMode = FrameOrderMode.PICKER
+
+    /** Ascending/descending for Name and Date modes. */
+    var defOrderDirection: FrameOrderDirection = FrameOrderDirection.ASCENDING
+
     /** Set when loaded frames do not all match the reference; blocks Compute. */
     var frameSizeError: String? = null
 
@@ -160,8 +172,8 @@ class AnalysisViewModel : ViewModel() {
     var lineCutHorizontal: Boolean = true
 
     /**
-     * Frame index the sweep is solved against; -1 means "whichever is last",
-     * the most deformed frame of a monotonic test.
+     * Frame index the sweep is solved against; -1 means the middle of the
+     * sequence (1-based frame n/2+1, i.e. 0-based index n/2).
      */
     var vsgFrameIndex: Int = -1
 
@@ -429,10 +441,19 @@ class AnalysisViewModel : ViewModel() {
 
     /**
      * The deformed frame a sweep is solved against: [vsgFrameIndex] when it
-     * points at a real frame, otherwise the last (most deformed) frame.
+     * points at a real frame, otherwise the middle of the sequence
+     * (0-based index n/2).
      */
-    private fun resolvedVsgFrameIndex(): Int =
-        if (vsgFrameIndex < 0 || vsgFrameIndex >= defFilePaths.size) defFilePaths.lastIndex else vsgFrameIndex
+    private fun resolvedVsgFrameIndex(): Int {
+        val n = defFilePaths.size
+        if (n <= 0) return -1
+        val last = n - 1
+        return if (vsgFrameIndex < 0 || vsgFrameIndex > last) {
+            (n / 2).coerceIn(0, last)
+        } else {
+            vsgFrameIndex
+        }
+    }
 
     /** Placeholder cloud id a session carries until the upload worker assigns the real one. */
     private fun newPendingSessionId(): String =

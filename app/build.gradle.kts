@@ -225,6 +225,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("com.jakewharton.timber:timber:5.0.1")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
 }
 
 // Static analysis gate: `./gradlew :app:detekt` (CI). The codebase is kept

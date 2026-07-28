@@ -187,50 +187,81 @@
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-
-                            <ImageView
-                                android:id="@+id/ivDefIcon"
-                                android:layout_width="46dp"
-                                android:layout_height="46dp"
-                                android:background="@color/surface_muted"
-                                android:contentDescription="@string/deformed_frames"
-                                android:padding="11dp"
-                                android:src="@drawable/ic_photos_share"
-                                app:tint="@color/text_secondary" />
+                            android:clipChildren="false"
+                            android:orientation="vertical"
+                            android:paddingBottom="8dp">
 
                             <LinearLayout
-                                android:layout_width="0dp"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginStart="12dp"
-                                android:layout_weight="1"
-                                android:orientation="vertical">
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
 
-                                <TextView
-                                    android:id="@+id/tvDefName"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="14sp"
-                                    android:textStyle="bold" />
+                                <ImageView
+                                    android:id="@+id/ivDefIcon"
+                                    android:layout_width="46dp"
+                                    android:layout_height="46dp"
+                                    android:background="@color/surface_muted"
+                                    android:contentDescription="@string/deformed_frames"
+                                    android:padding="11dp"
+                                    android:src="@drawable/ic_photos_share"
+                                    app:tint="@color/text_secondary" />
 
-                                <TextView
-                                    android:id="@+id/tvDefMeta"
-                                    android:layout_width="match_parent"
+                                <LinearLayout
+                                    android:layout_width="0dp"
                                     android:layout_height="wrap_content"
-                                    android:ellipsize="middle"
-                                    android:maxLines="1"
-                                    android:textColor="@color/text_secondary"
-                                    android:textSize="12sp" />
+                                    android:layout_marginStart="12dp"
+                                    android:layout_weight="1"
+                                    android:orientation="vertical">
+
+                                    <TextView
+                                        android:id="@+id/tvDefName"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:textColor="@color/text_primary"
+                                        android:textSize="14sp"
+                                        android:textStyle="bold" />
+
+                                    <TextView
+                                        android:id="@+id/tvDefMeta"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:ellipsize="middle"
+                                        android:maxLines="1"
+                                        android:textColor="@color/text_secondary"
+                                        android:textSize="12sp" />
+                                </LinearLayout>
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnDefChange"
+                                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/action_change" />
+
+                                <ImageButton
+                                    android:id="@+id/btnFrameOrderSort"
+                                    android:layout_width="40dp"
+                                    android:layout_height="40dp"
+                                    android:background="?attr/selectableItemBackgroundBorderless"
+                                    android:contentDescription="@string/frame_order_label"
+                                    android:padding="8dp"
+                                    android:src="@drawable/ic_sort"
+                                    android:visibility="gone"
+                                    app:tint="@color/text_secondary" />
                             </LinearLayout>
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnDefChange"
-                                style="@style/Widget.MaterialComponents.Button.TextButton"
-                                android:layout_width="wrap_content"
+                            <androidx.recyclerview.widget.RecyclerView
+                                android:id="@+id/rvFrameOrder"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="@string/action_change" />
+                                android:layout_marginTop="8dp"
+                                android:clipChildren="false"
+                                android:clipToPadding="false"
+                                android:orientation="horizontal"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:visibility="gone" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
                 </FrameLayout>
@@ -576,7 +607,6 @@
                             android:layout_height="wrap_content"
                             android:orientation="horizontal"
                             android:gravity="center_vertical"
-                            android:background="?attr/selectableItemBackground"
                             android:paddingBottom="4dp">
 
                             <ImageView
@@ -604,15 +634,6 @@
                                 app:chipStrokeColor="@color/surface_outline"
                                 app:chipStrokeWidth="1dp"
                                 app:ensureMinTouchTargetSize="false" />
-
-                            <ImageView
-                                android:id="@+id/ivAdvancedChevron"
-                                android:layout_width="24dp"
-                                android:layout_height="24dp"
-                                android:contentDescription="@string/advanced_parameters"
-                                android:rotation="180"
-                                android:src="@drawable/ic_expand_more"
-                                app:tint="@color/text_secondary" />
                         </LinearLayout>
 
                         <LinearLayout
@@ -901,7 +922,6 @@
                             android:id="@+id/sweepSettingsHeader"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:background="?attr/selectableItemBackground"
                             android:gravity="center_vertical"
                             android:orientation="horizontal"
                             android:paddingBottom="4dp">
@@ -925,15 +945,6 @@
                                     android:text="@string/sweep_settings"
                                     android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
                             </LinearLayout>
-
-                            <ImageView
-                                android:id="@+id/ivSweepSettingsChevron"
-                                android:layout_width="24dp"
-                                android:layout_height="24dp"
-                                android:contentDescription="@string/sweep_settings"
-                                android:rotation="180"
-                                android:src="@drawable/ic_expand_more"
-                                app:tint="@color/text_secondary" />
                         </LinearLayout>
 
                         <LinearLayout
@@ -952,9 +963,15 @@
 
                             <!-- Subset size range: min text | range slider | max text -->
                             <LinearLayout
+                                android:id="@+id/subsetRangeBlock"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="12dp"
+                                android:orientation="vertical">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
                                 android:orientation="horizontal">
 
                                 <TextView
@@ -1026,6 +1043,7 @@
                                     android:textColor="@color/sky_primary"
                                     android:textStyle="bold"
                                     tools:text="61" />
+                            </LinearLayout>
                             </LinearLayout>
 
                             <!-- Max VSG + step size on one row (Material outlined fields) -->
@@ -1124,6 +1142,7 @@
 
                 <!-- Always visible: planned lattice -->
                 <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/plannedLatticeCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp">
