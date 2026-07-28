@@ -64,7 +64,7 @@ object TokenStore {
      * Client hard-stop default when the backend hasn't reported a max yet.
      * Keep in sync with backend `MAX_SESSIONS_PER_USER` default.
      */
-    const val DEFAULT_MAX_SESSIONS = 4
+    const val DEFAULT_MAX_SESSIONS = 25
 
     fun quotaUsed(context: Context): Int = prefs(context).getInt(K_QUOTA_USED, 0)
     fun quotaMax(context: Context): Int = prefs(context).getInt(K_QUOTA_MAX, 0)
