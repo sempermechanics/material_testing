@@ -24,11 +24,13 @@ import com.google.android.material.snackbar.Snackbar
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.CloudSync
+import com.rafad.indicvisiondic.data.CoachPrefs
 import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
+import com.rafad.indicvisiondic.ui.common.CoachMarkController
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.common.MediaSourceChooser
 import com.rafad.indicvisiondic.ui.limit.SessionLimitActivity
@@ -135,6 +137,18 @@ class HomeActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.btnEmptyRestore).setOnClickListener {
             findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
+        }
+
+        fab.post {
+            CoachMarkController(this).maybeShow(
+                CoachPrefs.Screen.HOME,
+                listOf(
+                    CoachMarkController.Step(
+                        fab,
+                        getString(R.string.coach_home_fab),
+                    ),
+                ),
+            )
         }
 
         // Adapter callbacks close over selection; both must exist before the
