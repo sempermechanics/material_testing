@@ -70,6 +70,9 @@ class LineCutPreviewView @JvmOverloads constructor(
     }
 
     private val drawMatrix = Matrix()
+
+    /** Reused every draw: onDraw runs on each scrub frame. */
+    private val bitmapSrcRect = RectF()
     private val imageRect = RectF()
     private val roiRect = RectF()
 
@@ -194,11 +197,8 @@ class LineCutPreviewView @JvmOverloads constructor(
         val bmp = bitmap
         if (bmp != null && !bmp.isRecycled) {
             drawMatrix.reset()
-            drawMatrix.setRectToRect(
-                RectF(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat()),
-                imageRect,
-                Matrix.ScaleToFit.FILL,
-            )
+            bitmapSrcRect.set(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat())
+            drawMatrix.setRectToRect(bitmapSrcRect, imageRect, Matrix.ScaleToFit.FILL)
             canvas.drawBitmap(bmp, drawMatrix, imagePaint)
         }
 

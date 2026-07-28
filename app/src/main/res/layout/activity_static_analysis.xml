@@ -264,6 +264,37 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
+                <!-- Inline speckle-quality warning: the SSSIG measurement could
+                     not reach the accuracy target even at the largest subset. -->
+                <LinearLayout
+                    android:id="@+id/lowTextureWarnRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_warn_chip"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="10dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:contentDescription="@string/info"
+                        android:src="@android:drawable/stat_sys_warning"
+                        app:tint="@color/semantic_warning" />
+
+                    <TextView
+                        android:id="@+id/tvLowTextureWarning"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:textColor="@color/semantic_warning"
+                        android:textSize="12sp"
+                        tools:text="Speckle contrast is low — 101 px is the largest allowed subset and still falls short of 0.007 px accuracy" />
+                </LinearLayout>
+
                 <TextView
                     android:id="@+id/tvNextReason"
                     android:layout_width="match_parent"

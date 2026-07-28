@@ -94,6 +94,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var tvDefMeta: TextView
     private lateinit var tvDefDropHint: TextView
     private lateinit var jpegWarnRow: View
+
+    /** Inline speckle-quality warning from the SSSIG measurement. */
+    private lateinit var lowTextureWarnRow: View
+    private lateinit var tvLowTextureWarning: TextView
     private lateinit var tvNextReason: TextView
     private lateinit var ivInputsThumb: ImageView
     private lateinit var tvInputsTitle: TextView
@@ -178,6 +182,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvDefMeta = findViewById(R.id.tvDefMeta)
         tvDefDropHint = findViewById(R.id.tvDefDropHint)
         jpegWarnRow = findViewById(R.id.jpegWarnRow)
+        lowTextureWarnRow = findViewById(R.id.lowTextureWarnRow)
+        tvLowTextureWarning = findViewById(R.id.tvLowTextureWarning)
         tvNextReason = findViewById(R.id.tvNextReason)
         ivInputsThumb = findViewById(R.id.ivInputsThumb)
         tvInputsTitle = findViewById(R.id.tvInputsTitle)
@@ -799,7 +805,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Seeds the slider with the recommendation, until the user overrides it. */
     private fun applySubsetRecommendation() {
-        val rec = viewModel.subsetRecommendation ?: return
+        val rec = viewModel.subsetRecommendation ?: run {
+            lowTextureWarnRow.visibility = View.GONE
+            return
+        }
+        // The one thing the measurement knows that the slider cannot show: even
+        // the largest allowed subset misses the accuracy target on this pattern.
+        lowTextureWarnRow.visibility = if (rec.lowTexture) View.VISIBLE else View.GONE
+        if (rec.lowTexture) {
+            tvLowTextureWarning.text = getString(R.string.subset_low_texture_fmt, rec.subsetSize)
+        }
         if (!viewModel.subsetUserModified) {
             val snapped = snapToSlider(etSubsetSize, rec.subsetSize)
             if (etSubsetSize.value.toInt() != snapped) {

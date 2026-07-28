@@ -49,7 +49,10 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
     }
 
     fun wireGlassShieldTouch() {
-        glassShield.setOnTouchListener { _, event ->
+        glassShield.setOnTouchListener { view, event ->
+            // The shield forwards taps rather than handling clicks itself, but
+            // accessibility services still need the click hook to fire.
+            if (event.action == MotionEvent.ACTION_UP) view.performClick()
             if (!isInspectModeActive) {
                 imgMain.dispatchTouchEvent(event)
                 return@setOnTouchListener true

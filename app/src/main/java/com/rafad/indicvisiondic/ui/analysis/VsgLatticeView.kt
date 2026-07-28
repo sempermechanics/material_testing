@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
@@ -77,8 +78,15 @@ class VsgLatticeView @JvmOverloads constructor(
     }
 
     private val density = resources.displayMetrics.density
-    private val scaledDensity = resources.displayMetrics.scaledDensity
     private fun dp(value: Float) = value * density
+
+    /** Axis labels in px, scaled for the user's font-size setting. */
+    private val axisLabelPx =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, AXIS_LABEL_SP, resources.displayMetrics)
+
+    // Reused every draw — onDraw runs on each lattice interaction.
+    private val columnX = HashMap<Int, Float>()
+    private val frame = Frame()
 
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -100,7 +108,7 @@ class VsgLatticeView @JvmOverloads constructor(
         color = ContextCompat.getColor(context, R.color.surface)
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = AXIS_LABEL_SP * scaledDensity
+        textSize = axisLabelPx
         color = ContextCompat.getColor(context, R.color.text_secondary)
     }
     private val path = Path()
@@ -133,11 +141,11 @@ class VsgLatticeView @JvmOverloads constructor(
         val bottom = height - dp(PAD_BOTTOM_DP)
         if (right <= left || bottom <= top) return
 
-        val columnX = HashMap<Int, Float>(columns.size)
+        columnX.clear()
         columns.forEachIndexed { i, subset ->
             columnX[subset] = left + (i + HALF_COLUMN) / columns.size * (right - left)
         }
-        val frame = Frame(left, right, top, bottom)
+        frame.set(left, right, top, bottom)
         fun yFor(vsg: Int) = bottom - (vsg - vsgMin).toFloat() / (vsgMax - vsgMin) * (bottom - top)
 
         drawGrid(canvas, columnX, frame)
@@ -187,7 +195,20 @@ class VsgLatticeView @JvmOverloads constructor(
     }
 
     /** The plot area in view pixels, inside the axis gutters. */
-    private class Frame(val left: Float, val right: Float, val top: Float, val bottom: Float)
+    /** Mutable so one instance can serve every draw. */
+    private class Frame(
+        var left: Float = 0f,
+        var right: Float = 0f,
+        var top: Float = 0f,
+        var bottom: Float = 0f,
+    ) {
+        fun set(l: Float, r: Float, t: Float, b: Float) {
+            left = l
+            right = r
+            top = t
+            bottom = b
+        }
+    }
 
     private fun drawGrid(canvas: Canvas, columnX: Map<Int, Float>, f: Frame) {
         columnX.values.forEach { x -> canvas.drawLine(x, f.top, x, f.bottom, gridPaint) }

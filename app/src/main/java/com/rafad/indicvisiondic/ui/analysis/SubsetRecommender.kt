@@ -215,8 +215,10 @@ object SubsetRecommender {
         // Region decoding keeps full-resolution gradients without ever holding
         // the whole (possibly 50 MP) bitmap in memory.
         runCatching {
+            // Nullable on purpose: the API 31+ overload is annotated non-null,
+            // but the older one can hand back null and both land here.
             @Suppress("DEPRECATION")
-            val decoder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val decoder: BitmapRegionDecoder? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 BitmapRegionDecoder.newInstance(bytes, 0, bytes.size)
             } else {
                 BitmapRegionDecoder.newInstance(bytes, 0, bytes.size, false)

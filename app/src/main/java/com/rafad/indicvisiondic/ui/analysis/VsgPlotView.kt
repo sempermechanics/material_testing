@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.View
 import androidx.core.content.ContextCompat
 import com.rafad.indicvisiondic.R
@@ -76,9 +77,15 @@ class VsgPlotView @JvmOverloads constructor(
     fun paletteColor(index: Int): Int = PALETTE[index % PALETTE.size]
 
     private val density = resources.displayMetrics.density
-    private val scaledDensity = resources.displayMetrics.scaledDensity
 
     private fun dp(value: Float) = value * density
+
+    /** Axis labels in px, scaled for the user's font-size setting. */
+    private val axisLabelPx =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, AXIS_LABEL_SP, resources.displayMetrics)
+
+    /** Reused every draw — onDraw runs on each scrub frame. */
+    private val frame = Frame()
 
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -93,7 +100,7 @@ class VsgPlotView @JvmOverloads constructor(
         color = ContextCompat.getColor(context, R.color.surface_outline)
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = AXIS_LABEL_SP * scaledDensity
+        textSize = axisLabelPx
         color = ContextCompat.getColor(context, R.color.text_secondary)
     }
     private val path = Path()
@@ -116,7 +123,20 @@ class VsgPlotView @JvmOverloads constructor(
     private class Bounds(val xMin: Float, val xMax: Float, val yMin: Float, val yMax: Float)
 
     /** The plot area in view pixels, inside the axis gutters. */
-    private class Frame(val left: Float, val right: Float, val top: Float, val bottom: Float)
+    /** Mutable so one instance can serve every draw. */
+    private class Frame(
+        var left: Float = 0f,
+        var right: Float = 0f,
+        var top: Float = 0f,
+        var bottom: Float = 0f,
+    ) {
+        fun set(l: Float, r: Float, t: Float, b: Float) {
+            left = l
+            right = r
+            top = t
+            bottom = b
+        }
+    }
 
     private fun bounds(): Bounds? {
         val all = series.flatMap { it.points }
@@ -146,7 +166,8 @@ class VsgPlotView @JvmOverloads constructor(
         fun sx(x: Float) = left + (x - b.xMin) / (b.xMax - b.xMin) * (right - left)
         fun sy(y: Float) = bottom - (y - b.yMin) / (b.yMax - b.yMin) * (bottom - top)
 
-        drawGrid(canvas, b, Frame(left, right, top, bottom))
+        frame.set(left, right, top, bottom)
+        drawGrid(canvas, b, frame)
         highlightX?.let {
             gridPaint.color = ContextCompat.getColor(context, R.color.sky_primary)
             canvas.drawLine(sx(it), top, sx(it), bottom, gridPaint)

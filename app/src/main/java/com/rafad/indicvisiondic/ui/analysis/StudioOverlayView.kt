@@ -43,6 +43,9 @@ class StudioOverlayView @JvmOverloads constructor(
 
     // --- 1. IMAGE BOUNDARY TRACKING ---
     private var imageBounds = RectF()
+
+    /** Reused every draw: the drag rect is rebuilt on each touch move. */
+    private val activeHoleScratch = RectF()
     var onRoiChangedListener: ((RectF) -> Unit)? = null
     var imageView: ImageView? = null
         set(value) {
@@ -556,7 +559,9 @@ class StudioOverlayView @JvmOverloads constructor(
 
         // --- 3. DRAW ACTIVE HOLE BEING DRAGGED ---
         if (isDrawing && isSubtractMode) {
-            val activeHoleRect = RectF(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
+            val activeHoleRect = activeHoleScratch.apply {
+                set(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
+            }
             when (currentMode) {
                 RoiMode.RECTANGLE, RoiMode.SQUARE -> {
                     canvas.drawRect(activeHoleRect, holeFillPaint)

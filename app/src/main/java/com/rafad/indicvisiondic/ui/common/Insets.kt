@@ -51,7 +51,7 @@ object Insets {
             )
             windowInsets
         }
-        if (ViewCompat.isAttachedToWindow(view)) ViewCompat.requestApplyInsets(view)
+        if (view.isAttachedToWindow) ViewCompat.requestApplyInsets(view)
     }
 
     /**
@@ -69,7 +69,7 @@ object Insets {
             v.updatePadding(bottom = startBottom + ime)
             windowInsets
         }
-        if (ViewCompat.isAttachedToWindow(view)) ViewCompat.requestApplyInsets(view)
+        if (view.isAttachedToWindow) ViewCompat.requestApplyInsets(view)
     }
 
     private fun applyInsets(view: View, top: Boolean = false, bottom: Boolean = false) {
@@ -88,6 +88,6 @@ object Insets {
             windowInsets
         }
         // Ensure the listener runs even if the view is already attached.
-        if (ViewCompat.isAttachedToWindow(view)) ViewCompat.requestApplyInsets(view)
+        if (view.isAttachedToWindow) ViewCompat.requestApplyInsets(view)
     }
 }
