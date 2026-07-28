@@ -80,7 +80,7 @@ jobs:
 
       - name: Configure
         run: >
-          cmake -S app/src/test/cpp -B build/native-tests
+          cmake -S native/tests -B build/native-tests
           -DCMAKE_BUILD_TYPE=Release
           -DDIC_REQUIRE_OPENCV=ON
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
@@ -135,7 +135,7 @@ jobs:
 
       - name: Configure
         run: >
-          cmake -S app/src/test/cpp -B build/native-tests
+          cmake -S native/tests -B build/native-tests
           -DCMAKE_BUILD_TYPE=Release
           -DDIC_SANITIZER=${{ matrix.sanitizer }}
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
@@ -182,7 +182,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: app/.cxx
-          key: cxx-x86_64-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', '.gitmodules', 'app/src/main/cpp/**/*.cpp', 'app/src/main/cpp/**/*.h') }}
+          key: cxx-x86_64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
           restore-keys: cxx-x86_64-
 
       - name: Install ccache
@@ -280,7 +280,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: app/.cxx
-          key: cxx-arm64-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', '.gitmodules', 'app/src/main/cpp/**/*.cpp', 'app/src/main/cpp/**/*.h') }}
+          key: cxx-arm64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
           restore-keys: cxx-arm64-
 
       - name: Install ccache

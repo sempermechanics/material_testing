@@ -11,11 +11,11 @@ and how to run everything. The engine it exercises is described in
 
 ### Native engine tests (host build — no device needed)
 
-Built out of the source tree (from the repo root) so `app/src/test/cpp/`
+Built out of the source tree (from the repo root) so `native/tests/`
 stays pure sources — the build dir is regenerated on demand and gitignored:
 
 ```bash
-cmake -S app/src/test/cpp -B build/native-tests -DCMAKE_BUILD_TYPE=Release  # any C++17 compiler
+cmake -S native/tests -B build/native-tests -DCMAKE_BUILD_TYPE=Release  # any C++17 compiler
 cmake --build build/native-tests
 ./build/native-tests/dic_tests                 # all suites
 ./build/native-tests/dic_tests Engine          # one suite
@@ -23,23 +23,17 @@ cmake --build build/native-tests
 ```
 
 Dependencies come from the git submodules (`git submodule update --init`):
-Eigen (`third_party/eigen`) and OpenCV's universal-intrinsics headers
-(`third_party/opencv/modules/core/include`). OpenCV's generated
+Eigen (`native/third_party/eigen`) and OpenCV's universal-intrinsics headers
+(`native/third_party/opencv/modules/core/include`). OpenCV's generated
 `opencv2/opencv_modules.hpp` + `cvconfig.h` are committed under
-`app/src/test/cpp/shim/opencv2/` so the host build needs no OpenCV configure,
-and `<android/log.h>` is replaced by `shim/android/log.h`.
+`native/tests/shim/opencv2/` so the host build needs no OpenCV configure.
+Logging uses portable `util/log.hpp` (stderr on host; Android log on device).
 
 One-liner alternative (any host g++/clang++):
 
 ```bash
-g++ -std=c++17 -O2 -ffast-math \
-  -Iapp/src/test/cpp -Iapp/src/test/cpp/shim -Iapp/src/main/cpp \
-  -Iapp/src/main/cpp/third_party/eigen \
-  -Iapp/src/main/cpp/third_party/opencv/modules/core/include \
-  app/src/test/cpp/test_main.cpp \
-  app/src/test/cpp/unit/*.cpp app/src/test/cpp/integration/*.cpp \n  app/src/test/cpp/dice/test_translation_synthetic.cpp app/src/test/cpp/perf/*.cpp \
-  app/src/main/cpp/preprocessing/*.cpp app/src/main/cpp/core/OptimizationEngine.cpp \
-  app/src/main/cpp/postprocessing/StrainCalculator.cpp -o dic_tests
+Prefer the CMake invocation above. Manual one-liner paths moved to
+`native/tests` + `native/include` + `native/src/math` + `native/src/strain`.
 ```
 
 > Tests compile with `-ffast-math` deliberately — the same floating-point
@@ -150,7 +144,7 @@ case, in milliseconds on a laptop (no Trilinos/MPI).
 The real-image companion to `DiceTranslationSynthetic`: same 0.4 px / 0.1 px contract, but on
 DICe's **actual** 512×512 speckle images (`fixtures/dice/ref.tif`, `def.tif` —
 their `custom_app` `ref.tif`/`def.tif`, BSD-3, see
-[`fixtures/dice/LICENSE.DICe`](../../app/src/test/cpp/fixtures/dice/LICENSE.DICe)).
+[`fixtures/dice/LICENSE.DICe`](../../native/tests/fixtures/dice/LICENSE.DICe)).
 Where `DiceTranslationSynthetic` proves accuracy on math-perfect synthetic texture, this adds
 **real-speckle robustness** and **independence** — an image we did not generate,
 a target we did not compute. The fixtures path is injected by CMake as
@@ -247,10 +241,10 @@ touches the AndroidKeyStore in its constructor and only signed calls need it.
 
 ## Test layout
 
-Native host tests live under `app/src/test/cpp/`, grouped by scope:
+Native host tests live under `native/tests/`, grouped by scope:
 
 ```
-app/src/test/cpp/
+native/tests/
   test_main.cpp           micro-framework runner entry point
   framework/              the test harness — synthetic.h, test_framework.h
   shim/                   host stand-ins for <android/log.h> and OpenCV configs

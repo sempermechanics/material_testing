@@ -5,7 +5,7 @@
 # only list directories to include.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OC="$ROOT/app/src/main/cpp/third_party/opencv"
+OC="$ROOT/native/third_party/opencv"
 if [[ ! -d "$OC" ]]; then
   echo "OpenCV submodule not checked out at $OC" >&2
   exit 1

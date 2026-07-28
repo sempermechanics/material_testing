@@ -43,7 +43,7 @@ gates on all tiers and treats skipped jobs as passing.
 
 # Individual tiers
 ./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug   # tier 1
-cmake -S app/src/test/cpp -B build/native-tests -DDIC_REQUIRE_OPENCV=ON && cmake --build build/native-tests -j && ./build/native-tests/dic_tests   # tier 2a
+cmake -S native/tests -B build/native-tests -DDIC_REQUIRE_OPENCV=ON && cmake --build build/native-tests -j && ./build/native-tests/dic_tests   # tier 2a
 cd backend && pip install -r requirements-test.txt && pytest tests/ -v   # tier 4
 ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64              # tier 3 (emulator)
 ```

@@ -11,25 +11,17 @@ first. For the derivations behind the code see
 [TESTING.md](TESTING.md).
 
 ```
-┌─────────────────────────  Kotlin / Android  ─────────────────────────┐
-│ StaticAnalysisActivity ──▶ IndicVisionNativeLib (JNI surface)        │
-│        │                          │                                  │
-│  AuthActivity/Splash        DicUploadWorker ──▶ Cloud Run ─▶ Drive   │
-└───────────────────────────────────┼──────────────────────────────────┘
-                                    ▼  JNI (bridge/IndicVisionJNI.cpp)
-┌─────────────────────────── C++ Engine ───────────────────────────────┐
-│                                                                       │
-│  preprocessing/          core/                    postprocessing/     │
-│  ┌────────────────┐      ┌──────────────────┐     ┌────────────────┐  │
-│  │ ImageProcessor │──▶──│ SubsetPrecomputer │──▶──│                │  │
-│  │  (Image, interp│      │  (SubsetData)    │     │ StrainCalculator│ │
-│  │   gradients)   │      └──────────────────┘     │  (VSG / NLVC)  │  │
-│  └────────────────┘      ┌──────────────────┐     └────────────────┘  │
-│                          │ OptimizationEngine│                        │
-│                          │  (ICGN + Simplex) │                        │
-│                          └──────────────────┘                        │
-│                    core/SimdKernels.h (portable SIMD, all ABIs)       │
-└───────────────────────────────────────────────────────────────────────┘
+Kotlin / Android
+  StaticAnalysisActivity -> IndicVisionNativeLib
+       |
+       v  adapters/android (JNI marshalling only)
+native/ package
+  src/io + seeding + pipeline   (decode, AKAZE/mesh/RGDIC, OpenMP)
+       |
+       v
+  src/math + strain
+  Image -> SubsetPrecomputer -> OptimizationEngine -> StrainCalculator
+  Public API: include/indicvision/*.hpp  (no jni.h / android/*)
 ```
 
 **Data flow for one analysis:** decode images → `Image` (float intensities +
@@ -37,9 +29,11 @@ gradients) → for each grid point: `SubsetPrecomputer` builds a `SubsetData` �
 `OptimizationEngine.calculate_deformation` solves the 6-DOF warp →
 displacement field → `StrainCalculator` → results buffer back through JNI.
 
+Package layout and contributor rules: [`native/README.md`](../../native/README.md).
+
 ---
 
-## Module: `core/Types.h`
+## Module: `include/indicvision/types.hpp`
 
 Shared value types. All math is 32-bit `float` (`scalar_t`).
 
@@ -73,7 +67,7 @@ Everything precomputed about one reference subset. Invariants:
 
 ---
 
-## Module: `preprocessing/ImageProcessor` — class `Image`
+## Module: `include/indicvision/image.hpp` — class `Image`
 
 Owns intensities + precomputed gradients for one image.
 
@@ -101,7 +95,7 @@ return is a sentinel further filtered by callers (`val > 0` checks).
 
 ---
 
-## Module: `preprocessing/SubsetPrecomputer`
+## Module: `include/indicvision/subset.hpp`
 
 Static factory for `SubsetData`. Three entry points with one contract:
 **all paths must produce interchangeable state** (guarded by
@@ -126,7 +120,7 @@ ill-conditioned Hessian (`cond(H₂ₓ₂) > 1e12`).
 
 ---
 
-## Module: `core/OptimizationEngine`
+## Module: `include/indicvision/solver.hpp`
 
 Per-thread solver object (owns scratch buffers — **do not share across OMP threads**).
 
@@ -158,7 +152,7 @@ Y_def = cy + vx·x + (1+vy)·y + v
 
 i.e. a material point at `c + p` displaces by `t + [[ux,uy],[vx,vy]]·p`.
 Synthetic test data must be generated with this exact convention
-(see `app/src/test/cpp/framework/synthetic.h`).
+(see `native/tests/framework/synthetic.h`).
 
 ### Solver internals
 
@@ -207,7 +201,7 @@ Contracts (all test-guarded):
 
 ---
 
-## Module: `postprocessing/StrainCalculator`
+## Module: `include/indicvision/strain.hpp`
 
 ```cpp
 struct DisplacementField { int width, height, step;       // grid dims + px spacing
@@ -268,6 +262,23 @@ starts — a pending edit can never reach the engine uncommitted.
 
 ---
 
+## Package map (`native/`)
+
+| Path | Role |
+|---|---|
+| `include/indicvision/` | Public headers (`types`, `image`, `subset`, `solver`, `strain`, `simd`, `pipeline`, `io`, `seeding`) |
+| `src/math/` | Image / SubsetPrecomputer / OptimizationEngine |
+| `src/strain/` | StrainCalculator |
+| `src/io/` | Platform-agnostic OpenCV decode |
+| `src/seeding/` | AKAZE + RANSAC |
+| `src/pipeline/` | Full-field Path A/B/C + OpenMP |
+| `adapters/android/` | JNI only → `libindicvision_core.so` |
+| `tests/` | Host unit / integration / DICe / perf |
+
+CMake targets: `indicvision_math`, `indicvision_pipeline`, `indicvision_android` (`OUTPUT_NAME indicvision_core`).
+
+---
+
 ## Native dependencies (git submodules, built from source)
 
 Both native libraries are **git submodules pinned to release tags**, not vendored
@@ -275,8 +286,8 @@ binaries. Run `git submodule update --init --recursive` after cloning.
 
 | Dependency | Path | Version | How it's used |
 |---|---|---|---|
-| **Eigen** | `third_party/eigen` | 3.4.0 | header-only; added via `include_directories` |
-| **OpenCV** | `third_party/opencv` | 4.12.0 | **compiled from source** in the native build |
+| **Eigen** | `native/third_party/eigen` | 3.4.0 | header-only; added via `include_directories` |
+| **OpenCV** | `native/third_party/opencv` | 4.12.0 | **compiled from source** in the native build |
 
 **Sparse OpenCV checkout:** the full OpenCV repo includes `doc/`, `samples/`,
 `data/`, and `apps/` that this project never builds. After submodule init, run
@@ -284,7 +295,7 @@ binaries. Run `git submodule update --init --recursive` after cloning.
 those trees from the worktree (~100+ MB). CMake only needs `modules/`,
 `include/`, `3rdparty/`, `cmake/`, and the top-level `CMakeLists.txt`.
 
-**OpenCV from-source integration** (`app/src/main/cpp/CMakeLists.txt`):
+**OpenCV from-source integration** (`native/CMakeLists.txt`):
 
 - `add_subdirectory(third_party/opencv …)` builds OpenCV as part of the app's
   CMake project. A curated `BUILD_LIST` compiles only the modules the engine
@@ -308,15 +319,19 @@ those trees from the worktree (~100+ MB). CMake only needs `modules/`,
 
 The host test build ([TESTING.md](TESTING.md)) consumes OpenCV's universal-intrinsics
 header from the submodule source; the two generated headers it needs are
-committed under `app/src/test/cpp/shim/opencv2/` so host builds need no OpenCV
+committed under `native/tests/shim/opencv2/` so host builds need no OpenCV
 configure.
 
 ## Build & ABI strategy
 
-- `app/build.gradle.kts`: no `abiFilters` — all four ABIs
-  (arm64-v8a, armeabi-v7a, x86, x86_64) build; ABI `splits` produce
-  per-architecture APKs + a universal APK. Devices auto-select.
-- SIMD portability comes from `SimdKernels.h`; there is **no**
+- `app/build.gradle.kts`: default release ABI is **arm64-v8a**; debug also
+  adds **x86_64** for emulators. Override with `-PabiFilters=...`.
+  Gradle points `externalNativeBuild` at `native/CMakeLists.txt` with
+  `-DINDICVISION_ANDROID=ON`.
+- No ABI splits: one APK per build (the configured ABI filter set).
+- OpenCV is compiled once per ABI into the shared lib; `.cxx/` caches the
+  from-source build across incremental compiles.
+- SIMD portability comes from `include/indicvision/simd.hpp`; there is **no**
   architecture-conditional code left in the engine (`#if __aarch64__` was
   removed — do not reintroduce it; extend the kernels instead).
 - Production flags: `-O3 -flto -ffast-math -fopenmp` — note `-ffast-math`

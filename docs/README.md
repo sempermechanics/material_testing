@@ -69,15 +69,14 @@ in [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md).
 
 | Path | What it is |
 |---|---|
-| `app/src/main/cpp/core/` | ICGN solver + SIMD kernels (the hot loops) |
-| `app/src/main/cpp/preprocessing/` | Image pipeline, subset precomputation |
-| `app/src/main/cpp/postprocessing/` | Strain calculation |
-| `app/src/main/cpp/bridge/` | JNI layer: threading, seeding, telemetry |
+| `native/src/math/` | ICGN solver + SIMD kernels (the hot loops) |
+| `native/src/pipeline/` + `seeding/` | Full-field orchestration + AKAZE |
+| `native/adapters/android/` | Thin JNI → `libindicvision_core.so` |
 | `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI drawing |
 | `app/src/main/java/.../ui/viewer/` | Heatmap viewer, exports, share sheet |
 | `app/src/main/java/.../report/` | PDF report generation |
 | `app/src/main/java/.../data/` | Cloud sync client, upload/restore workers |
-| `app/src/test/cpp/` | Native test suite — runs on your PC, no device |
+| `native/tests/` | Native test suite — runs on your PC, no device |
 | `backend/` | GCP backend (FastAPI on Cloud Run) |
 
 ## Conventions

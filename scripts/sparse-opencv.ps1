@@ -4,7 +4,7 @@
 # only list directories to include.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-$Oc = Join-Path $Root "app\src\main\cpp\third_party\opencv"
+$Oc = Join-Path $Root "native\third_party\opencv"
 if (-not (Test-Path $Oc)) {
     Write-Error "OpenCV submodule not checked out at $Oc"
 }

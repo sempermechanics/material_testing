@@ -13,8 +13,8 @@ runs:
       shell: bash
       run: |
         git submodule update --init --depth 1 \
-          app/src/main/cpp/third_party/eigen \
-          app/src/main/cpp/third_party/opencv \
+          native/third_party/eigen \
+          native/third_party/opencv \
         || git submodule update --init \
-          app/src/main/cpp/third_party/eigen \
-          app/src/main/cpp/third_party/opencv
+          native/third_party/eigen \
+          native/third_party/opencv

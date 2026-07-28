@@ -27,7 +27,7 @@ Eigen stays a normal submodule (headers only, small).
 
 ### History rewrite (maintainers)
 
-The old prebuilt OpenCV Android SDK under `app/src/main/cpp/opencv/` was
+The old prebuilt OpenCV Android SDK under `app/src/main/cpp/opencv/` (pre-`native/` layout) was
 removed from HEAD but lingered in git history. That path (and orphaned
 `README.pdf`) was purged with `git filter-repo`. **If you cloned before the
 purge, re-clone** (or fetch and hard-reset to the rewritten tip). Do not merge
@@ -68,7 +68,7 @@ rm -rf app/.cxx app/build
 ./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.cloud.*"
 
 # Native engine tests (PC, no device)
-cmake -S app/src/test/cpp -B build/native-tests -DCMAKE_BUILD_TYPE=Release
+cmake -S native/tests -B build/native-tests -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native-tests -j
 ./build/native-tests/dic_tests
 

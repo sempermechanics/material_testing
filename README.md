@@ -112,24 +112,26 @@ Change the value and yours is kept — Reset returns to the suggestion.
 
 | Path | What lives there |
 |---|---|
-| `app/src/main/cpp/core/` | ICGN solver + SIMD kernels (the hot loops) |
-| `app/src/main/cpp/preprocessing/` | Image pipeline, subset precomputation |
-| `app/src/main/cpp/postprocessing/` | Strain calculation |
-| `app/src/main/cpp/bridge/` | JNI layer: threading, seeding, telemetry |
+| `native/include/indicvision/` | Public C++ API (types, image, solver, strain, pipeline) |
+| `native/src/math/` | ICGN solver + subset/image math + SIMD kernels |
+| `native/src/strain/` | VSG / NLVC strain |
+| `native/src/seeding/` | AKAZE + RANSAC seeding |
+| `native/src/pipeline/` | Full-field Path A/B/C orchestration |
+| `native/adapters/android/` | Thin JNI → `libindicvision_core.so` |
 | `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI drawing |
 | `app/src/main/java/.../ui/viewer/` | Heatmap viewer + exports |
 | `app/src/main/java/.../ui/auth/` | Sign-in and access gating |
 | `app/src/main/java/.../report/` | PDF report generation |
 | `app/src/main/java/.../data/` | Cloud sync client, upload worker |
 | `backend/` | GCP backend (FastAPI on Cloud Run) |
-| `app/src/test/cpp/` | Native test suite — runs on your PC, no device |
+| `native/tests/` | Native test suite — runs on your PC, no device |
 | `docs/` | **[Documentation index](docs/README.md)** — engine, backend, ops |
 
 ## Testing
 
 ```bash
 # C++ engine tests: synthetic images with exact known deformations
-cmake -S app/src/test/cpp -B build/native-tests -DCMAKE_BUILD_TYPE=Release
+cmake -S native/tests -B build/native-tests -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native-tests -j
 ./build/native-tests/dic_tests
 

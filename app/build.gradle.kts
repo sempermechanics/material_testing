@@ -83,6 +83,9 @@ android {
 
         externalNativeBuild {
             cmake {
+                // Portable engine package at repo-root native/; JNI adapter on.
+                arguments += "-DINDICVISION_ANDROID=ON"
+
                 // Vendored OpenCV defaults ENABLE_CCACHE to ON for Ninja builds,
                 // and when it finds a ccache on PATH it installs it as a GLOBAL
                 // RULE_LAUNCH_COMPILE — so it wraps our targets too, not just
@@ -162,7 +165,7 @@ android {
 
     externalNativeBuild {
         cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
+            path = file("../native/CMakeLists.txt")
             version = "3.22.1"
         }
     }

@@ -46,7 +46,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: app/.cxx
-          key: cxx-arm64-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', '.gitmodules', 'app/src/main/cpp/**/*.cpp', 'app/src/main/cpp/**/*.h') }}
+          key: cxx-arm64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
           restore-keys: cxx-arm64-
 
       - name: Install ccache
