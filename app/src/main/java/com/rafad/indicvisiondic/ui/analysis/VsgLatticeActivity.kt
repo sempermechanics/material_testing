@@ -16,12 +16,12 @@ import com.rafad.indicvisiondic.DicResult
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
-import java.io.File
-import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * The swept parameter space as a 2-D lattice (subset across, VSG up): solved
@@ -61,6 +61,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     private lateinit var latticeView: VsgLatticeView
     private lateinit var strainPlot: VsgPlotView
     private lateinit var strainSpinner: Spinner
+
     /** Blank until a drag; shows the scrubbed (x, y) of each plotted series. */
     private lateinit var strainPlotReadout: TextView
     private lateinit var btnOpenAnalysis: MaterialButton
