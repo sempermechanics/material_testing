@@ -17,19 +17,38 @@
             android:id="@+id/homeTopBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
             android:gravity="center_vertical"
+            android:orientation="horizontal"
             android:paddingHorizontal="20dp"
             android:paddingVertical="14dp">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/home_title"
-                android:textColor="@color/text_primary"
-                android:textSize="24sp"
-                android:textStyle="bold" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/home_title"
+                    android:textColor="@color/text_primary"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvHomeQuota"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:background="@drawable/bg_warn_chip"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="3dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:visibility="gone"
+                    tools:text="2 / 4 analyses used" />
+            </LinearLayout>
 
             <ImageButton
                 android:id="@+id/btnHomeSettings"
@@ -172,6 +191,14 @@
             android:text="@string/home_empty_body"
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnEmptyRestore"
+            style="@style/Widget.IndicVision.Button.Outlined"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/home_empty_restore" />
     </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton

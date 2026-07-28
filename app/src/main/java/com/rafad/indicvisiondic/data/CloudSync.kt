@@ -11,23 +11,11 @@ import androidx.work.WorkManager
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.data.net.IndicApi
 import com.rafad.indicvisiondic.data.net.TokenProvider
-import com.rafad.indicvisiondic.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.encodeToJsonElement
-import kotlinx.serialization.json.put
 import timber.log.Timber
-import java.io.File
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
@@ -181,63 +169,6 @@ object CloudSync {
         }
     }
 
-    /** Outcome of [exportAccountData]: the file to share, and how complete it is. */
-    data class ExportResult(val file: File, val cloudIncluded: Boolean)
-
-    /**
-     * GDPR data export (Art. 20 portability): everything the app holds about
-     * this account, as one JSON file ready to be shared or saved.
-     *
-     * The device half — the local session index — is always included, so the
-     * export still produces something usable when cloud sync is off or
-     * unreachable; [ExportResult.cloudIncluded] says whether the backend's copy
-     * made it in. Returns null only when the file itself couldn't be written.
-     *
-     * The file goes in `cache/share/` because that is the one directory the
-     * FileProvider publishes (see `res/xml/share_paths.xml`) — anywhere else
-     * and `getUriForFile` refuses to build a URI for it.
-     */
-    suspend fun exportAccountData(context: Context): ExportResult? = withContext(Dispatchers.IO) {
-        val appContext = context.applicationContext
-        val cloud = fetchCloudExport(appContext)
-        val payload = buildJsonObject {
-            put("exportedAt", isoStamp())
-            put("account", TokenStore.cachedEmail(appContext) ?: "")
-            put("localSessions", exportJson.encodeToJsonElement(SessionStore.list(appContext)))
-            put("cloud", cloud ?: JsonNull)
-        }
-        try {
-            val dir = File(appContext.cacheDir, "share").apply { mkdirs() }
-            // Previous exports are stale the moment a new one is made, and each
-            // is a full copy of the account — don't leave them piling up.
-            dir.listFiles { f -> f.name.startsWith(EXPORT_PREFIX) }?.forEach { it.delete() }
-            val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
-            val out = File(dir, "$EXPORT_PREFIX$stamp.json")
-            out.writeText(exportJson.encodeToString(JsonObject.serializer(), payload))
-            ExportResult(out, cloud != null)
-        } catch (e: IOException) {
-            Timber.e(e, "Data export failed — could not write the export file")
-            null
-        }
-    }
-
-    /** The backend's copy of the account, or null when the cloud can't answer. */
-    @Suppress("ReturnCount") // two "no cloud to ask" guards, then the answer
-    private suspend fun fetchCloudExport(appContext: Context): JsonElement? {
-        val api = IndicApi(appContext)
-        if (!api.enabled) return null
-        val token = TokenProvider.usableIdToken() ?: return null
-        return try {
-            Json.parseToJsonElement(api.exportAccount(token))
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            Timber.e(e, "Cloud half of the data export failed — exporting local data only")
-            null
-        }
-    }
-
-    private fun isoStamp(): String =
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).format(Date())
-
     /**
      * GDPR account deletion: erase the account and every analysis from the
      * cloud, then wipe all local data and the session token.
@@ -280,6 +211,61 @@ object CloudSync {
     }
 
     /**
+     * Delete only the cloud backup for one analysis and keep local files.
+     * Returns true when cloud data is gone (or there was no cloud copy).
+     */
+    suspend fun eraseCloudOnly(context: Context, localSessionId: String): Boolean = withContext(Dispatchers.IO) {
+        val appContext = context.applicationContext
+        val record = SessionStore.get(appContext, localSessionId) ?: return@withContext true
+        val api = IndicApi(appContext)
+        if (!api.enabled) return@withContext false
+
+        val token = TokenProvider.usableIdToken() ?: return@withContext false
+        try {
+            val cloudId = resolveCloudId(api, token, record) ?: return@withContext true
+            api.deleteSession(token, cloudId)
+            SessionStore.setSyncState(appContext, localSessionId, SessionRecord.SyncState.LOCAL_ONLY)
+            true
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.e(e, "Cloud-only erase failed for %s", localSessionId)
+            false
+        }
+    }
+
+    /**
+     * Erase one cloud backup addressed by its **backend** id. The "In the cloud"
+     * list is built from cloud rows, which may have no local copy at all — that
+     * is the case [eraseCloudOnly] cannot serve, since it starts from a local
+     * record. Permanent: the Drive artifacts and Firestore metadata both go.
+     *
+     * When a local record does point at this backup, it drops back to
+     * LOCAL_ONLY so the Home badge stops claiming a backup that no longer
+     * exists. Returns false if the cloud could not be reached, in which case
+     * nothing was deleted.
+     */
+    suspend fun eraseCloudBackup(
+        context: Context,
+        cloudSessionId: String,
+        localSessionId: String,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val appContext = context.applicationContext
+        val api = IndicApi(appContext)
+        if (!api.enabled) return@withContext false
+        val token = TokenProvider.usableIdToken() ?: return@withContext false
+        try {
+            api.deleteSession(token, cloudSessionId)
+            if (SessionStore.get(appContext, localSessionId) != null) {
+                SessionStore.setSyncState(appContext, localSessionId, SessionRecord.SyncState.LOCAL_ONLY)
+            }
+            Timber.i("Deleted cloud backup %s", cloudSessionId)
+            true
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.e(e, "Cloud backup delete failed for %s", cloudSessionId)
+            false
+        }
+    }
+
+    /**
      * The backend session id for a local analysis. Uses the stored link when we
      * have it, else falls back to matching on localSessionId (records uploaded
      * before the link existed). Null = nothing in the cloud to erase.
@@ -299,12 +285,19 @@ object CloudSync {
      * in-flight upload. Defaults to [NetworkType.UNMETERED] for background
      * repair; pass [allowMetered] = true for an explicit post-analysis upload.
      */
+    @Suppress("UNUSED_PARAMETER") // kept for call-site clarity (post-analysis vs repair)
     fun enqueueUpload(
         context: Context,
         localSessionId: String,
         allowMetered: Boolean = false,
     ) {
-        val network = if (allowMetered) NetworkType.CONNECTED else NetworkType.UNMETERED
+        // One policy for post-analysis and repair: Wi‑Fi-only when opted in;
+        // otherwise any connected network.
+        val network = if (DicSettings.uploadWifiOnly(context)) {
+            NetworkType.UNMETERED
+        } else {
+            NetworkType.CONNECTED
+        }
         val work = OneTimeWorkRequestBuilder<DicUploadWorker>()
             .setConstraints(
                 Constraints.Builder().setRequiredNetworkType(network).build(),
@@ -320,10 +313,6 @@ object CloudSync {
         )
     }
 
-    /** Readable on purpose: the export is a document the user keeps. */
-    private val exportJson = Json { prettyPrint = true; encodeDefaults = true }
-
-    private const val EXPORT_PREFIX = "indic-data-export-"
     private const val BACKOFF_SECONDS = 30L
     private const val K_LAST_RECONCILE_AT = "last_reconcile_at"
     private const val RECONCILE_MIN_INTERVAL_MS = 5 * 60 * 1000L

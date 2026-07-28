@@ -28,6 +28,7 @@ class SessionListAdapter(
     private val isSelected: (String) -> Boolean,
     private val onClick: (SessionRecord) -> Unit,
     private val onLongClick: (SessionRecord) -> Unit,
+    private val onBadgeClick: (SessionRecord) -> Unit = {},
 ) : RecyclerView.Adapter<SessionListAdapter.Holder>() {
 
     private var items: List<SessionRecord> = emptyList()
@@ -115,6 +116,7 @@ class SessionListAdapter(
                 ctx.getColor(R.color.sky_on_container)
             },
         )
+        holder.badge.setOnClickListener { onBadgeClick(r) }
 
         val refFile = File(r.refPath)
         if (refFile.exists()) {

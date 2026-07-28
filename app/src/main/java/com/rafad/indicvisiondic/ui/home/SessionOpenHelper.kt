@@ -1,17 +1,37 @@
 package com.rafad.indicvisiondic.ui.home
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.ui.analysis.VsgLatticeActivity
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 
 /**
  * Packs a [SessionRecord] into the Intent that opens either the result viewer
- * or the VSG lattice (sweeps). Callers still gate on [SessionRecord.hasLocalData].
+ * or the VSG lattice (sweeps).
  */
 object SessionOpenHelper {
+
+    /**
+     * Opens [session], or says why it cannot be opened when its frames are no
+     * longer on this phone — a session deleted locally but kept in the cloud
+     * still shows on both the Home list and the settings page.
+     */
+    fun openOrExplain(activity: Activity, session: SessionRecord) {
+        if (!session.hasLocalData()) {
+            MaterialAlertDialogBuilder(activity)
+                .setTitle(R.string.session_data_gone_title)
+                .setMessage(R.string.session_data_gone_body)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+            return
+        }
+        activity.startActivity(intentFor(activity, session))
+    }
 
     fun intentFor(context: Context, session: SessionRecord): Intent {
         // A sweep session opens on the interactive lattice, which forwards these

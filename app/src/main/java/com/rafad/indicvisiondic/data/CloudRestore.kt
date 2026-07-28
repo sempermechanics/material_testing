@@ -82,17 +82,42 @@ object CloudRestore {
     /** Concurrent GETs for legacy per-file restores (matches upload concurrency). */
     private const val LEGACY_DOWNLOAD_CONCURRENCY = 4
 
+    /**
+     * Why a restorable-list query failed or is empty — never collapse auth/config
+     * failures into a blank "no backups" list.
+     */
+    sealed class ListResult {
+        data class Ready(val sessions: List<CloudSessionDto>) : ListResult()
+        data object Empty : ListResult()
+        data object NeedSignIn : ListResult()
+        data object ApiOff : ListResult()
+        data class Failed(val reason: String) : ListResult()
+    }
+
     /** Cloud analyses available to restore (excludes ones already on this device). */
-    suspend fun listRestorable(context: Context): List<CloudSessionDto> = withContext(Dispatchers.IO) {
+    suspend fun listRestorable(context: Context): ListResult = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         val api = IndicApi(appContext)
-        if (!api.enabled) return@withContext emptyList()
-        val token = TokenProvider.usableIdToken() ?: return@withContext emptyList()
-        val localIds = SessionStore.list(appContext).map { it.id }.toSet()
-        api.listSessions(token).sessions
-            .filter { it.status == "COMPLETED" }
-            .filter { it.localSessionId.isBlank() || it.localSessionId !in localIds }
+        if (!api.enabled) return@withContext ListResult.ApiOff
+        val token = TokenProvider.usableIdToken() ?: return@withContext ListResult.NeedSignIn
+        try {
+            val localIds = SessionStore.list(appContext).map { it.id }.toSet()
+            val sessions = api.listSessions(token).sessions
+                .filter { it.status == "COMPLETED" }
+                .filter { it.localSessionId.isBlank() || it.localSessionId !in localIds }
+            if (sessions.isEmpty()) ListResult.Empty else ListResult.Ready(sessions)
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.e(e, "listRestorable failed")
+            ListResult.Failed(e.message ?: e.toString())
+        }
     }
+
+    /** Convenience for callers that only need the list (empty on any non-Ready). */
+    suspend fun listRestorableSessions(context: Context): List<CloudSessionDto> =
+        when (val result = listRestorable(context)) {
+            is ListResult.Ready -> result.sessions
+            else -> emptyList()
+        }
 
     /**
      * Download an analysis and rebuild it locally. Returns the restored local

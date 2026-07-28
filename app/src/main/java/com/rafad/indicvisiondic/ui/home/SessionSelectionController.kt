@@ -37,6 +37,7 @@ class SessionSelectionController(
     private val fab: FloatingActionButton,
     private val backCallback: OnBackPressedCallback,
     private val onRefresh: () -> Unit,
+    private val onDeviceOnlyDeleted: () -> Unit = {},
 ) {
     // Ids rather than indices, so the set survives a refresh() that reorders
     // or drops rows.
@@ -193,7 +194,7 @@ class SessionSelectionController(
             .setNeutralButton(R.string.delete_device_only) { _, _ ->
                 activity.lifecycleScope.launch {
                     CloudSync.eraseLocalOnly(activity, record.id)
-                    Toast.makeText(activity, R.string.delete_device_done, Toast.LENGTH_SHORT).show()
+                    onDeviceOnlyDeleted()
                     onRefresh()
                 }
             }
@@ -229,6 +230,7 @@ class SessionSelectionController(
                 activity.getString(R.string.delete_multi_done, records.size)
             }
             Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
+            if (!cloudToo) onDeviceOnlyDeleted()
 
             clearSelection()
             onRefresh()

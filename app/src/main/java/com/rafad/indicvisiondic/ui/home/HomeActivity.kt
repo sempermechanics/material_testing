@@ -6,12 +6,13 @@ package com.rafad.indicvisiondic.ui.home
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.ImageButton
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -19,20 +20,19 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.snackbar.Snackbar
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
-import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.data.CloudSync
-import com.rafad.indicvisiondic.data.DevAuth
+import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionRecord
 import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.analysis.StaticAnalysisActivity
-import com.rafad.indicvisiondic.ui.auth.AuthActivity
-import com.rafad.indicvisiondic.ui.auth.SplashActivity
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.common.MediaSourceChooser
 import com.rafad.indicvisiondic.ui.limit.SessionLimitActivity
+import com.rafad.indicvisiondic.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -52,6 +52,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var adapter: SessionListAdapter
     private lateinit var selection: SessionSelectionController
     private lateinit var fab: FloatingActionButton
+    private lateinit var tvHomeQuota: TextView
 
     private val backCallback = object : androidx.activity.OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = selection.clearSelection()
@@ -112,6 +113,7 @@ class HomeActivity : AppCompatActivity() {
         list = findViewById(R.id.sessionList)
         emptyState = findViewById(R.id.emptyState)
         swipeRefresh = findViewById(R.id.swipeRefresh)
+        tvHomeQuota = findViewById(R.id.tvHomeQuota)
         swipeRefresh.setColorSchemeResources(R.color.sky_primary)
         // Pull down = deep re-check: verify the blobs really exist in Drive,
         // not just that the backend's index says so.
@@ -129,18 +131,10 @@ class HomeActivity : AppCompatActivity() {
             showSourceChooser()
         }
         findViewById<ImageButton>(R.id.btnHomeSettings).setOnClickListener {
-            HomeSettingsSheet.show(
-                this,
-                object : HomeSettingsSheet.Callbacks {
-                    override fun onSignOut() {
-                        AuthRepository(this@HomeActivity).signOut()
-                        routeToSignIn()
-                    }
-
-                    override fun onExportData() = exportMyData()
-                    override fun onDeleteAccount() = confirmDeleteAccount()
-                },
-            )
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+        findViewById<View>(R.id.btnEmptyRestore).setOnClickListener {
+            findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
         }
 
         // Adapter callbacks close over selection; both must exist before the
@@ -161,6 +155,7 @@ class HomeActivity : AppCompatActivity() {
                     selection.startSelection(record)
                 }
             },
+            onBadgeClick = { record -> retryOrBackup(record) },
         )
         selection = SessionSelectionController(
             activity = this,
@@ -173,6 +168,7 @@ class HomeActivity : AppCompatActivity() {
             fab = fab,
             backCallback = backCallback,
             onRefresh = { refresh() },
+            onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
         )
         selection.bindBarActions(
             btnClose = findViewById(R.id.btnSelectionClose),
@@ -241,6 +237,7 @@ class HomeActivity : AppCompatActivity() {
             val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
             adapter.submit(sessions)
             emptyState.isVisible = sessions.isEmpty()
+            updateQuotaIndicator()
             // A refresh can drop rows out from under a selection.
             selection.updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
@@ -251,6 +248,29 @@ class HomeActivity : AppCompatActivity() {
                 // The spinner tracks the cloud check, not the local list read —
                 // that's the part worth waiting for.
                 swipeRefresh.isRefreshing = false
+            }
+        }
+    }
+
+    private fun updateQuotaIndicator() {
+        val max = TokenStore.effectiveQuotaMax(this)
+        val used = TokenStore.quotaUsed(this).coerceAtLeast(SessionStore.list(this).size)
+        if (max <= 0) {
+            tvHomeQuota.isVisible = false
+            return
+        }
+        tvHomeQuota.isVisible = true
+        tvHomeQuota.text = getString(R.string.home_quota_fmt, used, max)
+        tvHomeQuota.setTextColor(
+            getColor(
+                if (used >= max) R.color.semantic_danger else R.color.text_secondary,
+            ),
+        )
+        tvHomeQuota.setOnClickListener {
+            if (TokenStore.isSessionLimitReached(this)) {
+                openSessionLimitScreen()
+            } else {
+                findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
             }
         }
     }
@@ -301,81 +321,34 @@ class HomeActivity : AppCompatActivity() {
 
     // ── Row actions ──────────────────────────────────────────────────────
 
-    private fun openSession(record: SessionRecord) {
-        if (!record.hasLocalData()) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.session_data_gone_title)
-                .setMessage(R.string.session_data_gone_body)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
-            return
-        }
-        startActivity(SessionOpenHelper.intentFor(this, record))
-    }
+    private fun openSession(record: SessionRecord) = SessionOpenHelper.openOrExplain(this, record)
 
-    private fun routeToSignIn() {
-        // Under the emulator dev bypass there is nothing to sign in to: go back
-        // through the splash, which re-seeds the dev session and returns Home.
-        val target = if (DevAuth.active) SplashActivity::class.java else AuthActivity::class.java
-        val intent = Intent(this@HomeActivity, target)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        startActivity(intent)
-        finish()
-    }
-
-    /**
-     * GDPR data portability: a machine-readable copy of everything held about
-     * this account — the analyses on this phone plus the backend's copy —
-     * handed to the share sheet so the user can keep it wherever they like.
-     */
-    private fun exportMyData() {
-        Toast.makeText(this, R.string.export_data_working, Toast.LENGTH_SHORT).show()
-        lifecycleScope.launch {
-            val export = CloudSync.exportAccountData(this@HomeActivity)
-            if (export == null) {
-                Toast.makeText(this@HomeActivity, R.string.export_data_failed, Toast.LENGTH_LONG).show()
-                return@launch
+    /** Retry a failed/pending upload, or back up a local-only session when cloud is on. */
+    private fun retryOrBackup(record: SessionRecord) {
+        when (record.syncState) {
+            SessionRecord.SyncState.FAILED, SessionRecord.SyncState.PENDING -> {
+                SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
+                CloudSync.enqueueUpload(this, record.id, allowMetered = true)
+                adapter.rebindRow(record.id)
+                Toast.makeText(this, R.string.cloud_retry_backup, Toast.LENGTH_SHORT).show()
             }
-            // Say so rather than passing off a partial export as the whole account.
-            if (!export.cloudIncluded) {
-                Toast.makeText(this@HomeActivity, R.string.export_data_local_only, Toast.LENGTH_LONG).show()
+            SessionRecord.SyncState.LOCAL_ONLY -> if (DicSettings.saveToCloud(this)) {
+                SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
+                CloudSync.enqueueUpload(this, record.id, allowMetered = true)
+                adapter.rebindRow(record.id)
+                Toast.makeText(this, R.string.cloud_backup_now, Toast.LENGTH_SHORT).show()
+            } else {
+                findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
             }
-            val file = export.file
-            val uri = FileProvider.getUriForFile(
-                this@HomeActivity,
-                "$packageName.fileprovider",
-                file,
-            )
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = "application/json"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, file.name)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(Intent.createChooser(send, getString(R.string.export_data_share)))
+            SessionRecord.SyncState.SYNCED -> findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
         }
     }
 
-    /**
-     * GDPR account deletion. Spells out exactly what is erased, and only claims
-     * success once the cloud has actually confirmed it.
-     */
-    private fun confirmDeleteAccount() {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.delete_account_title)
-            .setMessage(R.string.delete_account_body)
-            .setPositiveButton(R.string.delete_account_confirm) { _, _ ->
-                lifecycleScope.launch {
-                    if (CloudSync.deleteAccount(this@HomeActivity)) {
-                        Toast.makeText(this@HomeActivity, R.string.delete_account_done, Toast.LENGTH_LONG).show()
-                        routeToSignIn()
-                    } else {
-                        // Nothing was deleted — keep the user signed in and say so.
-                        Toast.makeText(this@HomeActivity, R.string.delete_account_failed, Toast.LENGTH_LONG).show()
-                    }
-                }
+    private fun showDeviceOnlyKeptSnackbar() {
+        Snackbar.make(findViewById(R.id.homeRoot), R.string.delete_device_kept_snackbar, Snackbar.LENGTH_LONG)
+            .setAction(R.string.delete_device_restore_action) {
+                findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
             }
-            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 

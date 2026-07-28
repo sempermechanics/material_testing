@@ -177,10 +177,9 @@
     <string name="setting_roi_fmt">%1$d × %2$d at (%3$d, %4$d)</string>
     <string name="setting_size_fmt">%1$d × %2$d px</string>
     <string name="export_data">Export my data</string>
-    <string name="export_data_share">Share your inDIC data export</string>
-    <string name="export_data_working">Preparing your data export…</string>
+    <string name="export_data_share">Share your inDIC session export</string>
+    <string name="export_data_working">Preparing your session export…</string>
     <string name="export_data_failed">Couldn\'t prepare the export. Free up some storage and try again.</string>
-    <string name="export_data_local_only">Cloud unreachable — exporting the analyses on this phone only.</string>
     <string name="delete_account">Delete my account and data</string>
     <string name="delete_account_title">Delete your account?</string>
     <string name="delete_account_body">This permanently erases your account and everything in it:\n\n• Every analysis on this phone\n• Every cloud backup — images, results, reports\n• Your profile and registered device\n\nThis cannot be undone and your data cannot be recovered.</string>
@@ -189,7 +188,53 @@
     <string name="delete_account_failed">Couldn\'t reach the cloud, so nothing was deleted. Check your connection and try again.</string>
     <string name="action_cancel">Cancel</string>
     <string name="setting_save_cloud">Save to cloud</string>
-    <string name="setting_save_cloud_sub">Upload results when a network is available</string>
+    <string name="setting_save_cloud_sub">New analyses upload when a network is available</string>
+    <string name="setting_save_cloud_sub_off">New analyses stay on this phone. Existing cloud copies remain until you delete them</string>
+    <string name="setting_wifi_only">Wi‑Fi only</string>
+    <string name="setting_wifi_only_sub">Wait for unmetered Wi‑Fi before uploading</string>
+    <string name="account_section">Account</string>
+    <string name="account_device_id_fmt">Device ID · %1$s</string>
+    <string name="cloud_section">Cloud backup</string>
+    <string name="cloud_on_device">On this device</string>
+    <string name="analyses_data_management">Analyses data management</string>
+    <string name="analyses_data_empty">No analyses on this phone or in the cloud yet.</string>
+    <string name="analysis_state_phone_and_cloud_fmt">On phone · In cloud (%1$s)</string>
+    <string name="analysis_state_phone_only">On phone only</string>
+    <string name="analysis_state_cloud_only_fmt">Cloud only (%1$s)</string>
+    <string name="cloud_delete_pending">Backup deleted</string>
+    <string name="action_undo">Undo</string>
+    <string name="analysis_preferences">Analysis preferences</string>
+    <string name="cloud_retry_backup">Retry backup</string>
+    <string name="cloud_backup_now">Back up now</string>
+    <string name="cloud_delete_backup">Delete from backup</string>
+    <string name="cloud_delete_backup_title">Delete from backup</string>
+    <string name="cloud_delete_backup_body">Choose what to remove for this analysis.\n\nDeleting the cloud backup is permanent — the raw images, results and report are erased from the cloud and cannot be recovered.</string>
+    <string name="cloud_delete_backup_only">Delete cloud backup only</string>
+    <string name="cloud_delete_backup_and_local">Delete local + cloud</string>
+    <string name="cloud_delete_backup_done">Cloud backup deleted.</string>
+    <string name="cloud_delete_backup_failed">Couldn\'t delete from cloud. Try again.</string>
+    <string name="cloud_delete_forever_title">Delete this backup forever?</string>
+    <string name="cloud_delete_forever_body">This permanently erases the cloud copy of \"%1$s\" — raw images, results and report. It cannot be undone, and it can never be restored to this or any other device.\n\nAnalyses still on this phone are not touched.</string>
+    <string name="cloud_delete_forever_confirm">Delete forever</string>
+    <string name="home_quota_fmt">%1$d / %2$d analyses used</string>
+    <string name="cloud_backfill_title">Back up local analyses?</string>
+    <string name="cloud_backfill_body">%1$d analysis(es) on this phone are not in the cloud. Upload them now?</string>
+    <string name="cloud_backfill_confirm">Upload</string>
+    <string name="your_data_section">Your data</string>
+    <string name="your_data_delete_hint">To delete one analysis, use the list on Home (device only or everywhere).</string>
+    <string name="limits_section">Limits</string>
+    <string name="limits_quota_fmt">%1$d of %2$d cloud analyses used</string>
+    <string name="limits_manage">Manage limit</string>
+    <string name="restore_need_sign_in">Sign in to see cloud backups.</string>
+    <string name="restore_api_off">Cloud backup is not configured on this build.</string>
+    <string name="sync_status_backing_up">Backing up… %1$d/%2$d</string>
+    <string name="sync_status_restoring">Restoring… %1$d/%2$d</string>
+    <string name="sync_status_up_to_date">Cloud backups up to date</string>
+    <string name="sync_status_working">Syncing with cloud…</string>
+    <string name="home_empty_restore">Restore from cloud</string>
+    <string name="delete_device_kept_snackbar">Kept in the cloud</string>
+    <string name="delete_device_restore_action">Restore…</string>
+    <string name="session_sync_action_title">Cloud backup</string>
     <string name="setting_max_frames">Max frames</string>
     <string name="setting_max_frames_info">More frames = longer analysis and more memory. 50 suits most phones; raise it on a device with a fast processor and plenty of RAM, lower it if analyses feel slow or the app is killed mid-run.</string>
     <string name="info">Info</string>
@@ -197,15 +242,13 @@
     <string name="about_title">About</string>
     <string name="frames_capped_fmt">First %1$d frames kept — raise Max frames in Settings</string>
     <string name="advanced_parameters">Advanced parameters</string>
-    <string name="advanced_summary_fmt">Subset %1$d · Step %2$d · VSG %3$d</string>
     <string name="frames_size_mismatch_fmt">❌ %1$d frame(s) are not %2$d × %3$d like the reference. Deformed frames must match the reference exactly — reload matching frames to continue.</string>
-    <string name="advanced_defaults_suffix"> · defaults</string>
 
     <!-- Parameter sweep / virtual strain gauge study (Good Practices Guide §5.4.5) -->
     <string name="analysis_mode">Analysis mode</string>
     <string name="mode_single">Single</string>
     <string name="mode_sweep">Sweep</string>
-    <string name="info_analysis_mode">Single: every frame once at the parameters below. Sweep: one frame many times across subset and VSG sizes so you can compare strain fields.</string>
+    <string name="info_analysis_mode">Single: Runs every frame for the parameters choosen below. \n\n Sweep: Compares 2 frame across different subset and VSG sizes for a given step size.</string>
 
     <string name="subset_min">Subset size (min)</string>
     <string name="subset_max">Subset size (max)</string>
@@ -215,7 +258,7 @@
     <string name="step_depth">Step size</string>
     <string name="info_subset_samples">Total no of analyses = No. of subsets × No. of VSGs.</string>
     <string name="info_step_depth">Step size that subset moves given as subset ÷ N(Larger N means finer grid and denser correlation).</string>
-    <string name="info_subset_range"> Min to Max (px) capped by the image/ROI(Odd subset sizes).</string>
+    <string name="info_subset_range"> Min to Max (px) capped by the image/ROI(Odd subset sizes) and speckle pattern.</string>
     <string name="vsg_max">Max VSG size</string>
     <string name="info_vsg_max">Ceiling for virtual strain gauge size sweep(larger tends to over-smooth).</string>
 
@@ -234,7 +277,7 @@
     <string name="step_depth_prefix">subset ÷ </string>
     <string name="lattice_samples_settings">Sample counts</string>
     <string name="sweep_frame_summary_fmt">%1$s · Frame %2$d of %3$d</string>
-    <string name="sweep_frame_of_fmt">Frame %1$d of %2$d</string>
+    <string name="sweep_frame_out_of_fmt">out of %1$d</string>
     <string name="line_cut_preview_heading">Line cut</string>
     <string name="planned_lattice_heading">Planned lattice</string>
     <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · VSG %5$d</string>
@@ -326,7 +369,7 @@
     <string name="share_generating">Preparing files…</string>
     <string name="share_generating_pdf">Building the report — this can take a moment…</string>
     <string name="share_failed">Could not prepare the files. Try again.</string>
-    <string name="share_save_mode">Save to device instead of sharing</string>
+    <string name="share_save_to_files">Save to Files</string>
     <string name="save_success">Saved to device</string>
     <string name="save_failed">Couldn\'t save the file. Try again.</string>
     <string name="app_name_short">inDIC</string>
@@ -338,16 +381,9 @@
     <string name="cloud_resync_fmt">%1$d analysis backup(s) missing from the cloud — re-uploading.</string>
     <string name="cloud_check_failed_fmt">Couldn\'t check your cloud backups (%1$s). Backup status shown may be out of date.</string>
     <string name="badge_not_backed_up">Not backed up</string>
-    <string name="restore_title">Restore from cloud</string>
     <string name="restore_action">Restore</string>
-    <string name="restore_empty">No cloud backups available to restore.</string>
     <string name="restore_load_error">Couldn\'t load backups: %1$s</string>
-    <string name="restore_progress_fmt">Restoring… %1$d/%2$d files</string>
     <string name="restore_background_note">Restore continues even if you leave this screen.</string>
-    <string name="action_back">Back</string>
-    <string name="restore_done_fmt">Restored \"%1$s\".</string>
-    <string name="restore_failed_fmt">Restore failed: %1$s</string>
-    <string name="restore_frames_fmt">%1$d files · %2$s</string>
     <string name="home_restore_from_cloud">Restore from cloud</string>
     <string name="admin_pending_requests">Pending access requests</string>
     <string name="admin_title">Access requests</string>
@@ -384,9 +420,9 @@
     <string name="extract_n_frames_fmt">Extract %1$d frames</string>
     <string name="video_capped_suffix">" (capped — raise Max frames in Settings)"</string>
     <string name="video_first_frame_note">First frame becomes the reference</string>
-    <string name="info_subset">The pixel window tracked at each grid point. Bigger = more robust on weak speckle, but smooths sharp strain gradients.\n\nThe suggested value is fitted to your reference speckle (SSSIG criterion).</string>
-    <string name="info_step">Spacing between tracked points. Smaller = denser results and longer analysis time.</string>
-    <string name="info_strain_window">How many neighboring points are fitted to turn displacement into strain. Bigger = smoother strain, less local detail.</string>
+    <string name="info_subset">The pixel window tracked at each grid point. Bigger means more robust on weak speckle, but smooth sharps strain gradients.</string>
+    <string name="info_step">Spacing between tracked points. Smaller means denser results and longer analysis time.</string>
+    <string name="info_strain_window">Number of neighboring points fitted to turn displacement into strain. Bigger means smoother strain, less local detail.</string>
 
     <!-- Auth: sign-in errors -->
     <string name="error_passwords_mismatch">Passwords do not match.</string>
