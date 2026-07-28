@@ -115,7 +115,7 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tvAccountEmail).text = TokenStore.cachedEmail(this).orEmpty()
         val deviceId = runCatching { DeviceKeyManager(this).getDeviceId() }.getOrDefault("")
         findViewById<TextView>(R.id.tvAccountDevice).text =
-            getString(R.string.account_device_id_fmt, shortDeviceId(deviceId))
+            getString(R.string.account_device_id_fmt, deviceId)
 
         findViewById<View>(R.id.btnAdmin).apply {
             isVisible = TokenStore.isAdmin(this@SettingsActivity)
@@ -414,13 +414,8 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun frameCountText(value: Int): String = String.format(Locale.US, "%d", value)
 
-    /** Device ids are long hashes; the head is enough to recognise this phone. */
-    private fun shortDeviceId(id: String): String =
-        if (id.length > DEVICE_ID_CHARS) id.take(DEVICE_ID_CHARS) + "…" else id
-
     private companion object {
         const val CHEVRON_EXPANDED_DEG = 180f
-        const val DEVICE_ID_CHARS = 12
         const val BYTES_PER_KB = 1024.0
         const val BYTES_PER_MB = 1_048_576L
         const val BYTES_PER_GB = 1_073_741_824L

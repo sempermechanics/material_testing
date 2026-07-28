@@ -163,7 +163,6 @@
     <string name="delete_cloud_failed">Couldn\'t reach the cloud, so nothing was deleted. Check your connection and try again.</string>
     <string name="viewer_settings_used_desc">Show the settings used for this analysis</string>
     <string name="settings_used_title">Settings used</string>
-    <string name="settings_used_note">These are the values this result was computed with — changing settings later won\'t alter it.</string>
     <string name="setting_subset">Subset size</string>
     <string name="setting_step">Step size</string>
     <string name="setting_strain_window">Strain window</string>
@@ -226,7 +225,7 @@
     <string name="delete_device_kept_snackbar">Kept in the cloud</string>
     <string name="delete_device_restore_action">Restore…</string>
     <string name="setting_max_frames">Max frames</string>
-    <string name="setting_max_frames_info">More frames = longer analysis and more memory. 50 suits most phones; raise it on a device with a fast processor and plenty of RAM, lower it if analyses feel slow or the app is killed mid-run.</string>
+    <string name="setting_max_frames_info">More frames = longer analysis and more memory.</string>
     <string name="info">Info</string>
     <string name="action_sign_out">Sign out</string>
     <string name="about_title">About</string>
@@ -238,7 +237,7 @@
     <string name="analysis_mode">Analysis mode</string>
     <string name="mode_single">Single</string>
     <string name="mode_sweep">Sweep</string>
-    <string name="info_analysis_mode">Single: Runs every frame for the parameters choosen below. \n\n Sweep: Compares 2 frame across different subset and VSG sizes for a given step size.</string>
+    <string name="info_analysis_mode">Single: Runs every frame for the parameters chosen below. \n\n Sweep: Compares 2 frame across different subset and VSG sizes for a given step size.</string>
 
     <string name="subset_min">Subset size (min)</string>
     <string name="subset_max">Subset size (max)</string>
@@ -246,14 +245,14 @@
     <string name="subset_samples">No. of subsets</string>
     <string name="vsg_samples">No. of VSGs</string>
     <string name="step_depth">Step size</string>
-    <string name="info_subset_samples">Total no of analyses = No. of subsets × No. of VSGs.</string>
-    <string name="info_step_depth">Step size that subset moves given as subset ÷ N(Larger N means finer grid and denser correlation).</string>
+    <string name="info_subset_samples">Total No. of analyses = No. of subsets × No. of VSGs.</string>
+    <string name="info_step_depth">Step size given as subset ÷ N(Larger N means denser correlation). Capped between 2 and 6.</string>
     <string name="info_subset_range"> Min to Max (px) capped by the image/ROI(Odd subset sizes) and speckle pattern.</string>
     <string name="vsg_max">Max VSG size</string>
     <string name="info_vsg_max">Ceiling for virtual strain gauge size sweep(larger tends to over-smooth).</string>
 
     <string name="line_cut_axis">Line cut axis</string>
-    <string name="info_line_cut_axis">Strain along a cut through the ROI centre. Pick the axis that crosses your gradient.</string>
+    <string name="info_line_cut_axis">Strain along an axis through the ROI centre.</string>
     <string name="axis_x">X</string>
     <string name="axis_y">Y</string>
 
@@ -410,9 +409,9 @@
     <string name="extract_n_frames_fmt">Extract %1$d frames</string>
     <string name="video_capped_suffix">" (capped — raise Max frames in Settings)"</string>
     <string name="video_first_frame_note">First frame becomes the reference</string>
-    <string name="info_subset">The pixel window tracked at each grid point. Bigger means more robust on weak speckle, but smooth sharps strain gradients.</string>
-    <string name="info_step">Spacing between tracked points. Smaller means denser results and longer analysis time.</string>
-    <string name="info_strain_window">Number of neighboring points fitted to turn displacement into strain. Bigger means smoother strain, less local detail.</string>
+    <string name="info_subset">Bigger means more robust on weak speckle, but smoothens sharp strain gradients.</string>
+    <string name="info_step">Smaller means denser results but longer analysis time.</string>
+    <string name="info_strain_window">Bigger means smoother strain but less local detail.</string>
 
     <!-- Auth: sign-in errors -->
     <string name="error_passwords_mismatch">Passwords do not match.</string>
