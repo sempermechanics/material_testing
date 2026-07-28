@@ -85,7 +85,7 @@ When cloud is configured (`INDIC_API_BASE_URL`):
 | Change import / video extraction | `FrameImportHelper`, `VideoFrameExtractor` |
 | Change sweep planner UI | `SweepSetupHelper` (run loop stays in the Activity + `VsgStudyRunner`) |
 | Change heatmap / inspect / share | `ui/viewer/ResultViewerActivity.kt` + `Viewer*` helpers |
-| Change Home list / settings | `ui/home/HomeActivity.kt` + `Session*` / `HomeSettingsSheet` |
+| Change Home list / settings | `ui/home/HomeActivity.kt` + `Session*` / `ui/settings/SettingsActivity` |
 | Change the C++ engine | `docs/engine/ARCHITECTURE.md` — not this page |
 
 ## Related docs

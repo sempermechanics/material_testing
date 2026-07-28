@@ -358,15 +358,6 @@ class IndicApi(context: Context) {
     }
 
     /**
-     * GET /v1/me/export — the caller's full account data as JSON (GDPR
-     * portability). Returned as raw text so it can be written straight to a
-     * file the user keeps.
-     */
-    suspend fun exportAccount(idToken: String): String = withContext(Dispatchers.IO) {
-        authedGet(idToken, "$base/v1/me/export")
-    }
-
-    /**
      * DELETE /v1/me — erase the account and every analysis it owns from the
      * cloud. The caller must sign out immediately afterwards; any further
      * authenticated call would create a fresh, empty profile.
