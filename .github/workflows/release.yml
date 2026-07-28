@@ -28,6 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: release
+    permissions:
+      contents: read
+      actions: write   # prune-cache
     steps:
       - uses: actions/checkout@v7
         with:
@@ -99,6 +102,12 @@ jobs:
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: ccache --show-stats
+
+      # Keep one release ccache per ref instead of one per released commit.
+      - uses: ./.github/actions/prune-cache
+        with:
+          key-prefix: ccache-release-arm64-
+          except-key: ccache-release-arm64-${{ github.sha }}
 
   publish:
     name: Publish GitHub Release

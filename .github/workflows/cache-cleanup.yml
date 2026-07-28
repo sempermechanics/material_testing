@@ -1,0 +1,227 @@
+name: Cache cleanup
+
+# GitHub gives a repository 10 GB of Actions cache and evicts least-recently-used
+# entries once that fills. Eviction is blind: a 1 GB ccache tarball from a dead
+# branch can push out the Gradle home cache every tier depends on. This workflow
+# keeps usage under a budget deliberately — caches for deleted branches and
+# closed PRs first, then superseded ccache/.cxx entries, then plain LRU.
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      budget-gb:
+        description: 'Trim total cache usage below this many GB (limit is 10).'
+        required: false
+        default: '8'
+      dry-run:
+        description: 'List what would be deleted without deleting it.'
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: cache-cleanup
+  cancel-in-progress: false
+
+jobs:
+  # ===================================================================
+  # A closed PR never restores its caches again — drop them right away.
+  # ===================================================================
+  pr-closed:
+    name: Drop caches of the closed PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Delete caches for refs/pull/${{ github.event.pull_request.number }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          freed=0
+          for ref in "refs/pull/${PR_NUMBER}/merge" "refs/pull/${PR_NUMBER}/head"; do
+            caches=$(gh cache list --ref "$ref" --limit 100 --json id,key,sizeInBytes \
+                     || echo '[]')
+            while IFS=$'\t' read -r id key size; do
+              [ -n "$id" ] || continue
+              if gh cache delete "$id" >/dev/null 2>&1; then
+                echo "deleted ${key} ($((size / 1024 / 1024)) MiB)"
+                freed=$((freed + size))
+              else
+                echo "::warning::Could not delete cache ${key}."
+              fi
+            done < <(jq -r '.[] | "\(.id)\t\(.key)\t\(.sizeInBytes)"' <<<"$caches")
+          done
+          echo "PR #${PR_NUMBER} closed: freed $((freed / 1024 / 1024)) MiB." \
+            >> "$GITHUB_STEP_SUMMARY"
+
+  # ===================================================================
+  # Nightly (and on demand) sweep of the whole repository cache.
+  # ===================================================================
+  sweep:
+    name: Sweep repository caches
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry-run || 'false' }}
+      BUDGET_GB: ${{ inputs.budget-gb || '8' }}
+      # Prefixes whose entries are superseded by every newer build. Everything
+      # else (Gradle home, apt archives) is left to the LRU pass.
+      ROLLING_PREFIXES: |
+        ccache-host-tests-
+        ccache-san-asan-ubsan-
+        ccache-san-tsan-
+        ccache-x86_64-
+        ccache-arm64-
+        ccache-release-arm64-
+        cxx-x86_64-
+        cxx-arm64-
+    steps:
+      - name: Shared helpers
+        run: |
+          cat > "$RUNNER_TEMP/cache-lib.sh" <<'SH'
+          # drop <id> <key> <bytes> — honours DRY_RUN, echoes bytes actually freed.
+          drop() {
+            local id="$1" key="$2" size="$3"
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "would delete ${key} ($((size / 1024 / 1024)) MiB)" >&2
+              echo "$size"
+              return
+            fi
+            if gh cache delete "$id" >/dev/null 2>&1; then
+              echo "deleted ${key} ($((size / 1024 / 1024)) MiB)" >&2
+              echo "$size"
+            else
+              echo "::warning::Could not delete cache ${key}." >&2
+              echo 0
+            fi
+          }
+
+          # snapshot <file> — every cache in the repo, newest listing each call.
+          snapshot() {
+            gh cache list --limit 1000 \
+              --json id,key,ref,sizeInBytes,createdAt,lastAccessedAt > "$1"
+          }
+
+          report() {
+            local label="$1" freed="$2"
+            echo "- ${label}: $((freed / 1024 / 1024)) MiB" >> "$GITHUB_STEP_SUMMARY"
+          }
+          SH
+          echo "### Cache cleanup" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "_Dry run — nothing was deleted._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Usage before
+        run: |
+          set -uo pipefail
+          used=$(gh api "repos/$GH_REPO/actions/cache/usage" \
+                 --jq .active_caches_size_in_bytes)
+          count=$(gh api "repos/$GH_REPO/actions/cache/usage" --jq .active_caches_count)
+          echo "Before: $((used / 1024 / 1024)) MiB across ${count} entries." \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete caches of deleted branches and closed PRs
+        run: |
+          set -uo pipefail
+          source "$RUNNER_TEMP/cache-lib.sh"
+          snapshot "$RUNNER_TEMP/all.json"
+
+          dead=()
+          while read -r ref; do
+            [ -n "$ref" ] || continue
+            case "$ref" in
+              refs/heads/*)
+                branch="${ref#refs/heads/}"
+                gh api "repos/$GH_REPO/branches/$branch" --silent 2>/dev/null \
+                  || dead+=("$ref")
+                ;;
+              refs/pull/*)
+                num=$(cut -d/ -f3 <<<"$ref")
+                # Only a definite "closed" removes caches; an API hiccup keeps them.
+                state=$(gh api "repos/$GH_REPO/pulls/$num" --jq .state 2>/dev/null || echo '')
+                if [ "$state" = closed ]; then dead+=("$ref"); fi
+                ;;
+            esac
+          done < <(jq -r '.[].ref' "$RUNNER_TEMP/all.json" | sort -u)
+
+          freed=0
+          for ref in "${dead[@]:-}"; do
+            [ -n "$ref" ] || continue
+            while IFS=$'\t' read -r id key size; do
+              [ -n "$id" ] || continue
+              freed=$((freed + $(drop "$id" "$key" "$size")))
+            done < <(jq -r --arg ref "$ref" \
+              '.[] | select(.ref == $ref) | "\(.id)\t\(.key)\t\(.sizeInBytes)"' \
+              "$RUNNER_TEMP/all.json")
+          done
+          report "Dead branches and closed PRs" "$freed"
+
+      - name: Collapse superseded ccache and .cxx entries
+        run: |
+          set -uo pipefail
+          source "$RUNNER_TEMP/cache-lib.sh"
+          snapshot "$RUNNER_TEMP/all.json"
+
+          freed=0
+          while read -r prefix; do
+            [ -n "$prefix" ] || continue
+            # Newest entry per (ref, prefix) survives; the rest are stale rebuilds.
+            while IFS=$'\t' read -r id key size; do
+              [ -n "$id" ] || continue
+              freed=$((freed + $(drop "$id" "$key" "$size")))
+            done < <(jq -r --arg p "$prefix" '
+              map(select(.key | startswith($p)))
+              | group_by(.ref)[]
+              | sort_by(.createdAt) | reverse | .[1:][]
+              | "\(.id)\t\(.key)\t\(.sizeInBytes)"
+            ' "$RUNNER_TEMP/all.json")
+          done <<<"$ROLLING_PREFIXES"
+          report "Superseded rolling caches" "$freed"
+
+      - name: Trim to the size budget
+        run: |
+          set -uo pipefail
+          source "$RUNNER_TEMP/cache-lib.sh"
+          snapshot "$RUNNER_TEMP/all.json"
+
+          budget=$((BUDGET_GB * 1024 * 1024 * 1024))
+          total=$(jq '[.[].sizeInBytes] | add // 0' "$RUNNER_TEMP/all.json")
+
+          freed=0
+          # Least recently used first — the entries CI is not actually reusing.
+          while IFS=$'\t' read -r id key size; do
+            if [ "$total" -le "$budget" ]; then break; fi
+            [ -n "$id" ] || continue
+            gone=$(drop "$id" "$key" "$size")
+            freed=$((freed + gone))
+            total=$((total - size))
+          done < <(jq -r '
+            sort_by(.lastAccessedAt)[] | "\(.id)\t\(.key)\t\(.sizeInBytes)"
+          ' "$RUNNER_TEMP/all.json")
+          report "LRU trim to ${BUDGET_GB} GB" "$freed"
+
+      - name: Usage after
+        run: |
+          set -uo pipefail
+          used=$(gh api "repos/$GH_REPO/actions/cache/usage" \
+                 --jq .active_caches_size_in_bytes)
+          count=$(gh api "repos/$GH_REPO/actions/cache/usage" --jq .active_caches_count)
+          echo "After: $((used / 1024 / 1024)) MiB across ${count} entries." \
+            >> "$GITHUB_STEP_SUMMARY"

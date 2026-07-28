@@ -1,0 +1,76 @@
+name: Prune stale caches
+description: >
+  Delete the Actions cache entries that share a key prefix on this ref, so a job
+  keyed on the commit SHA leaves one entry behind instead of one per commit.
+  Run it as the last step of the job: main steps finish before `actions/cache`
+  writes the new entry in its post step, so the old entries go first and the
+  fresh one lands afterwards. Best-effort — a token without `actions: write`
+  (fork pull requests) warns instead of failing the job.
+
+inputs:
+  key-prefix:
+    description: Key prefix to prune, e.g. `ccache-arm64-`.
+    required: true
+  except-key:
+    description: >
+      Exact key to keep — the key this job is about to save. On a cache hit the
+      entry already exists and is not rewritten, so deleting it would leave the
+      next run with nothing to restore.
+    required: false
+    default: ''
+  keep:
+    description: Keep this many of the newest remaining entries as well.
+    required: false
+    default: '0'
+  ref:
+    description: Ref whose caches are pruned. Defaults to the ref of this run.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Prune ${{ inputs.key-prefix }}*
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        KEY_PREFIX: ${{ inputs.key-prefix }}
+        EXCEPT_KEY: ${{ inputs.except-key }}
+        KEEP: ${{ inputs.keep }}
+        PRUNE_REF: ${{ inputs.ref }}
+      run: |
+        set -uo pipefail
+        ref="${PRUNE_REF:-$GITHUB_REF}"
+
+        if ! caches=$(gh cache list --ref "$ref" --key "$KEY_PREFIX" \
+                        --sort created_at --order desc --limit 100 \
+                        --json id,key,sizeInBytes 2>&1); then
+          echo "::warning::Could not list ${KEY_PREFIX}* caches on ${ref}: ${caches}"
+          exit 0
+        fi
+
+        stale=$(jq -r --arg except "$EXCEPT_KEY" --argjson keep "$KEEP" '
+          map(select(.key != $except))
+          | .[$keep:][]
+          | "\(.id)\t\(.key)\t\(.sizeInBytes)"
+        ' <<<"$caches")
+
+        if [ -z "$stale" ]; then
+          echo "Nothing stale under ${KEY_PREFIX}* on ${ref}."
+          exit 0
+        fi
+
+        freed=0
+        while IFS=$'\t' read -r id key size; do
+          [ -n "$id" ] || continue
+          if gh cache delete "$id" >/dev/null 2>&1; then
+            echo "deleted ${key} ($((size / 1024 / 1024)) MiB)"
+            freed=$((freed + size))
+          else
+            echo "::warning::Could not delete cache ${key} — the job token needs actions:write."
+          fi
+        done <<<"$stale"
+
+        echo "Pruned ${KEY_PREFIX}* on ${ref}: freed $((freed / 1024 / 1024)) MiB." \
+          >> "$GITHUB_STEP_SUMMARY"

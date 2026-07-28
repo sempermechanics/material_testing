@@ -63,6 +63,37 @@ builds a signed release APK and publishes it as a GitHub Release. Requires the
 | `~/.gradle` | managed by `setup-gradle` | Dependency/build cache |
 | `~/apt-cache` | `apt-libopencv-dev-*` | libopencv-dev `.deb` archives |
 
+### Keeping under the 10 GB limit
+
+A repository gets 10 GB of Actions cache. The ccache and `.cxx` entries are
+0.5–1 GB each and the ccache keys end in the commit SHA, so left alone every
+push adds a fresh copy and GitHub starts evicting — blindly, by least recent
+use, which is how the Gradle home cache disappears and every tier goes cold.
+
+Two things keep that from happening:
+
+* **Each caching job prunes its own prefix.** The last step of tiers 2, 3 and 5
+  (and of the release build) runs
+  [`.github/actions/prune-cache`](../../.github/actions/prune-cache/action.yml),
+  which deletes the older entries under its key prefix on that ref just before
+  `actions/cache` writes the new one. The key the job is about to save is passed
+  as `except-key` so a cache *hit* — which is not rewritten — is never deleted.
+  Net effect: one entry per prefix per branch, not one per commit. It is
+  best-effort: a fork PR's read-only token makes it warn instead of fail.
+* **[`cache-cleanup.yml`](../../.github/workflows/cache-cleanup.yml) sweeps the
+  rest.** It drops a PR's caches when the PR closes, and nightly at 03:00 UTC it
+  deletes caches of deleted branches and closed PRs, collapses superseded
+  ccache/`.cxx` entries, then trims least-recently-used entries until total
+  usage is under 8 GB.
+
+Run the sweep by hand from the Actions tab — `Cache cleanup` →
+**Run workflow** — with `dry-run` ticked to see what it would delete, or a
+smaller `budget-gb` to claw back more space. To inspect usage yourself:
+
+```bash
+gh cache list --limit 100 --sort size_in_bytes --order desc
+```
+
 ## Things that surprise people
 
 **Only arm64-v8a is shipped.** Every phone from 2022 on is 64-bit ARM. CI builds

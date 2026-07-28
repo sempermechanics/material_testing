@@ -45,6 +45,9 @@ jobs:
     name: Tier 2 — Engine host
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write   # prune-cache
     if: >-
       github.event_name == 'push'
       || contains(github.event.pull_request.labels.*.name, 'engine')
@@ -96,6 +99,12 @@ jobs:
         if: always()
         run: ccache --show-stats
 
+      # Last main step: the old entries go before actions/cache saves the new one.
+      - uses: ./.github/actions/prune-cache
+        with:
+          key-prefix: ccache-host-tests-
+          except-key: ccache-host-tests-${{ github.sha }}
+
   # ===================================================================
   # Tier 2b — Sanitizers (ASan+UBSan, TSan)
   # ===================================================================
@@ -103,6 +112,9 @@ jobs:
     name: Tier 2 — Sanitized (${{ matrix.sanitizer }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write   # prune-cache
     if: >-
       github.event_name == 'push'
       || contains(github.event.pull_request.labels.*.name, 'engine')
@@ -151,6 +163,11 @@ jobs:
         if: always()
         run: ccache --show-stats
 
+      - uses: ./.github/actions/prune-cache
+        with:
+          key-prefix: ccache-san-${{ matrix.id }}-
+          except-key: ccache-san-${{ matrix.id }}-${{ github.sha }}
+
   # ===================================================================
   # Tier 3 — Emulator E2E (JNI smoke + Espresso)
   # ===================================================================
@@ -159,6 +176,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: [tier1-app-fast]
+    permissions:
+      contents: read
+      actions: write   # prune-cache
     if: >-
       github.event_name == 'push'
       || contains(github.event.pull_request.labels.*.name, 'engine')
@@ -218,6 +238,16 @@ jobs:
           CCACHE_MAXSIZE: 1G
           CCACHE_COMPILERCHECK: content
 
+      - uses: ./.github/actions/prune-cache
+        with:
+          key-prefix: cxx-x86_64-
+          except-key: cxx-x86_64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
+
+      - uses: ./.github/actions/prune-cache
+        with:
+          key-prefix: ccache-x86_64-
+          except-key: ccache-x86_64-${{ github.sha }}
+
   # ===================================================================
   # Tier 4 — Backend pytest
   # ===================================================================
@@ -257,6 +287,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: [tier1-app-fast]
+    permissions:
+      contents: read
+      actions: write   # prune-cache
     if: >-
       github.event_name == 'push'
       || contains(github.event.pull_request.labels.*.name, 'engine')
@@ -338,6 +371,16 @@ jobs:
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: ccache --show-stats
+
+      - uses: ./.github/actions/prune-cache
+        with:
+          key-prefix: cxx-arm64-
+          except-key: cxx-arm64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
+
+      - uses: ./.github/actions/prune-cache
+        with:
+          key-prefix: ccache-arm64-
+          except-key: ccache-arm64-${{ github.sha }}
 
   # ===================================================================
   # ci-ok — single required status check
