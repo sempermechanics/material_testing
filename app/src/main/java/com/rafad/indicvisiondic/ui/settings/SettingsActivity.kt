@@ -1,6 +1,7 @@
 // The settings page wires every section in one screen; kept together for
 // locality, so LongMethod / TooManyFunctions are suppressed for this file.
-@file:Suppress("LongMethod", "TooManyFunctions")
+
+@file:Suppress("TooManyFunctions")
 
 package com.rafad.indicvisiondic.ui.settings
 
@@ -9,7 +10,6 @@ import android.os.Bundle
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -17,7 +17,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.button.MaterialButton
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.google.android.material.snackbar.Snackbar
@@ -53,7 +54,8 @@ import java.util.concurrent.TimeUnit
  */
 class SettingsActivity : AppCompatActivity() {
 
-    private lateinit var analysesList: LinearLayout
+    private lateinit var analysesList: RecyclerView
+    private lateinit var analysesAdapter: AnalysisDataAdapter
     private lateinit var analysesProgress: ProgressBar
     private lateinit var analysesState: TextView
 
@@ -66,7 +68,18 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.btnSettingsBack).setOnClickListener { finish() }
 
-        analysesList = findViewById(R.id.analysesDataList)
+        analysesAdapter = AnalysisDataAdapter(
+            stateLine = ::stateLine,
+            backupLabel = ::backupLabel,
+            onOpen = { entry -> entry.record?.let { SessionOpenHelper.openOrExplain(this, it) } },
+            onBackup = ::startBackup,
+            onRestore = ::restoreBackup,
+            onDelete = ::deleteBackup,
+        )
+        analysesList = findViewById<RecyclerView>(R.id.analysesDataList).apply {
+            layoutManager = LinearLayoutManager(this@SettingsActivity)
+            adapter = analysesAdapter
+        }
         analysesProgress = findViewById(R.id.progressAnalysesData)
         analysesState = findViewById(R.id.tvAnalysesDataState)
 
@@ -160,7 +173,6 @@ class SettingsActivity : AppCompatActivity() {
     private fun wireAnalysesDataSection() {
         analysesProgress.isVisible = true
         analysesState.isVisible = false
-        analysesList.removeAllViews()
 
         lifecycleScope.launch {
             val records = withContext(Dispatchers.IO) { SessionStore.list(this@SettingsActivity) }
@@ -177,7 +189,7 @@ class SettingsActivity : AppCompatActivity() {
                 analysesState.isVisible = true
                 analysesState.setText(R.string.analyses_data_empty)
             }
-            entries.forEach { addAnalysisRow(it) }
+            analysesAdapter.submit(entries)
         }
     }
 
@@ -193,37 +205,42 @@ class SettingsActivity : AppCompatActivity() {
         is CloudRestore.ListResult.Failed -> getString(R.string.restore_load_error, result.reason)
     }
 
-    private fun addAnalysisRow(entry: AnalysisEntry) {
-        val row = layoutInflater.inflate(R.layout.item_analysis_data, analysesList, false)
-        row.findViewById<TextView>(R.id.tvAnalysisName).text = entry.name
-        row.findViewById<TextView>(R.id.tvAnalysisState).text = stateLine(entry)
+    private fun restoreBackup(entry: AnalysisEntry) {
+        val cloud = entry.cloud ?: return
+        CloudRestore.enqueueRestore(this, cloud.sessionId)
+        Toast.makeText(this, R.string.restore_background_note, Toast.LENGTH_SHORT).show()
+    }
 
-        val cloud = entry.cloud
+    private fun deleteBackup(entry: AnalysisEntry, row: View) {
+        val cloud = entry.cloud ?: return
         val record = entry.record
-        if (cloud != null) {
-            row.findViewById<ImageButton>(R.id.btnAnalysisRestore).apply {
-                isVisible = true
-                setOnClickListener {
-                    CloudRestore.enqueueRestore(this@SettingsActivity, cloud.sessionId)
-                    Toast.makeText(this@SettingsActivity, R.string.restore_background_note, Toast.LENGTH_SHORT).show()
-                }
-            }
-            row.findViewById<ImageButton>(R.id.btnAnalysisDelete).apply {
-                isVisible = true
-                setOnClickListener {
-                    if (record != null) {
-                        showDeleteBackupChoice(record, cloud, row)
-                    } else {
-                        confirmDeleteCloudBackup(cloud, entry.name, row)
-                    }
-                }
-            }
-        } else if (record != null) {
-            wireBackupButton(row.findViewById(R.id.btnAnalysisBackup), record)
+        if (record != null) {
+            showDeleteBackupChoice(record, cloud, row)
+        } else {
+            confirmDeleteCloudBackup(cloud, entry.name, row)
         }
+    }
 
-        if (record != null) row.setOnClickListener { SessionOpenHelper.openOrExplain(this, record) }
-        analysesList.addView(row)
+    /** Which backup action a row offers, or null when none applies. */
+    private fun backupLabel(entry: AnalysisEntry): Int? {
+        val record = entry.record ?: return null
+        return when (record.syncState) {
+            SessionRecord.SyncState.FAILED, SessionRecord.SyncState.PENDING -> R.string.cloud_retry_backup
+            SessionRecord.SyncState.LOCAL_ONLY ->
+                if (DicSettings.saveToCloud(this)) R.string.cloud_backup_now else null
+            // Backed up, but this run could not list the cloud: offer nothing
+            // rather than a "back up" that would duplicate an existing copy.
+            SessionRecord.SyncState.SYNCED -> null
+        }
+    }
+
+    private fun startBackup(entry: AnalysisEntry) {
+        val record = entry.record ?: return
+        val label = backupLabel(entry) ?: return
+        SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
+        CloudSync.enqueueUpload(this, record.id, allowMetered = true)
+        Toast.makeText(this, label, Toast.LENGTH_SHORT).show()
+        wireAnalysesDataSection()
     }
 
     private fun stateLine(entry: AnalysisEntry): String = when (entry.location) {
@@ -236,25 +253,6 @@ class SettingsActivity : AppCompatActivity() {
         // claiming the backup is gone.
         AnalysisLocation.PHONE_SYNC_STATE ->
             entry.record?.let { syncLabel(it.syncState) }.orEmpty()
-    }
-
-    private fun wireBackupButton(button: MaterialButton, record: SessionRecord) {
-        val label = when (record.syncState) {
-            SessionRecord.SyncState.FAILED, SessionRecord.SyncState.PENDING -> R.string.cloud_retry_backup
-            SessionRecord.SyncState.LOCAL_ONLY ->
-                if (DicSettings.saveToCloud(this)) R.string.cloud_backup_now else return
-            // Backed up, but this run could not list the cloud: offer nothing
-            // rather than a "back up" that would duplicate an existing copy.
-            SessionRecord.SyncState.SYNCED -> return
-        }
-        button.isVisible = true
-        button.setText(label)
-        button.setOnClickListener {
-            SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-            CloudSync.enqueueUpload(this, record.id, allowMetered = true)
-            Toast.makeText(this, label, Toast.LENGTH_SHORT).show()
-            wireAnalysesDataSection()
-        }
     }
 
     // ── Deletion, with an undo window ────────────────────────────────────
@@ -298,7 +296,7 @@ class SettingsActivity : AppCompatActivity() {
      * confirmed, and the worker retries if the network is down.
      */
     private fun scheduleDelete(row: View, cloudSessionId: String, localSessionId: String, alsoLocal: Boolean) {
-        analysesList.removeView(row)
+        analysesAdapter.removeAt(analysesList.getChildAdapterPosition(row))
         BackupDeleteWorker.enqueue(this, cloudSessionId, localSessionId, alsoLocal)
         Snackbar.make(findViewById(R.id.settingsRoot), R.string.cloud_delete_pending, UNDO_WINDOW_MS)
             .setAction(R.string.action_undo) {

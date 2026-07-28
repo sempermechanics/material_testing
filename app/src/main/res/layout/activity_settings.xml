@@ -297,12 +297,26 @@
                     android:textSize="12sp"
                     android:visibility="gone" />
 
-                <LinearLayout
-                    android:id="@+id/analysesDataList"
+                <!-- Bounded height so rows actually recycle: with wrap_content
+                     inside this scroll view the list would inflate one view per
+                     analysis and never reuse any. constrainedHeight caps it, and
+                     past the cap the list scrolls itself. -->
+                <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:orientation="vertical" />
+                    android:layout_marginTop="6dp">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/analysesDataList"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        app:layout_constrainedHeight="true"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintHeight_max="360dp"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
             </LinearLayout>
 
             <!-- 4. Your data -->
