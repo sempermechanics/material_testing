@@ -26,7 +26,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.ToggleButton
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.lifecycle.lifecycleScope
@@ -134,46 +133,6 @@ class ResultViewerActivity : AppCompatActivity() {
     private var currentHeatmapMax = 0f
 
     private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
-
-    // Storage Access Framework: "Save to device" writes a generated artifact to a
-    // user-chosen location. The picker is async, so the pending file is held here.
-    private var pendingSaveFile: File? = null
-    private val saveDocumentLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            val uri = result.data?.data
-            val src = pendingSaveFile
-            pendingSaveFile = null
-            if (result.resultCode != RESULT_OK || uri == null || src == null) return@registerForActivityResult
-            lifecycleScope.launch {
-                val ok = withContext(Dispatchers.IO) {
-                    try {
-                        contentResolver.openOutputStream(uri)?.use { out ->
-                            src.inputStream().use { it.copyTo(out) }
-                        } != null
-                    } catch (e: Exception) {
-                        Timber.e(e, "Save to device failed")
-                        false
-                    }
-                }
-                Toast.makeText(
-                    this@ResultViewerActivity,
-                    if (ok) R.string.save_success else R.string.save_failed,
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-        }
-
-    /** Launches the system "create document" picker to save [file] to the device. */
-    internal fun saveFileToDevice(file: File, mime: String) {
-        pendingSaveFile = file
-        saveDocumentLauncher.launch(
-            Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = mime
-                putExtra(Intent.EXTRA_TITLE, file.name)
-            },
-        )
-    }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {

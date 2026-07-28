@@ -11,7 +11,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
-import android.net.Uri
 import android.view.View
 import android.widget.TextView
 import androidx.core.content.FileProvider
@@ -41,23 +40,18 @@ import java.util.zip.ZipOutputStream
  * The Results share sheet (wireframe 08). One scope rule: photos share the
  * current frame; the PDF and CSV cover the whole analysis; the ZIP bundles
  * everything. Files are generated into `cacheDir/share` and handed to the
- * Android share sheet via FileProvider — which includes save-to-device.
+ * Android share sheet via FileProvider, with Save to Files as an initial
+ * chooser target alongside other apps.
  */
 class ShareCenter(private val host: ResultViewerActivity) {
 
     private val snap by lazy { host.buildShareSnapshot() }
-
-    /** When on, artifacts are written to a user-chosen location instead of shared. */
-    private var saveMode = false
 
     fun show() {
         val s = snap ?: return
         val sheet = BottomSheetDialog(host)
         val v = host.layoutInflater.inflate(R.layout.sheet_share, null)
         sheet.setContentView(v)
-
-        v.findViewById<android.widget.CompoundButton>(R.id.switchSaveMode)
-            .setOnCheckedChangeListener { _, checked -> saveMode = checked }
 
         val frameName = s.defNames.getOrNull(s.frameIndex) ?: "Frame ${s.frameIndex + 1}"
         v.findViewById<TextView>(R.id.tvShareCaption).text =
@@ -92,7 +86,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         sheet.show()
     }
 
-    // ── Job runner: progress dialog → system share sheet ────────────────
+    // ── Job runner: progress dialog → system share sheet (+ Local) ───────
 
     private fun runJob(progressText: Int, build: suspend () -> Pair<List<File>, String>) {
         val progress = MaterialAlertDialogBuilder(host)
@@ -102,21 +96,16 @@ class ShareCenter(private val host: ResultViewerActivity) {
         host.lifecycleScope.launch {
             try {
                 val (files, mime) = withContext(Dispatchers.Default) { build() }
-                if (saveMode) {
-                    // SAF saves one document; bundle multi-file exports into a zip first.
-                    val save = withContext(Dispatchers.Default) {
-                        if (files.size == 1) {
-                            files[0] to mime
-                        } else {
-                            zipInto(files, "inDIC_export.zip") to "application/zip"
-                        }
+                // SAF saves one document; bundle multi-file exports into a zip first.
+                val handoff = withContext(Dispatchers.Default) {
+                    if (files.size == 1) {
+                        files[0] to mime
+                    } else {
+                        zipInto(files, "inDIC_export.zip") to "application/zip"
                     }
-                    progress.dismiss()
-                    host.saveFileToDevice(save.first, save.second)
-                } else {
-                    progress.dismiss()
-                    shareFiles(files, mime)
                 }
+                progress.dismiss()
+                shareWithLocalOption(handoff.first, handoff.second)
             } catch (e: CancellationException) {
                 progress.dismiss()
                 throw e
@@ -135,23 +124,24 @@ class ShareCenter(private val host: ResultViewerActivity) {
         }
     }
 
-    private fun shareFiles(files: List<File>, mime: String) {
-        val uris = ArrayList<Uri>(files.size)
-        for (f in files) {
-            uris.add(
-                FileProvider.getUriForFile(host, "${host.packageName}.fileprovider", f),
+    /**
+     * System share chooser with an initial "Save to Files" target so Local sits
+     * alongside other apps — no mode toggle on the sheet.
+     */
+    private fun shareWithLocalOption(file: File, mime: String) {
+        val uri = FileProvider.getUriForFile(host, "${host.packageName}.fileprovider", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(send, host.getString(R.string.action_share)).apply {
+            putExtra(
+                Intent.EXTRA_INITIAL_INTENTS,
+                arrayOf(SaveExportActivity.intent(host, file, mime)),
             )
         }
-        val intent = if (uris.size == 1) {
-            Intent(Intent.ACTION_SEND).apply { putExtra(Intent.EXTRA_STREAM, uris[0]) }
-        } else {
-            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-            }
-        }
-        intent.type = mime
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        host.startActivity(Intent.createChooser(intent, host.getString(R.string.action_share)))
+        host.startActivity(chooser)
     }
 
     private fun shareDir(): File = File(host.cacheDir, "share").apply { mkdirs() }

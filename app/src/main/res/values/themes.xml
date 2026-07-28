@@ -47,4 +47,13 @@
         <item name="android:statusBarColor">@color/splash_bg</item>
         <item name="android:windowBackground">@color/splash_bg</item>
     </style>
+
+    <!-- Proxy activity for Save-to-Files from the share chooser -->
+    <style name="Theme.IndicVisionDIC.Transparent" parent="Theme.IndicVisionDIC">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
 </resources>

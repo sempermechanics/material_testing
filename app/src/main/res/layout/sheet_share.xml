@@ -31,16 +31,6 @@
         android:textColor="@color/text_secondary"
         android:textSize="12sp" />
 
-    <com.google.android.material.switchmaterial.SwitchMaterial
-        android:id="@+id/switchSaveMode"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:paddingVertical="6dp"
-        android:text="@string/share_save_mode"
-        android:textColor="@color/text_primary"
-        android:textSize="14sp" />
-
     <LinearLayout
         android:id="@+id/rowSharePhoto"
         android:layout_width="match_parent"
