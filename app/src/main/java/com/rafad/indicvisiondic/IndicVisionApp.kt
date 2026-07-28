@@ -1,6 +1,7 @@
 package com.rafad.indicvisiondic
 
 import android.app.Application
+import com.rafad.indicvisiondic.data.DicSettings
 import timber.log.Timber
 
 /**
@@ -13,5 +14,6 @@ class IndicVisionApp : Application() {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
+        DicSettings.migrate(this)
     }
 }
