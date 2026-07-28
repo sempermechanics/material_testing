@@ -211,32 +211,10 @@ object CloudSync {
     }
 
     /**
-     * Delete only the cloud backup for one analysis and keep local files.
-     * Returns true when cloud data is gone (or there was no cloud copy).
-     */
-    suspend fun eraseCloudOnly(context: Context, localSessionId: String): Boolean = withContext(Dispatchers.IO) {
-        val appContext = context.applicationContext
-        val record = SessionStore.get(appContext, localSessionId) ?: return@withContext true
-        val api = IndicApi(appContext)
-        if (!api.enabled) return@withContext false
-
-        val token = TokenProvider.usableIdToken() ?: return@withContext false
-        try {
-            val cloudId = resolveCloudId(api, token, record) ?: return@withContext true
-            api.deleteSession(token, cloudId)
-            SessionStore.setSyncState(appContext, localSessionId, SessionRecord.SyncState.LOCAL_ONLY)
-            true
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            Timber.e(e, "Cloud-only erase failed for %s", localSessionId)
-            false
-        }
-    }
-
-    /**
-     * Erase one cloud backup addressed by its **backend** id. The "In the cloud"
-     * list is built from cloud rows, which may have no local copy at all — that
-     * is the case [eraseCloudOnly] cannot serve, since it starts from a local
-     * record. Permanent: the Drive artifacts and Firestore metadata both go.
+     * Erase one cloud backup addressed by its **backend** id. The settings
+     * list is built from cloud rows, which may have no local copy at all, so
+     * the backend id is the only key always available. Permanent: the Drive
+     * artifacts and Firestore metadata both go.
      *
      * When a local record does point at this backup, it drops back to
      * LOCAL_ONLY so the Home badge stops claiming a backup that no longer

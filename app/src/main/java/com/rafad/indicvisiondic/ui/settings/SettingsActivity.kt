@@ -4,7 +4,6 @@
 
 package com.rafad.indicvisiondic.ui.settings
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -26,6 +25,7 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import com.rafad.indicvisiondic.BuildConfig
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
+import com.rafad.indicvisiondic.data.BackupDeleteWorker
 import com.rafad.indicvisiondic.data.CloudRestore
 import com.rafad.indicvisiondic.data.CloudSync
 import com.rafad.indicvisiondic.data.DeviceKeyManager
@@ -40,13 +40,11 @@ import com.rafad.indicvisiondic.ui.common.AuthRoute
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.home.SessionOpenHelper
 import com.rafad.indicvisiondic.ui.viewer.SaveExportActivity
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 /**
  * Settings: account, cloud preferences, per-analysis data management, data
@@ -159,13 +157,6 @@ class SettingsActivity : AppCompatActivity() {
 
     // ── Analyses data management ─────────────────────────────────────────
 
-    /** One analysis, wherever it lives. A null half means it is not there. */
-    private data class AnalysisEntry(
-        val name: String,
-        val record: SessionRecord?,
-        val cloud: CloudSessionDto?,
-    )
-
     private fun wireAnalysesDataSection() {
         analysesProgress.isVisible = true
         analysesState.isVisible = false
@@ -181,7 +172,7 @@ class SettingsActivity : AppCompatActivity() {
                 analysesState.text = it
             }
             val cloud = (result as? CloudRestore.ListResult.Ready)?.sessions.orEmpty()
-            val entries = mergeEntries(records, cloud)
+            val entries = AnalysisEntries.merge(records, cloud)
             if (entries.isEmpty()) {
                 analysesState.isVisible = true
                 analysesState.setText(R.string.analyses_data_empty)
@@ -200,28 +191,6 @@ class SettingsActivity : AppCompatActivity() {
         CloudRestore.ListResult.NeedSignIn -> getString(R.string.restore_need_sign_in)
         CloudRestore.ListResult.ApiOff -> getString(R.string.restore_api_off)
         is CloudRestore.ListResult.Failed -> getString(R.string.restore_load_error, result.reason)
-    }
-
-    /**
-     * Local records first, then backups with no copy on this phone. Cloud rows
-     * link by [CloudSessionDto.localSessionId], falling back to the stored
-     * cloud id for sessions uploaded before that link existed.
-     */
-    private fun mergeEntries(
-        records: List<SessionRecord>,
-        cloud: List<CloudSessionDto>,
-    ): List<AnalysisEntry> {
-        val byLocalId = cloud.filter { it.localSessionId.isNotBlank() }.associateBy { it.localSessionId }
-        val matched = mutableSetOf<String>()
-        val onPhone = records.map { record ->
-            val match = byLocalId[record.id]
-                ?: cloud.firstOrNull { record.cloudSessionId.isNotBlank() && it.sessionId == record.cloudSessionId }
-            match?.let { matched += it.sessionId }
-            AnalysisEntry(record.name, record, match)
-        }
-        val cloudOnly = cloud.filterNot { it.sessionId in matched }
-            .map { AnalysisEntry(it.specimen ?: it.sessionId, null, it) }
-        return onPhone + cloudOnly
     }
 
     private fun addAnalysisRow(entry: AnalysisEntry) {
@@ -243,7 +212,7 @@ class SettingsActivity : AppCompatActivity() {
                 isVisible = true
                 setOnClickListener {
                     if (record != null) {
-                        showDeleteBackupChoice(record, row)
+                        showDeleteBackupChoice(record, cloud, row)
                     } else {
                         confirmDeleteCloudBackup(cloud, entry.name, row)
                     }
@@ -257,21 +226,16 @@ class SettingsActivity : AppCompatActivity() {
         analysesList.addView(row)
     }
 
-    private fun stateLine(entry: AnalysisEntry): String {
-        val record = entry.record
-        val cloud = entry.cloud
-        return when {
-            cloud != null && record == null ->
-                getString(R.string.analysis_state_cloud_only_fmt, humanSize(cloud.totalBytes))
-            cloud != null ->
-                getString(R.string.analysis_state_phone_and_cloud_fmt, humanSize(cloud.totalBytes))
-            record?.syncState == SessionRecord.SyncState.LOCAL_ONLY ->
-                getString(R.string.analysis_state_phone_only)
-            // SYNCED here means the cloud copy exists but could not be listed —
-            // keep the badge rather than claiming the backup is gone.
-            record != null -> syncLabel(record.syncState)
-            else -> ""
-        }
+    private fun stateLine(entry: AnalysisEntry): String = when (entry.location) {
+        AnalysisLocation.CLOUD_ONLY ->
+            getString(R.string.analysis_state_cloud_only_fmt, humanSize(entry.cloud?.totalBytes ?: 0L))
+        AnalysisLocation.PHONE_AND_CLOUD ->
+            getString(R.string.analysis_state_phone_and_cloud_fmt, humanSize(entry.cloud?.totalBytes ?: 0L))
+        AnalysisLocation.PHONE_ONLY -> getString(R.string.analysis_state_phone_only)
+        // The cloud could not confirm this one: keep its badge rather than
+        // claiming the backup is gone.
+        AnalysisLocation.PHONE_SYNC_STATE ->
+            entry.record?.let { syncLabel(it.syncState) }.orEmpty()
     }
 
     private fun wireBackupButton(button: MaterialButton, record: SessionRecord) {
@@ -304,65 +268,44 @@ class SettingsActivity : AppCompatActivity() {
             .setTitle(R.string.cloud_delete_forever_title)
             .setMessage(getString(R.string.cloud_delete_forever_body, name))
             .setPositiveButton(R.string.cloud_delete_forever_confirm) { _, _ ->
-                scheduleDelete(row) { ctx ->
-                    val ok = CloudSync.eraseCloudBackup(ctx, session.sessionId, session.localSessionId)
-                    toastResult(ctx, ok, R.string.cloud_delete_backup_done, R.string.cloud_delete_backup_failed)
-                }
+                scheduleDelete(row, session.sessionId, session.localSessionId, alsoLocal = false)
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
-    private fun showDeleteBackupChoice(record: SessionRecord, row: View) {
+    private fun showDeleteBackupChoice(record: SessionRecord, cloud: CloudSessionDto, row: View) {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.cloud_delete_backup_title)
             .setMessage(R.string.cloud_delete_backup_body)
+            // Addressed by backend id: this row only exists because the cloud
+            // listed that backup, so no lookup is needed.
             .setPositiveButton(R.string.cloud_delete_backup_only) { _, _ ->
-                scheduleDelete(row) { ctx ->
-                    val ok = CloudSync.eraseCloudOnly(ctx, record.id)
-                    toastResult(ctx, ok, R.string.cloud_delete_backup_done, R.string.cloud_delete_backup_failed)
-                }
+                scheduleDelete(row, cloud.sessionId, record.id, alsoLocal = false)
             }
             .setNeutralButton(R.string.cloud_delete_backup_and_local) { _, _ ->
-                scheduleDelete(row) { ctx ->
-                    val erased = CloudSync.eraseEverywhere(ctx, record.id) ==
-                        CloudSync.EraseResult.ERASED_EVERYWHERE
-                    toastResult(ctx, erased, R.string.delete_everywhere_done, R.string.delete_cloud_failed)
-                }
+                scheduleDelete(row, cloud.sessionId, record.id, alsoLocal = true)
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     /**
-     * The safety net: the row goes at once but nothing reaches the backend
-     * until the undo window closes, so a mis-tapped bin followed by a reflexive
-     * confirm is still recoverable.
-     *
-     * The work runs on [deleteScope], not `lifecycleScope`: the user confirmed,
-     * so going back to Home inside the window must still delete. Only killing
-     * the app cancels it, which fails in the safe direction — the backup
-     * survives and reappears next time the page is opened.
+     * The safety net: the row goes at once, but the deletion sits in
+     * [BackupDeleteWorker] for the undo window and only then reaches the
+     * backend — so a mis-tapped bin followed by a reflexive confirm is still
+     * recoverable. Leaving the page (or the app) does not abandon it: the user
+     * confirmed, and the worker retries if the network is down.
      */
-    private fun scheduleDelete(row: View, erase: suspend (Context) -> Unit) {
+    private fun scheduleDelete(row: View, cloudSessionId: String, localSessionId: String, alsoLocal: Boolean) {
         analysesList.removeView(row)
-        val appContext = applicationContext
-        val job = deleteScope.launch {
-            delay(UNDO_WINDOW_MS)
-            erase(appContext)
-            // The page may be gone by now; only refresh it if it is still here.
-            if (!isFinishing && !isDestroyed) wireAnalysesDataSection()
-        }
-        Snackbar.make(findViewById(R.id.settingsRoot), R.string.cloud_delete_pending, UNDO_WINDOW_MS.toInt())
+        BackupDeleteWorker.enqueue(this, cloudSessionId, localSessionId, alsoLocal)
+        Snackbar.make(findViewById(R.id.settingsRoot), R.string.cloud_delete_pending, UNDO_WINDOW_MS)
             .setAction(R.string.action_undo) {
-                job.cancel()
+                BackupDeleteWorker.cancel(this, cloudSessionId)
                 wireAnalysesDataSection()
             }
             .show()
-    }
-
-    private fun toastResult(context: Context, ok: Boolean, doneRes: Int, failedRes: Int) {
-        Toast.makeText(context, if (ok) doneRes else failedRes, Toast.LENGTH_LONG).show()
     }
 
     // ── Your data / preferences / footer ─────────────────────────────────
@@ -485,14 +428,7 @@ class SettingsActivity : AppCompatActivity() {
         const val BYTES_PER_GB = 1_073_741_824L
         const val ZIP_MIME = "application/zip"
 
-        /** How long a confirmed delete stays recoverable before it is sent. */
-        const val UNDO_WINDOW_MS = 5_000L
-
-        /**
-         * Scope for confirmed deletions. Deliberately not the Activity's: the
-         * undo window must survive leaving the page, since the user already
-         * confirmed. Dies with the process, which leaves the backup intact.
-         */
-        val deleteScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        /** Snackbar shows for exactly as long as the delete stays cancellable. */
+        val UNDO_WINDOW_MS = TimeUnit.SECONDS.toMillis(BackupDeleteWorker.UNDO_WINDOW_SECONDS).toInt()
     }
 }

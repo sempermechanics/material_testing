@@ -110,7 +110,6 @@
     <string name="sub_pixel_interpolation_kernel">Sub-pixel interpolation kernel</string>
     <string name="label_4_4_bicubic">4×4 Bicubic</string>
     <string name="label_6_6_keys">6×6 Keys</string>
-    <string name="elapsed_time_0s">Elapsed Time: 0s</string>
     <string name="result">Result: --</string>
     <string name="back">Back</string>
     <string name="next_settings">Next: Settings →</string>
@@ -161,7 +160,6 @@
     <string name="delete_everywhere">Delete everywhere</string>
     <string name="delete_device_only">Device only</string>
     <string name="delete_everywhere_done">Analysis erased from this device and the cloud.</string>
-    <string name="delete_device_done">Removed from this device. The cloud backup was kept.</string>
     <string name="delete_cloud_failed">Couldn\'t reach the cloud, so nothing was deleted. Check your connection and try again.</string>
     <string name="viewer_settings_used_desc">Show the settings used for this analysis</string>
     <string name="settings_used_title">Settings used</string>
@@ -195,7 +193,6 @@
     <string name="account_section">Account</string>
     <string name="account_device_id_fmt">Device ID · %1$s</string>
     <string name="cloud_section">Cloud backup</string>
-    <string name="cloud_on_device">On this device</string>
     <string name="analyses_data_management">Analyses data management</string>
     <string name="analyses_data_empty">No analyses on this phone or in the cloud yet.</string>
     <string name="analysis_state_phone_and_cloud_fmt">On phone · In cloud (%1$s)</string>
@@ -222,19 +219,12 @@
     <string name="cloud_backfill_confirm">Upload</string>
     <string name="your_data_section">Your data</string>
     <string name="your_data_delete_hint">To delete one analysis, use the list on Home (device only or everywhere).</string>
-    <string name="limits_section">Limits</string>
-    <string name="limits_quota_fmt">%1$d of %2$d cloud analyses used</string>
-    <string name="limits_manage">Manage limit</string>
     <string name="restore_need_sign_in">Sign in to see cloud backups.</string>
     <string name="restore_api_off">Cloud backup is not configured on this build.</string>
-    <string name="sync_status_backing_up">Backing up… %1$d/%2$d</string>
-    <string name="sync_status_restoring">Restoring… %1$d/%2$d</string>
     <string name="sync_status_up_to_date">Cloud backups up to date</string>
-    <string name="sync_status_working">Syncing with cloud…</string>
     <string name="home_empty_restore">Restore from cloud</string>
     <string name="delete_device_kept_snackbar">Kept in the cloud</string>
     <string name="delete_device_restore_action">Restore…</string>
-    <string name="session_sync_action_title">Cloud backup</string>
     <string name="setting_max_frames">Max frames</string>
     <string name="setting_max_frames_info">More frames = longer analysis and more memory. 50 suits most phones; raise it on a device with a fast processor and plenty of RAM, lower it if analyses feel slow or the app is killed mid-run.</string>
     <string name="info">Info</string>
@@ -326,6 +316,7 @@
     <string name="use_full_image">Use full image</string>
     <string name="region_of_interest">Region of interest</string>
     <string name="jpeg_warning_inline">JPEG detected — lossless formats improve accuracy</string>
+    <string name="subset_low_texture_fmt">Speckle contrast is low — %1$d px is the largest allowed subset and still falls short of 0.007 px accuracy</string>
     <string name="next_reason_ref">add a reference image to continue</string>
     <string name="next_reason_def">add at least one deformed frame to continue</string>
     <string name="run_analysis">Compute</string>
@@ -384,7 +375,6 @@
     <string name="restore_action">Restore</string>
     <string name="restore_load_error">Couldn\'t load backups: %1$s</string>
     <string name="restore_background_note">Restore continues even if you leave this screen.</string>
-    <string name="home_restore_from_cloud">Restore from cloud</string>
     <string name="admin_pending_requests">Pending access requests</string>
     <string name="admin_title">Access requests</string>
     <string name="admin_approve">Approve</string>

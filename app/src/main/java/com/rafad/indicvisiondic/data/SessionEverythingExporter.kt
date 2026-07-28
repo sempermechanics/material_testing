@@ -166,7 +166,8 @@ object SessionEverythingExporter {
         zip.closeEntry()
     }
 
-    private fun sanitizeZipName(name: String, id: String): String {
+    /** Internal for test: entry names must stay filesystem- and archive-safe. */
+    internal fun sanitizeZipName(name: String, id: String): String {
         val cleaned = name.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_')
         return cleaned.ifBlank { "session" }.take(MAX_NAME_CHARS) + "_" + id.take(ID_CHARS)
     }

@@ -94,8 +94,20 @@ object CloudRestore {
         data class Failed(val reason: String) : ListResult()
     }
 
-    /** Cloud analyses available to restore (excludes ones already on this device). */
+    /**
+     * Cloud analyses available to restore (excludes ones already on this
+     * device).
+     *
+     * Each call is one Firestore-backed session listing, and the settings page
+     * asks on every open, so a successful answer is reused for
+     * [LIST_CACHE_MS]. Anything that changes what the cloud holds must call
+     * [invalidateRestorableCache]; failures are never cached, so a retry after
+     * signing in or coming back online goes straight to the backend.
+     */
     suspend fun listRestorable(context: Context): ListResult = withContext(Dispatchers.IO) {
+        cachedList?.takeIf { System.currentTimeMillis() - cachedAt < LIST_CACHE_MS }
+            ?.let { return@withContext it }
+
         val appContext = context.applicationContext
         val api = IndicApi(appContext)
         if (!api.enabled) return@withContext ListResult.ApiOff
@@ -105,12 +117,28 @@ object CloudRestore {
             val sessions = api.listSessions(token).sessions
                 .filter { it.status == "COMPLETED" }
                 .filter { it.localSessionId.isBlank() || it.localSessionId !in localIds }
-            if (sessions.isEmpty()) ListResult.Empty else ListResult.Ready(sessions)
+            val result = if (sessions.isEmpty()) ListResult.Empty else ListResult.Ready(sessions)
+            cachedList = result
+            cachedAt = System.currentTimeMillis()
+            result
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.e(e, "listRestorable failed")
             ListResult.Failed(e.message ?: e.toString())
         }
     }
+
+    /** Drop the cached listing after anything that changes the cloud's contents. */
+    fun invalidateRestorableCache() {
+        cachedList = null
+    }
+
+    @Volatile
+    private var cachedList: ListResult? = null
+
+    @Volatile
+    private var cachedAt = 0L
+
+    private const val LIST_CACHE_MS = 60_000L
 
     /** Convenience for callers that only need the list (empty on any non-Ready). */
     suspend fun listRestorableSessions(context: Context): List<CloudSessionDto> =
@@ -181,6 +209,8 @@ object CloudRestore {
             allowOverLimit = true, // already counted in the cloud quota
         )
         Timber.i("Restored analysis %s from cloud session %s (%d files)", localId, sessionId, files.size)
+        // The listing excludes backups already on this device, so it changed.
+        invalidateRestorableCache()
         localId
     }
 
