@@ -580,7 +580,7 @@
                                 android:layout_height="24dp"
                                 android:contentDescription="@string/advanced_parameters"
                                 android:rotation="180"
-                                android:src="@android:drawable/arrow_down_float"
+                                android:src="@drawable/ic_expand_more"
                                 app:tint="@color/text_secondary" />
                         </LinearLayout>
 
@@ -628,6 +628,7 @@
                                     android:id="@+id/tvSubsetValue"
                                     android:layout_width="52dp"
                                     android:layout_height="wrap_content"
+                                    android:background="@android:color/transparent"
                                     android:gravity="end"
                                     android:hint="@string/subset_size"
                                     android:imeOptions="actionDone"
@@ -689,6 +690,7 @@
                                     android:id="@+id/tvStepValue"
                                     android:layout_width="52dp"
                                     android:layout_height="wrap_content"
+                                    android:background="@android:color/transparent"
                                     android:gravity="end"
                                     android:hint="@string/step_size_density"
                                     android:imeOptions="actionDone"
@@ -750,6 +752,7 @@
                                     android:id="@+id/tvStrainValue"
                                     android:layout_width="52dp"
                                     android:layout_height="wrap_content"
+                                    android:background="@android:color/transparent"
                                     android:gravity="end"
                                     android:hint="@string/strain_window"
                                     android:imeOptions="actionDone"
@@ -840,8 +843,10 @@
             android:id="@+id/scrollStepSweep"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:clipToPadding="false"
             android:fillViewport="true"
-            android:scrollbars="none"
+            android:overScrollMode="ifContentScrolls"
+            android:scrollbars="vertical"
             android:visibility="gone">
 
             <LinearLayout
@@ -896,7 +901,7 @@
                                 android:layout_height="24dp"
                                 android:contentDescription="@string/sweep_settings"
                                 android:rotation="180"
-                                android:src="@android:drawable/arrow_down_float"
+                                android:src="@drawable/ic_expand_more"
                                 app:tint="@color/text_secondary" />
                         </LinearLayout>
 

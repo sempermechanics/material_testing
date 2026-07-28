@@ -1093,9 +1093,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // Advanced expander: expanded by default; header toggles body visibility.
         val advancedBody = findViewById<View>(R.id.advancedParamsBody)
         val advancedChevron = findViewById<ImageView>(R.id.ivAdvancedChevron)
+        val advancedReset = findViewById<View>(R.id.btnAdvancedReset)
+
+        fun applyAdvancedExpanded(expanded: Boolean) {
+            advancedBody.visibility = if (expanded) View.VISIBLE else View.GONE
+            advancedChevron.rotation = if (expanded) 180f else 0f
+            advancedReset.visibility = if (expanded) View.VISIBLE else View.GONE
+        }
+        applyAdvancedExpanded(true)
 
         @Suppress("MagicNumber") // the documented defaults: 41 / 5 / 15
-        findViewById<View>(R.id.btnAdvancedReset).setOnClickListener {
+        advancedReset.setOnClickListener {
             // Drop focus first so the fields accept the reset values.
             commitParamFields()
             // Reset hands the subset back to the SSSIG recommendation when one
@@ -1120,9 +1128,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             .setOnClickListener { showInfo(R.string.strain_window, R.string.info_strain_window) }
 
         findViewById<View>(R.id.advancedParamsHeader).setOnClickListener {
-            val expanded = advancedBody.visibility == View.VISIBLE
-            advancedBody.visibility = if (expanded) View.GONE else View.VISIBLE
-            advancedChevron.rotation = if (expanded) 0f else 180f
+            applyAdvancedExpanded(advancedBody.visibility != View.VISIBLE)
         }
 
         etSubsetSize.addOnChangeListener { _, _, fromUser ->

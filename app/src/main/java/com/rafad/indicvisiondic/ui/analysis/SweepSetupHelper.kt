@@ -5,18 +5,36 @@
 package com.rafad.indicvisiondic.ui.analysis
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.ProgressBar
+import android.widget.RadioGroup
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.slider.RangeSlider
+import com.rafad.indicvisiondic.IndicVisionNativeLib
 import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.ui.common.BitmapDecode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.nio.ByteBuffer
+import java.util.Locale
+import kotlin.math.min
 
 /**
  * Parameter-sweep setup UI for the analysis wizard (§5.4.5 VSG study): mode
@@ -52,6 +70,10 @@ class SweepSetupHelper(
         /** Hard bounds on Max VSG — the guardrail against a mistyped huge number. */
         const val VSG_MIN_INPUT = 21
         const val VSG_MAX_INPUT = 501
+
+        /** Longest edge of a frame thumbnail in the pick dialog. */
+        private const val PREVIEW_MAX_EDGE = 480
+        private const val RGBA_BYTES_PER_PIXEL = 4
     }
 
     private lateinit var rgAnalysisMode: MaterialButtonToggleGroup
@@ -76,6 +98,9 @@ class SweepSetupHelper(
 
     /** True while a suggestion/clamp is driving the sweep sliders, not the user. */
     private var bindingSweep = false
+
+    /** Cancels in-flight frame-pick preview decodes when the selection changes. */
+    private var framePreviewJob: Job? = null
 
     /**
      * Set once the user edits any sweep control. Until then the three sweep
@@ -463,50 +488,178 @@ class SweepSetupHelper(
         val count = viewModel.defCount
         if (count <= 1) return
         var selected = resolvedSweepFrame().coerceIn(0, count - 1)
-        val header = activity.layoutInflater.inflate(R.layout.dialog_sweep_frame_pick, null)
-        val preview = header.findViewById<ImageView>(R.id.ivSweepFrameDialogPreview)
-        val caption = header.findViewById<TextView>(R.id.tvSweepFrameDialogCaption)
+        val builder = MaterialAlertDialogBuilder(activity)
+        // Inflate against the builder's context so the rows pick up the dialog
+        // theme overlay rather than the activity's.
+        val content = LayoutInflater.from(builder.context)
+            .inflate(R.layout.dialog_sweep_frame_pick, null)
+        val preview = content.findViewById<ImageView>(R.id.ivSweepFrameDialogPreview)
+        val progress = content.findViewById<ProgressBar>(R.id.progressSweepFramePreview)
+        val numberField = content.findViewById<EditText>(R.id.etSweepFrameNumber)
+        content.findViewById<TextView>(R.id.tvSweepFrameTotal).text =
+            activity.getString(R.string.sweep_frame_out_of_fmt, count)
 
         fun bindPreview(index: Int) {
-            caption.text = activity.getString(R.string.sweep_frame_of_fmt, index + 1, count)
             val path = viewModel.defFilePaths.getOrNull(index)
+            framePreviewJob?.cancel()
             if (path.isNullOrBlank()) {
                 preview.setImageDrawable(null)
+                progress.isVisible = false
                 return
             }
-            val bmp = android.graphics.BitmapFactory.decodeFile(path)
-            if (bmp != null) {
-                val maxEdge = 480
-                val scale = minOf(1f, maxEdge.toFloat() / maxOf(bmp.width, bmp.height))
-                val w = (bmp.width * scale).toInt().coerceAtLeast(1)
-                val h = (bmp.height * scale).toInt().coerceAtLeast(1)
-                preview.setImageBitmap(
-                    if (scale < 1f) {
-                        android.graphics.Bitmap.createScaledBitmap(bmp, w, h, true)
-                    } else {
-                        bmp
-                    },
-                )
-            } else {
-                preview.setImageDrawable(null)
+            progress.isVisible = true
+            framePreviewJob = activity.lifecycleScope.launch {
+                val bmp = withContext(Dispatchers.Default) { decodeFramePreview(path) }
+                if (index != selected) {
+                    bmp?.recycle()
+                    return@launch
+                }
+                progress.isVisible = false
+                if (bmp != null) {
+                    preview.setImageBitmap(bmp)
+                } else {
+                    preview.setImageDrawable(null)
+                }
             }
         }
         bindPreview(selected)
-
-        val labels = Array(count) { frameLabel(it) }
-        MaterialAlertDialogBuilder(activity)
-            .setTitle(R.string.sweep_frame)
-            .setView(header)
-            .setSingleChoiceItems(labels, selected) { _, which ->
-                selected = which
-                bindPreview(which)
+        val rows = fillFrameChoices(content, count, selected) { which ->
+            selected = which
+            numberField.setText(frameNumberText(which + 1))
+            bindPreview(which)
+        }
+        numberField.setText(frameNumberText(selected + 1))
+        wireFrameNumberField(numberField, current = { selected + 1 }) { typed ->
+            val index = (typed - 1).coerceIn(0, count - 1)
+            rows.getOrNull(index)?.let { row ->
+                row.isChecked = true
+                scrollFrameRowIntoView(content, row)
             }
+            // Also normalises what was typed — "007" or an out-of-range number.
+            numberField.setText(frameNumberText(index + 1))
+        }
+
+        builder
+            .setTitle(R.string.sweep_frame)
+            .setView(content)
             .setPositiveButton(android.R.string.ok) { _, _ ->
+                framePreviewJob?.cancel()
                 viewModel.vsgFrameIndex = selected
                 refreshSweepPlan()
             }
-            .setNegativeButton(R.string.cancel, null)
+            .setNegativeButton(R.string.cancel) { _, _ -> framePreviewJob?.cancel() }
+            .setOnDismissListener { framePreviewJob?.cancel() }
             .show()
+    }
+
+    /**
+     * Fills the dialog's scrolling frame list and reports the picked index.
+     * The row for [selected] is scrolled into view, so reopening the dialog on
+     * frame 30 of 50 does not land the user at the top of the list.
+     */
+    private fun fillFrameChoices(
+        content: View,
+        count: Int,
+        selected: Int,
+        onPick: (Int) -> Unit,
+    ): List<MaterialRadioButton> {
+        val group = content.findViewById<RadioGroup>(R.id.rgSweepFrames)
+        val density = activity.resources.displayMetrics.density
+        val rowPadding = (8 * density).toInt()
+        val rows = List(count) { index ->
+            MaterialRadioButton(group.context).apply {
+                id = View.generateViewId()
+                text = frameLabel(index)
+                tag = index
+                minimumHeight = (48 * density).toInt()
+                setPadding(paddingLeft, rowPadding, paddingRight, rowPadding)
+                group.addView(this)
+                isChecked = index == selected
+            }
+        }
+        group.setOnCheckedChangeListener { _, checkedId ->
+            val index = group.findViewById<View>(checkedId)?.tag as? Int ?: return@setOnCheckedChangeListener
+            onPick(index)
+        }
+        rows.getOrNull(selected)?.let { scrollFrameRowIntoView(content, it) }
+        return rows
+    }
+
+    /** ASCII digits, so the field round-trips through toIntOrNull() in any locale. */
+    private fun frameNumberText(oneBased: Int): String = String.format(Locale.US, "%d", oneBased)
+
+    private fun scrollFrameRowIntoView(content: View, row: View) {
+        val scroll = content.findViewById<ScrollView>(R.id.scrollSweepFrames)
+        scroll.post { scroll.scrollTo(0, row.top) }
+    }
+
+    /**
+     * Frame number entry: commits on focus loss (IME Done just drops focus, as
+     * the sweep fields do). Anything unparseable reverts to [current].
+     */
+    private fun wireFrameNumberField(field: EditText, current: () -> Int, onPick: (Int) -> Unit) {
+        field.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) return@setOnFocusChangeListener
+            val typed = field.text.toString().trim().toIntOrNull()
+            if (typed == null) field.setText(frameNumberText(current())) else onPick(typed)
+        }
+        field.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                field.clearFocus()
+                activity.getSystemService(InputMethodManager::class.java)
+                    ?.hideSoftInputFromWindow(field.windowToken, 0)
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    /**
+     * Decode a deformed-frame path for the pick dialog. Handles ordinary
+     * containers, native-only formats (TIFF), and RAW RGBA blobs written at import.
+     */
+    @Suppress("ReturnCount") // a ladder of decoders; each rung returns what it managed
+    private fun decodeFramePreview(path: String): Bitmap? {
+        BitmapDecode.decodeFileForView(path, PREVIEW_MAX_EDGE, PREVIEW_MAX_EDGE, PREVIEW_MAX_EDGE)
+            ?.let { return it }
+
+        val file = File(path)
+        if (!file.exists()) return null
+        val bytes = runCatching { file.readBytes() }.getOrNull() ?: return null
+
+        runCatching {
+            IndicVisionNativeLib.getPreviewFromBytes(bytes, PREVIEW_MAX_EDGE)
+        }.getOrNull()?.let { return it }
+
+        decodeRawRgba(bytes, viewModel.defFrameSizes[path])?.let { return it }
+
+        // Last resort: bounds-free BitmapFactory (may still fail for RAW).
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    }
+
+    /** A RAW RGBA blob written at import, scaled down to preview size. */
+    private fun decodeRawRgba(bytes: ByteArray, size: Pair<Int, Int>?): Bitmap? {
+        val (w, h) = size?.takeIf {
+            bytes.size >= it.first * it.second * RGBA_BYTES_PER_PIXEL
+        } ?: return null
+        return runCatching {
+            val full = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            full.copyPixelsFromBuffer(ByteBuffer.wrap(bytes, 0, w * h * RGBA_BYTES_PER_PIXEL))
+            val scale = min(1f, PREVIEW_MAX_EDGE.toFloat() / maxOf(w, h))
+            if (scale >= 1f) {
+                full
+            } else {
+                val scaled = Bitmap.createScaledBitmap(
+                    full,
+                    (w * scale).toInt().coerceAtLeast(1),
+                    (h * scale).toInt().coerceAtLeast(1),
+                    true,
+                )
+                if (scaled !== full) full.recycle()
+                scaled
+            }
+        }.getOrNull()
     }
 
     private fun refreshSweepFrameUi() {
