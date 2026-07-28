@@ -295,6 +295,7 @@
 
     <string name="setting_vsg">Virtual strain gauge</string>
     <string name="line_cut_title">Strain along the centre line cut</string>
+    <string name="line_cut_title_axis_fmt">Strain along %1$s axis</string>
     <string name="line_cut_legend_prefix_fmt">Cut along %1$s through the ROI centre at %2$.0f px.</string>
     <string name="line_cut_legend_exx">Exx</string>
     <string name="line_cut_legend_eyy">Eyy</string>

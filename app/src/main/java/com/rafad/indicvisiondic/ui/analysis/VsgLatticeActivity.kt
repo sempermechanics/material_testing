@@ -61,6 +61,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     private lateinit var latticeView: VsgLatticeView
     private lateinit var strainPlot: VsgPlotView
     private lateinit var strainSpinner: Spinner
+    private lateinit var strainPlotTitle: TextView
 
     /** Blank until a drag; shows the scrubbed (x, y) of each plotted series. */
     private lateinit var strainPlotReadout: TextView
@@ -121,6 +122,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         strainPlotSection = findViewById(R.id.strainPlotSection)
         strainPlot = findViewById(R.id.plotLatticeStrain)
         strainSpinner = findViewById(R.id.spinnerStrainComponent)
+        strainPlotTitle = findViewById(R.id.tvStrainPlotTitle)
         strainPlotReadout = findViewById(R.id.tvStrainPlotReadout)
         btnOpenAnalysis = findViewById(R.id.btnOpenAnalysis)
         btnOpenAnalysis.setOnClickListener {
@@ -258,6 +260,12 @@ class VsgLatticeActivity : AppCompatActivity() {
             return
         }
         strainPlotSection.visibility = View.VISIBLE
+        // The cut is always through the ROI centre; the title carries the axis
+        // it runs along, the x axis label carries the position on it.
+        strainPlotTitle.text = getString(
+            R.string.line_cut_title_axis_fmt,
+            getString(if (horizontal) R.string.axis_x else R.string.axis_y),
+        )
         strainPlot.setData(
             seriesByFrame.map { it.series },
             getString(if (horizontal) R.string.line_cut_axis_x else R.string.line_cut_axis_y),
