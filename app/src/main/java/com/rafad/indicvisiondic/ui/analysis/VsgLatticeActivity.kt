@@ -2,15 +2,26 @@ package com.rafad.indicvisiondic.ui.analysis
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.rafad.indicvisiondic.DicKeys
+import com.rafad.indicvisiondic.DicResult
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
+import java.io.File
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * The swept parameter space as a 2-D lattice (subset across, VSG up): solved
@@ -18,15 +29,43 @@ import kotlin.math.roundToInt
  * viewer for a sweep — both after a fresh run and when a saved sweep is
  * reopened from Home — so the frames have a map.
  *
- * It is interactive: tapping a solved node opens that analysis, and "View
- * results" opens the first. The lattice stays on the back stack while the
- * viewer is up, so Back from the viewer returns here rather than skipping past.
+ * It is interactive: tapping a solved node focuses its line-cut curve; double
+ * tap, long-press, or "Open analysis" opens that specific result. "View
+ * results" still opens the first frame. The lattice stays on the back stack
+ * while the viewer is up, so Back from the viewer returns here.
  *
  * The Intent it receives is exactly the one the result viewer needs (plus the
  * sweep lattice arrays); it forwards those extras on, adding only the frame to
  * start at. So it never has to understand the viewer's payload.
  */
 class VsgLatticeActivity : AppCompatActivity() {
+
+    private companion object {
+        val STRAIN_OPTIONS = listOf(
+            R.string.field_exx to DicResult.IDX_EXX,
+            R.string.field_eyy to DicResult.IDX_EYY,
+            R.string.field_exy to DicResult.IDX_EXY,
+        )
+    }
+
+    /** Decoded `.dat` payloads for each solved combination, in frame order. */
+    private var frameData: List<FloatArray> = emptyList()
+
+    /** Grid pitch per solved frame (from the sweep plan). */
+    private var frameSteps: IntArray = IntArray(0)
+
+    /** The solved frame currently focused on the lattice/plot; -1 means all. */
+    private var focusedFrameIndex: Int = -1
+
+    private lateinit var strainPlotSection: View
+    private lateinit var latticeView: VsgLatticeView
+    private lateinit var strainPlot: VsgPlotView
+    private lateinit var strainSpinner: Spinner
+    /** Blank until a drag; shows the scrubbed (x, y) of each plotted series. */
+    private lateinit var strainPlotReadout: TextView
+    private lateinit var btnOpenAnalysis: MaterialButton
+
+    private data class FrameSeries(val frameIndex: Int, val series: VsgPlotView.Series)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,9 +97,13 @@ class VsgLatticeActivity : AppCompatActivity() {
         )
         val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.vsg }))
 
-        findViewById<VsgLatticeView>(R.id.latticeView).apply {
+        latticeView = findViewById<VsgLatticeView>(R.id.latticeView)
+        latticeView.apply {
+            interactionEnabled = true
             setNodes(nodes)
-            onNodeClick = { node -> if (node.frameIndex >= 0) openViewer(node.frameIndex) }
+            onNodeClick = { node -> toggleFocus(node.frameIndex) }
+            onNodeDoubleClick = { node -> openViewer(node.frameIndex) }
+            onNodeLongClick = { node -> openViewer(node.frameIndex) }
         }
 
         // The whole sweep shares one step fraction, subset ÷ D; recover D from a
@@ -73,6 +116,43 @@ class VsgLatticeActivity : AppCompatActivity() {
             getString(R.string.vsg_lattice_summary_short_fmt, nodes.size, solved.size, skipped.size)
         }
         findViewById<MaterialButton>(R.id.btnViewResults).setOnClickListener { openViewer(0) }
+
+        strainPlotSection = findViewById(R.id.strainPlotSection)
+        strainPlot = findViewById(R.id.plotLatticeStrain)
+        strainSpinner = findViewById(R.id.spinnerStrainComponent)
+        strainPlotReadout = findViewById(R.id.tvStrainPlotReadout)
+        btnOpenAnalysis = findViewById(R.id.btnOpenAnalysis)
+        btnOpenAnalysis.setOnClickListener {
+            if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex)
+        }
+        strainPlot.onScrub = { x, samples ->
+            strainPlotReadout.text = samples.joinToString(" · ") { (label, y) ->
+                getString(R.string.vsg_lattice_scrub_value_fmt, x, y, label)
+            }
+        }
+        setupStrainSpinner()
+        loadStrainProfiles()
+    }
+
+    private fun setupStrainSpinner() {
+        val labels = STRAIN_OPTIONS.map { getString(it.first) }
+        strainSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            labels,
+        )
+        strainSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long,
+            ) {
+                redrawStrainPlot()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
     }
 
     /** Reads one set of (subset, step, window) triples into lattice nodes. */
@@ -96,6 +176,105 @@ class VsgLatticeActivity : AppCompatActivity() {
                 frameIndex = if (solved) i else -1,
             )
         }
+    }
+
+    /**
+     * Loads each solved combination's `.dat` and shows the centre-line strain
+     * plot when at least one profile has data.
+     */
+    @Suppress("ReturnCount") // one bail per missing sweep extra before the load starts
+    private fun loadStrainProfiles() {
+        val batchDirPath = intent.getStringExtra(DicKeys.BATCH_DIR_PATH) ?: return
+        val steps = intent.getIntArrayExtra(DicKeys.SWEEP_STEPS) ?: return
+        if (steps.isEmpty()) return
+
+        lifecycleScope.launch {
+            val loaded = withContext(Dispatchers.IO) {
+                val dir = File(batchDirPath)
+                if (!dir.isDirectory) return@withContext emptyList()
+                val files = dir.listFiles { file -> file.extension == "dat" }
+                    ?.sortedBy { it.name }
+                    ?: return@withContext emptyList()
+                files.mapNotNull { file ->
+                    try {
+                        DicResult.decodeDatBytes(file.readBytes())
+                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                        Timber.w(e, "Failed to read %s", file.name)
+                        null
+                    }
+                }
+            }
+            if (loaded.isEmpty()) return@launch
+            frameData = loaded
+            frameSteps = steps
+            redrawStrainPlot()
+        }
+    }
+
+    /** Rebuilds the line-cut plot for the selected Exx / Eyy / Exy component. */
+    @Suppress("ReturnCount") // nothing to plot, or a dropped focus that re-enters after clearing it
+    private fun redrawStrainPlot() {
+        if (frameData.isEmpty()) {
+            strainPlotSection.visibility = View.GONE
+            return
+        }
+        val component = selectedStrainComponent()
+        val horizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
+        val line = VsgStudy.centreLine(
+            intent.getIntExtra(DicKeys.ROI_X, 0),
+            intent.getIntExtra(DicKeys.ROI_Y, 0),
+            intent.getIntExtra(DicKeys.ROI_W, 0),
+            intent.getIntExtra(DicKeys.ROI_H, 0),
+            horizontal,
+        )
+        val labels = intent.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES).orEmpty()
+        val baseStep = intent.getIntExtra(DicKeys.STEP, 1).coerceAtLeast(1)
+
+        val seriesByFrame = frameData.mapIndexedNotNull { index, data ->
+            val step = frameSteps.getOrNull(index)?.coerceAtLeast(1) ?: baseStep
+            val points = VsgStudy.profileAlong(data, component, line, step / 2f)
+            if (points.isEmpty()) return@mapIndexedNotNull null
+            FrameSeries(
+                frameIndex = index,
+                series = VsgPlotView.Series(
+                    label = labels.getOrNull(index) ?: getString(R.string.sweep_frame_btn_fmt, index + 1),
+                    color = strainPlot.paletteColor(index),
+                    points = points,
+                    markers = false,
+                    muted = focusedFrameIndex >= 0 && index != focusedFrameIndex,
+                ),
+            )
+        }
+        if (seriesByFrame.isEmpty()) {
+            strainPlotSection.visibility = View.GONE
+            return
+        }
+        if (focusedFrameIndex >= 0 && seriesByFrame.none { it.frameIndex == focusedFrameIndex }) {
+            focusedFrameIndex = -1
+            latticeView.selectedFrameIndex = -1
+            btnOpenAnalysis.visibility = View.GONE
+            redrawStrainPlot()
+            return
+        }
+        strainPlotSection.visibility = View.VISIBLE
+        strainPlot.setData(
+            seriesByFrame.map { it.series },
+            getString(if (horizontal) R.string.line_cut_axis_x else R.string.line_cut_axis_y),
+            getString(R.string.line_cut_axis_strain),
+        )
+        strainPlotReadout.text = ""
+    }
+
+    private fun toggleFocus(frameIndex: Int) {
+        focusedFrameIndex = if (focusedFrameIndex == frameIndex) -1 else frameIndex
+        latticeView.selectedFrameIndex = focusedFrameIndex
+        btnOpenAnalysis.visibility = if (focusedFrameIndex >= 0) View.VISIBLE else View.GONE
+        redrawStrainPlot()
+    }
+
+    private fun selectedStrainComponent(): Int {
+        val index = strainSpinner.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
+        return STRAIN_OPTIONS[index].second
     }
 
     /**

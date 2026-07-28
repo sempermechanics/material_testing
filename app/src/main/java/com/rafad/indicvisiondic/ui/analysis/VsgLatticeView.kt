@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
@@ -19,13 +20,21 @@ import kotlin.math.hypot
  * nodes fall into vertical columns — the lattice makes the shape of the sweep,
  * and which corners of it the engine could not solve, legible at a glance.
  *
- * Interactive: tapping a solved node opens that analysis via [onNodeClick].
+ * Interactive: tap to focus a solved node, double-tap/long-press to open it.
+ *
+ * Both plot axes: Y (VSG) is floored at 1; X (subset) uses evenly spaced
+ * columns for the present subset sizes.
  */
 class VsgLatticeView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0,
 ) : View(context, attrs, defStyleAttr) {
+    /**
+     * Off by default so the planned lattice preview keeps its old passive
+     * behaviour; the result lattice explicitly enables interactions.
+     */
+    var interactionEnabled: Boolean = false
 
     /**
      * One analysis of the sweep. [solved] is false for a combination the engine
@@ -43,6 +52,15 @@ class VsgLatticeView @JvmOverloads constructor(
 
     /** Invoked when a solved node is tapped. */
     var onNodeClick: ((Node) -> Unit)? = null
+    var onNodeDoubleClick: ((Node) -> Unit)? = null
+    var onNodeLongClick: ((Node) -> Unit)? = null
+
+    /** Solved frame currently focused by the host screen, or -1 for none. */
+    var selectedFrameIndex: Int = -1
+        set(value) {
+            field = value
+            invalidate()
+        }
 
     /** Where each node was last drawn, for hit-testing taps. */
     private class Placed(val node: Node, val x: Float, val y: Float)
@@ -61,7 +79,10 @@ class VsgLatticeView @JvmOverloads constructor(
         const val TICK_GAP_DP = 5f
         const val Y_TICKS = 4
 
-        /** Head-room above/below the VSG range so nodes are not clipped. */
+        /** Y-axis floor: VSG ticks / origin start at 1. */
+        const val AXIS_MIN = 1
+
+        /** Head-room above the VSG range so nodes are not clipped. */
         const val Y_MARGIN_FRACTION = 0.12f
 
         /** Baseline nudge that centres a tick label on its gridline. */
@@ -75,6 +96,7 @@ class VsgLatticeView @JvmOverloads constructor(
 
         /** Tap tolerance around a node centre, in dp. */
         const val TOUCH_RADIUS_DP = 22f
+        const val SELECT_RING_DP = 3f
     }
 
     private val density = resources.displayMetrics.density
@@ -115,18 +137,17 @@ class VsgLatticeView @JvmOverloads constructor(
 
     private var nodes: List<Node> = emptyList()
     private var columns: List<Int> = emptyList()
-    private var vsgMin = 0
-    private var vsgMax = 1
+    private var vsgMin = AXIS_MIN
+    private var vsgMax = AXIS_MIN + 1
 
     fun setNodes(nodes: List<Node>) {
         this.nodes = nodes
         columns = nodes.map { it.subset }.distinct().sorted()
         val vsgs = nodes.map { it.vsg }
-        val lo = vsgs.minOrNull() ?: 0
-        val hi = vsgs.maxOrNull() ?: 1
-        val margin = ((hi - lo) * Y_MARGIN_FRACTION).toInt().coerceAtLeast(1)
-        vsgMin = lo - margin
-        vsgMax = if (hi > lo) hi + margin else lo + margin
+        val hi = vsgs.maxOrNull() ?: AXIS_MIN
+        val yMargin = ((hi - AXIS_MIN) * Y_MARGIN_FRACTION).toInt().coerceAtLeast(1)
+        vsgMin = AXIS_MIN
+        vsgMax = maxOf(hi + yMargin, AXIS_MIN + 1)
         invalidate()
     }
 
@@ -154,30 +175,60 @@ class VsgLatticeView @JvmOverloads constructor(
         drawLabels(canvas, columnX, frame)
     }
 
-    /** The node a press started on, so a tap and its release resolve to the same one. */
+    /** Node where the current press started, for gesture resolution. */
     private var pressedNode: Node? = null
 
-    @Suppress("ReturnCount") // one branch per touch phase reads clearest
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            // Claim the gesture only when it starts on a node — otherwise a drag
-            // that begins on the lattice still scrolls the page around it.
-            MotionEvent.ACTION_DOWN -> {
-                pressedNode = nodeAt(event.x, event.y)
-                return pressedNode != null
+    private val gestureDetector = GestureDetector(
+        context,
+        object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean {
+                pressedNode = nodeAt(e.x, e.y)
+                val hit = pressedNode != null
+                parent?.requestDisallowInterceptTouchEvent(hit)
+                return hit
             }
-            MotionEvent.ACTION_UP -> {
-                val up = nodeAt(event.x, event.y)
-                if (up != null && up == pressedNode) {
+
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                val node = nodeAt(e.x, e.y)
+                if (node != null) {
                     performClick()
-                    onNodeClick?.invoke(up)
+                    onNodeClick?.invoke(node)
+                    return true
                 }
-                pressedNode = null
-                return true
+                return false
             }
-            MotionEvent.ACTION_CANCEL -> pressedNode = null
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                val node = nodeAt(e.x, e.y)
+                if (node != null) {
+                    onNodeDoubleClick?.invoke(node)
+                    return true
+                }
+                return false
+            }
+
+            override fun onLongPress(e: MotionEvent) {
+                val node = nodeAt(e.x, e.y)
+                if (node != null) onNodeLongClick?.invoke(node)
+            }
+
+            override fun onScroll(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                distanceX: Float,
+                distanceY: Float,
+            ): Boolean = pressedNode != null
+        },
+    )
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!interactionEnabled) return super.onTouchEvent(event)
+        val handled = gestureDetector.onTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            parent?.requestDisallowInterceptTouchEvent(false)
+            pressedNode = null
         }
-        return super.onTouchEvent(event)
+        return handled || super.onTouchEvent(event)
     }
 
     override fun performClick(): Boolean {
@@ -194,7 +245,6 @@ class VsgLatticeView @JvmOverloads constructor(
         return if (hypot(hit.x - x, hit.y - y) <= dp(TOUCH_RADIUS_DP)) hit.node else null
     }
 
-    /** The plot area in view pixels, inside the axis gutters. */
     /** Mutable so one instance can serve every draw. */
     private class Frame(
         var left: Float = 0f,
@@ -239,6 +289,7 @@ class VsgLatticeView @JvmOverloads constructor(
 
     private fun drawNodes(canvas: Canvas, columnX: Map<Int, Float>, yFor: (Int) -> Float) {
         val radius = dp(NODE_RADIUS_DP)
+        val selectedRadius = radius + dp(SELECT_RING_DP)
         val solved = ContextCompat.getColor(context, R.color.sky_primary)
         val skipped = ContextCompat.getColor(context, R.color.semantic_danger)
         nodes.forEach { node ->
@@ -248,6 +299,10 @@ class VsgLatticeView @JvmOverloads constructor(
             if (node.solved) {
                 fillPaint.color = solved
                 canvas.drawCircle(x, y, radius, fillPaint)
+                if (selectedFrameIndex >= 0 && node.frameIndex == selectedFrameIndex) {
+                    strokePaint.color = ContextCompat.getColor(context, R.color.text_primary)
+                    canvas.drawCircle(x, y, selectedRadius, strokePaint)
+                }
             } else {
                 // Hollow red ring: a combination that was attempted and failed.
                 canvas.drawCircle(x, y, radius, holePaint)

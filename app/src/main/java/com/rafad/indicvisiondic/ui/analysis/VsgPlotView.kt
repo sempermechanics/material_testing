@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
 import com.rafad.indicvisiondic.R
@@ -20,9 +21,11 @@ import kotlin.math.max
  *  - peak strain and strain noise against VSG size (the convergence view), and
  *  - strain along the line cut, one polyline per VSG (the line-scan view).
  *
- * Deliberately small: linear axes, no gestures, no zoom. The numbers next to
- * the chart carry the precision; the chart carries the shape.
+ * Deliberately small: linear axes, no zoom, and the one gesture is a horizontal
+ * scrub that reports the value under the finger through [onScrub]. The numbers
+ * next to the chart carry the precision; the chart carries the shape.
  */
+@Suppress("TooManyFunctions") // the draw pipeline and the scrub gesture, each piece small
 class VsgPlotView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -111,6 +114,11 @@ class VsgPlotView @JvmOverloads constructor(
 
     /** Data-unit x of a vertical guide line, e.g. the recommended VSG. */
     private var highlightX: Float? = null
+    private var scrubX: Float? = null
+    private var currentBounds: Bounds? = null
+
+    /** Called while scrubbing: x position and y values per visible series. */
+    var onScrub: ((x: Float, samples: List<Pair<String, Float>>) -> Unit)? = null
 
     fun setData(series: List<Series>, xLabel: String, yLabel: String, highlightX: Float? = null) {
         this.series = series
@@ -153,9 +161,11 @@ class VsgPlotView @JvmOverloads constructor(
         return Bounds(xMin, if (xMax > xMin) xMax else xMin + 1f, yMin, yMax)
     }
 
+    @Suppress("CyclomaticComplexMethod") // one branch per optional layer: crosshair, muted series, markers
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val b = bounds() ?: return
+        currentBounds = b
 
         val left = dp(PAD_LEFT_DP)
         val right = width - dp(PAD_RIGHT_DP)
@@ -168,7 +178,7 @@ class VsgPlotView @JvmOverloads constructor(
 
         frame.set(left, right, top, bottom)
         drawGrid(canvas, b, frame)
-        highlightX?.let {
+        (scrubX ?: highlightX)?.let {
             gridPaint.color = ContextCompat.getColor(context, R.color.sky_primary)
             canvas.drawLine(sx(it), top, sx(it), bottom, gridPaint)
             gridPaint.color = ContextCompat.getColor(context, R.color.surface_outline)
@@ -190,6 +200,76 @@ class VsgPlotView @JvmOverloads constructor(
         }
 
         drawAxisLabels(canvas, left, right, bottom)
+    }
+
+    @Suppress("ReturnCount") // one exit per gesture phase, plus the not-ours fall-throughs
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        val b = currentBounds ?: return super.onTouchEvent(event)
+        if (!hasFrame()) return super.onTouchEvent(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                if (!contains(event.x, event.y)) return false
+                parent?.requestDisallowInterceptTouchEvent(true)
+                updateScrub(event.x, b)
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
+                clearScrub()
+                if (event.actionMasked == MotionEvent.ACTION_UP) performClick()
+                return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    /** A scrub ends as a click so accessibility services can drive the view. */
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
+    }
+
+    private fun hasFrame(): Boolean = frame.right > frame.left && frame.bottom > frame.top
+
+    private fun contains(x: Float, y: Float): Boolean =
+        x in frame.left..frame.right && y in frame.top..frame.bottom
+
+    private fun updateScrub(xPx: Float, b: Bounds) {
+        val clamped = xPx.coerceIn(frame.left, frame.right)
+        val ratio = (clamped - frame.left) / (frame.right - frame.left)
+        val xData = b.xMin + ratio * (b.xMax - b.xMin)
+        scrubX = xData
+        val values = series
+            .filterNot { it.muted }
+            .mapNotNull { entry ->
+                interpolateY(entry.points, xData)?.let { y -> entry.label to y }
+            }
+        onScrub?.invoke(xData, values)
+        invalidate()
+    }
+
+    private fun clearScrub() {
+        if (scrubX == null) return
+        scrubX = null
+        onScrub?.invoke(Float.NaN, emptyList())
+        invalidate()
+    }
+
+    @Suppress("ReturnCount") // empty, both clamps, the degenerate span and the interpolated hit
+    private fun interpolateY(points: List<Pair<Float, Float>>, x: Float): Float? {
+        if (points.isEmpty()) return null
+        if (x <= points.first().first) return points.first().second
+        if (x >= points.last().first) return points.last().second
+        for (i in 0 until points.lastIndex) {
+            val (x0, y0) = points[i]
+            val (x1, y1) = points[i + 1]
+            if (x in x0..x1) {
+                val span = (x1 - x0).takeIf { it != 0f } ?: return y0
+                val t = (x - x0) / span
+                return y0 + t * (y1 - y0)
+            }
+        }
+        return null
     }
 
     private fun drawGrid(canvas: Canvas, b: Bounds, f: Frame) {

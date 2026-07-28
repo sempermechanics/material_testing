@@ -24,16 +24,18 @@
         android:layout_weight="1"
         android:scrollbars="none">
 
-        <!-- 14dp column inset matches the analysis pages this screen follows. -->
+        <!-- Tuned to land on one screen: 12dp column inset, 12dp card padding. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="14dp">
+            android:padding="12dp">
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content">
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="0dp"
+                app:contentPadding="12dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -58,13 +60,13 @@
                     <com.rafad.indicvisiondic.ui.analysis.VsgLatticeView
                         android:id="@+id/latticeView"
                         android:layout_width="match_parent"
-                        android:layout_height="300dp"
-                        android:layout_marginTop="14dp" />
+                        android:layout_height="210dp"
+                        android:layout_marginTop="10dp" />
 
                     <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="10dp"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
@@ -99,20 +101,91 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="6dp"
                         android:text="@string/vsg_lattice_caption"
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp" />
+
+                    <!-- Centre-line strain profiles for each solved combination. -->
+                    <LinearLayout
+                        android:id="@+id/strainPlotSection"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:orientation="vertical"
+                        android:visibility="gone"
+                        tools:visibility="visible">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tvStrainPlotTitle"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="8dp"
+                                android:layout_weight="1"
+                                android:text="@string/line_cut_title"
+                                android:textColor="@color/text_primary"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <Spinner
+                                android:id="@+id/spinnerStrainComponent"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:minHeight="36dp"
+                                android:spinnerMode="dropdown" />
+                        </LinearLayout>
+
+                        <com.rafad.indicvisiondic.ui.analysis.VsgPlotView
+                            android:id="@+id/plotLatticeStrain"
+                            android:layout_width="match_parent"
+                            android:layout_height="160dp"
+                            android:layout_marginTop="6dp" />
+
+                        <TextView
+                            android:id="@+id/tvStrainPlotReadout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:minLines="1"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            tools:text="(24.0, 0.0031) subset 21 · (24.0, 0.0028) subset 31" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnViewResults"
-                style="@style/Widget.IndicVision.Button.Cta"
+            <!-- Both ways out of this screen share one row; the outlined button
+                 only appears once a node is focused. -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:text="@string/vsg_lattice_view_results" />
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnOpenAnalysis"
+                    style="@style/Widget.IndicVision.Button.Outlined"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/vsg_lattice_open_analysis"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnViewResults"
+                    style="@style/Widget.IndicVision.Button.Cta"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/vsg_lattice_view_results" />
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

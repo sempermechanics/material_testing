@@ -157,14 +157,6 @@ class SweepSetupHelper(
             callbacks.startVsgSweep()
         }
 
-        val sweepSettingsBody = sweepBody
-        val sweepChevron = activity.findViewById<ImageView>(R.id.ivSweepSettingsChevron)
-        activity.findViewById<View>(R.id.sweepSettingsHeader).setOnClickListener {
-            val expanded = sweepSettingsBody.visibility == View.VISIBLE
-            sweepSettingsBody.visibility = if (expanded) View.GONE else View.VISIBLE
-            sweepChevron.rotation = if (expanded) 0f else 180f
-        }
-
         activity.findViewById<View>(R.id.btnLatticeSamples).setOnClickListener {
             val expanded = latticeSamplesBody.visibility == View.VISIBLE
             latticeSamplesBody.visibility = if (expanded) View.GONE else View.VISIBLE
@@ -266,11 +258,17 @@ class SweepSetupHelper(
         callbacks.checkReady()
     }
 
-    /** Defaults to the last frame — the most deformed one in a monotonic test. */
+    /** Defaults to the middle of the sequence (1-based frame n/2+1). */
     fun resolvedSweepFrame(): Int {
-        val last = maxOf(0, viewModel.defCount - 1)
+        val n = viewModel.defCount
+        if (n <= 0) return 0
+        val last = n - 1
         val stored = viewModel.vsgFrameIndex
-        return if (stored < 0 || stored > last) last else stored
+        return if (stored < 0 || stored > last) {
+            (n / 2).coerceIn(0, last)
+        } else {
+            stored
+        }
     }
 
     /** "N analyses · subset a–b px · VSG c–d px" for a plan. */

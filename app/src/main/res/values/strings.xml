@@ -281,15 +281,17 @@
 
     <!-- Sweep lattice staging screen (VsgLatticeActivity) -->
     <string name="vsg_lattice_title">Parameter sweep</string>
-    <string name="vsg_lattice_heading">Swept parameter space</string>
+    <string name="vsg_lattice_heading">Result lattice</string>
     <string name="vsg_lattice_summary_fmt">%1$d combinations · %2$d solved · %3$d skipped · step subset÷%4$d</string>
     <string name="vsg_lattice_summary_short_fmt">%1$d combinations · %2$d solved · %3$d skipped</string>
-    <string name="vsg_lattice_caption">Each node is one analysis. Every subset size carries its own ladder of virtual strain gauge sizes, set by sweeping the step size and strain window. Tap a node to open that analysis, or view all results below.</string>
+    <string name="vsg_lattice_caption">Tap a node to focus its curve · double-tap to open it</string>
     <string name="vsg_lattice_axis_subset">Subset size (px)</string>
     <string name="vsg_lattice_axis_vsg">VSG size (px)</string>
     <string name="vsg_lattice_legend_solved">Solved</string>
     <string name="vsg_lattice_legend_skipped">Skipped</string>
     <string name="vsg_lattice_view_results">View results</string>
+    <string name="vsg_lattice_open_analysis">Open analysis</string>
+    <string name="vsg_lattice_scrub_value_fmt">(%1$.1f, %2$.2f) %3$s</string>
 
     <string name="setting_vsg">Virtual strain gauge</string>
     <string name="line_cut_title">Strain along the centre line cut</string>
