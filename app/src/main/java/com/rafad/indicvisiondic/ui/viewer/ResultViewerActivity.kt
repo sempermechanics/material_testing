@@ -1,14 +1,14 @@
 // Result viewer Activity: it drives frame scrubbing, overlays, inspect mode and
 // export from one screen, so its size, per-control methods, combined gesture
 // conditions and literal UI constants are inherent here.
+
 @file:Suppress(
-    "MagicNumber",
     "ComplexCondition",
-    "LongMethod",
     "CyclomaticComplexMethod",
-    "TooManyFunctions",
-    "TooGenericExceptionCaught",
+    "LongMethod",
     "LoopWithTooManyJumpStatements",
+    "MagicNumber",
+    "TooManyFunctions",
 )
 
 package com.rafad.indicvisiondic.ui.viewer

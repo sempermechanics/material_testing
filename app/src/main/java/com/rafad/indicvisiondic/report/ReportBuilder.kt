@@ -1,14 +1,8 @@
 // Report rendering: literal page/table coordinates, paint sizes and long draw
 // calls are inherent to layout code and read clearest inline, so the structural
 // and magic-number rules are suppressed for this whole file.
-@file:Suppress(
-    "MagicNumber",
-    "MaxLineLength",
-    "LongMethod",
-    "CyclomaticComplexMethod",
-    "LongParameterList",
-    "NestedBlockDepth",
-)
+
+@file:Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList", "MagicNumber", "NestedBlockDepth")
 
 package com.rafad.indicvisiondic.report
 import android.graphics.Bitmap
@@ -68,7 +62,10 @@ object ReportBuilder {
         val drawMinMarker: Boolean = true,
     )
 
-    fun appBuildLabel(): String = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • ${Build.SUPPORTED_ABIS.firstOrNull() ?: "?"}"
+    fun appBuildLabel(): String {
+        val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "?"
+        return "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • $abi"
+    }
 
     fun formatMetric(value: Float): String {
         val absVal = abs(value)

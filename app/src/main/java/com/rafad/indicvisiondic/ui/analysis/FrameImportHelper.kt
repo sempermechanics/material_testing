@@ -1,5 +1,4 @@
 // Frame import: literal buffer/quality constants read clearest inline.
-@file:Suppress("MagicNumber")
 
 package com.rafad.indicvisiondic.ui.analysis
 

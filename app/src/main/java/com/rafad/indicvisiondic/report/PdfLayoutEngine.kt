@@ -1,7 +1,8 @@
 // PDF rendering code: page coordinates, paint sizes and long canvas draw calls
-// are literal by nature and read clearest inline, so MagicNumber / MaxLineLength
-// are suppressed for this whole file rather than named one offset at a time.
-@file:Suppress("MagicNumber", "MaxLineLength", "TooManyFunctions")
+// are literal by nature and read clearest inline, so MagicNumber is suppressed
+// for this whole file rather than named one offset at a time.
+
+@file:Suppress("MagicNumber", "TooManyFunctions")
 
 package com.rafad.indicvisiondic.report
 
@@ -108,7 +109,12 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
                 strokeWidth = 2f
             },
         )
-        canvas?.drawText("inDIC Metrology Report • Page $pageNumber", pageWidth / 2f, pageHeight - (margin / 2f), footerPaint)
+        canvas?.drawText(
+            "inDIC Metrology Report • Page $pageNumber",
+            pageWidth / 2f,
+            pageHeight - (margin / 2f),
+            footerPaint,
+        )
     }
 
     fun drawTitle(title: String) {
@@ -157,12 +163,22 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
         val rowHeight = 80f
         val colWidths = colWeights.map { it * contentWidth }
 
-        canvas?.drawRect(margin, cursorY, pageWidth - margin, cursorY + rowHeight, Paint().apply { color = colorPrimary })
+        canvas?.drawRect(
+            margin,
+            cursorY,
+            pageWidth - margin,
+            cursorY + rowHeight,
+            Paint().apply { color = colorPrimary },
+        )
 
         var currentX = margin
         for ((i, header) in headers.withIndex()) {
             val alignX = if (i == 0) currentX + 20f else currentX + colWidths[i] - 20f
-            val paint = if (i == 0) tableHeaderPaint else Paint(tableHeaderPaint).apply { textAlign = Paint.Align.RIGHT }
+            val paint = if (i == 0) {
+                tableHeaderPaint
+            } else {
+                Paint(tableHeaderPaint).apply { textAlign = Paint.Align.RIGHT }
+            }
             canvas?.drawText(header, alignX, cursorY + 55f, paint)
             currentX += colWidths[i]
         }
@@ -170,7 +186,9 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
 
         val rowBgZebra = Paint().apply { color = colorZebra }
         for ((rowIndex, row) in rows.withIndex()) {
-            if (rowIndex % 2 == 1) canvas?.drawRect(margin, cursorY, pageWidth - margin, cursorY + rowHeight, rowBgZebra)
+            if (rowIndex % 2 == 1) {
+                canvas?.drawRect(margin, cursorY, pageWidth - margin, cursorY + rowHeight, rowBgZebra)
+            }
 
             currentX = margin
             for ((colIndex, cell) in row.withIndex()) {
@@ -219,15 +237,30 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
             },
         )
 
-        canvas?.drawBitmap(refBmp, null, RectF(margin + 20f, startY, margin + 20f + imgWidth, startY + refHeight), upscalerPaint)
-        canvas?.drawBitmap(defBmp, null, RectF(margin + 40f + imgWidth, startY, margin + 40f + imgWidth * 2f, startY + defHeight), upscalerPaint)
+        canvas?.drawBitmap(
+            refBmp,
+            null,
+            RectF(margin + 20f, startY, margin + 20f + imgWidth, startY + refHeight),
+            upscalerPaint,
+        )
+        canvas?.drawBitmap(
+            defBmp,
+            null,
+            RectF(margin + 40f + imgWidth, startY, margin + 40f + imgWidth * 2f, startY + defHeight),
+            upscalerPaint,
+        )
 
         val labelPaint = Paint(bodyPaintLeft).apply {
             textAlign = Paint.Align.CENTER
             textSize = 32f
         }
         canvas?.drawText("Ref: $refName", margin + 20f + (imgWidth / 2f), startY + maxImgHeight + 60f, labelPaint)
-        canvas?.drawText("Def: $defName", margin + 40f + imgWidth + (imgWidth / 2f), startY + maxImgHeight + 60f, labelPaint)
+        canvas?.drawText(
+            "Def: $defName",
+            margin + 40f + imgWidth + (imgWidth / 2f),
+            startY + maxImgHeight + 60f,
+            labelPaint,
+        )
 
         cursorY += maxImgHeight + 160f
     }

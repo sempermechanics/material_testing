@@ -1,6 +1,3 @@
-// A few long preference-key / default-value lines read clearest unbroken.
-@file:Suppress("MaxLineLength")
-
 package com.rafad.indicvisiondic.data
 
 import android.content.Context
@@ -28,7 +25,8 @@ object DicSettings {
     /** Master switch for the upload worker; off = sessions stay "local only". */
     fun saveToCloud(context: Context): Boolean = prefs(context).getBoolean(KEY_SAVE_TO_CLOUD, true)
 
-    fun setSaveToCloud(context: Context, value: Boolean) = prefs(context).edit().putBoolean(KEY_SAVE_TO_CLOUD, value).apply()
+    fun setSaveToCloud(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_SAVE_TO_CLOUD, value).apply()
 
     /**
      * When true, uploads (post-analysis and reconcile repair) wait for unmetered

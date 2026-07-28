@@ -1,5 +1,6 @@
 // Builds a master ZIP of per-session Everything archives for Settings export.
-@file:Suppress("TooGenericExceptionCaught", "NestedBlockDepth")
+
+@file:Suppress("TooGenericExceptionCaught")
 
 package com.rafad.indicvisiondic.data
 

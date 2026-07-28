@@ -1,15 +1,15 @@
 // Analysis wizard Activity: it orchestrates the whole two/three-page setup flow
 // (image/video import, ROI, parameters, sweep, launch), so its size, per-control
 // methods, literal UI constants and broad import guards are inherent here.
+
 @file:Suppress(
-    "MagicNumber",
-    "MaxLineLength",
-    "LongMethod",
     "CyclomaticComplexMethod",
-    "TooManyFunctions",
     "LargeClass",
+    "LongMethod",
+    "MagicNumber",
     "ReturnCount",
     "TooGenericExceptionCaught",
+    "TooManyFunctions",
 )
 
 package com.rafad.indicvisiondic.ui.analysis
@@ -139,7 +139,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 override fun handleOnBackPressed() {
                     if (isProcessing) {
                         // Block the back button completely if the C++ engine is running
-                        Toast.makeText(this@StaticAnalysisActivity, R.string.analysis_running_back_blocked, Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            this@StaticAnalysisActivity,
+                            R.string.analysis_running_back_blocked,
+                            Toast.LENGTH_SHORT,
+                        ).show()
                     } else if (viewModel.wizardStep > 1) {
                         goToStep(viewModel.wizardStep - 1, animate = true)
                     } else if (viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty()) {
@@ -449,7 +453,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load reference image")
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@StaticAnalysisActivity, R.string.failed_load_reference, Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@StaticAnalysisActivity,
+                        R.string.failed_load_reference,
+                        Toast.LENGTH_LONG,
+                    ).show()
                 }
             }
         }
@@ -537,7 +545,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Timber.e(e, "Error handling batch")
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@StaticAnalysisActivity, getString(R.string.error_loading_images, e.message), Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@StaticAnalysisActivity,
+                        getString(R.string.error_loading_images, e.message),
+                        Toast.LENGTH_LONG,
+                    ).show()
                 }
             }
         }
@@ -660,7 +672,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     overlayHelper.hide()
                     if (result == null) {
-                        Toast.makeText(this@StaticAnalysisActivity, R.string.video_extract_insufficient, Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            this@StaticAnalysisActivity,
+                            R.string.video_extract_insufficient,
+                            Toast.LENGTH_LONG,
+                        ).show()
                         return@withContext
                     }
 
@@ -695,7 +711,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 Timber.e(e, "Error extracting video frames")
                 withContext(Dispatchers.Main) {
                     overlayHelper.hide()
-                    Toast.makeText(this@StaticAnalysisActivity, getString(R.string.video_read_error, e.message), Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@StaticAnalysisActivity,
+                        getString(R.string.video_read_error, e.message),
+                        Toast.LENGTH_LONG,
+                    ).show()
                 }
             }
         }

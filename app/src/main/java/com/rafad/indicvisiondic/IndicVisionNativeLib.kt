@@ -1,7 +1,8 @@
 // JNI bridge: the external declarations mirror the native C++ engine signatures
 // verbatim, so their parameter count and line length follow the engine, not this
-// layer — hence LongParameterList / MaxLineLength are suppressed here.
-@file:Suppress("LongParameterList", "MaxLineLength")
+// layer — hence LongParameterList is suppressed here.
+
+@file:Suppress("LongParameterList")
 
 package com.rafad.indicvisiondic
 
@@ -34,7 +35,13 @@ object IndicVisionNativeLib {
 
     // Call this ONCE before a batch starts to cache the reference image
     // This stops the engine from rebuilding it 50 times and crashing the memory!
-    external fun initializeReference(refBytes: ByteArray, maskBytes: ByteArray?, width: Int, height: Int, applyBlur: Boolean)
+    external fun initializeReference(
+        refBytes: ByteArray,
+        maskBytes: ByteArray?,
+        width: Int,
+        height: Int,
+        applyBlur: Boolean,
+    )
     external fun setDebugOutputDir(debugDir: String?)
 
     external fun computeFullFieldDirect(

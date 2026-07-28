@@ -1,6 +1,7 @@
 // Binary record layout: the literal byte offsets and strides ARE the on-disk
-// format and read clearest inline, so MagicNumber / MaxLineLength are suppressed.
-@file:Suppress("MagicNumber", "MaxLineLength")
+// format and read clearest inline, so MagicNumber is suppressed.
+
+@file:Suppress("MagicNumber")
 
 package com.rafad.indicvisiondic
 
@@ -45,7 +46,12 @@ object DicResult {
      */
     fun isSolvedPoint(corr: Float): Boolean = corr >= 0f
 
-    fun isAcceptedPoint(corr: Float, includeCorrelationField: Boolean = false): Boolean = if (includeCorrelationField) isSolvedPoint(corr) else isSolvedPoint(corr) && corr <= MAX_ZNSSD
+    fun isAcceptedPoint(corr: Float, includeCorrelationField: Boolean = false): Boolean =
+        if (includeCorrelationField) {
+            isSolvedPoint(corr)
+        } else {
+            isSolvedPoint(corr) && corr <= MAX_ZNSSD
+        }
 
     fun isStrainFieldIndex(dataIndex: Int): Boolean = dataIndex in IDX_EXX..IDX_EXY
 
