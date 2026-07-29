@@ -82,9 +82,16 @@ object VsgStudyRunner {
         val skipped: List<VsgStudy.Point> = emptyList(),
     )
 
-    /** Cooperative cancel, polled between solves (a solve is not interruptible). */
+    /**
+     * Cooperative cancel, polled between solves here and inside the engine's own
+     * point loops, so it stops the combination already running too.
+     */
     @Volatile
     var cancelRequested = false
+        set(value) {
+            field = value
+            IndicVisionNativeLib.setCancelRequested(value)
+        }
 
     /** Runs every combination of [params].plan in order. */
     fun run(
@@ -110,8 +117,8 @@ object VsgStudyRunner {
         val skipped = ArrayList<VsgStudy.Point>()
         var lastEngineError = 0
 
-        // A cancel short-circuits the remaining solves rather than interrupting
-        // one: the native call cannot be stopped once it has started.
+        // A cancel short-circuits the remaining solves; the one already running
+        // stops on its own, since the engine polls the same flag.
         for ((index, point) in params.plan.withIndex().takeWhile { !cancelRequested }) {
             val metrics = newMetrics()
             onProgress(Progress(index, total, index * PERCENT / maxOf(1, total), point, 0, -1f))

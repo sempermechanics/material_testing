@@ -43,6 +43,23 @@ Java_com_rafad_indicvisiondic_IndicVisionNativeLib_setDebugOutputDir(
     env->ReleaseStringUTFChars(debugDir, dir);
 }
 
+/**
+ * Ask the running solve to stop, or clear the flag before starting one.
+ *
+ * Deliberately takes no lock: computeFullFieldDirect holds g_cache.mutex for the
+ * whole solve, so a cancel that waited for it could never arrive in time — which
+ * is the entire point of the call.
+ */
+JNIEXPORT void JNICALL
+Java_com_rafad_indicvisiondic_IndicVisionNativeLib_setCancelRequested(
+        JNIEnv*, jobject, jboolean cancel) {
+    if (cancel == JNI_TRUE) {
+        IndicVision::pipeline::request_cancel();
+    } else {
+        IndicVision::pipeline::clear_cancel();
+    }
+}
+
 JNIEXPORT jobject JNICALL
 Java_com_rafad_indicvisiondic_IndicVisionNativeLib_getPreviewFromBytes(
         JNIEnv* env, jobject, jbyteArray fileData, jint targetWidth) {

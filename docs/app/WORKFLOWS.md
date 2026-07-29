@@ -439,7 +439,7 @@ Reached only when the file picked on Home was a video.
 ```
 5.4 Running
     ├── progress %, elapsed, points solved, convergence %
-    ├── Cancel (confirm; cooperative — only between frames)
+    ├── Cancel (confirm; cooperative — the engine stops mid-frame)
     └── Back is hard-blocked, screen kept on
 ```
 
@@ -450,7 +450,9 @@ Reached only when the file picked on Home was a video.
 | [ ] 5.4.3 | Leave the device untouched during a long run | The screen does not sleep |
 | [ ] 5.4.4 | Press Back mid-run | Blocked, with a toast |
 | [ ] 5.4.5 | Tap **Cancel** → "Keep running" | The run continues |
-| [ ] 5.4.6 | Tap **Cancel** → confirm | Stops after the current frame and returns to step 2, silently |
+| [ ] 5.4.6 | Tap **Cancel** → confirm | Stops within a moment — not at the end of the frame — and returns to step 2, silently |
+| [ ] 5.4.6a | Cancel a long frame (big ROI, small step) | Same: no multi-second wait on the progress overlay after confirming |
+| [ ] 5.4.6b | Start a new run straight after cancelling one | It runs normally — the cancel does not carry over |
 | [ ] 5.4.7 | Start a sweep | Status reads "Run i/N · subset · step · VSG" |
 | [ ] 5.4.8 | Background the app mid-run | The run does not survive process death — no resume is offered |
 

@@ -82,6 +82,13 @@ struct ThreadStats {
         }
     };
 
+// Cooperative cancel (the flag itself lives in cancel.cpp). Polled in the hot
+// point loops: the cost is one relaxed atomic load per point against a full ICGN
+// solve, and a late poll only means one more point, never a wrong result.
+
+/** How often a Path B worker parked on the queue re-checks the cancel flag. */
+static constexpr int kCancelPollMs = 20;
+
 int run_full_field(
     ReferenceCache& cache,
     const cv::Mat& def_gray,
@@ -101,6 +108,7 @@ int run_full_field(
 
         // 🚀 PRIORITY 3: Return -3 for memory/init errors
         if (output_ptr == nullptr || cache.ref_img == nullptr || def_gray.empty()) return -3;
+        if (cancel_requested()) return kCancelled;
 
         static int s_frame_count = 0; s_frame_count++;
         LOGD("=== FRAME %d computeFullFieldDirect (HYBRID CORE) START ===", s_frame_count);
@@ -571,6 +579,10 @@ int run_full_field(
 
     #pragma omp parallel for schedule(static) num_threads(safe_cores)
         for (int pool_idx = 0; pool_idx < gridW * gridH; ++pool_idx) {
+            // OpenMP forbids breaking out of a parallel for, so a cancel skips
+            // the remaining iterations instead — the same shape the existing
+            // exception guard in Path A uses.
+            if (cancel_requested()) continue;
             int gx = pool_idx % gridW, gy = pool_idx / gridW;
             if (!resultGrid[gy][gx].solved) {
                 int realX = params.rect_x + gx * params.step, realY = params.rect_y + gy * params.step;
@@ -693,6 +705,7 @@ int run_full_field(
     #pragma omp for schedule(dynamic, 32)
                 for (int idx = 0; idx < gridW * gridH; ++idx) {
                     if (omp_region_threw.load(std::memory_order_relaxed)) continue;
+                    if (cancel_requested()) continue;
                     if (!inMesh[idx]) continue;
                     int x = idx % gridW, y = idx / gridW;
                     if (resultGrid[y][x].solved) continue;
@@ -763,6 +776,10 @@ int run_full_field(
             }
             time_pathA = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_pathA_start).count();
         }
+
+        // Path A is done or abandoned; a cancelled field is incomplete, so stop
+        // before spending anything on strain and packing.
+        if (cancel_requested()) return kCancelled;
 
 
         std::unique_ptr<std::atomic<bool>[]> cell_claimed(new std::atomic<bool>[gridW * gridH]);
@@ -926,14 +943,20 @@ int run_full_field(
                         EngineStatFlusher flusher(local_engine, stats_pathB[tid], local_points_solved, local_hessian_ms, local_wait_ms);
 
                         while (true) {
+                            if (cancel_requested()) return;
                             IndicVision::SeedNode cur;
                             bool has_node = false;
                             {
                                 std::unique_lock<std::mutex> lk(gq.mtx);
                                 auto wait_start = std::chrono::high_resolution_clock::now();
-                                gq.cv.wait(lk, [&] { return !gq.q.empty() || gq.done || (gq.active == 0 && seed_idx.load(std::memory_order_relaxed) < (int)global_seeds.size()); });
+                                // Bounded wait: a worker parked on the queue has no
+                                // one to notify it of a cancel, so it re-checks on a
+                                // timer instead. A timeout is not an error — it just
+                                // sends the worker round the loop again.
+                                bool ready = gq.cv.wait_for(lk, std::chrono::milliseconds(kCancelPollMs), [&] { return !gq.q.empty() || gq.done || cancel_requested() || (gq.active == 0 && seed_idx.load(std::memory_order_relaxed) < (int)global_seeds.size()); });
                                 local_wait_ms += std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - wait_start).count();
-                                if (gq.done) return;
+                                if (gq.done || cancel_requested()) return;
+                                if (!ready) continue;
                                 if (!gq.q.empty()) { cur = gq.q.top(); gq.q.pop(); gq.active++; has_node = true; } else { gq.active++; }
                             }
 
@@ -1091,6 +1114,10 @@ int run_full_field(
                 });
             }
         }
+
+        // Path B's workers have been joined by their guard. A cancelled field is
+        // partial, so there is nothing worth deriving strain from.
+        if (cancel_requested()) return kCancelled;
 
         auto t_strain_start = std::chrono::high_resolution_clock::now();
         DisplacementField dispField;

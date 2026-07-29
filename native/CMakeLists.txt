@@ -67,6 +67,7 @@ add_library(indicvision_pipeline STATIC
         src/io/image_codec.cpp
         src/seeding/akaze_seed.cpp
         src/pipeline/reference_cache.cpp
+        src/pipeline/cancel.cpp
         src/pipeline/full_field_solver.cpp
 )
 target_include_directories(indicvision_pipeline

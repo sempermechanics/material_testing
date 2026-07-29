@@ -44,6 +44,16 @@ object IndicVisionNativeLib {
     )
     external fun setDebugOutputDir(debugDir: String?)
 
+    /**
+     * Stops the solve that is running now, rather than at the end of the frame.
+     *
+     * The engine polls this inside its point loops, so a cancel lands within a
+     * point or two. Call with `false` before starting a run — the flag survives
+     * the solve it stopped. Safe to call from any thread while a solve is in
+     * flight; that is what it is for.
+     */
+    external fun setCancelRequested(cancel: Boolean)
+
     external fun computeFullFieldDirect(
         refBytes: ByteArray,
         defBytes: ByteArray,

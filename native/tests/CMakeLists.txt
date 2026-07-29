@@ -34,6 +34,7 @@ set(DIC_UNIT_TESTS
         unit/test_image.cpp
         unit/test_subset_precomputer.cpp
         unit/test_strain_calculator.cpp
+        unit/test_cancel_token.cpp
 )
 set(DIC_INTEGRATION_TESTS
         integration/test_optimization_engine.cpp
@@ -55,6 +56,7 @@ set(DIC_ENGINE_SOURCES
         ${NATIVE_ROOT}/src/math/subset_precomputer.cpp
         ${NATIVE_ROOT}/src/math/optimization_engine.cpp
         ${NATIVE_ROOT}/src/strain/strain_calculator.cpp
+        ${NATIVE_ROOT}/src/pipeline/cancel.cpp
 )
 
 add_executable(dic_tests

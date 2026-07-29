@@ -210,6 +210,22 @@ precision, not "close enough".
 | `NlvcRecoversLinearFieldInInterior` | NLVC integral reproduces the same closed-form strain (quadrature tolerance 2e-3) |
 | `NlvcBoundaryStaysZeroWhenIntegralUnbalanced` | Edge points where the antisymmetric kernel can't balance stay 0 instead of exploding |
 
+## Suite: `CancelToken` — `unit/test_cancel_token.cpp`
+
+The flag `run_full_field` polls to stop a solve mid-frame. The polling itself
+needs a real solve (OpenCV, threads) and is covered on the Android side; what is
+pinned here is the contract those polls rest on.
+
+| Test | Proves |
+|---|---|
+| `StartsClear` / `RequestIsObserved` | The flag reads back what was set |
+| `StaysSetUntilCleared` | Sticky across a thousand polls — the caller must clear it before a run, which is why both run paths assign `false` on entry |
+| `CrossesThreads` | A worker spinning on the flag sees a request made from another thread — the flag is set on the UI thread, read by solver workers |
+| `CancelledCodeIsDistinctFromEngineErrors` | `kCancelled` is −99, matching `AnalysisRunCodes.ERROR_CANCELLED`, and is neither the −2 ROI nor the −3 init failure |
+
+`cancel.cpp` is deliberately its own translation unit with no OpenCV in it, so
+the host suite can link it without the rest of the pipeline.
+
 ## Suite: Kotlin JVM — `app/src/test/java` (`./gradlew :app:testDebugUnitTest`)
 
 ### `ApiDtosContractTest`
@@ -250,7 +266,8 @@ native/tests/
   shim/                   host stand-ins for <android/log.h> and OpenCV configs
   unit/                   one component vs. an oracle / mathematical identity
                             test_simd_kernels, test_image,
-                            test_subset_precomputer, test_strain_calculator
+                            test_subset_precomputer, test_strain_calculator,
+                            test_cancel_token
   integration/            the assembled engine end-to-end + robustness
                             test_optimization_engine, test_robustness
 ```

@@ -1,6 +1,7 @@
 #ifndef INDICVISION_PIPELINE_HPP
 #define INDICVISION_PIPELINE_HPP
 
+#include <indicvision/cancel.hpp>
 #include <indicvision/image.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/features2d.hpp>
@@ -46,7 +47,8 @@ struct FullFieldParams {
 
 /**
  * Run the hybrid full-field DIC pipeline.
- * @return number of valid output points, or negative error code (-2 ROI, -3 init).
+ * @return number of valid output points, or negative error code
+ *   (-2 ROI, -3 init, [kCancelled] if cancelled mid-solve).
  * Writes packed points to output_ptr (8 floats each: x,y,u,v,exx,eyy,exy,corr).
  * If metrics != nullptr and metrics_len >= 16, fills engine telemetry (17 floats preferred).
  */

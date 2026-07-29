@@ -494,9 +494,17 @@ class AnalysisViewModel : ViewModel() {
         val processingStartTime: Long,
     )
 
-    /** Cooperative cancel: checked between frames (the native solve itself is not interruptible). */
+    /**
+     * Cooperative cancel: checked between frames here, and forwarded to the
+     * engine, which polls it inside its point loops. Setting it therefore stops
+     * the solve already running rather than only the ones after it.
+     */
     @Volatile
     var cancelRequested = false
+        set(value) {
+            field = value
+            IndicVisionNativeLib.setCancelRequested(value)
+        }
 
     data class BatchProgressUpdate(
         val percent: Int,

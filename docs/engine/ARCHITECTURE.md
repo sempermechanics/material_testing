@@ -237,10 +237,40 @@ Key behaviors:
   (`schedule(dynamic, 32)`), reliability-guided seed propagation, and
   progress callbacks marshalled through a `NewGlobalRef` + `AttachCurrentThread`.
 - Results are written into a direct `ByteBuffer` (no copy back through JNI).
+- `setCancelRequested(...)` sets the cooperative cancel flag. It takes **no
+  lock** on purpose: `computeFullFieldDirect` holds the reference-cache mutex
+  for the whole solve, so a cancel that waited for it could never arrive while
+  the solve it means to stop is still running.
 
 Threading contract: **one `OptimizationEngine` + one `SubsetData` per OMP
 thread**; `SubsetData` buffers are reused across grid points via the
 `precompute_subset_fast` pool.
+
+### Cancellation — `include/indicvision/cancel.hpp`
+
+A process-wide flag (`request_cancel` / `clear_cancel` / `cancel_requested`),
+polled by `run_full_field` inside its point loops, so a cancel lands within a
+point or two instead of at the end of the frame. One relaxed atomic load per
+point is nothing against an ICGN solve.
+
+Where it is polled, and why there:
+
+| Site | Shape |
+|---|---|
+| Hessian pre-pass, Path A mesh execution | `if (cancel_requested()) continue;` — OpenMP forbids breaking out of a parallel `for`, so a cancel skips the remaining iterations |
+| Path B queue workers | `return` at the top of the work loop, plus the flag in the condition-variable predicate |
+| Path B's CV wait | bounded (`wait_for`, 20 ms) — a worker parked on an empty queue has no one to notify it of a cancel, so it re-checks on a timer |
+| After Path A, after Path B | `return kCancelled` — a cancelled field is partial, so strain and packing are never run on it |
+
+`run_full_field` returns `kCancelled` (**-99**), which is deliberately the same
+value as `AnalysisRunCodes.ERROR_CANCELLED` on the Kotlin side: the app already
+treats that code as "cancelled, discard", distinct from the `-2` / `-3` engine
+failures that raise a dialog.
+
+The flag is **sticky** — it survives the solve it stopped — so every run clears
+it before starting. Both `AnalysisViewModel.cancelRequested` and
+`VsgStudyRunner.cancelRequested` forward to it from their setters, and both
+assign `false` at the top of a run.
 
 ### Parameters from the app
 

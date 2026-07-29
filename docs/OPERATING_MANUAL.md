@@ -139,8 +139,9 @@ Then **Compute**.
 
 <img src="images/running.png" width="300" alt="Progress dialog">
 
-Points solved and convergence update live. **Cancel** stops after the current
-frame. Back is blocked.
+Points solved and convergence update live. **Cancel** stops the run where it is,
+within a moment — it does not wait out the frame being solved. Nothing is kept.
+Back is blocked.
 
 **Keep the app open.** A run has no resume. If Android kills the app, the run is
 gone.
