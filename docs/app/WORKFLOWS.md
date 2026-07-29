@@ -427,7 +427,9 @@ Reached only when the file picked on Home was a video.
 | [ ] 5.3.3 | Type a subset min above the max | Clamped so min ≤ max |
 | [ ] 5.3.4 | Type a max VSG of 5, then 900 | Clamped into 21–501 |
 | [ ] 5.3.5 | Type a step denominator of 1, then 9 | Clamped into 2–6; the prefix reads "subset ÷ n" |
-| [ ] 5.3.6 | Tap each ⓘ | Subset range, max strain window, step depth and samples each explain themselves |
+| [ ] 5.3.6 | Tap each ⓘ | Subset range, strain window range, step depth and samples each explain themselves |
+| [ ] 5.3.6b | Drag the strain window range | Two handles like the subset's; the min and max boxes track it and the plan count updates |
+| [ ] 5.3.6c | Type a min above the max | Clamped rather than inverted; the sweep still plans |
 | [ ] 5.3.6a | Open sweep setup for the first time | A coach mark points out the lattice preview graph |
 | [ ] 5.3.7 | Tap **Pick frame** | Dialog with a radio list, a frame-number field and a live preview |
 | [ ] 5.3.8 | Type a frame number in that dialog | The radio selection and preview follow |

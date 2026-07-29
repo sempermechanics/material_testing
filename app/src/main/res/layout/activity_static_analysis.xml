@@ -1065,29 +1065,50 @@
                                     android:src="@drawable/ic_info_min"
                                     app:tint="@color/text_secondary" />
 
-                                <com.google.android.material.textfield.TextInputLayout
-                                    android:id="@+id/tilVsgMax"
-                                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                                <EditText
+                                    android:id="@+id/etStrainWinMinValue"
+                                    android:layout_width="40dp"
+                                    android:layout_height="wrap_content"
+                                    android:background="@android:color/transparent"
+                                    android:gravity="center"
+                                    android:hint="@string/strain_win_min"
+                                    android:imeOptions="actionDone"
+                                    android:importantForAutofill="no"
+                                    android:inputType="number"
+                                    android:maxLength="2"
+                                    android:paddingTop="0dp"
+                                    android:paddingBottom="0dp"
+                                    android:textColor="@color/sky_primary"
+                                    android:textStyle="bold"
+                                    tools:text="5" />
+
+                                <com.google.android.material.slider.RangeSlider
+                                    android:id="@+id/rangeStrainWin"
                                     android:layout_width="0dp"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginEnd="6dp"
                                     android:layout_weight="1"
-                                    android:hint="@string/vsg_max"
-                                    app:boxStrokeColor="@color/sky_primary"
-                                    app:hintTextColor="@color/text_secondary"
-                                    app:suffixText="@string/scale_unit_px">
+                                    android:stepSize="2"
+                                    android:valueFrom="5"
+                                    android:valueTo="51"
+                                    app:values="@array/strain_window_range_default" />
 
-                                    <com.google.android.material.textfield.TextInputEditText
-                                        android:id="@+id/etVsgMaxValue"
-                                        android:layout_width="match_parent"
-                                        android:layout_height="wrap_content"
-                                        android:imeOptions="actionDone"
-                                        android:importantForAutofill="no"
-                                        android:inputType="number"
-                                        android:maxLength="4"
-                                        android:textColor="@color/text_primary"
-                                        tools:text="123" />
-                                </com.google.android.material.textfield.TextInputLayout>
+                                <EditText
+                                    android:id="@+id/etStrainWinMaxValue"
+                                    android:layout_width="40dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginEnd="6dp"
+                                    android:background="@android:color/transparent"
+                                    android:gravity="center"
+                                    android:hint="@string/strain_win_max"
+                                    android:imeOptions="actionDone"
+                                    android:importantForAutofill="no"
+                                    android:inputType="number"
+                                    android:maxLength="2"
+                                    android:paddingTop="0dp"
+                                    android:paddingBottom="0dp"
+                                    android:textColor="@color/sky_primary"
+                                    android:textStyle="bold"
+                                    tools:text="51" />
 
                                 <ImageButton
                                     android:id="@+id/btnStepDepthInfo"

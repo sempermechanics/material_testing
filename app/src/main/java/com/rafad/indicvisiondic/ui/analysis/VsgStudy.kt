@@ -146,50 +146,46 @@ object VsgStudy {
         sampleEvenly(subsetSizes(subsetMin, subsetMax), count)
 
     /**
+     * The odd strain windows between [winMin] and [winMax] inclusive, clamped to
+     * what the engine accepts. The subset's twin: both ends snapped odd, both
+     * ends the user's, so the axis says what it sweeps.
+     */
+    fun strainWindows(winMin: Int, winMax: Int): List<Int> {
+        val low = winMin.coerceIn(MIN_STRAIN_WINDOW, MAX_STRAIN_WINDOW) or 1
+        val high = (maxOf(winMax, low) or 1).coerceAtMost(MAX_STRAIN_WINDOW)
+        return (low..high step SUBSET_INCREMENT).toList()
+    }
+
+    /** [count] strain windows sampled evenly across `[winMin, winMax]`. */
+    fun sampledWindows(winMin: Int, winMax: Int, count: Int): List<Int> =
+        sampleEvenly(strainWindows(winMin, winMax), count)
+
+    /**
      * The sweep grid: for each sampled subset (x) and each of [strainWinSamples]
-     * strain windows (y) sampled up to [strainWinMax], one analysis at the fixed step size
-     * `subset/[stepDenominator]`. Deduplicated, ordered by subset then VSG — the
-     * order the frames are solved and scrubbed through in.
+     * strain windows (y) sampled across `[strainWinMin, strainWinMax]`, one
+     * analysis at the fixed step size `subset/[stepDenominator]`. Deduplicated,
+     * ordered by subset then VSG — the order the frames are solved and scrubbed
+     * through in.
      */
     @Suppress("LongParameterList") // the sweep's independent axes
     fun plan(
         subsetMin: Int,
         subsetMax: Int,
         subsetSamples: Int,
+        strainWinMin: Int,
         strainWinMax: Int,
         strainWinSamples: Int,
         stepDenominator: Int,
     ): List<Point> {
+        val windows = sampledWindows(strainWinMin, strainWinMax, strainWinSamples)
         val out = LinkedHashSet<Point>()
         for (subset in sampledSubsets(subsetMin, subsetMax, subsetSamples)) {
             val step = stepSizeFor(subset, stepDenominator)
-            for (window in sampledWindows(strainWinMax, strainWinSamples)) {
+            for (window in windows) {
                 out.add(Point(subset, step, window))
             }
         }
         return out.sortedWith(compareBy({ it.subset }, { it.vsg }, { it.step }))
-    }
-
-    /**
-     * [count] strain windows sampled evenly from [MIN_STRAIN_WINDOW] up to
-     * [strainWinMax]. Each value is snapped to odd.
-     */
-    private fun sampledWindows(strainWinMax: Int, count: Int): List<Int> {
-        val lo = MIN_STRAIN_WINDOW
-        val hi = strainWinMax.coerceIn(lo, MAX_STRAIN_WINDOW)
-        if (hi < lo) return emptyList()
-        val windows = LinkedHashSet<Int>()
-        for (raw in sampleSpan(lo, hi, count)) {
-            windows.add(raw or 1)
-        }
-        return windows.toList()
-    }
-
-    /** [count] integers spaced evenly across `[lo, hi]`, both ends included. */
-    private fun sampleSpan(lo: Int, hi: Int, count: Int): List<Int> = when {
-        count <= 0 || hi < lo -> emptyList()
-        count == 1 -> listOf((lo + hi) / 2)
-        else -> (0 until count).map { lo + (hi - lo) * it / (count - 1) }
     }
 
     /** [count] items of [items], evenly spaced, both ends included. */

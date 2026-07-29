@@ -97,10 +97,19 @@ class VsgStudyTest {
         subsetMin: Int = 41,
         subsetMax: Int = 61,
         subsetSamples: Int = 3,
+        strainWinMin: Int = VsgStudy.MIN_STRAIN_WINDOW,
         strainWinMax: Int = 51,
         strainWinSamples: Int = 3,
         stepDenominator: Int = 4,
-    ) = VsgStudy.plan(subsetMin, subsetMax, subsetSamples, strainWinMax, strainWinSamples, stepDenominator)
+    ) = VsgStudy.plan(
+        subsetMin,
+        subsetMax,
+        subsetSamples,
+        strainWinMin,
+        strainWinMax,
+        strainWinSamples,
+        stepDenominator,
+    )
 
     @Test
     fun `plan scales as subset samples times vsg samples`() {
@@ -139,6 +148,42 @@ class VsgStudyTest {
             strainWinMax = VsgStudy.MAX_STRAIN_WINDOW,
         )
         assertEquals(1, p.size)
+    }
+
+    @Test
+    fun `the strain window axis honours both ends, like the subset axis`() {
+        val p = plan(strainWinMin = 15, strainWinMax = 25, strainWinSamples = 8)
+
+        val windows = p.map { it.strainWindow }.distinct().sorted()
+        assertEquals("nothing below the floor", 15, windows.first())
+        assertTrue("nothing above the ceiling: $windows", windows.last() <= 25)
+        assertTrue("the range should not collapse to one window", windows.size > 1)
+    }
+
+    @Test
+    fun `a one-window range sweeps only that window`() {
+        val p = plan(strainWinMin = 21, strainWinMax = 21, strainWinSamples = 5)
+
+        assertEquals(setOf(21), p.map { it.strainWindow }.toSet())
+    }
+
+    @Test
+    fun `an inverted window range does not vanish`() {
+        // The UI clamps, but the planner must not produce an empty sweep if a
+        // min ever arrives above its max.
+        val p = plan(strainWinMin = 31, strainWinMax = 11, strainWinSamples = 3)
+
+        assertTrue("expected at least one combination", p.isNotEmpty())
+        p.forEach { assertTrue(it.strainWindow % 2 == 1) }
+    }
+
+    @Test
+    fun `window bounds are snapped odd and clamped to what the engine takes`() {
+        val p = plan(strainWinMin = 4, strainWinMax = 999, strainWinSamples = 8)
+
+        val windows = p.map { it.strainWindow }
+        assertTrue(windows.all { it % 2 == 1 })
+        assertTrue(windows.all { it in VsgStudy.MIN_STRAIN_WINDOW..VsgStudy.MAX_STRAIN_WINDOW })
     }
 
     @Test
@@ -187,7 +232,15 @@ class VsgStudyTest {
             .flatten()
 
         cases.forEach { c ->
-            val p = VsgStudy.plan(c.range.first, c.range.second, c.x, c.strainWinMax, c.y, c.depth)
+            val p = VsgStudy.plan(
+                c.range.first,
+                c.range.second,
+                c.x,
+                VsgStudy.MIN_STRAIN_WINDOW,
+                c.strainWinMax,
+                c.y,
+                c.depth,
+            )
             assertEquals("duplicates for $c", p.size, p.distinct().size)
         }
     }

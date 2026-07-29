@@ -163,7 +163,10 @@ class AnalysisViewModel : ViewModel() {
     /** Largest subset size of the sweep; 0 until a recommendation seeds it. */
     var subsetMax: Int = 0
 
-    /** Strain window ceiling for the sweep; 0 until a default seeds it. */
+    /** Smallest strain window of the sweep; 0 until a default seeds it. */
+    var strainWinMin: Int = 0
+
+    /** Largest strain window of the sweep; 0 until a default seeds it. */
     var strainWinMax: Int = 0
 
     /** How many subset sizes the sweep samples across the subset range (x axis). */

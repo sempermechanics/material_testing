@@ -80,6 +80,8 @@ class SweepSetupHelper(
     private lateinit var rangeSubset: RangeSlider
     private lateinit var etSubsetMinValue: EditText
     private lateinit var etSubsetMaxValue: EditText
+    private lateinit var rangeStrainWin: RangeSlider
+    private lateinit var etStrainWinMinValue: EditText
     private lateinit var etStrainWinMaxValue: EditText
     private lateinit var etStepDepthValue: EditText
     private lateinit var etSubsetSamplesValue: EditText
@@ -115,7 +117,9 @@ class SweepSetupHelper(
         rangeSubset = activity.findViewById(R.id.rangeSubset)
         etSubsetMinValue = activity.findViewById(R.id.etSubsetMinValue)
         etSubsetMaxValue = activity.findViewById(R.id.etSubsetMaxValue)
-        etStrainWinMaxValue = activity.findViewById(R.id.etVsgMaxValue)
+        rangeStrainWin = activity.findViewById(R.id.rangeStrainWin)
+        etStrainWinMinValue = activity.findViewById(R.id.etStrainWinMinValue)
+        etStrainWinMaxValue = activity.findViewById(R.id.etStrainWinMaxValue)
         etStepDepthValue = activity.findViewById(R.id.etStepDepthValue)
         etSubsetSamplesValue = activity.findViewById(R.id.etSubsetSamplesValue)
         etStrainWinSamplesValue = activity.findViewById(R.id.etVsgSamplesValue)
@@ -187,6 +191,7 @@ class SweepSetupHelper(
         if (!::etSubsetMinValue.isInitialized) return
         etSubsetMinValue.clearFocus()
         etSubsetMaxValue.clearFocus()
+        etStrainWinMinValue.clearFocus()
         etStrainWinMaxValue.clearFocus()
     }
 
@@ -213,9 +218,10 @@ class SweepSetupHelper(
         val (lo, hi) = suggestedSubsetWindow(rec, ceiling)
         viewModel.subsetMin = lo
         viewModel.subsetMax = hi
+        viewModel.strainWinMin = VsgStudy.MIN_STRAIN_WINDOW
         viewModel.strainWinMax = VsgStudy.MAX_STRAIN_WINDOW
         writeSubsetRange(lo, hi)
-        callbacks.renderParamField(etStrainWinMaxValue, viewModel.strainWinMax)
+        writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
         refreshSweepPlan()
     }
 
@@ -230,6 +236,7 @@ class SweepSetupHelper(
             subsetMin = viewModel.subsetMin,
             subsetMax = viewModel.subsetMax.coerceAtMost(ceiling),
             subsetSamples = viewModel.subsetSamples,
+            strainWinMin = viewModel.strainWinMin,
             strainWinMax = viewModel.strainWinMax,
             strainWinSamples = viewModel.strainWinSamples,
             stepDenominator = viewModel.stepDenominator,
@@ -340,6 +347,10 @@ class SweepSetupHelper(
 
         wireSweepField(etSubsetMinValue, { viewModel.subsetMin }) { commitSubsetMin(it) }
         wireSweepField(etSubsetMaxValue, { viewModel.subsetMax }) { commitSubsetMax(it) }
+        rangeStrainWin.addOnChangeListener { slider, _, fromUser ->
+            onSliderInput(fromUser) { commitStrainWinRange(slider.values[0].toInt(), slider.values[1].toInt()) }
+        }
+        wireSweepField(etStrainWinMinValue, { viewModel.strainWinMin }) { commitStrainWinMin(it) }
         wireSweepField(etStrainWinMaxValue, { viewModel.strainWinMax }) { commitStrainWinMax(it) }
         wireSweepField(etStepDepthValue, { viewModel.stepDenominator }) { commitStepDepth(it) }
         wireSweepField(etSubsetSamplesValue, { viewModel.subsetSamples }) { commitSubsetSamples(it) }
@@ -381,7 +392,7 @@ class SweepSetupHelper(
         activity.findViewById<View>(R.id.btnSubsetRangeInfo)
             .setOnClickListener { callbacks.showInfo(R.string.subset_range, R.string.info_subset_range) }
         activity.findViewById<View>(R.id.btnVsgMaxInfo)
-            .setOnClickListener { callbacks.showInfo(R.string.vsg_max, R.string.info_vsg_max) }
+            .setOnClickListener { callbacks.showInfo(R.string.strain_win_range, R.string.info_strain_win_range) }
         activity.findViewById<View>(R.id.btnSamplesInfo)
             .setOnClickListener { callbacks.showInfo(R.string.subset_samples, R.string.info_subset_samples) }
         activity.findViewById<View>(R.id.btnStepDepthInfo)
@@ -420,10 +431,41 @@ class SweepSetupHelper(
         refreshSweepPlan()
     }
 
-    private fun commitStrainWinMax(raw: Int) {
-        viewModel.strainWinMax = raw.coerceIn(STRAIN_WIN_MIN_INPUT, STRAIN_WIN_MAX_INPUT)
-        callbacks.renderParamField(etStrainWinMaxValue, viewModel.strainWinMax)
+    private fun oddWindow(raw: Int): Int =
+        raw.coerceIn(STRAIN_WIN_MIN_INPUT, STRAIN_WIN_MAX_INPUT) or 1
+
+    private fun commitStrainWinRange(rawLo: Int, rawHi: Int) {
+        val lo = oddWindow(rawLo)
+        val hi = oddWindow(rawHi).coerceAtLeast(lo)
+        viewModel.strainWinMin = lo
+        viewModel.strainWinMax = hi
+        writeStrainWinRange(lo, hi)
         refreshSweepPlan()
+    }
+
+    private fun commitStrainWinMin(raw: Int) {
+        val currentMax = viewModel.strainWinMax.takeIf { it > 0 } ?: STRAIN_WIN_MAX_INPUT
+        viewModel.strainWinMin = oddWindow(raw).coerceAtMost(currentMax)
+        writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
+        refreshSweepPlan()
+    }
+
+    private fun commitStrainWinMax(raw: Int) {
+        val floor = viewModel.strainWinMin.coerceAtLeast(STRAIN_WIN_MIN_INPUT)
+        viewModel.strainWinMax = oddWindow(raw).coerceAtLeast(floor)
+        writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
+        refreshSweepPlan()
+    }
+
+    private fun writeStrainWinRange(lo: Int, hi: Int) {
+        bindingSweep = true
+        rangeStrainWin.values = listOf(
+            lo.toFloat().coerceIn(rangeStrainWin.valueFrom, rangeStrainWin.valueTo),
+            hi.toFloat().coerceIn(rangeStrainWin.valueFrom, rangeStrainWin.valueTo),
+        )
+        bindingSweep = false
+        callbacks.renderParamField(etStrainWinMinValue, lo)
+        callbacks.renderParamField(etStrainWinMaxValue, hi)
     }
 
     private fun commitStepDepth(raw: Int) {

@@ -263,7 +263,7 @@ A sweep uses **one** deformed frame.
 | Control | Range |
 |---|---|
 | Subset range | 15–101, odd |
-| Max strain window | 5–51, odd — the sweep's y axis |
+| Strain window range | 5–51, odd — min and max, the sweep's y axis |
 | Step denominator | 2–6 — step is `subset ÷ n` |
 | Samples | 1–8 per axis |
 | Frame to sweep | radio list + number + preview |
@@ -476,7 +476,7 @@ version and phone model. Write above that block; leave it in place.
 | Kernel | 4×4 / 6×6 | 4×4 Bicubic | Studying interpolation bias | — |
 | Max frames | 10–150 | 50 | Long sequences | Runs are killed for memory |
 | Sweep subset range | 15–101, odd | Around recommended | — | — |
-| Sweep max strain window | 5–51, odd | — | Strain is noisy | Detail is being smoothed away |
+| Sweep strain window range | 5–51, odd | 5–51 | Strain is noisy | Detail is being smoothed away |
 | Step denominator | 2–6 | — | Denser correlation | Faster runs |
 | Samples | 1–8 per axis | 3 | Finer detail | Runtime is the product |
 

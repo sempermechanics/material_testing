@@ -145,10 +145,14 @@ class VsgLatticeView @JvmOverloads constructor(
         this.nodes = nodes
         columns = nodes.map { it.subset }.distinct().sorted()
         val windows = nodes.map { it.window }
+        // Frame the windows actually swept rather than anchoring at 1: the
+        // sweep's own range is the interesting span, and starting below it threw
+        // away most of the plot.
+        val lo = windows.minOrNull() ?: AXIS_MIN
         val hi = windows.maxOrNull() ?: AXIS_MIN
-        val yMargin = ((hi - AXIS_MIN) * Y_MARGIN_FRACTION).toInt().coerceAtLeast(1)
-        winMin = AXIS_MIN
-        winMax = maxOf(hi + yMargin, AXIS_MIN + 1)
+        val yMargin = ((hi - lo) * Y_MARGIN_FRACTION).toInt().coerceAtLeast(1)
+        winMin = (lo - yMargin).coerceAtLeast(0)
+        winMax = maxOf(hi + yMargin, winMin + 1)
         invalidate()
     }
 
