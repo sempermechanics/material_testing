@@ -5,24 +5,27 @@
 
 package com.rafad.indicvisiondic.ui.settings
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
-import android.view.View
-import android.widget.ImageButton
 import android.text.InputType
-import android.widget.ImageView
+import android.view.View
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.core.view.isVisible
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.google.android.material.snackbar.Snackbar
@@ -41,18 +44,18 @@ import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.CloudSessionDto
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.admin.AdminActivity
+import com.rafad.indicvisiondic.ui.auth.GoogleSignInHelper
 import com.rafad.indicvisiondic.ui.common.AuthRoute
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.home.SessionOpenHelper
-import com.rafad.indicvisiondic.ui.auth.GoogleSignInHelper
 import com.rafad.indicvisiondic.ui.viewer.SaveExportActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-import timber.log.Timber
 /**
  * Settings: account, cloud preferences, per-analysis data management, data
  * export/erasure and analysis defaults. A page rather than a sheet — Home
@@ -94,12 +97,14 @@ class SettingsActivity : AppCompatActivity() {
         wireCollapsible(R.id.headerAnalysesData, R.id.bodyAnalysesData, R.id.ivAnalysesDataChevron)
         wireCollapsible(R.id.headerYourData, R.id.bodyYourData, R.id.ivYourDataChevron)
         wireCollapsible(R.id.headerAnalysisPrefs, R.id.bodyAnalysisPrefs, R.id.ivAnalysisPrefsChevron)
+        wireCollapsible(R.id.headerHelpSupport, R.id.bodyHelpSupport, R.id.ivHelpSupportChevron)
 
         wireAccountSection()
         wireCloudSection()
         wireAnalysesDataSection()
         wireYourDataSection()
         wirePreferencesSection()
+        wireHelpSupportSection()
         wireFooter()
     }
 
@@ -395,11 +400,6 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun wirePreferencesSection() {
-        val valueLabel = findViewById<TextView>(R.id.tvMaxFramesValue)
-        findViewById<Slider>(R.id.sliderMaxFrames).apply {
-            value = DicSettings.maxFrames(this@SettingsActivity).toFloat()
-            valueLabel.text = frameCountText(value.toInt())
     private fun reauthenticateWithGoogleThenDelete(auth: AuthRepository) {
         lifecycleScope.launch {
             val idToken = try {
@@ -440,6 +440,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun toast(message: String) =
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
+    private fun wirePreferencesSection() {
+        val valueLabel = findViewById<TextView>(R.id.tvMaxFramesValue)
+        findViewById<Slider>(R.id.sliderMaxFrames).apply {
+            value = DicSettings.maxFrames(this@SettingsActivity).toFloat()
+            valueLabel.text = frameCountText(value.toInt())
             addOnChangeListener { _, v, _ ->
                 valueLabel.text = frameCountText(v.toInt())
                 DicSettings.setMaxFrames(this@SettingsActivity, v.toInt())
@@ -451,6 +456,43 @@ class SettingsActivity : AppCompatActivity() {
                 .setMessage(R.string.setting_max_frames_info)
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
+        }
+    }
+
+    private fun wireHelpSupportSection() {
+        findViewById<View>(R.id.btnEmailSupport).setOnClickListener { emailSupport() }
+    }
+
+    /** Opens the mail app pre-filled to support with account + device context. */
+    private fun emailSupport() {
+        val account = TokenStore.cachedEmail(this) ?: getString(R.string.pending_unknown_account)
+        // The blank lines leave the cursor above the diagnostics, so the user
+        // writes their question first and the context travels underneath it.
+        val body = buildString {
+            append("\n\n---\n")
+            append("Account: ").append(account).append('\n')
+            // Same guard as the Account section: a Keystore that refuses to open
+            // must not cost the user their way of reaching support.
+            val deviceId = runCatching { DeviceKeyManager(this@SettingsActivity).getDeviceId() }
+                .getOrDefault("(unavailable)")
+            append("Device ID: ").append(deviceId).append('\n')
+            append("App: ").append(BuildConfig.VERSION_NAME)
+                .append(" (").append(BuildConfig.VERSION_CODE).append(")\n")
+            append("Device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
+                .append(" — Android ").append(Build.VERSION.RELEASE)
+        }
+        val support = getString(R.string.support_email)
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = "mailto:".toUri()
+            putExtra(Intent.EXTRA_EMAIL, arrayOf(support))
+            putExtra(Intent.EXTRA_SUBJECT, getString(R.string.help_support_subject))
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+        try {
+            startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            Timber.w(e, "No email app to contact support")
+            Toast.makeText(this, getString(R.string.request_access_none, support), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -499,10 +541,10 @@ class SettingsActivity : AppCompatActivity() {
         const val BYTES_PER_GB = 1_073_741_824L
         const val ZIP_MIME = "application/zip"
 
+        /** Side inset for a bare EditText dropped into an alert dialog. */
+        const val DIALOG_FIELD_INSET_DP = 24
+
         /** Snackbar shows for exactly as long as the delete stays cancellable. */
         val UNDO_WINDOW_MS = TimeUnit.SECONDS.toMillis(BackupDeleteWorker.UNDO_WINDOW_SECONDS).toInt()
     }
 }
-        /** Side inset for a bare EditText dropped into an alert dialog. */
-        const val DIALOG_FIELD_INSET_DP = 24
-

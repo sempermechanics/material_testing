@@ -414,6 +414,12 @@
     <string name="support_email">support@indicvision.com</string>
     <string name="request_access_subject">inDIC access request</string>
 
+    <!-- Settings: help & support -->
+    <string name="help_support_section">Help &amp; support</string>
+    <string name="help_support_hint">Questions, bugs, or feature requests — email us and we\'ll get back to you.</string>
+    <string name="help_support_email_action">Email support</string>
+    <string name="help_support_subject">inDIC support request</string>
+
     <!-- First-login beta / data-use declaration (shown once per account on Home) -->
     <string name="beta_notice_title">Beta notice</string>
     <string name="beta_notice_body">To help improve the app and its services, analysis data generated while using the app will be collected and used to enhance performance, reliability, and future features. The user has the right to access, update, or delete their data at any time.</string>

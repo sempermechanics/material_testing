@@ -475,6 +475,69 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- 6. Help & support -->
+            <LinearLayout
+                android:id="@+id/headerHelpSupport"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:background="?attr/selectableItemBackground"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="4dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/help_support_section"
+                    android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+
+                <ImageView
+                    android:id="@+id/ivHelpSupportChevron"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:contentDescription="@string/help_support_section"
+                    android:src="@drawable/ic_expand_more"
+                    app:tint="@color/text_secondary" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/bodyHelpSupport"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/help_support_hint"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <!-- Selectable so the address stays copyable with no mail app installed. -->
+                <TextView
+                    android:id="@+id/tvSupportEmail"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/support_email"
+                    android:textColor="@color/sky_primary"
+                    android:textIsSelectable="true"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnEmailSupport"
+                    style="@style/Widget.IndicVision.Button.Outlined"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/help_support_email_action" />
+            </LinearLayout>
+
             <!-- Footer: the two app-level actions, equal width -->
             <LinearLayout
                 android:layout_width="match_parent"
