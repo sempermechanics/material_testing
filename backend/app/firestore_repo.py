@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from google.cloud import firestore
 
+from . import notify
 from .config import settings
 from .models import DeviceReg, FileComplete, FileSpec, SessionCreate
 
@@ -83,6 +84,10 @@ def get_or_create_user(claims: dict) -> dict:
         "lastSeenAt": firestore.SERVER_TIMESTAMP,
     }
     ref.set(data)
+    # Only ever reached once per account — every later sign-in takes the
+    # snap.exists branch above — so support gets exactly one mail per user.
+    if data["access_status"] == "PENDING":
+        notify.access_request(uid, data["email"], data["displayName"], provider)
     return {**data, "uid": uid}
 
 

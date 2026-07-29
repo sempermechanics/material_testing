@@ -28,6 +28,17 @@ class Settings:
         if e.strip()
     }
 
+    # Where "a new user is waiting for approval" mail goes. Same address the app
+    # shows in Settings -> Help & support and on the pending-approval screen.
+    SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@indicvision.com")
+
+    # Verified sender for outbound mail, e.g. "inDIC <noreply@indicvision.com>",
+    # and the Resend API key (the one secret this service holds — set it with
+    # --set-secrets, never --set-env-vars). Either one empty disables
+    # notification mail entirely: nothing is sent and nothing fails.
+    NOTIFY_FROM = os.environ.get("NOTIFY_FROM", "")
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+
     # The runtime service account email Cloud Run runs as. Used for the keyless
     # self-impersonation that mints Drive-scoped tokens.
     SERVICE_ACCOUNT_EMAIL = os.environ.get("SERVICE_ACCOUNT_EMAIL", "")
