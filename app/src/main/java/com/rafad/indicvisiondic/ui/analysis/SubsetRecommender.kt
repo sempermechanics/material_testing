@@ -46,7 +46,7 @@ object SubsetRecommender {
 
     /** Matches the subset slider's range/step in activity_static_analysis.xml. */
     const val MIN_SUBSET = 15
-    const val MAX_SUBSET = 101
+    const val MAX_SUBSET = 121
 
     /** Sample points are laid out on a GRID x GRID lattice inside the ROI. */
     private const val GRID = 4

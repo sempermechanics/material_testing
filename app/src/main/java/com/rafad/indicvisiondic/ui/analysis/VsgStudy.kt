@@ -48,7 +48,7 @@ object VsgStudy {
 
     /** Strain window is odd and matches the range of the settings slider. */
     const val MIN_STRAIN_WINDOW = 5
-    const val MAX_STRAIN_WINDOW = 51
+    const val MAX_STRAIN_WINDOW = 101
 
     /** Step size range of the settings slider. */
     const val MIN_STEP = 1
@@ -72,7 +72,7 @@ object VsgStudy {
      * the whole sweep, so it is not an axis of the grid.
      */
     const val STEP_DENOM_MIN = 2
-    const val STEP_DENOM_MAX = 6
+    const val STEP_DENOM_MAX = 9
     const val DEFAULT_STEP_DENOM = 3
 
     /** Samples the user may take along each axis (subset, VSG). */

@@ -310,6 +310,15 @@
     <string name="run_stopped_early_view">View results</string>
     <string name="error_low_convergence">Analysis stopped: convergence fell below 50%% on 2 consecutive frames. The images may have decorrelated due to change in spackle pattern or moved out of view.</string>
     <string name="vsg_lattice_all_failed">All combinations failed — tap a node for details.</string>
+
+    <!-- One-line failure labels for lattice nodes, in measurement terms. -->
+    <string name="sweep_reason_decorrelated">Decorrelated — the pair could not be matched</string>
+    <string name="sweep_reason_subset_too_big">Subset too large for the region of interest</string>
+    <string name="sweep_reason_decode">Image could not be decoded</string>
+    <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
+    <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
+    <string name="sweep_node_title_fmt">S%1$d · St%2$d · W%3$d · VSG %4$d</string>
+    <string name="sweep_node_skipped">This combination was skipped</string>
     <!-- Which frame a failure happened on; prefixes the reason above. -->
     <string name="failure_frame_fmt">Frame %1$d (%2$s): </string>
     <string name="failure_frame_no_name_fmt">Frame %1$d: </string>

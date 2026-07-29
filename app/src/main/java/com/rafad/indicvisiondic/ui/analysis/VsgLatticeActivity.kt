@@ -7,11 +7,11 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.DicResult
 import com.rafad.indicvisiondic.R
@@ -107,11 +107,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             interactionEnabled = true
             setNodes(nodes)
             onNodeClick = { node ->
-                if (node.solved) {
-                    toggleFocus(node.frameIndex)
-                } else if (node.failureReason.isNotEmpty()) {
-                    Toast.makeText(this@VsgLatticeActivity, node.failureReason, Toast.LENGTH_LONG).show()
-                }
+                if (node.solved) toggleFocus(node.frameIndex) else showSkipReason(node)
             }
             onNodeDoubleClick = { node -> if (node.solved) openViewer(node.frameIndex) }
             onNodeLongClick = { node -> if (node.solved) openViewer(node.frameIndex) }
@@ -158,7 +154,6 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
     }
 
-    /** Reads one set of (subset, step, window) triples into lattice nodes. */
     /**
      * The headline under the lattice, and whether opening results is offered at
      * all — a sweep where nothing solved has nothing to view, so the button goes
@@ -184,6 +179,27 @@ class VsgLatticeActivity : AppCompatActivity() {
         btnViewResults.setOnClickListener { openViewer(0) }
     }
 
+    /**
+     * Why one combination was skipped, named by the combination itself.
+     *
+     * A dialog rather than a toast: on a grid of hollow nodes the question is
+     * "why this one", so the answer has to stay on screen next to the settings it
+     * belongs to. There is always something to say — a node with no recorded code
+     * still gets the generic line, because a tap that does nothing reads as a
+     * broken chart.
+     */
+    private fun showSkipReason(node: VsgLatticeView.Node) {
+        val reason = node.failureReason.ifEmpty { getString(R.string.sweep_node_skipped) }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(
+                getString(R.string.sweep_node_title_fmt, node.subset, node.step, node.window, node.vsg),
+            )
+            .setMessage(reason)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    /** Reads one set of (subset, step, window) triples into lattice nodes. */
     private fun nodesFrom(
         subsetsKey: String,
         stepsKey: String,
@@ -203,8 +219,10 @@ class VsgLatticeActivity : AppCompatActivity() {
                 vsg = VsgStudy.vsgFor(steps[i], windows[i]),
                 solved = solved,
                 frameIndex = if (solved) i else -1,
+                // The short label, not the paragraph: this is read a node at a
+                // time against a grid of them.
                 failureReason = codes.getOrNull(i)
-                    ?.let { code -> getString(EngineFailure.reasonRes(code), code) }
+                    ?.let { code -> getString(EngineFailure.shortReasonRes(code)) }
                     .orEmpty(),
             )
         }

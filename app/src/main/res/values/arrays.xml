@@ -8,6 +8,6 @@
     </array>
     <array name="strain_window_range_default">
         <item>5.0</item>
-        <item>51.0</item>
+        <item>101.0</item>
     </array>
 </resources>

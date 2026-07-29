@@ -469,7 +469,7 @@ class SweepSetupHelper(
     }
 
     private fun commitStepDepth(raw: Int) {
-        viewModel.stepDenominator = raw.coerceIn(2, 6)
+        viewModel.stepDenominator = raw.coerceIn(VsgStudy.STEP_DENOM_MIN, VsgStudy.STEP_DENOM_MAX)
         callbacks.renderParamField(etStepDepthValue, viewModel.stepDenominator)
         refreshSweepPlan()
     }

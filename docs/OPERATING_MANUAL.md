@@ -182,9 +182,9 @@ Single mode only. Slider or typed field, each with an ⓘ.
 
 | Parameter | Range | Reset to |
 |---|---|---|
-| Subset size | 15–101, odd | Recommended |
+| Subset size | 15–121, odd | Recommended |
 | Step size | 1–30 | 5 |
-| Strain window | 5–51, odd | 15 |
+| Strain window | 5–101, odd | 15 |
 | Kernel | 4×4 Bicubic / 6×6 Keys | 4×4 Bicubic |
 
 ### Subset and step
@@ -262,9 +262,9 @@ A sweep uses **one** deformed frame.
 
 | Control | Range |
 |---|---|
-| Subset range | 15–101, odd |
-| Strain window range | 5–51, odd — min and max, the sweep's y axis |
-| Step denominator | 2–6 — step is `subset ÷ n` |
+| Subset range | 15–121, odd |
+| Strain window range | 5–101, odd — min and max, the sweep's y axis |
+| Step denominator | 2–9 — step is `subset ÷ n`, never below 1 px |
 | Samples | 1–8 per axis |
 | Frame to sweep | radio list + number + preview |
 
@@ -289,7 +289,7 @@ run. The coach mark points it out on a first visit.
 | | |
 |---|---|
 | Filled dot | Solved |
-| Hollow red ring | Skipped — tap it for the reason it failed |
+| Hollow red ring | Skipped — tap it and the reason names the combination and what went wrong |
 
 - **Tap** a node — its curve is highlighted, the rest fade.
 - **Double-tap** or **long-press** — opens that result.
@@ -470,14 +470,14 @@ version and phone model. Write above that block; leave it in place.
 
 | Parameter | Range | Default | Raise when | Lower when |
 |---|---|---|---|---|
-| Subset | 15–101, odd | Recommended | Speckle is weak; correlation fails | You need resolution across a sharp gradient |
+| Subset | 15–121, odd | Recommended | Speckle is weak; correlation fails | You need resolution across a sharp gradient |
 | Step | 1–30 | 5 | Runtime matters | You need a denser field |
-| Strain window | 5–51, odd | 15 | Strain is noisy | Detail is being smoothed away |
+| Strain window | 5–101, odd | 15 | Strain is noisy | Detail is being smoothed away |
 | Kernel | 4×4 / 6×6 | 4×4 Bicubic | Studying interpolation bias | — |
 | Max frames | 10–150 | 50 | Long sequences | Runs are killed for memory |
-| Sweep subset range | 15–101, odd | Around recommended | — | — |
-| Sweep strain window range | 5–51, odd | 5–51 | Strain is noisy | Detail is being smoothed away |
-| Step denominator | 2–6 | — | Denser correlation | Faster runs |
+| Sweep subset range | 15–121, odd | Around recommended | — | — |
+| Sweep strain window range | 5–101, odd | 5–101 | Strain is noisy | Detail is being smoothed away |
+| Step denominator | 2–9 | — | Denser correlation | Faster runs |
 | Samples | 1–8 per axis | 3 | Finer detail | Runtime is the product |
 
 `VSG = (strain window − 1) × step + 1`

@@ -24,8 +24,9 @@ object EngineFailure {
     const val ENGINE_ERROR_INIT = -3
 
     /**
-     * The message for [engineErrorCode]. Every string here takes the raw code as
-     * `%1$d` so the unknown case can name it; the known ones simply ignore it.
+     * The full explanation for [engineErrorCode] — what to change and why. Every
+     * string here takes the raw code as `%1$d` so the unknown case can name it;
+     * the known ones simply ignore it.
      */
     @StringRes
     fun reasonRes(engineErrorCode: Int): Int = when (engineErrorCode) {
@@ -34,5 +35,27 @@ object EngineFailure {
         ENGINE_ERROR_INIT -> R.string.sweep_fail_init
         AnalysisRunCodes.ERROR_LOW_CONVERGENCE -> R.string.error_low_convergence
         else -> R.string.sweep_fail_unknown
+    }
+
+    /**
+     * A one-line label for the same failure, in the terms the measurement is
+     * discussed in rather than the engine's — decorrelation, a subset that will
+     * not fit, a strain window nothing survived.
+     *
+     * This is what a lattice node shows: at a glance across a grid of them, the
+     * pattern of *which* combinations failed is the information, and a paragraph
+     * per node buries it. The full text stays for the dialog.
+     *
+     * Zero and unrecognised codes land on the strain-window case deliberately: a
+     * combination that returns no points has almost always asked for a window the
+     * ROI cannot support at that step.
+     */
+    @StringRes
+    fun shortReasonRes(engineErrorCode: Int): Int = when (engineErrorCode) {
+        ENGINE_ERROR_FEATURES -> R.string.sweep_reason_decorrelated
+        ENGINE_ERROR_ROI -> R.string.sweep_reason_subset_too_big
+        ENGINE_ERROR_INIT -> R.string.sweep_reason_decode
+        AnalysisRunCodes.ERROR_LOW_CONVERGENCE -> R.string.sweep_reason_low_convergence
+        else -> R.string.sweep_reason_vsg
     }
 }

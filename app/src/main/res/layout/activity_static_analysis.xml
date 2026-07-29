@@ -707,7 +707,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:valueFrom="15"
-                                android:valueTo="101"
+                                android:valueTo="121"
                                 android:stepSize="2"
                                 android:value="41" />
 
@@ -831,7 +831,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:valueFrom="5"
-                                android:valueTo="51"
+                                android:valueTo="101"
                                 android:stepSize="2"
                                 android:value="15" />
 
@@ -1024,7 +1024,7 @@
                                     android:layout_weight="1"
                                     android:stepSize="2"
                                     android:valueFrom="15"
-                                    android:valueTo="101"
+                                    android:valueTo="121"
                                     app:values="@array/subset_range_default" />
 
                                 <EditText
@@ -1089,7 +1089,7 @@
                                     android:layout_weight="1"
                                     android:stepSize="2"
                                     android:valueFrom="5"
-                                    android:valueTo="51"
+                                    android:valueTo="101"
                                     app:values="@array/strain_window_range_default" />
 
                                 <EditText
