@@ -379,9 +379,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             )
         }
         refDropzone.setOnClickListener { launchRefPicker() }
-        // The chip is the call to action inside the dropzone; the zone itself
-        // stays tappable, so both routes lead to the same picker.
-        findViewById<View>(R.id.chipSelectRef).setOnClickListener { launchRefPicker() }
         findViewById<View>(R.id.btnRefChange).setOnClickListener { launchRefPicker() }
 
         val launchDefPicker = {
@@ -398,7 +395,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             )
         }
         defDropzone.setOnClickListener { launchDefPicker() }
-        findViewById<View>(R.id.chipSelectDef).setOnClickListener { launchDefPicker() }
         findViewById<View>(R.id.btnDefChange).setOnClickListener { launchDefPicker() }
 
         btnDefineRoi.setOnClickListener {
