@@ -325,8 +325,10 @@ class AuthActivity : AppCompatActivity() {
 
     /** The bound is part of the message for the length rules, so they format it in. */
     private fun passwordFailureText(failure: PasswordPolicy.Failure): String = when (failure) {
-        is PasswordPolicy.Failure.TooShort -> getString(failure.message, failure.minLength)
-        is PasswordPolicy.Failure.TooLong -> getString(failure.message, failure.maxLength)
+        is PasswordPolicy.Failure.TooShort ->
+            resources.getQuantityString(R.plurals.password_too_short, failure.minLength, failure.minLength)
+        is PasswordPolicy.Failure.TooLong ->
+            resources.getQuantityString(R.plurals.password_too_long, failure.maxLength, failure.maxLength)
         is PasswordPolicy.Failure.Missing -> getString(failure.message)
     }
 

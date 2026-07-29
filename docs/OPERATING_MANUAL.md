@@ -154,8 +154,9 @@ Back is blocked.
 message names the frame and image it gave up on.
 
 This is a **short run, not a failed one**: the frames solved before the collapse
-are real data, they are saved as an analysis, and the dialog offers to open them.
-A 50-frame test that decorrelated at frame 40 still gives you frames 1–39.
+are real data, they are saved as an analysis, and acknowledging the message takes
+you straight into them. A 50-frame test that decorrelated at frame 40 still gives
+you frames 1–39.
 
 **Keep the app open.** A run has no resume. If Android kills the app, the run is
 gone.

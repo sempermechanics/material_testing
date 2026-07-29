@@ -16,20 +16,18 @@ object PasswordPolicy {
     const val MIN_LENGTH = 8
     const val MAX_LENGTH = 128
 
-    /** What a password failed on, or null when it passes. */
+    /**
+     * What a password failed on, or null when it passes.
+     *
+     * The length rules carry their bound rather than a message id: their wording
+     * is a plural of that number, which only the screen can resolve.
+     */
     sealed interface Failure {
-        @get:StringRes val message: Int
+        data class TooShort(val minLength: Int = MIN_LENGTH) : Failure
 
-        /** Length rules carry the bound so the message can name it. */
-        data class TooShort(val minLength: Int = MIN_LENGTH) : Failure {
-            override val message get() = R.string.password_too_short_fmt
-        }
+        data class TooLong(val maxLength: Int = MAX_LENGTH) : Failure
 
-        data class TooLong(val maxLength: Int = MAX_LENGTH) : Failure {
-            override val message get() = R.string.password_too_long_fmt
-        }
-
-        data class Missing(@get:StringRes override val message: Int) : Failure
+        data class Missing(@get:StringRes val message: Int) : Failure
     }
 
     /**

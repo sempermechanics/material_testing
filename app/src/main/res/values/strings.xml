@@ -295,14 +295,16 @@
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d · VSG %4$d</string>
     <string name="sweep_failed">The parameter sweep could not run.</string>
     <string name="sweep_partial_fmt">%1$d of %2$d combinations could not be solved and were skipped — the rest are shown.</string>
-    <string name="sweep_fail_title">Sweep couldn\'t solve</string>
     <string name="sweep_fail_features">The engine couldn\'t match the two images (AKAZE feature extraction failed).\n\nThis is almost always the image pair, not the settings: the deformed frame must be the same scene, framed like the reference. Re-shoot on a tripod so only the specimen moves, with the speckle in focus.</string>
     <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area, or use the full image.</string>
     <string name="sweep_fail_init">The engine couldn\'t start — an image failed to decode. Re-import them as PNG or TIFF.</string>
     <string name="sweep_fail_unknown">The engine returned error %1$d.</string>
     <string name="run_stopped_early_title">Stopped early</string>
     <string name="run_stopped_early_fmt">⚠️ Stopped at frame %1$d of %2$d</string>
-    <string name="run_stopped_early_body">Kept %1$d of %2$d frames — the ones solved before the images decorrelated. They are saved and can be opened.</string>
+    <plurals name="run_stopped_early_body">
+        <item quantity="one">Kept %1$d of %2$d frame — the one solved before the images decorrelated. It is saved and opens next.</item>
+        <item quantity="other">Kept %1$d of %2$d frames — the ones solved before the images decorrelated. They are saved and open next.</item>
+    </plurals>
     <string name="run_stopped_early_view">View results</string>
     <string name="error_low_convergence">Analysis stopped: convergence fell below 50%% on 2 consecutive frames. The images may have decorrelated — check that the deformed frames show the same speckle pattern as the reference, and that nothing moved out of view.</string>
     <string name="vsg_lattice_all_failed">All combinations failed — tap a node for details.</string>
@@ -311,8 +313,14 @@
     <string name="failure_frame_no_name_fmt">Frame %1$d: </string>
 
     <!-- Password policy -->
-    <string name="password_too_short_fmt">Password must be at least %1$d characters.</string>
-    <string name="password_too_long_fmt">Password must be at most %1$d characters.</string>
+    <plurals name="password_too_short">
+        <item quantity="one">Password must be at least %1$d character.</item>
+        <item quantity="other">Password must be at least %1$d characters.</item>
+    </plurals>
+    <plurals name="password_too_long">
+        <item quantity="one">Password must be at most %1$d character.</item>
+        <item quantity="other">Password must be at most %1$d characters.</item>
+    </plurals>
     <string name="password_needs_upper">Include at least one uppercase letter.</string>
     <string name="password_needs_lower">Include at least one lowercase letter.</string>
     <string name="password_needs_digit">Include at least one digit.</string>
@@ -376,7 +384,7 @@
     <string name="coach_next">Next</string>
     <string name="coach_done">Got it</string>
     <string name="coach_home_fab">Start a new analysis from here — pick a reference photo or a video of the deformation.</string>
-    <string name="coach_analysis_ref">Drop or pick to change the undeformed reference image.</string>
+    <string name="coach_analysis_ref">The reference image can be changed at any time.</string>
     <string name="coach_analysis_def">Add deformed frames next. When you pick several, you can sort by name, date, or drag.</string>
     <string name="coach_analysis_mode">Choose a single solve or a parameter sweep.</string>
     <string name="coach_analysis_roi">Open the editor to crop a region of interest, or Use the full image.</string>

@@ -468,8 +468,9 @@ Reached only when the file picked on Home was a video.
 |---|---|---|
 | [ ] 5.5.1 | Run on a featureless image pair | Engine failure dialog naming the feature-detection cause, **and the frame and image it failed on** |
 | [ ] 5.5.1a | Run a batch where a later frame decorrelates | "Stopped early" — not "Analysis failed" — naming the frame and how many were kept |
-| [ ] 5.5.1c | Tap **View results** on that dialog | The kept frames open in the viewer |
-| [ ] 5.5.1d | Dismiss it instead, then go to Home | The short analysis is there, with the frames it kept — not a phantom row from a run reported as failed |
+| [ ] 5.5.1c | Acknowledge that dialog | The kept frames open in the viewer — the run does not leave you back on the settings page |
+| [ ] 5.5.1d | Press Back on that dialog | Nothing dismisses it; the only way on is through to the results |
+| [ ] 5.5.1e | Return to Home afterwards | The short analysis is listed with the frames it kept — not a phantom row from a run reported as failed |
 | [ ] 5.5.1b | Sweep a decorrelated pair | Stops after two combinations under 50% rather than sweeping the rest |
 | [ ] 5.5.2 | Run with an unusable ROI | Engine failure dialog naming the ROI cause |
 | [ ] 5.5.3 | Finish a single-setting run | Result viewer opens on frame 1 |

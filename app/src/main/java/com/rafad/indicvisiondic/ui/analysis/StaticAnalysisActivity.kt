@@ -1165,7 +1165,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.run_stopped_early_title)
             .setMessage(
-                getString(R.string.run_stopped_early_body, kept, planned) +
+                resources.getQuantityString(R.plurals.run_stopped_early_body, kept, kept, planned) +
                     System.lineSeparator() + System.lineSeparator() +
                     engineFailureMessage(
                         outcome.engineErrorCode,
@@ -1173,8 +1173,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         frameName = outcome.failedFrameName,
                     ),
             )
+            // The dialog explains, it does not ask: the frames are saved either
+            // way, so dismissing it back onto the settings page would strand the
+            // user one screen away from the data the run just produced.
+            .setCancelable(false)
             .setPositiveButton(R.string.run_stopped_early_view) { _, _ -> openResultViewer() }
-            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
