@@ -1101,6 +1101,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT) {
                         checkReady()
                         startActivity(Intent(this@StaticAnalysisActivity, SessionLimitActivity::class.java))
+                    } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_LOW_CONVERGENCE &&
+                        outcome.totalFrames > 0
+                    ) {
+                        // Stopped early, but the frames before the collapse are
+                        // real and already saved: report it as a short run and
+                        // open them, rather than as a failure with no way through
+                        // to data the session quietly kept.
+                        onPartialRun(outcome)
                     } else if (outcome.engineErrorCode < 0) {
                         val errorMsg = engineFailureMessage(
                             outcome.engineErrorCode,
@@ -1136,6 +1144,38 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * A run that stopped itself partway: the images decorrelated, but the frames
+     * solved before that are valid and the session already holds them.
+     *
+     * Told plainly and then opened. The alternative — a failure dialog — left a
+     * session appearing on Home that the user had just been told was a failure,
+     * with no route to it from here.
+     */
+    private fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
+        val kept = outcome.totalFrames
+        val planned = viewModel.defFilePaths.size
+        tvResult.text = getString(R.string.run_stopped_early_fmt, kept, planned)
+        viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
+        viewModel.lastBatchDirPath = outcome.batchDirPath
+        viewModel.hasCompletedAnalysis = true
+        checkReady()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.run_stopped_early_title)
+            .setMessage(
+                getString(R.string.run_stopped_early_body, kept, planned) +
+                    System.lineSeparator() + System.lineSeparator() +
+                    engineFailureMessage(
+                        outcome.engineErrorCode,
+                        frameIndex = outcome.failedFrameIndex,
+                        frameName = outcome.failedFrameName,
+                    ),
+            )
+            .setPositiveButton(R.string.run_stopped_early_view) { _, _ -> openResultViewer() }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
     }
 
     /**
@@ -1692,7 +1732,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val showSort = n > 1 && !viewModel.defFromVideo
             btnFrameOrderSort.visibility = if (showSort) View.VISIBLE else View.GONE
             frameOrderAdapter.dragEnabled =
-                showSort && viewModel.defOrderMode == FrameOrderMode.MANUAL
+                showSort &&
+                viewModel.defOrderMode == FrameOrderMode.MANUAL
         } else {
             rvFrameOrder.visibility = View.GONE
             btnFrameOrderSort.visibility = View.GONE

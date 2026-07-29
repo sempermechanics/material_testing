@@ -436,7 +436,7 @@ class AnalysisViewModel : ViewModel() {
      * Returns the outcome to abort with, or null when the run may proceed.
      */
     @Suppress("ReturnCount") // two independent all-clear checks, then the stop
-    private fun sessionLimitOutcome(appContext: Context, totalFrames: Int): BatchAnalysisOutcome? {
+    private fun sessionLimitOutcome(appContext: Context, plannedFrames: Int): BatchAnalysisOutcome? {
         if (!wouldCreateNewSession()) return null
         TokenStore.refreshSessionLimit(appContext, SessionStore.list(appContext).size)
         if (!TokenStore.isSessionLimitReached(appContext)) return null
@@ -444,7 +444,7 @@ class AnalysisViewModel : ViewModel() {
         return BatchAnalysisOutcome(
             engineErrorCode = ERROR_SESSION_LIMIT,
             firstFrameValidPoints = 0,
-            totalFrames = totalFrames,
+            totalFrames = plannedFrames,
             executionTimeMs = 0,
             batchDirPath = "",
         )
@@ -532,6 +532,11 @@ class AnalysisViewModel : ViewModel() {
     data class BatchAnalysisOutcome(
         val engineErrorCode: Int,
         val firstFrameValidPoints: Int,
+        /**
+         * Frames that actually produced a field. Below the planned count when the
+         * run stopped early — the frames before that point are kept, so this is
+         * what the session holds and what the user should be told.
+         */
         val totalFrames: Int,
         val executionTimeMs: Int,
         val batchDirPath: String,
@@ -568,7 +573,7 @@ class AnalysisViewModel : ViewModel() {
         if (!params.debugDir.exists()) params.debugDir.mkdirs()
         IndicVisionNativeLib.setDebugOutputDir(params.debugDir.absolutePath)
 
-        val totalFrames = defFilePaths.size
+        val plannedFrames = defFilePaths.size
         val refBytes = refBytes ?: error("Reference missing")
 
         var firstFrameValidPoints = 0
@@ -595,6 +600,7 @@ class AnalysisViewModel : ViewModel() {
         var lastConvergence = -1f
         val convergenceGate = ConvergenceGate()
         var failedFrameIndex = -1
+        var solvedFrames = 0
 
         // Persist the raw deformed originals alongside the reference so exports
         // (and reopened sessions) can bundle them. Cleared per re-run.
@@ -606,19 +612,19 @@ class AnalysisViewModel : ViewModel() {
         // The filenames actually written into raw_deformed/, index-aligned with
         // the frames. These (not the cache-copy paths) are what the session index
         // and the cloud upload look the images up by. Blank = persist failed.
-        val persistedRawNames = MutableList(totalFrames) { "" }
+        val persistedRawNames = MutableList(plannedFrames) { "" }
 
         for ((frameIndex, defPath) in defFilePaths.withIndex()) {
             if (cancelRequested) {
                 engineErrorCode = ERROR_CANCELLED
                 break
             }
-            val frameLabel = "Processing Frame ${frameIndex + 1}/$totalFrames..."
+            val frameLabel = "Processing Frame ${frameIndex + 1}/$plannedFrames..."
             onProgress(
                 BatchProgressUpdate(
-                    percent = ((frameIndex.toFloat() / totalFrames) * 100).toInt(),
-                    status = if (totalFrames > 1) {
-                        "Processing frame ${frameIndex + 1} of $totalFrames"
+                    percent = ((frameIndex.toFloat() / plannedFrames) * 100).toInt(),
+                    status = if (plannedFrames > 1) {
+                        "Processing frame ${frameIndex + 1} of $plannedFrames"
                     } else {
                         "Correlating & solving…"
                     },
@@ -655,13 +661,13 @@ class AnalysisViewModel : ViewModel() {
             }
             val callback = object : ProgressCallback {
                 override fun onProgressUpdate(percentage: Int) {
-                    val frameProgress = (frameIndex.toFloat() / totalFrames) * 100
-                    val overallProgress = frameProgress + (percentage.toFloat() / totalFrames)
+                    val frameProgress = (frameIndex.toFloat() / plannedFrames) * 100
+                    val overallProgress = frameProgress + (percentage.toFloat() / plannedFrames)
                     onProgress(
                         BatchProgressUpdate(
                             percent = overallProgress.toInt(),
-                            status = if (totalFrames > 1) {
-                                "Processing frame ${frameIndex + 1} of $totalFrames"
+                            status = if (plannedFrames > 1) {
+                                "Processing frame ${frameIndex + 1} of $plannedFrames"
                             } else {
                                 "Correlating & solving…"
                             },
@@ -708,6 +714,7 @@ class AnalysisViewModel : ViewModel() {
                 fos.write(bytes)
             }
 
+            solvedFrames++
             totalPointsSolved += validPointsCount
             lastConvergence = metricsCatcher[EngineStats.SLOT_CONVERGENCE]
             if (convergenceGate.record(lastConvergence)) {
@@ -717,8 +724,8 @@ class AnalysisViewModel : ViewModel() {
             }
             onProgress(
                 BatchProgressUpdate(
-                    percent = (((frameIndex + 1).toFloat() / totalFrames) * 100).toInt(),
-                    status = "Processing frame ${frameIndex + 1} of $totalFrames",
+                    percent = (((frameIndex + 1).toFloat() / plannedFrames) * 100).toInt(),
+                    status = "Processing frame ${frameIndex + 1} of $plannedFrames",
                     timerText = frameLabel,
                     pointsSolved = totalPointsSolved,
                     convergencePercent = lastConvergence,
@@ -784,7 +791,7 @@ class AnalysisViewModel : ViewModel() {
         BatchAnalysisOutcome(
             engineErrorCode = engineErrorCode,
             firstFrameValidPoints = firstFrameValidPoints,
-            totalFrames = totalFrames,
+            totalFrames = solvedFrames,
             executionTimeMs = executionTimeMs,
             batchDirPath = batchDir.absolutePath,
             failedFrameIndex = failedFrameIndex,

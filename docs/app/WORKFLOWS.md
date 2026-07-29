@@ -467,7 +467,9 @@ Reached only when the file picked on Home was a video.
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.5.1 | Run on a featureless image pair | Engine failure dialog naming the feature-detection cause, **and the frame and image it failed on** |
-| [ ] 5.5.1a | Run a batch where a later frame decorrelates | Stops after two consecutive frames under 50% convergence; the message names that frame. Earlier frames are kept |
+| [ ] 5.5.1a | Run a batch where a later frame decorrelates | "Stopped early" — not "Analysis failed" — naming the frame and how many were kept |
+| [ ] 5.5.1c | Tap **View results** on that dialog | The kept frames open in the viewer |
+| [ ] 5.5.1d | Dismiss it instead, then go to Home | The short analysis is there, with the frames it kept — not a phantom row from a run reported as failed |
 | [ ] 5.5.1b | Sweep a decorrelated pair | Stops after two combinations under 50% rather than sweeping the rest |
 | [ ] 5.5.2 | Run with an unusable ROI | Engine failure dialog naming the ROI cause |
 | [ ] 5.5.3 | Finish a single-setting run | Result viewer opens on frame 1 |

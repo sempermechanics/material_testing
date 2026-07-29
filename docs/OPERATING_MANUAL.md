@@ -151,8 +151,11 @@ Back is blocked.
 
 **A run stops itself if the images decorrelate.** Two consecutive frames below
 50% convergence end it — the frames after them would be no better, and the
-message names the frame and image it gave up on. Frames solved before that point
-are kept.
+message names the frame and image it gave up on.
+
+This is a **short run, not a failed one**: the frames solved before the collapse
+are real data, they are saved as an analysis, and the dialog offers to open them.
+A 50-frame test that decorrelated at frame 40 still gives you frames 1–39.
 
 **Keep the app open.** A run has no resume. If Android kills the app, the run is
 gone.
@@ -433,7 +436,7 @@ version and phone model. Write above that block; leave it in place.
 | Engine failure: ROI | Region too small or fully masked |
 | Low-texture warning | Weak speckle for this region |
 | Sweep skipped nodes | Those combinations don't fit — usually big subsets in a small ROI. Tap a hollow node for its reason |
-| Run stopped itself partway | Convergence fell below 50% twice running — the pair has decorrelated. The message names the frame |
+| Run stopped itself partway | Convergence fell below 50% twice running — the pair has decorrelated. The message names the frame, and the frames before it are kept |
 | Sweep ended early | Same rule: two combinations under 50% and it stops rather than sweep the rest |
 | Password rejected on sign-up | 8+ chars, upper and lower case, a digit and a special character — or tap **Generate secure password** |
 | Only the first N frames | *Max frames* capped it |

@@ -300,6 +300,10 @@
     <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area, or use the full image.</string>
     <string name="sweep_fail_init">The engine couldn\'t start — an image failed to decode. Re-import them as PNG or TIFF.</string>
     <string name="sweep_fail_unknown">The engine returned error %1$d.</string>
+    <string name="run_stopped_early_title">Stopped early</string>
+    <string name="run_stopped_early_fmt">⚠️ Stopped at frame %1$d of %2$d</string>
+    <string name="run_stopped_early_body">Kept %1$d of %2$d frames — the ones solved before the images decorrelated. They are saved and can be opened.</string>
+    <string name="run_stopped_early_view">View results</string>
     <string name="error_low_convergence">Analysis stopped: convergence fell below 50%% on 2 consecutive frames. The images may have decorrelated — check that the deformed frames show the same speckle pattern as the reference, and that nothing moved out of view.</string>
     <string name="vsg_lattice_all_failed">All combinations failed — tap a node for details.</string>
     <!-- Which frame a failure happened on; prefixes the reason above. -->
