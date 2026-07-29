@@ -82,6 +82,19 @@
                             android:text="@string/ref_formats_hint"
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipSelectRef"
+                            style="@style/Widget.MaterialComponents.Chip.Action"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="@string/action_select"
+                            android:textColor="@color/sky_primary"
+                            app:chipIcon="@drawable/ic_add"
+                            app:chipIconTint="@color/sky_primary"
+                            app:chipStrokeColor="@color/sky_primary"
+                            app:chipStrokeWidth="1dp" />
                     </LinearLayout>
 
                     <com.google.android.material.card.MaterialCardView
@@ -176,6 +189,19 @@
                             android:layout_height="wrap_content"
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipSelectDef"
+                            style="@style/Widget.MaterialComponents.Chip.Action"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="@string/action_select"
+                            android:textColor="@color/sky_primary"
+                            app:chipIcon="@drawable/ic_add"
+                            app:chipIconTint="@color/sky_primary"
+                            app:chipStrokeColor="@color/sky_primary"
+                            app:chipStrokeWidth="1dp" />
                     </LinearLayout>
 
                     <com.google.android.material.card.MaterialCardView
@@ -1046,7 +1072,94 @@
                             </LinearLayout>
                             </LinearLayout>
 
-                            <!-- Max VSG + step size on one row (Material outlined fields) -->
+                            <!-- Strain window range: titled and full-width, the
+                                 twin of the subset range above it. -->
+                            <LinearLayout
+                                android:id="@+id/strainWinRangeBlock"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:orientation="vertical">
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="@string/strain_win_range"
+                                        android:textColor="@color/text_primary"
+                                        android:textStyle="bold" />
+
+                                    <ImageButton
+                                        android:id="@+id/btnVsgMaxInfo"
+                                        android:layout_width="18dp"
+                                        android:layout_height="18dp"
+                                        android:layout_marginStart="6dp"
+                                        android:background="?attr/selectableItemBackgroundBorderless"
+                                        android:contentDescription="@string/info"
+                                        android:scaleType="fitCenter"
+                                        android:src="@drawable/ic_info_min"
+                                        app:tint="@color/text_secondary" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:gravity="center_vertical"
+                                    android:orientation="horizontal">
+
+                                    <EditText
+                                        android:id="@+id/etStrainWinMinValue"
+                                        android:layout_width="46dp"
+                                        android:layout_height="wrap_content"
+                                        android:background="@android:color/transparent"
+                                        android:gravity="center"
+                                        android:hint="@string/strain_win_min"
+                                        android:imeOptions="actionDone"
+                                        android:importantForAutofill="no"
+                                        android:inputType="number"
+                                        android:maxLength="3"
+                                        android:paddingTop="0dp"
+                                        android:paddingBottom="0dp"
+                                        android:textColor="@color/sky_primary"
+                                        android:textStyle="bold"
+                                        tools:text="5" />
+
+                                    <com.google.android.material.slider.RangeSlider
+                                        android:id="@+id/rangeStrainWin"
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:stepSize="2"
+                                        android:valueFrom="5"
+                                        android:valueTo="101"
+                                        app:values="@array/strain_window_range_default" />
+
+                                    <EditText
+                                        android:id="@+id/etStrainWinMaxValue"
+                                        android:layout_width="46dp"
+                                        android:layout_height="wrap_content"
+                                        android:background="@android:color/transparent"
+                                        android:gravity="center"
+                                        android:hint="@string/strain_win_max"
+                                        android:imeOptions="actionDone"
+                                        android:importantForAutofill="no"
+                                        android:inputType="number"
+                                        android:maxLength="3"
+                                        android:paddingTop="0dp"
+                                        android:paddingBottom="0dp"
+                                        android:textColor="@color/sky_primary"
+                                        android:textStyle="bold"
+                                        tools:text="101" />
+                                </LinearLayout>
+                            </LinearLayout>
+
+                            <!-- Step size gets its own row rather than sharing
+                                 one with a range control. -->
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
@@ -1055,67 +1168,10 @@
                                 android:orientation="horizontal">
 
                                 <ImageButton
-                                    android:id="@+id/btnVsgMaxInfo"
-                                    android:layout_width="18dp"
-                                    android:layout_height="18dp"
-                                    android:layout_marginEnd="4dp"
-                                    android:background="?attr/selectableItemBackgroundBorderless"
-                                    android:contentDescription="@string/info"
-                                    android:scaleType="fitCenter"
-                                    android:src="@drawable/ic_info_min"
-                                    app:tint="@color/text_secondary" />
-
-                                <EditText
-                                    android:id="@+id/etStrainWinMinValue"
-                                    android:layout_width="40dp"
-                                    android:layout_height="wrap_content"
-                                    android:background="@android:color/transparent"
-                                    android:gravity="center"
-                                    android:hint="@string/strain_win_min"
-                                    android:imeOptions="actionDone"
-                                    android:importantForAutofill="no"
-                                    android:inputType="number"
-                                    android:maxLength="2"
-                                    android:paddingTop="0dp"
-                                    android:paddingBottom="0dp"
-                                    android:textColor="@color/sky_primary"
-                                    android:textStyle="bold"
-                                    tools:text="5" />
-
-                                <com.google.android.material.slider.RangeSlider
-                                    android:id="@+id/rangeStrainWin"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:stepSize="2"
-                                    android:valueFrom="5"
-                                    android:valueTo="101"
-                                    app:values="@array/strain_window_range_default" />
-
-                                <EditText
-                                    android:id="@+id/etStrainWinMaxValue"
-                                    android:layout_width="40dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginEnd="6dp"
-                                    android:background="@android:color/transparent"
-                                    android:gravity="center"
-                                    android:hint="@string/strain_win_max"
-                                    android:imeOptions="actionDone"
-                                    android:importantForAutofill="no"
-                                    android:inputType="number"
-                                    android:maxLength="2"
-                                    android:paddingTop="0dp"
-                                    android:paddingBottom="0dp"
-                                    android:textColor="@color/sky_primary"
-                                    android:textStyle="bold"
-                                    tools:text="51" />
-
-                                <ImageButton
                                     android:id="@+id/btnStepDepthInfo"
                                     android:layout_width="18dp"
                                     android:layout_height="18dp"
-                                    android:layout_marginStart="2dp"
-                                    android:layout_marginEnd="4dp"
+                                    android:layout_marginEnd="6dp"
                                     android:background="?attr/selectableItemBackgroundBorderless"
                                     android:contentDescription="@string/info"
                                     android:scaleType="fitCenter"
@@ -1125,9 +1181,8 @@
                                 <com.google.android.material.textfield.TextInputLayout
                                     android:id="@+id/tilStepDepth"
                                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                                    android:layout_width="0dp"
+                                    android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_weight="1"
                                     android:hint="@string/step_depth"
                                     app:boxStrokeColor="@color/sky_primary"
                                     app:hintTextColor="@color/text_secondary"
