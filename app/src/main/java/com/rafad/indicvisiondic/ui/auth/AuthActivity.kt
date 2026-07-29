@@ -3,6 +3,7 @@
 @file:Suppress("TooManyFunctions", "ReturnCount")
 
 package com.rafad.indicvisiondic.ui.auth
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
@@ -17,6 +18,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.AuthRepository
+import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.common.Insets
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -34,6 +36,13 @@ class AuthActivity : AppCompatActivity() {
 
     private val authRepo by lazy { AuthRepository(applicationContext) }
     private var registerMode = false
+
+    /**
+     * Re-authentication: the caller already has a session and needs it proved
+     * again before something irreversible. The screen keeps all of its sign-in
+     * methods but answers with a result instead of routing onward.
+     */
+    private var reauthMode = false
 
     private lateinit var progressBar: ProgressBar
     private lateinit var etEmail: EditText
@@ -66,6 +75,16 @@ class AuthActivity : AppCompatActivity() {
         val googleConfigured = GoogleSignInHelper.isConfigured(this)
         btnGoogle.visibility = if (googleConfigured) View.VISIBLE else View.GONE
         googleOrDivider.visibility = if (googleConfigured) View.VISIBLE else View.GONE
+
+        reauthMode = intent.getBooleanExtra(EXTRA_REAUTH, false)
+        if (reauthMode) {
+            // Re-auth must prove *this* account, so the address is fixed. Read
+            // from the cached session rather than Firebase: it is only shown, and
+            // the re-auth calls take the address from the live user themselves.
+            etEmail.setText(TokenStore.cachedEmail(this).orEmpty())
+            etEmail.isEnabled = false
+            tvToggle.visibility = View.GONE
+        }
 
         btnMain.setOnClickListener { onMainAction() }
         tvToggle.setOnClickListener {
@@ -102,11 +121,19 @@ class AuthActivity : AppCompatActivity() {
     }
 
     private fun updateMode() {
-        findViewById<TextView>(R.id.tvSubtitle).text = getString(R.string.secure_access_portal)
+        findViewById<TextView>(R.id.tvSubtitle).text = getString(
+            if (reauthMode) R.string.reauth_body else R.string.secure_access_portal,
+        )
         layoutConfirm.visibility = if (registerMode) View.VISIBLE else View.GONE
         // Password recovery and the sign-in link only make sense when signing in.
         recoveryLinks.visibility = if (registerMode) View.GONE else View.VISIBLE
-        btnMain.text = getString(if (registerMode) R.string.auth_create_account else R.string.auth_sign_in)
+        btnMain.text = getString(
+            when {
+                reauthMode -> R.string.reauth_confirm
+                registerMode -> R.string.auth_create_account
+                else -> R.string.auth_sign_in
+            },
+        )
         tvToggle.text = getString(
             if (registerMode) R.string.auth_toggle_to_login else R.string.auth_toggle_to_register,
         )
@@ -118,6 +145,10 @@ class AuthActivity : AppCompatActivity() {
         if (!validEmail(email)) return
         if (password.length < MIN_PASSWORD) {
             showSnackbar(getString(R.string.error_password_short), isError = true)
+            return
+        }
+        if (reauthMode) {
+            runReauth { authRepo.reauthenticateWithPassword(password) }
             return
         }
         if (registerMode && password != etConfirm.text.toString()) {
@@ -170,7 +201,11 @@ class AuthActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val idToken = GoogleSignInHelper.getIdToken(this@AuthActivity)
-                routeResult(authRepo.signInWithGoogle(idToken))
+                if (reauthMode) {
+                    finishReauth(authRepo.reauthenticateWithGoogle(idToken))
+                } else {
+                    routeResult(authRepo.signInWithGoogle(idToken))
+                }
             } catch (e: GoogleSignInHelper.NotConfigured) {
                 Timber.w(e, "Google sign-in is not configured")
                 setLoading(false)
@@ -190,12 +225,35 @@ class AuthActivity : AppCompatActivity() {
     }
 
     private fun completeEmailLink(link: String) {
+        if (reauthMode) {
+            // Already signed in: the link proves the address rather than opening
+            // a new session, so it must not go through the sign-in path.
+            runReauth { authRepo.reauthenticateWithEmailLink(link) }
+            return
+        }
         val email = authRepo.pendingLinkEmail()
         if (email.isNullOrBlank()) {
             showSnackbar(getString(R.string.auth_link_wrong_device), isError = true)
             return
         }
         runAuth { authRepo.completeEmailLink(email, link) }
+    }
+
+    /** Run a re-authentication call and answer the caller with its outcome. */
+    private fun runReauth(call: suspend () -> Result<Unit>) {
+        setLoading(true)
+        lifecycleScope.launch { finishReauth(call()) }
+    }
+
+    private fun finishReauth(result: Result<Unit>) {
+        setLoading(false)
+        result.fold(
+            onSuccess = {
+                setResult(RESULT_OK)
+                finish()
+            },
+            onFailure = { showSnackbar(it.message ?: getString(R.string.reauth_failed), isError = true) },
+        )
     }
 
     /** Run an auth call that resolves to an access status, and route on the result. */
@@ -213,8 +271,30 @@ class AuthActivity : AppCompatActivity() {
                 startActivity(Intent(this, AccessRouter.afterSignIn(status)))
                 finish()
             },
-            onFailure = { showSnackbar(it.message ?: getString(R.string.auth_sign_in_failed), isError = true) },
+            onFailure = { error ->
+                if (error is AuthRepository.EmailVerificationRequired) {
+                    onVerificationPending(error)
+                } else {
+                    showSnackbar(error.message ?: getString(R.string.auth_sign_in_failed), isError = true)
+                }
+            },
         )
+    }
+
+    /**
+     * The account was created and its verification mail sent; there is no
+     * session yet. Signing in is the next thing the user will do, so the screen
+     * goes back to sign-in rather than leaving them on a Create account form
+     * that has already done its job.
+     */
+    internal fun onVerificationPending(error: AuthRepository.EmailVerificationRequired) {
+        registerMode = false
+        updateMode()
+        etEmail.setText(error.email)
+        etPassword.setText("")
+        etConfirm.setText("")
+        // Not an error: what they asked for happened, and the next step is theirs.
+        showSnackbar(error.message ?: getString(R.string.auth_verify_first), isError = false)
     }
 
     private fun validEmail(email: String): Boolean {
@@ -240,7 +320,16 @@ class AuthActivity : AppCompatActivity() {
         snackbar.show()
     }
 
-    private companion object {
-        const val MIN_PASSWORD = 6
+    companion object {
+        private const val MIN_PASSWORD = 6
+        private const val EXTRA_REAUTH = "reauth"
+
+        /**
+         * Launch this screen to re-confirm the signed-in identity. Finishes with
+         * `RESULT_OK` once any of its methods proves the account, `RESULT_CANCELED`
+         * if the user backs out. The caller stays where it is either way.
+         */
+        fun reauthIntent(context: Context): Intent =
+            Intent(context, AuthActivity::class.java).putExtra(EXTRA_REAUTH, true)
     }
 }

@@ -46,8 +46,10 @@ Two things to know up front:
 Accounts need approval, not just sign-up.
 
 1. Sign in with Google or email.
-2. **Signing up with email?** Open the verification link first. Until you do,
-   sign-in is refused and a fresh link is sent each time you try.
+2. **Signing up with email?** Creating the account sends a verification link and
+   puts you back on the sign-in form with your address still filled in. Open the
+   link, then sign in there. Until you do, sign-in is refused and a fresh link is
+   sent each time you try.
 3. New accounts land on **Pending approval**. Support is emailed automatically
    at this point — you do not have to ask to be noticed.
 4. Tap **Request access** if you want to add context. It opens a prefilled
@@ -385,9 +387,11 @@ backup has a **5-second Undo**.
 you come back.
 
 **Deleting your account** (Settings → Your data) asks you to confirm your
-identity first — your password, or a fresh Google sign-in. Then it erases the
-cloud copy, this device, and the sign-in itself, and signs you out. If the cloud
-cannot be reached nothing is deleted at all.
+identity first, on the sign-in screen itself — whichever way you normally sign
+in: password, Google, or an emailed link. Your address is filled in and cannot be
+changed; you are proving *this* account. Back out and nothing happens. Once
+confirmed it erases the cloud copy, this device, and the sign-in itself, and
+signs you out. If the cloud cannot be reached nothing is deleted at all.
 
 **Quota.** The Home chip reads `Using N of M analyses` and turns red at the cap.
 Not a paywall — email support from the limit screen, or delete something and
@@ -414,11 +418,13 @@ version and phone model. Write above that block; leave it in place.
 | Only the first N frames | *Max frames* capped it |
 | Frames in the wrong order | Sort on step 1, then re-run |
 | Run vanished | The app was killed. No resume — run it again in the foreground |
-| Frames look incomparable | Auto colour scale. Fix the bounds |
+| Frames look incomparable | Auto colour scale. Fix the bounds, or use the summary animation — it already puts them on one |
+| Summary still says "Rendering" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
+| Summary shows one frame, not a loop | Android 8 or older. The exported GIFs still animate |
+| Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
 | Badge stuck on Pending | Offline, Wi-Fi-only, or backup off |
 | Still pending approval | Tap **Check status** — it never polls |
 | Sign-in refused after signing up | Open the verification link in your email, then try again |
-| Delete account asks for a password | Expected — identity is confirmed before anything is erased |
 | Nothing here matches | **Settings → Help & support → Email support** — the mail carries your account, device and build, so quote nothing |
 
 ---

@@ -7,13 +7,13 @@ Each chunk owns one layer; no duplicate assertions across chunks.
 
 | Chunk | User journey | JVM tests (`app/src/test`) | Instrumented (`androidTest`) |
 |-------|--------------|---------------------------|------------------------------|
-| **auth** | Splash → Auth / Pending / Home | `auth/AccessRouterTest` | `auth/FirebaseAuthIntegrationTest` |
+| **auth** | Splash → Auth / Pending / Home, re-auth | `auth/AccessRouterTest`, `auth/ReauthFlowTest` | `auth/FirebaseAuthIntegrationTest` |
 | **session** | Home list, open session, disk layout | `session/SessionPathsTest` | — |
 | **analysis** | Import → ROI → batch/sweep | `analysis/VsgStudyTest`, `SubsetRecommenderTest`, `BitmapDecodeTest` | — |
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `GifEncoderTest`, `SummaryAnimationTest` | — |
 | **viewer** | Result viewer controls | `viewer/FrameNumberEntryTest` | — |
 | **cloud** | Upload, API, restore, account deletion | `cloud/ApiDtosContractTest`, `UploadResumableTest`, `SessionUploadBundlerTest`, `CloudRestoreMappingTest`, `AccountDeletionTest` | — |
-| **settings** | Settings sections, contacting support | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest` | — |
+| **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest` | — |
 | **e2e** | Full UI flows | — | `e2e/AppFlowEspressoTest` |
 | **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
 

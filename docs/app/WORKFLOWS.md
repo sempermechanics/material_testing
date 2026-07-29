@@ -106,7 +106,7 @@ approval, depending on the backend's answer.
 | [ ] 1.7 | Tap the mode toggle | Becomes "Create account"; the confirm-password field appears |
 | [ ] 1.8 | Create an account with a 5-character password | Blocked with "password too short" |
 | [ ] 1.9 | Create an account with mismatched confirm | Blocked with "passwords do not match" |
-| [ ] 1.10 | Create a valid new account | A verification email is sent and the session is dropped — "Verify your email first…" naming the address |
+| [ ] 1.10 | Create a valid new account | A verification email is sent, the session is dropped, and **the screen returns to Sign in** — email kept, both password fields cleared, no confirm box |
 | [ ] 1.10a | Try to sign in before opening that link | Blocked with the same message; a fresh verification email is sent each time |
 | [ ] 1.10b | Open the link, then sign in | Signs in and lands on Pending approval (new accounts aren't pre-approved) |
 | [ ] 1.10c | Sign in with Google, or via an email sign-in link | No verification step — both arrive already verified |
@@ -272,10 +272,11 @@ any sync badge). **Exit:** Home, Admin, a result, or Login.
 | [ ] 4.18 | Confirm and wait past the undo window | The backup is really gone after a refresh |
 | [ ] 4.19 | Tap **Export my data** | A master ZIP is built and handed to the share chooser, with "Save to Files" offered |
 | [ ] 4.20 | Tap **Delete my account and data** | Dialog listing exactly what goes: local analyses, cloud backups, profile and device |
-| [ ] 4.20a | Confirm it, as a password account | "Confirm it's you" with a password field before anything is deleted |
-| [ ] 4.20b | Enter the wrong password | "Incorrect password." and nothing is deleted |
-| [ ] 4.20c | Confirm it, as a Google account | The Google chooser appears instead, to re-authenticate |
-| [ ] 4.20d | Dismiss that chooser | Returns to Settings silently; nothing is deleted |
+| [ ] 4.20a | Confirm it | The **sign-in screen** opens to re-verify, with your email filled in and locked, and no "create account" toggle |
+| [ ] 4.20b | Enter the wrong password there | "Incorrect password." and nothing is deleted |
+| [ ] 4.20c | Confirm it, as a Google account | Same screen; **Sign in with Google** re-authenticates instead |
+| [ ] 4.20d | Confirm it, as an email-link-only account | **Email me a sign-in link** works too — this account could not be deleted at all before |
+| [ ] 4.20e | Press back on that screen | Returns to Settings; nothing is deleted |
 | [ ] 4.21 | Confirm the delete with no network | Nothing local is touched; a failure toast is shown |
 | [ ] 4.22 | Confirm the delete online | Everything is wiped, including the sign-in identity, and you land back on Login |
 | [ ] 4.22a | Sign up again with the same email afterwards | It behaves as a brand-new account — the old identity is gone |

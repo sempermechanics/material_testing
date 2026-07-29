@@ -9,20 +9,17 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.text.InputType
 import android.view.View
-import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
-import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -36,6 +33,7 @@ import com.rafad.indicvisiondic.data.AuthRepository
 import com.rafad.indicvisiondic.data.BackupDeleteWorker
 import com.rafad.indicvisiondic.data.CloudRestore
 import com.rafad.indicvisiondic.data.CloudSync
+import com.rafad.indicvisiondic.data.DevAuth
 import com.rafad.indicvisiondic.data.DeviceKeyManager
 import com.rafad.indicvisiondic.data.DicSettings
 import com.rafad.indicvisiondic.data.SessionEverythingExporter
@@ -44,7 +42,7 @@ import com.rafad.indicvisiondic.data.SessionStore
 import com.rafad.indicvisiondic.data.net.CloudSessionDto
 import com.rafad.indicvisiondic.data.net.TokenStore
 import com.rafad.indicvisiondic.ui.admin.AdminActivity
-import com.rafad.indicvisiondic.ui.auth.GoogleSignInHelper
+import com.rafad.indicvisiondic.ui.auth.AuthActivity
 import com.rafad.indicvisiondic.ui.common.AuthRoute
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.home.SessionOpenHelper
@@ -62,6 +60,14 @@ import java.util.concurrent.TimeUnit
  * refreshes in `onResume`, so anything changed here is reflected on return.
  */
 class SettingsActivity : AppCompatActivity() {
+
+    /**
+     * Registered up front, as activity-result launchers must be: the delete flow
+     * hands off to the sign-in screen and only proceeds if it answers OK.
+     */
+    private val reauthLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (it.resultCode == RESULT_OK) deleteAccount()
+    }
 
     private lateinit var analysesList: RecyclerView
     private lateinit var analysesAdapter: AnalysisDataAdapter
@@ -364,59 +370,19 @@ class SettingsActivity : AppCompatActivity() {
      * able to perform on an old session, so we prove who is holding it first.
      * Firebase also refuses to delete a user whose sign-in has gone stale, which
      * is what used to leave the identity behind after the data was gone.
+     *
+     * The proof happens on the sign-in screen itself — it already knows every
+     * way into this account, including the emailed link, which a password box
+     * here never could.
      */
     private fun verifyThenDeleteAccount() {
-        val auth = AuthRepository(this)
-        when {
-            !auth.hasFirebaseIdentity() -> deleteAccount() // dev bypass: nothing to prove
-            auth.isPasswordUser() -> promptPasswordThenDelete(auth)
-            else -> reauthenticateWithGoogleThenDelete(auth)
+        if (DevAuth.active) {
+            // The emulator bypass never signed in, so there is no identity to
+            // prove — and no real account to protect either.
+            deleteAccount()
+            return
         }
-    }
-
-    private fun promptPasswordThenDelete(auth: AuthRepository) {
-        val field = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setHint(R.string.reauth_password_hint)
-        }
-        val inset = (DIALOG_FIELD_INSET_DP * resources.displayMetrics.density).toInt()
-        val frame = FrameLayout(this).apply {
-            setPadding(inset, inset / 2, inset, 0)
-            addView(field)
-        }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.reauth_title)
-            .setMessage(R.string.reauth_body)
-            .setView(frame)
-            .setPositiveButton(R.string.reauth_confirm) { _, _ ->
-                lifecycleScope.launch {
-                    auth.reauthenticateWithPassword(field.text.toString()).fold(
-                        onSuccess = { deleteAccount() },
-                        onFailure = { toast(it.message ?: getString(R.string.reauth_failed)) },
-                    )
-                }
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
-    }
-
-    private fun reauthenticateWithGoogleThenDelete(auth: AuthRepository) {
-        lifecycleScope.launch {
-            val idToken = try {
-                GoogleSignInHelper.getIdToken(this@SettingsActivity)
-            } catch (e: GetCredentialCancellationException) {
-                Timber.d(e, "Re-authentication cancelled")
-                return@launch
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                Timber.w(e, "Could not obtain a Google credential for re-authentication")
-                toast(e.message ?: getString(R.string.reauth_failed))
-                return@launch
-            }
-            auth.reauthenticateWithGoogle(idToken).fold(
-                onSuccess = { deleteAccount() },
-                onFailure = { toast(it.message ?: getString(R.string.reauth_failed)) },
-            )
-        }
+        reauthLauncher.launch(AuthActivity.reauthIntent(this))
     }
 
     private fun deleteAccount() {
@@ -540,9 +506,6 @@ class SettingsActivity : AppCompatActivity() {
         const val BYTES_PER_MB = 1_048_576L
         const val BYTES_PER_GB = 1_073_741_824L
         const val ZIP_MIME = "application/zip"
-
-        /** Side inset for a bare EditText dropped into an alert dialog. */
-        const val DIALOG_FIELD_INSET_DP = 24
 
         /** Snackbar shows for exactly as long as the delete stays cancellable. */
         val UNDO_WINDOW_MS = TimeUnit.SECONDS.toMillis(BackupDeleteWorker.UNDO_WINDOW_SECONDS).toInt()

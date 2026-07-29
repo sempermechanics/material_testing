@@ -199,9 +199,7 @@
     <string name="delete_account_done">Your account and all data have been deleted.</string>
     <string name="delete_account_failed">Couldn\'t reach the cloud, so nothing was deleted. Check your connection and try again.</string>
     <string name="delete_account_identity_kept">Your data is deleted. Your sign-in could not be removed — sign in again and retry to clear it.</string>
-    <string name="reauth_title">Confirm it\'s you</string>
-    <string name="reauth_body">Deleting an account is permanent, so we check your identity first.</string>
-    <string name="reauth_password_hint">Your password</string>
+    <string name="reauth_body">Deleting an account is permanent — confirm it\'s you.</string>
     <string name="reauth_confirm">Verify</string>
     <string name="reauth_failed">Couldn\'t verify your identity. Nothing was deleted.</string>
     <string name="action_cancel">Cancel</string>
@@ -472,6 +470,7 @@
     <string name="auth_google_no_account">No Google account available on this device.</string>
     <string name="auth_google_failed">Google sign-in failed.</string>
     <string name="auth_sign_in_failed">Sign-in failed.</string>
+    <string name="auth_verify_first">Open the link in your email, then sign in.</string>
 
     <!-- Auth: startup routing -->
     <string name="status_offline_mode">Offline Mode</string>

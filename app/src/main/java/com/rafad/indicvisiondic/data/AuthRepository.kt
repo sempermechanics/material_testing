@@ -65,13 +65,6 @@ class AuthRepository(context: Context) {
         result
     }
 
-    /** True when the signed-in user can re-authenticate with a password. */
-    fun isPasswordUser(): Boolean =
-        auth.currentUser?.providerData?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
-
-    /** True when a Firebase identity exists at all (false under the dev bypass). */
-    fun hasFirebaseIdentity(): Boolean = auth.currentUser != null
-
     /**
      * Prove the session still belongs to whoever is holding the phone, so
      * destructive identity operations cannot ride an old sign-in. Firebase
@@ -99,6 +92,23 @@ class AuthRepository(context: Context) {
             Result.success(Unit)
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.w(e, "Google re-authentication failed")
+            Result.failure(Exception(e.message ?: "Could not verify your identity."))
+        }
+    }
+
+    /**
+     * As [reauthenticateWithPassword], for accounts that only ever sign in with
+     * an emailed link. Without this such an account could not be deleted at all:
+     * it has no password to type and no Google credential to present.
+     */
+    suspend fun reauthenticateWithEmailLink(link: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val user = auth.currentUser ?: return@withContext Result.failure(Exception("Not signed in."))
+        val email = user.email ?: return@withContext Result.failure(Exception("This account has no email."))
+        try {
+            user.reauthenticate(EmailAuthProvider.getCredentialWithLink(email, link)).await()
+            Result.success(Unit)
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Email-link re-authentication failed")
             Result.failure(Exception(e.message ?: "Could not verify your identity."))
         }
     }
@@ -242,10 +252,21 @@ class AuthRepository(context: Context) {
             .onFailure { Timber.w(it, "Could not re-send verification email") }
         val email = user.email.orEmpty()
         signOut()
-        return Exception(
+        return EmailVerificationRequired(email)
+    }
+
+    /**
+     * The account exists and its verification mail has just gone out, but the
+     * address is not confirmed yet, so there is no session.
+     *
+     * A distinct type rather than a message: the sign-in screen switches itself
+     * back out of "create account" mode on this outcome, and deciding that by
+     * matching an error string would break the first time the wording changed.
+     */
+    class EmailVerificationRequired(val email: String) :
+        Exception(
             "Verify your email first. We've sent a link to $email — open it, then sign in again.",
         )
-    }
 
     /** True when this account signs in with a password and has not confirmed its address. */
     private suspend fun needsEmailVerification(user: FirebaseUser): Boolean {
