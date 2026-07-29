@@ -123,12 +123,44 @@ gcloud run deploy indic-api \
   --allow-unauthenticated \
   --min-instances 0 --max-instances 10 \
   --concurrency 40 --cpu 1 --memory 512Mi --timeout 120 \
-  --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com"
+  --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
+  --set-env-vars "SUPPORT_EMAIL=support@indicvision.com,NOTIFY_FROM=inDIC <noreply@yourdomain.com>" \
+  --set-secrets "RESEND_API_KEY=resend-api-key:latest"
 ```
 > `FIREBASE_PROJECT_ID` can be omitted when Firebase Auth lives in the same
 > project as the backend — it defaults to `GOOGLE_CLOUD_PROJECT`. See
 > [AUTH_SETUP.md](AUTH_SETUP.md) §3 for what `AUTO_APPROVE_HD` and
 > `ADMIN_EMAILS` do.
+
+> `NOTIFY_FROM` / `RESEND_API_KEY` drive the "a new user is waiting for
+> approval" mail to `SUPPORT_EMAIL` (see B1a). Leave both unset and the backend
+> simply sends nothing — no error, no failed sign-ins.
+
+### B1a. Access-request notification mail (optional)
+
+When a new account is created `PENDING`, the backend mails `SUPPORT_EMAIL` with
+the account, the uid, and how to approve it. Without this, a pending user is
+only discovered by opening **Settings → Access requests** in the app.
+
+Sending goes through [Resend](https://resend.com). Verify your sending domain
+there first — an unverified `NOTIFY_FROM` is rejected and only shows up as a
+warning in the logs.
+
+`RESEND_API_KEY` is the one secret this service holds, so it goes in Secret
+Manager rather than `--set-env-vars`:
+
+```bash
+printf '%s' 're_your_key_here' | gcloud secrets create resend-api-key --data-file=-
+```
+
+```bash
+gcloud secrets add-iam-policy-binding resend-api-key --member "serviceAccount:$API_SA" --role roles/secretmanager.secretAccessor
+```
+
+Then deploy with the `--set-secrets` flag shown in B1. Verify by signing in with
+a fresh non-admin, non-domain account: mail should land in support@ within
+seconds, and `gcloud run services logs read indic-api --region $REGION` should
+carry no `access-request mail` warning.
 
 > `--allow-unauthenticated` is correct here: the service is public at the network
 > layer, and **auth is enforced in the app layer** (Firebase ID token + device

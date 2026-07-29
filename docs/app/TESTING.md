@@ -11,7 +11,8 @@ Each chunk owns one layer; no duplicate assertions across chunks.
 | **session** | Home list, open session, disk layout | `session/SessionPathsTest` | — |
 | **analysis** | Import → ROI → batch/sweep | `analysis/VsgStudyTest`, `SubsetRecommenderTest`, `BitmapDecodeTest` | — |
 | **results** | `.dat` decode, CSV, heatmap, PDF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest` | — |
-| **cloud** | Upload, API, restore | `cloud/ApiDtosContractTest`, `UploadResumableTest`, `SessionUploadBundlerTest`, `CloudRestoreMappingTest` | — |
+| **cloud** | Upload, API, restore, account deletion | `cloud/ApiDtosContractTest`, `UploadResumableTest`, `SessionUploadBundlerTest`, `CloudRestoreMappingTest`, `AccountDeletionTest` | — |
+| **settings** | Settings sections, contacting support | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest` | — |
 | **e2e** | Full UI flows | — | `e2e/AppFlowEspressoTest` |
 | **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
 
@@ -31,7 +32,12 @@ Each chunk owns one layer; no duplicate assertions across chunks.
 ./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.analysis.*"
 ./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.results.*"
 ./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.cloud.*"
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.settings.*"
 ```
+
+`settings/HelpSupportSectionTest` drives the real `SettingsActivity` under
+Robolectric — it is the first UI-level test of that screen, and the pattern to
+copy for the other sections.
 
 Emulator (all instrumented):
 ```bash

@@ -10,6 +10,7 @@ build it. This page routes you to the rest.
 | Understand DIC itself before touching anything | [DIC in five minutes](#dic-in-five-minutes) below |
 | Change the Android UI / understand app flow | [app/ARCHITECTURE.md](app/ARCHITECTURE.md) |
 | Walk every user flow, or run a manual test pass | [app/WORKFLOWS.md](app/WORKFLOWS.md) |
+| Operate the app to analyse a DIC image set | [OPERATING_MANUAL.md](OPERATING_MANUAL.md) |
 | Change the correlation engine (C++) | [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md) |
 | Check the math, or write it up | [engine/MATHEMATICS.md](engine/MATHEMATICS.md) |
 | Add or run app tests | [app/TESTING.md](app/TESTING.md) |

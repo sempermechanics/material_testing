@@ -106,7 +106,10 @@ approval, depending on the backend's answer.
 | [ ] 1.7 | Tap the mode toggle | Becomes "Create account"; the confirm-password field appears |
 | [ ] 1.8 | Create an account with a 5-character password | Blocked with "password too short" |
 | [ ] 1.9 | Create an account with mismatched confirm | Blocked with "passwords do not match" |
-| [ ] 1.10 | Create a valid new account | Signs in and lands on Pending approval (new accounts aren't pre-approved) |
+| [ ] 1.10 | Create a valid new account | A verification email is sent and the session is dropped — "Verify your email first…" naming the address |
+| [ ] 1.10a | Try to sign in before opening that link | Blocked with the same message; a fresh verification email is sent each time |
+| [ ] 1.10b | Open the link, then sign in | Signs in and lands on Pending approval (new accounts aren't pre-approved) |
+| [ ] 1.10c | Sign in with Google, or via an email sign-in link | No verification step — both arrive already verified |
 | [ ] 1.11 | In register mode, look for the recovery links | Forgot-password / email-link links are hidden |
 | [ ] 1.12 | Tap **Forgot password** with a registered email | Green snackbar confirming the email was sent |
 | [ ] 1.13 | Tap **Forgot password** with an unregistered email | Same success message — enumeration is deliberately not leaked |
@@ -133,8 +136,16 @@ allowed in. A new account sits here until an admin approves it.
 **Entry:** Splash or Login when status is `PENDING`. **Exit:** Home on approval,
 Login on sign-out.
 
+The backend mails support the moment the account is created `PENDING`, so an
+admin learns about it without the user asking (see
+[BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) §B1a). **Request access**
+below is the user's own nudge on top of that, not the only signal.
+
 | # | Action | Expected |
 |---|---|---|
+| [ ] 2.0 | Land here for the first time on a new account | support@ receives an "inDIC access request" mail naming the account and its user id, without anyone tapping anything |
+| [ ] 2.0a | Sign out and back in on that same account | No second mail — it is sent once, when the account is created |
+| [ ] 2.0b | Same on a backend with no `RESEND_API_KEY` set | No mail and no error: sign-in still ends on this screen normally |
 | [ ] 2.1 | Read the screen | Your email and a truncated device ID are both shown |
 | [ ] 2.2 | Tap **Request access** | Mail app opens, prefilled with account, device ID, app version and device model |
 | [ ] 2.3 | Same, with no mail app installed | Toast instead of a crash |
@@ -229,6 +240,9 @@ two-button footer.
    │   └── Delete my account and data   (backend first; local wipe only on success)
    ├── Analysis preferences
    │   └── Max frames per analysis      (10–150, default 50) + info dialog
+   ├── Help & support
+   │   ├── support@indicvision.com      (selectable, copyable)
+   │   └── Email support                (mailto, prefilled with account/device/build)
    ├── About                            (version dialog only)
    └── Sign out
 ```
@@ -238,7 +252,7 @@ any sync badge). **Exit:** Home, Admin, a result, or Login.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 4.1 | Open Settings | All five sections are collapsed; chevrons rotate on tap |
+| [ ] 4.1 | Open Settings | All six sections are collapsed; chevrons rotate on tap |
 | [ ] 4.2 | Expand **Account** | Your email and "Device ID · …" are shown; the device ID can be selected and copied |
 | [ ] 4.3 | Expand **Account** as a non-admin | No "Pending access requests" button |
 | [ ] 4.4 | Expand **Account** as an admin | The button appears and opens the admin list |
@@ -258,13 +272,21 @@ any sync badge). **Exit:** Home, Admin, a result, or Login.
 | [ ] 4.18 | Confirm and wait past the undo window | The backup is really gone after a refresh |
 | [ ] 4.19 | Tap **Export my data** | A master ZIP is built and handed to the share chooser, with "Save to Files" offered |
 | [ ] 4.20 | Tap **Delete my account and data** | Dialog listing exactly what goes: local analyses, cloud backups, profile and device |
+| [ ] 4.20a | Confirm it, as a password account | "Confirm it's you" with a password field before anything is deleted |
+| [ ] 4.20b | Enter the wrong password | "Incorrect password." and nothing is deleted |
+| [ ] 4.20c | Confirm it, as a Google account | The Google chooser appears instead, to re-authenticate |
+| [ ] 4.20d | Dismiss that chooser | Returns to Settings silently; nothing is deleted |
 | [ ] 4.21 | Confirm the delete with no network | Nothing local is touched; a failure toast is shown |
-| [ ] 4.22 | Confirm the delete online | Everything is wiped and you land back on Login |
+| [ ] 4.22 | Confirm the delete online | Everything is wiped, including the sign-in identity, and you land back on Login |
+| [ ] 4.22a | Sign up again with the same email afterwards | It behaves as a brand-new account — the old identity is gone |
 | [ ] 4.23 | Drag the **Max frames** slider | Value label tracks in steps of 10 between 10 and 150 |
 | [ ] 4.24 | Tap the ⓘ next to it | Explains the cost of more frames |
 | [ ] 4.25 | Set it to 20, then import 40 frames in an analysis | Only the first 20 are kept, with a "capped" toast |
-| [ ] 4.26 | Tap **About** | "inDIC v<name> (<code>)" |
-| [ ] 4.27 | Tap **Sign out** → confirm | Login, back stack cleared |
+| [ ] 4.26 | Expand **Help & support** | The support address is shown and can be selected and copied |
+| [ ] 4.27 | Tap **Email support** | Mail app opens to support@, subject "inDIC support request", body carrying account, device ID, app version and device model |
+| [ ] 4.28 | Same with no mail app installed | "No email app found…" toast naming the address; no crash |
+| [ ] 4.29 | Tap **About** | "inDIC v<name> (<code>)" |
+| [ ] 4.30 | Tap **Sign out** → confirm | Login, back stack cleared |
 
 ### 4.1 Admin `[admin]`
 
@@ -277,7 +299,7 @@ any sync badge). **Exit:** Home, Admin, a result, or Login.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 4.1.1 | Open the admin list | Every user awaiting approval is listed |
+| [ ] 4.1.1 | Open the admin list | Every user awaiting approval is listed — each one should match a mail support already received (§2.0) |
 | [ ] 4.1.2 | With no one waiting | "No pending requests." |
 | [ ] 4.1.3 | Tap **Approve** | Toast, list reloads, that user can now get past Pending approval |
 | [ ] 4.1.4 | Tap **Deny** | Toast, the row disappears |
@@ -731,12 +753,14 @@ then the link opens in a browser and the flow is effectively dead. See
 
 ### Behavioural gaps worth knowing
 
-- **No re-authentication before account deletion.** The backend account is
-  erased, but Firebase usually refuses `delete()` without a recent login, so the
-  identity survives — signing in again with the same email creates a fresh
-  pending profile.
-- **Email verification is sent but never enforced** or surfaced. An unverified
-  new account simply lands on Pending approval.
+- **Account deletion re-authenticates first** (password prompt, or a fresh Google
+  credential), so `delete()` is no longer refused as stale and the identity goes
+  with the data. If it still fails the user is told the data is gone but the
+  sign-in survived, and is signed out regardless.
+- **Email verification is enforced for password accounts.** Sign-up and every
+  later sign-in are blocked until the address is confirmed; the session is torn
+  down and a fresh link sent. Google and email-link users are exempt — both
+  arrive verified.
 - **Pending approval does not poll**, despite its KDoc saying so. Only the button
   checks.
 - **Coach marks cannot be replayed or reset** — the flags are write-once with no

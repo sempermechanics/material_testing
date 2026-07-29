@@ -98,6 +98,15 @@ Auth lives in the same project as this backend, you can skip the
      | `FIREBASE_PROJECT_ID` | the Firebase project id from step 7 — omit if it is the same as above |
      | `AUTO_APPROVE_HD` | your domain, e.g. `yourdomain.com` — verified emails there are approved on first sign-in |
      | `ADMIN_EMAILS` | comma-separated admin addresses |
+     | `SUPPORT_EMAIL` | where "a new user is waiting for approval" mail goes — defaults to `support@indicvision.com` |
+     | `NOTIFY_FROM` | verified Resend sender, e.g. `inDIC <noreply@yourdomain.com>` — leave unset to disable notification mail |
+
+   - **Container → Variables & Secrets → + Reference a secret** for the API key
+     (it must not be a plain variable): name `RESEND_API_KEY`, secret
+     `resend-api-key`, version `latest`, exposed as an environment variable.
+     Create the secret first in **Security → Secret Manager**, and grant
+     **indic-api** the *Secret Manager Secret Accessor* role on it. Skip this and
+     the backend just sends no notification mail — nothing breaks.
 
    - (Resources) CPU 1, Memory 512 MiB, Min instances 0, Max 10.
 7. **Create.** Wait for the build+deploy to finish; copy the service **URL**
