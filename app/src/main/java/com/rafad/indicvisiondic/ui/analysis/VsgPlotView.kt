@@ -46,6 +46,13 @@ class VsgPlotView @JvmOverloads constructor(
         val muted: Boolean = false,
     )
 
+    /**
+     * One curve's value under the scrub line, carrying the colour it is drawn
+     * in — the readout is only readable against several curves if each entry
+     * matches the line it came from.
+     */
+    data class Sample(val label: String, val value: Float, val color: Int)
+
     private companion object {
         const val AXIS_LABEL_SP = 11f
         const val LINE_WIDTH_DP = 2f
@@ -118,7 +125,7 @@ class VsgPlotView @JvmOverloads constructor(
     private var currentBounds: Bounds? = null
 
     /** Called while scrubbing: x position and y values per visible series. */
-    var onScrub: ((x: Float, samples: List<Pair<String, Float>>) -> Unit)? = null
+    var onScrub: ((x: Float, samples: List<Sample>) -> Unit)? = null
 
     fun setData(series: List<Series>, xLabel: String, yLabel: String, highlightX: Float? = null) {
         this.series = series
@@ -242,7 +249,7 @@ class VsgPlotView @JvmOverloads constructor(
         val values = series
             .filterNot { it.muted }
             .mapNotNull { entry ->
-                interpolateY(entry.points, xData)?.let { y -> entry.label to y }
+                interpolateY(entry.points, xData)?.let { y -> Sample(entry.label, y, entry.color) }
             }
         onScrub?.invoke(xData, values)
         invalidate()

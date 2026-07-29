@@ -481,6 +481,8 @@ Reached only when the file picked on Home was a video.
 | [ ] 5.5.4 | Finish a sweep with some combinations failing | "N of M skipped" toast, then the Lattice |
 | [ ] 5.5.4a | Tap a hollow node | A dialog titled with that combination (S · St · W · VSG) and a one-line reason — decorrelated, subset too large, VSG failure |
 | [ ] 5.5.4c | Tap a hollow node from a sweep with no recorded code | Still explains itself rather than doing nothing |
+| [ ] 5.5.4d | Open the lattice for the first time | Coach marks point out the graph, then the strain plot's drag readout |
+| [ ] 5.5.4e | Drag across the strain plot | Every curve's value at that position, each in its own curve's colour |
 | [ ] 5.5.4b | Run a sweep where **every** combination fails | The Lattice opens — not the parameter screen — all nodes hollow, summary says all failed, **View results** is gone |
 | [ ] 5.5.5 | Finish a sweep cleanly | Lattice opens with every node filled |
 | [ ] 5.5.6 | Hit the quota during a run | Session limit screen |

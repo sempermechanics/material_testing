@@ -294,7 +294,8 @@ run. The coach mark points it out on a first visit.
 - **Tap** a node — its curve is highlighted, the rest fade.
 - **Double-tap** or **long-press** — opens that result.
 - **Drag across the plot** — a guide follows your finger and the readout gives
-  `(x, y)` for every curve, so you can compare combinations at one position.
+  `(x, y)` for every curve, **each in that curve's own colour**, so you can read
+  several combinations at one position without matching text to a legend.
 - The **Exx / Eyy / Exy** selector switches component.
 
 Look for the VSG where the curves stop separating.

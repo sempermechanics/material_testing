@@ -411,6 +411,7 @@
     <string name="coach_sweep_subset">Set the subset size range for sweep granularity.</string>
     <string name="coach_sweep_lattice">This is the planned lattice — each node is one analysis.</string>
     <string name="coach_sweep_graph">Each node is one combination: subset size across, strain window up. Filled nodes solved — tap one to focus its curve, double-tap to open it. Hollow ones failed; tap for the reason.</string>
+    <string name="coach_sweep_scrub">Drag across the plot to read every curve at one position. Each value is shown in its own curve\'s colour, so you can tell them apart without checking the legend.</string>
     <string name="coach_sweep_run">Run the sweep when the plan looks right.</string>
     <string name="inputs_meta_fmt">Reference · %1$d deformed frames</string>
     <string name="roi_full_fmt">Full image · %1$d × %2$d px</string>

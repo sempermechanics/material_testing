@@ -6,6 +6,9 @@ package com.rafad.indicvisiondic.ui.analysis
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.style.ForegroundColorSpan
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -130,15 +133,35 @@ class VsgLatticeActivity : AppCompatActivity() {
         btnOpenAnalysis.setOnClickListener {
             if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex)
         }
-        strainPlot.onScrub = { x, samples ->
-            strainPlotReadout.text = samples.joinToString(" · ") { (label, y) ->
-                getString(R.string.vsg_lattice_scrub_value_fmt, x, y, label)
-            }
-        }
+        strainPlot.onScrub = { x, samples -> strainPlotReadout.text = scrubReadout(x, samples) }
         setupStrainSpinner()
         loadStrainProfiles()
 
         maybeCoachTheGraph()
+    }
+
+    /**
+     * The scrub readout, each curve's value in that curve's own colour.
+     *
+     * With several combinations plotted at once the numbers are otherwise
+     * unattributable — the label alone makes you match text to a legend while
+     * dragging. Colouring them ties each value to the line it came from.
+     */
+    private fun scrubReadout(x: Float, samples: List<VsgPlotView.Sample>): CharSequence {
+        val out = SpannableStringBuilder()
+        samples.forEachIndexed { index, sample ->
+            if (index > 0) out.append(getString(R.string.dot_separator))
+            val text = getString(R.string.vsg_lattice_scrub_value_fmt, x, sample.value, sample.label)
+            val start = out.length
+            out.append(text)
+            out.setSpan(
+                ForegroundColorSpan(sample.color),
+                start,
+                out.length,
+                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
+        return out
     }
 
     /**
@@ -154,6 +177,10 @@ class VsgLatticeActivity : AppCompatActivity() {
                     CoachMarkController.Step(
                         latticeView,
                         getString(R.string.coach_sweep_graph),
+                    ),
+                    CoachMarkController.Step(
+                        strainPlot,
+                        getString(R.string.coach_sweep_scrub),
                     ),
                 ),
             )
