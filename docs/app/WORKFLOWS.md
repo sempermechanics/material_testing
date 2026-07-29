@@ -338,6 +338,7 @@ Lattice, Session limit, or back to Home.
 
 | # | Action | Expected |
 |---|---|---|
+| [ ] 5.1.0 | Look at an empty image slot | A **Select** chip sits inside the dashed area; tapping it or the area opens the picker |
 | [ ] 5.1.1 | Tap the reference dropzone → **Photos** | Picker opens, images only |
 | [ ] 5.1.2 | Pick a `.dng` or `.tif` via **Files** | Card shows the filename and `W × H`; no decode error |
 | [ ] 5.1.3 | Tap **Change** on the reference card | Source chooser reopens; the new image replaces the old |
@@ -428,7 +429,9 @@ Reached only when the file picked on Home was a video.
 | [ ] 5.3.4 | Type a max VSG of 5, then 900 | Clamped into 21–501 |
 | [ ] 5.3.5 | Type a step denominator of 1, then 9 | Clamped into 2–6; the prefix reads "subset ÷ n" |
 | [ ] 5.3.6 | Tap each ⓘ | Subset range, strain window range, step depth and samples each explain themselves |
-| [ ] 5.3.6b | Drag the strain window range | Two handles like the subset's; the min and max boxes track it and the plan count updates |
+| [ ] 5.3.6b | Read the strain window control | It has its own title and ⓘ and spans the row, like the subset range above it |
+| [ ] 5.3.6d | Drag the strain window range | Two handles like the subset's; the min and max boxes track it and the plan count updates |
+| [ ] 5.3.6e | Find the step size | On its own row below the range, not sharing one with it |
 | [ ] 5.3.6c | Type a min above the max | Clamped rather than inverted; the sweep still plans |
 | [ ] 5.3.6a | Open sweep setup for the first time | A coach mark points out the lattice preview graph |
 | [ ] 5.3.7 | Tap **Pick frame** | Dialog with a radio list, a frame-number field and a live preview |
