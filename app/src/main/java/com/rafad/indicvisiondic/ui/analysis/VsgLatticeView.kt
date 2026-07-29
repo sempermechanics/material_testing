@@ -48,6 +48,7 @@ class VsgLatticeView @JvmOverloads constructor(
         val vsg: Int,
         val solved: Boolean,
         val frameIndex: Int = -1,
+        val failureReason: String = "",
     )
 
     /** Invoked when a solved node is tapped. */
@@ -137,17 +138,17 @@ class VsgLatticeView @JvmOverloads constructor(
 
     private var nodes: List<Node> = emptyList()
     private var columns: List<Int> = emptyList()
-    private var vsgMin = AXIS_MIN
-    private var vsgMax = AXIS_MIN + 1
+    private var winMin = AXIS_MIN
+    private var winMax = AXIS_MIN + 1
 
     fun setNodes(nodes: List<Node>) {
         this.nodes = nodes
         columns = nodes.map { it.subset }.distinct().sorted()
-        val vsgs = nodes.map { it.vsg }
-        val hi = vsgs.maxOrNull() ?: AXIS_MIN
+        val windows = nodes.map { it.window }
+        val hi = windows.maxOrNull() ?: AXIS_MIN
         val yMargin = ((hi - AXIS_MIN) * Y_MARGIN_FRACTION).toInt().coerceAtLeast(1)
-        vsgMin = AXIS_MIN
-        vsgMax = maxOf(hi + yMargin, AXIS_MIN + 1)
+        winMin = AXIS_MIN
+        winMax = maxOf(hi + yMargin, AXIS_MIN + 1)
         invalidate()
     }
 
@@ -167,7 +168,7 @@ class VsgLatticeView @JvmOverloads constructor(
             columnX[subset] = left + (i + HALF_COLUMN) / columns.size * (right - left)
         }
         frame.set(left, right, top, bottom)
-        fun yFor(vsg: Int) = bottom - (vsg - vsgMin).toFloat() / (vsgMax - vsgMin) * (bottom - top)
+        fun yFor(win: Int) = bottom - (win - winMin).toFloat() / (winMax - winMin) * (bottom - top)
 
         drawGrid(canvas, columnX, frame)
         drawConnectors(canvas, columnX, ::yFor)
@@ -236,10 +237,9 @@ class VsgLatticeView @JvmOverloads constructor(
         return true
     }
 
-    /** The nearest solved node within the tap tolerance of (x, y), or null. */
+    /** The nearest node within the tap tolerance of (x, y), or null. */
     private fun nodeAt(x: Float, y: Float): Node? {
         val hit = placed
-            .filter { it.node.solved }
             .minByOrNull { hypot(it.x - x, it.y - y) }
             ?: return null
         return if (hypot(hit.x - x, hit.y - y) <= dp(TOUCH_RADIUS_DP)) hit.node else null
@@ -267,7 +267,7 @@ class VsgLatticeView @JvmOverloads constructor(
         for (i in 0..Y_TICKS) {
             val y = f.bottom - (f.bottom - f.top) * i / Y_TICKS
             canvas.drawLine(f.left, y, f.right, y, gridPaint)
-            val vsg = vsgMin + (vsgMax - vsgMin) * i / Y_TICKS
+            val vsg = winMin + (winMax - winMin) * i / Y_TICKS
             val baseline = y + textPaint.textSize * TICK_BASELINE
             canvas.drawText(vsg.toString(), f.left - dp(TICK_GAP_DP), baseline, textPaint)
         }
@@ -277,11 +277,11 @@ class VsgLatticeView @JvmOverloads constructor(
     private fun drawConnectors(canvas: Canvas, columnX: Map<Int, Float>, yFor: (Int) -> Float) {
         columns.forEach { subset ->
             val x = columnX[subset] ?: return@forEach
-            val ladder = nodes.filter { it.subset == subset }.sortedBy { it.vsg }
+            val ladder = nodes.filter { it.subset == subset }.sortedBy { it.window }
             if (ladder.size < 2) return@forEach
             path.reset()
             ladder.forEachIndexed { i, node ->
-                if (i == 0) path.moveTo(x, yFor(node.vsg)) else path.lineTo(x, yFor(node.vsg))
+                if (i == 0) path.moveTo(x, yFor(node.window)) else path.lineTo(x, yFor(node.window))
             }
             canvas.drawPath(path, connectorPaint)
         }
@@ -294,7 +294,7 @@ class VsgLatticeView @JvmOverloads constructor(
         val skipped = ContextCompat.getColor(context, R.color.semantic_danger)
         nodes.forEach { node ->
             val x = columnX[node.subset] ?: return@forEach
-            val y = yFor(node.vsg)
+            val y = yFor(node.window)
             placed.add(Placed(node, x, y))
             if (node.solved) {
                 fillPaint.color = solved

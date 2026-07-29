@@ -1102,9 +1102,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         checkReady()
                         startActivity(Intent(this@StaticAnalysisActivity, SessionLimitActivity::class.java))
                     } else if (outcome.engineErrorCode < 0) {
-                        val errorMsg = engineFailureMessage(outcome.engineErrorCode)
+                        val errorMsg = engineFailureMessage(
+                            outcome.engineErrorCode,
+                            frameIndex = outcome.failedFrameIndex,
+                            frameName = outcome.failedFrameName,
+                        )
                         tvResult.text = "❌ Error: $errorMsg"
-                        showEngineFailureDialog(outcome.engineErrorCode, R.string.analysis_failed_title)
+                        showEngineFailureDialog(
+                            outcome.engineErrorCode,
+                            R.string.analysis_failed_title,
+                            frameIndex = outcome.failedFrameIndex,
+                            frameName = outcome.failedFrameName,
+                        )
                     } else if (outcome.firstFrameValidPoints <= 0) {
                         tvResult.text = "❌ Engine returned no data"
                     } else {
@@ -1170,6 +1179,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 putExtra(DicKeys.SWEEP_SKIP_SUBSETS, skipped.map { it.subset }.toIntArray())
                 putExtra(DicKeys.SWEEP_SKIP_STEPS, skipped.map { it.step }.toIntArray())
                 putExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS, skipped.map { it.strainWindow }.toIntArray())
+                putExtra(DicKeys.SWEEP_SKIP_CODES, viewModel.sweepSkippedCodes.toIntArray())
             }
 
             // PDF GENERATOR DATA
@@ -1363,7 +1373,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 progress.totalRuns,
                 progress.point.subset,
                 progress.point.step,
-                progress.point.vsg,
+                progress.point.strainWindow,
             ),
             title = getString(R.string.mode_sweep),
             pointsSolved = if (progress.pointsSolved > 0) progress.pointsSolved else -1,
@@ -1386,11 +1396,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
             return
         }
         if (outcome.totalFrames == 0) {
-            // Nothing completed: a cancel is the user's own doing, anything
-            // else is an engine failure the user needs the reason for.
-            if (outcome.engineErrorCode != AnalysisRunCodes.ERROR_CANCELLED) {
-                showEngineFailureDialog(outcome.engineErrorCode, R.string.sweep_fail_title)
-            }
+            if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED) return
+            // Route to lattice with all-failed nodes so the user can tap each for details.
+            viewModel.sweepPlan = emptyList()
+            viewModel.sweepSkipped = sweepHelper.currentPlan()
+            viewModel.sweepSkippedCodes = viewModel.sweepSkipped.map { outcome.engineErrorCode }
+            viewModel.lastBatchDirPath = outcome.batchDirPath
+            openResultViewer(sweep = true)
             return
         }
         val skipped = viewModel.sweepSkipped.size
@@ -1416,20 +1428,28 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * Why a run produced nothing. The engine's codes are the same for single
      * analysis and sweep; messages reuse the sweep-path string resources.
      */
-    private fun engineFailureMessage(engineErrorCode: Int): String {
-        val reason = when (engineErrorCode) {
-            ENGINE_ERROR_FEATURES -> R.string.sweep_fail_features
-            ENGINE_ERROR_ROI -> R.string.sweep_fail_roi
-            ENGINE_ERROR_INIT -> R.string.sweep_fail_init
-            else -> R.string.sweep_fail_unknown
+    private fun engineFailureMessage(
+        engineErrorCode: Int,
+        frameIndex: Int = -1,
+        frameName: String? = null,
+    ): String {
+        val frameInfo = when {
+            frameIndex < 0 -> ""
+            frameName != null -> getString(R.string.failure_frame_fmt, frameIndex + 1, frameName)
+            else -> getString(R.string.failure_frame_no_name_fmt, frameIndex + 1)
         }
-        return getString(reason, engineErrorCode)
+        return frameInfo + getString(EngineFailure.reasonRes(engineErrorCode), engineErrorCode)
     }
 
-    private fun showEngineFailureDialog(engineErrorCode: Int, titleRes: Int) {
+    private fun showEngineFailureDialog(
+        engineErrorCode: Int,
+        titleRes: Int,
+        frameIndex: Int = -1,
+        frameName: String? = null,
+    ) {
         MaterialAlertDialogBuilder(this)
             .setTitle(titleRes)
-            .setMessage(engineFailureMessage(engineErrorCode))
+            .setMessage(engineFailureMessage(engineErrorCode, frameIndex, frameName))
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }
@@ -1549,6 +1569,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         CoachMarkController.Step(
                             findViewById(R.id.plannedLatticeCard),
                             getString(R.string.coach_sweep_lattice),
+                        ),
+                        CoachMarkController.Step(
+                            findViewById(R.id.sweepLatticePreview),
+                            getString(R.string.coach_sweep_graph),
                         ),
                         CoachMarkController.Step(
                             findViewById(R.id.btnRunSweep),

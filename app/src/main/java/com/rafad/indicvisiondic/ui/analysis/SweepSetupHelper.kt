@@ -64,12 +64,9 @@ class SweepSetupHelper(
         /** Width of the subset window a fresh sweep suggests, centred on the recommendation. */
         const val SUGGESTED_SUBSET_SPAN = 20
 
-        /** Suggested Max VSG, as a multiple of the largest subset in the sweep. */
-        const val VSG_SUGGESTION_FACTOR = 3
-
-        /** Hard bounds on Max VSG — the guardrail against a mistyped huge number. */
-        const val VSG_MIN_INPUT = 21
-        const val VSG_MAX_INPUT = 501
+        /** Hard bounds on strain window input — the guardrail against a mistyped huge number. */
+        const val STRAIN_WIN_MIN_INPUT = VsgStudy.MIN_STRAIN_WINDOW
+        const val STRAIN_WIN_MAX_INPUT = VsgStudy.MAX_STRAIN_WINDOW
 
         /** Longest edge of a frame thumbnail in the pick dialog. */
         private const val PREVIEW_MAX_EDGE = 480
@@ -83,10 +80,10 @@ class SweepSetupHelper(
     private lateinit var rangeSubset: RangeSlider
     private lateinit var etSubsetMinValue: EditText
     private lateinit var etSubsetMaxValue: EditText
-    private lateinit var etVsgMaxValue: EditText
+    private lateinit var etStrainWinMaxValue: EditText
     private lateinit var etStepDepthValue: EditText
     private lateinit var etSubsetSamplesValue: EditText
-    private lateinit var etVsgSamplesValue: EditText
+    private lateinit var etStrainWinSamplesValue: EditText
     private lateinit var rgLineCutAxis: MaterialButtonToggleGroup
     private lateinit var btnPickSweepFrame: Button
     private lateinit var tvSweepPlan: TextView
@@ -118,10 +115,10 @@ class SweepSetupHelper(
         rangeSubset = activity.findViewById(R.id.rangeSubset)
         etSubsetMinValue = activity.findViewById(R.id.etSubsetMinValue)
         etSubsetMaxValue = activity.findViewById(R.id.etSubsetMaxValue)
-        etVsgMaxValue = activity.findViewById(R.id.etVsgMaxValue)
+        etStrainWinMaxValue = activity.findViewById(R.id.etVsgMaxValue)
         etStepDepthValue = activity.findViewById(R.id.etStepDepthValue)
         etSubsetSamplesValue = activity.findViewById(R.id.etSubsetSamplesValue)
-        etVsgSamplesValue = activity.findViewById(R.id.etVsgSamplesValue)
+        etStrainWinSamplesValue = activity.findViewById(R.id.etVsgSamplesValue)
         rgLineCutAxis = activity.findViewById(R.id.rgLineCutAxis)
         btnPickSweepFrame = activity.findViewById(R.id.btnPickSweepFrame)
         tvSweepPlan = activity.findViewById(R.id.tvSweepPlan)
@@ -167,7 +164,7 @@ class SweepSetupHelper(
 
         applyAnalysisModeUi()
         callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
-        callbacks.renderParamField(etVsgSamplesValue, viewModel.vsgSamples)
+        callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
         callbacks.renderParamField(etStepDepthValue, viewModel.stepDenominator)
         seedSweepSuggestions()
     }
@@ -190,7 +187,7 @@ class SweepSetupHelper(
         if (!::etSubsetMinValue.isInitialized) return
         etSubsetMinValue.clearFocus()
         etSubsetMaxValue.clearFocus()
-        etVsgMaxValue.clearFocus()
+        etStrainWinMaxValue.clearFocus()
     }
 
     /** Hands the sweep back to suggested inputs (e.g. Advanced Reset). */
@@ -216,9 +213,9 @@ class SweepSetupHelper(
         val (lo, hi) = suggestedSubsetWindow(rec, ceiling)
         viewModel.subsetMin = lo
         viewModel.subsetMax = hi
-        viewModel.vsgMax = (VSG_SUGGESTION_FACTOR * hi).coerceIn(VSG_MIN_INPUT, VSG_MAX_INPUT)
+        viewModel.strainWinMax = VsgStudy.MAX_STRAIN_WINDOW
         writeSubsetRange(lo, hi)
-        callbacks.renderParamField(etVsgMaxValue, viewModel.vsgMax)
+        callbacks.renderParamField(etStrainWinMaxValue, viewModel.strainWinMax)
         refreshSweepPlan()
     }
 
@@ -233,8 +230,8 @@ class SweepSetupHelper(
             subsetMin = viewModel.subsetMin,
             subsetMax = viewModel.subsetMax.coerceAtMost(ceiling),
             subsetSamples = viewModel.subsetSamples,
-            vsgMax = viewModel.vsgMax,
-            vsgSamples = viewModel.vsgSamples,
+            strainWinMax = viewModel.strainWinMax,
+            strainWinSamples = viewModel.strainWinSamples,
             stepDenominator = viewModel.stepDenominator,
         )
     }
@@ -242,7 +239,7 @@ class SweepSetupHelper(
     fun refreshSweepPlan() {
         if (!::tvSweepPlan.isInitialized) return
         callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
-        callbacks.renderParamField(etVsgSamplesValue, viewModel.vsgSamples)
+        callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
         callbacks.renderParamField(etStepDepthValue, viewModel.stepDenominator)
         refreshSweepFrameUi()
 
@@ -271,14 +268,14 @@ class SweepSetupHelper(
         }
     }
 
-    /** "N analyses · subset a–b px · VSG c–d px" for a plan. */
+    /** "N analyses · subset a–b px · window c–d" for a plan. */
     fun planSummary(plan: List<VsgStudy.Point>): String = activity.getString(
         R.string.sweep_plan_grid_fmt,
         plan.size,
         plan.minOf { it.subset },
         plan.maxOf { it.subset },
-        plan.minOf { it.vsg },
-        plan.maxOf { it.vsg },
+        plan.minOf { it.strainWindow },
+        plan.maxOf { it.strainWindow },
     )
 
     /** Short per-combination label; becomes the frame name in viewer and report. */
@@ -343,10 +340,10 @@ class SweepSetupHelper(
 
         wireSweepField(etSubsetMinValue, { viewModel.subsetMin }) { commitSubsetMin(it) }
         wireSweepField(etSubsetMaxValue, { viewModel.subsetMax }) { commitSubsetMax(it) }
-        wireSweepField(etVsgMaxValue, { viewModel.vsgMax }) { commitVsgMax(it) }
+        wireSweepField(etStrainWinMaxValue, { viewModel.strainWinMax }) { commitStrainWinMax(it) }
         wireSweepField(etStepDepthValue, { viewModel.stepDenominator }) { commitStepDepth(it) }
         wireSweepField(etSubsetSamplesValue, { viewModel.subsetSamples }) { commitSubsetSamples(it) }
-        wireSweepField(etVsgSamplesValue, { viewModel.vsgSamples }) { commitVsgSamples(it) }
+        wireSweepField(etStrainWinSamplesValue, { viewModel.strainWinSamples }) { commitStrainWinSamples(it) }
     }
 
     private inline fun onSliderInput(fromUser: Boolean, body: () -> Unit) {
@@ -423,9 +420,9 @@ class SweepSetupHelper(
         refreshSweepPlan()
     }
 
-    private fun commitVsgMax(raw: Int) {
-        viewModel.vsgMax = raw.coerceIn(VSG_MIN_INPUT, VSG_MAX_INPUT)
-        callbacks.renderParamField(etVsgMaxValue, viewModel.vsgMax)
+    private fun commitStrainWinMax(raw: Int) {
+        viewModel.strainWinMax = raw.coerceIn(STRAIN_WIN_MIN_INPUT, STRAIN_WIN_MAX_INPUT)
+        callbacks.renderParamField(etStrainWinMaxValue, viewModel.strainWinMax)
         refreshSweepPlan()
     }
 
@@ -441,9 +438,9 @@ class SweepSetupHelper(
         refreshSweepPlan()
     }
 
-    private fun commitVsgSamples(raw: Int) {
-        viewModel.vsgSamples = raw.coerceIn(VsgStudy.MIN_SAMPLES, VsgStudy.MAX_SAMPLES)
-        callbacks.renderParamField(etVsgSamplesValue, viewModel.vsgSamples)
+    private fun commitStrainWinSamples(raw: Int) {
+        viewModel.strainWinSamples = raw.coerceIn(VsgStudy.MIN_SAMPLES, VsgStudy.MAX_SAMPLES)
+        callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
         refreshSweepPlan()
     }
 

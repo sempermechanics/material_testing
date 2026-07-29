@@ -146,8 +146,8 @@ object VsgStudy {
         sampleEvenly(subsetSizes(subsetMin, subsetMax), count)
 
     /**
-     * The sweep grid: for each sampled subset (x) and each of [vsgSamples] VSG
-     * sizes (y) sampled up to [vsgMax], one analysis at the fixed step size
+     * The sweep grid: for each sampled subset (x) and each of [strainWinSamples]
+     * strain windows (y) sampled up to [strainWinMax], one analysis at the fixed step size
      * `subset/[stepDenominator]`. Deduplicated, ordered by subset then VSG — the
      * order the frames are solved and scrubbed through in.
      */
@@ -156,14 +156,14 @@ object VsgStudy {
         subsetMin: Int,
         subsetMax: Int,
         subsetSamples: Int,
-        vsgMax: Int,
-        vsgSamples: Int,
+        strainWinMax: Int,
+        strainWinSamples: Int,
         stepDenominator: Int,
     ): List<Point> {
         val out = LinkedHashSet<Point>()
         for (subset in sampledSubsets(subsetMin, subsetMax, subsetSamples)) {
             val step = stepSizeFor(subset, stepDenominator)
-            for (window in sampledWindows(step, vsgMax, vsgSamples)) {
+            for (window in sampledWindows(strainWinMax, strainWinSamples)) {
                 out.add(Point(subset, step, window))
             }
         }
@@ -171,23 +171,16 @@ object VsgStudy {
     }
 
     /**
-     * [count] strain windows for [step], one per VSG size sampled evenly from
-     * the smallest reachable VSG up to [vsgMax]. Empty when [vsgMax] is below
-     * what this step can reach at all.
+     * [count] strain windows sampled evenly from [MIN_STRAIN_WINDOW] up to
+     * [strainWinMax]. Each value is snapped to odd.
      */
-    private fun sampledWindows(step: Int, vsgMax: Int, count: Int): List<Int> {
-        val loVsg = vsgFor(step, MIN_STRAIN_WINDOW)
-        val hiVsg = minOf(vsgMax, vsgFor(step, MAX_STRAIN_WINDOW))
-        if (hiVsg < loVsg) return emptyList()
+    private fun sampledWindows(strainWinMax: Int, count: Int): List<Int> {
+        val lo = MIN_STRAIN_WINDOW
+        val hi = strainWinMax.coerceIn(lo, MAX_STRAIN_WINDOW)
+        if (hi < lo) return emptyList()
         val windows = LinkedHashSet<Int>()
-        for (vsg in sampleSpan(loVsg, hiVsg, count)) {
-            // Rounding to an odd window can nudge the VSG a little past the
-            // target; pull it back so no combination's VSG exceeds [vsgMax].
-            var window = windowForVsg(step, vsg)
-            while (window > MIN_STRAIN_WINDOW && vsgFor(step, window) > vsgMax) {
-                window -= SUBSET_INCREMENT
-            }
-            windows.add(window)
+        for (raw in sampleSpan(lo, hi, count)) {
+            windows.add(raw or 1)
         }
         return windows.toList()
     }

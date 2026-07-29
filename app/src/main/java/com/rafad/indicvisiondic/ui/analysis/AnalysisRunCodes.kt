@@ -10,4 +10,7 @@ object AnalysisRunCodes {
 
     /** A new session would exceed the account quota. */
     const val ERROR_SESSION_LIMIT = -98
+
+    /** Two consecutive frames had convergence below 50%. */
+    const val ERROR_LOW_CONVERGENCE = -96
 }

@@ -55,6 +55,16 @@ class AnalysisViewModel : ViewModel() {
 
         /** Index of the height in an `[x, y, w, h]` ROI array. */
         private const val ROI_H = 3
+
+        /** Below this, the correlation has effectively lost the speckle. */
+        const val MIN_CONVERGENCE_PERCENT = 50f
+
+        /**
+         * How many consecutive low-convergence frames end the run. One bad frame
+         * can be a transient — a flash, a knock — so a single strike would abort
+         * runs that would have recovered.
+         */
+        const val LOW_CONVERGENCE_STRIKES = 2
     }
 
     // NATIVE THREAD PINNING: All JNI/OpenMP calls are routed through the global
@@ -153,14 +163,14 @@ class AnalysisViewModel : ViewModel() {
     /** Largest subset size of the sweep; 0 until a recommendation seeds it. */
     var subsetMax: Int = 0
 
-    /** VSG ceiling for the sweep; 0 until the subset size supplies a default. */
-    var vsgMax: Int = 0
+    /** Strain window ceiling for the sweep; 0 until a default seeds it. */
+    var strainWinMax: Int = 0
 
     /** How many subset sizes the sweep samples across the subset range (x axis). */
     var subsetSamples: Int = VsgStudy.DEFAULT_SUBSET_SAMPLES
 
-    /** How many VSG sizes the sweep samples up to [vsgMax] (y axis). */
-    var vsgSamples: Int = VsgStudy.DEFAULT_VSG_SAMPLES
+    /** How many strain window sizes the sweep samples up to [strainWinMax] (y axis). */
+    var strainWinSamples: Int = VsgStudy.DEFAULT_VSG_SAMPLES
 
     /**
      * Step-depth denominator (z axis): step sizes are subset/2 down to
@@ -182,6 +192,9 @@ class AnalysisViewModel : ViewModel() {
 
     /** Combinations the engine could not solve in the last sweep. */
     var sweepSkipped: List<VsgStudy.Point> = emptyList()
+
+    /** Engine code per skipped combination, index-aligned with [sweepSkipped]. */
+    var sweepSkippedCodes: List<Int> = emptyList()
 
     /**
      * @param labels one human-readable name per combination, index-aligned with
@@ -242,6 +255,7 @@ class AnalysisViewModel : ViewModel() {
 
         sweepPlan = result.runs.map { it.point }
         sweepSkipped = result.skipped
+        sweepSkippedCodes = result.skippedCodes
         engineStatsArray = result.firstMetrics
         val executionTimeMs = (System.currentTimeMillis() - startedAt).toInt()
 
@@ -521,6 +535,14 @@ class AnalysisViewModel : ViewModel() {
         val totalFrames: Int,
         val executionTimeMs: Int,
         val batchDirPath: String,
+        /**
+         * Which frame the run stopped on, and its image name — the failure is
+         * almost always a property of one image pair, so naming it is the
+         * difference between an actionable message and a shrug. -1 / null when
+         * the run finished.
+         */
+        val failedFrameIndex: Int = -1,
+        val failedFrameName: String? = null,
     )
 
     /**
@@ -571,6 +593,8 @@ class AnalysisViewModel : ViewModel() {
         cancelRequested = false
         var totalPointsSolved = 0
         var lastConvergence = -1f
+        val convergenceGate = ConvergenceGate()
+        var failedFrameIndex = -1
 
         // Persist the raw deformed originals alongside the reference so exports
         // (and reopened sessions) can bundle them. Cleared per re-run.
@@ -664,6 +688,7 @@ class AnalysisViewModel : ViewModel() {
 
             if (validPointsCount < 0) {
                 engineErrorCode = validPointsCount
+                failedFrameIndex = frameIndex
                 break
             }
 
@@ -685,6 +710,11 @@ class AnalysisViewModel : ViewModel() {
 
             totalPointsSolved += validPointsCount
             lastConvergence = metricsCatcher[EngineStats.SLOT_CONVERGENCE]
+            if (convergenceGate.record(lastConvergence)) {
+                engineErrorCode = AnalysisRunCodes.ERROR_LOW_CONVERGENCE
+                failedFrameIndex = frameIndex
+                break
+            }
             onProgress(
                 BatchProgressUpdate(
                     percent = (((frameIndex + 1).toFloat() / totalFrames) * 100).toInt(),
@@ -757,6 +787,10 @@ class AnalysisViewModel : ViewModel() {
             totalFrames = totalFrames,
             executionTimeMs = executionTimeMs,
             batchDirPath = batchDir.absolutePath,
+            failedFrameIndex = failedFrameIndex,
+            failedFrameName = failedFrameIndex
+                .takeIf { it >= 0 }
+                ?.let { defFilePaths.getOrNull(it)?.substringAfterLast('/') },
         )
     }
 

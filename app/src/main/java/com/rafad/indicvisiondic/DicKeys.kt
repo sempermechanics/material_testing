@@ -83,6 +83,9 @@ object DicKeys {
     const val SWEEP_SKIP_STEPS = "SWEEP_SKIP_STEPS"
     const val SWEEP_SKIP_STRAIN_WINS = "SWEEP_SKIP_STRAIN_WINS"
 
+    /** Engine code per skipped node. Index-aligned with SWEEP_SKIP_*. */
+    const val SWEEP_SKIP_CODES = "SWEEP_SKIP_CODES"
+
     /** Frame the result viewer opens on — a lattice node tap picks one. */
     const val START_FRAME = "START_FRAME"
 }

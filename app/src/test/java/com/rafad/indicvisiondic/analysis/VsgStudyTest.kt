@@ -97,24 +97,30 @@ class VsgStudyTest {
         subsetMin: Int = 41,
         subsetMax: Int = 61,
         subsetSamples: Int = 3,
-        vsgMax: Int = 300,
-        vsgSamples: Int = 3,
+        strainWinMax: Int = 51,
+        strainWinSamples: Int = 3,
         stepDenominator: Int = 4,
-    ) = VsgStudy.plan(subsetMin, subsetMax, subsetSamples, vsgMax, vsgSamples, stepDenominator)
+    ) = VsgStudy.plan(subsetMin, subsetMax, subsetSamples, strainWinMax, strainWinSamples, stepDenominator)
 
     @Test
     fun `plan scales as subset samples times vsg samples`() {
         // A generous VSG ceiling so no VSG ladder is truncated: the full grid.
         val subsets = 3
         val vsg = 3
-        val p = plan(subsetSamples = subsets, vsgSamples = vsg, vsgMax = 500)
+        val p = plan(subsetSamples = subsets, strainWinSamples = vsg, strainWinMax = VsgStudy.MAX_STRAIN_WINDOW)
         assertEquals(subsets * vsg, p.size)
     }
 
     @Test
     fun `every combination uses the one chosen step size`() {
         // A single subset so the fixed step is unambiguous; every point shares it.
-        val p = plan(subsetMin = 41, subsetMax = 41, subsetSamples = 1, vsgMax = 500, stepDenominator = 3)
+        val p = plan(
+            subsetMin = 41,
+            subsetMax = 41,
+            subsetSamples = 1,
+            strainWinMax = VsgStudy.MAX_STRAIN_WINDOW,
+            stepDenominator = 3,
+        )
         assertEquals(setOf(VsgStudy.stepSizeFor(41, 3)), p.map { it.step }.toSet())
     }
 
@@ -126,7 +132,12 @@ class VsgStudyTest {
 
     @Test
     fun `one sample per axis yields a single analysis`() {
-        val p = plan(subsetSamples = 1, vsgSamples = 1, stepDenominator = 2, vsgMax = 500)
+        val p = plan(
+            subsetSamples = 1,
+            strainWinSamples = 1,
+            stepDenominator = 2,
+            strainWinMax = VsgStudy.MAX_STRAIN_WINDOW,
+        )
         assertEquals(1, p.size)
     }
 
@@ -138,18 +149,17 @@ class VsgStudyTest {
 
     @Test
     fun `every combination is a valid engine point`() {
-        plan(vsgMax = 500).forEach {
+        plan(strainWinMax = VsgStudy.MAX_STRAIN_WINDOW).forEach {
             assertTrue(it.subset % 2 == 1)
             assertTrue(it.strainWindow % 2 == 1)
             assertTrue(it.strainWindow in VsgStudy.MIN_STRAIN_WINDOW..VsgStudy.MAX_STRAIN_WINDOW)
             assertTrue(it.step in VsgStudy.MIN_STEP..VsgStudy.MAX_STEP)
-            assertTrue(it.vsg <= 500)
         }
     }
 
     @Test
     fun `plan has no duplicate combinations`() {
-        val p = plan(vsgMax = 500)
+        val p = plan(strainWinMax = VsgStudy.MAX_STRAIN_WINDOW)
         assertEquals(p.size, p.distinct().size)
     }
 
@@ -173,16 +183,16 @@ class VsgStudyTest {
             .flatMap { min -> listOf(0, 8, 40, 60).map { min to (min + it) } }
             .flatMap { range -> samples.map { range to it } }
             .flatMap { (range, x) -> samples.map { Triple(range, x, it) } }
-            .flatMap { (range, x, y) -> depths.map { listOf(21, 120, 501).map { v -> Case6(range, x, y, it, v) } } }
+            .flatMap { (range, x, y) -> depths.map { listOf(3, 15, 51).map { sw -> Case6(range, x, y, it, sw) } } }
             .flatten()
 
         cases.forEach { c ->
-            val p = VsgStudy.plan(c.range.first, c.range.second, c.x, c.vsgMax, c.y, c.depth)
+            val p = VsgStudy.plan(c.range.first, c.range.second, c.x, c.strainWinMax, c.y, c.depth)
             assertEquals("duplicates for $c", p.size, p.distinct().size)
         }
     }
 
-    private data class Case6(val range: Pair<Int, Int>, val x: Int, val y: Int, val depth: Int, val vsgMax: Int)
+    private data class Case6(val range: Pair<Int, Int>, val x: Int, val y: Int, val depth: Int, val strainWinMax: Int)
 
     // ------------------------------------------------------------------
     // Field measurements

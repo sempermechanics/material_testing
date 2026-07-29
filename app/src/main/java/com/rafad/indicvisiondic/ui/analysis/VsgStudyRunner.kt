@@ -80,6 +80,8 @@ object VsgStudyRunner {
         val firstMetrics: FloatArray?,
         val engineErrorCode: Int,
         val skipped: List<VsgStudy.Point> = emptyList(),
+        /** Engine code per skipped combination, index-aligned with [skipped]. */
+        val skippedCodes: List<Int> = emptyList(),
     )
 
     /**
@@ -115,11 +117,14 @@ object VsgStudyRunner {
         val total = params.plan.size
 
         val skipped = ArrayList<VsgStudy.Point>()
+        val skippedCodes = ArrayList<Int>()
         var lastEngineError = 0
+        val convergenceGate = ConvergenceGate()
 
         // A cancel short-circuits the remaining solves; the one already running
-        // stops on its own, since the engine polls the same flag.
-        for ((index, point) in params.plan.withIndex().takeWhile { !cancelRequested }) {
+        // stops on its own, since the engine polls the same flag. A convergence
+        // collapse ends it the same way.
+        for ((index, point) in params.plan.withIndex().takeWhile { !cancelRequested && !convergenceGate.shouldStop }) {
             val metrics = newMetrics()
             onProgress(Progress(index, total, index * PERCENT / maxOf(1, total), point, 0, -1f))
 
@@ -129,18 +134,16 @@ object VsgStudyRunner {
                 // subset can fail to correlate where a larger one succeeds, and
                 // the plan starts at the smallest. Skip it and keep sweeping;
                 // aborting here would throw away every setting that does work.
-                Timber.w(
-                    "VSG sweep skipped subset=%d step=%d window=%d (engine code %d)",
-                    point.subset,
-                    point.step,
-                    point.strainWindow,
-                    solved,
-                )
-                skipped.add(point)
+                recordSkip(point, solved, skipped, skippedCodes)
                 lastEngineError = solved
                 continue
             }
             if (firstMetrics == null) firstMetrics = metrics
+
+            // Combination after combination coming back under-converged means the
+            // pair itself has decorrelated, not that the settings are wrong —
+            // sweeping the rest would burn minutes to prove the same thing.
+            convergenceGate.record(metrics[EngineStats.SLOT_CONVERGENCE])
 
             // Named by solved index (not plan index) so .dat files stay dense
             // and line up with [runs] / upload's frame_0000..N-1 walk — skipped
@@ -168,10 +171,37 @@ object VsgStudyRunner {
         // produced nothing reports the engine's own code, which says why.
         if (cancelRequested) {
             errorCode = ERROR_CANCELLED
+        } else if (convergenceGate.shouldStop) {
+            // Reported even though some combinations solved: the user needs to
+            // know the sweep is short because the images gave up, not because
+            // the plan was.
+            errorCode = AnalysisRunCodes.ERROR_LOW_CONVERGENCE
         } else if (runs.isEmpty() && skipped.isNotEmpty()) {
             errorCode = lastEngineError
         }
-        return Result(runs, firstMetrics, errorCode, skipped)
+        return Result(runs, firstMetrics, errorCode, skipped, skippedCodes)
+    }
+
+    /**
+     * Notes a combination the engine could not solve. The engine's own code
+     * travels, not a sentence: the screen that shows it has a Context and turns
+     * it into the same wording the failure dialog uses.
+     */
+    private fun recordSkip(
+        point: VsgStudy.Point,
+        engineCode: Int,
+        skipped: MutableList<VsgStudy.Point>,
+        skippedCodes: MutableList<Int>,
+    ) {
+        Timber.w(
+            "VSG sweep skipped subset=%d step=%d window=%d (engine code %d)",
+            point.subset,
+            point.step,
+            point.strainWindow,
+            engineCode,
+        )
+        skipped.add(point)
+        skippedCodes.add(engineCode)
     }
 
     private fun newMetrics() = FloatArray(EngineStats.SLOT_COUNT).also {

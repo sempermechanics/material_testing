@@ -300,7 +300,11 @@
     <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area, or use the full image.</string>
     <string name="sweep_fail_init">The engine couldn\'t start — an image failed to decode. Re-import them as PNG or TIFF.</string>
     <string name="sweep_fail_unknown">The engine returned error %1$d.</string>
+    <string name="error_low_convergence">Analysis stopped: convergence fell below 50%% on 2 consecutive frames. The images may have decorrelated — check that the deformed frames show the same speckle pattern as the reference, and that nothing moved out of view.</string>
+    <string name="vsg_lattice_all_failed">All combinations failed — tap a node for details.</string>
     <!-- Which frame a failure happened on; prefixes the reason above. -->
+    <string name="failure_frame_fmt">Frame %1$d (%2$s): </string>
+    <string name="failure_frame_no_name_fmt">Frame %1$d: </string>
 
     <!-- Password policy -->
     <string name="password_too_short_fmt">Password must be at least %1$d characters.</string>
@@ -375,6 +379,7 @@
     <string name="coach_analysis_advanced">Change parameters when you need finer control.</string>
     <string name="coach_sweep_subset">Set the subset size range for sweep granularity.</string>
     <string name="coach_sweep_lattice">This is the planned lattice — each node is one analysis.</string>
+    <string name="coach_sweep_graph">The graph plots each combination: subset size across, strain window up. Tap a solved node after the sweep to see its result.</string>
     <string name="coach_sweep_run">Run the sweep when the plan looks right.</string>
     <string name="inputs_meta_fmt">Reference · %1$d deformed frames</string>
     <string name="roi_full_fmt">Full image · %1$d × %2$d px</string>

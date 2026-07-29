@@ -7,6 +7,7 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
@@ -91,33 +92,32 @@ class VsgLatticeActivity : AppCompatActivity() {
             DicKeys.SWEEP_STRAIN_WINS,
             solved = true,
         )
+        val skippedCodes = intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_CODES) ?: IntArray(0)
         val skipped = nodesFrom(
             DicKeys.SWEEP_SKIP_SUBSETS,
             DicKeys.SWEEP_SKIP_STEPS,
             DicKeys.SWEEP_SKIP_STRAIN_WINS,
             solved = false,
+            codes = skippedCodes,
         )
-        val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.vsg }))
+        val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.window }))
 
         latticeView = findViewById<VsgLatticeView>(R.id.latticeView)
         latticeView.apply {
             interactionEnabled = true
             setNodes(nodes)
-            onNodeClick = { node -> toggleFocus(node.frameIndex) }
-            onNodeDoubleClick = { node -> openViewer(node.frameIndex) }
-            onNodeLongClick = { node -> openViewer(node.frameIndex) }
+            onNodeClick = { node ->
+                if (node.solved) {
+                    toggleFocus(node.frameIndex)
+                } else if (node.failureReason.isNotEmpty()) {
+                    Toast.makeText(this@VsgLatticeActivity, node.failureReason, Toast.LENGTH_LONG).show()
+                }
+            }
+            onNodeDoubleClick = { node -> if (node.solved) openViewer(node.frameIndex) }
+            onNodeLongClick = { node -> if (node.solved) openViewer(node.frameIndex) }
         }
 
-        // The whole sweep shares one step fraction, subset ÷ D; recover D from a
-        // node (step = round(subset / D)).
-        val stepDenom = nodes.firstOrNull()?.takeIf { it.step > 0 }
-            ?.let { (it.subset.toDouble() / it.step).roundToInt() } ?: 0
-        findViewById<TextView>(R.id.tvLatticeSummary).text = if (stepDenom > 0) {
-            getString(R.string.vsg_lattice_summary_fmt, nodes.size, solved.size, skipped.size, stepDenom)
-        } else {
-            getString(R.string.vsg_lattice_summary_short_fmt, nodes.size, solved.size, skipped.size)
-        }
-        findViewById<MaterialButton>(R.id.btnViewResults).setOnClickListener { openViewer(0) }
+        showSummary(nodes, solved.size, skipped.size)
 
         strainPlotSection = findViewById(R.id.strainPlotSection)
         strainPlot = findViewById(R.id.plotLatticeStrain)
@@ -159,11 +159,37 @@ class VsgLatticeActivity : AppCompatActivity() {
     }
 
     /** Reads one set of (subset, step, window) triples into lattice nodes. */
+    /**
+     * The headline under the lattice, and whether opening results is offered at
+     * all — a sweep where nothing solved has nothing to view, so the button goes
+     * rather than opening an empty viewer.
+     */
+    private fun showSummary(nodes: List<VsgLatticeView.Node>, solvedCount: Int, skippedCount: Int) {
+        // The whole sweep shares one step fraction, subset ÷ D; recover D from a
+        // node (step = round(subset / D)).
+        val stepDenom = nodes.firstOrNull()?.takeIf { it.step > 0 }
+            ?.let { (it.subset.toDouble() / it.step).roundToInt() } ?: 0
+        val summary = findViewById<TextView>(R.id.tvLatticeSummary)
+        val btnViewResults = findViewById<MaterialButton>(R.id.btnViewResults)
+        if (solvedCount == 0) {
+            summary.text = getString(R.string.vsg_lattice_all_failed)
+            btnViewResults.visibility = View.GONE
+            return
+        }
+        summary.text = if (stepDenom > 0) {
+            getString(R.string.vsg_lattice_summary_fmt, nodes.size, solvedCount, skippedCount, stepDenom)
+        } else {
+            getString(R.string.vsg_lattice_summary_short_fmt, nodes.size, solvedCount, skippedCount)
+        }
+        btnViewResults.setOnClickListener { openViewer(0) }
+    }
+
     private fun nodesFrom(
         subsetsKey: String,
         stepsKey: String,
         windowsKey: String,
         solved: Boolean,
+        codes: IntArray = IntArray(0),
     ): List<VsgLatticeView.Node> {
         val subsets = intent.getIntArrayExtra(subsetsKey) ?: IntArray(0)
         val steps = intent.getIntArrayExtra(stepsKey) ?: IntArray(0)
@@ -177,6 +203,9 @@ class VsgLatticeActivity : AppCompatActivity() {
                 vsg = VsgStudy.vsgFor(steps[i], windows[i]),
                 solved = solved,
                 frameIndex = if (solved) i else -1,
+                failureReason = codes.getOrNull(i)
+                    ?.let { code -> getString(EngineFailure.reasonRes(code), code) }
+                    .orEmpty(),
             )
         }
     }

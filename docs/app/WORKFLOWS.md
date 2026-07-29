@@ -88,8 +88,9 @@ neither opens a separate screen.
    │   ├── return via App Link deep link → /finishSignIn
    │   └── wrong-device error path
    ├── Forgot password (reset email; reports success even for unknown emails)
-   └── validation: email format, password < 6 chars, confirm mismatch,
-       routing-error banner passed in from Splash
+   ├── Generate secure password          [register]
+   └── validation: email format, password policy on register (8+, upper, lower,
+       digit, special), confirm mismatch, routing-error banner from Splash
 ```
 
 **Entry:** Splash, sign-out, or the sign-in deep link. **Exit:** Home or Pending
@@ -104,7 +105,10 @@ approval, depending on the backend's answer.
 | [ ] 1.5 | Sign in with a wrong password | Red snackbar, fields keep their contents |
 | [ ] 1.6 | Enter a malformed email | Inline "invalid email" before any network call |
 | [ ] 1.7 | Tap the mode toggle | Becomes "Create account"; the confirm-password field appears |
-| [ ] 1.8 | Create an account with a 5-character password | Blocked with "password too short" |
+| [ ] 1.8 | Create an account with a 5-character password | Blocked: at least 8 characters |
+| [ ] 1.8a | Try `abcdefgh`, `ABCDEFGH1!`, `Abcdefgh!`, `Abcdefg1` | Each blocked naming the rule it misses — lowercase, uppercase, digit, special character |
+| [ ] 1.8b | Tap **Generate secure password** | Both password fields fill with a strong value, shown in clear so it can be saved, and it passes every rule |
+| [ ] 1.8c | Sign in (not register) with an old short password | Still allowed — the rules bind new passwords, not existing accounts |
 | [ ] 1.9 | Create an account with mismatched confirm | Blocked with "passwords do not match" |
 | [ ] 1.10 | Create a valid new account | A verification email is sent, the session is dropped, and **the screen returns to Sign in** — email kept, both password fields cleared, no confirm box |
 | [ ] 1.10a | Try to sign in before opening that link | Blocked with the same message; a fresh verification email is sent each time |
@@ -423,7 +427,8 @@ Reached only when the file picked on Home was a video.
 | [ ] 5.3.3 | Type a subset min above the max | Clamped so min ≤ max |
 | [ ] 5.3.4 | Type a max VSG of 5, then 900 | Clamped into 21–501 |
 | [ ] 5.3.5 | Type a step denominator of 1, then 9 | Clamped into 2–6; the prefix reads "subset ÷ n" |
-| [ ] 5.3.6 | Tap each ⓘ | Subset range, max VSG, step depth and samples each explain themselves |
+| [ ] 5.3.6 | Tap each ⓘ | Subset range, max strain window, step depth and samples each explain themselves |
+| [ ] 5.3.6a | Open sweep setup for the first time | A coach mark points out the lattice preview graph |
 | [ ] 5.3.7 | Tap **Pick frame** | Dialog with a radio list, a frame-number field and a live preview |
 | [ ] 5.3.8 | Type a frame number in that dialog | The radio selection and preview follow |
 | [ ] 5.3.9 | Scrub quickly through frames in the dialog | Preview keeps up; no stale image is left behind |
@@ -461,10 +466,14 @@ Reached only when the file picked on Home was a video.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 5.5.1 | Run on a featureless image pair | Engine failure dialog naming the feature-detection cause |
+| [ ] 5.5.1 | Run on a featureless image pair | Engine failure dialog naming the feature-detection cause, **and the frame and image it failed on** |
+| [ ] 5.5.1a | Run a batch where a later frame decorrelates | Stops after two consecutive frames under 50% convergence; the message names that frame. Earlier frames are kept |
+| [ ] 5.5.1b | Sweep a decorrelated pair | Stops after two combinations under 50% rather than sweeping the rest |
 | [ ] 5.5.2 | Run with an unusable ROI | Engine failure dialog naming the ROI cause |
 | [ ] 5.5.3 | Finish a single-setting run | Result viewer opens on frame 1 |
 | [ ] 5.5.4 | Finish a sweep with some combinations failing | "N of M skipped" toast, then the Lattice |
+| [ ] 5.5.4a | Tap a hollow node | Its own failure reason, in the same wording the failure dialog uses |
+| [ ] 5.5.4b | Run a sweep where **every** combination fails | The Lattice opens — not the parameter screen — all nodes hollow, summary says all failed, **View results** is gone |
 | [ ] 5.5.5 | Finish a sweep cleanly | Lattice opens with every node filled |
 | [ ] 5.5.6 | Hit the quota during a run | Session limit screen |
 | [ ] 5.5.7 | Re-run with the same inputs after changing a parameter | The same Home row is updated, not duplicated |
@@ -568,10 +577,10 @@ the Lattice for a sweep.
 
 ```
 8. Result viewer — ResultViewerActivity
-   ├── field switching: U / V / Exx / Eyy / Exy
    ├── summary animation                        (the slot before frame 1)
    │   ├── every frame of the selected field, looping, ≤10 s
    │   └── one colour scale for the whole sequence
+   ├── field switching: U / V / Exx / Eyy / Exy
    ├── image viewer
    │   ├── pinch zoom (to 10×) and pan
    │   └── jet heatmap over the reference (fixed 0.7 alpha)
@@ -580,8 +589,8 @@ the Lattice for a sweep.
    │   └── Auto scale
    ├── stats strip: max / min / mean
    ├── frame scrubbing: prev / next + "name (i / N)"
-   ├── Inspect — point probe
    │   └── type a frame number to jump straight there
+   ├── Inspect — point probe
    │   ├── tap / drag readout (location + value)
    │   └── X,Y coordinate entry dialog
    ├── Max/Min markers
@@ -591,8 +600,8 @@ the Lattice for a sweep.
    ├── Share
    │   ├── result photo (current field + frame)
    │   ├── all field photos (5, zipped)
-   │   ├── PDF report (all frames)
    │   ├── field animations (5 GIFs, zipped)
+   │   ├── PDF report (all frames)
    │   ├── CSV data
    │   ├── everything (.zip: raw photos + animations + results + CSV + PDF)
    │   └── "Save to Files" target inside the chooser
@@ -631,7 +640,6 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2.5 | Tap Next rapidly | Keeps up without stuttering or showing a stale frame |
 | [ ] 8.2.6 | Scrub through a sweep | Each frame is a different combination; the settings sheet follows it |
 | [ ] 8.2.7 | Rotate the device | The same frame and field stay on screen |
-
 | [ ] 8.2.8 | Type a frame number and press Go | Jumps straight there; the field has no underline under it |
 | [ ] 8.2.9 | Type `0`, a number past the end, or letters | Nothing moves and the current number comes back |
 | [ ] 8.2.10 | Step with Next/Prev | The number follows immediately, not after the frame decodes |
@@ -651,6 +659,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2a.9 | Step into the frames while it is still building | The viewer stays responsive throughout |
 | [ ] 8.2a.10 | Open a sweep node from the Lattice | Lands on that node, not on the summary |
 | [ ] 8.2a.11 | Run on Android 8 | The first frame with a note that animation needs Android 9; sharing still works |
+
 ### 8.3 Measurement tools
 
 | # | Action | Expected |
@@ -684,9 +693,9 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.5.1 | Tap Share | Sheet with six targets and a caption naming the current frame |
 | [ ] 8.5.2 | **Result photo** | One annotated PNG of the field and frame on screen |
 | [ ] 8.5.3 | **All field photos** | Five PNGs for the current frame, zipped for hand-off |
-| [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
 | [ ] 8.5.3a | **Field animations (GIF)** | Five GIFs, one per field, zipped; each loops when opened in a gallery app |
 | [ ] 8.5.3b | Same, immediately on entering the viewer | Fields not built yet are built under the progress dialog — never silently missing |
+| [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
 | [ ] 8.5.5 | **CSV data** | Header `x_px,y_px,u_px,v_px,exx,eyy,exy,znssd`; sweeps add subset/step/window columns |
 | [ ] 8.5.6 | **Everything (.zip)** | Raw photos, the five animations, per-frame results for all five fields, the CSV and the PDF |
 | [ ] 8.5.7 | In any chooser, pick **Save to Files** | A SAF save dialog; the file lands where you choose |

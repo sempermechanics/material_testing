@@ -46,15 +46,19 @@ Two things to know up front:
 Accounts need approval, not just sign-up.
 
 1. Sign in with Google or email.
-2. **Signing up with email?** Creating the account sends a verification link and
+2. **Passwords** need 8+ characters with upper and lower case, a digit and a
+   special character. **Generate secure password** fills a strong one in for you
+   and reveals it so you can save it. (A forgotten password is reset through
+   Firebase's own page, which these rules cannot reach.)
+3. **Signing up with email?** Creating the account sends a verification link and
    puts you back on the sign-in form with your address still filled in. Open the
    link, then sign in there. Until you do, sign-in is refused and a fresh link is
    sent each time you try.
-3. New accounts land on **Pending approval**. Support is emailed automatically
+4. New accounts land on **Pending approval**. Support is emailed automatically
    at this point — you do not have to ask to be noticed.
-4. Tap **Request access** if you want to add context. It opens a prefilled
+5. Tap **Request access** if you want to add context. It opens a prefilled
    email; send it.
-5. After an admin approves you, tap **Check status**.
+6. After an admin approves you, tap **Check status**.
 
 **Nothing polls.** The screen never updates on its own. Use the button.
 
@@ -145,6 +149,11 @@ Points solved and convergence update live. **Cancel** stops the run where it is,
 within a moment — it does not wait out the frame being solved. Nothing is kept.
 Back is blocked.
 
+**A run stops itself if the images decorrelate.** Two consecutive frames below
+50% convergence end it — the frames after them would be no better, and the
+message names the frame and image it gave up on. Frames solved before that point
+are kept.
+
 **Keep the app open.** A run has no resume. If Android kills the app, the run is
 gone.
 
@@ -155,7 +164,8 @@ gone.
 | Single | Result viewer, frame 1 |
 | Sweep | Result lattice |
 | Some sweep points failed | `N of M skipped` toast, then the lattice |
-| Engine failed | A dialog naming the cause |
+| Engine failed | A dialog naming the cause, and which frame and image it failed on |
+| Every sweep combination failed | The lattice, every node hollow — tap one for its reason. No **View results** |
 
 Re-running the same inputs updates the same analysis. Different inputs make a
 new one.
@@ -193,8 +203,9 @@ It is a starting point. Touch the slider and it stops tracking the image.
 VSG = (strain window − 1) × step + 1     [px]
 ```
 
-Quote the VSG, not the window. It is the distance one strain value covers, and
-it is what a sweep varies.
+Quote the VSG, not the window: it is the distance one strain value actually
+covers. The sweep varies the **window** and reports the resulting VSG per node —
+the window is the knob, the VSG is the number you publish.
 
 ### Kernel
 
@@ -248,7 +259,7 @@ A sweep uses **one** deformed frame.
 | Control | Range |
 |---|---|
 | Subset range | 15–101, odd |
-| Max VSG | 21–501 (defaults to 3 × subset) |
+| Max strain window | 5–51, odd — the sweep's y axis |
 | Step denominator | 2–6 — step is `subset ÷ n` |
 | Samples | 1–8 per axis |
 | Frame to sweep | radio list + number + preview |
@@ -256,7 +267,14 @@ A sweep uses **one** deformed frame.
 Runtime is the product of the two sample counts. 8 × 8 is 64 solves. Start at
 3 × 3.
 
-The lattice preview on this step is **inert** — taps do nothing until it has run.
+The sweep varies the **strain window** directly, not the VSG. VSG is still what
+you quote — it is shown per node and in the settings sheet — but it is derived
+(`(window − 1) × step + 1`), so two combinations with different steps can share a
+window and land on different VSGs. Sweeping the window is what makes the axis
+mean one thing.
+
+The lattice preview on this step is **inert** — taps do nothing until it has
+run. The coach mark points it out on a first visit.
 
 ### Reading the result lattice
 
@@ -267,7 +285,7 @@ The lattice preview on this step is **inert** — taps do nothing until it has r
 | | |
 |---|---|
 | Filled dot | Solved |
-| Hollow red ring | Skipped — nothing behind it |
+| Hollow red ring | Skipped — tap it for the reason it failed |
 
 - **Tap** a node — its curve is highlighted, the rest fade.
 - **Double-tap** or **long-press** — opens that result.
@@ -303,10 +321,6 @@ your finger, the other card gives both extrema with their coordinates.
 | **X, Y** | Jump the probe to typed coordinates — same point across frames |
 | **Max/Min** | Marks both extrema with values and positions |
 
-**Frames.** Prev / Next step through; the counter shows the filename and
-`(i / N)`. Type a number in the small field under it and press Go to jump
-straight to that frame — useful at 150 frames. Anything out of range leaves you
-where you are. On a sweep each frame is a parameter combination, labelled like
 **The summary comes first.** The viewer opens on a looping animation of the
 whole sequence in the current field — every frame, never longer than 10 seconds,
 about 300 ms a frame until the frame count forces it faster. **Next** enters the
@@ -322,6 +336,10 @@ that instead.
 (Animation playback needs Android 9 or newer. Below that you get the first frame
 and a note; the GIFs still export.)
 
+**Frames.** Prev / Next step through; the counter shows the filename and
+`(i / N)`. Type a number in the small field under it and press Go to jump
+straight to that frame — useful at 150 frames. Anything out of range leaves you
+where you are. On a sweep each frame is a parameter combination, labelled like
 `S15 · St5 · W13 · VSG 61`.
 
 ### Settings used
@@ -345,9 +363,9 @@ provenance record.
 |---|---|
 | Result photo | One PNG: current field and frame, annotated, full resolution |
 | All field photos | Five PNGs for this frame, zipped |
+| Field animations (GIF) | Five looping GIFs — one per field, every frame, each on its own whole-sequence scale — zipped |
 | PDF report | Every frame, plus a telemetry page |
 | CSV data | `x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — sweeps add subset, step, window |
-| Field animations (GIF) | Five looping GIFs — one per field, every frame, each on its own whole-sequence scale — zipped |
 | Everything (.zip) | Raw photos + animations + all fields + CSV + PDF |
 
 The animations are shared as a set, not one at a time — they are only comparable
@@ -414,7 +432,10 @@ version and phone model. Write above that block; leave it in place.
 | Engine failure: feature detection | The pair could not be correlated. Pattern, or wrong pair |
 | Engine failure: ROI | Region too small or fully masked |
 | Low-texture warning | Weak speckle for this region |
-| Sweep skipped nodes | Those combinations don't fit — usually big subsets in a small ROI |
+| Sweep skipped nodes | Those combinations don't fit — usually big subsets in a small ROI. Tap a hollow node for its reason |
+| Run stopped itself partway | Convergence fell below 50% twice running — the pair has decorrelated. The message names the frame |
+| Sweep ended early | Same rule: two combinations under 50% and it stops rather than sweep the rest |
+| Password rejected on sign-up | 8+ chars, upper and lower case, a digit and a special character — or tap **Generate secure password** |
 | Only the first N frames | *Max frames* capped it |
 | Frames in the wrong order | Sort on step 1, then re-run |
 | Run vanished | The app was killed. No resume — run it again in the foreground |
@@ -451,7 +472,7 @@ version and phone model. Write above that block; leave it in place.
 | Kernel | 4×4 / 6×6 | 4×4 Bicubic | Studying interpolation bias | — |
 | Max frames | 10–150 | 50 | Long sequences | Runs are killed for memory |
 | Sweep subset range | 15–101, odd | Around recommended | — | — |
-| Sweep max VSG | 21–501 | 3 × subset | — | — |
+| Sweep max strain window | 5–51, odd | — | Strain is noisy | Detail is being smoothed away |
 | Step denominator | 2–6 | — | Denser correlation | Faster runs |
 | Samples | 1–8 per axis | 3 | Finer detail | Runtime is the product |
 
