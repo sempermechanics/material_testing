@@ -20,6 +20,13 @@
         android:largeHeap="true"
         android:hardwareAccelerated="true">
 
+        <!-- Credential Manager: tells password managers which domain's
+             credentials belong to this app, via the same Digital Asset
+             Links file the sign-in App Link already verifies against. -->
+        <meta-data
+            android:name="asset_statements"
+            android:resource="@string/asset_statements" />
+
         <activity
             android:name=".ui.auth.SplashActivity"
             android:exported="true"

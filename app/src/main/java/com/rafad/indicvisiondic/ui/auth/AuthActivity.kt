@@ -13,6 +13,8 @@ import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.credentials.CreatePasswordRequest
+import androidx.credentials.CredentialManager
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.rafad.indicvisiondic.DicKeys
@@ -43,6 +45,9 @@ class AuthActivity : AppCompatActivity() {
      * methods but answers with a result instead of routing onward.
      */
     private var reauthMode = false
+
+    /** The email/password just submitted, pending the outcome that validates it. */
+    private var pendingCredential: Pair<String, String>? = null
 
     private lateinit var progressBar: ProgressBar
     private lateinit var etEmail: EditText
@@ -181,6 +186,9 @@ class AuthActivity : AppCompatActivity() {
             showSnackbar(getString(R.string.error_passwords_mismatch), isError = true)
             return
         }
+        // Kept until the outcome is known: a password is only worth saving once
+        // the app has accepted it.
+        pendingCredential = email to password
         runAuth {
             if (registerMode) {
                 authRepo.signUpWithPassword(email, password)
@@ -265,6 +273,23 @@ class AuthActivity : AppCompatActivity() {
         runAuth { authRepo.completeEmailLink(email, link) }
     }
 
+    /**
+     * Asks the user's password manager to keep this pair.
+     *
+     * Best-effort and deliberately quiet: declining, having no provider, or an
+     * older device all land in the same place — nothing was saved, and nothing
+     * about the sign-in changes. Only offered for credentials the app itself
+     * accepted, so a rejected password is never stored.
+     */
+    private fun offerToSavePassword(email: String, password: String) {
+        lifecycleScope.launch {
+            runCatching {
+                CredentialManager.create(this@AuthActivity)
+                    .createCredential(this@AuthActivity, CreatePasswordRequest(email, password))
+            }.onFailure { Timber.d(it, "Password not saved (declined or unsupported)") }
+        }
+    }
+
     /** Run a re-authentication call and answer the caller with its outcome. */
     private fun runReauth(call: suspend () -> Result<Unit>) {
         setLoading(true)
@@ -294,6 +319,7 @@ class AuthActivity : AppCompatActivity() {
         setLoading(false)
         result.fold(
             onSuccess = { status ->
+                pendingCredential?.let { (email, password) -> offerToSavePassword(email, password) }
                 startActivity(Intent(this, AccessRouter.afterSignIn(status)))
                 finish()
             },
@@ -314,6 +340,9 @@ class AuthActivity : AppCompatActivity() {
      * that has already done its job.
      */
     internal fun onVerificationPending(error: AuthRepository.EmailVerificationRequired) {
+        // The account exists now, so this is the moment the password becomes
+        // worth keeping — they will need it to sign in once the link is opened.
+        pendingCredential?.let { (email, password) -> offerToSavePassword(email, password) }
         registerMode = false
         updateMode()
         etEmail.setText(error.email)

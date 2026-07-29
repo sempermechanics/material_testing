@@ -106,26 +106,32 @@ async def delete_account(ctx=Depends(verified_device)):
     uid = user["uid"]
     token = drive.access_token()
 
-    # 1. Delete each session's Drive folder via its STORED pointer. Never rely
-    #    on walking the tree by name for this: if the lookup missed we would
-    #    silently skip Drive and still wipe the metadata, stranding the blobs
-    #    with nothing left pointing at them.
-    sessions = repo.list_user_sessions(uid, limit=1000)
+    # 1. The session folders live inside the user folder, so deleting that one
+    #    removes the whole subtree in a single call. The per-session loop below
+    #    is the fallback for accounts predating the stored pointer — walking N
+    #    sessions is N sequential Drive round-trips, which is what made deleting
+    #    a busy account take the best part of a minute.
+    user_folder = user.get("driveFolderId")
     folders_deleted = 0
-    for s in sessions:
-        folder = s.get("driveFolderId")
-        if folder:
-            drive.delete_file(token, folder)  # raises → we abort before touching Firestore
-            folders_deleted += 1
-
-    # 2. Then the whole user subtree — removes the scaffolding and anything a
-    #    failed sync orphaned. Prefer the id stored at upload time; only fall
-    #    back to walking names for accounts that predate it.
-    user_folder = user.get("driveFolderId") or drive.find_user_folder(token, uid)
     if user_folder:
-        drive.delete_file(token, user_folder)
+        drive.delete_file(token, user_folder)  # raises → we abort before Firestore
     else:
-        log.warning("No Drive folder found for uid %s — nothing to purge there", uid)
+        # No stored pointer: delete each session's folder via its OWN stored id
+        # rather than trusting a lookup by name. If a name lookup missed we would
+        # silently skip Drive and still wipe the metadata, stranding the blobs
+        # with nothing left pointing at them.
+        sessions = repo.list_user_sessions(uid, limit=1000)
+        for s in sessions:
+            folder = s.get("driveFolderId")
+            if folder:
+                drive.delete_file(token, folder)
+                folders_deleted += 1
+        # Then the scaffolding itself, and anything a failed sync orphaned.
+        user_folder = drive.find_user_folder(token, uid)
+        if user_folder:
+            drive.delete_file(token, user_folder)
+        else:
+            log.warning("No Drive folder found for uid %s — nothing to purge there", uid)
 
     # 3. Only once the blobs are gone: erase the metadata.
     counts = repo.delete_all_user_data(uid)

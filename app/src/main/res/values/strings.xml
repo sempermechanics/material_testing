@@ -1,6 +1,13 @@
 <resources>
     <string name="app_name">inDIC</string>
 
+    <!-- Digital Asset Links for Credential Manager. Not user-facing. -->
+    <string name="asset_statements" translatable="false">
+        [{
+        \"include\": \"https://indicvision-dic-app-auth.firebaseapp.com/.well-known/assetlinks.json\"
+        }]
+    </string>
+
     <!-- Accessibility -->
     <string name="prev_frame">Previous frame</string>
     <string name="next_frame">Next frame</string>
@@ -199,6 +206,7 @@
     <string name="delete_account_title">Delete your account?</string>
     <string name="delete_account_body">This permanently erases your account and everything in it:\n\n• Every analysis on this phone\n• Every cloud backup — images, results, reports\n• Your profile and registered device\n\nThis cannot be undone and your data cannot be recovered.</string>
     <string name="delete_account_confirm">Delete everything</string>
+    <string name="delete_account_working">Erasing your account and data…</string>
     <string name="delete_account_done">Your account and all data have been deleted.</string>
     <string name="delete_account_failed">Couldn\'t reach the cloud, so nothing was deleted. Check your connection and try again.</string>
     <string name="delete_account_identity_kept">Your data is deleted. Your sign-in could not be removed — sign in again and retry to clear it.</string>
@@ -402,7 +410,7 @@
     <string name="coach_analysis_advanced">Change parameters when you need finer control.</string>
     <string name="coach_sweep_subset">Set the subset size range for sweep granularity.</string>
     <string name="coach_sweep_lattice">This is the planned lattice — each node is one analysis.</string>
-    <string name="coach_sweep_graph">The graph plots each combination: subset size across, strain window up. Tap a solved node after the sweep to see its result.</string>
+    <string name="coach_sweep_graph">Each node is one combination: subset size across, strain window up. Filled nodes solved — tap one to focus its curve, double-tap to open it. Hollow ones failed; tap for the reason.</string>
     <string name="coach_sweep_run">Run the sweep when the plan looks right.</string>
     <string name="inputs_meta_fmt">Reference · %1$d deformed frames</string>
     <string name="roi_full_fmt">Full image · %1$d × %2$d px</string>

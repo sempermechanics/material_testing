@@ -1,3 +1,7 @@
+// One small method per thing the screen does — node taps, the summary, the
+// strain plot, the coach mark — so TooManyFunctions is suppressed here.
+@file:Suppress("TooManyFunctions")
+
 package com.rafad.indicvisiondic.ui.analysis
 
 import android.content.Intent
@@ -15,6 +19,8 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.DicResult
 import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.data.CoachPrefs
+import com.rafad.indicvisiondic.ui.common.CoachMarkController
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
@@ -131,6 +137,27 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
         setupStrainSpinner()
         loadStrainProfiles()
+
+        maybeCoachTheGraph()
+    }
+
+    /**
+     * Explained here rather than on the setup screen: there the lattice is an
+     * inert preview of a plan, so there is nothing to tap and nothing the advice
+     * applies to yet. This is the first time the graph is real.
+     */
+    private fun maybeCoachTheGraph() {
+        latticeView.post {
+            CoachMarkController(this).maybeShow(
+                CoachPrefs.Screen.SWEEP_LATTICE,
+                listOf(
+                    CoachMarkController.Step(
+                        latticeView,
+                        getString(R.string.coach_sweep_graph),
+                    ),
+                ),
+            )
+        }
     }
 
     private fun setupStrainSpinner() {

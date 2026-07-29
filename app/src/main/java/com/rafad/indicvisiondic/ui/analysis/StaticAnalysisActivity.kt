@@ -1614,10 +1614,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                             getString(R.string.coach_sweep_lattice),
                         ),
                         CoachMarkController.Step(
-                            findViewById(R.id.sweepLatticePreview),
-                            getString(R.string.coach_sweep_graph),
-                        ),
-                        CoachMarkController.Step(
                             findViewById(R.id.btnRunSweep),
                             getString(R.string.coach_sweep_run),
                         ),

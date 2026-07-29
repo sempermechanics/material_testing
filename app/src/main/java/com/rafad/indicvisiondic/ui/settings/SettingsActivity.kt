@@ -386,8 +386,17 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun deleteAccount() {
+        // Erasure walks the cloud copy before it touches anything local, so it
+        // can take a few seconds on a full account. Without this the screen just
+        // sits there and the only feedback is the app appearing to have hung.
+        val progress = MaterialAlertDialogBuilder(this)
+            .setMessage(R.string.delete_account_working)
+            .setCancelable(false)
+            .show()
         lifecycleScope.launch {
-            when (CloudSync.deleteAccount(this@SettingsActivity)) {
+            val outcome = CloudSync.deleteAccount(this@SettingsActivity)
+            progress.dismiss()
+            when (outcome) {
                 CloudSync.AccountDeletion.DELETED -> {
                     toast(getString(R.string.delete_account_done))
                     AuthRoute.toSignIn(this@SettingsActivity)
