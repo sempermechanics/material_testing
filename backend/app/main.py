@@ -1,4 +1,5 @@
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -104,6 +105,7 @@ async def delete_account(ctx=Depends(verified_device)):
     """
     user, device = ctx["user"], ctx["device"]
     uid = user["uid"]
+    started = time.monotonic()
     token = drive.access_token()
 
     # 1. The session folders live inside the user folder, so deleting that one
@@ -133,9 +135,21 @@ async def delete_account(ctx=Depends(verified_device)):
         else:
             log.warning("No Drive folder found for uid %s — nothing to purge there", uid)
 
+    drive_ms = int((time.monotonic() - started) * 1000)
+
     # 3. Only once the blobs are gone: erase the metadata.
     counts = repo.delete_all_user_data(uid)
-    detail = {**counts, "driveFolders": folders_deleted, "userFolderFound": bool(user_folder)}
+    total_ms = int((time.monotonic() - started) * 1000)
+    # Timed per phase: erasure is the one call a user waits on with nothing to
+    # look at, so when it feels slow the log should say which half was slow.
+    detail = {
+        **counts,
+        "driveFolders": folders_deleted,
+        "userFolderFound": bool(user_folder),
+        "driveMs": drive_ms,
+        "firestoreMs": total_ms - drive_ms,
+        "totalMs": total_ms,
+    }
     audit.record(uid, device.get("deviceId"), action="ACCOUNT_DELETE",
                  target={"type": "user", "id": uid}, detail=detail)
     log.info("Erased account %s: %s", uid, detail)

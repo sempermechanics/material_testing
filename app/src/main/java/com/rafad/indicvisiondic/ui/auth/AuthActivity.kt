@@ -281,13 +281,11 @@ class AuthActivity : AppCompatActivity() {
      * about the sign-in changes. Only offered for credentials the app itself
      * accepted, so a rejected password is never stored.
      */
-    private fun offerToSavePassword(email: String, password: String) {
-        lifecycleScope.launch {
-            runCatching {
-                CredentialManager.create(this@AuthActivity)
-                    .createCredential(this@AuthActivity, CreatePasswordRequest(email, password))
-            }.onFailure { Timber.d(it, "Password not saved (declined or unsupported)") }
-        }
+    private suspend fun offerToSavePassword(email: String, password: String) {
+        runCatching {
+            CredentialManager.create(this)
+                .createCredential(this, CreatePasswordRequest(email, password))
+        }.onFailure { Timber.d(it, "Password not saved (declined or unsupported)") }
     }
 
     /** Run a re-authentication call and answer the caller with its outcome. */
@@ -315,10 +313,13 @@ class AuthActivity : AppCompatActivity() {
         }
     }
 
-    private fun routeResult(result: Result<String>) {
+    private suspend fun routeResult(result: Result<String>) {
         setLoading(false)
         result.fold(
             onSuccess = { status ->
+                // Awaited, not fired and forgotten: the save prompt is hosted by
+                // this Activity, so navigating away first cancels it out from
+                // under the user — which is exactly what it reported.
                 pendingCredential?.let { (email, password) -> offerToSavePassword(email, password) }
                 startActivity(Intent(this, AccessRouter.afterSignIn(status)))
                 finish()
@@ -342,7 +343,11 @@ class AuthActivity : AppCompatActivity() {
     internal fun onVerificationPending(error: AuthRepository.EmailVerificationRequired) {
         // The account exists now, so this is the moment the password becomes
         // worth keeping — they will need it to sign in once the link is opened.
-        pendingCredential?.let { (email, password) -> offerToSavePassword(email, password) }
+        // This screen stays up, so the prompt has a host and can be launched
+        // without blocking the switch back to sign-in.
+        pendingCredential?.let { (email, password) ->
+            lifecycleScope.launch { offerToSavePassword(email, password) }
+        }
         registerMode = false
         updateMode()
         etEmail.setText(error.email)

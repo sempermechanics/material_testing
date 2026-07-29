@@ -173,15 +173,9 @@ def delete_session(sid: str) -> int:
     Firestore batches cap at 500 writes, so this chunks.
     """
     files = list(db().collection("files").where("sessionId", "==", sid).stream())
-    removed = 0
-    for start in range(0, len(files), _BATCH_LIMIT):
-        batch = db().batch()
-        for d in files[start:start + _BATCH_LIMIT]:
-            batch.delete(d.reference)
-            removed += 1
-        batch.commit()
+    _delete_refs([d.reference for d in files])
     db().collection("sessions").document(sid).delete()
-    return removed
+    return len(files)
 
 
 def remember_user_folder(uid: str, folder_id: str) -> None:
@@ -216,17 +210,26 @@ def delete_all_user_data(uid: str) -> dict:
     itself. Audit records are intentionally kept: they hold no analysis content,
     only the fact that actions (including this erasure) occurred.
     """
+    # File docs carry the uid, so the whole account is one query rather than one
+    # per session. Deleting session by session meant a query and a batch commit
+    # each — sequential round-trips that made erasing a busy account crawl.
     sessions = list(db().collection("sessions").where("uid", "==", uid).stream())
-    files_removed = 0
-    for s in sessions:
-        files_removed += delete_session(s.id)
-
+    files = list(db().collection("files").where("uid", "==", uid).stream())
     devices = list(db().collection("devices").where("uid", "==", uid).stream())
-    for d in devices:
-        d.reference.delete()
 
-    db().collection("users").document(uid).delete()
-    return {"sessions": len(sessions), "files": files_removed, "devices": len(devices)}
+    refs = [d.reference for d in files] + [d.reference for d in sessions] + [d.reference for d in devices]
+    refs.append(db().collection("users").document(uid))
+    _delete_refs(refs)
+    return {"sessions": len(sessions), "files": len(files), "devices": len(devices)}
+
+
+def _delete_refs(refs: list) -> None:
+    """Deletes every reference, chunked to Firestore's per-batch write cap."""
+    for start in range(0, len(refs), _BATCH_LIMIT):
+        batch = db().batch()
+        for ref in refs[start:start + _BATCH_LIMIT]:
+            batch.delete(ref)
+        batch.commit()
 
 
 def get_session(sid: str):
