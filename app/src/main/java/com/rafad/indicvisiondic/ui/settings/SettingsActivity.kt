@@ -9,7 +9,10 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.ImageButton
+import android.text.InputType
 import android.widget.ImageView
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -19,6 +22,7 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.google.android.material.snackbar.Snackbar
@@ -40,6 +44,7 @@ import com.rafad.indicvisiondic.ui.admin.AdminActivity
 import com.rafad.indicvisiondic.ui.common.AuthRoute
 import com.rafad.indicvisiondic.ui.common.Insets
 import com.rafad.indicvisiondic.ui.home.SessionOpenHelper
+import com.rafad.indicvisiondic.ui.auth.GoogleSignInHelper
 import com.rafad.indicvisiondic.ui.viewer.SaveExportActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -47,6 +52,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+import timber.log.Timber
 /**
  * Settings: account, cloud preferences, per-analysis data management, data
  * export/erasure and analysis defaults. A page rather than a sheet — Home
@@ -343,14 +349,46 @@ class SettingsActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delete_account_title)
             .setMessage(R.string.delete_account_body)
-            .setPositiveButton(R.string.delete_account_confirm) { _, _ ->
+            .setPositiveButton(R.string.delete_account_confirm) { _, _ -> verifyThenDeleteAccount() }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    /**
+     * Erasing an identity is the one action a stolen unlocked phone must not be
+     * able to perform on an old session, so we prove who is holding it first.
+     * Firebase also refuses to delete a user whose sign-in has gone stale, which
+     * is what used to leave the identity behind after the data was gone.
+     */
+    private fun verifyThenDeleteAccount() {
+        val auth = AuthRepository(this)
+        when {
+            !auth.hasFirebaseIdentity() -> deleteAccount() // dev bypass: nothing to prove
+            auth.isPasswordUser() -> promptPasswordThenDelete(auth)
+            else -> reauthenticateWithGoogleThenDelete(auth)
+        }
+    }
+
+    private fun promptPasswordThenDelete(auth: AuthRepository) {
+        val field = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setHint(R.string.reauth_password_hint)
+        }
+        val inset = (DIALOG_FIELD_INSET_DP * resources.displayMetrics.density).toInt()
+        val frame = FrameLayout(this).apply {
+            setPadding(inset, inset / 2, inset, 0)
+            addView(field)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.reauth_title)
+            .setMessage(R.string.reauth_body)
+            .setView(frame)
+            .setPositiveButton(R.string.reauth_confirm) { _, _ ->
                 lifecycleScope.launch {
-                    if (CloudSync.deleteAccount(this@SettingsActivity)) {
-                        Toast.makeText(this@SettingsActivity, R.string.delete_account_done, Toast.LENGTH_LONG).show()
-                        AuthRoute.toSignIn(this@SettingsActivity)
-                    } else {
-                        Toast.makeText(this@SettingsActivity, R.string.delete_account_failed, Toast.LENGTH_LONG).show()
-                    }
+                    auth.reauthenticateWithPassword(field.text.toString()).fold(
+                        onSuccess = { deleteAccount() },
+                        onFailure = { toast(it.message ?: getString(R.string.reauth_failed)) },
+                    )
                 }
             }
             .setNegativeButton(R.string.action_cancel, null)
@@ -362,6 +400,46 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<Slider>(R.id.sliderMaxFrames).apply {
             value = DicSettings.maxFrames(this@SettingsActivity).toFloat()
             valueLabel.text = frameCountText(value.toInt())
+    private fun reauthenticateWithGoogleThenDelete(auth: AuthRepository) {
+        lifecycleScope.launch {
+            val idToken = try {
+                GoogleSignInHelper.getIdToken(this@SettingsActivity)
+            } catch (e: GetCredentialCancellationException) {
+                Timber.d(e, "Re-authentication cancelled")
+                return@launch
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Timber.w(e, "Could not obtain a Google credential for re-authentication")
+                toast(e.message ?: getString(R.string.reauth_failed))
+                return@launch
+            }
+            auth.reauthenticateWithGoogle(idToken).fold(
+                onSuccess = { deleteAccount() },
+                onFailure = { toast(it.message ?: getString(R.string.reauth_failed)) },
+            )
+        }
+    }
+
+    private fun deleteAccount() {
+        lifecycleScope.launch {
+            when (CloudSync.deleteAccount(this@SettingsActivity)) {
+                CloudSync.AccountDeletion.DELETED -> {
+                    toast(getString(R.string.delete_account_done))
+                    AuthRoute.toSignIn(this@SettingsActivity)
+                }
+                // Data is gone either way, so the session must not continue.
+                CloudSync.AccountDeletion.IDENTITY_KEPT -> {
+                    toast(getString(R.string.delete_account_identity_kept))
+                    AuthRoute.toSignIn(this@SettingsActivity)
+                }
+                CloudSync.AccountDeletion.CLOUD_UNREACHABLE ->
+                    toast(getString(R.string.delete_account_failed))
+            }
+        }
+    }
+
+    private fun toast(message: String) =
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+
             addOnChangeListener { _, v, _ ->
                 valueLabel.text = frameCountText(v.toInt())
                 DicSettings.setMaxFrames(this@SettingsActivity, v.toInt())
@@ -425,3 +503,6 @@ class SettingsActivity : AppCompatActivity() {
         val UNDO_WINDOW_MS = TimeUnit.SECONDS.toMillis(BackupDeleteWorker.UNDO_WINDOW_SECONDS).toInt()
     }
 }
+        /** Side inset for a bare EditText dropped into an alert dialog. */
+        const val DIALOG_FIELD_INSET_DP = 24
+

@@ -12,7 +12,6 @@ import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.data.net.IndicApi
 import com.rafad.indicvisiondic.data.net.TokenProvider
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.IOException
@@ -169,40 +168,69 @@ object CloudSync {
         }
     }
 
+    /** What actually happened, so the caller can tell the user the truth. */
+    enum class AccountDeletion {
+        /** Backend, device and Firebase identity are all gone. */
+        DELETED,
+
+        /** Nothing was touched — the backend could not be reached. */
+        CLOUD_UNREACHABLE,
+
+        /** Data is gone, but the sign-in identity outlived it. */
+        IDENTITY_KEPT,
+    }
+
     /**
      * GDPR account deletion: erase the account and every analysis from the
-     * cloud, then wipe all local data and the session token.
+     * cloud, then wipe all local data, the identity and the session token.
      *
-     * The cloud is erased first for the same reason as [eraseEverywhere] — and
-     * on failure nothing local is touched, so the user is never told their data
-     * is gone while it still exists. Returns false if the cloud couldn't be
-     * reached (caller should keep the user signed in and show an error).
+     * The caller re-authenticates first, which is what lets the identity delete
+     * succeed instead of being refused as too stale.
      */
-    suspend fun deleteAccount(context: Context): Boolean = withContext(Dispatchers.IO) {
+    suspend fun deleteAccount(context: Context): AccountDeletion = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         val api = IndicApi(appContext)
+        val auth = AuthRepository(appContext)
+        deleteAccount(
+            eraseCloud = { eraseAccountInCloud(api) },
+            deleteIdentity = { auth.deleteIdentity().isSuccess },
+            wipeLocal = { SessionStore.deleteAll(appContext) },
+            signOut = { auth.signOut() },
+        )
+    }
 
-        if (api.enabled) {
-            val token = TokenProvider.usableIdToken() ?: return@withContext false
-            try {
-                api.deleteAccount(token)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                Timber.e(e, "Account erasure failed — local data left intact")
-                return@withContext false
-            }
-        }
-
-        // Cloud is gone (or was never configured): now wipe this device and the
-        // Firebase identity itself (best-effort — needs recent sign-in; falls back
-        // to sign-out so the app returns to the login screen regardless).
-        val fbUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        runCatching { fbUser?.delete()?.await() }
-            .onFailure { Timber.w(it, "Firebase user delete failed; signing out instead") }
-        SessionStore.deleteAll(appContext)
-        // Reuse the shared session clear (Firebase sign-out + TokenStore).
-        AuthRepository(appContext).signOut()
+    /**
+     * The order-sensitive half of [deleteAccount], with its side effects passed
+     * in so the sequence can be tested without Firebase or a backend.
+     *
+     * The cloud goes first, for the same reason as [eraseEverywhere]: if it
+     * fails nothing local is touched, so the user is never told their data is
+     * gone while it still exists. Once the data *is* gone the session must not
+     * continue, so the wipe and sign-out run whether or not the identity itself
+     * could be deleted.
+     */
+    internal suspend fun deleteAccount(
+        eraseCloud: suspend () -> Boolean,
+        deleteIdentity: suspend () -> Boolean,
+        wipeLocal: () -> Unit,
+        signOut: () -> Unit,
+    ): AccountDeletion {
+        if (!eraseCloud()) return AccountDeletion.CLOUD_UNREACHABLE
+        val identityGone = deleteIdentity()
+        wipeLocal()
+        signOut()
         Timber.i("Account erased and local data wiped")
-        true
+        return if (identityGone) AccountDeletion.DELETED else AccountDeletion.IDENTITY_KEPT
+    }
+
+    /** True when the backend copy is gone, or there was never a backend at all. */
+    private suspend fun eraseAccountInCloud(api: IndicApi): Boolean {
+        if (!api.enabled) return true
+        val token = TokenProvider.usableIdToken()
+        return token != null &&
+            runCatching { api.deleteAccount(token) }
+                .onFailure { Timber.e(it, "Account erasure failed — local data left intact") }
+                .isSuccess
     }
 
     /** Delete only this device's copy; the cloud backup is deliberately kept. */

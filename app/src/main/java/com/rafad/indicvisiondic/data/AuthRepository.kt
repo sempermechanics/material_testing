@@ -2,11 +2,13 @@ package com.rafad.indicvisiondic.data
 
 import android.content.Context
 import com.google.firebase.auth.ActionCodeSettings
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.rafad.indicvisiondic.data.net.IndicApi
 import com.rafad.indicvisiondic.data.net.TokenProvider
@@ -51,14 +53,69 @@ class AuthRepository(context: Context) {
     }
 
     /**
-     * New account: email + password. Fires a verification email — until the user
-     * verifies, the backend keeps a domain user PENDING (see AUTO_APPROVE_HD).
+     * New account: email + password. Fires a verification email and stops there —
+     * [firebaseThen] blocks the session until the address is confirmed, so a new
+     * account never reaches the backend before its owner has proved the mailbox
+     * is theirs.
      */
     suspend fun signUpWithPassword(email: String, password: String): Result<String> = firebaseThen {
         val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
         runCatching { result.user?.sendEmailVerification()?.await() }
             .onFailure { Timber.w(it, "Could not send verification email") }
         result
+    }
+
+    /** True when the signed-in user can re-authenticate with a password. */
+    fun isPasswordUser(): Boolean =
+        auth.currentUser?.providerData?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
+
+    /** True when a Firebase identity exists at all (false under the dev bypass). */
+    fun hasFirebaseIdentity(): Boolean = auth.currentUser != null
+
+    /**
+     * Prove the session still belongs to whoever is holding the phone, so
+     * destructive identity operations cannot ride an old sign-in. Firebase
+     * requires this within minutes of the action for [deleteIdentity].
+     */
+    suspend fun reauthenticateWithPassword(password: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val user = auth.currentUser ?: return@withContext Result.failure(Exception("Not signed in."))
+        val email = user.email ?: return@withContext Result.failure(Exception("This account has no email."))
+        try {
+            user.reauthenticate(EmailAuthProvider.getCredential(email, password)).await()
+            Result.success(Unit)
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
+            Result.failure(Exception("Incorrect password.", e))
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Re-authentication failed")
+            Result.failure(Exception(e.message ?: "Could not verify your identity."))
+        }
+    }
+
+    /** As [reauthenticateWithPassword], for accounts that sign in with Google. */
+    suspend fun reauthenticateWithGoogle(googleIdToken: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val user = auth.currentUser ?: return@withContext Result.failure(Exception("Not signed in."))
+        try {
+            user.reauthenticate(GoogleAuthProvider.getCredential(googleIdToken, null)).await()
+            Result.success(Unit)
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Google re-authentication failed")
+            Result.failure(Exception(e.message ?: "Could not verify your identity."))
+        }
+    }
+
+    /**
+     * Erase the Firebase identity itself. Only succeeds soon after a
+     * re-authentication, which is why the delete flow asks for one first.
+     */
+    suspend fun deleteIdentity(): Result<Unit> = withContext(Dispatchers.IO) {
+        val user = auth.currentUser ?: return@withContext Result.success(Unit)
+        try {
+            user.delete().await()
+            Result.success(Unit)
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Firebase identity delete failed")
+            Result.failure(e)
+        }
     }
 
     /**
@@ -165,8 +222,39 @@ class AuthRepository(context: Context) {
         }
         val user = auth.currentUser
             ?: return@withContext Result.failure(Exception("Sign-in did not complete."))
+        unverifiedEmailError(user)?.let { return@withContext Result.failure(it) }
         TokenStore.saveIdentity(appContext, user.uid, user.email)
         resolveStatus()
+    }
+
+    /**
+     * Password accounts must confirm their address before the session counts.
+     * Google users and email-link users arrive already verified, so this only
+     * bites the email + password path.
+     *
+     * On a block the session is torn down again — an unverified user is never
+     * left half signed-in — and a fresh link is sent so the mail they need is
+     * always the most recent one.
+     */
+    private suspend fun unverifiedEmailError(user: FirebaseUser): Exception? {
+        if (!needsEmailVerification(user)) return null
+        runCatching { auth.currentUser?.sendEmailVerification()?.await() }
+            .onFailure { Timber.w(it, "Could not re-send verification email") }
+        val email = user.email.orEmpty()
+        signOut()
+        return Exception(
+            "Verify your email first. We've sent a link to $email — open it, then sign in again.",
+        )
+    }
+
+    /** True when this account signs in with a password and has not confirmed its address. */
+    private suspend fun needsEmailVerification(user: FirebaseUser): Boolean {
+        if (user.providerData.none { it.providerId == EmailAuthProvider.PROVIDER_ID }) return false
+        // Someone who just clicked the link in a browser is still unverified in
+        // this cached user object; reload before judging them.
+        runCatching { user.reload().await() }
+            .onFailure { Timber.d(it, "Could not refresh verification state; using cached value") }
+        return auth.currentUser?.isEmailVerified == false
     }
 
     private suspend fun resolveStatus(): Result<String> {
