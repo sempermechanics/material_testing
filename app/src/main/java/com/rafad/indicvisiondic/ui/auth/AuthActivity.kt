@@ -55,6 +55,8 @@ class AuthActivity : AppCompatActivity() {
     private lateinit var tvForgotPassword: TextView
     private lateinit var tvEmailLink: TextView
     private lateinit var btnGoogle: Button
+    private lateinit var tvPasswordRules: TextView
+    private lateinit var btnGeneratePassword: com.google.android.material.button.MaterialButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,6 +73,19 @@ class AuthActivity : AppCompatActivity() {
         tvEmailLink = findViewById(R.id.tvEmailLink)
         progressBar = findViewById(R.id.progressBar)
         btnGoogle = findViewById(R.id.btnGoogleSignIn)
+        tvPasswordRules = findViewById(R.id.tvPasswordRules)
+        btnGeneratePassword = findViewById(R.id.btnGeneratePassword)
+
+        btnGeneratePassword.setOnClickListener {
+            val generated = PasswordPolicy.generate()
+            etPassword.setText(generated)
+            etConfirm.setText(generated)
+            etPassword.inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            etPassword.setSelection(etPassword.text.length)
+            showSnackbar(getString(R.string.password_generated), isError = false)
+        }
+
         val googleOrDivider = findViewById<View>(R.id.googleOrDivider)
         val googleConfigured = GoogleSignInHelper.isConfigured(this)
         btnGoogle.visibility = if (googleConfigured) View.VISIBLE else View.GONE
@@ -127,6 +142,9 @@ class AuthActivity : AppCompatActivity() {
         layoutConfirm.visibility = if (registerMode) View.VISIBLE else View.GONE
         // Password recovery and the sign-in link only make sense when signing in.
         recoveryLinks.visibility = if (registerMode) View.GONE else View.VISIBLE
+        tvPasswordRules.visibility = if (registerMode) View.VISIBLE else View.GONE
+        tvPasswordRules.text = getString(R.string.password_hint_rules)
+        btnGeneratePassword.visibility = if (registerMode) View.VISIBLE else View.GONE
         btnMain.text = getString(
             when {
                 reauthMode -> R.string.reauth_confirm
@@ -143,9 +161,17 @@ class AuthActivity : AppCompatActivity() {
         val email = etEmail.text.toString().trim()
         val password = etPassword.text.toString()
         if (!validEmail(email)) return
-        if (password.length < MIN_PASSWORD) {
-            showSnackbar(getString(R.string.error_password_short), isError = true)
-            return
+        if (registerMode) {
+            val failure = PasswordPolicy.validate(password)
+            if (failure != null) {
+                showSnackbar(passwordFailureText(failure), isError = true)
+                return
+            }
+        } else {
+            if (password.length < MIN_PASSWORD) {
+                showSnackbar(getString(R.string.error_password_short), isError = true)
+                return
+            }
         }
         if (reauthMode) {
             runReauth { authRepo.reauthenticateWithPassword(password) }
@@ -295,6 +321,13 @@ class AuthActivity : AppCompatActivity() {
         etConfirm.setText("")
         // Not an error: what they asked for happened, and the next step is theirs.
         showSnackbar(error.message ?: getString(R.string.auth_verify_first), isError = false)
+    }
+
+    /** The bound is part of the message for the length rules, so they format it in. */
+    private fun passwordFailureText(failure: PasswordPolicy.Failure): String = when (failure) {
+        is PasswordPolicy.Failure.TooShort -> getString(failure.message, failure.minLength)
+        is PasswordPolicy.Failure.TooLong -> getString(failure.message, failure.maxLength)
+        is PasswordPolicy.Failure.Missing -> getString(failure.message)
     }
 
     private fun validEmail(email: String): Boolean {

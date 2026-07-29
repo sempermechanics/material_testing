@@ -86,7 +86,10 @@
     <string name="auth_reset_failed">Could not send the reset email.</string>
     <string name="auth_google_unconfigured">Google sign-in isn\'t set up yet. Use email instead.</string>
     <string name="email_address">Email Address</string>
-    <string name="password_min_6_characters">Password (min 6 characters)</string>
+    <string name="password_min_6_characters">Password</string>
+    <string name="generate_password">Generate secure password</string>
+    <string name="password_generated">Password generated and filled</string>
+    <string name="password_hint_rules">8+ chars · upper &amp; lowercase · digit · special character</string>
     <string name="confirm_password">Confirm Password</string>
     <string name="forgot_password">Forgot Password?</string>
     <string name="or">or</string>
@@ -278,7 +281,7 @@
     <string name="sweep_frame">Frame to sweep</string>
     <string name="sweep_frame_btn_fmt">Frame %1$d</string>
     <string name="sweep_plan_grid_fmt">%1$d analyses · subset %2$d–%3$d px · window %4$d–%5$d</string>
-    <string name="sweep_plan_empty">No combination fits this ceiling — raise Max VSG or lower the subset range.</string>
+    <string name="sweep_plan_empty">No combination fits this ceiling — raise Max strain window or lower the subset range.</string>
     <string name="sweep_plan_subset_too_big_fmt">Subset range starts above what this image and ROI can hold (max %1$d px). Lower the minimum subset, or draw a larger region of interest.</string>
     <string name="next_sweep">Next: Sweep →</string>
     <string name="sweep_settings">Sweep settings</string>
@@ -297,6 +300,15 @@
     <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area, or use the full image.</string>
     <string name="sweep_fail_init">The engine couldn\'t start — an image failed to decode. Re-import them as PNG or TIFF.</string>
     <string name="sweep_fail_unknown">The engine returned error %1$d.</string>
+    <!-- Which frame a failure happened on; prefixes the reason above. -->
+
+    <!-- Password policy -->
+    <string name="password_too_short_fmt">Password must be at least %1$d characters.</string>
+    <string name="password_too_long_fmt">Password must be at most %1$d characters.</string>
+    <string name="password_needs_upper">Include at least one uppercase letter.</string>
+    <string name="password_needs_lower">Include at least one lowercase letter.</string>
+    <string name="password_needs_digit">Include at least one digit.</string>
+    <string name="password_needs_special">Include at least one special character (e.g. !@#$%).</string>
 
     <!-- Sweep lattice staging screen (VsgLatticeActivity) -->
     <string name="vsg_lattice_title">Parameter sweep</string>

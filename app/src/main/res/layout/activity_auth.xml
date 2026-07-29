@@ -153,6 +153,28 @@
                         android:inputType="textPassword" />
                 </com.google.android.material.textfield.TextInputLayout>
 
+                <!-- Password rules hint (visible in register mode) -->
+                <TextView
+                    android:id="@+id/tvPasswordRules"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:visibility="gone"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:paddingHorizontal="4dp" />
+
+                <!-- Generate password button (visible in register mode) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGeneratePassword"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:visibility="gone"
+                    android:text="@string/generate_password"
+                    android:textAllCaps="false" />
+
                 <!-- Recovery options, hidden while creating an account. -->
                 <LinearLayout
                     android:id="@+id/recoveryLinks"
