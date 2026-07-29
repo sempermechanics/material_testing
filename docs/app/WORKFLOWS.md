@@ -338,7 +338,6 @@ Lattice, Session limit, or back to Home.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 5.1.0 | Look at an empty image slot | A **Select** chip sits inside the dashed area; tapping it or the area opens the picker |
 | [ ] 5.1.1 | Tap the reference dropzone → **Photos** | Picker opens, images only |
 | [ ] 5.1.2 | Pick a `.dng` or `.tif` via **Files** | Card shows the filename and `W × H`; no decode error |
 | [ ] 5.1.3 | Tap **Change** on the reference card | Source chooser reopens; the new image replaces the old |

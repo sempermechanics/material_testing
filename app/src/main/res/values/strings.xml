@@ -370,7 +370,6 @@
     <string name="ref_formats_hint">PNG or TIFF recommended</string>
     <string name="deformed_frames">Deformed frames</string>
     <string name="def_formats_hint_fmt">Up to %1$d · PNG or TIFF recommended</string>
-    <string name="action_select">Select</string>
     <string name="action_change">Change</string>
     <string name="action_edit">Edit</string>
     <string name="action_reset">Reset</string>
