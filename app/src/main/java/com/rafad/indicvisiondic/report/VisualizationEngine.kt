@@ -26,13 +26,44 @@ object VisualizationEngine {
     /** Longest-edge cap for on-screen scrub heatmaps (export paths omit this). */
     const val DISPLAY_MAX_EDGE = 1080
 
-    // PRECOMPUTED LOOKUP TABLE: Jet Colormap (256 colors)
-    private val JET_LUT = IntArray(256) { i ->
-        val v = i / 255.0f
-        val r = (clamp(minOf(4f * v - 1.5f, -4f * v + 4.5f)) * 255).toInt()
-        val g = (clamp(minOf(4f * v - 0.5f, -4f * v + 3.5f)) * 255).toInt()
-        val b = (clamp(minOf(4f * v + 0.5f, -4f * v + 2.5f)) * 255).toInt()
-        Color.rgb(r, g, b)
+    /**
+     * Palette slot for "no correlated data here" — transparent on screen, the
+     * animation's background colour in a GIF. It costs the colour ramp its top
+     * entry (values map to 0..[LAST_COLOR]), which is one 255th of the scale and
+     * buys a single render path shared by the viewer, the report and the GIF.
+     */
+    const val TRANSPARENT_INDEX = 255
+    private const val LAST_COLOR = TRANSPARENT_INDEX - 1
+
+    /**
+     * One byte per pixel, each an index into [JET_LUT] or [TRANSPARENT_INDEX],
+     * with the value range the colours were mapped against.
+     */
+    class IndexPlane(
+        val indices: ByteArray,
+        val width: Int,
+        val height: Int,
+        val min: Float,
+        val max: Float,
+    )
+
+    /**
+     * The jet ramp as a GIF global colour table: [TRANSPARENT_INDEX] takes
+     * [background], every other slot is the colour the viewer would draw.
+     */
+    fun gifPalette(background: Int): IntArray =
+        IntArray(JET_LUT.size) { if (it == TRANSPARENT_INDEX) background else JET_LUT[it] }
+
+    // PRECOMPUTED LOOKUP TABLE: Jet Colormap (256 colors). Built on first use so
+    // the value-range helpers stay callable without an Android graphics stack.
+    private val JET_LUT: IntArray by lazy {
+        IntArray(256) { i ->
+            val v = i / 255.0f
+            val r = (clamp(minOf(4f * v - 1.5f, -4f * v + 4.5f)) * 255).toInt()
+            val g = (clamp(minOf(4f * v - 0.5f, -4f * v + 3.5f)) * 255).toInt()
+            val b = (clamp(minOf(4f * v + 0.5f, -4f * v + 2.5f)) * 255).toInt()
+            Color.rgb(r, g, b)
+        }
     }
 
     private fun clamp(v: Float) = v.coerceIn(0f, 1f)
@@ -64,6 +95,28 @@ object VisualizationEngine {
     }
 
     /**
+     * The displayed value range of several fields at once, in one pass over the
+     * points — the same percentile-clamped bounds [generateHeatmap] would pick
+     * for each. Null for a field with no correlated points.
+     *
+     * The summary animation needs every field's range across every frame before
+     * it can render anything; decoding each frame once and asking for all five
+     * ranges together keeps that pre-pass to a single walk of the data.
+     */
+    fun valueRanges(data: FloatArray, valIndices: IntArray): Map<Int, Pair<Float, Float>?> {
+        val collected = valIndices.associateWith { mutableListOf<Float>() }
+        for (i in data.indices step DicResult.STRIDE) {
+            if (!DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) continue
+            for (valIndex in valIndices) {
+                collected.getValue(valIndex).add(data[i + valIndex])
+            }
+        }
+        return collected.mapValues { (valIndex, values) ->
+            if (values.isEmpty()) null else computeSigmaClampedRange(values, valIndex)
+        }
+    }
+
+    /**
      * @param maxLongEdge when set and smaller than the image's longest edge, the
      *   bitmap is generated at display scale (viewer scrub). Pass null / omit for
      *   full-resolution PDF and share export.
@@ -78,6 +131,35 @@ object VisualizationEngine {
         customMax: Float? = null,
         maxLongEdge: Int? = null,
     ): Triple<Bitmap, Float, Float> {
+        val plane = generateHeatmapIndices(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
+        val pixels = IntArray(plane.indices.size) { i ->
+            val index = plane.indices[i].toInt() and 0xFF
+            if (index == TRANSPARENT_INDEX) 0 else JET_LUT[index]
+        }
+        val bitmap = Bitmap.createBitmap(plane.width, plane.height, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(pixels, 0, plane.width, 0, 0, plane.width, plane.height)
+        return Triple(bitmap, plane.min, plane.max)
+    }
+
+    /**
+     * The same render as [generateHeatmap], stopping one step earlier: one byte
+     * per pixel, holding an index into [JET_LUT] — or [TRANSPARENT_INDEX] where
+     * no correlated data covers the pixel.
+     *
+     * The GIF summary animation consumes this directly, so its colours are the
+     * viewer's colours by construction rather than by quantisation. Both callers
+     * share this one implementation of the interpolation.
+     */
+    fun generateHeatmapIndices(
+        data: FloatArray,
+        imgW: Int,
+        imgH: Int,
+        valIndex: Int,
+        step: Int,
+        customMin: Float? = null,
+        customMax: Float? = null,
+        maxLongEdge: Int? = null,
+    ): IndexPlane {
         val longest = max(imgW, imgH).coerceAtLeast(1)
         val scale = if (maxLongEdge != null && longest > maxLongEdge) {
             maxLongEdge.toFloat() / longest
@@ -110,7 +192,7 @@ object VisualizationEngine {
         }
 
         if (validValues.isEmpty()) {
-            return Triple(Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888), 0f, 0f)
+            return IndexPlane(ByteArray(outW * outH) { TRANSPARENT_INDEX.toByte() }, outW, outH, 0f, 0f)
         }
 
         // THE SCALING LOGIC: Use Custom Bounds if provided, else use Mean ± 3σ Statistical Clamping
@@ -127,7 +209,7 @@ object VisualizationEngine {
 
         val range = if (maxV - minV == 0f) 0.0001f else maxV - minV
 
-        val pixels = IntArray(outW * outH)
+        val plane = ByteArray(outW * outH) { TRANSPARENT_INDEX.toByte() }
         val cols = ((maxX - minX) / step) + 1
         val rows = ((maxY - minY) / step) + 1
         val grid = FloatArray(cols * rows) { Float.NaN }
@@ -174,17 +256,14 @@ object VisualizationEngine {
                         for (ox in ox0 until ox1) {
                             val wx = (ox - ox0).toFloat() / dw
                             val v = leftEdgeV + wx * (rightEdgeV - leftEdgeV)
-                            val norm = ((v.coerceIn(minV, maxV) - minV) / range * 255).toInt()
-                            pixels[rowOffset + ox] = JET_LUT[norm.coerceIn(0, 255)]
+                            val norm = ((v.coerceIn(minV, maxV) - minV) / range * LAST_COLOR).toInt()
+                            plane[rowOffset + ox] = norm.coerceIn(0, LAST_COLOR).toByte()
                         }
                     }
                 }
             }
         }
 
-        val bitmap = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
-        bitmap.setPixels(pixels, 0, outW, 0, 0, outW, outH)
-
-        return Triple(bitmap, minV, maxV)
+        return IndexPlane(plane, outW, outH, minV, maxV)
     }
 }

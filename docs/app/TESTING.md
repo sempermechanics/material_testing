@@ -10,7 +10,8 @@ Each chunk owns one layer; no duplicate assertions across chunks.
 | **auth** | Splash → Auth / Pending / Home | `auth/AccessRouterTest` | `auth/FirebaseAuthIntegrationTest` |
 | **session** | Home list, open session, disk layout | `session/SessionPathsTest` | — |
 | **analysis** | Import → ROI → batch/sweep | `analysis/VsgStudyTest`, `SubsetRecommenderTest`, `BitmapDecodeTest` | — |
-| **results** | `.dat` decode, CSV, heatmap, PDF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest` | — |
+| **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `GifEncoderTest`, `SummaryAnimationTest` | — |
+| **viewer** | Result viewer controls | `viewer/FrameNumberEntryTest` | — |
 | **cloud** | Upload, API, restore, account deletion | `cloud/ApiDtosContractTest`, `UploadResumableTest`, `SessionUploadBundlerTest`, `CloudRestoreMappingTest`, `AccountDeletionTest` | — |
 | **settings** | Settings sections, contacting support | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest` | — |
 | **e2e** | Full UI flows | — | `e2e/AppFlowEspressoTest` |
@@ -33,11 +34,18 @@ Each chunk owns one layer; no duplicate assertions across chunks.
 ./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.results.*"
 ./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.cloud.*"
 ./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.settings.*"
+./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.viewer.*"
 ```
 
 `settings/HelpSupportSectionTest` drives the real `SettingsActivity` under
 Robolectric — it is the first UI-level test of that screen, and the pattern to
-copy for the other sections.
+copy for the other sections. `viewer/FrameNumberEntryTest` does the same for
+`ResultViewerActivity`, writing synthetic `.dat` frames to a temp folder and
+handing their path in on the intent.
+
+`results/GifEncoderTest` reads its own output back with `javax.imageio` rather
+than a decoder of ours: the encoder is written against the GIF89a spec by hand,
+so the only claim worth making is that a third-party decoder agrees.
 
 Emulator (all instrumented):
 ```bash

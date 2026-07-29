@@ -302,7 +302,24 @@ your finger, the other card gives both extrema with their coordinates.
 | **Max/Min** | Marks both extrema with values and positions |
 
 **Frames.** Prev / Next step through; the counter shows the filename and
-`(i / N)`. On a sweep each frame is a parameter combination, labelled like
+`(i / N)`. Type a number in the small field under it and press Go to jump
+straight to that frame — useful at 150 frames. Anything out of range leaves you
+where you are. On a sweep each frame is a parameter combination, labelled like
+**The summary comes first.** The viewer opens on a looping animation of the
+whole sequence in the current field — every frame, never longer than 10 seconds,
+about 300 ms a frame until the frame count forces it faster. **Next** enters the
+frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
+field.
+
+Unlike scrubbing, the animation puts **every frame on one colour scale** — the
+range that covers the whole sequence, shown in the labels beside it. That is the
+point of it: on the per-frame auto scale, a frame late in a test can look exactly
+like an early one. If you have set a fixed scale for a field, the animation uses
+that instead.
+
+(Animation playback needs Android 9 or newer. Below that you get the first frame
+and a note; the GIFs still export.)
+
 `S15 · St5 · W13 · VSG 61`.
 
 ### Settings used
@@ -320,7 +337,7 @@ provenance record.
 
 ## 9. Exports
 
-**Share** gives five targets. Every chooser offers **Save to Files**.
+**Share** gives six targets. Every chooser offers **Save to Files**.
 
 | Export | Contents |
 |---|---|
@@ -328,7 +345,11 @@ provenance record.
 | All field photos | Five PNGs for this frame, zipped |
 | PDF report | Every frame, plus a telemetry page |
 | CSV data | `x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — sweeps add subset, step, window |
-| Everything (.zip) | Raw photos + all fields + CSV + PDF |
+| Field animations (GIF) | Five looping GIFs — one per field, every frame, each on its own whole-sequence scale — zipped |
+| Everything (.zip) | Raw photos + animations + all fields + CSV + PDF |
+
+The animations are shared as a set, not one at a time — they are only comparable
+because they share a scale, and the set is what carries that.
 
 Build on the **CSV**. Coordinates are image pixels, displacements pixels,
 strains scientific notation. `znssd` is the match residual — filter on it to drop

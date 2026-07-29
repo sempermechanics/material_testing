@@ -270,6 +270,51 @@
             android:clickable="true"
             android:focusable="true"
             android:visibility="gone" />
+
+        <!-- Summary animation. Covers the frame views while it is showing, so the
+             zoom/inspect machinery underneath needs no special case. -->
+        <FrameLayout
+            android:id="@+id/summaryLayer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/viewer_canvas"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/imgSummary"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/summary_title"
+                android:scaleType="fitCenter" />
+
+            <LinearLayout
+                android:id="@+id/summaryStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_viewer_panel"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <ProgressBar
+                    android:id="@+id/progressSummary"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="140dp"
+                    android:layout_height="wrap_content"
+                    android:max="100" />
+
+                <TextView
+                    android:id="@+id/tvSummaryStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@color/viewer_on_dark"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </FrameLayout>
     </RelativeLayout>
 
     <LinearLayout
@@ -393,17 +438,60 @@
                 android:src="@drawable/ic_nav_prev"
                 app:tint="@color/viewer_on_dark" />
 
-            <TextView
-                android:id="@+id/tvFrameCounter"
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="center"
-                android:paddingHorizontal="12dp"
-                android:text="@string/frame_1_1"
-                android:textColor="@color/viewer_on_dark"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:orientation="vertical"
+                android:paddingHorizontal="12dp">
+
+                <TextView
+                    android:id="@+id/tvFrameCounter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="middle"
+                    android:gravity="center"
+                    android:singleLine="true"
+                    android:text="@string/frame_1_1"
+                    android:textColor="@color/viewer_on_dark"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <!-- Jump straight to a frame. No underline: the chip around it is
+                     the affordance, and a stock EditText line fights the panel. -->
+                <LinearLayout
+                    android:id="@+id/layoutFrameJump"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/etFrameNumber"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@null"
+                        android:gravity="center"
+                        android:hint="@string/frame_number_hint"
+                        android:imeOptions="actionGo"
+                        android:importantForAutofill="no"
+                        android:inputType="number"
+                        android:maxLength="4"
+                        android:minWidth="36dp"
+                        android:paddingVertical="2dp"
+                        android:textColor="@color/sky_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvFrameTotal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/viewer_on_dark"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
 
             <ImageButton
                 android:id="@+id/btnNextFrame"

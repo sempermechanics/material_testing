@@ -14,12 +14,16 @@
 package com.rafad.indicvisiondic.ui.viewer
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.os.Bundle
 import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -134,6 +138,20 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
 
+    private lateinit var etFrameNumber: EditText
+    private lateinit var tvFrameTotal: TextView
+    private lateinit var summary: ViewerSummaryHelper
+
+    /**
+     * True while the summary animation is up instead of a frame. It sits before
+     * frame 1: Prev from frame 1 reaches it, Next leaves it.
+     */
+    private var showingSummary = false
+
+    internal fun summaryBatchFiles(): List<File> = batchFiles
+
+    internal fun customBoundsFor(dataIndex: Int): Pair<Float, Float>? = customBoundsMap[dataIndex]
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -145,6 +163,8 @@ class ResultViewerActivity : AppCompatActivity() {
         btnPrevFrame = findViewById(R.id.btnPrevFrame)
         btnNextFrame = findViewById(R.id.btnNextFrame)
         tvFrameCounter = findViewById(R.id.tvFrameCounter)
+        etFrameNumber = findViewById(R.id.etFrameNumber)
+        tvFrameTotal = findViewById(R.id.tvFrameTotal)
 
         layoutColorScale = findViewById(R.id.layoutColorScale)
         tvScaleMax = findViewById(R.id.tvScaleMax)
@@ -171,10 +191,14 @@ class ResultViewerActivity : AppCompatActivity() {
             inspect.lastMinIdx = savedInstanceState.getInt("LAST_MIN_IDX", -1)
             inspect.isMaxMinActive = savedInstanceState.getBoolean("MAX_MIN_ACTIVE", false)
             currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
+            showingSummary = savedInstanceState.getBoolean("SHOWING_SUMMARY", false)
         } else {
             // A lattice node tap asks to open on a specific frame; clamped once
             // the batch is loaded below.
             currentFrameIndex = intent.getIntExtra(DicKeys.START_FRAME, 0)
+            // Otherwise the summary is what the viewer opens on — it answers
+            // "what happened across the test" before any single frame does.
+            showingSummary = !intent.hasExtra(DicKeys.START_FRAME)
         }
 
         imgW = intent.getIntExtra(DicKeys.IMG_W, 0)
@@ -219,12 +243,18 @@ class ResultViewerActivity : AppCompatActivity() {
             }
         }
 
+        summary = ViewerSummaryHelper(this)
+
         if (batchFiles.isNotEmpty()) {
             // A START_FRAME (or restored index) past the batch would load nothing.
             currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
+            tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
             loadFrameData(currentFrameIndex)
+            summary.start()
+            if (showingSummary) summary.show()
             updateNavButtons()
         } else {
+            showingSummary = false
             com.google.android.material.snackbar.Snackbar.make(
                 findViewById(android.R.id.content),
                 R.string.no_batch_data,
@@ -233,20 +263,28 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         btnPrevFrame.setOnClickListener {
-            if (currentFrameIndex > 0) {
-                currentFrameIndex--
-                updateNavButtons()
-                requestFrameLoad(debounced = true)
+            when {
+                showingSummary -> Unit
+                currentFrameIndex == 0 -> enterSummary()
+                else -> {
+                    currentFrameIndex--
+                    updateNavButtons()
+                    requestFrameLoad(debounced = true)
+                }
             }
         }
 
         btnNextFrame.setOnClickListener {
-            if (currentFrameIndex < batchFiles.size - 1) {
+            if (showingSummary) {
+                leaveSummary()
+            } else if (currentFrameIndex < batchFiles.size - 1) {
                 currentFrameIndex++
                 updateNavButtons()
                 requestFrameLoad(debounced = true)
             }
         }
+
+        wireFrameJump()
 
         imgMain.onMatrixChangedListener = {
             applyHeatmapMatrix()
@@ -269,6 +307,8 @@ class ResultViewerActivity : AppCompatActivity() {
                 currentTypeString = label
                 currentDataIndex = index
                 updateVisualization(currentDataIndex)
+                summary.onFieldChanged()
+                if (showingSummary) tvFrameCounter.text = summary.counterText()
                 updateStatsStrip()
                 if (inspect.isMaxMinActive) inspect.calculateMaxMin()
                 inspect.refreshCrosshairs()
@@ -339,6 +379,7 @@ class ResultViewerActivity : AppCompatActivity() {
         visualizationJob?.cancel()
         scrubDebounceJob?.cancel()
         refDecodeJob?.cancel()
+        summary.cancel()
         scrubCache.clear(except = cachedHeatmap)
         inspect.clearSpatialIndex()
     }
@@ -401,6 +442,7 @@ class ResultViewerActivity : AppCompatActivity() {
         outState.putInt("LAST_MIN_IDX", inspect.lastMinIdx)
         outState.putBoolean("MAX_MIN_ACTIVE", inspect.isMaxMinActive)
         outState.putInt("CURRENT_FRAME", currentFrameIndex)
+        outState.putBoolean("SHOWING_SUMMARY", showingSummary)
     }
 
     private fun loadFrameData(index: Int) {
@@ -465,7 +507,10 @@ class ResultViewerActivity : AppCompatActivity() {
         step = sweepSteps?.getOrNull(index) ?: baseStep
         inspect.rebuildSpatialIndex(data, step)
         val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
-        tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
+        if (!showingSummary) {
+            tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
+        }
+        syncFrameNumber()
         updateVisualization(currentDataIndex)
         updateStatsStrip()
         if (inspect.isMaxMinActive) inspect.calculateMaxMin()
@@ -516,6 +561,7 @@ class ResultViewerActivity : AppCompatActivity() {
                 if (maxVal != null && minVal != null && maxVal > minVal) {
                     customBoundsMap[currentDataIndex] = Pair(minVal / multiplier, maxVal / multiplier)
                     updateVisualization(currentDataIndex)
+                    summary.onScaleChanged(currentDataIndex)
                 } else {
                     Toast.makeText(this, R.string.invalid_scale_inputs, Toast.LENGTH_LONG).show()
                 }
@@ -523,6 +569,7 @@ class ResultViewerActivity : AppCompatActivity() {
             .setNeutralButton(R.string.auto_scale) { _, _ ->
                 customBoundsMap.remove(currentDataIndex)
                 updateVisualization(currentDataIndex)
+                summary.onScaleChanged(currentDataIndex)
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -585,11 +632,15 @@ class ResultViewerActivity : AppCompatActivity() {
         currentHeatmapMin = actualMin
         currentHeatmapMax = actualMax
 
-        val isStrain = DicResult.isStrainFieldIndex(index)
-        val multiplier = DicResult.strainMultiplier(index)
-        val unit = if (isStrain) " [mε]" else " px"
-        tvScaleMax.text = "Max: ${ReportBuilder.formatMetric(actualMax * multiplier)}$unit"
-        tvScaleMin.text = "Min: ${ReportBuilder.formatMetric(actualMin * multiplier)}$unit"
+        // While the summary is up the labels belong to its whole-sequence scale,
+        // not to whichever frame happens to be loaded behind it.
+        if (!showingSummary) {
+            val isStrain = DicResult.isStrainFieldIndex(index)
+            val multiplier = DicResult.strainMultiplier(index)
+            val unit = if (isStrain) " [mε]" else " px"
+            tvScaleMax.text = "Max: ${ReportBuilder.formatMetric(actualMax * multiplier)}$unit"
+            tvScaleMin.text = "Min: ${ReportBuilder.formatMetric(actualMin * multiplier)}$unit"
+        }
         isGeneratingHeatmap = false
     }
 
@@ -620,6 +671,8 @@ class ResultViewerActivity : AppCompatActivity() {
             baseImage = base,
             refImagePath = refImagePath,
             defImagePaths = defImagePaths,
+            summary = summary.animation,
+            summaryBounds = { index -> summary.boundsFor(index) },
             buildReportAt = { index, frameData -> buildReportData(index, frameData) },
         )
     }
@@ -646,11 +699,78 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     private fun updateNavButtons() {
-        btnPrevFrame.isEnabled = currentFrameIndex > 0
-        btnNextFrame.isEnabled = currentFrameIndex < batchFiles.size - 1
+        btnPrevFrame.isEnabled = !showingSummary && batchFiles.isNotEmpty()
+        btnNextFrame.isEnabled = showingSummary || currentFrameIndex < batchFiles.size - 1
 
         btnPrevFrame.alpha = if (btnPrevFrame.isEnabled) 1.0f else 0.5f
         btnNextFrame.alpha = if (btnNextFrame.isEnabled) 1.0f else 0.5f
+        // The number tracks the buttons, not the decode: a debounced scrub would
+        // otherwise leave it a frame behind for as long as the load takes.
+        syncFrameNumber()
+    }
+
+    // ── Summary slot ─────────────────────────────────────────────────────
+
+    private fun enterSummary() {
+        showingSummary = true
+        summary.show()
+        tvFrameCounter.text = summary.counterText()
+        updateNavButtons()
+    }
+
+    private fun leaveSummary() {
+        showingSummary = false
+        summary.hide()
+        updateNavButtons()
+        // Re-apply the frame's own labels and heatmap after the summary's.
+        requestFrameLoad(debounced = false)
+    }
+
+    // ── Typed frame jump ─────────────────────────────────────────────────
+
+    private fun wireFrameJump() {
+        etFrameNumber.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_GO) {
+                commitFrameJump()
+                true
+            } else {
+                false
+            }
+        }
+        etFrameNumber.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) commitFrameJump()
+        }
+    }
+
+    /**
+     * Applies what is typed in the frame field. Anything unparseable or outside
+     * the batch restores the current number rather than jumping somewhere the
+     * user did not ask for.
+     */
+    private fun commitFrameJump() {
+        val typed = etFrameNumber.text?.toString()?.trim()?.toIntOrNull()
+        val target = typed?.minus(1)?.takeIf { it in batchFiles.indices }
+        if (target == null) {
+            syncFrameNumber()
+        } else if (target != currentFrameIndex || showingSummary) {
+            if (showingSummary) leaveSummary()
+            currentFrameIndex = target
+            updateNavButtons()
+            // A typed number is a settled destination, unlike a Next/Prev burst.
+            requestFrameLoad(debounced = false)
+        }
+        dismissFrameJumpKeyboard()
+    }
+
+    private fun dismissFrameJumpKeyboard() {
+        etFrameNumber.clearFocus()
+        val ime = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        ime?.hideSoftInputFromWindow(etFrameNumber.windowToken, 0)
+    }
+
+    private fun syncFrameNumber() {
+        val shown = if (showingSummary) "" else (currentFrameIndex + 1).toString()
+        if (etFrameNumber.text?.toString() != shown) etFrameNumber.setText(shown)
     }
 
     private companion object {

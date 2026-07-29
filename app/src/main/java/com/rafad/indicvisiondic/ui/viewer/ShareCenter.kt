@@ -71,6 +71,10 @@ class ShareCenter(private val host: ResultViewerActivity) {
             sheet.dismiss()
             runJob(R.string.share_generating) { allFieldPhotos() to "image/png" }
         }
+        v.findViewById<View>(R.id.rowShareAnimations).setOnClickListener {
+            sheet.dismiss()
+            runJob(R.string.share_generating_gif) { fieldAnimations() to "image/gif" }
+        }
         v.findViewById<View>(R.id.rowSharePdf).setOnClickListener {
             sheet.dismiss()
             runJob(R.string.share_generating_pdf) { listOf(allFramesPdf()) to "application/pdf" }
@@ -231,6 +235,24 @@ class ShareCenter(private val host: ResultViewerActivity) {
     }
 
     /**
+     * All five fields as looping GIFs, each covering every frame on that field's
+     * whole-sequence colour scale.
+     *
+     * Shared as a set rather than one at a time: the point of the animations is
+     * that they are directly comparable, which only holds if you have them all.
+     * Fields the viewer has not rendered yet are built here, so sharing works
+     * the moment the screen opens.
+     */
+    private suspend fun fieldAnimations(): List<File> {
+        val s = snap!!
+        val animation = s.summary ?: return emptyList()
+        return SummaryAnimation.FIELDS.mapNotNull { (label, index) ->
+            val bounds = s.summaryBounds(index) ?: return@mapNotNull null
+            animation.build(index, label, bounds)
+        }
+    }
+
+    /**
      * One CSV covering every frame's solved points, via the shared
      * [AnalysisCsvWriter] the cloud upload uses too. A sweep leads each row with
      * its settings columns; an ordinary analysis leads with the image name.
@@ -306,6 +328,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * ├── inDIC_report_all_{ts}_frames.pdf     (root)
      * └── photos_{ts}/
      *     ├── raw photos/                      reference + deformed originals
+     *     ├── animations/                      U, V, Exx, Eyy, Exy as looping GIFs
      *     └── results/<NNN_frame>/             U, V, Exx, Eyy, Exy per frame
      * ```
      */
@@ -313,10 +336,16 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val s = snap!!
         val pdf = allFramesPdf()
         val csv = batchCsv()
+        val animations = fieldAnimations()
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val f = File(shareDir(), "inDIC_everything_$ts.zip")
         ZipOutputStream(f.outputStream().buffered()).use { zip ->
             addRawPhotos(zip, s, ts)
+            for (gif in animations) {
+                zip.putNextEntry(ZipEntry("photos_$ts/animations/${gif.name}"))
+                gif.inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+            }
             addResultImages(zip, s, ts)
             // Home of the archive: the data table and the full report.
             zip.putNextEntry(ZipEntry("inDIC_analysis_${ts}_data.csv"))
@@ -409,6 +438,10 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val baseImage: Bitmap?,
         val refImagePath: String?,
         val defImagePaths: List<String>,
+        /** The viewer's animation builder, so a share reuses what it already rendered. */
+        val summary: SummaryAnimation?,
+        /** Whole-sequence colour bounds of a field, or null if it has no data. */
+        val summaryBounds: (Int) -> Pair<Float, Float>?,
         /**
          * Report data for one frame, given that frame's index and decoded
          * field. Index-driven so an all-frames report can build each frame's

@@ -95,6 +95,21 @@
     <string name="min_0_0">Min: 0.0</string>
     <string name="max_0_0">Max: 0.0</string>
     <string name="frame_1_1">Frame: 1 / 1</string>
+
+    <!-- Result viewer: summary animation and frame jump -->
+    <string name="summary_title">Summary</string>
+    <plurals name="summary_counter_fmt">
+        <item quantity="one">Summary · %1$s · %2$d frame</item>
+        <item quantity="other">Summary · %1$s · %2$d frames</item>
+    </plurals>
+    <string name="scale_max_fmt">Max: %1$s %2$s</string>
+    <string name="scale_min_fmt">Min: %1$s %2$s</string>
+    <string name="summary_building_fmt">Rendering %1$s… %2$d of %3$d</string>
+    <string name="summary_failed">Could not build the animation.</string>
+    <string name="summary_no_data">No correlated data to animate.</string>
+    <string name="summary_needs_android_9">Showing the first frame — animation needs Android 9 or newer.</string>
+    <string name="frame_number_hint">#</string>
+    <string name="frame_total_fmt">" / %1$d"</string>
     <string name="tap_image_to_inspect">Tap image to inspect</string>
     <string name="max_nmin">Max: --\nMin: --</string>
     <string name="video">Video</string>
@@ -249,13 +264,13 @@
     <string name="subset_max">Subset size (max)</string>
     <string name="subset_range">Subset size range</string>
     <string name="subset_samples">No. of subsets</string>
-    <string name="vsg_samples">No. of VSGs</string>
+    <string name="vsg_samples">No. of strain windows</string>
     <string name="step_depth">Step size</string>
     <string name="info_subset_samples">Total No. of analyses = No. of subsets × No. of VSGs.</string>
     <string name="info_step_depth">Step size given as subset ÷ N(Larger N means denser correlation). Capped between 2 and 6.</string>
     <string name="info_subset_range"> Min to Max (px) capped by the image/ROI(Odd subset sizes) and speckle pattern.</string>
-    <string name="vsg_max">Max VSG size</string>
-    <string name="info_vsg_max">Ceiling for virtual strain gauge size sweep(larger tends to over-smooth).</string>
+    <string name="vsg_max">Max strain window</string>
+    <string name="info_vsg_max">Ceiling for the strain window sweep. Larger windows smooth strain more; smaller ones resolve finer gradients.</string>
 
     <string name="line_cut_axis">Line cut axis</string>
     <string name="info_line_cut_axis">Strain along an axis through the ROI centre.</string>
@@ -264,7 +279,7 @@
 
     <string name="sweep_frame">Frame to sweep</string>
     <string name="sweep_frame_btn_fmt">Frame %1$d</string>
-    <string name="sweep_plan_grid_fmt">%1$d analyses · subset %2$d–%3$d px · VSG %4$d–%5$d px</string>
+    <string name="sweep_plan_grid_fmt">%1$d analyses · subset %2$d–%3$d px · window %4$d–%5$d</string>
     <string name="sweep_plan_empty">No combination fits this ceiling — raise Max VSG or lower the subset range.</string>
     <string name="sweep_plan_subset_too_big_fmt">Subset range starts above what this image and ROI can hold (max %1$d px). Lower the minimum subset, or draw a larger region of interest.</string>
     <string name="next_sweep">Next: Sweep →</string>
@@ -275,7 +290,7 @@
     <string name="sweep_frame_out_of_fmt">out of %1$d</string>
     <string name="line_cut_preview_heading">Line cut</string>
     <string name="planned_lattice_heading">Planned lattice</string>
-    <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · VSG %5$d</string>
+    <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · window %5$d</string>
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d · VSG %4$d</string>
     <string name="sweep_failed">The parameter sweep could not run.</string>
     <string name="sweep_partial_fmt">%1$d of %2$d combinations could not be solved and were skipped — the rest are shown.</string>
@@ -292,7 +307,7 @@
     <string name="vsg_lattice_summary_short_fmt">%1$d combinations · %2$d solved · %3$d skipped</string>
     <string name="vsg_lattice_caption">Tap a node to focus its curve · double-tap to open it</string>
     <string name="vsg_lattice_axis_subset">Subset size (px)</string>
-    <string name="vsg_lattice_axis_vsg">VSG size (px)</string>
+    <string name="vsg_lattice_axis_vsg">Strain window</string>
     <string name="vsg_lattice_legend_solved">Solved</string>
     <string name="vsg_lattice_legend_skipped">Skipped</string>
     <string name="vsg_lattice_view_results">View results</string>
@@ -382,8 +397,11 @@
     <string name="share_pdf_sub_fmt">All %1$d frames · fields, stats, telemetry</string>
     <string name="share_csv">CSV data</string>
     <string name="share_csv_sub_fmt">Whole analysis · %1$d frames, one file</string>
+    <string name="share_animations">Field animations (GIF)</string>
+    <string name="share_animations_sub">U V Exx Eyy Exy · every frame, one scale</string>
     <string name="share_zip">Everything (.zip)</string>
-    <string name="share_zip_sub">All frames: photos + PDF + CSV</string>
+    <string name="share_zip_sub">All frames: photos + PDF + CSV + GIFs</string>
+    <string name="share_generating_gif">Rendering the animations — this can take a moment…</string>
     <string name="share_generating">Preparing files…</string>
     <string name="share_generating_pdf">Building the report — this can take a moment…</string>
     <string name="share_failed">Could not prepare the files. Try again.</string>

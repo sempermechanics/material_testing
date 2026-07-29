@@ -568,6 +568,9 @@ the Lattice for a sweep.
 ```
 8. Result viewer — ResultViewerActivity
    ├── field switching: U / V / Exx / Eyy / Exy
+   ├── summary animation                        (the slot before frame 1)
+   │   ├── every frame of the selected field, looping, ≤10 s
+   │   └── one colour scale for the whole sequence
    ├── image viewer
    │   ├── pinch zoom (to 10×) and pan
    │   └── jet heatmap over the reference (fixed 0.7 alpha)
@@ -577,6 +580,7 @@ the Lattice for a sweep.
    ├── stats strip: max / min / mean
    ├── frame scrubbing: prev / next + "name (i / N)"
    ├── Inspect — point probe
+   │   └── type a frame number to jump straight there
    │   ├── tap / drag readout (location + value)
    │   └── X,Y coordinate entry dialog
    ├── Max/Min markers
@@ -587,8 +591,9 @@ the Lattice for a sweep.
    │   ├── result photo (current field + frame)
    │   ├── all field photos (5, zipped)
    │   ├── PDF report (all frames)
+   │   ├── field animations (5 GIFs, zipped)
    │   ├── CSV data
-   │   ├── everything (.zip: raw photos + results + CSV + PDF)
+   │   ├── everything (.zip: raw photos + animations + results + CSV + PDF)
    │   └── "Save to Files" target inside the chooser
    ├── Return to home
    └── Back (→ 7. Lattice for sweeps)
@@ -621,11 +626,30 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2.1 | Read the frame counter | The original filename (or the sweep label) plus "(i / N)" |
 | [ ] 8.2.2 | Tap **Next** | Advances one frame; the heatmap and stats update |
 | [ ] 8.2.3 | Reach the last frame | **Next** disables and fades |
-| [ ] 8.2.4 | Reach the first frame | **Prev** disables and fades |
+| [ ] 8.2.4 | Reach the first frame | **Prev** goes back to the summary, not nowhere |
 | [ ] 8.2.5 | Tap Next rapidly | Keeps up without stuttering or showing a stale frame |
 | [ ] 8.2.6 | Scrub through a sweep | Each frame is a different combination; the settings sheet follows it |
 | [ ] 8.2.7 | Rotate the device | The same frame and field stay on screen |
 
+| [ ] 8.2.8 | Type a frame number and press Go | Jumps straight there; the field has no underline under it |
+| [ ] 8.2.9 | Type `0`, a number past the end, or letters | Nothing moves and the current number comes back |
+| [ ] 8.2.10 | Step with Next/Prev | The number follows immediately, not after the frame decodes |
+
+### 8.2a Summary animation
+
+| # | Action | Expected |
+|---|---|---|
+| [ ] 8.2a.1 | Open a result | It lands on the summary, which builds and then loops; the counter reads "Summary · <field> · N frames" |
+| [ ] 8.2a.2 | Watch a short (≤33 frame) analysis | Each frame is visible for about 300 ms |
+| [ ] 8.2a.3 | Watch a 150-frame analysis | Every frame is there and the loop still finishes inside 10 s |
+| [ ] 8.2a.4 | Compare early and late frames of a growing test | Colour rises through the sequence — one scale throughout, no per-frame renormalising |
+| [ ] 8.2a.5 | Read the scale labels beside it | The widest bounds in the whole sequence, not the current frame's |
+| [ ] 8.2a.6 | Switch field | The animation rebuilds in that field; switching back replays from cache |
+| [ ] 8.2a.7 | Set a custom scale for one field | Only that field's animation rebuilds |
+| [ ] 8.2a.8 | Tap **Next** on the summary, then **Prev** on frame 1 | Leaves to frame 1 and comes back |
+| [ ] 8.2a.9 | Step into the frames while it is still building | The viewer stays responsive throughout |
+| [ ] 8.2a.10 | Open a sweep node from the Lattice | Lands on that node, not on the summary |
+| [ ] 8.2a.11 | Run on Android 8 | The first frame with a note that animation needs Android 9; sharing still works |
 ### 8.3 Measurement tools
 
 | # | Action | Expected |
@@ -656,12 +680,14 @@ node. **Exit:** Home, or back to the Lattice.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.5.1 | Tap Share | Sheet with five targets and a caption naming the current frame |
+| [ ] 8.5.1 | Tap Share | Sheet with six targets and a caption naming the current frame |
 | [ ] 8.5.2 | **Result photo** | One annotated PNG of the field and frame on screen |
 | [ ] 8.5.3 | **All field photos** | Five PNGs for the current frame, zipped for hand-off |
 | [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
+| [ ] 8.5.3a | **Field animations (GIF)** | Five GIFs, one per field, zipped; each loops when opened in a gallery app |
+| [ ] 8.5.3b | Same, immediately on entering the viewer | Fields not built yet are built under the progress dialog — never silently missing |
 | [ ] 8.5.5 | **CSV data** | Header `x_px,y_px,u_px,v_px,exx,eyy,exy,znssd`; sweeps add subset/step/window columns |
-| [ ] 8.5.6 | **Everything (.zip)** | Raw photos, per-frame results for all five fields, the CSV and the PDF |
+| [ ] 8.5.6 | **Everything (.zip)** | Raw photos, the five animations, per-frame results for all five fields, the CSV and the PDF |
 | [ ] 8.5.7 | In any chooser, pick **Save to Files** | A SAF save dialog; the file lands where you choose |
 | [ ] 8.5.8 | Export a very large analysis | Progress dialog, then either a file or a snackbar — never a crash |
 | [ ] 8.5.9 | Check an exported PNG | Full resolution, heatmap baked in, min/max annotated |
