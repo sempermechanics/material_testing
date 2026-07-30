@@ -1109,7 +1109,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         // open them, rather than as a failure with no way through
                         // to data the session quietly kept.
                         onPartialRun(outcome)
-                    } else if (outcome.engineErrorCode < 0) {
+                    } else if (outcome.engineErrorCode < 0 &&
+                        outcome.totalFrames > 0
+                    )  {
+                        onPartialRun(outcome)
+                    } else if (outcome.engineErrorCode < 0
+                    )  {
                         val errorMsg = engineFailureMessage(
                             outcome.engineErrorCode,
                             frameIndex = outcome.failedFrameIndex,

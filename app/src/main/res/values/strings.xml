@@ -321,8 +321,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d · VSG %4$d</string>
     <string name="sweep_failed">The parameter sweep could not run.</string>
     <string name="sweep_partial_fmt">%1$d of %2$d combinations could not be solved and were skipped — the rest are shown.</string>
-    <string name="sweep_fail_features">The engine couldn\'t match the two images (AKAZE feature extraction failed).\n\nThis is almost always the image pair, not the settings: the deformed frame must be the same scene, framed like the reference. Re-shoot on a tripod so only the specimen moves, with the speckle in focus.</string>
-    <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area, or use the full image.</string>
+    <string name="sweep_fail_features">The engine couldn\'t match the two images (AKAZE feature extraction failed). \n\nThe image pair:During the test, specimen might have moved or too much deformation could have decorrelated with the reference.</string>
+    <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area or use a different image.</string>
     <string name="sweep_fail_init">The engine couldn\'t start — an image failed to decode. Re-import them as PNG or TIFF.</string>
     <string name="sweep_fail_unknown">The engine returned error %1$d.</string>
     <string name="run_stopped_early_title">Stopped early</string>
