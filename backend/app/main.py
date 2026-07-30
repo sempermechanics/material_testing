@@ -15,7 +15,7 @@ from .models import DeviceReg, FileComplete, SessionCreate
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("indic")
 
-app = FastAPI(title="inDIC API", version="1.0")
+app = FastAPI(title="Semper API", version="1.0")
 
 
 @app.on_event("startup")

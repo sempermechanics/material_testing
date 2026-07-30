@@ -30,7 +30,7 @@ def access_request(uid: str, email, display_name, provider) -> None:
         log.info("notify disabled (no RESEND_API_KEY/NOTIFY_FROM); pending user %s not mailed", uid)
         return
     body = (
-        "A new inDIC account is waiting for approval.\n\n"
+        "A new Semper account is waiting for approval.\n\n"
         f"Account: {email or '(no email)'}\n"
         f"Name: {display_name or '(none)'}\n"
         f"Sign-in: {provider or '(unknown)'}\n"
@@ -45,7 +45,7 @@ def access_request(uid: str, email, display_name, provider) -> None:
             json={
                 "from": settings.NOTIFY_FROM,
                 "to": [settings.SUPPORT_EMAIL],
-                "subject": f"inDIC access request — {email or uid}",
+                "subject": f"Semper access request — {email or uid}",
                 "text": body,
             },
             timeout=_TIMEOUT_S,

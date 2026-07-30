@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- ============================================================= -->
-    <!--  IndicVision Design System — "Deep Sky Blue & White"          -->
+    <!--  Semper Design System — "Deep Sky Blue & White"          -->
     <!--  Single source of truth for color. Prefer theme attributes    -->
     <!--  (?attr/colorPrimary, ?attr/colorSurface) in new layouts;     -->
     <!--  reference these names only when an attr doesn't fit.          -->

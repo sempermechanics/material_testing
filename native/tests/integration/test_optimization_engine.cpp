@@ -20,17 +20,17 @@
 // =====================================================================
 #include "framework/test_framework.h"
 #include "framework/synthetic.h"
-#include <indicvision/solver.hpp>
-#include <indicvision/subset.hpp>
+#include <semper/solver.hpp>
+#include <semper/subset.hpp>
 
-using IndicVision::Image;
-using IndicVision::SubsetData;
-using IndicVision::SubsetPrecomputer;
-using IndicVision::OptimizationEngine;
-using IndicVision::AnalysisResult;
-using IndicVision::INIT_NO_SEARCH;
-using IndicVision::INIT_NO_SIMPLEX;
-using IndicVision::INIT_AUTO_SEARCH;
+using Semper::Image;
+using Semper::SubsetData;
+using Semper::SubsetPrecomputer;
+using Semper::OptimizationEngine;
+using Semper::AnalysisResult;
+using Semper::INIT_NO_SEARCH;
+using Semper::INIT_NO_SIMPLEX;
+using Semper::INIT_AUTO_SEARCH;
 
 namespace {
 
@@ -44,7 +44,7 @@ namespace {
     // Run one full synthetic experiment and return the engine's answer.
     AnalysisResult run_engine(const dictest::AffineDeformation &truth,
                               float guess_u, float guess_v,
-                              IndicVision::InitializationMode mode,
+                              Semper::InitializationMode mode,
                               unsigned seed = 1234) {
         dictest::SpeckleField field(seed, W, H);
         Image ref = dictest::make_reference_image(field, W, H);

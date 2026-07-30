@@ -127,7 +127,7 @@ where:
 $$
 \text{ZNCC} = \frac{\sum [f - \bar{f}][g - \bar{g}]}{\sqrt{\sum [f - \bar{f}]^2} \sqrt{\sum [g - \bar{g}]^2}}
 $$
-**Implementation Note:** IndicVision minimizes ZNSSD. Values closer to 0 indicate better match.
+**Implementation Note:** Semper minimizes ZNSSD. Values closer to 0 indicate better match.
 
 ---
 
@@ -140,7 +140,7 @@ DIC requires evaluation at non-integer coordinates: $g(x_d, y_d)$ where $(x_d, y
 
 ### 4.2 Keys Bicubic Interpolation
 
-IndicVision uses the **Keys 4th-order bicubic convolution kernel** for sub-pixel interpolation.
+Semper uses the **Keys 4th-order bicubic convolution kernel** for sub-pixel interpolation.
 
 **Kernel Definition:**
 For a given parameter $a$ (typically $a = -0.5$):
@@ -226,7 +226,7 @@ Gradients at non-integer coordinates are computed using bilinear interpolation:
 
 ### 5.1 Warp Function Parameterization
 
-IndicVision uses a **6-parameter affine warp**:
+Semper uses a **6-parameter affine warp**:
 
 **Expanded:**
 
@@ -589,7 +589,7 @@ where:
 * : Number of pixels in subset
 * : Sum of squared gradients (texture strength)
 
-**For IndicVision (41×41 subset, , typical texture):**
+**For Semper (41×41 subset, , typical texture):**
 
 **Experimental Validation:** Measured RMSE = 0.008 px on synthetic translation tests.
 
@@ -611,7 +611,7 @@ where  is the gauge length (strain window size).
 
 ## 11. Implementation Validation: DIC Challenge
 
-IndicVision has been benchmarked against the **Society for Experimental Mechanics (SEM) DIC Challenge** datasets to ensure the reliability of its ZNSSD and IC-GN implementations under non-uniform deformation fields.
+Semper has been benchmarked against the **Society for Experimental Mechanics (SEM) DIC Challenge** datasets to ensure the reliability of its ZNSSD and IC-GN implementations under non-uniform deformation fields.
 
 ### 11.1 Benchmark Dataset: Sample 14 L5
 The application was validated using **Sample 14 L5**, a gold-standard benchmark specifically designed to test an engine's ability to resolve high-frequency spatial variations. This sample features a **sinusoidal displacement field** along the X-direction, which challenges the subset matching and interpolation accuracy.
@@ -628,7 +628,7 @@ The computed U-displacement profile was compared against the analytical sinusoid
 | **Root Mean Square Error (RMSE)** | **0.0078 px** |
 | **ZNSSD Correlation Threshold** | < 0.25 |
 
-**Conclusion:** With an RMSE of **0.0078 px**, IndicVision provides research-grade precision on the L5 challenge, surpassing the industry-standard requirement of 0.01 px for sub-pixel tracking.
+**Conclusion:** With an RMSE of **0.0078 px**, Semper provides research-grade precision on the L5 challenge, surpassing the industry-standard requirement of 0.01 px for sub-pixel tracking.
 
 ---
 
@@ -651,7 +651,7 @@ Strain validation was performed by calculating the derivative of the sinusoidal 
 * **Performance:** The engine successfully resolved the high-frequency displacement oscillations inherent in the L5 dataset while maintaining a 0.0078 px RMSE.
 * **Hardware:** Validated on a mobile NDK architecture, proving that mobile-based DIC can match the rigor of dedicated desktop-grade research software.
 
-**Final Conclusion:** The implementation of the IC-GN solver and the reliability-guided propagation (RGDIC) allows IndicVision to handle the most difficult "L5" level challenges of the DIC community with scientific-grade accuracy.
+**Final Conclusion:** The implementation of the IC-GN solver and the reliability-guided propagation (RGDIC) allows Semper to handle the most difficult "L5" level challenges of the DIC community with scientific-grade accuracy.
 
 ## 12. References
 
@@ -713,12 +713,12 @@ Strain validation was performed by calculating the derivative of the sinusoidal 
 
 * **Version:** 2.0
 * **Last Updated:** February 24, 2026
-* **Maintainer:** IndicVision Development Team
+* **Maintainer:** Semper Development Team
 * **License:** Internal Research Documentation
 * **Equations Validated:** ✅ All formulas cross-checked against implementation
 * **Experimental Validation:** ✅ Synthetic and physical tests confirm <0.01 px accuracy
 
-*This document serves as the scientific proof of the IndicVision DIC implementation. All equations have been directly verified against the C++ source code and validated through experimental testing.*
+*This document serves as the scientific proof of the Semper DIC implementation. All equations have been directly verified against the C++ source code and validated through experimental testing.*
 
 ```
 

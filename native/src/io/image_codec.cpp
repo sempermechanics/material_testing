@@ -1,8 +1,8 @@
-#include <indicvision/io.hpp>
+#include <semper/io.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
-namespace IndicVision {
+namespace Semper {
 namespace io {
 
 cv::Mat decode_gray(const uint8_t* data, size_t len,
@@ -54,4 +54,4 @@ void image_dimensions(const uint8_t* data, size_t len, int& out_w, int& out_h) {
 }
 
 } // namespace io
-} // namespace IndicVision
+} // namespace Semper

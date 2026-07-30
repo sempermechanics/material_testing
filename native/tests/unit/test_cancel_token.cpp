@@ -15,14 +15,14 @@
 //    thread and read by the solver's workers.
 // =====================================================================
 #include "framework/test_framework.h"
-#include <indicvision/cancel.hpp>
+#include <semper/cancel.hpp>
 
 #include <atomic>
 #include <thread>
 
-using IndicVision::pipeline::cancel_requested;
-using IndicVision::pipeline::clear_cancel;
-using IndicVision::pipeline::request_cancel;
+using Semper::pipeline::cancel_requested;
+using Semper::pipeline::clear_cancel;
+using Semper::pipeline::request_cancel;
 
 TEST_CASE(CancelToken, StartsClear) {
     clear_cancel();
@@ -72,7 +72,7 @@ TEST_CASE(CancelToken, CancelledCodeIsDistinctFromEngineErrors) {
     // -2 is a ROI error and -3 an init error; a cancel must not be mistaken
     // for either, and must match AnalysisRunCodes.ERROR_CANCELLED on the
     // Kotlin side, which is what the UI keys "cancelled" off.
-    CHECK(IndicVision::pipeline::kCancelled == -99);
-    CHECK(IndicVision::pipeline::kCancelled != -2);
-    CHECK(IndicVision::pipeline::kCancelled != -3);
+    CHECK(Semper::pipeline::kCancelled == -99);
+    CHECK(Semper::pipeline::kCancelled != -2);
+    CHECK(Semper::pipeline::kCancelled != -3);
 }

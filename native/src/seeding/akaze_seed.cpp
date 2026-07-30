@@ -1,9 +1,9 @@
-#include <indicvision/seeding.hpp>
+#include <semper/seeding.hpp>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
 #include <chrono>
 
-namespace IndicVision {
+namespace Semper {
 namespace seeding {
 
 void draw_outlined_text(cv::Mat &img, const std::string &text, cv::Point pt, double scale) {
@@ -103,4 +103,4 @@ bool extract_akaze_features(cv::Mat &ref, cv::Mat &def, cv::Mat &roi_mask, doubl
     }
 
 } // namespace seeding
-} // namespace IndicVision
+} // namespace Semper

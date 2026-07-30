@@ -84,7 +84,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldU"
-                style="@style/Widget.IndicVision.SegmentedButton"
+                style="@style/Widget.Semper.SegmentedButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -92,7 +92,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldV"
-                style="@style/Widget.IndicVision.SegmentedButton"
+                style="@style/Widget.Semper.SegmentedButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -100,7 +100,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldExx"
-                style="@style/Widget.IndicVision.SegmentedButton"
+                style="@style/Widget.Semper.SegmentedButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -108,7 +108,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldEyy"
-                style="@style/Widget.IndicVision.SegmentedButton"
+                style="@style/Widget.Semper.SegmentedButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -116,7 +116,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldExy"
-                style="@style/Widget.IndicVision.SegmentedButton"
+                style="@style/Widget.Semper.SegmentedButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -165,7 +165,7 @@
                 android:textAllCaps="false"
                 android:textColor="@color/viewer_on_dark"
                 android:textStyle="bold"
-                app:backgroundTint="@color/ic_indic_launcher_background"
+                app:backgroundTint="@color/ic_semper_launcher_background"
                 app:cornerRadius="22dp"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@id/toggleMaxMin"
@@ -249,7 +249,7 @@
         android:layout_below="@id/layoutColorScale"
         android:forceDarkAllowed="false">
 
-        <com.rafad.indicvisiondic.ui.viewer.TouchImageView
+        <com.indicvision.semper.ui.viewer.TouchImageView
             android:id="@+id/imgBaseResult"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
@@ -263,7 +263,7 @@
             android:outlineProvider="bounds"
             android:scaleType="matrix" />
 
-        <com.rafad.indicvisiondic.ui.viewer.InspectOverlayView
+        <com.indicvision.semper.ui.viewer.InspectOverlayView
             android:id="@+id/glassShield"
             android:layout_width="match_parent"
             android:layout_height="match_parent"

@@ -1,4 +1,4 @@
-# Contributing to inDIC
+# Contributing to Semper
 
 Thanks for helping. This repo is a single Android app (`:app`) with an optional
 FastAPI backend. The correlation engine is C++ (on-device); most UI work is
@@ -61,11 +61,11 @@ rm -rf app/.cxx app/build
 ./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug
 
 # Per-chunk tests
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.auth.*"
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.session.*"
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.analysis.*"
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.results.*"
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.cloud.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.auth.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.session.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.analysis.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.results.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.cloud.*"
 
 # Native engine tests (PC, no device)
 cmake -S native/tests -B build/native-tests -DCMAKE_BUILD_TYPE=Release

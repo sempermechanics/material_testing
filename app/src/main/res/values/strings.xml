@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">inDIC</string>
+    <string name="app_name">Semper</string>
 
     <!-- Digital Asset Links for Credential Manager. Not user-facing. -->
     <string name="asset_statements" translatable="false">
@@ -48,7 +48,7 @@
 
     <!-- Static analysis -->
     <string name="analysis_running_back_blocked">Analysis running. Please wait or cancel first.</string>
-    <string name="exit_indic_title">Exit inDIC?</string>
+    <string name="exit_indic_title">Exit Semper?</string>
     <string name="exit_indic_message">Are you sure you want to exit the app?</string>
     <string name="exit_analysis_title">Exit analysis?</string>
     <string name="exit_analysis_message">Are you sure you want to leave? All uncalculated setup and ROI definitions will be lost.</string>
@@ -215,7 +215,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="setting_roi_fmt">%1$d × %2$d at (%3$d, %4$d)</string>
     <string name="setting_size_fmt">%1$d × %2$d px</string>
     <string name="export_data">Export my data</string>
-    <string name="export_data_share">Share your inDIC session export</string>
+    <string name="export_data_share">Share your Semper session export</string>
     <string name="export_data_working">Preparing your session export…</string>
     <string name="export_data_failed">Couldn\'t prepare the export. Free up some storage and try again.</string>
     <string name="delete_account">Delete my account and data</string>
@@ -471,9 +471,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="share_save_to_files">Save to Files</string>
     <string name="save_success">Saved to device</string>
     <string name="save_failed">Couldn\'t save the file. Try again.</string>
-    <string name="app_name_short">inDIC</string>
+    <string name="app_name_short">Semper</string>
     <string name="approval_title">Access required</string>
-    <string name="approval_body">This account isn\'t approved for inDIC yet. Tap Request access to email our team, then check back once you\'re approved.</string>
+    <string name="approval_body">This account isn\'t approved for Semper yet. Tap Request access to email our team, then check back once you\'re approved.</string>
     <string name="check_now">Check now</string>
     <string name="action_request_access">Request access</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
@@ -493,13 +493,13 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="admin_denied_toast">Denied %1$s</string>
     <string name="admin_action_error">Action failed: %1$s</string>
     <string name="support_email">support@indicvision.com</string>
-    <string name="request_access_subject">inDIC access request</string>
+    <string name="request_access_subject">Semper access request</string>
 
     <!-- Settings: help & support -->
     <string name="help_support_section">Help &amp; support</string>
     <string name="help_support_hint">Questions, bugs, or feature requests — email us and we\'ll get back to you.</string>
     <string name="help_support_email_action">Email support</string>
-    <string name="help_support_subject">inDIC support request</string>
+    <string name="help_support_subject">Semper support request</string>
 
     <!-- First-login beta / data-use declaration (shown once per account on Home) -->
     <string name="beta_notice_title">Beta notice</string>
@@ -513,7 +513,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="limit_email_support">Email support@indicvision.com</string>
     <string name="limit_recheck">Re-check limit</string>
     <string name="limit_back">Back to my analyses</string>
-    <string name="limit_subject">inDIC — request higher analysis limit</string>
+    <string name="limit_subject">Semper — request higher analysis limit</string>
     <string name="limit_still_full">Still at the limit. Delete an analysis or email support@indicvision.com.</string>
     <string name="limit_cleared">You\'re under the limit again.</string>
     <string name="request_access_none">No email app found. Please email %1$s to request access.</string>
@@ -555,7 +555,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- Log out confirmation -->
     <string name="logout_confirm_title">Log Out?</string>
-    <string name="logout_confirm_body">Are you sure you want to log out of inDIC on this device?</string>
+    <string name="logout_confirm_body">Are you sure you want to log out of Semper on this device?</string>
     <string name="action_log_out">Log Out</string>
     <string name="logout_success">You have been successfully logged out.</string>
 </resources>

@@ -1,7 +1,7 @@
 swagger: '2.0'
 info:
   title: indic-api
-  description: API Gateway front door for the private inDIC Cloud Run service.
+  description: API Gateway front door for the private Semper Cloud Run service.
   version: '1.0'
 schemes:
   - https

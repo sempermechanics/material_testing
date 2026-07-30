@@ -1,8 +1,8 @@
-#include <indicvision/cancel.hpp>
+#include <semper/cancel.hpp>
 
 #include <atomic>
 
-namespace IndicVision {
+namespace Semper {
 namespace pipeline {
 
 // Its own translation unit, free of OpenCV and threads, so the host test suite
@@ -20,4 +20,4 @@ void clear_cancel() { g_cancel_requested.store(false, std::memory_order_relaxed)
 bool cancel_requested() { return g_cancel_requested.load(std::memory_order_relaxed); }
 
 } // namespace pipeline
-} // namespace IndicVision
+} // namespace Semper

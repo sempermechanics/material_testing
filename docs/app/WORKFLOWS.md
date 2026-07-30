@@ -1,6 +1,6 @@
 # App workflows — the complete map
 
-Every user-facing flow in inDIC, as a tree plus a checkable test step per leaf.
+Every user-facing flow in Semper, as a tree plus a checkable test step per leaf.
 Use it two ways:
 
 - **As a map** — the trees answer "what screens exist and how do I reach them".
@@ -13,7 +13,7 @@ out see [ARCHITECTURE.md](ARCHITECTURE.md). This file covers what a human sees.
 
 ## How the app is put together
 
-There is no `NavHost`, no Compose and no Fragments. inDIC is **Activity-based**:
+There is no `NavHost`, no Compose and no Fragments. Semper is **Activity-based**:
 11 activities in `app/src/main/AndroidManifest.xml`, wired with plain
 `startActivity` and `ActivityResultContracts`. Sub-flows are wizard pages inside
 one Activity, `BottomSheetDialog`s, `MaterialAlertDialog`s and `PopupMenu`s. So a
@@ -147,7 +147,7 @@ below is the user's own nudge on top of that, not the only signal.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 2.0 | Land here for the first time on a new account | support@ receives an "inDIC access request" mail naming the account and its user id, without anyone tapping anything |
+| [ ] 2.0 | Land here for the first time on a new account | support@ receives an "Semper access request" mail naming the account and its user id, without anyone tapping anything |
 | [ ] 2.0a | Sign out and back in on that same account | No second mail — it is sent once, when the account is created |
 | [ ] 2.0b | Same on a backend with no `RESEND_API_KEY` set | No mail and no error: sign-in still ends on this screen normally |
 | [ ] 2.1 | Read the screen | Your email and a truncated device ID are both shown |
@@ -288,9 +288,9 @@ any sync badge). **Exit:** Home, Admin, a result, or Login.
 | [ ] 4.24 | Tap the ⓘ next to it | Explains the cost of more frames |
 | [ ] 4.25 | Set it to 20, then import 40 frames in an analysis | Only the first 20 are kept, with a "capped" toast |
 | [ ] 4.26 | Expand **Help & support** | The support address is shown and can be selected and copied |
-| [ ] 4.27 | Tap **Email support** | Mail app opens to support@, subject "inDIC support request", body carrying account, device ID, app version and device model |
+| [ ] 4.27 | Tap **Email support** | Mail app opens to support@, subject "Semper support request", body carrying account, device ID, app version and device model |
 | [ ] 4.28 | Same with no mail app installed | "No email app found…" toast naming the address; no crash |
-| [ ] 4.29 | Tap **About** | "inDIC v<name> (<code>)" |
+| [ ] 4.29 | Tap **About** | "Semper v<name> (<code>)" |
 | [ ] 4.30 | Tap **Sign out** → confirm | Login, back stack cleared |
 
 ### 4.1 Admin `[admin]`

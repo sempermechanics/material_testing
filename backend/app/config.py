@@ -32,7 +32,7 @@ class Settings:
     # shows in Settings -> Help & support and on the pending-approval screen.
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@indicvision.com")
 
-    # Verified sender for outbound mail, e.g. "inDIC <noreply@indicvision.com>",
+    # Verified sender for outbound mail, e.g. "Semper <noreply@indicvision.com>",
     # and the Resend API key (the one secret this service holds — set it with
     # --set-secrets, never --set-env-vars). Either one empty disables
     # notification mail entirely: nothing is sent and nothing fails.

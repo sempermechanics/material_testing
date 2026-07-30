@@ -1,5 +1,5 @@
-#ifndef INDICVISION_TEST_FRAMEWORK_H
-#define INDICVISION_TEST_FRAMEWORK_H
+#ifndef SEMPER_TEST_FRAMEWORK_H
+#define SEMPER_TEST_FRAMEWORK_H
 
 // =====================================================================
 // MICRO TEST FRAMEWORK (zero dependencies)
@@ -159,4 +159,4 @@ namespace dictest {
 
 #define FAIL_MSG(msg) dictest::report_failure(__FILE__, __LINE__, (msg))
 
-#endif // INDICVISION_TEST_FRAMEWORK_H
+#endif // SEMPER_TEST_FRAMEWORK_H

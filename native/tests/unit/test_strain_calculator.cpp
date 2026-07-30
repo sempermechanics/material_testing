@@ -16,11 +16,11 @@
 // sentinel on unsupported windows and the 90% structural fill rule.
 // =====================================================================
 #include "framework/test_framework.h"
-#include <indicvision/strain.hpp>
+#include <semper/strain.hpp>
 
-using IndicVision::DisplacementField;
-using IndicVision::StrainCalculator;
-using IndicVision::StrainField;
+using Semper::DisplacementField;
+using Semper::StrainCalculator;
+using Semper::StrainField;
 
 namespace {
 

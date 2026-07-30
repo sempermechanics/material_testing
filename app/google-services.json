@@ -7,17 +7,17 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:171818100029:android:f349f0ff04a0102d161154",
+        "mobilesdk_app_id": "1:171818100029:android:66c62c336df47e4d161154",
         "android_client_info": {
-          "package_name": "com.rafad.indicvisiondic"
+          "package_name": "com.indicvision.semper"
         }
       },
       "oauth_client": [
         {
-          "client_id": "171818100029-rj82srrvl8d9crt882qh3ehkribu98cs.apps.googleusercontent.com",
+          "client_id": "171818100029-l7sgjbcm1es0i8ncn95q0kdg6v8b9bus.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.rafad.indicvisiondic",
+            "package_name": "com.indicvision.semper",
             "certificate_hash": "920fd8d7acf4c3461363f29e7b82d3dd96842be2"
           }
         },

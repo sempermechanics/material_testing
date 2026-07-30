@@ -1,4 +1,4 @@
-# inDIC — Production Cloud Architecture (Pure GCP, Keyless)
+# Semper — Production Cloud Architecture (Pure GCP, Keyless)
 
 **You probably don't need this document.** Analysis is fully offline and the
 cloud is off unless someone builds with `INDIC_API_BASE_URL` set. Read it if
@@ -90,7 +90,7 @@ change (see §19).
                          ▼
               ┌───────────────────────────────────────────────┐
               │  Company Google Workspace — Shared Drive       │
-              │  "inDIC-Research-Storage" (5 TB pool)          │
+              │  "Semper-Research-Storage" (5 TB pool)          │
               │  SA is Manager. Device PUTs bytes here        │
               │  DIRECTLY (never through Cloud Run).           │
               └───────────────────────────────────────────────┘
@@ -331,7 +331,7 @@ whole class of rules-bypass risk.
 ## 6. Google Drive folder hierarchy
 
 ```
-Shared Drive: inDIC-Research-Storage/        (SA = Manager/organizer)
+Shared Drive: Semper-Research-Storage/        (SA = Manager/organizer)
 └── Research Storage/
     └── user/{uid}/
         └── session/{sessionId}/
@@ -372,13 +372,13 @@ the way it does.
 
 | Concern | File |
 |---|---|
-| Google sign-in, session state | [`data/AuthRepository.kt`](../../app/src/main/java/com/rafad/indicvisiondic/data/AuthRepository.kt) |
-| Credential Manager helper | [`ui/auth/GoogleSignInHelper.kt`](../../app/src/main/java/com/rafad/indicvisiondic/ui/auth/GoogleSignInHelper.kt) |
-| EC P-256 Keystore device key | [`data/DeviceKeyManager.kt`](../../app/src/main/java/com/rafad/indicvisiondic/data/DeviceKeyManager.kt) |
-| Backend HTTP client | [`data/net/IndicApi.kt`](../../app/src/main/java/com/rafad/indicvisiondic/data/net/IndicApi.kt) |
-| Token storage / refresh | [`data/net/TokenStore.kt`](../../app/src/main/java/com/rafad/indicvisiondic/data/net/TokenStore.kt) · [`TokenProvider.kt`](../../app/src/main/java/com/rafad/indicvisiondic/data/net/TokenProvider.kt) |
-| Resumable upload worker | [`data/DicUploadWorker.kt`](../../app/src/main/java/com/rafad/indicvisiondic/data/DicUploadWorker.kt) |
-| Restore / download | [`data/DicRestoreWorker.kt`](../../app/src/main/java/com/rafad/indicvisiondic/data/DicRestoreWorker.kt) · [`CloudRestore.kt`](../../app/src/main/java/com/rafad/indicvisiondic/data/CloudRestore.kt) |
+| Google sign-in, session state | [`data/AuthRepository.kt`](../../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt) |
+| Credential Manager helper | [`ui/auth/GoogleSignInHelper.kt`](../../app/src/main/java/com/indicvision/semper/ui/auth/GoogleSignInHelper.kt) |
+| EC P-256 Keystore device key | [`data/DeviceKeyManager.kt`](../../app/src/main/java/com/indicvision/semper/data/DeviceKeyManager.kt) |
+| Backend HTTP client | [`data/net/IndicApi.kt`](../../app/src/main/java/com/indicvision/semper/data/net/IndicApi.kt) |
+| Token storage / refresh | [`data/net/TokenStore.kt`](../../app/src/main/java/com/indicvision/semper/data/net/TokenStore.kt) · [`TokenProvider.kt`](../../app/src/main/java/com/indicvision/semper/data/net/TokenProvider.kt) |
+| Resumable upload worker | [`data/DicUploadWorker.kt`](../../app/src/main/java/com/indicvision/semper/data/DicUploadWorker.kt) |
+| Restore / download | [`data/DicRestoreWorker.kt`](../../app/src/main/java/com/indicvision/semper/data/DicRestoreWorker.kt) · [`CloudRestore.kt`](../../app/src/main/java/com/indicvision/semper/data/CloudRestore.kt) |
 
 The upload worker speaks the resumable protocol from §4: `PUT` with a
 `Content-Range` header, `308` means keep going, `200`/`201` means the file
@@ -422,7 +422,7 @@ for R in run.admin artifactregistry.writer iam.serviceAccountUser cloudbuild.bui
 
 **Drive membership (the only Workspace-side step, done by you, not the SA):**
 add `indic-api@indic-prod.iam.gserviceaccount.com` as **Manager** of the
-`inDIC-Research-Storage` Shared Drive. If Workspace blocks adding a
+`Semper-Research-Storage` Shared Drive. If Workspace blocks adding a
 service-account principal, a Workspace admin must one-time-allow it (Admin
 console → Drive & Docs → Sharing → allow members outside org / add to the
 allow-list). **No JSON key, no domain-wide delegation required.**

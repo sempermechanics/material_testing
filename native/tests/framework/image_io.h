@@ -1,5 +1,5 @@
-#ifndef INDICVISION_TEST_IMAGE_IO_H
-#define INDICVISION_TEST_IMAGE_IO_H
+#ifndef SEMPER_TEST_IMAGE_IO_H
+#define SEMPER_TEST_IMAGE_IO_H
 
 // Fixture image loading, so fixtures stay vendored in DICe's original .tif.
 //
@@ -32,4 +32,4 @@ namespace dictest {
 
 } // namespace dictest
 
-#endif // INDICVISION_TEST_IMAGE_IO_H
+#endif // SEMPER_TEST_IMAGE_IO_H

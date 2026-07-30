@@ -11,7 +11,7 @@
 // the scalar fallback.
 // =====================================================================
 #include "framework/test_framework.h"
-#include <indicvision/simd.hpp>
+#include <semper/simd.hpp>
 
 #include <random>
 #include <vector>
@@ -59,14 +59,14 @@ TEST_CASE(SimdKernels, SumSqDiff_AllSizes) {
         auto vals = random_vec(n, (unsigned) (100 + n));
         float mean = 127.3f;
         double expect = ref_sum_sq_diff(vals, mean);
-        float got = IndicVision::simd::sum_sq_diff(vals.data(), n, mean);
+        float got = Semper::simd::sum_sq_diff(vals.data(), n, mean);
         CHECK_REL(got, expect, 1e-4);
     }
 }
 
 TEST_CASE(SimdKernels, SumSqDiff_ZeroWhenAllEqualMean) {
     std::vector<float> vals(64, 42.5f);
-    float got = IndicVision::simd::sum_sq_diff(vals.data(), vals.size(), 42.5f);
+    float got = Semper::simd::sum_sq_diff(vals.data(), vals.size(), 42.5f);
     CHECK_NEAR(got, 0.0f, 1e-3);
 }
 
@@ -77,7 +77,7 @@ TEST_CASE(SimdKernels, Znssd_AllSizes) {
         auto ref = random_vec(n, (unsigned) (300 + n), -2.0f, 2.0f);
         float mean = 128.0f, inv_std = 1.0f / 40.0f;
         double expect = ref_znssd(vals, ref, mean, inv_std);
-        float got = IndicVision::simd::znssd_sum(vals.data(), ref.data(), n,
+        float got = Semper::simd::znssd_sum(vals.data(), ref.data(), n,
                                                  mean, inv_std);
         CHECK_REL(got, expect, 1e-4);
     }
@@ -99,7 +99,7 @@ TEST_CASE(SimdKernels, Znssd_PerfectMatchIsZero) {
     for (size_t i = 0; i < n; ++i)
         ref[i] = (vals[i] - (float) mean) * inv_std;
 
-    float got = IndicVision::simd::znssd_sum(vals.data(), ref.data(), n,
+    float got = Semper::simd::znssd_sum(vals.data(), ref.data(), n,
                                              (float) mean, inv_std);
     CHECK_NEAR(got, 0.0f, 1e-2); // n=961 accumulated float roundoff
 }
@@ -125,7 +125,7 @@ TEST_CASE(SimdKernels, ErrorAndGradient_MatchesScalarOracle) {
         }
 
         float dp_out[6];
-        float e_got = IndicVision::simd::znssd_error_and_gradient(
+        float e_got = Semper::simd::znssd_error_and_gradient(
                 vals.data(), ref.data(), planes.data(), n, mean, inv_std,
                 dp_out);
 
@@ -147,9 +147,9 @@ TEST_CASE(SimdKernels, FusedErrorEqualsStandaloneZnssd) {
     float mean = 130.0f, inv_std = 0.02f;
 
     float dp[6];
-    float fused = IndicVision::simd::znssd_error_and_gradient(
+    float fused = Semper::simd::znssd_error_and_gradient(
             vals.data(), ref.data(), planes.data(), n, mean, inv_std, dp);
     float standalone =
-            IndicVision::simd::znssd_sum(vals.data(), ref.data(), n, mean, inv_std);
+            Semper::simd::znssd_sum(vals.data(), ref.data(), n, mean, inv_std);
     CHECK_REL(fused, standalone, 1e-5);
 }

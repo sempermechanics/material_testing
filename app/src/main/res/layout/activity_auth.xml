@@ -74,7 +74,7 @@
                 android:layout_height="wrap_content"
                 android:paddingHorizontal="12dp"
                 android:text="@string/or"
-                android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
+                android:textAppearance="@style/TextAppearance.Semper.Caption" />
 
             <View
                 android:layout_width="0dp"
@@ -221,7 +221,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnMainAction"
-                style="@style/Widget.IndicVision.Button.Cta"
+                style="@style/Widget.Semper.Button.Cta"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:minHeight="55dp"

@@ -46,7 +46,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/vsg_lattice_heading"
-                        android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                        android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
 
                     <TextView
                         android:id="@+id/tvLatticeSummary"
@@ -57,7 +57,7 @@
                         android:textSize="12sp"
                         tools:text="12 combinations · 10 solved · 2 skipped" />
 
-                    <com.rafad.indicvisiondic.ui.analysis.VsgLatticeView
+                    <com.indicvision.semper.ui.analysis.VsgLatticeView
                         android:id="@+id/latticeView"
                         android:layout_width="match_parent"
                         android:layout_height="210dp"
@@ -141,7 +141,7 @@
                                 android:spinnerMode="dropdown" />
                         </LinearLayout>
 
-                        <com.rafad.indicvisiondic.ui.analysis.VsgPlotView
+                        <com.indicvision.semper.ui.analysis.VsgPlotView
                             android:id="@+id/plotLatticeStrain"
                             android:layout_width="match_parent"
                             android:layout_height="160dp"
@@ -170,7 +170,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnOpenAnalysis"
-                    style="@style/Widget.IndicVision.Button.Outlined"
+                    style="@style/Widget.Semper.Button.Outlined"
                     android:layout_width="wrap_content"
                     android:layout_height="match_parent"
                     android:layout_marginEnd="8dp"
@@ -180,7 +180,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnViewResults"
-                    style="@style/Widget.IndicVision.Button.Cta"
+                    style="@style/Widget.Semper.Button.Cta"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"

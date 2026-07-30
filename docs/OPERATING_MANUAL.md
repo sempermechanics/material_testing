@@ -1,4 +1,4 @@
-# inDIC operating manual
+# Semper operating manual
 
 How to get displacement and strain fields out of a DIC image set, using the app.
 

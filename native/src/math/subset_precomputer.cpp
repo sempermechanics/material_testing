@@ -1,8 +1,8 @@
-#include <indicvision/subset.hpp>
+#include <semper/subset.hpp>
 #include "util/log.hpp"
 #include <cmath>
 
-namespace IndicVision {
+namespace Semper {
 
     // =========================================================
     // EXISTING: Full Precompute (Fallback / Original logic)
@@ -387,4 +387,4 @@ namespace IndicVision {
         data.is_initialized = true;
     }
 
-} // namespace IndicVision
+} // namespace Semper

@@ -435,7 +435,7 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="@string/region_of_interest"
-                                    android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                                    android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
 
                                 <TextView
                                     android:id="@+id/tvInstruction"
@@ -475,7 +475,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/analysis_mode"
-                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                                android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
 
                             <View
                                 android:layout_width="0dp"
@@ -504,7 +504,7 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/rbModeSingle"
-                                style="@style/Widget.IndicVision.SegmentedButton"
+                                style="@style/Widget.Semper.SegmentedButton"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -512,7 +512,7 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/rbModeSweep"
-                                style="@style/Widget.IndicVision.SegmentedButton"
+                                style="@style/Widget.Semper.SegmentedButton"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -544,7 +544,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/line_cut_preview_heading"
-                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                                android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
 
                             <ImageButton
                                 android:id="@+id/btnLineCutInfo"
@@ -569,7 +569,7 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/rbAxisX"
-                                style="@style/Widget.IndicVision.SegmentedButton"
+                                style="@style/Widget.Semper.SegmentedButton"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -577,14 +577,14 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/rbAxisY"
-                                style="@style/Widget.IndicVision.SegmentedButton"
+                                style="@style/Widget.Semper.SegmentedButton"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="@string/axis_y" />
                         </com.google.android.material.button.MaterialButtonToggleGroup>
 
-                        <com.rafad.indicvisiondic.ui.analysis.LineCutPreviewView
+                        <com.indicvision.semper.ui.analysis.LineCutPreviewView
                             android:id="@+id/lineCutPreview"
                             android:layout_width="match_parent"
                             android:layout_height="220dp"
@@ -623,7 +623,7 @@
                                 android:layout_marginStart="10dp"
                                 android:layout_weight="1"
                                 android:text="@string/advanced_parameters"
-                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                                android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
 
                             <com.google.android.material.chip.Chip
                                 android:id="@+id/btnAdvancedReset"
@@ -858,7 +858,7 @@
 
                                 <com.google.android.material.button.MaterialButton
                                     android:id="@+id/rbBicubic"
-                                    style="@style/Widget.IndicVision.SegmentedButton"
+                                    style="@style/Widget.Semper.SegmentedButton"
                                     android:layout_width="0dp"
                                     android:layout_weight="1"
                                     android:layout_height="wrap_content"
@@ -866,7 +866,7 @@
 
                                 <com.google.android.material.button.MaterialButton
                                     android:id="@+id/rbKeys"
-                                    style="@style/Widget.IndicVision.SegmentedButton"
+                                    style="@style/Widget.Semper.SegmentedButton"
                                     android:layout_width="0dp"
                                     android:layout_weight="1"
                                     android:layout_height="wrap_content"
@@ -945,7 +945,7 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="@string/sweep_settings"
-                                    android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                                    android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
                             </LinearLayout>
                         </LinearLayout>
 
@@ -1215,7 +1215,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="@string/planned_lattice_heading"
-                                android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                                android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
 
                             <ImageButton
                                 android:id="@+id/btnLatticeSamples"
@@ -1300,7 +1300,7 @@
                             </LinearLayout>
                         </LinearLayout>
 
-                        <com.rafad.indicvisiondic.ui.analysis.VsgLatticeView
+                        <com.indicvision.semper.ui.analysis.VsgLatticeView
                             android:id="@+id/sweepLatticePreview"
                             android:layout_width="match_parent"
                             android:layout_height="260dp"
@@ -1334,7 +1334,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnBack"
-            style="@style/Widget.IndicVision.Button.Outlined"
+            style="@style/Widget.Semper.Button.Outlined"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_marginEnd="6dp"
@@ -1349,7 +1349,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnCalculateFullField"
-            style="@style/Widget.IndicVision.Button.Cta"
+            style="@style/Widget.Semper.Button.Cta"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_marginStart="6dp"
@@ -1365,7 +1365,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRunSweep"
-            style="@style/Widget.IndicVision.Button.Cta"
+            style="@style/Widget.Semper.Button.Cta"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_marginStart="6dp"
@@ -1381,7 +1381,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnNext"
-            style="@style/Widget.IndicVision.Button.Cta"
+            style="@style/Widget.Semper.Button.Cta"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_marginStart="6dp"
@@ -1428,7 +1428,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/computing_strain_field"
-                    android:textAppearance="@style/TextAppearance.IndicVision.SectionHeader" />
+                    android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
 
                 <FrameLayout
                     android:layout_width="wrap_content"
@@ -1475,7 +1475,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="@string/elapsed_0s"
-                    android:textAppearance="@style/TextAppearance.IndicVision.Caption" />
+                    android:textAppearance="@style/TextAppearance.Semper.Caption" />
 
                 <LinearLayout
                     android:layout_width="match_parent"

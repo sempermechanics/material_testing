@@ -4,23 +4,23 @@
     <!-- ============================================================= -->
     <!--  Shape appearances                                            -->
     <!-- ============================================================= -->
-    <style name="ShapeAppearance.IndicVision.Small" parent="ShapeAppearance.MaterialComponents.SmallComponent">
+    <style name="ShapeAppearance.Semper.Small" parent="ShapeAppearance.MaterialComponents.SmallComponent">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">10dp</item>
     </style>
 
-    <style name="ShapeAppearance.IndicVision.Medium" parent="ShapeAppearance.MaterialComponents.MediumComponent">
+    <style name="ShapeAppearance.Semper.Medium" parent="ShapeAppearance.MaterialComponents.MediumComponent">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">18dp</item>
     </style>
 
-    <style name="Widget.IndicVision" parent="android:Widget" />
+    <style name="Widget.Semper" parent="android:Widget" />
 
     <!-- ============================================================= -->
     <!--  Buttons                                                      -->
     <!-- ============================================================= -->
     <!-- Primary filled action (default via theme's materialButtonStyle) -->
-    <style name="Widget.IndicVision.Button" parent="Widget.MaterialComponents.Button">
+    <style name="Widget.Semper.Button" parent="Widget.MaterialComponents.Button">
         <item name="backgroundTint">@color/sky_primary</item>
         <item name="android:textColor">@color/text_on_primary</item>
         <item name="cornerRadius">12dp</item>
@@ -35,7 +35,7 @@
     <!-- Tonal / secondary: light sky container, dark text -->
 
     <!-- Outlined: quiet actions -->
-    <style name="Widget.IndicVision.Button.Outlined" parent="Widget.MaterialComponents.Button.OutlinedButton">
+    <style name="Widget.Semper.Button.Outlined" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="cornerRadius">12dp</item>
         <item name="strokeColor">@color/sky_primary</item>
         <item name="android:textColor">@color/sky_primary</item>
@@ -45,14 +45,14 @@
     </style>
 
     <!-- Destructive (log out, cancel) -->
-    <style name="Widget.IndicVision.Button.Text.Danger" parent="Widget.MaterialComponents.Button.TextButton">
+    <style name="Widget.Semper.Button.Text.Danger" parent="Widget.MaterialComponents.Button.TextButton">
         <item name="android:textColor">@color/semantic_danger</item>
         <item name="android:textAllCaps">false</item>
         <item name="rippleColor">#22E53935</item>
     </style>
 
     <!-- Prominent success CTA (Compute) -->
-    <style name="Widget.IndicVision.Button.Cta">
+    <style name="Widget.Semper.Button.Cta">
         <item name="backgroundTint">@color/sky_primary</item>
         <item name="android:textSize">16sp</item>
         <item name="android:paddingTop">15dp</item>
@@ -63,7 +63,7 @@
     <!-- ============================================================= -->
     <!--  Cards                                                        -->
     <!-- ============================================================= -->
-    <style name="Widget.IndicVision.Card" parent="Widget.MaterialComponents.CardView">
+    <style name="Widget.Semper.Card" parent="Widget.MaterialComponents.CardView">
         <item name="cardBackgroundColor">@color/surface</item>
         <item name="cardCornerRadius">18dp</item>
         <item name="cardElevation">0dp</item>
@@ -76,23 +76,23 @@
     <!-- ============================================================= -->
     <!--  Sliders / segmented toggles                                  -->
     <!-- ============================================================= -->
-    <style name="Widget.IndicVision.Slider" parent="Widget.MaterialComponents.Slider">
+    <style name="Widget.Semper.Slider" parent="Widget.MaterialComponents.Slider">
         <item name="trackColorActive">@color/sky_primary</item>
         <item name="trackColorInactive">@color/sky_container</item>
         <item name="thumbColor">@color/sky_primary</item>
         <item name="haloColor">#330288D1</item>
         <item name="tickColorActive">#66FFFFFF</item>
         <item name="tickColorInactive">#660288D1</item>
-        <item name="labelStyle">@style/Widget.IndicVision.Slider.Tooltip</item>
+        <item name="labelStyle">@style/Widget.Semper.Slider.Tooltip</item>
     </style>
 
-    <style name="Widget.IndicVision.Slider.Tooltip" parent="Widget.MaterialComponents.Tooltip">
+    <style name="Widget.Semper.Slider.Tooltip" parent="Widget.MaterialComponents.Tooltip">
         <item name="backgroundTint">@color/sky_primary</item>
         <item name="android:textColor">@color/text_on_primary</item>
     </style>
 
     <!-- Segmented button group (replaces radio groups) -->
-    <style name="Widget.IndicVision.SegmentedButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
+    <style name="Widget.Semper.SegmentedButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="android:textAllCaps">false</item>
         <item name="strokeColor">@color/surface_outline</item>
         <item name="android:textColor">@color/segmented_text</item>
@@ -101,7 +101,7 @@
     </style>
 
     <!-- Segmented chips on the dark ROI draw toolbar -->
-    <style name="Widget.IndicVision.SegmentedButton.Dark" parent="Widget.MaterialComponents.Button.OutlinedButton">
+    <style name="Widget.Semper.SegmentedButton.Dark" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="android:textAllCaps">false</item>
         <item name="android:textColor">@color/viewer_on_dark</item>
         <item name="android:textSize">12sp</item>
@@ -116,12 +116,12 @@
     <!--  Typography                                                   -->
     <!-- ============================================================= -->
 
-    <style name="TextAppearance.IndicVision.SectionHeader" parent="TextAppearance.MaterialComponents.Subtitle1">
+    <style name="TextAppearance.Semper.SectionHeader" parent="TextAppearance.MaterialComponents.Subtitle1">
         <item name="android:textColor">@color/text_primary</item>
         <item name="android:textStyle">bold</item>
     </style>
 
-    <style name="TextAppearance.IndicVision.Caption" parent="TextAppearance.MaterialComponents.Caption">
+    <style name="TextAppearance.Semper.Caption" parent="TextAppearance.MaterialComponents.Caption">
         <item name="android:textColor">@color/text_secondary</item>
     </style>
 
@@ -130,7 +130,7 @@
     <!-- ============================================================= -->
     <!--  Motion: subtle shared-axis-style activity transition         -->
     <!-- ============================================================= -->
-    <style name="Animation.IndicVision.Activity" parent="@android:style/Animation.Activity">
+    <style name="Animation.Semper.Activity" parent="@android:style/Animation.Activity">
         <item name="android:activityOpenEnterAnimation">@anim/slide_in_right</item>
         <item name="android:activityOpenExitAnimation">@anim/fade_out_scale</item>
         <item name="android:activityCloseEnterAnimation">@anim/fade_in_scale</item>

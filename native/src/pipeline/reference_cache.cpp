@@ -1,8 +1,8 @@
-#include <indicvision/pipeline.hpp>
+#include <semper/pipeline.hpp>
 #include "util/log.hpp"
 #include <opencv2/imgproc.hpp>
 
-namespace IndicVision {
+namespace Semper {
 namespace pipeline {
 
 void ReferenceCache::reset() {
@@ -47,4 +47,4 @@ void ReferenceCache::set_from_gray(const cv::Mat& gray_in, const cv::Mat& roi_ma
 }
 
 } // namespace pipeline
-} // namespace IndicVision
+} // namespace Semper

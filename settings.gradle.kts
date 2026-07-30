@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "IndicVisionDIC"
+rootProject.name = "Semper"
 include(":app")

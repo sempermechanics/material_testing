@@ -9,15 +9,15 @@
 // No DICe code is used, only its published scenario and tolerance.
 #include "framework/test_framework.h"
 #include "framework/synthetic.h"
-#include <indicvision/solver.hpp>
-#include <indicvision/subset.hpp>
+#include <semper/solver.hpp>
+#include <semper/subset.hpp>
 
-using IndicVision::Image;
-using IndicVision::SubsetData;
-using IndicVision::SubsetPrecomputer;
-using IndicVision::OptimizationEngine;
-using IndicVision::AnalysisResult;
-using IndicVision::INIT_NO_SIMPLEX;
+using Semper::Image;
+using Semper::SubsetData;
+using Semper::SubsetPrecomputer;
+using Semper::OptimizationEngine;
+using Semper::AnalysisResult;
+using Semper::INIT_NO_SIMPLEX;
 
 namespace {
     constexpr int W = 160, H = 160;

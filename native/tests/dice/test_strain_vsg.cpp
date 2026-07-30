@@ -10,10 +10,10 @@
 // window should be markedly tighter than the raw per-subset scatter.
 #include "framework/test_framework.h"
 #include "framework/image_io.h"
-#include <indicvision/solver.hpp>
-#include <indicvision/strain.hpp>
-#include <indicvision/image.hpp>
-#include <indicvision/subset.hpp>
+#include <semper/solver.hpp>
+#include <semper/strain.hpp>
+#include <semper/image.hpp>
+#include <semper/subset.hpp>
 
 #include <cmath>
 #include <cstdio>
@@ -22,15 +22,15 @@
 
 #if defined(DIC_HAVE_OPENCV)
 
-using IndicVision::Image;
-using IndicVision::SubsetData;
-using IndicVision::SubsetPrecomputer;
-using IndicVision::OptimizationEngine;
-using IndicVision::AnalysisResult;
-using IndicVision::INIT_NO_SIMPLEX;
-using IndicVision::DisplacementField;
-using IndicVision::StrainField;
-using IndicVision::StrainCalculator;
+using Semper::Image;
+using Semper::SubsetData;
+using Semper::SubsetPrecomputer;
+using Semper::OptimizationEngine;
+using Semper::AnalysisResult;
+using Semper::INIT_NO_SIMPLEX;
+using Semper::DisplacementField;
+using Semper::StrainField;
+using Semper::StrainCalculator;
 using dictest::GrayImage;
 using dictest::load_gray;
 

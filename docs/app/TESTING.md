@@ -28,13 +28,13 @@ Each chunk owns one layer; no duplicate assertions across chunks.
 ## Running by chunk
 
 ```bash
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.auth.*"
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.session.*"
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.analysis.*"
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.results.*"
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.cloud.*"
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.settings.*"
-./gradlew :app:testDebugUnitTest --tests "com.rafad.indicvisiondic.viewer.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.auth.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.session.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.analysis.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.results.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.cloud.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.settings.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.viewer.*"
 ```
 
 `settings/HelpSupportSectionTest` drives the real `SettingsActivity` under

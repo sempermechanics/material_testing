@@ -1,4 +1,4 @@
-# Releasing inDIC
+# Releasing Semper
 
 How a build goes from `main` to testers. Written for maintainers; nothing
 here is needed for day-to-day contributions.

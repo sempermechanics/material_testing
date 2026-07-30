@@ -9,21 +9,21 @@
 // checking our engine against itself.
 #include "framework/test_framework.h"
 #include "framework/image_io.h"
-#include <indicvision/solver.hpp>
-#include <indicvision/image.hpp>
-#include <indicvision/subset.hpp>
+#include <semper/solver.hpp>
+#include <semper/image.hpp>
+#include <semper/subset.hpp>
 
 #include <cstdio>
 #include <string>
 
 #if defined(DIC_HAVE_OPENCV)
 
-using IndicVision::Image;
-using IndicVision::SubsetData;
-using IndicVision::SubsetPrecomputer;
-using IndicVision::OptimizationEngine;
-using IndicVision::AnalysisResult;
-using IndicVision::INIT_NO_SIMPLEX;
+using Semper::Image;
+using Semper::SubsetData;
+using Semper::SubsetPrecomputer;
+using Semper::OptimizationEngine;
+using Semper::AnalysisResult;
+using Semper::INIT_NO_SIMPLEX;
 using dictest::GrayImage;
 using dictest::load_gray;
 

@@ -1,5 +1,5 @@
-#ifndef INDICVISION_TEST_SYNTHETIC_H
-#define INDICVISION_TEST_SYNTHETIC_H
+#ifndef SEMPER_TEST_SYNTHETIC_H
+#define SEMPER_TEST_SYNTHETIC_H
 
 // =====================================================================
 // SYNTHETIC SPECKLE FIELD + ANALYTIC DEFORMATION
@@ -25,7 +25,7 @@
 #include <random>
 #include <vector>
 
-#include <indicvision/image.hpp>
+#include <semper/image.hpp>
 
 namespace dictest {
 
@@ -97,10 +97,10 @@ namespace dictest {
     };
 
     // Render the undeformed reference image from the continuous field.
-    inline IndicVision::Image make_reference_image(const SpeckleField &field,
+    inline Semper::Image make_reference_image(const SpeckleField &field,
                                                    int w, int h) {
         std::vector<uint8_t> dummy((size_t) w * h, 0);
-        IndicVision::Image img(w, h, dummy.data());
+        Semper::Image img(w, h, dummy.data());
         for (int y = 0; y < h; ++y)
             for (int x = 0; x < w; ++x)
                 img.intensities[(size_t) y * w + x] =
@@ -110,11 +110,11 @@ namespace dictest {
     }
 
     // Render the deformed image by exact analytic inverse warping.
-    inline IndicVision::Image make_deformed_image(const SpeckleField &field,
+    inline Semper::Image make_deformed_image(const SpeckleField &field,
                                                   int w, int h,
                                                   const AffineDeformation &def) {
         std::vector<uint8_t> dummy((size_t) w * h, 0);
-        IndicVision::Image img(w, h, dummy.data());
+        Semper::Image img(w, h, dummy.data());
         for (int y = 0; y < h; ++y) {
             for (int x = 0; x < w; ++x) {
                 float rx, ry;
@@ -128,4 +128,4 @@ namespace dictest {
 
 } // namespace dictest
 
-#endif // INDICVISION_TEST_SYNTHETIC_H
+#endif // SEMPER_TEST_SYNTHETIC_H

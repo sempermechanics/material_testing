@@ -13,12 +13,12 @@
 // =====================================================================
 #include "framework/test_framework.h"
 #include "framework/synthetic.h"
-#include <indicvision/subset.hpp>
+#include <semper/subset.hpp>
 
-using IndicVision::Image;
-using IndicVision::SubsetData;
-using IndicVision::SubsetPrecomputer;
-using IndicVision::CachedHessianData;
+using Semper::Image;
+using Semper::SubsetData;
+using Semper::SubsetPrecomputer;
+using Semper::CachedHessianData;
 
 namespace {
     constexpr int W = 128, H = 128, DIM = 21;

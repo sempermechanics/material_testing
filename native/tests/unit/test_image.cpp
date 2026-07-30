@@ -17,11 +17,11 @@
 // =====================================================================
 #include "framework/test_framework.h"
 #include "framework/synthetic.h"
-#include <indicvision/image.hpp>
+#include <semper/image.hpp>
 
 #include <vector>
 
-using IndicVision::Image;
+using Semper::Image;
 
 namespace {
 

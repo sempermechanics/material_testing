@@ -1,6 +1,6 @@
-# inDIC documentation
+# Semper documentation
 
-Start with the [project README](../README.md) for what inDIC is and how to
+Start with the [project README](../README.md) for what Semper is and how to
 build it. This page routes you to the rest.
 
 ## Find your way by what you're doing
@@ -73,7 +73,7 @@ in [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md).
 |---|---|
 | `native/src/math/` | ICGN solver + SIMD kernels (the hot loops) |
 | `native/src/pipeline/` + `seeding/` | Full-field orchestration + AKAZE |
-| `native/adapters/android/` | Thin JNI → `libindicvision_core.so` |
+| `native/adapters/android/` | Thin JNI → `libsemper_core.so` |
 | `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI drawing |
 | `app/src/main/java/.../ui/viewer/` | Heatmap viewer, exports, share sheet |
 | `app/src/main/java/.../report/` | PDF report generation |

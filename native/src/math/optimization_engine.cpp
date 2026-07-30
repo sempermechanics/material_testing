@@ -1,10 +1,10 @@
-#include <indicvision/solver.hpp>
-#include <indicvision/simd.hpp>
+#include <semper/solver.hpp>
+#include <semper/simd.hpp>
 #include "util/log.hpp"
 #include <algorithm>
 #include <chrono>
 
-namespace IndicVision {
+namespace Semper {
 
     AnalysisResult OptimizationEngine::calculate_deformation(
             const SubsetData &subset, const Image &def_img, float guess_u,
@@ -515,4 +515,4 @@ namespace IndicVision {
         return {p[best][0], p[best][1], p[best][2], p[best][3], p[best][4], p[best][5], final_status, y[best]};
     }
 
-} // namespace IndicVision
+} // namespace Semper

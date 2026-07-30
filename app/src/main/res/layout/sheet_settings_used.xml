@@ -64,7 +64,7 @@
             android:textSize="14sp"
             android:textStyle="bold" />
 
-        <com.rafad.indicvisiondic.ui.analysis.VsgPlotView
+        <com.indicvision.semper.ui.analysis.VsgPlotView
             android:id="@+id/plotLineCut"
             android:layout_width="match_parent"
             android:layout_height="190dp"

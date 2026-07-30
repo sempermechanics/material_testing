@@ -29,7 +29,7 @@ fun localProperty(key: String): String? =
 // below. Put INDIC_DEV_AUTH_BYPASS=false in local.properties to exercise the
 // real sign-in flow on an emulator.
 val devAuthBypass = localProperty("INDIC_DEV_AUTH_BYPASS") != "false"
-// Base URL of the inDIC GCP backend (Cloud Run). Empty = cloud sync disabled;
+// Base URL of the Semper GCP backend (Cloud Run). Empty = cloud sync disabled;
 // the app still runs fully offline. e.g. https://indic-api-xxxx.a.run.app
 // The Google client ID is NOT read here: Firebase Auth supplies it via the
 // google-services plugin as the default_web_client_id resource.
@@ -46,11 +46,11 @@ val indicApiBaseUrl =
     }
 
 android {
-    namespace = "com.rafad.indicvisiondic"
+    namespace = "com.indicvision.semper"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.rafad.indicvisiondic"
+        applicationId = "com.indicvision.semper"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -84,7 +84,7 @@ android {
         externalNativeBuild {
             cmake {
                 // Portable engine package at repo-root native/; JNI adapter on.
-                arguments += "-DINDICVISION_ANDROID=ON"
+                arguments += "-DSEMPER_ANDROID=ON"
 
                 // Vendored OpenCV defaults ENABLE_CCACHE to ON for Ninja builds,
                 // and when it finds a ccache on PATH it installs it as a GLOBAL
@@ -220,7 +220,7 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
-    // inDIC GCP backend client: OkHttp + kotlinx.serialization
+    // Semper GCP backend client: OkHttp + kotlinx.serialization
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("androidx.work:work-runtime-ktx:2.9.0")

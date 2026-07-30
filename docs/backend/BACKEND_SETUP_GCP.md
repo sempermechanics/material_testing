@@ -1,9 +1,9 @@
-# inDIC GCP Backend — Setup & Run Runbook
+# Semper GCP Backend — Setup & Run Runbook
 
 Get the **keyless GCP backend** (`backend/`) deployed and proven end-to-end,
 then point the app at it.
 
-**Nobody needs this to work on inDIC.** The app builds and runs fully offline
+**Nobody needs this to work on Semper.** The app builds and runs fully offline
 without a backend; do this only if you are deploying the cloud side yourself.
 
 - Prefer clicking to typing? → [BACKEND_SETUP_CONSOLE.md](BACKEND_SETUP_CONSOLE.md)
@@ -37,7 +37,7 @@ without a backend; do this only if you are deploying the cloud side yourself.
 
 - **Google Cloud SDK** (`gcloud`) installed and `gcloud init` done.
 - A **GCP project** you can create resources in (company creates it if needed).
-- The **Shared Drive** `inDIC-Research-Storage` (or any Shared Drive you own)
+- The **Shared Drive** `Semper-Research-Storage` (or any Shared Drive you own)
   and its **`SHARED_DRIVE_ID`**.
 - A **Firebase project** with sign-in providers enabled and its
   `google-services.json` in `app/` — see [AUTH_SETUP.md](AUTH_SETUP.md). Note
@@ -77,7 +77,7 @@ gcloud firestore databases create --location=$REGION --type=firestore-native
 ### A3. Create the runtime service account
 ```bash
 gcloud iam service-accounts create indic-api \
-  --display-name="inDIC Cloud Run runtime"
+  --display-name="Semper Cloud Run runtime"
 ```
 **Check:** `gcloud iam service-accounts list | grep indic-api`.
 
@@ -98,7 +98,7 @@ gcloud projects add-iam-policy-binding $PROJECT \
 **Check:** `gcloud iam service-accounts get-iam-policy $API_SA` lists the SA itself as `serviceAccountTokenCreator`.
 
 ### A5. 🖐️ Add the SA to the Shared Drive
-In **Google Drive → `inDIC-Research-Storage` → Manage members**, add
+In **Google Drive → `Semper-Research-Storage` → Manage members**, add
 `indic-api@indic-prod.iam.gserviceaccount.com` as **Manager**.
   > Use **Manager**, not Content manager. Content manager can upload but
   > **cannot permanently delete**: `files.delete` needs *organizer* rights on
@@ -124,7 +124,7 @@ gcloud run deploy indic-api \
   --min-instances 0 --max-instances 10 \
   --concurrency 40 --cpu 1 --memory 512Mi --timeout 120 \
   --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
-  --set-env-vars "SUPPORT_EMAIL=support@indicvision.com,NOTIFY_FROM=inDIC <noreply@yourdomain.com>" \
+  --set-env-vars "SUPPORT_EMAIL=support@indicvision.com,NOTIFY_FROM=Semper <noreply@yourdomain.com>" \
   --set-secrets "RESEND_API_KEY=resend-api-key:latest"
 ```
 > `FIREBASE_PROJECT_ID` can be omitted when Firebase Auth lives in the same
@@ -212,7 +212,7 @@ curl -s -X POST "$URL/v1/files/$FID/complete" -H "content-type: application/json
 ```
 
 **Check (the payoff):**
-- `inDIC-Research-Storage/Research Storage/user/dev-user/session/$SID/metadata/note.txt` exists in Drive.
+- `Semper-Research-Storage/Research Storage/user/dev-user/session/$SID/metadata/note.txt` exists in Drive.
 - Firestore → `sessions/$SID` shows `status: COMPLETED`; `files/$FID` shows `driveFileId`.
 - Cloud Run logs (`gcloud run services logs read indic-api --region $REGION`) show the requests, no errors.
 

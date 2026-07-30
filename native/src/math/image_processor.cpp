@@ -1,7 +1,7 @@
-#include <indicvision/image.hpp>
+#include <semper/image.hpp>
 #include <cmath>
 
-namespace IndicVision {
+namespace Semper {
 
     Image::Image(int_t w, int_t h, const uint8_t *raw_pixels) : width(w), height(h) {
         intensities.resize(w * h);

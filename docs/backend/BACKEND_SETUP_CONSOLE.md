@@ -53,7 +53,7 @@ the app at your deployment.
 
 ## 6. Add the SA to the Shared Drive
 1. Open <https://drive.google.com> → left menu → **Shared drives** →
-   `inDIC-Research-Storage` (create it if needed: **New**).
+   `Semper-Research-Storage` (create it if needed: **New**).
 2. **Manage members** (top-right people icon) → paste the `indic-api@…` email →
    role **Manager** → **Send/Share**. (Manager — not Content manager — or
    account/analysis deletion cannot erase the files; see A5.)
@@ -99,7 +99,7 @@ Auth lives in the same project as this backend, you can skip the
      | `AUTO_APPROVE_HD` | your domain, e.g. `yourdomain.com` — verified emails there are approved on first sign-in |
      | `ADMIN_EMAILS` | comma-separated admin addresses |
      | `SUPPORT_EMAIL` | where "a new user is waiting for approval" mail goes — defaults to `support@indicvision.com` |
-     | `NOTIFY_FROM` | verified Resend sender, e.g. `inDIC <noreply@yourdomain.com>` — leave unset to disable notification mail |
+     | `NOTIFY_FROM` | verified Resend sender, e.g. `Semper <noreply@yourdomain.com>` — leave unset to disable notification mail |
 
    - **Container → Variables & Secrets → + Reference a secret** for the API key
      (it must not be a plain variable): name `RESEND_API_KEY`, secret
@@ -137,7 +137,7 @@ Temporarily enable dev mode so you can call the API without a signed request:
    }
    ```
    You should get **200** with a `sessionId` and an `uploadUrl`.
-4. **Check Drive:** in `inDIC-Research-Storage` a tree now exists —
+4. **Check Drive:** in `Semper-Research-Storage` a tree now exists —
    `Research Storage/user/dev-user/session/<sessionId>/` with `raw`, `processed`,
    `reports`, `metadata` subfolders. ✅ keyless Drive access works.
 5. **Check Firestore:** ☰ → **Firestore → Data** → collection `sessions` has your

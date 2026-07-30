@@ -6,7 +6,7 @@ that the passwordless **email-link sign-in** depends on:
 | Path | Purpose |
 |---|---|
 | `/.well-known/assetlinks.json` | Digital Asset Links — lets Android verify the App Link and route the sign-in link to the app instead of a browser. |
-| `/finishSignIn` | The email link's continue URL (`EMAIL_LINK_CONTINUE_URL` in [`AuthRepository.kt`](../app/src/main/java/com/rafad/indicvisiondic/data/AuthRepository.kt)). On-device the app's App Link intercepts it; in a plain browser it shows a "finish on your phone" page. |
+| `/finishSignIn` | The email link's continue URL (`EMAIL_LINK_CONTINUE_URL` in [`AuthRepository.kt`](../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt)). On-device the app's App Link intercepts it; in a plain browser it shows a "finish on your phone" page. |
 
 Firebase Auth is configured to use **direct continue-URL handlers** (not the
 retired Dynamic Links), so the emailed link lands on `/finishSignIn` carrying
@@ -55,8 +55,8 @@ firebase deploy --only hosting
 curl -s https://indicvision-dic-app-auth.firebaseapp.com/.well-known/assetlinks.json
 
 # On a connected device/emulator (Android 12+):
-adb shell pm verify-app-links --re-verify com.rafad.indicvisiondic
-adb shell pm get-app-links com.rafad.indicvisiondic   # expect: verified
+adb shell pm verify-app-links --re-verify com.indicvision.semper
+adb shell pm get-app-links com.indicvision.semper   # expect: verified
 ```
 
 Until the file is live and verified, the email **link** flow falls back to a

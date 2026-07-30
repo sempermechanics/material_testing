@@ -3,7 +3,7 @@
     <!-- ============================================================= -->
     <!--  Application theme — Deep Sky Blue & White                    -->
     <!-- ============================================================= -->
-    <style name="Theme.IndicVisionDIC" parent="Theme.MaterialComponents.Light.NoActionBar">
+    <style name="Theme.Semper" parent="Theme.MaterialComponents.Light.NoActionBar">
         <!-- Brand -->
         <item name="colorPrimary">@color/sky_primary</item>
         <item name="colorPrimaryVariant">@color/sky_primary_dark</item>
@@ -29,27 +29,27 @@
         <item name="android:windowLightStatusBar">@bool/light_system_bars</item>
 
         <!-- Shapes: soft, consistent rounding across all Material components -->
-        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.IndicVision.Small</item>
-        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.IndicVision.Medium</item>
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.Semper.Small</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.Semper.Medium</item>
 
         <!-- Default component styles applied app-wide -->
-        <item name="materialButtonStyle">@style/Widget.IndicVision.Button</item>
-        <item name="materialCardViewStyle">@style/Widget.IndicVision.Card</item>
-        <item name="sliderStyle">@style/Widget.IndicVision.Slider</item>
+        <item name="materialButtonStyle">@style/Widget.Semper.Button</item>
+        <item name="materialCardViewStyle">@style/Widget.Semper.Card</item>
+        <item name="sliderStyle">@style/Widget.Semper.Slider</item>
 
         <!-- Subtle, professional screen transitions (enabled per-activity) -->
-        <item name="android:windowAnimationStyle">@style/Animation.IndicVision.Activity</item>
+        <item name="android:windowAnimationStyle">@style/Animation.Semper.Activity</item>
     </style>
 
     <!-- Splash window matches the layout so the first frame doesn't flash —
          splash_bg is night-qualified for the same guarantee in dark mode -->
-    <style name="Theme.IndicVisionDIC.Splash" parent="Theme.IndicVisionDIC">
+    <style name="Theme.Semper.Splash" parent="Theme.Semper">
         <item name="android:statusBarColor">@color/splash_bg</item>
         <item name="android:windowBackground">@color/splash_bg</item>
     </style>
 
     <!-- Proxy activity for Save-to-Files from the share chooser -->
-    <style name="Theme.IndicVisionDIC.Transparent" parent="Theme.IndicVisionDIC">
+    <style name="Theme.Semper.Transparent" parent="Theme.Semper">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>

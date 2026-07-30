@@ -9,18 +9,18 @@
 // For real benchmarking, run this locally on a quiet machine.
 #include "framework/test_framework.h"
 #include "framework/synthetic.h"
-#include <indicvision/solver.hpp>
-#include <indicvision/subset.hpp>
+#include <semper/solver.hpp>
+#include <semper/subset.hpp>
 
 #include <chrono>
 #include <cstdio>
 
-using IndicVision::Image;
-using IndicVision::SubsetData;
-using IndicVision::SubsetPrecomputer;
-using IndicVision::OptimizationEngine;
-using IndicVision::AnalysisResult;
-using IndicVision::INIT_NO_SIMPLEX;
+using Semper::Image;
+using Semper::SubsetData;
+using Semper::SubsetPrecomputer;
+using Semper::OptimizationEngine;
+using Semper::AnalysisResult;
+using Semper::INIT_NO_SIMPLEX;
 
 namespace {
     constexpr int W = 512, H = 512;

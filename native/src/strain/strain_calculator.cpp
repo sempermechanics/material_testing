@@ -1,9 +1,9 @@
-#include <indicvision/strain.hpp>
+#include <semper/strain.hpp>
 #include "util/log.hpp"
 #include <Eigen/Dense>
 #include <cmath>
 
-namespace IndicVision {
+namespace Semper {
 
     StrainField StrainCalculator::compute_vsg_strain(const DisplacementField& disp, int window_pixels) {
         StrainField strain;

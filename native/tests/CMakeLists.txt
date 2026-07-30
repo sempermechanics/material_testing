@@ -10,7 +10,7 @@
 #   ./build/native-tests/dic_tests
 # =====================================================================
 cmake_minimum_required(VERSION 3.16)
-project(indicvision_tests CXX)
+project(semper_tests CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -79,7 +79,7 @@ target_include_directories(dic_tests PRIVATE
 
 target_compile_definitions(dic_tests PRIVATE
         DICE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dice"
-        INDICVISION_HOST_LOG=1
+        SEMPER_HOST_LOG=1
 )
 
 option(DIC_REQUIRE_OPENCV "Fail configure if OpenCV is missing (CI sets this)" OFF)

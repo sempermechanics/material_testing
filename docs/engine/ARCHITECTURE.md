@@ -12,7 +12,7 @@ first. For the derivations behind the code see
 
 ```
 Kotlin / Android
-  StaticAnalysisActivity -> IndicVisionNativeLib
+  StaticAnalysisActivity -> SemperNativeLib
        |
        v  adapters/android (JNI marshalling only)
 native/ package
@@ -21,7 +21,7 @@ native/ package
        v
   src/math + strain
   Image -> SubsetPrecomputer -> OptimizationEngine -> StrainCalculator
-  Public API: include/indicvision/*.hpp  (no jni.h / android/*)
+  Public API: include/semper/*.hpp  (no jni.h / android/*)
 ```
 
 **Data flow for one analysis:** decode images → `Image` (float intensities +
@@ -33,7 +33,7 @@ Package layout and contributor rules: [`native/README.md`](../../native/README.m
 
 ---
 
-## Module: `include/indicvision/types.hpp`
+## Module: `include/semper/types.hpp`
 
 Shared value types. All math is 32-bit `float` (`scalar_t`).
 
@@ -67,7 +67,7 @@ Everything precomputed about one reference subset. Invariants:
 
 ---
 
-## Module: `include/indicvision/image.hpp` — class `Image`
+## Module: `include/semper/image.hpp` — class `Image`
 
 Owns intensities + precomputed gradients for one image.
 
@@ -95,7 +95,7 @@ return is a sentinel further filtered by callers (`val > 0` checks).
 
 ---
 
-## Module: `include/indicvision/subset.hpp`
+## Module: `include/semper/subset.hpp`
 
 Static factory for `SubsetData`. Three entry points with one contract:
 **all paths must produce interchangeable state** (guarded by
@@ -120,7 +120,7 @@ ill-conditioned Hessian (`cond(H₂ₓ₂) > 1e12`).
 
 ---
 
-## Module: `include/indicvision/solver.hpp`
+## Module: `include/semper/solver.hpp`
 
 Per-thread solver object (owns scratch buffers — **do not share across OMP threads**).
 
@@ -178,7 +178,7 @@ compiled to NEON on ARM and SSE on x86, scalar fallback elsewhere. Header-only;
 no OpenCV linkage required.
 
 ```cpp
-namespace IndicVision::simd {
+namespace Semper::simd {
   // Σ (vals[i] − mean)²
   float sum_sq_diff(const float* vals, size_t n, float mean);
 
@@ -201,7 +201,7 @@ Contracts (all test-guarded):
 
 ---
 
-## Module: `include/indicvision/strain.hpp`
+## Module: `include/semper/strain.hpp`
 
 ```cpp
 struct DisplacementField { int width, height, step;       // grid dims + px spacing
@@ -226,9 +226,9 @@ with `0.0f`. Check before rendering/statistics.
 
 ---
 
-## Module: `bridge/IndicVisionJNI.cpp`
+## Module: `bridge/SemperJNI.cpp`
 
-JNI surface (see `IndicVisionNativeLib.kt` for the Kotlin declarations).
+JNI surface (see `SemperNativeLib.kt` for the Kotlin declarations).
 Key behaviors:
 
 - `initializeReference(...)` caches the decoded reference image in
@@ -246,7 +246,7 @@ Threading contract: **one `OptimizationEngine` + one `SubsetData` per OMP
 thread**; `SubsetData` buffers are reused across grid points via the
 `precompute_subset_fast` pool.
 
-### Cancellation — `include/indicvision/cancel.hpp`
+### Cancellation — `include/semper/cancel.hpp`
 
 A process-wide flag (`request_cancel` / `clear_cancel` / `cancel_requested`),
 polled by `run_full_field` inside its point loops, so a cancel lands within a
@@ -296,16 +296,16 @@ starts — a pending edit can never reach the engine uncommitted.
 
 | Path | Role |
 |---|---|
-| `include/indicvision/` | Public headers (`types`, `image`, `subset`, `solver`, `strain`, `simd`, `pipeline`, `io`, `seeding`) |
+| `include/semper/` | Public headers (`types`, `image`, `subset`, `solver`, `strain`, `simd`, `pipeline`, `io`, `seeding`) |
 | `src/math/` | Image / SubsetPrecomputer / OptimizationEngine |
 | `src/strain/` | StrainCalculator |
 | `src/io/` | Platform-agnostic OpenCV decode |
 | `src/seeding/` | AKAZE + RANSAC |
 | `src/pipeline/` | Full-field Path A/B/C + OpenMP |
-| `adapters/android/` | JNI only → `libindicvision_core.so` |
+| `adapters/android/` | JNI only → `libsemper_core.so` |
 | `tests/` | Host unit / integration / DICe / perf |
 
-CMake targets: `indicvision_math`, `indicvision_pipeline`, `indicvision_android` (`OUTPUT_NAME indicvision_core`).
+CMake targets: `semper_math`, `semper_pipeline`, `semper_android` (`OUTPUT_NAME semper_core`).
 
 ---
 
@@ -332,7 +332,7 @@ those trees from the worktree (~100+ MB). CMake only needs `modules/`,
   uses — `core, imgproc, imgcodecs, features2d, calib3d, flann` — which keeps the
   build to a few minutes per ABI instead of tens.
 - `BUILD_SHARED_LIBS OFF` → OpenCV is **statically linked** into
-  `libindicvision_core.so` (which is why it is ~10–22 MB per ABI). We link the
+  `libsemper_core.so` (which is why it is ~10–22 MB per ABI). We link the
   in-tree targets directly: `opencv_core opencv_imgproc opencv_imgcodecs
   opencv_features2d opencv_calib3d opencv_flann`.
 - OpenCV's bundled 3rd-party image codecs (`zlib/png/jpeg/tiff/webp`) are built
@@ -357,11 +357,11 @@ configure.
 - `app/build.gradle.kts`: default release ABI is **arm64-v8a**; debug also
   adds **x86_64** for emulators. Override with `-PabiFilters=...`.
   Gradle points `externalNativeBuild` at `native/CMakeLists.txt` with
-  `-DINDICVISION_ANDROID=ON`.
+  `-DSEMPER_ANDROID=ON`.
 - No ABI splits: one APK per build (the configured ABI filter set).
 - OpenCV is compiled once per ABI into the shared lib; `.cxx/` caches the
   from-source build across incremental compiles.
-- SIMD portability comes from `include/indicvision/simd.hpp`; there is **no**
+- SIMD portability comes from `include/semper/simd.hpp`; there is **no**
   architecture-conditional code left in the engine (`#if __aarch64__` was
   removed — do not reintroduce it; extend the kernels instead).
 - Production flags: `-O3 -flto -ffast-math -fopenmp` — note `-ffast-math`

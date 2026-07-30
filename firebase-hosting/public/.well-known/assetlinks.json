@@ -3,7 +3,7 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.rafad.indicvisiondic",
+      "package_name": "com.indicvision.semper",
       "sha256_cert_fingerprints": [
         "39:30:C4:37:4D:31:83:18:36:0D:6D:BF:CF:9C:68:F8:6C:11:91:1A:AF:48:1E:56:79:21:47:BB:81:13:18:E6",
         "REPLACE_WITH_RELEASE_SHA256_BEFORE_SHIPPING"

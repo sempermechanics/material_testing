@@ -1,8 +1,8 @@
-# inDIC — Digital Image Correlation on Android
+# Semper — Digital Image Correlation on Android
 
 [![CI](https://github.com/shankar-indicvision/IndicVisionDIC/actions/workflows/ci.yml/badge.svg)](https://github.com/shankar-indicvision/IndicVisionDIC/actions/workflows/ci.yml)
 
-inDIC measures **how objects deform** — from nothing but photographs.
+Semper measures **how objects deform** — from nothing but photographs.
 Paint a random speckle pattern on a specimen, photograph it before and during
 loading, and the app computes full-field **displacement** (U, V — to ~1/100th
 of a pixel) and **strain** (Exx, Eyy, Exy) everywhere on the surface. Results
@@ -112,12 +112,12 @@ Change the value and yours is kept — Reset returns to the suggestion.
 
 | Path | What lives there |
 |---|---|
-| `native/include/indicvision/` | Public C++ API (types, image, solver, strain, pipeline) |
+| `native/include/semper/` | Public C++ API (types, image, solver, strain, pipeline) |
 | `native/src/math/` | ICGN solver + subset/image math + SIMD kernels |
 | `native/src/strain/` | VSG / NLVC strain |
 | `native/src/seeding/` | AKAZE + RANSAC seeding |
 | `native/src/pipeline/` | Full-field Path A/B/C orchestration |
-| `native/adapters/android/` | Thin JNI → `libindicvision_core.so` |
+| `native/adapters/android/` | Thin JNI → `libsemper_core.so` |
 | `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI drawing |
 | `app/src/main/java/.../ui/viewer/` | Heatmap viewer + exports |
 | `app/src/main/java/.../ui/auth/` | Sign-in and access gating |

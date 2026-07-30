@@ -22,18 +22,18 @@
 
 # ============================================================
 # JNI REFLECTION CONTRACT
-# IndicVisionJNI.cpp resolves this callback method BY NAME at
+# SemperJNI.cpp resolves this callback method BY NAME at
 # runtime (GetMethodID("onProgressUpdate", "(I)V")). If R8
 # renames it, the lookup returns null and engine progress
 # callbacks silently stop working in release builds.
 # ============================================================
--keepclassmembers class * implements com.rafad.indicvisiondic.ProgressCallback {
+-keepclassmembers class * implements com.indicvision.semper.ProgressCallback {
     public void onProgressUpdate(int);
 }
 
 # Native entry points: AGP's default rules keep classes with native
 # methods, but be explicit — the C symbol names embed this class name.
--keep class com.rafad.indicvisiondic.IndicVisionNativeLib { *; }
+-keep class com.indicvision.semper.SemperNativeLib { *; }
 
 # ============================================================
 # KOTLINX-SERIALIZATION MODELS (backend wire DTOs)
@@ -41,10 +41,10 @@
 # serializers explicitly so a library update can't silently
 # break the cloud sync payloads.
 # ============================================================
--keepclassmembers @kotlinx.serialization.Serializable class com.rafad.indicvisiondic.** {
+-keepclassmembers @kotlinx.serialization.Serializable class com.indicvision.semper.** {
     *** Companion;
 }
--keepclasseswithmembers class com.rafad.indicvisiondic.** {
+-keepclasseswithmembers class com.indicvision.semper.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
 

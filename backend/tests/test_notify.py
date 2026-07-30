@@ -14,7 +14,7 @@ class _Response:
 @pytest.fixture
 def configured(monkeypatch):
     monkeypatch.setattr(settings, "RESEND_API_KEY", "test-key")
-    monkeypatch.setattr(settings, "NOTIFY_FROM", "inDIC <noreply@indicvision.com>")
+    monkeypatch.setattr(settings, "NOTIFY_FROM", "Semper <noreply@indicvision.com>")
     monkeypatch.setattr(settings, "SUPPORT_EMAIL", "support@indicvision.com")
 
 
@@ -32,7 +32,7 @@ def sent(monkeypatch):
 
 def test_disabled_without_api_key(monkeypatch, sent):
     monkeypatch.setattr(settings, "RESEND_API_KEY", "")
-    monkeypatch.setattr(settings, "NOTIFY_FROM", "inDIC <noreply@indicvision.com>")
+    monkeypatch.setattr(settings, "NOTIFY_FROM", "Semper <noreply@indicvision.com>")
 
     notify.access_request("uid-1", "new@example.com", "New User", "google.com")
 

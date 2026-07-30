@@ -5,17 +5,17 @@ user in with Firebase, sends the resulting **Firebase ID token** as a bearer
 token, and Cloud Run verifies it with `firebase-admin`.
 
 Three providers are wired in
-[`AuthRepository.kt`](../../app/src/main/java/com/rafad/indicvisiondic/data/AuthRepository.kt):
+[`AuthRepository.kt`](../../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt):
 
 | Provider | How it signs in | Email verified? |
 |---|---|---|
-| **Google** | Credential Manager returns a Google ID token, exchanged for a Firebase credential ([GoogleSignInHelper.kt](../../app/src/main/java/com/rafad/indicvisiondic/ui/auth/GoogleSignInHelper.kt)) | Yes, by construction |
+| **Google** | Credential Manager returns a Google ID token, exchanged for a Firebase credential ([GoogleSignInHelper.kt](../../app/src/main/java/com/indicvision/semper/ui/auth/GoogleSignInHelper.kt)) | Yes, by construction |
 | **Email link** | Firebase emails a sign-in link; tapping it completes sign-in | Yes, by construction |
 | **Email + password** | Standard Firebase email/password | Not until the user confirms |
 
 Forgot a password? The sign-in screen also offers **Forgot password?**, which
 emails a Firebase reset link (`sendPasswordReset` in
-[AuthRepository.kt](../../app/src/main/java/com/rafad/indicvisiondic/data/AuthRepository.kt)).
+[AuthRepository.kt](../../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt)).
 It is identity-only — no backend call — and reports success even for an unknown
 email so the screen can't be used to probe which addresses are registered.
 
@@ -33,7 +33,7 @@ email so the screen can't be used to probe which addresses are registered.
 2. **Authentication → Sign-in method**: enable **Google**, **Email/Password**,
    and **Email link (passwordless sign-in)**.
 3. **Project settings → Your apps → Android app** with package
-   `com.rafad.indicvisiondic`. Add the **SHA-1** of every signing key you use —
+   `com.indicvision.semper`. Add the **SHA-1** of every signing key you use —
    debug and release. Google sign-in fails without it.
 
    ```bash
@@ -56,7 +56,7 @@ The passwordless link only signs the user in if tapping it **reopens this app**.
 Firebase mails a link back to the continue URL
 `https://indicvision-dic-app-auth.firebaseapp.com/finishSignIn`
 (`EMAIL_LINK_CONTINUE_URL` in
-[AuthRepository.kt](../../app/src/main/java/com/rafad/indicvisiondic/data/AuthRepository.kt)),
+[AuthRepository.kt](../../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt)),
 and `AuthActivity` declares a matching App Link `intent-filter` for that
 host + path.
 

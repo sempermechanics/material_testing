@@ -1,8 +1,8 @@
-#include <indicvision/pipeline.hpp>
-#include <indicvision/seeding.hpp>
-#include <indicvision/solver.hpp>
-#include <indicvision/strain.hpp>
-#include <indicvision/subset.hpp>
+#include <semper/pipeline.hpp>
+#include <semper/seeding.hpp>
+#include <semper/solver.hpp>
+#include <semper/strain.hpp>
+#include <semper/subset.hpp>
 #include "util/log.hpp"
 
 #include <atomic>
@@ -25,9 +25,9 @@
 #include <cmath>
 
 #undef LOG_TAG
-#define LOG_TAG "IndicVisionPipeline"
+#define LOG_TAG "SemperPipeline"
 
-namespace IndicVision {
+namespace Semper {
 namespace pipeline {
 
 struct ThreadStats {
@@ -668,7 +668,7 @@ int run_full_field(
             int realY = params.rect_y + path_c_seed_y * params.step;
             int flat_idx = path_c_seed_y * gridW + path_c_seed_x;
 
-            IndicVision::SubsetData seed_subset;
+            Semper::SubsetData seed_subset;
             SubsetPrecomputer::precompute_subset_fast(seed_subset, *cache.ref_img, realX, realY, params.subset_size, hessian_pool[flat_idx]);
 
             if (seed_subset.is_initialized) {
@@ -694,7 +694,7 @@ int run_full_field(
     #pragma omp parallel num_threads(safe_cores)
             {
                 int tid = omp_get_thread_num();
-                OptimizationEngine local_engine; IndicVision::SubsetData local_subset;
+                OptimizationEngine local_engine; Semper::SubsetData local_subset;
                 // 🚀 ENABLE LEVENBERG-MARQUARDT (TIKHONOV REGULARIZATION) - PATH A
                 local_engine.lm_enabled = true;
                 local_engine.lm_alpha = 0.05f; // <--- TUNE THIS VALUE
@@ -727,7 +727,7 @@ int run_full_field(
                         int simplex_count_before = local_engine.count_simplex;
 
                         auto search_flag = ALLOW_SIMPLEX_RESCUE ? INIT_NO_SEARCH : INIT_NO_SIMPLEX;
-                        IndicVision::AnalysisResult res = local_engine.calculate_deformation(
+                        Semper::AnalysisResult res = local_engine.calculate_deformation(
                                 local_subset, defImg, guessU[idx], guessV[idx], guessUx[idx], guessUy[idx], guessVx[idx], guessVy[idx], search_flag);
                         // 🚀 VSG PROTECTOR: Reject if > 5% of the subset fell into the Ghost Wall
                         float ghost_fraction = (float)res.invalid_ref_pixels / (float)(params.subset_size * params.subset_size);
@@ -793,8 +793,8 @@ int run_full_field(
         // ==========================================
         {
             ScopedTimer pathB_timer(time_pathB);
-            std::vector<IndicVision::SeedNode> boundary_seeds;
-            std::vector<IndicVision::SeedNode> global_seeds;
+            std::vector<Semper::SeedNode> boundary_seeds;
+            std::vector<Semper::SeedNode> global_seeds;
 
             const int dx4[] = {1, -1, 0, 0}, dy4[] = {0, 0, 1, -1};
             for (int y = 0; y < gridH; ++y) {
@@ -805,7 +805,7 @@ int run_full_field(
                         int nx = x + dx4[k], ny = y + dy4[k];
                         if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH && !resultGrid[ny][nx].solved) { touching = true; break; }
                     }
-                    if (touching) boundary_seeds.push_back(IndicVision::SeedNode(x, y, resultGrid[y][x].u, resultGrid[y][x].v, resultGrid[y][x].ux, resultGrid[y][x].uy, resultGrid[y][x].vx, resultGrid[y][x].vy, resultGrid[y][x].corr));
+                    if (touching) boundary_seeds.push_back(Semper::SeedNode(x, y, resultGrid[y][x].u, resultGrid[y][x].v, resultGrid[y][x].ux, resultGrid[y][x].uy, resultGrid[y][x].vx, resultGrid[y][x].vy, resultGrid[y][x].corr));
                 }
             }
 
@@ -832,7 +832,7 @@ int run_full_field(
 
                 if (candidates.empty()) {
                     // 🚀 PRIORITY 4: Use the intelligently found Smart Seed from Path C
-                    global_seeds.push_back(IndicVision::SeedNode(path_c_seed_x, path_c_seed_y, globalU, globalV, 0.f, 0.f, 0.f, 0.f, 0.f));
+                    global_seeds.push_back(Semper::SeedNode(path_c_seed_x, path_c_seed_y, globalU, globalV, 0.f, 0.f, 0.f, 0.f, 0.f));
                 } else {
                     std::sort(candidates.begin(), candidates.end(), [](const SeedCandidate& a, const SeedCandidate& b) {
                         if (std::abs(a.displacement_mag - b.displacement_mag) > 1.f) return a.displacement_mag < b.displacement_mag;
@@ -841,14 +841,14 @@ int run_full_field(
                     int seeds_pushed = 0;
                     for (const auto& c : candidates) {
                         if (seeds_pushed >= 5) break;
-                        global_seeds.push_back(IndicVision::SeedNode(c.ix, c.iy, c.u_init, c.v_init, 0.f, 0.f, 0.f, 0.f, 0.f));
+                        global_seeds.push_back(Semper::SeedNode(c.ix, c.iy, c.u_init, c.v_init, 0.f, 0.f, 0.f, 0.f, 0.f));
                         seeds_pushed++;
                     }
                 }
             }
 
             struct GlobalQueue {
-                std::priority_queue<IndicVision::SeedNode> q;
+                std::priority_queue<Semper::SeedNode> q;
                 std::mutex mtx; std::condition_variable cv;
                 int active = 0; bool done = false;
             } gq;
@@ -866,7 +866,7 @@ int run_full_field(
             prewarm_engine.lm_alpha = 0.05f; // <--- TUNE THIS VALUE
             prewarm_engine.use_6x6_interpolator = params.use_6x6_interpolator;
 
-            IndicVision::SubsetData prewarm_subset;
+            Semper::SubsetData prewarm_subset;
 
             while ((int)gq.q.size() < cores_to_use && seed_idx.load() < (int)global_seeds.size()) {
                 int si = seed_idx.fetch_add(1, std::memory_order_relaxed);
@@ -885,7 +885,7 @@ int run_full_field(
                 int icgn_count_before = prewarm_engine.count_icgn;
 
                 auto search_flag = ALLOW_SIMPLEX_RESCUE ? INIT_NO_SEARCH : INIT_NO_SIMPLEX;
-                IndicVision::AnalysisResult res = prewarm_engine.calculate_deformation(
+                Semper::AnalysisResult res = prewarm_engine.calculate_deformation(
                         prewarm_subset, defImg, seed.u, seed.v, 0.f, 0.f, 0.f, 0.f, search_flag);
                 stats_pathB[0].icgn_iters += res.iters;
                 bool needed_rescue = (prewarm_engine.count_simplex > simplex_count_before);
@@ -912,7 +912,7 @@ int run_full_field(
                 if (res.status == 0 && res.correlation_score <= 0.15f) {
                     int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
                     resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, -1, order, resultGrid[seed.y_idx][seed.x_idx].mesh_assignment_type, needed_rescue, icgn_iters_used};                global_points_solved.fetch_add(1, std::memory_order_relaxed);
-                    gq.q.push(IndicVision::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+                    gq.q.push(Semper::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
                 } else {
                     resultGrid[seed.y_idx][seed.x_idx].corr = CORR_INVALID;
                     resultGrid[seed.y_idx][seed.x_idx].used_simplex = needed_rescue;
@@ -937,14 +937,14 @@ int run_full_field(
                         local_engine.lm_enabled = true;
                         local_engine.lm_alpha = .05f; // <--- TUNE THIS VALUE
                         local_engine.use_6x6_interpolator = params.use_6x6_interpolator;
-                        IndicVision::SubsetData local_subset;
+                        Semper::SubsetData local_subset;
                         double local_hessian_ms = 0.0, local_wait_ms = 0.0;
                         int local_points_solved = 0;
                         EngineStatFlusher flusher(local_engine, stats_pathB[tid], local_points_solved, local_hessian_ms, local_wait_ms);
 
                         while (true) {
                             if (cancel_requested()) return;
-                            IndicVision::SeedNode cur;
+                            Semper::SeedNode cur;
                             bool has_node = false;
                             {
                                 std::unique_lock<std::mutex> lk(gq.mtx);
@@ -976,7 +976,7 @@ int run_full_field(
 
                                             int simplex_count_before = local_engine.count_simplex;
 
-                                            IndicVision::AnalysisResult res = local_engine.calculate_deformation(
+                                            Semper::AnalysisResult res = local_engine.calculate_deformation(
                                                     local_subset, defImg, seed.u, seed.v, 0.f, 0.f, 0.f, 0.f, INIT_NO_SEARCH);
 
                                             // 🚀 VSG PROTECTOR: Reject if > 5% of the subset fell into the Ghost Wall
@@ -1015,7 +1015,7 @@ int run_full_field(
                                                                                           res.correlation_score, true, tid, order, 0, needed_rescue, res.iters};
                                                 }
                                                 global_points_solved.fetch_add(1, std::memory_order_relaxed); local_points_solved++;
-                                                { std::lock_guard<std::mutex> lq(gq.mtx); gq.q.push(IndicVision::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score)); gq.cv.notify_one(); }
+                                                { std::lock_guard<std::mutex> lq(gq.mtx); gq.q.push(Semper::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score)); gq.cv.notify_one(); }
                                                 seed_pushed = true;
                                             } else {
                                                 std::lock_guard<std::mutex> lg(grid_mutex);
@@ -1031,7 +1031,7 @@ int run_full_field(
                                 continue;
                             }
 
-                            std::vector<IndicVision::SeedNode> pending_pushes;
+                            std::vector<Semper::SeedNode> pending_pushes;
                             pending_pushes.reserve(4);
                             for (int k = 0; k < 4; ++k) {
                                 const int nx = cur.x_idx + DX[k], ny = cur.y_idx + DY[k];
@@ -1058,7 +1058,7 @@ int run_full_field(
                                 float guess_v = cur.v + cur.vx * dx + cur.vy * dy;
 
                                 auto search_flag = ALLOW_SIMPLEX_RESCUE ? INIT_NO_SEARCH : INIT_NO_SIMPLEX;
-                                IndicVision::AnalysisResult res = local_engine.calculate_deformation(
+                                Semper::AnalysisResult res = local_engine.calculate_deformation(
                                         local_subset, defImg, guess_u, guess_v, cur.ux, cur.uy, cur.vx, cur.vy, search_flag);
                                 // 🚀 VSG PROTECTOR: Reject if > 5% of the subset fell into the Ghost Wall
                                 float ghost_fraction = (float)res.invalid_ref_pixels / (float)(params.subset_size * params.subset_size);
@@ -1098,7 +1098,7 @@ int run_full_field(
                                                               needed_rescue, res.iters};
                                     }
                                     global_points_solved.fetch_add(1, std::memory_order_relaxed); local_points_solved++;
-                                    pending_pushes.push_back(IndicVision::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
+                                    pending_pushes.push_back(Semper::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
                                 } else {
                                     std::lock_guard<std::mutex> lg(grid_mutex);
                                     resultGrid[ny][nx].corr = CORR_INVALID;
@@ -1599,4 +1599,4 @@ int run_full_field(
 
 
 } // namespace pipeline
-} // namespace IndicVision
+} // namespace Semper

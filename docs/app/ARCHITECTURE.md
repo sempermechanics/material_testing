@@ -21,14 +21,14 @@ SplashActivity
 ```
 
 Access-status routing is centralized in
-[`AccessRouter`](../../app/src/main/java/com/rafad/indicvisiondic/ui/auth/AccessRouter.kt)
+[`AccessRouter`](../../app/src/main/java/com/indicvision/semper/ui/auth/AccessRouter.kt)
 using constants from
-[`AccessStatus`](../../app/src/main/java/com/rafad/indicvisiondic/data/AccessStatus.kt).
+[`AccessStatus`](../../app/src/main/java/com/indicvision/semper/data/AccessStatus.kt).
 Do not re-encode `"APPROVED"` / `"PENDING"` switches in new screens — call the
 router.
 
 Intent extras shared across Activities live in
-[`DicKeys`](../../app/src/main/java/com/rafad/indicvisiondic/DicKeys.kt).
+[`DicKeys`](../../app/src/main/java/com/indicvision/semper/DicKeys.kt).
 
 ## Package map
 
@@ -51,7 +51,7 @@ launchers in the Activity.
 ## Session layout on disk
 
 Each saved analysis lives under the app's session directory (see
-[`SessionStore`](../../app/src/main/java/com/rafad/indicvisiondic/data/SessionStore.kt)):
+[`SessionStore`](../../app/src/main/java/com/indicvision/semper/data/SessionStore.kt)):
 
 ```
 <sessionId>/
@@ -61,7 +61,7 @@ Each saved analysis lives under the app's session directory (see
 ```
 
 The constant `SessionPaths.RAW_DEFORMED_SUBDIR` is shared by the ViewModel,
-[`DicUploadWorker`](../../app/src/main/java/com/rafad/indicvisiondic/data/DicUploadWorker.kt),
+[`DicUploadWorker`](../../app/src/main/java/com/indicvision/semper/data/DicUploadWorker.kt),
 and cloud restore so path segments never diverge.
 
 ## Sync workers
