@@ -15,6 +15,7 @@ import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import com.rafad.indicvisiondic.R
 import com.rafad.indicvisiondic.data.SessionRecord
+import com.rafad.indicvisiondic.ui.analysis.EngineFailure
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -86,23 +87,44 @@ class SessionListAdapter(
 
     override fun getItemCount() = items.size
 
+    /**
+     * Date · size · headline, plus why it stopped when it did.
+     *
+     * A run cut short reads as "39 of 50 frames" rather than "39 frames": the
+     * count alone cannot distinguish a short run from a shorter test.
+     */
+    private fun subtitleFor(ctx: android.content.Context, r: SessionRecord): String = buildString {
+        append(dateFmt.format(Date(r.createdAt)))
+        append(" · ")
+        if (r.isSweep) {
+            append(ctx.getString(R.string.session_sweep_kind))
+        } else if (r.stoppedEarly && r.plannedFrameCount > r.frameCount) {
+            append(
+                ctx.resources.getQuantityString(
+                    R.plurals.session_frames_of_fmt,
+                    r.plannedFrameCount,
+                    r.frameCount,
+                    r.plannedFrameCount,
+                ),
+            )
+        } else {
+            append(ctx.getString(R.string.session_frames_fmt, r.frameCount))
+        }
+        if (r.headline.isNotBlank()) {
+            append(" · ")
+            append(r.headline)
+        }
+        if (r.stoppedEarly) {
+            append(" · ")
+            append(ctx.getString(EngineFailure.shortReasonRes(r.stopCode)))
+        }
+    }
+
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val r = items[position]
         val ctx = holder.itemView.context
         holder.title.text = r.name
-        holder.subtitle.text = buildString {
-            append(dateFmt.format(Date(r.createdAt)))
-            append(" · ")
-            if (r.isSweep) {
-                append(ctx.getString(R.string.session_sweep_kind))
-            } else {
-                append(ctx.getString(R.string.session_frames_fmt, r.frameCount))
-            }
-            if (r.headline.isNotBlank()) {
-                append(" · ")
-                append(r.headline)
-            }
-        }
+        holder.subtitle.text = subtitleFor(ctx, r)
         holder.badge.text = when (r.syncState) {
             SessionRecord.SyncState.SYNCED -> ctx.getString(R.string.badge_synced)
             SessionRecord.SyncState.PENDING -> ctx.getString(R.string.badge_pending)

@@ -60,6 +60,13 @@ object SessionOpenHelper {
                 putExtra(DicKeys.SWEEP_SKIP_SUBSETS, session.sweepSkipSubsets.toIntArray())
                 putExtra(DicKeys.SWEEP_SKIP_STEPS, session.sweepSkipSteps.toIntArray())
                 putExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS, session.sweepSkipStrainWindows.toIntArray())
+                // Without these the reopened lattice knows which nodes failed
+                // but not why, and every tap falls back to the generic line.
+                putExtra(DicKeys.SWEEP_SKIP_CODES, session.sweepSkipCodes.toIntArray())
+            }
+            putExtra(DicKeys.STOP_CODE, session.stopCode)
+            putExtra(DicKeys.PLANNED_FRAMES, session.plannedFrameCount)
+            run {
             }
             putExtra(DicKeys.SESSION_ID, session.id)
             putExtra(DicKeys.SESSION_LOCAL_ID, session.id)

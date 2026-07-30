@@ -59,6 +59,16 @@
     <string name="failed_load_reference">Failed to load reference image. Please try another file.</string>
     <string name="roi_too_small">ROI is too small. It must be larger than the subset size.</string>
     <string name="analysis_failed_title">Analysis failed</string>
+    <string name="analysis_no_data_title">No data produced</string>
+    <string name="analysis_no_data">The engine ran but every point was rejected, so there is no field to show.
+
+That is usually the speckle or the region: too little contrast for correlation to lock on, or an ROI sitting over something featureless. Try a larger subset, or redraw the region over well-speckled surface.</string>
+    <string name="analysis_unexpected_title">Analysis stopped unexpectedly</string>
+    <string name="analysis_unexpected_fmt">The run ended with an error it could not describe:
+
+%1$s
+
+A large region at a small step can exhaust memory — try a coarser step or a smaller ROI. If it repeats on the same images, send them to support.</string>
     <string name="video_read_failed">Could not read this video.</string>
     <string name="video_extract_insufficient">Could not extract enough frames from this segment.</string>
     <string name="video_read_error">Failed to read video: %1$s</string>
@@ -160,6 +170,10 @@
     <string name="badge_pending">upload pending</string>
     <string name="badge_local">local only</string>
     <string name="session_frames_fmt">%1$d frames</string>
+    <plurals name="session_frames_of_fmt">
+        <item quantity="one">%1$d of %2$d frame</item>
+        <item quantity="other">%1$d of %2$d frames</item>
+    </plurals>
     <string name="session_sweep_kind">VSG study</string>
     <string name="session_sweep_name_fmt">VSG study · %1$s · %2$s</string>
     <string name="session_sweep_headline_fmt">%1$s · %2$d of %3$d solved · subset %4$d–%5$d</string>
@@ -192,6 +206,8 @@
     <string name="setting_step">Step size</string>
     <string name="setting_strain_window">Strain window</string>
     <string name="setting_strain_method">Strain method</string>
+    <string name="setting_stopped_early">Stopped early</string>
+    <string name="setting_frames_solved">Frames solved</string>
     <string name="setting_roi">Region of interest</string>
     <string name="setting_image_size">Image size</string>
     <string name="setting_px_fmt">%1$d px</string>

@@ -355,6 +355,7 @@ object CloudRestore {
             sweepSkipSubsets = intList(skipped?.optJSONArray("subsets")),
             sweepSkipSteps = intList(skipped?.optJSONArray("steps")),
             sweepSkipStrainWindows = intList(skipped?.optJSONArray("strainWindows")),
+            sweepSkipCodes = intList(skipped?.optJSONArray("codes")),
         )
     }
 

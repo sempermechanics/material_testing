@@ -1123,7 +1123,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
                             frameName = outcome.failedFrameName,
                         )
                     } else if (outcome.firstFrameValidPoints <= 0) {
-                        tvResult.text = "❌ Engine returned no data"
+                        // Distinct from a negative code: the engine ran and
+                        // rejected everything, which points at the speckle or
+                        // the region rather than at a hard failure.
+                        tvResult.text = getString(R.string.analysis_no_data_title)
+                        MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
+                            .setTitle(R.string.analysis_no_data_title)
+                            .setMessage(R.string.analysis_no_data)
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
                     } else {
                         tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
 
@@ -1139,7 +1147,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     isProcessing = false
                     overlayHelper.hide()
-                    tvResult.text = "❌ Error: ${e.message}"
+                    // Anything unmodelled — an OOM on a large ROI is the usual
+                    // one — used to surface as a raw exception string and nothing
+                    // else. Say what it was and what tends to cause it.
+                    val detail = e.message ?: e::class.java.simpleName
+                    tvResult.text = getString(R.string.analysis_unexpected_title)
+                    MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
+                        .setTitle(R.string.analysis_unexpected_title)
+                        .setMessage(getString(R.string.analysis_unexpected_fmt, detail))
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
                     checkReady()
                 }
             }
@@ -1223,6 +1240,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 putExtra(DicKeys.SWEEP_SKIP_STEPS, skipped.map { it.step }.toIntArray())
                 putExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS, skipped.map { it.strainWindow }.toIntArray())
                 putExtra(DicKeys.SWEEP_SKIP_CODES, viewModel.sweepSkippedCodes.toIntArray())
+            }
+            putExtra(DicKeys.STOP_CODE, viewModel.lastStopCode)
+            putExtra(DicKeys.PLANNED_FRAMES, viewModel.lastPlannedFrames)
+            run {
             }
 
             // PDF GENERATOR DATA

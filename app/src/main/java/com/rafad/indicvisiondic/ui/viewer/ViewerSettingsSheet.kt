@@ -9,6 +9,7 @@ import android.widget.TextView
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.rafad.indicvisiondic.DicKeys
 import com.rafad.indicvisiondic.R
+import com.rafad.indicvisiondic.ui.analysis.EngineFailure
 import com.rafad.indicvisiondic.ui.analysis.VsgPlotView
 import com.rafad.indicvisiondic.ui.analysis.VsgStudy
 
@@ -21,18 +22,41 @@ object ViewerSettingsSheet {
     private const val SETTINGS_ROW_SP = 13f
     private const val SETTINGS_DIVIDER_MARGIN = 10
 
-    fun show(host: ResultViewerActivity) {
-        val sheet = BottomSheetDialog(host)
-        val view = host.layoutInflater.inflate(R.layout.sheet_settings_used, null)
-        sheet.setContentView(view)
+    /**
+     * Why the run stopped and how far it got, or nothing when it finished.
+     *
+     * This sheet is the provenance record, so it is where "why is this analysis
+     * short?" has to be answerable months later without remembering the run.
+     */
+    private fun stopRows(host: ResultViewerActivity): List<Pair<String, String>> {
+        val stopCode = host.intent.getIntExtra(DicKeys.STOP_CODE, 0)
+        if (stopCode == 0) return emptyList()
+        val planned = host.intent.getIntExtra(DicKeys.PLANNED_FRAMES, 0)
+        return buildList {
+            add(
+                host.getString(R.string.setting_stopped_early) to
+                    host.getString(EngineFailure.shortReasonRes(stopCode)),
+            )
+            if (planned > 0) {
+                add(
+                    host.getString(R.string.setting_frames_solved) to
+                        host.resources.getQuantityString(
+                            R.plurals.session_frames_of_fmt,
+                            planned,
+                            host.frameCount(),
+                            planned,
+                        ),
+                )
+            }
+        }
+    }
 
-        view.findViewById<TextView>(R.id.tvSettingsUsedSpecimen).text =
-            host.intent.getStringExtra(DicKeys.REF_NAME).orEmpty()
-
-        val rows = view.findViewById<LinearLayout>(R.id.settingsUsedRows)
+    /**
+     * Every row the sheet shows for the frame on screen, in order.
+     */
+    private fun entriesFor(host: ResultViewerActivity): List<Pair<String, String>> {
         val roiW = host.intent.getIntExtra(DicKeys.ROI_W, 0)
         val roiH = host.intent.getIntExtra(DicKeys.ROI_H, 0)
-
         // A sweep varies the settings frame by frame, so the sheet must describe
         // the combination on screen rather than the one the run started with.
         val frame = host.currentFrameIndex
@@ -40,8 +64,7 @@ object ViewerSettingsSheet {
             ?: host.intent.getIntExtra(DicKeys.SUBSET_SIZE, 0)
         val strainWin = host.sweepStrainWins?.getOrNull(frame)
             ?: host.intent.getIntExtra(DicKeys.STRAIN_WINDOW, 0)
-
-        val entries = buildList {
+        return buildList {
             add(host.getString(R.string.setting_subset) to host.getString(R.string.setting_px_fmt, subset))
             add(host.getString(R.string.setting_step) to host.getString(R.string.setting_px_fmt, host.step))
             add(
@@ -60,6 +83,7 @@ object ViewerSettingsSheet {
                 host.getString(R.string.setting_strain_method) to
                     (host.intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG"),
             )
+            addAll(stopRows(host))
             // ROI is only meaningful when one was actually recorded.
             if (roiW > 0 && roiH > 0) {
                 add(
@@ -80,6 +104,19 @@ object ViewerSettingsSheet {
                 ),
             )
         }
+    }
+
+    fun show(host: ResultViewerActivity) {
+        val sheet = BottomSheetDialog(host)
+        val view = host.layoutInflater.inflate(R.layout.sheet_settings_used, null)
+        sheet.setContentView(view)
+
+        view.findViewById<TextView>(R.id.tvSettingsUsedSpecimen).text =
+            host.intent.getStringExtra(DicKeys.REF_NAME).orEmpty()
+
+        val rows = view.findViewById<LinearLayout>(R.id.settingsUsedRows)
+
+        val entries = entriesFor(host)
 
         entries.forEachIndexed { index, (label, value) ->
             if (index > 0) rows.addView(settingsDivider(host))

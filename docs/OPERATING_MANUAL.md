@@ -158,6 +158,11 @@ are real data, they are saved as an analysis, and acknowledging the message take
 you straight into them. A 50-frame test that decorrelated at frame 40 still gives
 you frames 1–39.
 
+**The reason is kept with the analysis.** Its Home row reads "39 of 50 frames"
+followed by why it stopped, and **Settings used** (the ⓘ in the viewer) lists
+*Stopped early* and *Frames solved*. You do not have to remember the run — or
+have been the person who made it.
+
 **Keep the app open.** A run has no resume. If Android kills the app, the run is
 gone.
 

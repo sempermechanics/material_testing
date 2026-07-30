@@ -131,6 +131,10 @@ class AnalysisViewModel : ViewModel() {
     var lastDefPath: String? = null
     var hasCompletedAnalysis: Boolean = false
 
+    /** Why the last run stopped early (0 = ran to completion), and its planned size. */
+    var lastStopCode: Int = 0
+    var lastPlannedFrames: Int = 0
+
     var currentSessionId: String? = null
     var engineStatsArray: FloatArray? = null
 
@@ -349,6 +353,9 @@ class AnalysisViewModel : ViewModel() {
             sweepSkipSubsets = skipped.map { it.subset },
             sweepSkipSteps = skipped.map { it.step },
             sweepSkipStrainWindows = skipped.map { it.strainWindow },
+            sweepSkipCodes = result.skippedCodes,
+            stopCode = result.engineErrorCode.also { lastStopCode = it },
+            plannedFrameCount = result.runs.size + skipped.size,
             headline = summary.headline,
         )
         if (SessionStore.upsert(appContext, record) && cloudEnabled) {
@@ -769,7 +776,9 @@ class AnalysisViewModel : ViewModel() {
                     pointsConverged = firstFrameValidPoints,
                     avgIterations = firstFrameAvgIters,
                     executionTimeMs = executionTimeMs,
-                    frameCount = defFilePaths.size,
+                    frameCount = solvedFrames,
+                    stopCode = engineErrorCode.also { lastStopCode = it },
+                    plannedFrameCount = plannedFrames.also { lastPlannedFrames = it },
                     // The names actually on disk in raw_deformed/ — reopening a
                     // session, exporting and cloud upload resolve images by these.
                     defNames = persistedRawNames.mapIndexed { i, persisted ->
@@ -864,6 +873,8 @@ class AnalysisViewModel : ViewModel() {
         executionTimeMs: Int,
         frameCount: Int,
         defNames: List<String>,
+        stopCode: Int = 0,
+        plannedFrameCount: Int = 0,
     ): SessionRecord {
         val now = System.currentTimeMillis()
         // Re-runs upsert over the same id: keep the original creation time
@@ -892,6 +903,8 @@ class AnalysisViewModel : ViewModel() {
             defNames = defNames,
             headline = String.format(java.util.Locale.US, "%.1f%% converged", convergence),
             engineStats = engineStatsArray?.toList() ?: emptyList(),
+            stopCode = stopCode,
+            plannedFrameCount = plannedFrameCount,
             strainMethod = if (settings.useNlvc) "NLVC" else "VSG",
             pointsConverged = pointsConverged,
             avgIterations = avgIterations,

@@ -150,6 +150,9 @@ class ResultViewerActivity : AppCompatActivity() {
 
     internal fun summaryBatchFiles(): List<File> = batchFiles
 
+    /** How many frames this analysis actually holds. */
+    internal fun frameCount(): Int = batchFiles.size
+
     internal fun customBoundsFor(dataIndex: Int): Pair<Float, Float>? = customBoundsMap[dataIndex]
 
     @SuppressLint("ClickableViewAccessibility")

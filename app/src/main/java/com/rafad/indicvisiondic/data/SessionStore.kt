@@ -80,7 +80,29 @@ data class SessionRecord(
     val sweepSkipSubsets: List<Int> = emptyList(),
     val sweepSkipSteps: List<Int> = emptyList(),
     val sweepSkipStrainWindows: List<Int> = emptyList(),
+
+    /**
+     * Engine code per skipped combination, index-aligned with the lists above.
+     * Stored rather than resolved so the lattice can still say *why* each node
+     * is hollow after a reopen — without it the reasons only survive until the
+     * screen is left.
+     */
+    val sweepSkipCodes: List<Int> = emptyList(),
+
+    /**
+     * Why a run ended before it finished, as an engine/run code, or 0 when it
+     * ran to completion. Kept with the analysis because a short run otherwise
+     * looks exactly like a shorter test that ran cleanly.
+     */
+    val stopCode: Int = 0,
+
+    /** Frames the run set out to solve; 0 for records predating this field. */
+    val plannedFrameCount: Int = 0,
 ) {
+
+    /** True when the run stopped itself before working through every frame. */
+    val stoppedEarly: Boolean get() = stopCode != 0
+
     /** True when the frames are parameter combinations rather than images. */
     val isSweep: Boolean get() = sweepSteps.isNotEmpty()
 

@@ -86,6 +86,10 @@ object DicKeys {
     /** Engine code per skipped node. Index-aligned with SWEEP_SKIP_*. */
     const val SWEEP_SKIP_CODES = "SWEEP_SKIP_CODES"
 
+    /** Why the run stopped early, or 0 when it finished; and what it planned. */
+    const val STOP_CODE = "STOP_CODE"
+    const val PLANNED_FRAMES = "PLANNED_FRAMES"
+
     /** Frame the result viewer opens on — a lattice node tap picks one. */
     const val START_FRAME = "START_FRAME"
 }
