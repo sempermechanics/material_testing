@@ -63,8 +63,10 @@ Java_com_indicvision_semper_SemperNativeLib_setCancelRequested(
 JNIEXPORT jobject JNICALL
 Java_com_indicvision_semper_SemperNativeLib_getPreviewFromBytes(
         JNIEnv* env, jobject, jbyteArray fileData, jint targetWidth) {
+    if (fileData == nullptr) return nullptr;
     jsize len = env->GetArrayLength(fileData);
     jbyte* buf = env->GetByteArrayElements(fileData, nullptr);
+    if (buf == nullptr) return nullptr;
     cv::Mat fullImg = Semper::io::decode_bgr(reinterpret_cast<uint8_t*>(buf), (size_t)len);
     env->ReleaseByteArrayElements(fileData, buf, JNI_ABORT);
     if (fullImg.empty()) return nullptr;
@@ -96,11 +98,15 @@ Java_com_indicvision_semper_SemperNativeLib_getPreviewFromBytes(
 JNIEXPORT jintArray JNICALL
 Java_com_indicvision_semper_SemperNativeLib_getImageDimensions(
         JNIEnv* env, jobject, jbyteArray fileData) {
-    jsize len = env->GetArrayLength(fileData);
-    jbyte* buf = env->GetByteArrayElements(fileData, nullptr);
     int w = 0, h = 0;
-    Semper::io::image_dimensions(reinterpret_cast<uint8_t*>(buf), (size_t)len, w, h);
-    env->ReleaseByteArrayElements(fileData, buf, JNI_ABORT);
+    if (fileData != nullptr) {
+        jsize len = env->GetArrayLength(fileData);
+        jbyte* buf = env->GetByteArrayElements(fileData, nullptr);
+        if (buf != nullptr) {
+            Semper::io::image_dimensions(reinterpret_cast<uint8_t*>(buf), (size_t)len, w, h);
+            env->ReleaseByteArrayElements(fileData, buf, JNI_ABORT);
+        }
+    }
     jintArray result = env->NewIntArray(2);
     jint temp[] = {w, h};
     env->SetIntArrayRegion(result, 0, 2, temp);
@@ -110,7 +116,7 @@ Java_com_indicvision_semper_SemperNativeLib_getImageDimensions(
 JNIEXPORT void JNICALL
 Java_com_indicvision_semper_SemperNativeLib_initializeReference(
         JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray maskBytes,
-        jint width, jint height, jboolean applyBlur) {
+        jint width, jint height) {
     std::lock_guard<std::mutex> lock(g_cache.mutex);
     if (refBytes == nullptr) {
         g_cache.reset();
@@ -118,6 +124,7 @@ Java_com_indicvision_semper_SemperNativeLib_initializeReference(
     }
     jsize len = env->GetArrayLength(refBytes);
     jbyte* buf = env->GetByteArrayElements(refBytes, nullptr);
+    if (buf == nullptr) { g_cache.reset(); return; }
     cv::Mat refMat = Semper::io::decode_gray(
             reinterpret_cast<uint8_t*>(buf), (size_t)len, width, height);
     env->ReleaseByteArrayElements(refBytes, buf, JNI_ABORT);
@@ -126,12 +133,13 @@ Java_com_indicvision_semper_SemperNativeLib_initializeReference(
     if (maskBytes != nullptr && env->GetArrayLength(maskBytes) > 0) {
         jsize mlen = env->GetArrayLength(maskBytes);
         jbyte* mbuf = env->GetByteArrayElements(maskBytes, nullptr);
+        if (mbuf == nullptr) { g_cache.reset(); return; }
         roiMask = Semper::io::decode_gray(
                 reinterpret_cast<uint8_t*>(mbuf), (size_t)mlen,
                 refMat.cols, refMat.rows);
         env->ReleaseByteArrayElements(maskBytes, mbuf, JNI_ABORT);
     }
-    g_cache.set_from_gray(refMat, roiMask, applyBlur == JNI_TRUE);
+    g_cache.set_from_gray(refMat, roiMask);
 }
 
 JNIEXPORT jint JNICALL
@@ -139,8 +147,6 @@ Java_com_indicvision_semper_SemperNativeLib_computeFullFieldDirect(
         JNIEnv* env, jobject, jbyteArray refBytes, jbyteArray defBytes,
         jbyteArray maskBytes, jint rectX, jint rectY, jint rectWidth,
         jint rectHeight, jint step, jint subsetSize, jint strainWindow,
-        jboolean useDelaunay, jboolean useFallback, jboolean useRGDIC,
-        jboolean applyGaussianBlur, jboolean useNlvcStrain,
         jboolean use6x6Interpolator, jobject outputBuffer, jobject callbackObj,
         jfloatArray out_metrics) {
     (void)refBytes;  // reference comes from initializeReference cache
@@ -150,9 +156,16 @@ Java_com_indicvision_semper_SemperNativeLib_computeFullFieldDirect(
         return -3;
     float* output_ptr = (float*)env->GetDirectBufferAddress(outputBuffer);
     if (!output_ptr) return -3;
+    // Bound the solver's write. Each point packs 8 floats; without this the
+    // solver would trust output_ptr blindly and a ROI/step combination larger
+    // than the Kotlin-side allocation would overflow the direct buffer.
+    jlong output_cap_bytes = env->GetDirectBufferCapacity(outputBuffer);
+    if (output_cap_bytes < static_cast<jlong>(sizeof(float))) return -3;
+    int output_capacity = static_cast<int>(output_cap_bytes / static_cast<jlong>(sizeof(float)));
 
     jsize dlen = env->GetArrayLength(defBytes);
     jbyte* dbuf = env->GetByteArrayElements(defBytes, nullptr);
+    if (dbuf == nullptr) return -3;
     cv::Mat defMat = Semper::io::decode_gray(
             reinterpret_cast<uint8_t*>(dbuf), (size_t)dlen,
             g_cache.width, g_cache.height);
@@ -163,6 +176,7 @@ Java_com_indicvision_semper_SemperNativeLib_computeFullFieldDirect(
     if (maskBytes != nullptr && env->GetArrayLength(maskBytes) > 0) {
         jsize mlen = env->GetArrayLength(maskBytes);
         jbyte* mbuf = env->GetByteArrayElements(maskBytes, nullptr);
+        if (mbuf == nullptr) return -3;
         roiMask = Semper::io::decode_gray(
                 reinterpret_cast<uint8_t*>(mbuf), (size_t)mlen,
                 g_cache.width, g_cache.height);
@@ -177,11 +191,6 @@ Java_com_indicvision_semper_SemperNativeLib_computeFullFieldDirect(
     params.step = step;
     params.subset_size = subsetSize;
     params.strain_window = strainWindow;
-    params.use_delaunay = useDelaunay == JNI_TRUE;
-    params.use_fallback = useFallback == JNI_TRUE;
-    params.use_rgdic = useRGDIC == JNI_TRUE;
-    params.apply_gaussian_blur = applyGaussianBlur == JNI_TRUE;
-    params.use_nlvc_strain = useNlvcStrain == JNI_TRUE;
     params.use_6x6_interpolator = use6x6Interpolator == JNI_TRUE;
 
     JavaVM* jvm = nullptr;
@@ -225,8 +234,8 @@ Java_com_indicvision_semper_SemperNativeLib_computeFullFieldDirect(
     }
 
     int result = Semper::pipeline::run_full_field(
-            g_cache, defMat, roiMask, params, output_ptr, metrics_ptr,
-            metrics_ptr ? 17 : 0, on_progress);
+            g_cache, defMat, roiMask, params, output_ptr, output_capacity,
+            metrics_ptr, metrics_ptr ? 17 : 0, on_progress);
 
     if (globalCallback != nullptr) {
         env->DeleteGlobalRef(globalCallback);

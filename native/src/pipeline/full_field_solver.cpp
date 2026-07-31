@@ -95,6 +95,7 @@ int run_full_field(
     const cv::Mat& roi_mask,
     const FullFieldParams& params,
     float* output_ptr,
+    int output_capacity,
     float* metrics,
     int metrics_len,
     ProgressCallback on_progress) {
@@ -108,6 +109,10 @@ int run_full_field(
 
         // 🚀 PRIORITY 3: Return -3 for memory/init errors
         if (output_ptr == nullptr || cache.ref_img == nullptr || def_gray.empty()) return -3;
+        // Clear any leftover cancel from a previous solve so this run starts fresh.
+        // The flag is process-global; without this, a caller that cancelled and
+        // then started a new solve without resetting would get an instant -99.
+        clear_cancel();
         if (cancel_requested()) return kCancelled;
 
         static int s_frame_count = 0; s_frame_count++;
@@ -124,7 +129,7 @@ int run_full_field(
         }
 
         Image defImg(defMat.cols, defMat.rows, defMat.data);
-        defImg.prepare_data(params.apply_gaussian_blur);
+        defImg.prepare_data(false);
         time_img_prep = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_prep_start).count();
 
         int safe_cores = std::max(1, (int)std::thread::hardware_concurrency());
@@ -271,15 +276,21 @@ int run_full_field(
         // corr==0 convention silently discarded.
         constexpr float CORR_INVALID = -1.0f;
 
+        // Default-initialized so a new field can never leave a call site
+        // reading indeterminate memory. The aggregate-init sites below fill the
+        // first 15 members positionally, in this exact order:
+        //   0:x 1:y 2:u 3:v 4:ux 5:uy 6:vx 7:vy 8:corr 9:solved 10:thread_id
+        //   11:compute_order 12:mesh_assignment_type 13:used_simplex 14:icgn_iters
+        // (guess_* default to 0). Keep that order in sync with those sites.
         struct GridPoint {
-            float x, y, u, v, ux, uy, vx, vy, corr;
-            bool solved;
-            int thread_id;
-            int compute_order;
-            int mesh_assignment_type;
-            bool used_simplex;
-            int icgn_iters;
-            float guess_u, guess_v, guess_ux, guess_uy, guess_vx, guess_vy;
+            float x = 0, y = 0, u = 0, v = 0, ux = 0, uy = 0, vx = 0, vy = 0, corr = 0;
+            bool solved = false;
+            int thread_id = 0;
+            int compute_order = 0;
+            int mesh_assignment_type = 0;
+            bool used_simplex = false;
+            int icgn_iters = 0;
+            float guess_u = 0, guess_v = 0, guess_ux = 0, guess_uy = 0, guess_vx = 0, guess_vy = 0;
         };
         std::vector<std::vector<GridPoint>> resultGrid(gridH, std::vector<GridPoint>(gridW));
         int total_valid_points = 0;
@@ -1138,18 +1149,24 @@ int run_full_field(
             }
         }
 
-        StrainField strainField;
-        if (params.use_nlvc_strain) strainField = StrainCalculator::compute_nlvc_strain(dispField, params.strain_window);
-        else strainField = StrainCalculator::compute_vsg_strain(dispField, params.strain_window);
+        StrainField strainField = StrainCalculator::compute_vsg_strain(dispField, params.strain_window);
 
         int valid_count = 0;
         int dropped_by_post_filter = 0; // 🚀 NEW: Track dropped points
+        bool output_truncated = false;
 
-        for (int y = 0; y < gridH; ++y) {
+        for (int y = 0; y < gridH && !output_truncated; ++y) {
             for (int x = 0; x < gridW; ++x) {
                 int idx = y * gridW + x;
 
                 if (dispField.valid[idx]) {
+                    // Never write past the caller's buffer. In the normal path the
+                    // capacity is exactly gridW*gridH*8, so this never trips; it is
+                    // the backstop against a caller under-allocating output_ptr.
+                    if ((valid_count + 1) * 8 > output_capacity) {
+                        output_truncated = true;
+                        break;
+                    }
 
                     // === 🚀 ROBUST STRAIN FILTER (FAST-MATH SAFE) ===
                     // Since the compiler strips NaN, we check for our hard sentinel.
@@ -1183,6 +1200,9 @@ int run_full_field(
 
         // 🚀 DIAGNOSTIC: Print exactly how many points the filter caught
         LOGD("DIAGNOSTIC POST-FILTER: Dropped %d noisy points. Final Valid Output: %d", dropped_by_post_filter, valid_count);
+        if (output_truncated) {
+            LOGE("Output buffer full at %d points (capacity %d floats); remaining points dropped.", valid_count, output_capacity);
+        }
 
         if (on_progress) { try { on_progress(100); } catch (...) {} }
 

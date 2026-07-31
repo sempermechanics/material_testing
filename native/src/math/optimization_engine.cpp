@@ -205,7 +205,7 @@ namespace Semper {
             // 🚀 FAST-PATH: All pixels are safely inside the image boundaries.
             // Portable SIMD kernels — one codepath compiled to NEON on ARM
             // and SSE on x86, replacing the old #if __aarch64__ fork.
-            if (valid_pixels == n) {
+            if (valid_pixels == static_cast<int>(n)) {
                 def_sum_sq = simd::sum_sq_diff(def_vals.data(), n, def_mean);
 
                 float def_std = std::sqrt(def_sum_sq / valid_pixels);
@@ -370,7 +370,7 @@ namespace Semper {
         float def_sum_sq = 0.0f;
         float znssd = 0.0f;
 
-        if (valid_pixels == n) {
+        if (valid_pixels == static_cast<int>(n)) {
             // 🚀 Portable SIMD kernels (NEON/SSE via one codepath) — see SimdKernels.h
             def_sum_sq = simd::sum_sq_diff(buffer.data(), n, def_mean);
 

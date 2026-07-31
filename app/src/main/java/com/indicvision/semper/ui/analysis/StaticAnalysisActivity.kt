@@ -68,11 +68,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private companion object {
         /** Subset shown before a reference image is available to measure. */
         const val FALLBACK_SUBSET_SIZE = 41
-
-        // Native engine failure codes, shared with the single-analysis path.
-        const val ENGINE_ERROR_FEATURES = -1
-        const val ENGINE_ERROR_ROI = -2
-        const val ENGINE_ERROR_INIT = -3
     }
 
     private val viewModel: AnalysisViewModel by viewModels()
@@ -421,6 +416,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
             commitParamFields()
             if (!viewModel.sweepMode) startBatchAnalysis()
         }
+    }
+
+    override fun onDestroy() {
+        // The engine runs on a process-global daemon thread that outlives this
+        // Activity. Without this teardown a solve in flight when the screen is
+        // destroyed keeps burning CPU and holding frame bytes, the progress
+        // ticker reposts against dead views, and KEEP_SCREEN_ON leaks.
+        viewModel.cancelRequested = true // also flips the native cancel flag
+        VsgStudyRunner.cancelRequested = true // stop a sweep run too
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (::overlayHelper.isInitialized) overlayHelper.release()
+        super.onDestroy()
     }
 
     private fun handleReferenceImage(uri: Uri) {
@@ -1050,10 +1057,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         wireCancelButton { viewModel.cancelRequested = true }
 
-        // Pinned: strain is always VSG, blur always off (UI removed; the
-        // native signature keeps both flags so C++ stays untouched).
-        val applyBlur = false
-        val useNlvc = false
+        // Strain is always VSG; pre-correlation blur is not offered. Both were
+        // removed from the engine signature, not just pinned in the UI.
         val use6x6 = currentUseKeysInterpolator()
         val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
 
@@ -1072,8 +1077,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     finalRectY = finalRectY,
                     finalRectW = finalRectW,
                     finalRectH = finalRectH,
-                    applyBlur = applyBlur,
-                    useNlvc = useNlvc,
                     use6x6 = use6x6,
                     maskData = maskData,
                     debugDir = debugDir,

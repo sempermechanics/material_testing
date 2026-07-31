@@ -10,7 +10,7 @@ native/
 ├── include/semper/     # public API headers
 ├── src/
 │   ├── math/                # Image, SubsetPrecomputer, OptimizationEngine
-│   ├── strain/              # VSG / NLVC
+│   ├── strain/              # VSG
 │   ├── io/                  # OpenCV decode helpers
 │   ├── seeding/             # AKAZE + RANSAC
 │   ├── pipeline/            # full-field orchestration (Path A/B/C)

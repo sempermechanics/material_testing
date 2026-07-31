@@ -174,34 +174,4 @@ namespace Semper {
 
         return val;
     }
-
-    scalar_t Image::gradient_x(scalar_t x, scalar_t y) const {
-        int xi = static_cast<int>(x); int yi = static_cast<int>(y);
-        if (xi < 0 || xi >= width-1 || yi < 0 || yi >= height-1) return 0.0f;
-
-        float dx = x - xi;
-        float dy = y - yi;
-
-        float g00 = grad_x[yi*width + xi];
-        float g10 = grad_x[yi*width + xi+1];
-        float g01 = grad_x[(yi+1)*width + xi];
-        float g11 = grad_x[(yi+1)*width + xi+1];
-
-        return (1.0f-dx)*(1.0f-dy)*g00 + dx*(1.0f-dy)*g10 + (1.0f-dx)*dy*g01 + dx*dy*g11;
-    }
-
-    scalar_t Image::gradient_y(scalar_t x, scalar_t y) const {
-        int xi = static_cast<int>(x); int yi = static_cast<int>(y);
-        if (xi < 0 || xi >= width-1 || yi < 0 || yi >= height-1) return 0.0f;
-
-        float dx = x - xi;
-        float dy = y - yi;
-
-        float g00 = grad_y[yi*width + xi];
-        float g10 = grad_y[yi*width + xi+1];
-        float g01 = grad_y[(yi+1)*width + xi];
-        float g11 = grad_y[(yi+1)*width + xi+1];
-
-        return (1.0f-dx)*(1.0f-dy)*g00 + dx*(1.0f-dy)*g10 + (1.0f-dx)*dy*g01 + dx*dy*g11;
-    }
 }

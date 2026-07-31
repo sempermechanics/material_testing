@@ -9,6 +9,9 @@ set_target_properties(semper_android PROPERTIES OUTPUT_NAME semper_core)
 target_include_directories(semper_android PRIVATE
         ${SEMPER_ROOT}/src
         ${SEMPER_ROOT}/include
+)
+# Vendored OpenCV headers SYSTEM so -Wall/-Wextra flag only the JNI adapter.
+target_include_directories(semper_android SYSTEM PRIVATE
         ${SEMPER_OPENCV_INCLUDE_DIRS}
 )
 
@@ -16,7 +19,7 @@ target_compile_definitions(semper_android PRIVATE SEMPER_ANDROID_LOG=1)
 
 if(NOT MSVC)
     target_compile_options(semper_android PRIVATE
-            -O3 -flto -ffast-math -fopenmp -fPIC -fvisibility=hidden -fexceptions
+            -O3 -flto -ffast-math -fopenmp -fPIC -fvisibility=hidden -fexceptions -Wall -Wextra
     )
     target_link_options(semper_android PRIVATE
             -s -flto -Wl,-z,max-page-size=16384

@@ -40,7 +40,6 @@ object SemperNativeLib {
         maskBytes: ByteArray?,
         width: Int,
         height: Int,
-        applyBlur: Boolean,
     )
     external fun setDebugOutputDir(debugDir: String?)
 
@@ -65,11 +64,6 @@ object SemperNativeLib {
         step: Int,
         subset: Int,
         strainWin: Int,
-        useZNCC: Boolean,
-        useICGN: Boolean,
-        useSpline: Boolean,
-        applyBlur: Boolean,
-        useNlvc: Boolean,
         // UI toggle selecting the Keys 6x6 interpolation kernel
         use6x6Interpolator: Boolean,
         outputBuffer: ByteBuffer,

@@ -46,18 +46,21 @@ add_library(semper_math STATIC
 target_include_directories(semper_math
         PUBLIC
             ${SEMPER_PUBLIC_INCLUDE}
+        PRIVATE
+            ${SEMPER_SRC_INCLUDE}
+)
+# Vendored headers marked SYSTEM so -Wall/-Wextra below flag only our code.
+target_include_directories(semper_math SYSTEM PUBLIC
             ${EIGEN_SRC_DIR}
             ${OPENCV_SRC_DIR}/modules/core/include
             ${CMAKE_BINARY_DIR}
-        PRIVATE
-            ${SEMPER_SRC_INCLUDE}
 )
 target_compile_definitions(semper_math PRIVATE
         $<$<BOOL:${SEMPER_ANDROID}>:SEMPER_ANDROID_LOG=1>
         $<$<NOT:$<BOOL:${SEMPER_ANDROID}>>:SEMPER_HOST_LOG=1>
 )
 if(NOT MSVC)
-    target_compile_options(semper_math PRIVATE -O3 -ffast-math -fPIC -fvisibility=hidden)
+    target_compile_options(semper_math PRIVATE -O3 -ffast-math -fPIC -fvisibility=hidden -Wall -Wextra)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -73,10 +76,12 @@ add_library(semper_pipeline STATIC
 target_include_directories(semper_pipeline
         PUBLIC
             ${SEMPER_PUBLIC_INCLUDE}
-            ${SEMPER_OPENCV_INCLUDE_DIRS}
-            ${EIGEN_SRC_DIR}
         PRIVATE
             ${SEMPER_SRC_INCLUDE}
+)
+target_include_directories(semper_pipeline SYSTEM PUBLIC
+            ${SEMPER_OPENCV_INCLUDE_DIRS}
+            ${EIGEN_SRC_DIR}
 )
 target_link_libraries(semper_pipeline
         PUBLIC
@@ -94,7 +99,7 @@ target_compile_definitions(semper_pipeline PRIVATE
 )
 if(NOT MSVC)
     # Apply aggressive flags only to our TUs, not OpenCV (added after add_subdirectory).
-    target_compile_options(semper_pipeline PRIVATE -O3 -flto -ffast-math -fopenmp -fPIC -fvisibility=hidden -fexceptions)
+    target_compile_options(semper_pipeline PRIVATE -O3 -flto -ffast-math -fopenmp -fPIC -fvisibility=hidden -fexceptions -Wall -Wextra)
     target_link_options(semper_pipeline PUBLIC -fopenmp)
 endif()
 

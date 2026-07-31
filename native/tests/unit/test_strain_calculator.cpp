@@ -1,9 +1,9 @@
 // =====================================================================
 // SUITE: Strain — native/postprocessing/StrainCalculator.cpp
 //
-// Both strain algorithms (VSG plane-fit and NLVC integral) are fed
-// analytically exact displacement fields, so the Green-Lagrange strain
-// they should output is known in closed form:
+// The VSG plane-fit strain algorithm is fed analytically exact
+// displacement fields, so the Green-Lagrange strain it should output is
+// known in closed form:
 //
 //   u = a·X + b·Y,  v = c·X + d·Y   (X, Y in physical pixels)
 //   exx = a + ½(a² + c²)
@@ -108,29 +108,4 @@ TEST_CASE(Strain, VsgLeavesSentinelWhereWindowUnsupported) {
     f2.valid[center] = false;
     auto s2 = StrainCalculator::compute_vsg_strain(f2, 25);
     CHECK_NEAR(s2.exx[center], -1000.0f, 1e-3);
-}
-
-TEST_CASE(Strain, NlvcRecoversLinearFieldInInterior) {
-    const float a = 0.010f, b = 0.002f, c = -0.003f, d = 0.007f;
-    // NLVC integrates a Gaussian-derivative kernel — needs a dense grid
-    auto f = linear_field(41, 41, 2, a, b, c, d);
-    auto s = StrainCalculator::compute_nlvc_strain(f, 24);
-    auto gt = green_lagrange(a, b, c, d);
-
-    // Interior point far from boundary (kernel support fully inside)
-    int idx = 20 * 41 + 20;
-    // NLVC is an integral approximation on a discrete grid: tolerance is
-    // dominated by quadrature error, not float precision.
-    CHECK_NEAR(s.exx[idx], gt.exx, 2e-3);
-    CHECK_NEAR(s.eyy[idx], gt.eyy, 2e-3);
-    CHECK_NEAR(s.exy[idx], gt.exy, 2e-3);
-}
-
-TEST_CASE(Strain, NlvcBoundaryStaysZeroWhenIntegralUnbalanced) {
-    // At the grid edge the antisymmetric kernel no longer integrates to
-    // ~0, so the result must be left at the initialized 0 value rather
-    // than a corrupted estimate.
-    auto f = linear_field(41, 41, 2, 0.01f, 0, 0, 0);
-    auto s = StrainCalculator::compute_nlvc_strain(f, 24);
-    CHECK_NEAR(s.exx[0], 0.0f, 1e-6);
 }

@@ -84,6 +84,17 @@ class ComputeOverlayHelper(
         mainHandler.removeCallbacks(elapsedTicker)
     }
 
+    /**
+     * Drop every pending main-thread callback. Call from the host's onDestroy so
+     * the self-reposting elapsed ticker cannot keep firing against a dead view
+     * hierarchy after the Activity is gone.
+     */
+    fun release() {
+        mainHandler.removeCallbacksAndMessages(null)
+        flushScheduled = false
+        clearPending()
+    }
+
     /** Update the overlay's ring + percentage. Safe to call from any thread. */
     fun setProgress(percent: Int) {
         pendingPercent = percent.coerceIn(0, 100)

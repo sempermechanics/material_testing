@@ -99,7 +99,7 @@ class EnginePipelineSmokeTest {
         val dims = SemperNativeLib.getImageDimensions(refBytes)
         assertTrue("PNG decode failed in native imgcodecs", dims[0] == W && dims[1] == H)
 
-        SemperNativeLib.initializeReference(refBytes, null, W, H, false)
+        SemperNativeLib.initializeReference(refBytes, null, W, H)
 
         val maxPoints = (W / STEP) * (H / STEP)
         val buffer = ByteBuffer.allocateDirect(maxPoints * DicResult.BYTES_PER_POINT)
@@ -115,7 +115,7 @@ class EnginePipelineSmokeTest {
             refBytes, defBytes, ByteArray(0),
             0, 0, W, H,
             STEP, SUBSET, 15,
-            true, true, false, false, false, false,
+            false,
             buffer, callback, metrics,
         )
         assertTrue("Engine returned error code $validPoints", validPoints > 0)

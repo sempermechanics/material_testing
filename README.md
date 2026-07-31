@@ -15,7 +15,7 @@ cloud for authenticated testers.
 ## Features
 
 - **Full-field 2D DIC** — ICGN sub-pixel solver, AKAZE + Delaunay mesh
-  seeding, reliability-guided (RGDIC) propagation, VSG/NLVC strain
+  seeding, reliability-guided (RGDIC) propagation, VSG strain
 - **Batch analysis** — one reference vs. many deformed frames, or frames
   extracted automatically from a video
 - **Region of interest** — rectangles or freehand-painted masks
@@ -114,7 +114,7 @@ Change the value and yours is kept — Reset returns to the suggestion.
 |---|---|
 | `native/include/semper/` | Public C++ API (types, image, solver, strain, pipeline) |
 | `native/src/math/` | ICGN solver + subset/image math + SIMD kernels |
-| `native/src/strain/` | VSG / NLVC strain |
+| `native/src/strain/` | VSG strain |
 | `native/src/seeding/` | AKAZE + RANSAC seeding |
 | `native/src/pipeline/` | Full-field Path A/B/C orchestration |
 | `native/adapters/android/` | Thin JNI → `libsemper_core.so` |

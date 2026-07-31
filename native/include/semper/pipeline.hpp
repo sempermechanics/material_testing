@@ -29,7 +29,7 @@ struct ReferenceCache {
 
     ~ReferenceCache() { reset(); }
     void reset();
-    void set_from_gray(const cv::Mat& gray_in, const cv::Mat& roi_mask, bool apply_blur);
+    void set_from_gray(const cv::Mat& gray_in, const cv::Mat& roi_mask);
 };
 
 struct FullFieldParams {
@@ -37,11 +37,6 @@ struct FullFieldParams {
     int step = 0;
     int subset_size = 0;
     int strain_window = 0;
-    bool use_delaunay = true;
-    bool use_fallback = true;
-    bool use_rgdic = true;
-    bool apply_gaussian_blur = false;
-    bool use_nlvc_strain = false;
     bool use_6x6_interpolator = false;
 };
 
@@ -50,6 +45,8 @@ struct FullFieldParams {
  * @return number of valid output points, or negative error code
  *   (-2 ROI, -3 init, [kCancelled] if cancelled mid-solve).
  * Writes packed points to output_ptr (8 floats each: x,y,u,v,exx,eyy,exy,corr).
+ * output_capacity is the number of floats output_ptr can hold; the solver never
+ * writes past it (points beyond the capacity are dropped rather than overflowing).
  * If metrics != nullptr and metrics_len >= 16, fills engine telemetry (17 floats preferred).
  */
 int run_full_field(
@@ -58,6 +55,7 @@ int run_full_field(
     const cv::Mat& roi_mask,
     const FullFieldParams& params,
     float* output_ptr,
+    int output_capacity,
     float* metrics,
     int metrics_len,
     ProgressCallback on_progress = nullptr);

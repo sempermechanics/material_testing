@@ -509,56 +509,6 @@ double dudy = Cu(2);
 
 ```
 
-**Strain Calculation:**
-
-### 9.4 Non-Local Vector Calculus (NLVC)
-
-**Motivation:** VSG smooths over cracks and discontinuities. NLVC preserves sharp gradients.
-
-**Core Idea:** Replace point-wise derivatives with spatially-weighted integral averages.
-
-**NLVC Strain Definition:**
-
-where  is a localization kernel.
-
-**Gaussian Kernel:**
-
-**Derivative of Kernel:**
-
-**Discrete Implementation:**
-For a grid point at , sum over neighbors within horizon :
-
-where  is the area associated with each grid point (typically step × step).
-
-**Implementation:**
-
-```cpp
-// StrainCalculator.cpp, line 73-112
-double s = h / 3.0;
-double norm_factor = 1.0 / (PI * 2.0 * s * s);
-
-for (int dy = -grid_rad; dy <= grid_rad; ++dy) {
-    for (int dx = -grid_rad; dx <= grid_rad; ++dx) {
-        double phys_dx = dx * disp.step;
-        double phys_dy = dy * disp.step;
-        double r_sq = phys_dx*phys_dx + phys_dy*phys_dy;
-        
-        if (r_sq <= h*h) {
-            double exp_val = std::exp(-(r_sq / (2.0*s*s)));
-            double kx = norm_factor * (-phys_dx / (s*s)) * exp_val;
-            double ky = norm_factor * (-phys_dy / (s*s)) * exp_val;
-            
-            dudx -= disp.u[neighbor] * kx * patch_area;
-            dudy -= disp.u[neighbor] * ky * patch_area;
-        }
-    }
-}
-
-```
-
-**Boundary Check:**
-To prevent false strain at ROI edges where the integration circle is truncated:
-
 ---
 
 ## 10. Error Analysis & Uncertainty

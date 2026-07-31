@@ -3,6 +3,9 @@ plugins {
     kotlin("plugin.serialization") version "1.9.22"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     id("com.google.gms.google-services")
+    // Coverage measurement only (report-only, no gate). Generate with
+    // `./gradlew :app:koverHtmlReport` → app/build/reports/kover/.
+    id("org.jetbrains.kotlinx.kover") version "0.9.1"
 }
 
 // Read local.properties directly rather than via java.util.Properties, so the
@@ -45,6 +48,18 @@ val indicApiBaseUrl =
         ""
     }
 
+// Release signing. The keystore and passwords come from the environment
+// (SIGNING_* — set by .github/workflows/release.yml and the tier-5 CI job),
+// never from the repo. When the keystore is absent — every local build, and
+// any CI run without the secrets — the release variant simply stays unsigned
+// instead of failing, so `assembleRelease` still works for inspection.
+val releaseKeystore =
+    System
+        .getenv("SIGNING_KEYSTORE")
+        ?.takeIf { it.isNotBlank() }
+        ?.let { rootProject.file(it) }
+        ?.takeIf { it.exists() }
+
 android {
     namespace = "com.indicvision.semper"
     compileSdk = 36
@@ -53,8 +68,10 @@ android {
         applicationId = "com.indicvision.semper"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // Overridable from the release workflow: -PversionCode / -PversionName.
+        // Every build handed to anyone must bump versionCode (see docs/ops/RELEASING.md).
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
+        versionName = (project.findProperty("versionName") as String?)?.takeIf { it.isNotBlank() } ?: "1.0"
 
         buildConfigField("String", "INDIC_API_BASE_URL", "\"$indicApiBaseUrl\"")
         // Overridden per build type below; the default keeps the flag defined
@@ -118,6 +135,17 @@ android {
         viewBinding = true
     }
 
+    signingConfigs {
+        create("release") {
+            releaseKeystore?.let { ks ->
+                storeFile = ks
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("boolean", "DEV_AUTH_BYPASS", "$devAuthBypass")
@@ -144,6 +172,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Sign with the release key when the keystore is present (CI with
+            // secrets). Absent it, the variant stays unsigned rather than
+            // silently debug-signed, so an unsigned APK never masquerades as a
+            // release build.
+            if (releaseKeystore != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

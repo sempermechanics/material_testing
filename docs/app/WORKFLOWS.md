@@ -800,7 +800,6 @@ then the link opens in a browser and the flow is effectively dead. See
 | Feature | Where | Why unreachable |
 |---|---|---|
 | **Circle, ellipse and freeform ROI** | `StudioOverlayView` — full draw, hit-test and mask generation | `activity_roi_draw.xml` only exposes Rect and Square; everything else collapses to Rectangle |
-| Pre-correlation blur, NLVC strain | `StaticAnalysisActivity` | Both flags pinned `false`; the `"NLVC"` strain-method branch can never fire |
 | **Convergence view** (peak strain and noise vs VSG) | documented in `VsgPlotView` / `VsgStudy` | Never built — only line-cut plots exist |
 | `VsgStudyRunner.ERROR_ENGINE_FAILED` | `VsgStudyRunner` | Declared, never assigned or matched |
 | Frame-order *picker* mode | `FrameOrderHelper` | Only the initial state; the sort menu offers no way back once you sort |

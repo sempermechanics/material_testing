@@ -17,16 +17,36 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(NATIVE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
+# Treat any first-party warning as an error under -DSEMPER_WERROR=ON.
+# Off by default so a local build still completes and shows the warnings.
+# The engine sources + non-image tests are already warning-clean; enable this
+# in CI once a green run confirms the OpenCV-backed dice tests are clean too.
+option(SEMPER_WERROR "Fail the build on compiler warnings in first-party code" OFF)
+
 if (NOT MSVC)
-    add_compile_options(-O2 -ffast-math)
+    add_compile_options(-O2 -ffast-math -Wall -Wextra)
+    if (SEMPER_WERROR)
+        add_compile_options(-Werror)
+    endif ()
 else ()
-    add_compile_options(/O2 /fp:fast)
+    add_compile_options(/O2 /fp:fast /W3)
+    if (SEMPER_WERROR)
+        add_compile_options(/WX)
+    endif ()
 endif ()
 
 set(DIC_SANITIZER "" CACHE STRING "Comma-separated sanitizers (address,undefined,thread) or empty")
 if (DIC_SANITIZER AND NOT MSVC)
     add_compile_options(-fsanitize=${DIC_SANITIZER} -g -fno-omit-frame-pointer)
     add_link_options(-fsanitize=${DIC_SANITIZER})
+endif ()
+
+# Report-only gcov/llvm-cov instrumentation: build with -DSEMPER_COVERAGE=ON,
+# run dic_tests, then gcovr/llvm-cov over the build tree. No gate.
+option(SEMPER_COVERAGE "Instrument the host tests for coverage (gcov)" OFF)
+if (SEMPER_COVERAGE AND NOT MSVC)
+    add_compile_options(--coverage -O0 -g)
+    add_link_options(--coverage)
 endif ()
 
 set(DIC_UNIT_TESTS
@@ -73,6 +93,9 @@ target_include_directories(dic_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/shim
         ${NATIVE_ROOT}/include
         ${NATIVE_ROOT}/src
+)
+# Vendored headers are not ours to warn about — SYSTEM silences -Wall/-Wextra there.
+target_include_directories(dic_tests SYSTEM PRIVATE
         ${NATIVE_ROOT}/third_party/eigen
         ${NATIVE_ROOT}/third_party/opencv/modules/core/include
 )
@@ -89,7 +112,8 @@ if (OpenCV_FOUND)
     message(STATUS "OpenCV ${OpenCV_VERSION} found — image-backed DICe tests enabled")
     add_library(dic_test_imageio STATIC framework/image_io.cpp)
     target_include_directories(dic_test_imageio PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(dic_test_imageio SYSTEM PRIVATE
             ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(dic_test_imageio PRIVATE ${OpenCV_LIBS})
     target_compile_definitions(dic_tests PRIVATE DIC_HAVE_OPENCV=1)

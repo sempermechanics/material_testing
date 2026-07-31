@@ -207,8 +207,6 @@ precision, not "close enough".
 | `VsgRecoversGeneralLinearField` | All three strain components for a general 4-coefficient field, at multiple interior points |
 | `VsgRigidBodyTranslationGivesZeroStrain` | Constant displacement → zero strain (the classic false-strain bug) |
 | `VsgLeavesSentinelWhereWindowUnsupported` | Corner points (<90% window fill) and invalidated points keep the `−1000` sentinel |
-| `NlvcRecoversLinearFieldInInterior` | NLVC integral reproduces the same closed-form strain (quadrature tolerance 2e-3) |
-| `NlvcBoundaryStaysZeroWhenIntegralUnbalanced` | Edge points where the antisymmetric kernel can't balance stay 0 instead of exploding |
 
 ## Suite: `CancelToken` — `unit/test_cancel_token.cpp`
 

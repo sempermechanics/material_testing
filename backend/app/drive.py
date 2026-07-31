@@ -228,18 +228,6 @@ def open_download(
     return DriveDownload(r)
 
 
-def stream_file(token: str, drive_file_id: str, chunk_size: int = 256 * 1024):
-    """Yield a Drive file's bytes for restore/download.
-
-    NOTE: unlike uploads (which go device→Drive directly via a resumable URI),
-    Drive offers no anonymous signed download, so restore bytes must be proxied
-    through here. That costs egress and is the main argument for moving blobs to
-    GCS (signed URLs) if downloads ever become common. See
-    docs/backend/CLOUD_ARCHITECTURE_GCP.md §0 and §19.
-    """
-    yield from open_download(token, drive_file_id).iter_chunks(chunk_size)
-
-
 def init_resumable(token: str, parent_folder_id: str, filename: str, size_bytes: int) -> str:
     """Start a resumable session; return the URI the client uploads bytes to."""
     r = requests.post(

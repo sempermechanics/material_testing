@@ -11,6 +11,34 @@ concurrency:
 
 jobs:
   # ===================================================================
+  # Detect which areas a PR touches, so the expensive tiers below run
+  # only when relevant. On push everything runs regardless (see each
+  # tier's `if`). This replaces the earlier `github.event.pull_request
+  # .changed_files` expression, which compared against an integer count
+  # and so never matched.
+  # ===================================================================
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      native: ${{ steps.filter.outputs.native }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            native:
+              - 'native/**'
+              - 'app/src/main/cpp/**'
+              - '.github/workflows/ci.yml'
+
+  # ===================================================================
   # Tier 1 — Kotlin compile + JVM unit tests + quality gates (no NDK)
   # ===================================================================
   tier1-app-fast:
@@ -38,6 +66,9 @@ jobs:
           :app:lintDebug
           :app:compileReleaseKotlin
 
+      - name: Kotlin coverage (report-only)
+        run: ./gradlew --console=plain :app:koverLog
+
   # ===================================================================
   # Tier 2a — Host-side engine correctness
   # ===================================================================
@@ -45,13 +76,14 @@ jobs:
     name: Tier 2 — Engine host
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: changes
     permissions:
       contents: read
       actions: write   # prune-cache
     if: >-
       github.event_name == 'push'
       || contains(github.event.pull_request.labels.*.name, 'engine')
-      || !contains(join(github.event.pull_request.head.sha, ''), 'skip-native')
+      || needs.changes.outputs.native == 'true'
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 500M
@@ -112,13 +144,14 @@ jobs:
     name: Tier 2 — Sanitized (${{ matrix.sanitizer }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: changes
     permissions:
       contents: read
       actions: write   # prune-cache
     if: >-
       github.event_name == 'push'
       || contains(github.event.pull_request.labels.*.name, 'engine')
-      || !contains(join(github.event.pull_request.head.sha, ''), 'skip-native')
+      || needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -255,9 +288,10 @@ jobs:
     name: Tier 4 — Backend
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: changes
     if: >-
       github.event_name == 'push'
-      || contains(join(github.event.pull_request.changed_files, ','), 'backend/')
+      || needs.changes.outputs.backend == 'true'
     defaults:
       run:
         working-directory: backend
@@ -277,7 +311,8 @@ jobs:
         run: ruff check app/ tests/
 
       - name: Test
-        run: pytest tests/ -v
+        # Coverage is reported, not gated — visibility first (no --cov-fail-under).
+        run: pytest tests/ -v --cov=app --cov-report=term-missing
 
   # ===================================================================
   # Tier 5 — Signed release build (arm64-v8a)
@@ -390,6 +425,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - changes
       - tier1-app-fast
       - tier2-engine-host
       - tier2-sanitizers
@@ -401,6 +437,7 @@ jobs:
         run: |
           results=()
           for result in \
+            "${{ needs.changes.result }}" \
             "${{ needs.tier1-app-fast.result }}" \
             "${{ needs.tier2-engine-host.result }}" \
             "${{ needs.tier2-sanitizers.result }}" \

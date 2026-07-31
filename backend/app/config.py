@@ -1,6 +1,16 @@
 import os
 
 
+def _env_int(name: str, default: str) -> int:
+    """Parse an integer env var, failing with a clear message rather than a bare
+    ValueError traceback when the value is non-numeric."""
+    raw = os.environ.get(name, default)
+    try:
+        return int(raw)
+    except ValueError as e:
+        raise RuntimeError(f"Environment variable {name}={raw!r} is not an integer") from e
+
+
 class Settings:
     # There is deliberately no sign-in domain gate. Any account Firebase Auth
     # accepts may authenticate; whether it may *use* anything is decided by
@@ -16,8 +26,8 @@ class Settings:
     # Per-user quotas. MAX_SESSIONS_PER_USER = how many analyses a user may keep
     # in the cloud; MAX_FILES_PER_SESSION bounds one analysis (150 frames x
     # raw+dat+csv + reference + report + metadata ≈ 460, so 600 gives headroom).
-    MAX_SESSIONS_PER_USER = int(os.environ.get("MAX_SESSIONS_PER_USER", "4"))
-    MAX_FILES_PER_SESSION = int(os.environ.get("MAX_FILES_PER_SESSION", "600"))
+    MAX_SESSIONS_PER_USER = _env_int("MAX_SESSIONS_PER_USER", "4")
+    MAX_FILES_PER_SESSION = _env_int("MAX_FILES_PER_SESSION", "600")
 
     # Comma-separated emails that are treated as admins (role=admin, always
     # approved) — they can call the /v1/admin/* endpoints. e.g.
@@ -70,6 +80,15 @@ class Settings:
     INSECURE_AUTH_ACK = os.environ.get("INSECURE_AUTH_I_ACCEPT_THE_RISK", "") == "1"
     # 1 = new users are created APPROVED instead of PENDING (smooth pilot).
     AUTO_APPROVE = os.environ.get("AUTO_APPROVE", "") == "1"
+
+    # Env vars the service cannot function without: GCP_PROJECT is the token
+    # audience for ID-token verification, SERVICE_ACCOUNT_EMAIL mints Drive
+    # tokens, SHARED_DRIVE_ID is where every file lives. A deployed service
+    # missing any of these serves broken Drive/token calls, so startup rejects
+    # it (see main._startup) instead of only warning.
+    def missing_required(self) -> list[str]:
+        required = ("GCP_PROJECT", "SERVICE_ACCOUNT_EMAIL", "SHARED_DRIVE_ID")
+        return [k for k in required if not getattr(self, k)]
 
 
 settings = Settings()

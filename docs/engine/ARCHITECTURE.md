@@ -209,20 +209,19 @@ struct DisplacementField { int width, height, step;       // grid dims + px spac
                            std::vector<bool> valid; };
 
 static StrainField compute_vsg_strain (const DisplacementField&, int window_pixels);
-static StrainField compute_nlvc_strain(const DisplacementField&, int horizon_pixels);
 ```
 
-Both output **Green-Lagrange strain**:
+Outputs **Green-Lagrange strain**:
 `exx = ∂u/∂x + ½((∂u/∂x)² + (∂v/∂x)²)`, etc.
 
-| | VSG (default) | NLVC |
-|---|---|---|
-| Method | least-squares plane fit over a circular window | nonlocal Gaussian-derivative integral |
-| Exact for | any linear displacement field | linear fields (up to quadrature error) |
-| Rejection | < 90% window fill or `rcond < 1e-12` → sentinel `−1000.0f` | unbalanced kernel integral → stays `0.0f` |
+| | VSG |
+|---|---|
+| Method | least-squares plane fit over a circular window |
+| Exact for | any linear displacement field |
+| Rejection | < 90% window fill or `rcond < 1e-12` → sentinel `−1000.0f` |
 
-**Consumer warning:** VSG failures are marked with `−1000.0f`, NLVC failures
-with `0.0f`. Check before rendering/statistics.
+**Consumer warning:** VSG failures are marked with `−1000.0f`. Check before
+rendering/statistics.
 
 ---
 

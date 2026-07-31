@@ -7,7 +7,7 @@ plugins {
 
 tasks.register("ciReleaseGate") {
     group = "verification"
-    description = "Mirrors CI tiers 1–3 locally (fast app + release build). Run emulator smoke separately."
+    description = "Mirrors CI tiers 1 + 5 locally (app gates + release build). Native/backend run separately."
     dependsOn(
         "spotlessCheck",
         ":app:detekt",

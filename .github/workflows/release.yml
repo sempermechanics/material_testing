@@ -69,6 +69,11 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
+      - name: Resolve version name
+        run: echo "VERSION_NAME=${VERSION#v}" >> "$GITHUB_ENV"
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+
       - name: Build signed release APK
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -84,12 +89,25 @@ jobs:
           :app:assembleRelease
           -PabiFilters=arm64-v8a
           -PnativeCompilerLauncher=ccache
+          -PversionName="${VERSION_NAME}"
+          -PversionCode="${{ github.run_number }}"
 
       - name: Verify arm64-v8a .so in release APK
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
           unzip -l "$APK" | grep -q "lib/arm64-v8a/libsemper_core.so" \
             || { echo "MISSING arm64-v8a native lib"; exit 1; }
+
+      # The whole point of the signing inputs above: prove the APK is actually
+      # signed with the release key. Fails the release if signing did not happen.
+      - name: Verify release signature
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BUILD_TOOLS/apksigner" verify --print-certs --verbose "$APK" \
+            || { echo "APK is NOT validly signed"; exit 1; }
+          echo "Release APK is signed:"
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | grep -i "Signer #1 certificate SHA-256"
 
       - name: Upload release APK
         uses: actions/upload-artifact@v7

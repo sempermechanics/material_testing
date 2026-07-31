@@ -16,14 +16,14 @@ void ReferenceCache::reset() {
     akaze_scale = 0.25;
 }
 
-void ReferenceCache::set_from_gray(const cv::Mat& gray_in, const cv::Mat& roi_mask, bool apply_blur) {
+void ReferenceCache::set_from_gray(const cv::Mat& gray_in, const cv::Mat& roi_mask) {
     reset();
     if (gray_in.empty()) return;
     gray = gray_in.clone();
     width = gray.cols;
     height = gray.rows;
     ref_img = new Image(width, height, gray.data);
-    ref_img->prepare_data(apply_blur);
+    ref_img->prepare_data(false);
 
     int sterilized_count = 0;
     if (!roi_mask.empty()) {

@@ -330,7 +330,6 @@ class AnalysisViewModel : ViewModel() {
                 roiY = roi[1],
                 roiW = roi[2],
                 roiH = roi[ROI_H],
-                useNlvc = false,
                 use6x6 = request.use6x6,
             ),
             cloudEnabled = cloudEnabled,
@@ -497,7 +496,6 @@ class AnalysisViewModel : ViewModel() {
         val roiY: Int,
         val roiW: Int,
         val roiH: Int,
-        val useNlvc: Boolean,
         val use6x6: Boolean,
     )
 
@@ -510,8 +508,6 @@ class AnalysisViewModel : ViewModel() {
         val finalRectY: Int,
         val finalRectW: Int,
         val finalRectH: Int,
-        val applyBlur: Boolean,
-        val useNlvc: Boolean,
         val use6x6: Boolean,
         val maskData: ByteArray,
         val debugDir: File,
@@ -596,7 +592,6 @@ class AnalysisViewModel : ViewModel() {
             params.maskData,
             realRefWidth,
             realRefHeight,
-            params.applyBlur,
         )
 
         val gridW = params.finalRectW / params.step
@@ -697,8 +692,7 @@ class AnalysisViewModel : ViewModel() {
             val validPointsCount = SemperNativeLib.computeFullFieldDirect(
                 refBytes, defBytes, params.maskData,
                 params.finalRectX, params.finalRectY, params.finalRectW, params.finalRectH,
-                params.step, params.subset, params.strainWin, true, true, false, params.applyBlur,
-                params.useNlvc, params.use6x6,
+                params.step, params.subset, params.strainWin, params.use6x6,
                 outputBuffer, callback, metricsCatcher,
             )
 
@@ -769,7 +763,6 @@ class AnalysisViewModel : ViewModel() {
                         roiY = params.finalRectY,
                         roiW = params.finalRectW,
                         roiH = params.finalRectH,
-                        useNlvc = params.useNlvc,
                         use6x6 = params.use6x6,
                     ),
                     cloudEnabled = cloudEnabled,
@@ -905,7 +898,7 @@ class AnalysisViewModel : ViewModel() {
             engineStats = engineStatsArray?.toList() ?: emptyList(),
             stopCode = stopCode,
             plannedFrameCount = plannedFrameCount,
-            strainMethod = if (settings.useNlvc) "NLVC" else "VSG",
+            strainMethod = "VSG",
             pointsConverged = pointsConverged,
             avgIterations = avgIterations,
             executionTimeMs = executionTimeMs,

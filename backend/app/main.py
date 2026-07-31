@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -20,11 +21,20 @@ app = FastAPI(title="Semper API", version="1.0")
 
 @app.on_event("startup")
 def _startup():
-    # GCP_PROJECT is required for Firebase ID-token verification (token audience).
-    missing = [k for k in ("GCP_PROJECT", "SERVICE_ACCOUNT_EMAIL", "SHARED_DRIVE_ID")
-               if not getattr(settings, k)]
+    # Required config (token audience, Drive SA, shared drive). A deployed
+    # service missing any of these cannot serve real traffic, so fail the start
+    # loudly rather than 500 on the first Drive/token call. Locally, warn and
+    # continue so partial setups can still be exercised.
+    missing = settings.missing_required()
     if missing:
-        log.warning("Missing env vars: %s", ", ".join(missing))
+        joined = ", ".join(missing)
+        if settings.ON_CLOUD_RUN:
+            raise RuntimeError(
+                f"Missing required env vars: {joined}. Refusing to start a "
+                "deployed service that cannot reach Drive/Firestore. Set them "
+                "via --set-env-vars / --set-secrets."
+            )
+        log.warning("Missing env vars: %s (running locally — continuing)", joined)
     if settings.DEV_INSECURE_AUTH:
         if settings.ON_CLOUD_RUN and not settings.INSECURE_AUTH_ACK:
             raise RuntimeError(
@@ -51,14 +61,18 @@ async def me(user=Depends(current_user)):
 
 
 @app.get("/v1/me/export")
-async def export_account(user=Depends(current_user)):
+async def export_account(ctx=Depends(verified_device)):
     """GDPR data portability (Art. 20): everything we hold about the caller, as JSON.
 
     Structured and machine-readable: the profile, registered devices, and every
     analysis with its full file manifest. The binary artifacts themselves stay
     downloadable via /v1/files/{id}/content (each file's `fileId` is included),
     which is also what the app's Restore screen uses.
+
+    Device-signed (like DELETE /v1/me): a full-account export is high-consequence
+    enough that a stolen ID token alone must not be able to trigger it.
     """
+    user = ctx["user"]
     uid = user["uid"]
     profile = repo.get_user(uid) or {}
     sessions = repo.list_user_sessions(uid, limit=1000)
@@ -307,8 +321,12 @@ async def download_file(file_id: str, request: Request, user=Depends(current_use
         log.error("drive download %s failed: HTTP %s", drive_file_id, status)
         raise HTTPException(502, "drive_download_failed") from e
 
+    # The stored name is client-supplied (validated for length only), so strip
+    # anything that could break out of the quoted filename or inject a header.
+    raw_name = f.get("name") or file_id
+    safe_name = re.sub(r'[\r\n"\\]', "_", str(raw_name))[:256] or file_id
     out_headers = {
-        "Content-Disposition": f'attachment; filename="{f.get("name", file_id)}"',
+        "Content-Disposition": f'attachment; filename="{safe_name}"',
         "Accept-Ranges": "bytes",
     }
     content_range = dl.headers.get("Content-Range")

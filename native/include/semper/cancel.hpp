@@ -15,8 +15,9 @@ constexpr int kCancelled = -99;
  * than per-call because only one solve runs at a time — the JNI layer holds the
  * reference-cache mutex for the duration of one.
  *
- * [clear_cancel] must be called before starting a solve that is meant to run:
- * the flag survives the solve it stopped.
+ * run_full_field clears the flag on entry, so a stale cancel from a previous
+ * solve never aborts the next one. [clear_cancel] remains public for callers
+ * that want to reset the flag explicitly between solves.
  *
  * Deliberately kept in a header of its own, with no OpenCV in it, so the flag
  * can be linked and tested without the rest of the pipeline.

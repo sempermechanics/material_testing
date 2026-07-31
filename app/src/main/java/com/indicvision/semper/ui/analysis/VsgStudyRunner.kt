@@ -107,7 +107,7 @@ object VsgStudyRunner {
         if (!params.debugDir.exists()) params.debugDir.mkdirs()
         params.outputDir.mkdirs()
         SemperNativeLib.setDebugOutputDir(params.debugDir.absolutePath)
-        SemperNativeLib.initializeReference(refBytes, params.maskData, refWidth, refHeight, false)
+        SemperNativeLib.initializeReference(refBytes, params.maskData, refWidth, refHeight)
 
         val defBytes = File(params.defFramePath).readBytes()
         val buffer = allocateFor(params)
@@ -247,7 +247,7 @@ object VsgStudyRunner {
             refBytes, defBytes, params.maskData,
             params.roiX, params.roiY, params.roiW, params.roiH,
             point.step, point.subset, point.strainWindow,
-            true, true, false, false, false, params.use6x6,
+            params.use6x6,
             buffer, silent, metrics,
         )
     }
