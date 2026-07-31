@@ -972,7 +972,6 @@ int run_full_field(
                             }
 
                             if (!has_node) {
-                                bool seed_pushed = false;
                                 int si = seed_idx.fetch_add(1, std::memory_order_relaxed);
                                 if (si < (int)global_seeds.size()) {
                                     const auto &seed = global_seeds[si];
@@ -1027,7 +1026,6 @@ int run_full_field(
                                                 }
                                                 global_points_solved.fetch_add(1, std::memory_order_relaxed); local_points_solved++;
                                                 { std::lock_guard<std::mutex> lq(gq.mtx); gq.q.push(Semper::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score)); gq.cv.notify_one(); }
-                                                seed_pushed = true;
                                             } else {
                                                 std::lock_guard<std::mutex> lg(grid_mutex);
                                                 resultGrid[seed.y_idx][seed.x_idx].corr = CORR_INVALID;
@@ -1179,9 +1177,6 @@ int run_full_field(
                     }
                     // =================================================
 
-                    float point_corr = resultGrid[y][x].corr;
-                    float point_std = hessian_pool[idx].std_dev;
-
                     int out_idx = valid_count * 8;
                     output_ptr[out_idx + 0] = resultGrid[y][x].x;
                     output_ptr[out_idx + 1] = resultGrid[y][x].y;
@@ -1210,7 +1205,7 @@ int run_full_field(
         // ⏱️ AGGREGATE PROFILING METRICS
         // ==========================================
         double a_icgn = 0, a_simp = 0, b_icgn = 0, b_simp = 0, b_wait = 0;
-        int a_simp_cnt = 0, b_simp_cnt = 0, total_icgn_iters = 0;
+        int total_icgn_iters = 0;
 
         int a_simp_calls = 0, a_simp_saved = 0, a_simp_dead = 0, a_simp_crash = 0, a_simp_timeout = 0;
         int b_simp_calls = 0, b_simp_saved = 0, b_simp_dead = 0, b_simp_crash = 0, b_simp_timeout = 0;
@@ -1219,11 +1214,11 @@ int run_full_field(
         int pathA_pts = 0, pathB_pts = 0;
 
         for (int i = 0; i < safe_cores; i++) {
-            a_icgn += stats_pathA[i].icgn_time_ms; a_simp += stats_pathA[i].simplex_time_ms; a_simp_cnt += stats_pathA[i].simplex_iters;
+            a_icgn += stats_pathA[i].icgn_time_ms; a_simp += stats_pathA[i].simplex_time_ms;
             pathA_pts += stats_pathA[i].points_solved; total_hessian += stats_pathA[i].hessian_time_ms; total_icgn_iters += stats_pathA[i].icgn_iters;
             a_simp_calls += stats_pathA[i].simplex_calls; a_simp_saved += stats_pathA[i].simplex_saved; a_simp_dead += stats_pathA[i].simplex_dead;
 
-            b_icgn += stats_pathB[i].icgn_time_ms; b_simp += stats_pathB[i].simplex_time_ms; b_simp_cnt += stats_pathB[i].simplex_iters;
+            b_icgn += stats_pathB[i].icgn_time_ms; b_simp += stats_pathB[i].simplex_time_ms;
             b_wait += stats_pathB[i].queue_wait_time_ms; pathB_pts += stats_pathB[i].points_solved; total_hessian += stats_pathB[i].hessian_time_ms;
             total_icgn_iters += stats_pathB[i].icgn_iters;
             b_simp_calls += stats_pathB[i].simplex_calls; b_simp_saved += stats_pathB[i].simplex_saved; b_simp_dead += stats_pathB[i].simplex_dead;
@@ -1265,6 +1260,7 @@ int run_full_field(
         LOGD("Total JNI Execution:  %.2f ms", time_total);
         LOGD("--- ENGINE MATH & HARDWARE EFFICIENCY ---");
         LOGD("Total Points Solved:  %d (A: %d, B: %d)", valid_count, pathA_pts, pathB_pts);
+        LOGD("Hessian Precompute:   %.2f ms (both paths)", total_hessian);
         LOGD("Average ICGN Speed:   %.4f iterations / point", (valid_count > 0) ? (float)total_icgn_iters / valid_count : 0.0f);
         int tot_simp_calls = a_simp_calls + b_simp_calls;
         int tot_simp_saved = a_simp_saved + b_simp_saved;

@@ -245,8 +245,10 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test:core-ktx:1.6.1")
     androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-    androidTestImplementation("androidx.test:rules:1.6.1")
+    // 3.6.1 crashes on API 37 (Espresso's InputManagerEventInjectionStrategy
+    // calls the hidden InputManager.getInstance, removed in Android 17).
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation("androidx.test:rules:1.7.0")
 
     implementation("androidx.activity:activity-ktx:1.8.2")
 

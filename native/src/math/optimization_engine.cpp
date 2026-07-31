@@ -413,8 +413,8 @@ namespace Semper {
         const int DIM = translation_only ? 2 : 6;
         int n_pts = DIM + 1;
 
-        float p[7][6] = {0.0f};
-        float y[7] = {0.0f};
+        float p[7][6] = {};
+        float y[7] = {};
 
         float scale[] = {2.0f, 2.0f, 0.01f, 0.01f, 0.01f, 0.01f};
         std::vector<bool> ref_valid = build_ref_valid(subset);
