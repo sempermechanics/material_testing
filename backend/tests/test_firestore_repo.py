@@ -1,0 +1,154 @@
+"""Security-critical repo logic: nonce single-use/TTL, admin+approval policy,
+and the complete_file idempotency + bump-once invariant. All against an
+in-memory Firestore double — no live backend, no auth bypass."""
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+import fake_firestore
+
+from app import firestore_repo as repo
+from app.models import FileComplete
+
+
+@pytest.fixture
+def store(monkeypatch):
+    # Keep outbound mail out of the unit tests regardless of env.
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    return fake_firestore.install(monkeypatch)
+
+
+def _claims(sub="u1", email="a@b.com", verified=True, provider="google.com"):
+    return {
+        "sub": sub,
+        "email": email,
+        "email_verified": verified,
+        "name": "Test",
+        "firebase": {"sign_in_provider": provider},
+    }
+
+
+# ---------------- nonce ----------------
+def test_nonce_round_trip_consumes_once(store):
+    nonce = repo.issue_nonce("u1", "d1")
+    assert repo.consume_nonce(nonce, "u1", "d1") is True
+    # Single-use: the same nonce cannot be replayed.
+    assert repo.consume_nonce(nonce, "u1", "d1") is False
+
+
+def test_nonce_rejects_wrong_uid_or_device(store):
+    nonce = repo.issue_nonce("u1", "d1")
+    assert repo.consume_nonce(nonce, "someone-else", "d1") is False
+
+
+def test_nonce_wrong_device_rejected(store):
+    nonce = repo.issue_nonce("u1", "d1")
+    assert repo.consume_nonce(nonce, "u1", "d2") is False
+
+
+def test_nonce_expired_rejected(store):
+    nonce = repo.issue_nonce("u1", "d1")
+    # Force the stored challenge to be in the past.
+    store._data["challenges"][nonce]["expireAt"] = datetime.now(timezone.utc) - timedelta(seconds=1)
+    assert repo.consume_nonce(nonce, "u1", "d1") is False
+
+
+def test_nonce_unknown_rejected(store):
+    assert repo.consume_nonce("never-issued", "u1", "d1") is False
+
+
+# ---------------- admin / approval ----------------
+def test_admin_email_requires_verified(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", {"boss@corp.com"})
+    assert repo._is_admin_email(_claims(email="boss@corp.com", verified=True)) is True
+    # Unverified email must never grant admin, even if it matches.
+    assert repo._is_admin_email(_claims(email="boss@corp.com", verified=False)) is False
+    assert repo._is_admin_email(_claims(email="nobody@corp.com", verified=True)) is False
+
+
+def test_auto_approved_policy(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "corp.com")
+    assert repo._auto_approved(_claims(email="x@corp.com", verified=True)) is True
+    assert repo._auto_approved(_claims(email="x@corp.com", verified=False)) is False
+    assert repo._auto_approved(_claims(email="x@other.com", verified=True)) is False
+
+
+def test_new_user_pending_by_default(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    u = repo.get_or_create_user(_claims(sub="new1", email="x@nowhere.com"))
+    assert u["access_status"] == "PENDING"
+    assert u["role"] == "user"
+
+
+def test_new_admin_user_approved(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", {"boss@corp.com"})
+    u = repo.get_or_create_user(_claims(sub="admin1", email="boss@corp.com"))
+    assert u["access_status"] == "APPROVED"
+    assert u["role"] == "admin"
+
+
+def test_pending_user_promoted_on_qualifying_signin(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    repo.get_or_create_user(_claims(sub="u2", email="x@corp.com"))  # PENDING
+    # Domain is now auto-approved; the next sign-in flips them to APPROVED.
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "corp.com")
+    u = repo.get_or_create_user(_claims(sub="u2", email="x@corp.com"))
+    assert u["access_status"] == "APPROVED"
+
+
+# ---------------- complete_file idempotency ----------------
+def _seed_pending_file(store, file_id="f1", uid="u1", size=100):
+    store._data.setdefault("files", {})[file_id] = {
+        "uid": uid, "sizeBytes": size, "status": "PENDING", "sessionId": "s1",
+    }
+
+
+def test_complete_file_first_call_ok(store):
+    _seed_pending_file(store)
+    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5="abc")
+    assert repo.complete_file("f1", "u1", body) == "ok"
+    assert store._data["files"]["f1"]["status"] == "COMPLETED"
+
+
+def test_complete_file_retry_is_idempotent(store):
+    _seed_pending_file(store)
+    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5="abc")
+    assert repo.complete_file("f1", "u1", body) == "ok"
+    # A retried completion must return "already" and NOT bump again.
+    assert repo.complete_file("f1", "u1", body) == "already"
+
+
+def test_complete_file_rejects_wrong_uid(store):
+    _seed_pending_file(store, uid="u1")
+    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5="abc")
+    assert repo.complete_file("f1", "someone-else", body) == ""
+
+
+def test_complete_file_rejects_size_mismatch(store):
+    _seed_pending_file(store, size=100)
+    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=999, md5="abc")
+    assert repo.complete_file("f1", "u1", body) == ""
+
+
+def test_complete_file_missing_returns_empty(store):
+    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5="abc")
+    assert repo.complete_file("nope", "u1", body) == ""
+
+
+# ---------------- bump_session_progress ----------------
+def test_bump_advances_and_completes(store):
+    store._data.setdefault("sessions", {})["s1"] = {
+        "uid": "u1", "fileCount": 2, "completedCount": 0, "status": "UPLOADING",
+    }
+    repo.bump_session_progress("s1")
+    assert store._data["sessions"]["s1"]["completedCount"] == 1
+    assert store._data["sessions"]["s1"]["status"] == "UPLOADING"
+    repo.bump_session_progress("s1")
+    assert store._data["sessions"]["s1"]["completedCount"] == 2
+    assert store._data["sessions"]["s1"]["status"] == "COMPLETED"

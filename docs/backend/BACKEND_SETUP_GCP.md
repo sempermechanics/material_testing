@@ -280,7 +280,9 @@ signature) runs unchanged — the client token arrives as
 `X-Forwarded-Authorization` (already handled in `deps.py`).
 
 ```bash
-PROJECT=indicvision-dic-app; REGION=asia-south1
+# Reuse the same $PROJECT you set in Part A — do not reassign it here. Set
+# $REGION to wherever you deployed Cloud Run.
+REGION=asia-south1
 RUN_URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
 
 # 1. APIs

@@ -1,0 +1,55 @@
+name: Deploy Backend
+
+# Versioned replacement for the by-hand `gcloud run deploy` in the runbook.
+# Manual trigger; the caller supplies the target. Auth is via Workload Identity
+# Federation (no service-account key in the repo) — set the two secrets below
+# before first use. Until then this is a template that will fail at the auth
+# step, which is intentional: config is now reviewed in git, not pasted in a
+# terminal.
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: GCP project id
+        required: true
+      region:
+        description: Cloud Run region
+        required: true
+        default: us-central1
+      service:
+        description: Cloud Run service name
+        required: true
+        default: indic-api
+
+permissions:
+  contents: read
+  id-token: write   # Workload Identity Federation
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ github.event.inputs.service }}
+          region: ${{ github.event.inputs.region }}
+          source: backend
+          # Non-secret runtime config. Sensitive values (RESEND_API_KEY) come
+          # from Secret Manager via --set-secrets, configured on the service.
+          env_vars: |-
+            GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
+            SHARED_DRIVE_ID=${{ vars.SHARED_DRIVE_ID }}
+            SERVICE_ACCOUNT_EMAIL=${{ vars.SERVICE_ACCOUNT_EMAIL }}
+            ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
+            SUPPORT_EMAIL=${{ vars.SUPPORT_EMAIL }}
+            NOTIFY_FROM=${{ vars.NOTIFY_FROM }}
+          flags: --cpu=1 --memory=512Mi --min-instances=0

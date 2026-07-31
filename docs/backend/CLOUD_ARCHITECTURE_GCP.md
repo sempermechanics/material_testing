@@ -576,21 +576,33 @@ stays in GitHub encrypted secrets or Play App Signing.
 
 ## 17. Monitoring and logging
 
-- **Structured JSON logs** (one line/request: `uid`, `deviceId`, `action`,
-  `latencyMs`, `outcome`; **never** tokens/signatures/URIs).
+**Implemented:**
+- **Structured JSON access log** — one line per request (`requestId`, `method`,
+  `path`, `status`, `latencyMs`, `outcome`, and `uid` when a device-signed
+  dependency resolved it), via the `access_log` middleware in `main.py`. Never
+  logs tokens/signatures/URIs.
+- **Audit trail** in Firestore `audit_logs` — the compliance record (Cloud
+  Logging is the operational one).
+
+**Planned (not yet built):**
+- Enrich the access line with `deviceId`/`action`.
 - **Cloud Monitoring** dashboards: Cloud Run req count / p95 latency / error
   rate / instance count; Drive init failure rate; Firestore write count vs free
   quota.
-- **Error Reporting** auto-groups exceptions.
+- **Error Reporting** auto-grouping of exceptions.
 - **Log-based alerts:** spike in `AUTH_DENIED` (attack), `storageQuotaExceeded`
   (misconfig), Drive `429` (quota), sessions stuck `UPLOADING`.
 - **Uptime check** on `/healthz`.
-- **Audit trail** in Firestore `audit_logs` is the compliance record; Cloud
-  Logging is the operational one.
 
 ---
 
 ## 18. Disaster recovery
+
+> **Status: mostly planned.** Offline-first (Identity row) is real today, and
+> partial IaC now exists — `backend/firestore.indexes.json` and the
+> `deploy-backend.yml` workflow. The scheduled Firestore export, PITR, nightly
+> Drive↔Firestore reconciliation, and full Terraform below are **not yet
+> implemented**; the RPO/RTO figures describe the target, not current cover.
 
 | Asset | Risk | Mitigation |
 |---|---|---|

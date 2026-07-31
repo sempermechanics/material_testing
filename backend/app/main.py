@@ -1,7 +1,9 @@
+import json
 import logging
 import re
 import time
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import requests
@@ -15,12 +17,10 @@ from .models import DeviceReg, FileComplete, SessionCreate
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("indic")
+_access_log = logging.getLogger("indic.access")
 
-app = FastAPI(title="Semper API", version="1.0")
 
-
-@app.on_event("startup")
-def _startup():
+def _startup_checks():
     # Required config (token audience, Drive SA, shared drive). A deployed
     # service missing any of these cannot serve real traffic, so fail the start
     # loudly rather than 500 on the first Drive/token call. Locally, warn and
@@ -45,6 +45,44 @@ def _startup():
                 "otherwise remove DEV_INSECURE_AUTH."
             )
         log.warning("=== DEV_INSECURE_AUTH=1 : auth is BYPASSED. Never use in production. ===")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _startup_checks()
+    yield
+
+
+app = FastAPI(title="Semper API", version="1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def access_log(request: Request, call_next):
+    """One structured JSON line per request: method, path, status, latencyMs,
+    outcome, and the caller uid when a dependency resolved it (set on
+    request.state by verified_device). Also stamps an X-Request-Id."""
+    start = time.perf_counter()
+    request_id = uuid.uuid4().hex[:12]
+    request.state.uid = None
+    request.state.request_id = request_id
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers["X-Request-Id"] = request_id
+        return response
+    finally:
+        latency_ms = round((time.perf_counter() - start) * 1000, 1)
+        outcome = "ok" if status < 400 else ("client_error" if status < 500 else "server_error")
+        _access_log.info(json.dumps({
+            "requestId": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status": status,
+            "latencyMs": latency_ms,
+            "outcome": outcome,
+            "uid": getattr(request.state, "uid", None),
+        }))
 
 
 @app.get("/healthz")
@@ -412,6 +450,23 @@ async def admin_revoke_user(uid: str, admin=Depends(admin_user)):
 @app.post("/v1/files/{file_id}/complete")
 async def complete_file(file_id: str, body: FileComplete, ctx=Depends(verified_device)):
     user = ctx["user"]
+    rec = repo.get_file(file_id)
+    if not rec or rec.get("uid") != user["uid"]:
+        raise HTTPException(404, "file_not_found")
+    # Verify the upload actually landed intact before trusting this completion.
+    # The client uploads straight to Drive, so ask Drive for the real size/md5
+    # and reject a truncated or corrupted object. Skipped on an idempotent retry
+    # (already COMPLETED), which carries no new bytes.
+    if rec.get("status") != "COMPLETED":
+        try:
+            meta = drive.get_file_meta(drive.access_token(), body.driveFileId)
+        except requests.HTTPError as e:
+            log.error("drive meta for %s failed: %s", body.driveFileId, e)
+            raise HTTPException(502, "drive_meta_failed") from e
+        if meta["size"] != rec.get("sizeBytes"):
+            raise HTTPException(422, "size_mismatch")
+        if body.md5 and meta["md5"] and body.md5 != meta["md5"]:
+            raise HTTPException(422, "checksum_mismatch")
     outcome = repo.complete_file(file_id, user["uid"], body)
     if not outcome:
         raise HTTPException(409, "size_or_state_mismatch")

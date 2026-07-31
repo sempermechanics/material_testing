@@ -35,11 +35,15 @@ Intent extras shared across Activities live in
 | Package | Role |
 |---|---|
 | `ui/auth/` | Splash, sign-in, pending approval, Google / AccessRouter helpers |
-| `ui/home/` | Session list, settings sheet, selection, open-session intents |
+| `ui/home/` | Session list, selection, open-session intents |
 | `ui/analysis/` | Setup wizard, ROI, VSG sweep, import/overlay helpers, ViewModel |
 | `ui/viewer/` | Heatmaps, inspect, report factory, settings-used sheet |
+| `ui/settings/` | Settings screen, cloud/account controls, analysis-data listing |
+| `ui/admin/` | Admin screen — approve/revoke users via `/v1/admin/*` |
+| `ui/limit/` | Session-quota screen |
 | `ui/common/` | Insets, media source chooser, motion |
-| `data/` | Auth, session store, cloud sync/upload/restore, API client |
+| `data/` | Auth, session store, cloud sync/upload/restore |
+| `data/net/` | Backend HTTP client (`IndicApi`), token store/provider |
 | `report/` | PDF / CSV / visualization |
 
 Style for shared UI logic: plain `object` / small classes named `*Helper`,

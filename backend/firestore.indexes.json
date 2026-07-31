@@ -1,0 +1,5 @@
+{
+  "//": "Firestore index source of truth. Deploy with `firebase deploy --only firestore:indexes`. Every backend query (firestore_repo.py) is a single-field equality (users.access_status, files.sessionId/uid, sessions.uid, devices.uid) plus optional limit()/count(), which Firestore single-field-indexes automatically — so no composite index is required today. Add composite entries here if a query ever combines fields or adds orderBy.",
+  "indexes": [],
+  "fieldOverrides": []
+}

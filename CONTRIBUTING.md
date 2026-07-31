@@ -87,7 +87,7 @@ and local analysis work without it.
 
 ## CI
 
-CI is defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
+CI is defined in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 See [docs/ops/CI.md](docs/ops/CI.md) for the tier map and required checks.
 The single required status check is `ci-ok`.
 

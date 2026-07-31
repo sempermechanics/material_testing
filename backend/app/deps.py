@@ -80,6 +80,11 @@ async def verified_device(
     x_signature: str = Header(default=""),
 ) -> dict:
     user = await current_user(authorization, x_forwarded_authorization)
+    # Surface the caller to the access-log middleware (best-effort).
+    try:
+        request.state.uid = user["uid"]
+    except Exception:  # noqa: BLE001 - logging enrichment must never fail a request
+        pass
     if settings.DEV_INSECURE_AUTH:
         return {"user": user, "device": _DEV_DEVICE}
 

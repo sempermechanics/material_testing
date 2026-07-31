@@ -1,0 +1,14 @@
+# Ruff config for the backend. Without this, only E/F run by default, which
+# means the `# noqa: BLE001` markers in the source suppressed a rule that was
+# never enabled. Turn BLE (flake8-blind-except) on so those markers mean
+# something and new blind excepts are flagged.
+target-version = "py312"
+
+[lint]
+# Ruff's default set (E4/E7/E9/F) — which the code already passes — plus BLE
+# (flake8-blind-except), the one rule the `# noqa: BLE001` markers reference.
+# Scoped deliberately: E501 or I/UP/B would flag pre-existing style unrelated
+# to making those markers meaningful.
+select = ["E4", "E7", "E9", "F", "BLE"]
+# The three broad excepts that are deliberate (auth verify, best-effort audit
+# and mail) already carry `# noqa: BLE001`, so enabling BLE does not fail them.

@@ -228,6 +228,25 @@ def open_download(
     return DriveDownload(r)
 
 
+def get_file_meta(token: str, drive_file_id: str) -> dict:
+    """The size (bytes) and md5 Drive actually recorded for an uploaded file.
+
+    The client PUTs bytes straight to Drive, so its claimed size/checksum are not
+    authoritative — this is how the backend verifies the upload landed intact.
+    Returns {"size": int|None, "md5": str|None}.
+    """
+    r = requests.get(
+        f"{API}/files/{drive_file_id}",
+        headers=_headers(token),
+        params={"fields": "size,md5Checksum", "supportsAllDrives": "true"},
+        timeout=30,
+    )
+    r.raise_for_status()
+    j = r.json()
+    size = j.get("size")
+    return {"size": int(size) if size is not None else None, "md5": j.get("md5Checksum")}
+
+
 def init_resumable(token: str, parent_folder_id: str, filename: str, size_bytes: int) -> str:
     """Start a resumable session; return the URI the client uploads bytes to."""
     r = requests.post(

@@ -1,4 +1,8 @@
 import os
+import sys
+
+# Make test-only helpers (e.g. fake_firestore) importable by bare name.
+sys.path.insert(0, os.path.dirname(__file__))
 
 os.environ.setdefault("DEV_INSECURE_AUTH", "1")
 os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "test-project")
