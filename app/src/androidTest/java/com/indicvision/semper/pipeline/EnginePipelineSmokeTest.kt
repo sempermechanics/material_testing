@@ -228,4 +228,61 @@ class EnginePipelineSmokeTest {
         val res = solve(ref.toPngBytes(), soften(warp(ref, m)).toPngBytes())
         assertFieldMatchesWarp(res, m, tolPx = 0.4f, minCoverageFrac = 0.10f)
     }
+
+    // ── Contract characterization (pins behaviour before any refactor) ────────
+
+    /** Bare compute call, returning the raw engine code (may be negative). */
+    private fun compute(
+        refBytes: ByteArray,
+        defBytes: ByteArray,
+        roiX: Int = 0, roiY: Int = 0, roiW: Int = W, roiH: Int = H,
+        bufferPoints: Int = (W / STEP) * (H / STEP),
+    ): Int {
+        SemperNativeLib.initializeReference(refBytes, null, W, H)
+        val buffer = ByteBuffer.allocateDirect(maxOf(1, bufferPoints) * DicResult.BYTES_PER_POINT)
+            .order(ByteOrder.nativeOrder())
+        val metrics = FloatArray(17) { if (it == 16) -1f else 0f }
+        val cb = object : ProgressCallback { override fun onProgressUpdate(percentage: Int) {} }
+        return SemperNativeLib.computeFullFieldDirect(
+            refBytes, defBytes, ByteArray(0),
+            roiX, roiY, roiW, roiH, STEP, SUBSET, 15, false, buffer, cb, metrics,
+        )
+    }
+
+    @Test
+    fun degenerateRoi_returnsRoiError() {
+        // rectW < step ⇒ gridW == 0 ⇒ documented ROI error (-2), not a crash.
+        val ref = makeReference().toPngBytes()
+        val def = warp(makeReference(), Matrix().apply { setTranslate(3f, 2f) }).toPngBytes()
+        assertTrue("expected -2 for degenerate ROI", compute(ref, def, roiW = STEP - 1, roiH = STEP - 1) == -2)
+    }
+
+    @Test
+    fun emptyDeformed_returnsInitError() {
+        // A def image the codec cannot decode ⇒ init/decode error (-3).
+        val ref = makeReference().toPngBytes()
+        assertTrue("expected -3 for undecodable deformed", compute(ref, ByteArray(0)) == -3)
+    }
+
+    @Test
+    fun staleCancelDoesNotAbortNextSolve() {
+        // 1.8: the solver clears the process-global cancel flag on entry, so a
+        // cancel left set from a prior run must NOT abort a fresh solve.
+        val ref = makeReference().toPngBytes()
+        val def = warp(makeReference(), Matrix().apply { setTranslate(3f, 2f) }).toPngBytes()
+        SemperNativeLib.setCancelRequested(true) // stale request, never cleared by us
+        val n = compute(ref, def)
+        SemperNativeLib.setCancelRequested(false)
+        assertTrue("stale cancel aborted the solve (got $n)", n > 0)
+    }
+
+    @Test
+    fun undersizedBuffer_truncatesWithoutOverflow() {
+        // 0.1: an output buffer far smaller than gridW*gridH must not overflow;
+        // the solver caps the write and returns a bounded count (no crash).
+        val ref = makeReference().toPngBytes()
+        val def = warp(makeReference(), Matrix().apply { setTranslate(3f, 2f) }).toPngBytes()
+        val n = compute(ref, def, bufferPoints = 4) // room for only 4 points
+        assertTrue("expected a bounded, non-crashing count, got $n", n in 0..4)
+    }
 }

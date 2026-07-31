@@ -17,17 +17,19 @@ namespace Semper {
         INIT_NO_SIMPLEX = 2
     };
 
-    // DIC analysis result (6-DOF + status)
+    // DIC analysis result (6-DOF + status). Default-initialized so a result
+    // that is read before every field was written can never carry indeterminate
+    // memory (the same class of bug the SubsetData::dim comment below records).
     struct AnalysisResult {
-        float u;
-        float v;
-        float ux;
-        float uy;
-        float vx;
-        float vy;
+        float u = 0.0f;
+        float v = 0.0f;
+        float ux = 0.0f;
+        float uy = 0.0f;
+        float vx = 0.0f;
+        float vy = 0.0f;
 
-        int status;
-        float correlation_score;
+        int status = 0;
+        float correlation_score = 0.0f;
         int iters = 0;
         int invalid_ref_pixels = 0; // 🚀 NEW: Tracks Ghost Wall overlap
     };
@@ -65,8 +67,8 @@ namespace Semper {
         std::vector<scalar_t> ref_intensities;
         std::vector<scalar_t> norm_ref_intensities;
         std::vector<scalar_t> gx_vec, gy_vec; // Pre-sampled gradients
-        scalar_t mean_intensity;
-        scalar_t std_dev;
+        scalar_t mean_intensity = 0.0f;
+        scalar_t std_dev = 0.0f;
 
         // 🚀 Matrix memory footprint cut in half!
         Eigen::Matrix<float, 6, 6> H_inv;

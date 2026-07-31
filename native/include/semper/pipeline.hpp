@@ -15,7 +15,14 @@ namespace pipeline {
 
 using ProgressCallback = std::function<void(int percentage)>;
 
-/** Cached reference for multi-frame solves (AKAZE + Image). Thread-safe via mutex. */
+/**
+ * Cached reference for multi-frame solves (AKAZE + Image).
+ *
+ * Owns a raw Image* (freed in reset()), so it is non-copyable/non-movable to
+ * avoid a double-free — there is one process-wide instance (see the JNI layer).
+ * The embedded `mutex` does NOT make the struct's methods thread-safe; it is
+ * held by the JNI caller around a whole solve so a cancel can still interrupt.
+ */
 struct ReferenceCache {
     Image* ref_img = nullptr;
     int width = 0;
@@ -27,7 +34,13 @@ struct ReferenceCache {
     std::mutex mutex;
     std::string debug_dir;
 
+    ReferenceCache() = default;
     ~ReferenceCache() { reset(); }
+    ReferenceCache(const ReferenceCache&) = delete;
+    ReferenceCache& operator=(const ReferenceCache&) = delete;
+    ReferenceCache(ReferenceCache&&) = delete;
+    ReferenceCache& operator=(ReferenceCache&&) = delete;
+
     void reset();
     void set_from_gray(const cv::Mat& gray_in, const cv::Mat& roi_mask);
 };

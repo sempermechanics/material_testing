@@ -7,7 +7,7 @@
 namespace Semper {
 
     struct DisplacementField {
-        int width, height, step;
+        int width = 0, height = 0, step = 0;
         std::vector<float> u, v; // 🚀 Changed to float
         std::vector<bool> valid;
     };
