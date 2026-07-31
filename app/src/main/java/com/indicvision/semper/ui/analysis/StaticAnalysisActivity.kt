@@ -535,11 +535,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     tvResult.text = "Caching images..."
                 }
 
-                viewModel.clearPreviousResults()
-
-                // Fresh pick keeps system picker order until the user chooses Name/Date/Manual.
-                viewModel.defOrderMode = FrameOrderMode.PICKER
-                viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
+                // Heavy IO stays off the main thread.
                 val meta = FrameOrderHelper.loadMeta(
                     this@StaticAnalysisActivity,
                     capped,
@@ -554,29 +550,33 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     cacheDir = cacheDir,
                     displayName = ::getFileName,
                 )
-                if (batch != null) {
-                    viewModel.defFilePaths = batch.filePaths
-                    viewModel.defOriginalNames = batch.originalNames
-                    viewModel.defFrameSizes = batch.frameSizes
-                    viewModel.defFrameDates = batch.filePaths.map { path ->
-                        val name = File(path).name
-                        val idx = name.take(4).toIntOrNull()
-                        if (idx != null && idx in datesByIndex.indices) {
-                            datesByIndex[idx]
-                        } else {
-                            Long.MAX_VALUE
-                        }
-                    }
-                    viewModel.defFromVideo = batch.fromVideo
-                } else {
-                    viewModel.defFilePaths = emptyList()
-                    viewModel.defOriginalNames = emptyList()
-                    viewModel.defFrameSizes = emptyMap()
-                    viewModel.defFrameDates = emptyList()
-                    viewModel.defFromVideo = false
+                val frameDates = batch?.filePaths?.map { path ->
+                    val name = File(path).name
+                    val idx = name.take(4).toIntOrNull()
+                    if (idx != null && idx in datesByIndex.indices) datesByIndex[idx] else Long.MAX_VALUE
                 }
 
+                // Every ViewModel write happens on Main, so the Main-thread reads
+                // (refreshDefSlot / validateFrameSizes / checkReady) observe them
+                // safely. Matches handleReferenceImage's threading.
                 withContext(Dispatchers.Main) {
+                    viewModel.clearPreviousResults()
+                    // Fresh pick keeps system picker order until the user chooses Name/Date/Manual.
+                    viewModel.defOrderMode = FrameOrderMode.PICKER
+                    viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
+                    if (batch != null) {
+                        viewModel.defFilePaths = batch.filePaths
+                        viewModel.defOriginalNames = batch.originalNames
+                        viewModel.defFrameSizes = batch.frameSizes
+                        viewModel.defFrameDates = frameDates.orEmpty()
+                        viewModel.defFromVideo = batch.fromVideo
+                    } else {
+                        viewModel.defFilePaths = emptyList()
+                        viewModel.defOriginalNames = emptyList()
+                        viewModel.defFrameSizes = emptyMap()
+                        viewModel.defFrameDates = emptyList()
+                        viewModel.defFromVideo = false
+                    }
                     tvResult.text = ""
                     refreshDefSlot()
                     validateFrameSizes()

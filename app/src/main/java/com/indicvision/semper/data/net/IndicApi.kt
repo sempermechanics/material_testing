@@ -79,17 +79,6 @@ class IndicApi(context: Context) {
      */
     val enabled: Boolean get() = base.isNotBlank() && !DevAuth.active
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
-        .writeTimeout(WRITE_TIMEOUT_S, TimeUnit.SECONDS) // large chunk PUTs to Drive
-        .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
-        .build()
-
-    /** Longer read idle for large Session.zip / legacy restores through the proxy. */
-    private val downloadClient = client.newBuilder()
-        .readTimeout(DOWNLOAD_READ_TIMEOUT_S, TimeUnit.SECONDS)
-        .build()
-
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val octet = "application/octet-stream".toMediaType()
 
@@ -510,5 +499,22 @@ class IndicApi(context: Context) {
     } catch (e: IOException) {
         Timber.w(e, "reading error body")
         ""
+    }
+
+    companion object {
+        // One connection pool + dispatcher shared by every IndicApi instance.
+        // The class is constructed per worker/repo (many times), and a fresh
+        // OkHttpClient each time would throw away TLS session reuse and
+        // keep-alive. downloadClient shares this pool via newBuilder().
+        private val client = OkHttpClient.Builder()
+            .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
+            .writeTimeout(WRITE_TIMEOUT_S, TimeUnit.SECONDS) // large chunk PUTs to Drive
+            .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
+            .build()
+
+        /** Longer read idle for large Session.zip / legacy restores through the proxy. */
+        private val downloadClient = client.newBuilder()
+            .readTimeout(DOWNLOAD_READ_TIMEOUT_S, TimeUnit.SECONDS)
+            .build()
     }
 }
