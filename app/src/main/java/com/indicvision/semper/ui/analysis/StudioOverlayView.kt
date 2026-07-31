@@ -1,15 +1,7 @@
-// Custom ROI overlay view: literal handle sizes, stroke widths, colours and the
-// dense gesture/hit-testing logic are clearest inline, so the structural and
-// magic-number rules are suppressed for this whole file.
-@file:Suppress(
-    "MagicNumber",
-    "ComplexCondition",
-    "LongMethod",
-    "CyclomaticComplexMethod",
-    "NestedBlockDepth",
-    "ReturnCount",
-    "TooManyFunctions",
-)
+// Custom ROI overlay view: coordinate mapping, the gesture/hit-testing state
+// machine and mask serialization all live here. Its detekt findings are tracked
+// in detekt-baseline.xml rather than blanket-suppressed, so the debt is counted
+// and can be burned down (see docs — Tier 3 splits this view up).
 
 package com.indicvision.semper.ui.analysis
 

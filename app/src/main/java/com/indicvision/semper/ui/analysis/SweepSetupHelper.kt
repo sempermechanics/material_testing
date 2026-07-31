@@ -1,6 +1,6 @@
 // Sweep setup wires many sliders/fields and seeds their suggested values; the
 // literal UI/parameter constants and per-control methods read clearest inline.
-@file:Suppress("LongMethod", "MagicNumber", "TooManyFunctions")
+// Findings are tracked in detekt-baseline.xml rather than blanket-suppressed.
 
 package com.indicvision.semper.ui.analysis
 

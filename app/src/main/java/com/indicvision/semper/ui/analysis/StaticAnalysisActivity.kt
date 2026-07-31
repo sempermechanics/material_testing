@@ -2,15 +2,7 @@
 // (image/video import, ROI, parameters, sweep, launch), so its size, per-control
 // methods, literal UI constants and broad import guards are inherent here.
 
-@file:Suppress(
-    "CyclomaticComplexMethod",
-    "LargeClass",
-    "LongMethod",
-    "MagicNumber",
-    "ReturnCount",
-    "TooGenericExceptionCaught",
-    "TooManyFunctions",
-)
+// Findings are tracked in detekt-baseline.xml rather than blanket-suppressed.
 
 package com.indicvision.semper.ui.analysis
 import android.annotation.SuppressLint

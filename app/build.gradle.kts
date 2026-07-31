@@ -270,4 +270,9 @@ dependencies {
 // clean of findings, so there is no baseline — any new issue fails the build.
 detekt {
     buildUponDefaultConfig = true
+    // Existing findings in the large UI files live here instead of blanket
+    // @file:Suppress blocks, so the debt is counted and visibly burnable.
+    // Any NEW finding still fails the build. Regenerate deliberately (and
+    // only to remove entries) with `./gradlew :app:detektBaseline`.
+    baseline = file("detekt-baseline.xml")
 }

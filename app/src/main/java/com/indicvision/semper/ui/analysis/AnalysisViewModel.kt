@@ -2,13 +2,7 @@
 // cohesive loop (per-frame persist, solve, progress, cancel); the method size,
 // branching, break/continue and broad per-frame catch are inherent to that
 // pipeline and its literal step constants, so those rules are suppressed here.
-@file:Suppress(
-    "MagicNumber",
-    "LongMethod",
-    "CyclomaticComplexMethod",
-    "LoopWithTooManyJumpStatements",
-    "TooGenericExceptionCaught",
-)
+// Findings are tracked in detekt-baseline.xml rather than blanket-suppressed.
 
 package com.indicvision.semper.ui.analysis
 import android.content.Context

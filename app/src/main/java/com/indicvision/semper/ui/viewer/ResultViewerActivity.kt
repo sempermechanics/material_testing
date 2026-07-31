@@ -2,14 +2,7 @@
 // export from one screen, so its size, per-control methods, combined gesture
 // conditions and literal UI constants are inherent here.
 
-@file:Suppress(
-    "ComplexCondition",
-    "CyclomaticComplexMethod",
-    "LongMethod",
-    "LoopWithTooManyJumpStatements",
-    "MagicNumber",
-    "TooManyFunctions",
-)
+// Findings are tracked in detekt-baseline.xml rather than blanket-suppressed.
 
 package com.indicvision.semper.ui.viewer
 
