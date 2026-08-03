@@ -24,7 +24,10 @@ option(SEMPER_WERROR "Fail the build on compiler warnings in first-party code" O
 if (NOT MSVC)
     add_compile_options(-O2 -ffast-math -Wall -Wextra)
     if (SEMPER_WERROR)
-        add_compile_options(-Werror)
+        # GCC's -Waggressive-loop-optimizations is a known false positive on
+        # SIMD residual tails (reports absurd iteration counts). Keep it as a
+        # warning so real -Wall/-Wextra issues still fail the build.
+        add_compile_options(-Werror -Wno-error=aggressive-loop-optimizations)
     endif ()
 else ()
     add_compile_options(/O2 /fp:fast /W3)

@@ -34,8 +34,10 @@ namespace Semper {
             }
             sum = cv::v_reduce_sum(acc);
 #endif
-            for (; i < n; ++i) {
-                float d = vals[i] - mean;
+            // Fresh index for the scalar tail: GCC's -Waggressive-loop-optimizations
+            // falsely claims UB when the same `i` continues after `i + step <= n`.
+            for (size_t j = i; j < n; ++j) {
+                float d = vals[j] - mean;
                 sum += d * d;
             }
             return sum;
@@ -59,9 +61,9 @@ namespace Semper {
             }
             sum = cv::v_reduce_sum(acc);
 #endif
-            for (; i < n; ++i) {
-                float norm_def = (vals[i] - mean) * inv_std;
-                float diff = ref[i] - norm_def;
+            for (size_t j = i; j < n; ++j) {
+                float norm_def = (vals[j] - mean) * inv_std;
+                float diff = ref[j] - norm_def;
                 sum += diff * diff;
             }
             return sum;
@@ -121,16 +123,16 @@ namespace Semper {
             dp4 = cv::v_reduce_sum(a4);
             dp5 = cv::v_reduce_sum(a5);
 #endif
-            for (; i < n; ++i) {
-                float norm_def = (vals[i] - mean) * inv_std;
-                float diff = ref[i] - norm_def;
+            for (size_t j = i; j < n; ++j) {
+                float norm_def = (vals[j] - mean) * inv_std;
+                float diff = ref[j] - norm_def;
                 err += diff * diff;
-                dp0 += p0[i] * diff;
-                dp1 += p1[i] * diff;
-                dp2 += p2[i] * diff;
-                dp3 += p3[i] * diff;
-                dp4 += p4[i] * diff;
-                dp5 += p5[i] * diff;
+                dp0 += p0[j] * diff;
+                dp1 += p1[j] * diff;
+                dp2 += p2[j] * diff;
+                dp3 += p3[j] * diff;
+                dp4 += p4[j] * diff;
+                dp5 += p5[j] * diff;
             }
             dp_out[0] = dp0;
             dp_out[1] = dp1;
