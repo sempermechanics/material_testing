@@ -197,8 +197,13 @@ class HomeActivity : AppCompatActivity() {
 
         maybeShowBetaNotice()
         // Cold start / return with an already-full quota → persistent support screen.
-        TokenStore.refreshSessionLimit(this, SessionStore.list(this).size)
-        if (TokenStore.isSessionLimitReached(this)) openSessionLimitScreen()
+        lifecycleScope.launch {
+            val localCount = withContext(Dispatchers.IO) {
+                SessionStore.list(this@HomeActivity).size
+            }
+            TokenStore.refreshSessionLimit(this@HomeActivity, localCount)
+            if (TokenStore.isSessionLimitReached(this@HomeActivity)) openSessionLimitScreen()
+        }
     }
 
     override fun onResume() {
@@ -251,7 +256,7 @@ class HomeActivity : AppCompatActivity() {
             val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
             adapter.submit(sessions)
             emptyState.isVisible = sessions.isEmpty()
-            updateQuotaIndicator()
+            updateQuotaIndicator(sessions.size)
             // A refresh can drop rows out from under a selection.
             selection.updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
@@ -266,9 +271,9 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateQuotaIndicator() {
+    private fun updateQuotaIndicator(localSessionCount: Int) {
         val max = TokenStore.effectiveQuotaMax(this)
-        val used = TokenStore.quotaUsed(this).coerceAtLeast(SessionStore.list(this).size)
+        val used = TokenStore.quotaUsed(this).coerceAtLeast(localSessionCount)
         if (max <= 0) {
             tvHomeQuota.isVisible = false
             return

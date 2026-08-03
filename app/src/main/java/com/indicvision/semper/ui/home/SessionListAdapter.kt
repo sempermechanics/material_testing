@@ -6,6 +6,8 @@ package com.indicvision.semper.ui.home
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,6 +22,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 /**
  * Home session list. Selection state lives with the owner ([isSelected]); this
@@ -140,19 +143,7 @@ class SessionListAdapter(
         )
         holder.badge.setOnClickListener { onBadgeClick(r) }
 
-        val refFile = File(r.refPath)
-        if (refFile.exists()) {
-            val cached = thumbCache[r.refPath]
-            val bmp = if (cached != null && !cached.isRecycled) {
-                cached
-            } else {
-                val opts = BitmapFactory.Options().apply { inSampleSize = 8 }
-                BitmapFactory.decodeFile(r.refPath, opts)?.also { thumbCache[r.refPath] = it }
-            }
-            holder.thumb.setImageBitmap(bmp)
-        } else {
-            holder.thumb.setImageDrawable(null)
-        }
+        bindThumbnail(holder, r)
 
         val selected = isSelected(r.id)
         holder.check.isVisible = selected
@@ -172,7 +163,41 @@ class SessionListAdapter(
         }
     }
 
+    private fun bindThumbnail(holder: Holder, r: SessionRecord) {
+        val refFile = File(r.refPath)
+        if (!refFile.exists()) {
+            holder.thumb.tag = null
+            holder.thumb.setImageDrawable(null)
+            return
+        }
+        val cached = thumbCache[r.refPath]
+        if (cached != null && !cached.isRecycled) {
+            holder.thumb.setImageBitmap(cached)
+            return
+        }
+        // Decode off the main thread; tag avoids applying a stale bind.
+        holder.thumb.setImageDrawable(null)
+        holder.thumb.tag = r.refPath
+        val path = r.refPath
+        thumbExecutor.execute {
+            val opts = BitmapFactory.Options().apply { inSampleSize = 8 }
+            val bmp = BitmapFactory.decodeFile(path, opts)
+            mainHandler.post {
+                if (holder.thumb.tag != path) {
+                    bmp?.recycle()
+                    return@post
+                }
+                if (bmp != null) {
+                    thumbCache[path] = bmp
+                    holder.thumb.setImageBitmap(bmp)
+                }
+            }
+        }
+    }
+
     companion object {
         private const val THUMB_CACHE_MAX = 24
+        private val thumbExecutor = Executors.newSingleThreadExecutor()
+        private val mainHandler = Handler(Looper.getMainLooper())
     }
 }

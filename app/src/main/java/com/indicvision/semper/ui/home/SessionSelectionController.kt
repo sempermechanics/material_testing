@@ -19,7 +19,9 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Multi-select bar for the Home session list: selection set, select-all,
@@ -160,8 +162,10 @@ class SessionSelectionController(
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val newName = input.text.toString().trim()
                 if (newName.isNotEmpty()) {
-                    SessionStore.rename(activity, record.id, newName)
-                    onRefresh()
+                    activity.lifecycleScope.launch(Dispatchers.IO) {
+                        SessionStore.rename(activity, record.id, newName)
+                        withContext(Dispatchers.Main) { onRefresh() }
+                    }
                 }
             }
             .setNegativeButton(R.string.action_cancel, null)

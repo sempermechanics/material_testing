@@ -1,3 +1,5 @@
+@file:Suppress("TooGenericExceptionCaught") // corrupt/OOM decode must never abort session save
+
 package com.indicvision.semper.data
 
 import android.content.Context
@@ -20,6 +22,10 @@ import java.util.Locale
  */
 class SessionRepository {
 
+    private companion object {
+        const val PNG_QUALITY_MAX = 100
+    }
+
     /** Writes a display-sized PNG of the reference into the session dir. */
     fun writeReferenceCopy(sessionDir: File, refBytes: ByteArray): String {
         val refPngFile = File(sessionDir, "reference.png")
@@ -31,7 +37,9 @@ class SessionRepository {
             ) ?: BitmapDecode.decodeByteArrayCapped(refBytes)
             val bmp = refBmp
             if (bmp != null) {
-                refPngFile.outputStream().use { out -> bmp.compress(Bitmap.CompressFormat.PNG, 100, out) }
+                refPngFile.outputStream().use { out ->
+                    bmp.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY_MAX, out)
+                }
             } else {
                 refPngFile.writeBytes(refBytes)
             }

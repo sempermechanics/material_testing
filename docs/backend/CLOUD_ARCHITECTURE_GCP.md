@@ -403,10 +403,13 @@ Cloud sync stays off entirely unless `INDIC_API_BASE_URL` is set at build time
 Two service accounts, least-privilege:
 
 ```bash
-PROJECT=indic-prod
+PROJECT=indic-prod   # placeholder GCP project id — replace with yours
 API_SA=indic-api@$PROJECT.iam.gserviceaccount.com
 DEPLOY_SA=indic-deployer@$PROJECT.iam.gserviceaccount.com
+```
+Firebase Auth may use a different project id (`indicvision-dic-app-auth`); see AUTH_SETUP.md and set `FIREBASE_PROJECT_ID` when they differ.
 
+```bash
 # Runtime SA — what Cloud Run runs AS
 gcloud iam service-accounts create indic-api --project $PROJECT
 

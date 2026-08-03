@@ -45,11 +45,14 @@ without a backend; do this only if you are deploying the cloud side yourself.
 - `curl` + `python` (3.12) for the smoke test.
 
 ```bash
-export PROJECT=indic-prod          # your project id
+export PROJECT=indic-prod          # your GCP project id (placeholder — replace)
 export REGION=asia-south1          # pick one near you; Firestore must match
 export API_SA=indic-api@$PROJECT.iam.gserviceaccount.com
 gcloud config set project $PROJECT
 ```
+> **Note:** `$PROJECT` is the Cloud Run / Firestore / Drive project. Firebase Auth
+> may live in a different project (currently `indicvision-dic-app-auth` — see
+> [AUTH_SETUP.md](AUTH_SETUP.md)); set `FIREBASE_PROJECT_ID` when they differ.
 > **PowerShell:** replace `export X=Y` with `$env:X="Y"`, and `$VAR` with `$env:VAR`.
 
 ---

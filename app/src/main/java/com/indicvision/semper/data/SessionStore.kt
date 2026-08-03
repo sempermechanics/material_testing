@@ -137,8 +137,9 @@ data class SessionRecord(
 /**
  * The local session index behind the Home list: one JSON file in app-private
  * storage plus one directory per session for its frames and reference copy.
- * All methods are synchronous and cheap (the index is small); call off the
- * main thread when convenient but correctness does not require it.
+ * All methods are synchronous and lock-guarded (the index is small). Prefer
+ * calling mutations and [list] from a background dispatcher when on the UI
+ * thread — see Home / ResultViewer / SessionListAdapter.
  */
 object SessionStore {
 
