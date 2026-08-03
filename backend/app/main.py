@@ -472,8 +472,14 @@ async def complete_file(file_id: str, body: FileComplete, ctx=Depends(verified_d
         raise HTTPException(409, "size_or_state_mismatch")
     # Only a FIRST completion advances the counter — a retried completion
     # ("already") must not double-count toward session COMPLETED.
+    #
+    # Advance the session the FILE belongs to, never the one the client named:
+    # body.sessionId is unauthenticated input, and bump_session_progress does no
+    # ownership check of its own, so trusting it let a caller complete someone
+    # else's session. The binding was fixed at upload time (create_file records
+    # sessionId on the file doc), so the client's copy is redundant anyway.
     if outcome == "ok":
-        repo.bump_session_progress(body.sessionId)
+        repo.bump_session_progress(rec["sessionId"])
     audit.record(user["uid"], ctx["device"].get("deviceId"), action="UPLOAD_COMPLETE",
                  target={"type": "file", "id": file_id})
     return {"status": "ok"}

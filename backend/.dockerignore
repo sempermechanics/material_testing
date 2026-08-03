@@ -1,0 +1,15 @@
+# Keep the build context to what the image actually needs (app/ + requirements).
+# Nothing sensitive should reach the layer cache or a pushed image.
+tests/
+requirements-test.txt
+pytest.ini
+ruff.toml
+gateway/
+firestore.indexes.json
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+.env
+.env.*
+*.log

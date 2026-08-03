@@ -74,6 +74,18 @@ gcloud firestore databases create --location=$REGION --type=firestore-native
 ```
 **Check:** `gcloud firestore databases list` shows one `(default)` database.
 
+### A2a. Enable the TTL policy on auth challenges
+Each `/v1/challenge` writes a `challenges/{nonce}` doc with an `expireAt`
+timestamp. Consumed nonces are deleted immediately, but *abandoned* ones only
+disappear if Firestore is told `expireAt` is a TTL field — otherwise they
+accumulate forever. Set the policy once:
+```bash
+gcloud firestore fields ttls update expireAt \
+  --collection-group=challenges --enable-ttl
+```
+**Check:** `gcloud firestore fields ttls list --collection-group=challenges`
+shows `expireAt` in state `ACTIVE` (may take a few minutes to apply).
+
 ### A3. Create the runtime service account
 ```bash
 gcloud iam service-accounts create indic-api \

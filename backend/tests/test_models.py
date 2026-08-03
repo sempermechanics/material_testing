@@ -27,6 +27,18 @@ class TestFileSpec:
         with pytest.raises(ValidationError):
             FileSpec(name="f", role="bundle", bytes=0, sha256="a" * 64)
 
+    def test_ordinary_names_accepted(self):
+        # name is used as-is inside a Firestore doc id, but these are all safe.
+        for name in ("Session.zip", "metadata.json", "oht cfrp (1).tiff"):
+            assert FileSpec(name=name, role="bundle", bytes=1, sha256="a" * 64).name == name
+
+    @pytest.mark.parametrize("name", ["a/b.zip", "sub/dir/x", "..\\evil", ".", "..", "evil\nname"])
+    def test_path_breaking_names_rejected(self, name):
+        # A "/" or reserved id would make "{sid}_{role}_{name}" an invalid Firestore
+        # document path — a 500 — so it must be rejected as a 422 at the boundary.
+        with pytest.raises(ValidationError):
+            FileSpec(name=name, role="bundle", bytes=1, sha256="a" * 64)
+
 
 class TestSessionCreate:
     def test_valid(self):

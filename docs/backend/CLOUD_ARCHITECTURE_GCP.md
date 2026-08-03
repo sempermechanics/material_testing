@@ -193,9 +193,12 @@ sequenceDiagram
 ```
 
 **One-user-one-device binding.** `devices/{deviceId}.uid` is unique per active
-device; a second registration for the same `uid` returns `409` unless an admin
-sets the prior device `status: REVOKED`. **Device replacement is an
-admin-approval workflow** (`/v1/admin/devices/{id}:rebind`), never automatic.
+device. Re-registering the *same* `deviceId` for its owner is idempotent — it refreshes
+the stored public key and returns `201` with `healed: true` (see
+`register_device` in `main.py`). Registering a *different* second device for a
+`uid` that already has one returns `409 device_conflict`; moving to genuinely
+new hardware currently means an admin revokes the prior device first. (There is
+no `:rebind` endpoint — that was a design idea, not something implemented.)
 
 **Latency note.** A per-request challenge round-trip doubles RTT. For hot paths
 you may fold it into a **signed-timestamp assertion** (client signs
@@ -223,9 +226,9 @@ sequenceDiagram
         D-->>R: 200 Location: <resumable session URI>
     end
     R->>Firestore: sessions/{sid}=UPLOADING, files/{fid}=PENDING (+ session URIs)
-    R-->>W: 200 {sessionId, uploads:[{fileId, uploadUrl, chunkSize:8MiB}]}
+    R-->>W: 200 {sessionId, uploads:[{fileId, uploadUrl, chunkSize:32MiB}]}
 
-    loop each file, 8 MiB chunks
+    loop each file, 32 MiB chunks
         W->>D: PUT uploadUrl  Content-Range: bytes a-b/total  (direct, no backend)
         D-->>W: 308 Resume Incomplete (Range: bytes=0-b)
     end
@@ -245,19 +248,22 @@ last-received byte in the `Range` header → worker resumes from there. No bytes
 re-sent. WorkManager's `BackoffPolicy.EXPONENTIAL` + network constraint handles
 retry/offline.
 
-**Integrity.** Client computes SHA-256 while streaming (never buffers the whole
-file). Drive returns `md5Checksum` for classic files; store **both** the
-client SHA-256 (source of truth) and Drive md5. Mismatch → `files/{fid}=FAILED`,
-delete the Drive file, re-enqueue. (Note: Drive omits `md5Checksum` for some
-Docs-native types; for our binary blobs it is present.)
+**Integrity.** At `:complete` the backend asks Drive for the object's real
+`size`/`md5Checksum` and rejects a mismatch with `422` (`size_mismatch` /
+`checksum_mismatch`), leaving the file `PENDING` rather than marking it
+`COMPLETED` — see `complete_file` in `main.py`. It does **not** currently mark
+`FAILED`, delete the Drive object, or auto-re-enqueue; the client retries the
+completion. (Note: Drive omits `md5Checksum` for some Docs-native types; for our
+binary blobs it is present, and the md5 check is skipped only when the client
+sends no md5.)
 
-**Why one resumable session per file, not one zip.** The
-`raw/processed/reports/metadata` hierarchy has to be browsable *in Drive*,
-which requires real per-file objects. Since the backend must not process bytes, it cannot unzip.
-Trade-off: a session with N files needs N resumable inits (N cheap metadata
-calls). Typical sessions have <20 files, well within quota. If a session ever
-has thousands of tiny files, prefer bundling `raw/` into one archive
-client-side to stay under the 400k-item Shared-Drive cap.
+**One Session.zip per session (current), not per-file objects.** The product now
+uploads a single `bundle`-role `Session.zip` holding `raw/`, `dat/`, `csv/` and
+the report archives (plus a small `metadata.json` at the session root), so a
+session costs ~1–2 Firestore file docs instead of 3F+4. This trades in-Drive
+browsability of individual frames for far fewer resumable inits and Firestore
+writes. The `raw/processed/reports/metadata` subfolder tree below is the older
+per-file layout, kept for reference.
 
 ---
 
@@ -267,7 +273,9 @@ Native mode, `nam5`/regional to match Cloud Run region. Collections:
 
 ```
 users/{uid}                       (uid = Google 'sub')
-  email, hd, displayName
+  email, displayName              (note: `hd`/hostedDomain is NOT persisted today —
+                                   get_or_create_user does not write it, so
+                                   /v1/me/export returns hostedDomain: null)
   role: "user" | "admin"
   access_status: "PENDING" | "APPROVED" | "SUSPENDED"
   activeDeviceId: string | null
@@ -293,7 +301,8 @@ sessions/{sessionId}
 
 files/{fileId}                    (fileId = deterministic sid_role_name)
   sessionId, uid
-  role: "raw" | "processed" | "report" | "metadata"
+  role: "raw" | "processed" | "reports" | "metadata" | "csv" | "dat" | "bundle"
+        (see Role in models.py; "bundle" is the Session.zip the app now ships)
   name, sizeBytes, sha256
   status: "PENDING" | "UPLOADING" | "COMPLETED" | "FAILED"
   uploadUrl                       (resumable session URI, cleared on complete)
@@ -310,16 +319,16 @@ audit_logs/{autoId}               (append-only)
 ```
 
 **Indexing.**
-- Single-field auto-indexes cover most equality lookups.
-- Composite: `sessions` on `(uid ASC, createdAt DESC)` — user's session list.
-- Composite: `sessions` on `(status ASC, updatedAt ASC)` — janitor sweep of
-  stuck `UPLOADING`.
-- Composite: `files` on `(sessionId ASC, status ASC)` — completion check.
-- Composite: `audit_logs` on `(uid ASC, ts DESC)` — per-user audit view.
+- **No composite indexes are required today**, which is why
+  `backend/firestore.indexes.json` is empty. Every query the code issues is a
+  single-field equality (`.where(field, "==", value)`) with an optional
+  `.limit()`/`.count()` — see `firestore_repo.py` — and single-field auto-indexes
+  cover those. A composite index becomes necessary only if a query adds an
+  `order_by` or a second `where`; add it to that file then.
 - **Exempt** large/opaque fields from indexing (`publicKeyPem`, `uploadUrl`,
   `sha256`) to cut index cost and stay off the 40 KB/1500-field limits.
-- **TTL policy** on `challenges.expireAt` and optionally
-  `audit_logs.ts` (e.g. 400-day retention).
+- **TTL policy** on `challenges.expireAt` and optionally `audit_logs.ts` (e.g.
+  400-day retention) — planned, not yet configured in IaC.
 
 Security: Firestore is **written only by the Cloud Run SA** (server-side). No
 Android SDK writes → Firestore Security Rules can be `allow read, write: if
@@ -469,9 +478,13 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
 - **Keyless everywhere:** ADC + IAM Credentials impersonation; WIF for CI. Zero
   long-lived key material.
 - **Defense in depth on identity:** signature + `aud` + `iss` + `email_verified`
-  + `hd` + email-suffix + Firestore allow-list.
-- **Device binding:** non-exportable Keystore key, challenge/nonce with TTL +
-  replay cache, admin-gated rebind.
+  + Firestore allow-list (`access_status`). Note there is deliberately **no `hd`
+  sign-in gate** — any account Firebase accepts may authenticate; what it may
+  *use* is decided by `access_status` (config.py spells this out). Domain only
+  affects auto-approval via `AUTO_APPROVE_HD`, not admission.
+- **Device binding:** non-exportable Keystore key, challenge/nonce with replay
+  cache, admin-gated revoke. (Nonce TTL cleanup is not yet enforced by an IaC
+  TTL policy — see §5.)
 - **Least privilege IAM:** `datastore.user` + self-`tokenCreator` only; deployer
   SA separate.
 - **Firestore locked to the server:** client rules deny-all; all writes via API.
@@ -481,8 +494,10 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
 - **Transport:** TLS only; HSTS; reject non-HTTPS.
 - **Input validation:** pydantic models; cap `files[]` length and per-file bytes
   (reject >5 GB); sanitize filenames before Drive.
-- **Rate limiting:** per-uid token bucket (challenge + session create) to blunt
-  abuse; Cloud Armor when public.
+- **Rate limiting (planned, NOT implemented):** there is no rate limiting in the
+  service today. `/v1/challenge` in particular mints a nonce doc per call with no
+  per-uid throttle. Target is a per-uid token bucket (challenge + session create)
+  plus Cloud Armor when public.
 - **Audit everything security-relevant**, append-only, with retention.
 - **Privacy prerequisites for public launch:** privacy policy + account-deletion
   path (raw specimen images + email are personal data).
@@ -495,8 +510,8 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
 |---|---|---|
 | Network drop mid-chunk | OkHttp IOException | WorkManager retry; resume via `bytes */total` → 308 offset |
 | App killed during upload | Worker re-created by WM | Reload plan from local store; resume each incomplete file |
-| Resumable URI expired (~1 wk) | 404/410 on PUT | Broker `POST /v1/files/{id}:reinit` → new session URI, resume from 0 |
-| Chunk checksum mismatch | client SHA-256 vs stored | mark FAILED, delete Drive file, re-enqueue |
+| Resumable URI expired (~1 wk) | 404/410 on PUT | **Planned:** a `:reinit` broker endpoint to mint a fresh session URI. Not implemented today; the client re-creates the session. |
+| Chunk checksum mismatch | Drive size/md5 checked at `:complete` | reject with `422`, leave the file `PENDING`; client retries the completion (no auto-delete/re-enqueue today) |
 | Session stuck `UPLOADING` | janitor query `(status, updatedAt)` | after N hours → notify user / reinit / mark FAILED |
 | Firestore write fails after Drive success | try/except around commit | idempotent `:complete` (deterministic fileId) → safe re-POST |
 | Drive `403 storageQuotaExceeded` | broker init error | means writing to SA's personal 15 GB, not the Shared Drive → config alarm |
@@ -558,19 +573,22 @@ cost of GB-month + egress billing (~$0.02/GB-mo storage, ~$0.12/GB egress).
 
 ---
 
-## 16. CI/CD pipeline — planned, not built
+## 16. CI/CD pipeline
 
-> **Status: not implemented.** There is no backend deploy workflow today;
-> `.github/workflows/ci.yml` builds and tests the *app and engine* only
-> ([CI.md](../ops/CI.md)). Backend deploys are the manual `gcloud run deploy`
-> in the runbook.
+> **Status: built, gated on secrets.** `.github/workflows/deploy-backend.yml`
+> deploys the backend to Cloud Run; it runs ruff + pytest first and deploys only
+> if they pass. It is `workflow_dispatch` (manual) and stays inert until
+> `GCP_WIF_PROVIDER` and `GCP_DEPLOY_SA` are set, so the documented manual
+> `gcloud run deploy` in the runbook is still the path until then.
+> `.github/workflows/ci.yml` continues to build and test the app and engine
+> ([CI.md](../ops/CI.md)).
 
-When it is built, it should authenticate with **Workload Identity Federation**
-rather than a stored key: a pool trusting GitHub's OIDC, mapped to a
-`indic-deployer` service account and restricted to this repo, with
-`permissions: id-token: write`. That keeps the no-JSON-keys rule (§0) intact
-all the way through delivery. The signing keystore for Android release builds
-stays in GitHub encrypted secrets or Play App Signing.
+It authenticates with **Workload Identity Federation** rather than a stored key:
+a pool trusting GitHub's OIDC, mapped to a deployer service account and
+restricted to this repo, with `permissions: id-token: write`. That keeps the
+no-JSON-keys rule (§0) intact all the way through delivery. The signing keystore
+for Android release builds stays in GitHub encrypted secrets or Play App
+Signing.
 
 ---
 

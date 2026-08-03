@@ -1,6 +1,6 @@
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # "bundle" = one Session.zip holding raw/, dat/, csv/ and the report archives —
 # uploaded as a single file so a session costs ~2 Firestore file docs, not 3F+4.
@@ -20,6 +20,21 @@ class FileSpec(BaseModel):
     role: Role
     bytes: int = Field(gt=0, le=5 * 1024 * 1024 * 1024)  # cap 5 GB
     sha256: str = Field(min_length=64, max_length=64)
+
+    @field_validator("name")
+    @classmethod
+    def _no_path_separators(cls, v: str) -> str:
+        # name is interpolated into a Firestore document id ("{sid}_{role}_{name}").
+        # A "/" would add path segments (an even-segment path Firestore rejects with
+        # a 500), and "." / ".." are reserved id values. Reject those and control
+        # chars here so a bad name is a clean 422 at the edge, not a 500 mid-write.
+        if "/" in v or "\\" in v:
+            raise ValueError("name must not contain path separators")
+        if v in (".", ".."):
+            raise ValueError("name must not be '.' or '..'")
+        if any(ord(c) < 0x20 for c in v):
+            raise ValueError("name must not contain control characters")
+        return v
 
 
 class SessionCreate(BaseModel):
