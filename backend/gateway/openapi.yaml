@@ -104,6 +104,9 @@ paths:
   /v1/files/{fileId}/content:
     get:
       operationId: downloadFile
+      description: >
+        Device-attested download (same verified_device headers as writes).
+        Signature covers GET + path + empty body; Range is an unsigned header.
       produces:
         - application/octet-stream
       parameters:
@@ -119,6 +122,7 @@ paths:
       responses:
         '200': { description: OK }
         '206': { description: Partial content }
+        '401': { description: Missing or invalid device attestation }
   /v1/admin/users:
     get:
       operationId: adminListUsers

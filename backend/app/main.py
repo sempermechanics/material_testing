@@ -333,14 +333,17 @@ async def list_session_files(sid: str, user=Depends(current_user)):
 
 
 @app.get("/v1/files/{file_id}/content")
-async def download_file(file_id: str, request: Request, user=Depends(current_user)):
+async def download_file(file_id: str, request: Request, ctx=Depends(verified_device)):
     """Stream one file back from Drive (restore).
 
     Drive has no anonymous signed download, so — unlike uploads, which go
     device→Drive directly — these bytes are proxied through Cloud Run.
-    Clients may send `Range: bytes=N-`; we forward it to Drive and return
+    Requires the same device attestation as writes (`verified_device`).
+    Clients may send `Range: bytes=N-` (unsigned header; signature covers
+    method + path + empty body only); we forward Range to Drive and return
     206 + Content-Range so a truncated restore can resume into a partial file.
     """
+    user = ctx["user"]
     f = repo.get_file(file_id)
     if not f or f.get("uid") != user["uid"]:
         raise HTTPException(404, "file_not_found")

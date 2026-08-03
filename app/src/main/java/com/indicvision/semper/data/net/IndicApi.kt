@@ -234,6 +234,10 @@ class IndicApi private constructor(context: Context) {
      * These bytes are proxied by the backend (Drive has no anonymous download),
      * so this is the one path where the backend touches file content.
      *
+     * Device-attested like writes: fresh nonce + ECDSA over method/path/empty
+     * body per attempt. `Range` is an unsigned header (not part of the signed
+     * message) so resume offsets can change without rehashing the body.
+     *
      * Writes to a sibling `.part` file and renames on success. If the transfer
      * drops mid-stream, retries with `Range: bytes=N-` so already-received
      * bytes are kept (backend forwards Range to Drive and returns 206).
@@ -242,14 +246,19 @@ class IndicApi private constructor(context: Context) {
     suspend fun downloadFile(idToken: String, fileId: String, dest: java.io.File) = withContext(Dispatchers.IO) {
         dest.parentFile?.mkdirs()
         val part = java.io.File(dest.parentFile, "${dest.name}.part")
+        val path = "/v1/files/$fileId/content"
         var attempt = 0
         while (true) {
             attempt++
             val offset = if (part.exists()) part.length() else 0L
             try {
+                // Fresh challenge per attempt so a resumed Range request never
+                // replays a consumed nonce.
+                val nonce = fetchChallenge(idToken)
+                val headers = signedHeaders(idToken, "GET", path, ByteArray(0), nonce)
                 val builder = Request.Builder()
-                    .url("$base/v1/files/$fileId/content")
-                    .header("Authorization", "Bearer $idToken")
+                    .url("$base$path")
+                    .headers(headers)
                     .get()
                 if (offset > 0L) builder.header("Range", "bytes=$offset-")
                 downloadClient.newCall(builder.build()).execute().use { resp ->
@@ -338,6 +347,7 @@ class IndicApi private constructor(context: Context) {
         val headers = signedHeaders(idToken, method, path, bodyBytes, nonce)
         val builder = Request.Builder().url("$base$path").headers(headers)
         when (method) {
+            "GET" -> builder.get()
             "POST" -> builder.post(bodyBytes.toRequestBody(jsonMedia))
             // No body: the backend hashes empty bytes, so we must send none.
             "DELETE" -> builder.delete()
