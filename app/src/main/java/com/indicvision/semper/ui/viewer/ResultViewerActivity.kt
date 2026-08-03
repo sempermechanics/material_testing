@@ -23,6 +23,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.ToggleButton
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.lifecycle.lifecycleScope
@@ -51,6 +52,8 @@ import java.io.File
  * [ShareCenter]).
  */
 class ResultViewerActivity : AppCompatActivity() {
+
+    private val viewerVm: ResultViewerViewModel by viewModels()
 
     internal lateinit var imgMain: TouchImageView
     private lateinit var imgHeatmap: ImageView
@@ -107,7 +110,11 @@ class ResultViewerActivity : AppCompatActivity() {
 
     internal var cachedBaseImage: Bitmap? = null
     private var cachedHeatmap: Bitmap? = null
-    internal var currentTypeString: String = "U"
+    internal var currentTypeString: String
+        get() = viewerVm.currentTypeString
+        set(value) {
+            viewerVm.currentTypeString = value
+        }
     private var isGeneratingHeatmap = false
 
     private var batchFiles: List<File> = emptyList()
@@ -115,7 +122,11 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private var refImagePath: String? = null
     private var defImagePaths: List<String> = emptyList()
-    internal var currentFrameIndex = 0
+    internal var currentFrameIndex: Int
+        get() = viewerVm.currentFrameIndex
+        set(value) {
+            viewerVm.currentFrameIndex = value
+        }
     private var loadFrameJob: Job? = null
     private var visualizationJob: Job? = null
     private var scrubDebounceJob: Job? = null
@@ -123,7 +134,11 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private val scrubCache = ScrubFrameCache()
 
-    internal var currentDataIndex = 2
+    internal var currentDataIndex: Int
+        get() = viewerVm.currentDataIndex
+        set(value) {
+            viewerVm.currentDataIndex = value
+        }
 
     internal var currentDefPath: String? = null
     private var currentHeatmapMin = 0f
@@ -361,11 +376,14 @@ class ResultViewerActivity : AppCompatActivity() {
             val data = rawData ?: return@let
             val stats = DicResult.fieldStats(data, currentDataIndex) ?: return@let
             val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) "m\u03b5" else "px"
-            com.indicvision.semper.data.SessionStore.updateHeadline(
-                this,
-                localId,
-                "$currentTypeString max ${ReportBuilder.formatMetric(stats[0])} $unit",
-            )
+            val headline = "$currentTypeString max ${ReportBuilder.formatMetric(stats[0])} $unit"
+            lifecycleScope.launch(Dispatchers.IO) {
+                com.indicvision.semper.data.SessionStore.updateHeadline(
+                    this@ResultViewerActivity,
+                    localId,
+                    headline,
+                )
+            }
         }
     }
 

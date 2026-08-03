@@ -415,8 +415,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // Activity. Without this teardown a solve in flight when the screen is
         // destroyed keeps burning CPU and holding frame bytes, the progress
         // ticker reposts against dead views, and KEEP_SCREEN_ON leaks.
-        viewModel.cancelRequested = true // also flips the native cancel flag
-        VsgStudyRunner.cancelRequested = true // stop a sweep run too
+        viewModel.cancelRequested = true // also flips the native cancel flag via AnalysisCancelGate
+        // VsgStudyRunner observes the same gate — no separate flag.
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::overlayHelper.isInitialized) overlayHelper.release()
         // Reclaim the retained reference thumbnail deterministically on close. The
@@ -1047,124 +1047,126 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         // Hard stop: do not start a new analysis when the session quota is full.
         // Re-runs that update an existing Home row are still allowed.
-        if (!ensureSessionQuota()) return
+        lifecycleScope.launch {
+            if (!ensureSessionQuota()) return@launch
 
-        isProcessing = true
-        checkReady()
-        overlayHelper.processingStartTime = System.currentTimeMillis()
-        overlayHelper.show()
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        wireCancelButton { viewModel.cancelRequested = true }
+            isProcessing = true
+            checkReady()
+            overlayHelper.processingStartTime = System.currentTimeMillis()
+            overlayHelper.show()
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            wireCancelButton { viewModel.cancelRequested = true }
 
-        // Strain is always VSG; pre-correlation blur is not offered. Both were
-        // removed from the engine signature, not just pinned in the UI.
-        val use6x6 = currentUseKeysInterpolator()
-        val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
+            // Strain is always VSG; pre-correlation blur is not offered. Both were
+            // removed from the engine signature, not just pinned in the UI.
+            val use6x6 = currentUseKeysInterpolator()
+            val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
 
-        val debugDir = File(cacheDir, "dic_debug")
-        if (!debugDir.exists()) debugDir.mkdirs()
-        SemperNativeLib.setDebugOutputDir(debugDir.absolutePath)
+            val debugDir = File(cacheDir, "dic_debug")
+            if (!debugDir.exists()) debugDir.mkdirs()
+            SemperNativeLib.setDebugOutputDir(debugDir.absolutePath)
 
-        lifecycleScope.launch(SemperNativeLib.nativeDispatcher) {
-            try {
-                val params = AnalysisViewModel.BatchAnalysisParams(
-                    cacheDir = cacheDir,
-                    subset = subset,
-                    step = step,
-                    strainWin = strainWin,
-                    finalRectX = finalRectX,
-                    finalRectY = finalRectY,
-                    finalRectW = finalRectW,
-                    finalRectH = finalRectH,
-                    use6x6 = use6x6,
-                    maskData = maskData,
-                    debugDir = debugDir,
-                    processingStartTime = overlayHelper.processingStartTime,
-                )
-
-                val outcome = viewModel.runBatchAnalysis(applicationContext, params) { progress ->
-                    overlayHelper.update(
-                        percent = progress.percent,
-                        status = progress.status,
-                        title = progress.status,
-                        pointsSolved = progress.pointsSolved,
-                        convergencePercent = progress.convergencePercent,
+            withContext(SemperNativeLib.nativeDispatcher) {
+                try {
+                    val params = AnalysisViewModel.BatchAnalysisParams(
+                        cacheDir = cacheDir,
+                        subset = subset,
+                        step = step,
+                        strainWin = strainWin,
+                        finalRectX = finalRectX,
+                        finalRectY = finalRectY,
+                        finalRectW = finalRectW,
+                        finalRectH = finalRectH,
+                        use6x6 = use6x6,
+                        maskData = maskData,
+                        debugDir = debugDir,
+                        processingStartTime = overlayHelper.processingStartTime,
                     )
-                }
 
-                withContext(Dispatchers.Main) {
-                    isProcessing = false
-                    overlayHelper.hide()
-                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    val outcome = viewModel.runBatchAnalysis(applicationContext, params) { progress ->
+                        overlayHelper.update(
+                            percent = progress.percent,
+                            status = progress.status,
+                            title = progress.status,
+                            pointsSolved = progress.pointsSolved,
+                            convergencePercent = progress.convergencePercent,
+                        )
+                    }
 
-                    if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED) {
-                        // User cancelled: stay on settings, nothing to report.
-                        checkReady()
-                    } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT) {
-                        checkReady()
-                        startActivity(Intent(this@StaticAnalysisActivity, SessionLimitActivity::class.java))
-                    } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_LOW_CONVERGENCE &&
-                        outcome.totalFrames > 0
-                    ) {
-                        // Stopped early, but the frames before the collapse are
-                        // real and already saved: report it as a short run and
-                        // open them, rather than as a failure with no way through
-                        // to data the session quietly kept.
-                        onPartialRun(outcome)
-                    } else if (outcome.engineErrorCode < 0 &&
-                        outcome.totalFrames > 0
-                    ) {
-                        onPartialRun(outcome)
-                    } else if (outcome.engineErrorCode < 0
-                    ) {
-                        val errorMsg = engineFailureMessage(
-                            outcome.engineErrorCode,
-                            frameIndex = outcome.failedFrameIndex,
-                            frameName = outcome.failedFrameName,
-                        )
-                        tvResult.text = "❌ Error: $errorMsg"
-                        showEngineFailureDialog(
-                            outcome.engineErrorCode,
-                            R.string.analysis_failed_title,
-                            frameIndex = outcome.failedFrameIndex,
-                            frameName = outcome.failedFrameName,
-                        )
-                    } else if (outcome.firstFrameValidPoints <= 0) {
-                        // Distinct from a negative code: the engine ran and
-                        // rejected everything, which points at the speckle or
-                        // the region rather than at a hard failure.
-                        tvResult.text = getString(R.string.analysis_no_data_title)
+                    withContext(Dispatchers.Main) {
+                        isProcessing = false
+                        overlayHelper.hide()
+                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+                        if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED) {
+                            // User cancelled: stay on settings, nothing to report.
+                            checkReady()
+                        } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT) {
+                            checkReady()
+                            startActivity(Intent(this@StaticAnalysisActivity, SessionLimitActivity::class.java))
+                        } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_LOW_CONVERGENCE &&
+                            outcome.totalFrames > 0
+                        ) {
+                            // Stopped early, but the frames before the collapse are
+                            // real and already saved: report it as a short run and
+                            // open them, rather than as a failure with no way through
+                            // to data the session quietly kept.
+                            onPartialRun(outcome)
+                        } else if (outcome.engineErrorCode < 0 &&
+                            outcome.totalFrames > 0
+                        ) {
+                            onPartialRun(outcome)
+                        } else if (outcome.engineErrorCode < 0
+                        ) {
+                            val errorMsg = engineFailureMessage(
+                                outcome.engineErrorCode,
+                                frameIndex = outcome.failedFrameIndex,
+                                frameName = outcome.failedFrameName,
+                            )
+                            tvResult.text = "❌ Error: $errorMsg"
+                            showEngineFailureDialog(
+                                outcome.engineErrorCode,
+                                R.string.analysis_failed_title,
+                                frameIndex = outcome.failedFrameIndex,
+                                frameName = outcome.failedFrameName,
+                            )
+                        } else if (outcome.firstFrameValidPoints <= 0) {
+                            // Distinct from a negative code: the engine ran and
+                            // rejected everything, which points at the speckle or
+                            // the region rather than at a hard failure.
+                            tvResult.text = getString(R.string.analysis_no_data_title)
+                            MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
+                                .setTitle(R.string.analysis_no_data_title)
+                                .setMessage(R.string.analysis_no_data)
+                                .setPositiveButton(android.R.string.ok, null)
+                                .show()
+                        } else {
+                            tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
+
+                            viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
+                            viewModel.lastBatchDirPath = outcome.batchDirPath
+                            viewModel.hasCompletedAnalysis = true
+                            checkReady()
+                            openResultViewer()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Batch processing failed")
+                    withContext(Dispatchers.Main) {
+                        isProcessing = false
+                        overlayHelper.hide()
+                        // Anything unmodelled — an OOM on a large ROI is the usual
+                        // one — used to surface as a raw exception string and nothing
+                        // else. Say what it was and what tends to cause it.
+                        val detail = e.message ?: e::class.java.simpleName
+                        tvResult.text = getString(R.string.analysis_unexpected_title)
                         MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                            .setTitle(R.string.analysis_no_data_title)
-                            .setMessage(R.string.analysis_no_data)
+                            .setTitle(R.string.analysis_unexpected_title)
+                            .setMessage(getString(R.string.analysis_unexpected_fmt, detail))
                             .setPositiveButton(android.R.string.ok, null)
                             .show()
-                    } else {
-                        tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
-
-                        viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
-                        viewModel.lastBatchDirPath = outcome.batchDirPath
-                        viewModel.hasCompletedAnalysis = true
                         checkReady()
-                        openResultViewer()
                     }
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Batch processing failed")
-                withContext(Dispatchers.Main) {
-                    isProcessing = false
-                    overlayHelper.hide()
-                    // Anything unmodelled — an OOM on a large ROI is the usual
-                    // one — used to surface as a raw exception string and nothing
-                    // else. Say what it was and what tends to cause it.
-                    val detail = e.message ?: e::class.java.simpleName
-                    tvResult.text = getString(R.string.analysis_unexpected_title)
-                    MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                        .setTitle(R.string.analysis_unexpected_title)
-                        .setMessage(getString(R.string.analysis_unexpected_fmt, detail))
-                        .setPositiveButton(android.R.string.ok, null)
-                        .show()
-                    checkReady()
                 }
             }
         }
@@ -1342,54 +1344,35 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // read via slider.value everywhere.
     // ------------------------------------------------------------------
     private fun setupParameterControls() {
-        val updateLabels = {
-            renderParamField(tvSubsetValue, etSubsetSize.value.toInt())
-            renderParamField(tvStepValue, etStepSize.value.toInt())
-            renderParamField(tvStrainValue, etStrainWindow.value.toInt())
-        }
-        updateLabels()
-
-        bindParamField(tvSubsetValue, etSubsetSize) { viewModel.subsetUserModified = true }
-        bindParamField(tvStepValue, etStepSize)
-        bindParamField(tvStrainValue, etStrainWindow)
-
-        // Advanced parameters: always visible (no collapse).
-        val advancedReset = findViewById<View>(R.id.btnAdvancedReset)
-
-        @Suppress("MagicNumber") // the documented defaults: 41 / 5 / 15
-        advancedReset.setOnClickListener {
-            // Drop focus first so the fields accept the reset values.
-            commitParamFields()
-            // Reset hands the subset back to the SSSIG recommendation when one
-            // was measured for this reference image.
-            viewModel.subsetUserModified = false
-            etSubsetSize.value = defaultSubsetSize().toFloat()
-            etStepSize.value = 5f
-            etStrainWindow.value = 15f
-            rgInterpolator.check(R.id.rbBicubic)
-            // Reset also hands the sweep back to its suggested inputs.
-            if (::sweepHelper.isInitialized) {
-                sweepHelper.resetUserModified()
-                sweepHelper.seedSweepSuggestions()
-            }
-        }
-
-        findViewById<View>(R.id.btnSubsetInfo)
-            .setOnClickListener { showInfo(R.string.subset_size, R.string.info_subset) }
-        findViewById<View>(R.id.btnStepInfo)
-            .setOnClickListener { showInfo(R.string.step_size_density, R.string.info_step) }
-        findViewById<View>(R.id.btnStrainInfo)
-            .setOnClickListener { showInfo(R.string.strain_window, R.string.info_strain_window) }
-
-        etSubsetSize.addOnChangeListener { _, _, fromUser ->
-            if (fromUser) viewModel.subsetUserModified = true
-            updateLabels()
-            // Moving the single-setting subset re-seeds the sweep's suggestion,
-            // until the user sets their own sweep inputs.
-            if (fromUser && ::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
-        }
-        etStepSize.addOnChangeListener { _, _, _ -> updateLabels() }
-        etStrainWindow.addOnChangeListener { _, _, _ -> updateLabels() }
+        AnalysisSettingsSheetHelper(
+            root = findViewById(android.R.id.content),
+            subset = etSubsetSize,
+            step = etStepSize,
+            strain = etStrainWindow,
+            subsetValue = tvSubsetValue,
+            stepValue = tvStepValue,
+            strainValue = tvStrainValue,
+            renderParamField = ::renderParamField,
+            bindParamField = { field, slider, onUser -> bindParamField(field, slider, onUser) },
+            showInfo = ::showInfo,
+            onSubsetUserModified = { viewModel.subsetUserModified = true },
+            onSubsetRecommendationRefresh = {
+                if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
+            },
+            onAdvancedReset = {
+                commitParamFields()
+                viewModel.subsetUserModified = false
+                @Suppress("MagicNumber") // documented defaults: 41 / 5 / 15
+                etSubsetSize.value = defaultSubsetSize().toFloat()
+                etStepSize.value = 5f
+                etStrainWindow.value = 15f
+                rgInterpolator.check(R.id.rbBicubic)
+                if (::sweepHelper.isInitialized) {
+                    sweepHelper.resetUserModified()
+                    sweepHelper.seedSweepSuggestions()
+                }
+            },
+        ).bind()
     }
 
     // ------------------------------------------------------------------
@@ -1401,19 +1384,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // Every combination shares the ROI, so the largest subset has to fit it.
         val roi = resolveRoi(plan.maxOf { it.subset }) ?: return
 
-        if (!ensureSessionQuota()) return
-
-        isProcessing = true
-        checkReady()
-        overlayHelper.processingStartTime = System.currentTimeMillis()
-        overlayHelper.show(getString(R.string.mode_sweep), sweepHelper.planSummary(plan))
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        wireCancelButton { VsgStudyRunner.cancelRequested = true }
-
-        val debugDir = File(cacheDir, "dic_debug").apply { mkdirs() }
-        val use6x6 = currentUseKeysInterpolator()
-
         lifecycleScope.launch {
+            if (!ensureSessionQuota()) return@launch
+
+            isProcessing = true
+            checkReady()
+            overlayHelper.processingStartTime = System.currentTimeMillis()
+            overlayHelper.show(getString(R.string.mode_sweep), sweepHelper.planSummary(plan))
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            wireCancelButton { viewModel.cancelRequested = true }
+
+            val debugDir = File(cacheDir, "dic_debug").apply { mkdirs() }
+            val use6x6 = currentUseKeysInterpolator()
+
             val outcome = runCatching {
                 val request = AnalysisViewModel.SweepRequest(
                     plan = plan,
@@ -1528,10 +1511,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
     /**
      * Hard stop for a new session when quota is full. Returns false after
      * navigating to the limit screen; re-runs of an existing session still pass.
+     * Reads the local session index off the main thread.
      */
-    private fun ensureSessionQuota(): Boolean {
+    @Suppress("ReturnCount") // early-outs for re-run / under-quota / blocked
+    private suspend fun ensureSessionQuota(): Boolean {
         if (!viewModel.wouldCreateNewSession()) return true
-        TokenStore.refreshSessionLimit(this, SessionStore.list(this).size)
+        val localCount = withContext(Dispatchers.IO) {
+            SessionStore.list(this@StaticAnalysisActivity).size
+        }
+        TokenStore.refreshSessionLimit(this, localCount)
         if (!TokenStore.isSessionLimitReached(this)) return true
         startActivity(Intent(this, SessionLimitActivity::class.java))
         return false

@@ -87,12 +87,12 @@ object VsgStudyRunner {
     /**
      * Cooperative cancel, polled between solves here and inside the engine's own
      * point loops, so it stops the combination already running too.
+     * Observes [AnalysisCancelGate] owned by [AnalysisViewModel].
      */
-    @Volatile
-    var cancelRequested = false
+    var cancelRequested: Boolean
+        get() = AnalysisCancelGate.requested
         set(value) {
-            field = value
-            SemperNativeLib.setCancelRequested(value)
+            AnalysisCancelGate.requested = value
         }
 
     /** Runs every combination of [params].plan in order. */

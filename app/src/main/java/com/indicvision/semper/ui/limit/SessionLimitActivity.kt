@@ -18,6 +18,7 @@ import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DeviceKeyManager
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.Insets
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -27,6 +28,7 @@ import timber.log.Timber
  * the user to email support@indicvision.com to raise their limit, and lets them
  * re-check or go back to manage (delete) existing analyses.
  */
+@AndroidEntryPoint
 class SessionLimitActivity : AppCompatActivity() {
 
     private lateinit var tvBody: TextView

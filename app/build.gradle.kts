@@ -3,6 +3,8 @@ plugins {
     kotlin("plugin.serialization") version "1.9.22"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     id("com.google.gms.google-services")
+    alias(libs.plugins.hilt.android)
+    alias(libs.plugins.ksp)
     // Coverage measurement only (report-only, no gate). Generate with
     // `./gradlew :app:koverHtmlReport` → app/build/reports/kover/.
     id("org.jetbrains.kotlinx.kover") version "0.9.1"
@@ -132,7 +134,9 @@ android {
 
     buildFeatures {
         buildConfig = true
-        viewBinding = true
+        // findViewById is used throughout; generating unused binding classes only
+        // slows compile and confuses contributors into thinking ViewBinding is adopted.
+        viewBinding = false
     }
 
     signingConfigs {
@@ -264,6 +268,8 @@ dependencies {
     implementation("com.jakewharton.timber:timber:5.0.1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 }
 
 // Static analysis gate: `./gradlew :app:detekt` (CI). The codebase is kept

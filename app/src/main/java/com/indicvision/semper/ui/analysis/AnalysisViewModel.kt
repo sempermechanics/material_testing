@@ -14,7 +14,6 @@ import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionPaths
-import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionRecordSettings
 import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
@@ -491,12 +490,12 @@ class AnalysisViewModel : ViewModel() {
      * Cooperative cancel: checked between frames here, and forwarded to the
      * engine, which polls it inside its point loops. Setting it therefore stops
      * the solve already running rather than only the ones after it.
+     * Shared with [VsgStudyRunner] via [AnalysisCancelGate].
      */
-    @Volatile
-    var cancelRequested = false
+    var cancelRequested: Boolean
+        get() = AnalysisCancelGate.requested
         set(value) {
-            field = value
-            SemperNativeLib.setCancelRequested(value)
+            AnalysisCancelGate.requested = value
         }
 
     data class BatchProgressUpdate(

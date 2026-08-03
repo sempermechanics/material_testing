@@ -107,7 +107,9 @@ parallel). Kotlin/docs-only PRs run ~10–15 min via path filters.
 | CI / release | [docs/ops/CI.md](docs/ops/CI.md), [docs/ops/RELEASING.md](docs/ops/RELEASING.md) |
 
 Prefer extracting a `*Helper` / `*Runner` next to existing ones over growing a
-god Activity. Do not introduce a DI framework for small helpers.
+god Activity. Do not introduce a DI framework for tiny helpers. Hilt is bootstrapped
+(`@HiltAndroidApp` / screen-by-screen `@AndroidEntryPoint`); extend it when a screen
+gains injectable dependencies — do not sneak a framework into an unrelated PR.
 
 ## Pull requests
 
