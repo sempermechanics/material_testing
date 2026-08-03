@@ -37,7 +37,7 @@ import java.io.IOException
 class AuthRepository(context: Context) {
 
     private val appContext = context.applicationContext
-    private val api = IndicApi(appContext)
+    private val api = IndicApi.get(appContext)
     private val auth = FirebaseAuth.getInstance()
 
     val cloudConfigured: Boolean get() = api.enabled

@@ -109,7 +109,7 @@ object CloudRestore {
             ?.let { return@withContext it }
 
         val appContext = context.applicationContext
-        val api = IndicApi(appContext)
+        val api = IndicApi.get(appContext)
         if (!api.enabled) return@withContext ListResult.ApiOff
         val token = TokenProvider.usableIdToken() ?: return@withContext ListResult.NeedSignIn
         try {
@@ -157,7 +157,7 @@ object CloudRestore {
         onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> },
     ): String = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
-        val api = IndicApi(appContext)
+        val api = IndicApi.get(appContext)
         val token = TokenProvider.usableIdToken()
             ?: error("Not signed in")
 

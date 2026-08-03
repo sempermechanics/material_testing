@@ -57,7 +57,7 @@ private const val DOWNLOAD_READ_TIMEOUT_S = 300L
  * broker — they never pass through this client's backend host.
  */
 @Suppress("TooManyFunctions") // one method per backend endpoint plus signing helpers
-class IndicApi(context: Context) {
+class IndicApi private constructor(context: Context) {
 
     private val appContext = context.applicationContext
 
@@ -516,5 +516,20 @@ class IndicApi(context: Context) {
         private val downloadClient = client.newBuilder()
             .readTimeout(DOWNLOAD_READ_TIMEOUT_S, TimeUnit.SECONDS)
             .build()
+
+        @Volatile
+        private var instance: IndicApi? = null
+
+        /**
+         * Process-wide client. Shares OkHttp pools and DeviceKeyManager; call sites
+         * must not construct [IndicApi] directly.
+         */
+        fun get(context: Context): IndicApi {
+            val existing = instance
+            if (existing != null) return existing
+            return synchronized(this) {
+                instance ?: IndicApi(context.applicationContext).also { instance = it }
+            }
+        }
     }
 }

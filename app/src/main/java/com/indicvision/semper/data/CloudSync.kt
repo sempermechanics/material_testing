@@ -72,7 +72,7 @@ object CloudSync {
     suspend fun reconcile(context: Context, reupload: Boolean = true, deep: Boolean = false): Outcome {
         return withContext(Dispatchers.IO) {
             val appContext = context.applicationContext
-            val api = IndicApi(appContext)
+            val api = IndicApi.get(appContext)
             if (!api.enabled) return@withContext Outcome.Disabled
 
             // Every screen resume lands here, and each check costs one Firestore
@@ -145,7 +145,7 @@ object CloudSync {
     suspend fun eraseEverywhere(context: Context, localSessionId: String): EraseResult = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         val record = SessionStore.get(appContext, localSessionId)
-        val api = IndicApi(appContext)
+        val api = IndicApi.get(appContext)
 
         val neverSynced = record == null ||
             (record.syncState == SessionRecord.SyncState.LOCAL_ONLY && record.cloudSessionId.isBlank())
@@ -189,7 +189,7 @@ object CloudSync {
      */
     suspend fun deleteAccount(context: Context): AccountDeletion = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
-        val api = IndicApi(appContext)
+        val api = IndicApi.get(appContext)
         val auth = AuthRepository(appContext)
         deleteAccount(
             eraseCloud = { eraseAccountInCloud(api) },
@@ -255,7 +255,7 @@ object CloudSync {
         localSessionId: String,
     ): Boolean = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
-        val api = IndicApi(appContext)
+        val api = IndicApi.get(appContext)
         if (!api.enabled) return@withContext false
         val token = TokenProvider.usableIdToken() ?: return@withContext false
         try {

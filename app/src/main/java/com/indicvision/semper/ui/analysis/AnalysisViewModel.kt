@@ -6,7 +6,6 @@
 
 package com.indicvision.semper.ui.analysis
 import android.content.Context
-import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.ProgressCallback
@@ -16,16 +15,14 @@ import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.data.SessionRecordSettings
+import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
-import com.indicvision.semper.report.VisualizationEngine
-import com.indicvision.semper.ui.common.BitmapDecode
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -60,6 +57,8 @@ class AnalysisViewModel : ViewModel() {
          */
         const val LOW_CONVERGENCE_STRIKES = 2
     }
+
+    private val sessions = SessionRepository()
 
     // NATIVE THREAD PINNING: All JNI/OpenMP calls are routed through the global
     // SemperNativeLib.nativeDispatcher to ensure thread affinity.
@@ -304,12 +303,12 @@ class AnalysisViewModel : ViewModel() {
     ) {
         val roi = request.roi
         currentSessionId = newPendingSessionId()
-        val refPngPath = writeReferenceCopy(batchDir, refBytes)
+        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes)
         lastRefPath = refPngPath
         lastStep = result.runs.first().point.step
 
         val frameIndex = resolvedVsgFrameIndex()
-        val rawName = copyRawDeformed(batchDir, frameIndex)
+        val rawName = sessions.copyRawDeformed(batchDir, frameIndex, defFilePaths, defOriginalNames)
 
         val cloudEnabled = DicSettings.saveToCloud(appContext)
         val first = result.runs.first().point
@@ -318,12 +317,15 @@ class AnalysisViewModel : ViewModel() {
         }.baseName()
         val skipped = result.skipped
         val summary = sweepSummary(appContext, localSessionId, result, request, defDisplay)
-        val record = buildSessionRecord(
+        val record = sessions.buildSessionRecord(
             appContext = appContext,
             localSessionId = localSessionId,
             batchDir = batchDir,
             refPngPath = refPngPath,
-            settings = RecordSettings(
+            refName = refName,
+            realRefWidth = realRefWidth,
+            realRefHeight = realRefHeight,
+            settings = SessionRecordSettings(
                 subset = first.subset,
                 step = first.step,
                 strainWin = first.strainWindow,
@@ -338,9 +340,8 @@ class AnalysisViewModel : ViewModel() {
             avgIterations = result.firstMetrics?.getOrNull(EngineStats.SLOT_AVG_ITERS) ?: 0f,
             executionTimeMs = executionTimeMs,
             frameCount = result.runs.size,
-            // Every combination was solved against the same image, so they all
-            // point at the one raw file persisted above.
             defNames = result.runs.map { rawName },
+            engineStatsArray = engineStatsArray,
         ).copy(
             name = summary.name,
             // What makes a reopened session a sweep again: without these the
@@ -401,24 +402,8 @@ class AnalysisViewModel : ViewModel() {
     }
 
     /** Copies one deformed original into the session dir; returns its name. */
-    private fun copyRawDeformed(batchDir: File, frameIndex: Int): String {
-        val rawDir = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply {
-            mkdirs()
-            listFiles()?.forEach { it.delete() }
-        }
-        val name = (defOriginalNames.getOrNull(frameIndex) ?: File(defFilePaths[frameIndex]).name)
-            .baseName()
-        return runCatching {
-            val target = File(rawDir, name)
-            if (target.exists()) target.delete()
-            FileInputStream(File(defFilePaths[frameIndex])).use { input ->
-                FileOutputStream(target).use { output ->
-                    input.copyTo(output)
-                }
-            }
-            target.name
-        }.onFailure { Timber.w(it, "Could not persist the sweep's deformed frame") }.getOrDefault("")
-    }
+    private fun copyRawDeformed(batchDir: File, frameIndex: Int): String =
+        sessions.copyRawDeformed(batchDir, frameIndex, defFilePaths, defOriginalNames)
 
     fun isReadyToCompute(): Boolean = refBytes != null && defFilePaths.isNotEmpty()
 
@@ -483,22 +468,9 @@ class AnalysisViewModel : ViewModel() {
     private fun newPendingSessionId(): String =
         "Pending_Cloud_Sync_" + UUID.randomUUID().toString().take(8)
 
-    /** The "MMM d, HH:mm:ss" stamp used in default session names. */
+    /** The "MMM d, HH:mm:ss" stamp used in default session names / sweep labels. */
     private fun timestamp(millis: Long): String =
         SimpleDateFormat("MMM d, HH:mm:ss", Locale.US).format(Date(millis))
-
-    /** The engine settings a session row records, shared by both run modes. */
-    @Suppress("LongParameterList") // one row of the session index
-    data class RecordSettings(
-        val subset: Int,
-        val step: Int,
-        val strainWin: Int,
-        val roiX: Int,
-        val roiY: Int,
-        val roiW: Int,
-        val roiH: Int,
-        val use6x6: Boolean,
-    )
 
     data class BatchAnalysisParams(
         val cacheDir: File,
@@ -745,18 +717,21 @@ class AnalysisViewModel : ViewModel() {
 
             // Persist a viewable copy of the reference next to the frames —
             // the Home list and reopened sessions depend on it surviving.
-            val refPngPath = writeReferenceCopy(batchDir, refBytes)
+            val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes)
             lastRefPath = refPngPath
 
             val cloudEnabled = DicSettings.saveToCloud(appContext)
             val saved = SessionStore.upsert(
                 appContext,
-                buildSessionRecord(
+                sessions.buildSessionRecord(
                     appContext = appContext,
                     localSessionId = localSessionId,
                     batchDir = batchDir,
                     refPngPath = refPngPath,
-                    settings = RecordSettings(
+                    refName = refName,
+                    realRefWidth = realRefWidth,
+                    realRefHeight = realRefHeight,
+                    settings = SessionRecordSettings(
                         subset = params.subset,
                         step = params.step,
                         strainWin = params.strainWin,
@@ -781,6 +756,7 @@ class AnalysisViewModel : ViewModel() {
                                 .baseName()
                         }
                     },
+                    engineStatsArray = engineStatsArray,
                 ),
             )
             if (!saved) {
@@ -804,106 +780,6 @@ class AnalysisViewModel : ViewModel() {
             failedFrameName = failedFrameIndex
                 .takeIf { it >= 0 }
                 ?.let { defFilePaths.getOrNull(it)?.substringAfterLast('/') },
-        )
-    }
-
-    /**
-     * Writes a display-sized PNG of the reference into the session dir for Home
-     * list + viewer UI. The engine still uses full [refBytes] in memory.
-     */
-    private fun writeReferenceCopy(sessionDir: File, refBytes: ByteArray): String {
-        val refPngFile = File(sessionDir, "reference.png")
-        var refBmp: Bitmap? = null
-        try {
-            // Cap longest edge for the on-disk display copy — full-width preview
-            // was wasteful for Home thumbs / viewer chrome. Fallback chain keeps
-            // a decodable file so cloud backup and report base images still work.
-            refBmp = SemperNativeLib.getPreviewFromBytes(
-                refBytes,
-                VisualizationEngine.DISPLAY_MAX_EDGE,
-            ) ?: decodeDisplaySized(refBytes)
-            val bmp = refBmp
-            if (bmp != null) {
-                refPngFile.outputStream().use { out -> bmp.compress(Bitmap.CompressFormat.PNG, 100, out) }
-            } else {
-                refPngFile.writeBytes(refBytes)
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Reference preview failed; storing the raw reference bytes")
-            runCatching { refPngFile.writeBytes(refBytes) }
-        } finally {
-            refBmp?.recycle()
-        }
-        return refPngFile.absolutePath
-    }
-
-    /** Bounds-aware decode capped to [VisualizationEngine.DISPLAY_MAX_EDGE]. */
-    private fun decodeDisplaySized(refBytes: ByteArray): Bitmap? =
-        BitmapDecode.decodeByteArrayCapped(refBytes)
-
-    @Suppress("LongParameterList") // one-shot assembly of the index row
-    /**
-     * Default name for a new analysis: the reference file's base name plus the
-     * run's timestamp. The name alone used to be the reference file name, so
-     * every run off the same reference produced an identical, indistinguishable
-     * row in the Home list. A user-chosen name always wins over this.
-     */
-    private fun defaultSessionName(refFileName: String, now: Long): String {
-        val base = refFileName.substringBeforeLast('.').ifBlank { "Analysis" }
-        val stamp = timestamp(now)
-        return "$base · $stamp"
-    }
-
-    @Suppress("LongParameterList") // one-shot assembly of the session index row
-    private fun buildSessionRecord(
-        appContext: Context,
-        localSessionId: String,
-        batchDir: File,
-        refPngPath: String,
-        settings: RecordSettings,
-        cloudEnabled: Boolean,
-        pointsConverged: Int,
-        avgIterations: Float,
-        executionTimeMs: Int,
-        frameCount: Int,
-        defNames: List<String>,
-        stopCode: Int = 0,
-        plannedFrameCount: Int = 0,
-    ): SessionRecord {
-        val now = System.currentTimeMillis()
-        // Re-runs upsert over the same id: keep the original creation time
-        // and any user-chosen name.
-        val existing = SessionStore.get(appContext, localSessionId)
-        val convergence = engineStatsArray?.getOrNull(EngineStats.SLOT_CONVERGENCE) ?: 0f
-        return SessionRecord(
-            id = localSessionId,
-            name = existing?.name ?: defaultSessionName(refName, now),
-            createdAt = existing?.createdAt ?: now,
-            updatedAt = now,
-            frameCount = frameCount,
-            subset = settings.subset,
-            step = settings.step,
-            strainWindow = settings.strainWin,
-            use6x6 = settings.use6x6,
-            imgW = realRefWidth,
-            imgH = realRefHeight,
-            roiX = settings.roiX,
-            roiY = settings.roiY,
-            roiW = settings.roiW,
-            roiH = settings.roiH,
-            refPath = refPngPath,
-            refName = refName,
-            sessionDir = batchDir.absolutePath,
-            defNames = defNames,
-            headline = String.format(java.util.Locale.US, "%.1f%% converged", convergence),
-            engineStats = engineStatsArray?.toList() ?: emptyList(),
-            stopCode = stopCode,
-            plannedFrameCount = plannedFrameCount,
-            strainMethod = "VSG",
-            pointsConverged = pointsConverged,
-            avgIterations = avgIterations,
-            executionTimeMs = executionTimeMs,
-            syncState = if (cloudEnabled) SessionRecord.SyncState.PENDING else SessionRecord.SyncState.LOCAL_ONLY,
         )
     }
 }

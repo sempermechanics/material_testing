@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
  */
 class AdminActivity : AppCompatActivity() {
 
-    private val api by lazy { IndicApi(applicationContext) }
+    private val api by lazy { IndicApi.get(applicationContext) }
 
     private lateinit var rv: RecyclerView
     private lateinit var tvEmpty: TextView

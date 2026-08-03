@@ -177,7 +177,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val api = IndicApi(applicationContext)
+        val api = IndicApi.get(applicationContext)
         if (!api.enabled) {
             Timber.d("Cloud backend not configured — skipping upload")
             return@withContext Result.success()

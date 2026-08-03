@@ -38,7 +38,7 @@ class UploadResumableTest {
     @Before
     fun setUp() {
         server = MockWebServer().apply { start() }
-        api = IndicApi(ApplicationProvider.getApplicationContext<Context>())
+        api = IndicApi.get(ApplicationProvider.getApplicationContext<Context>())
         file = File.createTempFile("upload", ".bin")
     }
 
