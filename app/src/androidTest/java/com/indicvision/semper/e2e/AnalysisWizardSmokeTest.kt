@@ -8,19 +8,25 @@ import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.indicvision.semper.ui.auth.SplashActivity
+import com.indicvision.semper.R
+import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+/**
+ * Instrumented UI smoke: open the analysis screen and assert the wizard chrome
+ * is alive. This is not a full E2E (no fixture pick / compute); CI must not
+ * treat it as one.
+ */
 @RunWith(AndroidJUnit4::class)
-class AppFlowEspressoTest {
+class AnalysisWizardSmokeTest {
 
     @get:Rule
-    val scenarioRule = ActivityScenarioRule(SplashActivity::class.java)
+    val scenarioRule = ActivityScenarioRule(StaticAnalysisActivity::class.java)
 
     @Test
-    fun splashActivity_launches() {
-        onView(withId(android.R.id.content)).check(matches(isDisplayed()))
+    fun analysisActivity_showsWizardNextWithoutCrashing() {
+        onView(withId(R.id.btnNext)).check(matches(isDisplayed()))
     }
 }

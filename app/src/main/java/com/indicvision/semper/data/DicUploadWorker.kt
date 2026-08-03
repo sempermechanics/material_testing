@@ -121,6 +121,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
         val byKey = artifacts.associateBy { it.role to it.name }
         val work = ArrayList<UploadJob>(state.uploads.size)
+        var allMatch = true
         for (u in state.uploads) {
             val art = byKey[u.role to u.name]
             if (art == null || art.file.length() != u.sizeBytes) {
@@ -131,16 +132,22 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     u.name,
                     u.sizeBytes,
                 )
-                return Resume.Rebuild
+                allMatch = false
+                break
             }
             work.add(UploadJob(u.fileId, u.uploadUrl, u.chunkSize, u.name, art.file))
         }
-        if (work.isEmpty()) {
-            // No pending files, yet not COMPLETED — inconsistent; don't trust it.
-            Timber.w("Session %s has no pending uploads but isn't COMPLETED — rebuilding", cloudSessionId)
-            return Resume.Rebuild
+        return when (
+            UploadWorkOutcomes.classifyResume(
+                sessionStatus = state.status.orEmpty(),
+                pendingCount = if (allMatch) work.size else state.uploads.size,
+                allPendingMatchArtifacts = allMatch,
+            )
+        ) {
+            UploadWorkOutcomes.ResumeKind.DONE -> Resume.Done
+            UploadWorkOutcomes.ResumeKind.REBUILD -> Resume.Rebuild
+            UploadWorkOutcomes.ResumeKind.CONTINUE -> Resume.Continue(work)
         }
-        return Resume.Continue(work)
     }
 
     /** Declare the whole analysis and get one resumable target per file. */
@@ -437,7 +444,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     Timber.e("Upload rejected (%d): %s", e.code, e.detail)
                     // 409 means the account's analysis quota is full — raise the
                     // persistent limit gate so the user is told to email support.
-                    if (e.code == 409) {
+                    if (UploadWorkOutcomes.isQuotaExhausted(e.code)) {
                         TokenStore.setSessionLimitReached(applicationContext, true)
                         applicationContext.startActivity(
                             Intent(applicationContext, SessionLimitActivity::class.java).apply {
@@ -451,7 +458,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     }
                     SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
                     stagingDir.deleteRecursively()
-                    Result.failure()
+                    UploadWorkOutcomes.fromHttpCode(e.code)
                 }
                 // 400 = the resumable session's expected size no longer matches our
                 // files (a session from an earlier build, or content that changed).
@@ -470,12 +477,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     }.onFailure { Timber.w(it, "Could not delete stale session") }
                     SessionStore.setCloudSessionId(applicationContext, localId, "")
                     stagingDir.deleteRecursively()
-                    Result.retry()
+                    UploadWorkOutcomes.fromHttpCode(e.code)
                 }
                 else -> {
                     // Transient — keep the staged files so the retry resumes identically.
                     Timber.e(e, "Upload failed for %s; will retry", localId)
-                    Result.retry()
+                    UploadWorkOutcomes.fromHttpCode(e.code)
                 }
             }
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
