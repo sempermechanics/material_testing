@@ -13,6 +13,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import androidx.core.graphics.toColorInt
 import java.util.Locale
 
 class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
@@ -29,10 +30,10 @@ class PdfLayoutEngine(private val pdfDocument: PdfDocument) {
     private var pageNumber = 0
 
     // Design System Colors
-    private val colorPrimary = Color.parseColor("#1A237E") // Navy Blue
-    private val colorText = Color.parseColor("#37474F") // Slate Gray
-    private val colorBorder = Color.parseColor("#CFD8DC") // Light Gray
-    private val colorZebra = Color.parseColor("#F8F9FA") // Faint Gray
+    private val colorPrimary = "#1A237E".toColorInt() // Navy Blue
+    private val colorText = "#37474F".toColorInt() // Slate Gray
+    private val colorBorder = "#CFD8DC".toColorInt() // Light Gray
+    private val colorZebra = "#F8F9FA".toColorInt() // Faint Gray
 
     // Typography
     private val h1Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

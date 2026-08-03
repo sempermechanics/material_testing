@@ -1,5 +1,8 @@
+@file:SuppressLint("InflateParams")
+
 package com.indicvision.semper.ui.viewer
 
+import android.annotation.SuppressLint
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
@@ -69,7 +72,7 @@ object ViewerSettingsSheet {
             add(host.getString(R.string.setting_step) to host.getString(R.string.setting_px_fmt, host.step))
             add(
                 host.getString(R.string.setting_strain_window) to
-                    host.getString(R.string.setting_subsets_fmt, strainWin),
+                    host.resources.getQuantityString(R.plurals.setting_subsets_fmt, strainWin, strainWin),
             )
             if (host.isSweep) {
                 add(

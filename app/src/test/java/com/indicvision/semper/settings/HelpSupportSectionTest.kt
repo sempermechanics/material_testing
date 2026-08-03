@@ -18,8 +18,8 @@ import org.robolectric.annotation.Config
 
 /**
  * Settings → Help & support. The section is the only place in the app a user who
- * is merely stuck can find the support address, so what matters is that it is
- * present, shows the real address, and hands the mail app an actionable intent.
+ * is merely stuck can find community links and the support address, so what matters
+ * is that those actions are wired and the mail intent stays actionable.
  */
 // Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
@@ -49,6 +49,51 @@ class HelpSupportSectionTest {
         val body = activity.findViewById<View>(R.id.bodyHelpSupport)
         assertEquals(View.VISIBLE, body.visibility)
         assertEquals(supportEmail, activity.findViewById<TextView>(R.id.tvSupportEmail).text.toString())
+    }
+
+    @Test
+    fun `community opens the public community URL`() {
+        val activity = settings()
+
+        activity.findViewById<View>(R.id.btnCommunity).performClick()
+
+        val started = shadowOf(activity).nextStartedActivity
+        assertNotNull("no intent was started", started)
+        assertEquals(Intent.ACTION_VIEW, started.action)
+        assertEquals(
+            activity.getString(R.string.url_community),
+            started.data.toString(),
+        )
+    }
+
+    @Test
+    fun `report bug opens the bugs URL`() {
+        val activity = settings()
+
+        activity.findViewById<View>(R.id.btnReportBug).performClick()
+
+        val started = shadowOf(activity).nextStartedActivity
+        assertNotNull("no intent was started", started)
+        assertEquals(Intent.ACTION_VIEW, started.action)
+        assertEquals(
+            activity.getString(R.string.url_report_bug),
+            started.data.toString(),
+        )
+    }
+
+    @Test
+    fun `request feature opens the features URL`() {
+        val activity = settings()
+
+        activity.findViewById<View>(R.id.btnRequestFeature).performClick()
+
+        val started = shadowOf(activity).nextStartedActivity
+        assertNotNull("no intent was started", started)
+        assertEquals(Intent.ACTION_VIEW, started.action)
+        assertEquals(
+            activity.getString(R.string.url_request_feature),
+            started.data.toString(),
+        )
     }
 
     @Test

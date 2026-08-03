@@ -1,6 +1,7 @@
 package com.indicvision.semper.data
 
 import androidx.work.ListenableWorker.Result
+import com.indicvision.semper.data.net.HttpStatus
 
 /**
  * Pure decision helpers for [DicUploadWorker] HTTP / resume outcomes.
@@ -9,22 +10,22 @@ import androidx.work.ListenableWorker.Result
  */
 internal object UploadWorkOutcomes {
 
-    private const val HTTP_BAD_REQUEST = 400
-    private const val HTTP_CONFLICT = 409
-    private const val HTTP_PAYLOAD_TOO_LARGE = 413
-
     /** Map a backend [IndicApi]-style HTTP status to a WorkManager result. */
     fun fromHttpCode(code: Int): Result = when (code) {
         // Quota full / payload too large — retrying will not help.
-        HTTP_CONFLICT, HTTP_PAYLOAD_TOO_LARGE -> Result.failure()
+        HttpStatus.CONFLICT, HttpStatus.PAYLOAD_TOO_LARGE -> Result.failure()
         // Stale resumable session — rebuild on the next attempt.
-        HTTP_BAD_REQUEST -> Result.retry()
+        HttpStatus.BAD_REQUEST -> Result.retry()
         // Transient or unknown — keep staging and retry.
         else -> Result.retry()
     }
 
     /** Whether HTTP [code] means the account analysis quota is full. */
-    fun isQuotaExhausted(code: Int): Boolean = code == HTTP_CONFLICT
+    fun isQuotaExhausted(code: Int): Boolean = code == HttpStatus.CONFLICT
+
+    /** Whether retrying cannot help (quota or payload size). */
+    fun isTerminalClientError(code: Int): Boolean =
+        code == HttpStatus.CONFLICT || code == HttpStatus.PAYLOAD_TOO_LARGE
 
     /**
      * Resume planner outcome when comparing pending uploads to local artifacts.

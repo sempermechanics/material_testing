@@ -4,8 +4,9 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.net.IndicApi
 import kotlinx.coroutines.runBlocking
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
+import mockwebserver3.MockResponse
+import mockwebserver3.MockWebServer
+import okhttp3.Headers
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -37,42 +38,47 @@ class UploadResumableTest {
 
     @Before
     fun setUp() {
-        server = MockWebServer().apply { start() }
+        server = MockWebServer()
+        server.start()
         api = IndicApi.get(ApplicationProvider.getApplicationContext<Context>())
         file = File.createTempFile("upload", ".bin")
     }
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
         file.delete()
     }
 
     private fun writeBytes(n: Int) = file.writeBytes(ByteArray(n) { (it % 251).toByte() })
 
+    private fun enqueue(code: Int, headers: Headers = Headers.headersOf(), body: String = "") {
+        server.enqueue(MockResponse(code = code, headers = headers, body = body))
+    }
+
     @Test
     fun `resumes from the offset Drive reports instead of resending`() = runBlocking {
         writeBytes(1000)
         // Probe: Drive already holds bytes 0-399.
-        server.enqueue(MockResponse().setResponseCode(308).addHeader("Range", "bytes=0-399"))
+        enqueue(308, Headers.headersOf("Range", "bytes=0-399"))
         // The continuation PUT completes the file.
-        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"id":"drv1","md5Checksum":"md5x"}"""))
+        enqueue(200, body = """{"id":"drv1","md5Checksum":"md5x"}""")
 
         val (driveId, md5) = api.uploadResumable(server.url("/u").toString(), file, chunk256k)
 
         assertEquals("drv1", driveId)
         assertEquals("md5x", md5)
         // Request 1 = probe; request 2 must continue at byte 400, not 0.
-        assertEquals("bytes */1000", server.takeRequest().getHeader("Content-Range"))
+        assertEquals("bytes */1000", server.takeRequest().headers["Content-Range"])
         val put = server.takeRequest()
-        assertEquals("bytes 400-999/1000", put.getHeader("Content-Range"))
-        assertEquals(600L, put.bodySize)
+        assertEquals("bytes 400-999/1000", put.headers["Content-Range"])
+        assertEquals(600L, put.body?.size?.toLong() ?: 0L)
     }
 
     @Test
     fun `already-complete upload returns the Drive resource from the probe alone`() = runBlocking {
         writeBytes(500)
-        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"id":"done1"}"""))
+        enqueue(200, body = """{"id":"done1"}""")
 
         val (driveId, md5) = api.uploadResumable(server.url("/u").toString(), file, chunk256k)
 
@@ -86,16 +92,16 @@ class UploadResumableTest {
     fun `fresh upload with no Range header starts at zero and chunks correctly`() = runBlocking {
         val total = chunk256k + 1000 // forces exactly two chunks at the min chunk size
         writeBytes(total)
-        server.enqueue(MockResponse().setResponseCode(308)) // probe: nothing received yet
-        server.enqueue(MockResponse().setResponseCode(308).addHeader("Range", "bytes=0-${chunk256k - 1}"))
-        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"id":"drv2"}"""))
+        enqueue(308) // probe: nothing received yet
+        enqueue(308, Headers.headersOf("Range", "bytes=0-${chunk256k - 1}"))
+        enqueue(200, body = """{"id":"drv2"}""")
 
         // chunkSize=1 is below Drive's 256 KiB minimum — the clamp must raise it.
         val (driveId, _) = api.uploadResumable(server.url("/u").toString(), file, 1)
 
         assertEquals("drv2", driveId)
         server.takeRequest() // probe
-        assertEquals("bytes 0-${chunk256k - 1}/$total", server.takeRequest().getHeader("Content-Range"))
-        assertEquals("bytes $chunk256k-${total - 1}/$total", server.takeRequest().getHeader("Content-Range"))
+        assertEquals("bytes 0-${chunk256k - 1}/$total", server.takeRequest().headers["Content-Range"])
+        assertEquals("bytes $chunk256k-${total - 1}/$total", server.takeRequest().headers["Content-Range"])
     }
 }

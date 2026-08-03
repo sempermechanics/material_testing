@@ -1,0 +1,18 @@
+package com.indicvision.semper.data.net
+
+/**
+ * HTTP status codes branched on by the Semper API client and upload worker.
+ * Keep literals here so quota / payload decisions stay consistent.
+ */
+object HttpStatus {
+    const val OK = 200
+    const val CREATED = 201
+    const val PARTIAL_CONTENT = 206
+    const val RESUME_INCOMPLETE = 308
+    const val BAD_REQUEST = 400
+    const val FORBIDDEN = 403
+    const val NOT_FOUND = 404
+    const val CONFLICT = 409
+    const val PAYLOAD_TOO_LARGE = 413
+    const val RANGE_NOT_SATISFIABLE = 416
+}

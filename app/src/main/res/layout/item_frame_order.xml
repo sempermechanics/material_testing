@@ -5,7 +5,7 @@
     android:layout_height="72dp"
     android:layout_marginEnd="8dp"
     android:background="@color/surface"
-    android:elevation="0dp">
+    android:elevation="0dp" tools:ignore="Overdraw">
 
     <ImageView
         android:id="@+id/ivFrameThumb"

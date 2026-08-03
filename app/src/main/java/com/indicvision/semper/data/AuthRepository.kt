@@ -1,6 +1,7 @@
 package com.indicvision.semper.data
 
 import android.content.Context
+import androidx.core.content.edit
 import com.google.firebase.auth.ActionCodeSettings
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
@@ -143,7 +144,7 @@ class AuthRepository(context: Context) {
             .build()
         try {
             auth.sendSignInLinkToEmail(clean, settings).await()
-            linkPrefs().edit().putString(K_PENDING_EMAIL, clean).apply()
+            linkPrefs().edit { putString(K_PENDING_EMAIL, clean) }
             Result.success(Unit)
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.w(e, "Could not send sign-in link")
@@ -182,7 +183,7 @@ class AuthRepository(context: Context) {
     /** Finish a passwordless email-link sign-in from the tapped link. */
     suspend fun completeEmailLink(email: String, link: String): Result<String> {
         val result = firebaseThen { auth.signInWithEmailLink(email.trim(), link).await() }
-        if (result.isSuccess) linkPrefs().edit().remove(K_PENDING_EMAIL).apply()
+        if (result.isSuccess) linkPrefs().edit { remove(K_PENDING_EMAIL) }
         return result
     }
 

@@ -1,8 +1,14 @@
 // runBatchAnalysis / runVsgSweep stream frames through the native engine in one
-// cohesive loop (per-frame persist, solve, progress, cancel); the method size,
-// branching, break/continue and broad per-frame catch are inherent to that
-// pipeline and its literal step constants, so those rules are suppressed here.
-// Findings are tracked in detekt-baseline.xml rather than blanket-suppressed.
+// cohesive loop. Method size, branching, jump statements and per-frame catch
+// are inherent; suppress rather than baseline so new findings elsewhere fail CI.
+
+@file:Suppress(
+    "CyclomaticComplexMethod",
+    "LongMethod",
+    "LoopWithTooManyJumpStatements",
+    "MagicNumber",
+    "TooGenericExceptionCaught",
+)
 
 package com.indicvision.semper.ui.analysis
 import android.content.Context
@@ -359,7 +365,7 @@ class AnalysisViewModel : ViewModel() {
             headline = summary.headline,
         )
         if (SessionStore.upsert(appContext, record) && cloudEnabled) {
-            CloudSync.enqueueUpload(appContext, localSessionId, allowMetered = true)
+            CloudSync.enqueueUpload(appContext, localSessionId)
         }
     }
 
@@ -389,8 +395,9 @@ class AnalysisViewModel : ViewModel() {
             defDisplay.substringBeforeLast('.').ifBlank { defDisplay },
             stamp,
         )
-        val headline = appContext.getString(
-            R.string.session_sweep_headline_fmt,
+        val headline = appContext.resources.getQuantityString(
+            R.plurals.session_sweep_headline_fmt,
+            result.runs.size,
             defDisplay,
             result.runs.size,
             totalPlanned,
@@ -763,7 +770,7 @@ class AnalysisViewModel : ViewModel() {
                 engineErrorCode = ERROR_SESSION_LIMIT
             } else if (cloudEnabled) {
                 // Everything the worker needs now lives in the SessionRecord.
-                CloudSync.enqueueUpload(appContext, localSessionId, allowMetered = true)
+                CloudSync.enqueueUpload(appContext, localSessionId)
             } else {
                 Timber.d("Save to cloud is off — session %s stays local only", localSessionId)
             }

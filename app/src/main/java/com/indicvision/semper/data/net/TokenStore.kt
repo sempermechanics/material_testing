@@ -5,6 +5,7 @@
 package com.indicvision.semper.data.net
 
 import android.content.Context
+import androidx.core.content.edit
 
 /**
  * Local session cache alongside Firebase Auth: the signed-in identity plus the
@@ -37,26 +38,26 @@ object TokenStore {
 
     /** Cache the signed-in identity (from the Firebase user) for offline UI. */
     fun saveIdentity(context: Context, uid: String?, email: String?) {
-        prefs(context).edit()
-            .putString(K_UID, uid)
-            .putString(K_EMAIL, email)
-            .apply()
+        prefs(context).edit {
+            putString(K_UID, uid)
+            putString(K_EMAIL, email)
+        }
     }
 
     fun cachedUid(context: Context): String? = prefs(context).getString(K_UID, null)
     fun cachedEmail(context: Context): String? = prefs(context).getString(K_EMAIL, null)
 
     fun cachedStatus(context: Context): String? = prefs(context).getString(K_STATUS, null)
-    fun setStatus(context: Context, status: String) = prefs(context).edit().putString(K_STATUS, status).apply()
+    fun setStatus(context: Context, status: String) = prefs(context).edit { putString(K_STATUS, status) }
 
     fun cachedRole(context: Context): String? = prefs(context).getString(K_ROLE, null)
-    fun setRole(context: Context, role: String?) = prefs(context).edit().putString(K_ROLE, role).apply()
+    fun setRole(context: Context, role: String?) = prefs(context).edit { putString(K_ROLE, role) }
 
     fun isAdmin(context: Context): Boolean = cachedRole(context) == "admin"
 
     fun isDeviceRegistered(context: Context): Boolean = prefs(context).getBoolean(K_DEVICE_REGISTERED, false)
     fun setDeviceRegistered(context: Context, v: Boolean) {
-        prefs(context).edit().putBoolean(K_DEVICE_REGISTERED, v).apply()
+        prefs(context).edit { putBoolean(K_DEVICE_REGISTERED, v) }
     }
 
     // ── Cloud analysis quota (max sessions per account) ──────────────────
@@ -82,11 +83,11 @@ object TokenStore {
     fun setQuota(context: Context, used: Int, max: Int, localCount: Int = 0) {
         val effectiveMax = if (max > 0) max else DEFAULT_MAX_SESSIONS
         val effectiveUsed = maxOf(used, localCount)
-        prefs(context).edit()
-            .putInt(K_QUOTA_USED, effectiveUsed)
-            .putInt(K_QUOTA_MAX, effectiveMax)
-            .putBoolean(K_LIMIT_REACHED, effectiveUsed >= effectiveMax)
-            .apply()
+        prefs(context).edit {
+            putInt(K_QUOTA_USED, effectiveUsed)
+            putInt(K_QUOTA_MAX, effectiveMax)
+            putBoolean(K_LIMIT_REACHED, effectiveUsed >= effectiveMax)
+        }
     }
 
     /** Recompute the hard-stop flag from local session count (+ cached cloud used). */
@@ -96,7 +97,7 @@ object TokenStore {
 
     /** Force the limit flag (e.g. an upload rejected 409 without fresh numbers). */
     fun setSessionLimitReached(context: Context, v: Boolean) {
-        prefs(context).edit().putBoolean(K_LIMIT_REACHED, v).apply()
+        prefs(context).edit { putBoolean(K_LIMIT_REACHED, v) }
     }
 
     /** True when the account may not create another analysis (hard stop). */
@@ -113,9 +114,9 @@ object TokenStore {
 
     fun setBetaNoticeAcked(context: Context) {
         val uid = cachedUid(context) ?: return
-        onboardingPrefs(context).edit().putBoolean(K_BETA_ACKED_PREFIX + uid, true).apply()
+        onboardingPrefs(context).edit { putBoolean(K_BETA_ACKED_PREFIX + uid, true) }
     }
 
     /** Wipe the local session cache (sign-out). Keystore device key is left intact. */
-    fun clear(context: Context) = prefs(context).edit().clear().apply()
+    fun clear(context: Context) = prefs(context).edit { clear() }
 }

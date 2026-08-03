@@ -6,7 +6,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import com.indicvision.semper.SemperNativeLib
-import com.indicvision.semper.ui.common.BitmapDecode
+import com.indicvision.semper.imaging.BitmapDecode
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale

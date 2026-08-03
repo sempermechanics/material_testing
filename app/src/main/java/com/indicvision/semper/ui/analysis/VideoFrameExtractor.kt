@@ -10,13 +10,18 @@
     "TooGenericExceptionCaught",
 )
 
+@file:SuppressLint("InlinedApi")
+
 package com.indicvision.semper.ui.analysis
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
-import com.indicvision.semper.ui.common.BitmapDecode
+import androidx.core.graphics.scale
+import com.indicvision.semper.imaging.BitmapDecode
+import com.indicvision.semper.imaging.ImageEncode
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -73,10 +78,8 @@ object VideoFrameExtractor {
         } catch (e: Exception) {
             Timber.e(e, "Video metadata read failed")
         } finally {
-            try {
-                retriever.release()
-            } catch (_: Exception) {
-            }
+            runCatching { retriever.release() }
+                .onFailure { Timber.w(it, "MediaMetadataRetriever.release failed") }
         }
         return meta
     }
@@ -136,7 +139,7 @@ object VideoFrameExtractor {
                 } else {
                     val f = File(tempDir, String.format(Locale.US, "%04d_frame.png", i))
                     FileOutputStream(f).use { out ->
-                        frame.compress(Bitmap.CompressFormat.PNG, 100, out)
+                        frame.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, out)
                     }
                     frame.recycle()
                     defPaths.add(f.absolutePath)
@@ -168,10 +171,8 @@ object VideoFrameExtractor {
                 batch = batch,
             )
         } finally {
-            try {
-                retriever.release()
-            } catch (_: Exception) {
-            }
+            runCatching { retriever.release() }
+                .onFailure { Timber.w(it, "MediaMetadataRetriever.release failed") }
         }
     }
 
@@ -183,7 +184,7 @@ object VideoFrameExtractor {
 
     private fun compressPngToBytes(frame: Bitmap): ByteArray =
         ByteArrayOutputStream().use { out ->
-            frame.compress(Bitmap.CompressFormat.PNG, 100, out)
+            frame.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, out)
             out.toByteArray()
         }
 
@@ -193,11 +194,9 @@ object VideoFrameExtractor {
             return frame.copy(frame.config ?: Bitmap.Config.ARGB_8888, false)
         }
         val scale = PREVIEW_MAX_EDGE.toFloat() / longEdge
-        return Bitmap.createScaledBitmap(
-            frame,
+        return frame.scale(
             (frame.width * scale).toInt().coerceAtLeast(1),
             (frame.height * scale).toInt().coerceAtLeast(1),
-            true,
         )
     }
 }

@@ -1,8 +1,17 @@
 // Analysis wizard Activity: it orchestrates the whole two/three-page setup flow
-// (image/video import, ROI, parameters, sweep, launch), so its size, per-control
-// methods, literal UI constants and broad import guards are inherent here.
+// (image/video import, ROI, parameters, sweep, launch). Size and branching are
+// inherent; suppress rather than baseline so new findings elsewhere still fail CI.
 
-// Findings are tracked in detekt-baseline.xml rather than blanket-suppressed.
+@file:Suppress(
+    "LargeClass",
+    "TooManyFunctions",
+    "CyclomaticComplexMethod",
+    "LongMethod",
+    "MagicNumber",
+    "ReturnCount",
+    "TooGenericExceptionCaught",
+)
+@file:SuppressLint("InflateParams", "PrivateResource", "SetTextI18n")
 
 package com.indicvision.semper.ui.analysis
 import android.annotation.SuppressLint
@@ -25,6 +34,8 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.net.toUri
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -36,14 +47,10 @@ import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.DicSettings
-import com.indicvision.semper.data.SessionStore
-import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.common.Motion
-import com.indicvision.semper.ui.limit.SessionLimitActivity
-import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -265,11 +272,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // the extract-frames flow. Consumed once.
         intent.getStringExtra(DicKeys.PICKED_REF_URI)?.let {
             intent.removeExtra(DicKeys.PICKED_REF_URI)
-            handleReferenceImage(Uri.parse(it))
+            handleReferenceImage(it.toUri())
         }
         intent.getStringExtra(DicKeys.PICKED_VIDEO_URI)?.let {
             intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
-            handleVideo(Uri.parse(it))
+            handleVideo(it.toUri())
         }
 
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
@@ -494,7 +501,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         isRaw: Boolean,
     ): LoadedReference? {
         if (isRaw) {
-            val decoded = com.indicvision.semper.ui.common.BitmapDecode.rgbaAndPreviewFromStream(stream)
+            val decoded = com.indicvision.semper.imaging.BitmapDecode.rgbaAndPreviewFromStream(stream)
                 ?: return null
             return LoadedReference(decoded.rgba, decoded.width, decoded.height, decoded.preview)
         }
@@ -504,7 +511,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val dims = SemperNativeLib.getImageDimensions(bytes)
             val preview = SemperNativeLib.getPreviewFromBytes(
                 bytes,
-                com.indicvision.semper.ui.common.BitmapDecode.PREVIEW_MAX_EDGE,
+                com.indicvision.semper.imaging.BitmapDecode.PREVIEW_MAX_EDGE,
             )
             LoadedReference(bytes, dims[0], dims[1], preview)
         }
@@ -520,78 +527,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun handleDeformedBatch(rawUris: List<Uri>) {
-        // Frame cap (Home settings drawer): keep the first N and say so.
-        val cap = DicSettings.maxFrames(this)
-        val capped = if (rawUris.size > cap) {
-            Toast.makeText(this, getString(R.string.frames_capped_fmt, cap), Toast.LENGTH_LONG).show()
-            FrameImportHelper.cappedUris(rawUris, cap)
-        } else {
-            rawUris
-        }
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                withContext(Dispatchers.Main) {
-                    tvResult.text = "Caching images..."
-                }
-
-                // Heavy IO stays off the main thread.
-                val meta = FrameOrderHelper.loadMeta(
-                    this@StaticAnalysisActivity,
-                    capped,
-                    ::getFileName,
-                )
-                val uris = meta.map { it.uri }
-                val datesByIndex = meta.map { it.dateMs }
-
-                val batch = FrameImportHelper.importDeformedUris(
-                    context = this@StaticAnalysisActivity,
-                    uris = uris,
-                    cacheDir = cacheDir,
-                    displayName = ::getFileName,
-                )
-                val frameDates = batch?.filePaths?.map { path ->
-                    val name = File(path).name
-                    val idx = name.take(4).toIntOrNull()
-                    if (idx != null && idx in datesByIndex.indices) datesByIndex[idx] else Long.MAX_VALUE
-                }
-
-                // Every ViewModel write happens on Main, so the Main-thread reads
-                // (refreshDefSlot / validateFrameSizes / checkReady) observe them
-                // safely. Matches handleReferenceImage's threading.
-                withContext(Dispatchers.Main) {
-                    viewModel.clearPreviousResults()
-                    // Fresh pick keeps system picker order until the user chooses Name/Date/Manual.
-                    viewModel.defOrderMode = FrameOrderMode.PICKER
-                    viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
-                    if (batch != null) {
-                        viewModel.defFilePaths = batch.filePaths
-                        viewModel.defOriginalNames = batch.originalNames
-                        viewModel.defFrameSizes = batch.frameSizes
-                        viewModel.defFrameDates = frameDates.orEmpty()
-                        viewModel.defFromVideo = batch.fromVideo
-                    } else {
-                        viewModel.defFilePaths = emptyList()
-                        viewModel.defOriginalNames = emptyList()
-                        viewModel.defFrameSizes = emptyMap()
-                        viewModel.defFrameDates = emptyList()
-                        viewModel.defFromVideo = false
-                    }
-                    tvResult.text = ""
-                    refreshDefSlot()
-                    validateFrameSizes()
-                    checkReady()
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Error handling batch")
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        this@StaticAnalysisActivity,
-                        getString(R.string.error_loading_images, e.message),
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
-            }
-        }
+        AnalysisDeformedBatchHelper.handle(
+            activity = this,
+            viewModel = viewModel,
+            rawUris = rawUris,
+            cacheDir = cacheDir,
+            displayName = ::getFileName,
+            tvResult = tvResult,
+            onApplied = {
+                refreshDefSlot()
+                validateFrameSizes()
+                checkReady()
+            },
+        )
     }
 
     private fun setupFrameOrderStrip() {
@@ -609,45 +557,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun showFrameOrderMenu(anchor: View) {
-        val popup = androidx.appcompat.widget.PopupMenu(this, anchor)
-        popup.menuInflater.inflate(R.menu.menu_frame_order, popup.menu)
-        val checkedId = when {
-            viewModel.defOrderMode == FrameOrderMode.NAME &&
-                viewModel.defOrderDirection == FrameOrderDirection.ASCENDING ->
-                R.id.menu_frame_order_name_asc
-            viewModel.defOrderMode == FrameOrderMode.NAME &&
-                viewModel.defOrderDirection == FrameOrderDirection.DESCENDING ->
-                R.id.menu_frame_order_name_desc
-            viewModel.defOrderMode == FrameOrderMode.DATE &&
-                viewModel.defOrderDirection == FrameOrderDirection.ASCENDING ->
-                R.id.menu_frame_order_date_asc
-            viewModel.defOrderMode == FrameOrderMode.DATE &&
-                viewModel.defOrderDirection == FrameOrderDirection.DESCENDING ->
-                R.id.menu_frame_order_date_desc
-            viewModel.defOrderMode == FrameOrderMode.MANUAL ->
-                R.id.menu_frame_order_manual
-            else -> 0
-        }
-        if (checkedId != 0) {
-            popup.menu.findItem(checkedId)?.isChecked = true
-        }
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                R.id.menu_frame_order_name_asc ->
-                    applyFrameOrderMode(FrameOrderMode.NAME, FrameOrderDirection.ASCENDING)
-                R.id.menu_frame_order_name_desc ->
-                    applyFrameOrderMode(FrameOrderMode.NAME, FrameOrderDirection.DESCENDING)
-                R.id.menu_frame_order_date_asc ->
-                    applyFrameOrderMode(FrameOrderMode.DATE, FrameOrderDirection.ASCENDING)
-                R.id.menu_frame_order_date_desc ->
-                    applyFrameOrderMode(FrameOrderMode.DATE, FrameOrderDirection.DESCENDING)
-                R.id.menu_frame_order_manual ->
-                    applyFrameOrderMode(FrameOrderMode.MANUAL, viewModel.defOrderDirection)
-                else -> return@setOnMenuItemClickListener false
-            }
-            true
-        }
-        popup.show()
+        AnalysisFrameOrderMenuHelper.show(
+            activity = this,
+            anchor = anchor,
+            mode = viewModel.defOrderMode,
+            direction = viewModel.defOrderDirection,
+            onSelect = ::applyFrameOrderMode,
+        )
     }
 
     private fun applyFrameOrderMode(
@@ -770,7 +686,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val n = estimate()
             val capped = if (n >= maxFrames) getString(R.string.video_capped_suffix) else ""
             tvEstimate.text = "≈ $n frame(s): 1 reference + ${(n - 1).coerceAtLeast(0)} deformed$capped"
-            btnExtract.text = getString(R.string.extract_n_frames_fmt, n)
+            btnExtract.text = resources.getQuantityString(R.plurals.extract_n_frames_fmt, n, n)
         }
 
         sliderFps.addOnChangeListener { _, v, _ ->
@@ -800,78 +716,24 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Extracts frames at [fpsExtract] over [startMs, endMs] with the progress overlay. */
     private fun extractVideoFrames(uri: Uri, fpsExtract: Double, startMs: Long, endMs: Long) {
-        overlayHelper.processingStartTime = System.currentTimeMillis()
-        overlayHelper.show(title = "Extracting Frames", status = "Reading video…")
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                viewModel.clearPreviousResults()
-                val result = VideoFrameExtractor.extract(
-                    context = this@StaticAnalysisActivity,
-                    uri = uri,
-                    fpsExtract = fpsExtract,
-                    startMs = startMs,
-                    endMs = endMs,
-                    maxFrames = DicSettings.maxFrames(this@StaticAnalysisActivity),
-                    cacheDir = cacheDir,
-                    onProgress = { percent, status ->
-                        overlayHelper.update(percent = percent, status = status)
-                    },
-                )
-
-                withContext(Dispatchers.Main) {
-                    overlayHelper.hide()
-                    if (result == null) {
-                        Toast.makeText(
-                            this@StaticAnalysisActivity,
-                            R.string.video_extract_insufficient,
-                            Toast.LENGTH_LONG,
-                        ).show()
-                        return@withContext
-                    }
-
-                    viewModel.realRefWidth = result.refWidth
-                    viewModel.realRefHeight = result.refHeight
-                    viewModel.refBytes = result.refPng
-                    viewModel.refName = result.refName
-                    if (!viewModel.hasCustomRoi) {
-                        viewModel.roiX = 0
-                        viewModel.roiY = 0
-                        viewModel.roiW = result.refWidth
-                        viewModel.roiH = result.refHeight
-                    }
-                    viewModel.defFilePaths = result.batch.filePaths
-                    viewModel.defOriginalNames = result.batch.originalNames
-                    viewModel.defFrameSizes = result.batch.frameSizes
-                    viewModel.defFrameDates = emptyList()
-                    viewModel.defOrderMode = FrameOrderMode.PICKER
-                    viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
-                    viewModel.defFromVideo = result.batch.fromVideo
-
-                    result.refPreview?.let { refPreviewBmp = it }
-                    refreshRefSlot()
-                    refreshDefSlot()
-                    validateFrameSizes()
-                    checkReady()
-                    requestSubsetRecommendation()
-                    Toast.makeText(
-                        this@StaticAnalysisActivity,
-                        getString(R.string.video_loaded_frames, result.batch.filePaths.size),
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Error extracting video frames")
-                withContext(Dispatchers.Main) {
-                    overlayHelper.hide()
-                    Toast.makeText(
-                        this@StaticAnalysisActivity,
-                        getString(R.string.video_read_error, e.message),
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
-            }
-        }
+        AnalysisVideoExtractHelper.extract(
+            activity = this,
+            viewModel = viewModel,
+            uri = uri,
+            fpsExtract = fpsExtract,
+            startMs = startMs,
+            endMs = endMs,
+            cacheDir = cacheDir,
+            overlayHelper = overlayHelper,
+            onApplied = { applied ->
+                applied.refPreview?.let { refPreviewBmp = it }
+                refreshRefSlot()
+                refreshDefSlot()
+                validateFrameSizes()
+                checkReady()
+                requestSubsetRecommendation()
+            },
+        )
     }
 
     private fun currentSubsetSize(): Int = etSubsetSize.value.toInt()
@@ -909,7 +771,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (mismatched == 0) {
                 null
             } else {
-                getString(R.string.frames_size_mismatch_fmt, mismatched, refW, refH)
+                resources.getQuantityString(R.plurals.frames_size_mismatch_fmt, mismatched, mismatched, refW, refH)
             }
         }
     }
@@ -979,7 +841,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     /** Seeds the slider with the recommendation, until the user overrides it. */
     private fun applySubsetRecommendation() {
         val rec = viewModel.subsetRecommendation ?: run {
-            lowTextureWarnRow.visibility = View.GONE
+            lowTextureWarnRow.isVisible = false
             return
         }
         // The one thing the measurement knows that the slider cannot show: even
@@ -1103,7 +965,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                             checkReady()
                         } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT) {
                             checkReady()
-                            startActivity(Intent(this@StaticAnalysisActivity, SessionLimitActivity::class.java))
+                            AnalysisNavHelper.openSessionLimit(this@StaticAnalysisActivity)
                         } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_LOW_CONVERGENCE &&
                             outcome.totalFrames > 0
                         ) {
@@ -1215,61 +1077,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
      */
     private fun openResultViewer(sweep: Boolean = false) {
         val plan = viewModel.sweepPlan
-        // A sweep opens the interactive lattice first; it forwards these same
-        // extras on to the result viewer when a node (or "View results") is
-        // tapped, and stays on the back stack so Back returns to it.
-        val target = if (sweep) VsgLatticeActivity::class.java else ResultViewerActivity::class.java
-        val intent = Intent(this, target).apply {
-            putExtra(DicKeys.IMG_W, viewModel.realRefWidth)
-            putExtra(DicKeys.IMG_H, viewModel.realRefHeight)
-            putExtra(DicKeys.STEP, viewModel.lastStep)
-            putExtra(DicKeys.REF_NAME, viewModel.refName)
-
-            // The persisted per-session reference copy, not the picked source.
-            putExtra(DicKeys.REF_PATH, viewModel.lastRefPath ?: "")
-
-            putExtra(DicKeys.DEF_PATH, viewModel.lastDefPath)
-            putExtra(DicKeys.BATCH_DIR_PATH, viewModel.lastBatchDirPath)
-            val frameNames = if (sweep) {
-                plan.map { sweepHelper.combinationLabel(it) }
-            } else {
-                viewModel.defFilePaths.map { it.substringAfterLast('/') }
-            }
-            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(frameNames))
-            putStringArrayListExtra(DicKeys.DEF_FILE_PATHS, ArrayList(viewModel.defFilePaths))
-
-            if (sweep) {
-                putExtra(DicKeys.SWEEP_SUBSETS, plan.map { it.subset }.toIntArray())
-                putExtra(DicKeys.SWEEP_STEPS, plan.map { it.step }.toIntArray())
-                putExtra(DicKeys.SWEEP_STRAIN_WINS, plan.map { it.strainWindow }.toIntArray())
-                putExtra(DicKeys.LINE_CUT_HORIZONTAL, viewModel.lineCutHorizontal)
-                // Skipped combinations show as hollow nodes on the lattice.
-                val skipped = viewModel.sweepSkipped
-                putExtra(DicKeys.SWEEP_SKIP_SUBSETS, skipped.map { it.subset }.toIntArray())
-                putExtra(DicKeys.SWEEP_SKIP_STEPS, skipped.map { it.step }.toIntArray())
-                putExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS, skipped.map { it.strainWindow }.toIntArray())
-                putExtra(DicKeys.SWEEP_SKIP_CODES, viewModel.sweepSkippedCodes.toIntArray())
-            }
-            putExtra(DicKeys.STOP_CODE, viewModel.lastStopCode)
-            putExtra(DicKeys.PLANNED_FRAMES, viewModel.lastPlannedFrames)
-            run {
-            }
-
-            // PDF GENERATOR DATA
-            putExtra(DicKeys.SESSION_ID, viewModel.currentSessionId)
-            putExtra(DicKeys.SESSION_LOCAL_ID, viewModel.workingLocalId)
-            putExtra(DicKeys.SUBSET_SIZE, currentSubsetSize())
-            putExtra(DicKeys.STRAIN_WINDOW, currentStrainWindow())
-            putExtra(DicKeys.STRAIN_METHOD, "VSG")
-            putExtra(DicKeys.ENGINE_STATS, viewModel.engineStatsArray)
-
-            // PASSING ROI DATA FOR THE PDF REPORT
-            putExtra(DicKeys.ROI_X, viewModel.roiX)
-            putExtra(DicKeys.ROI_Y, viewModel.roiY)
-            putExtra(DicKeys.ROI_W, viewModel.roiW)
-            putExtra(DicKeys.ROI_H, viewModel.roiH)
+        val frameNames = if (sweep) {
+            ArrayList(plan.map { sweepHelper.combinationLabel(it) })
+        } else {
+            ArrayList(viewModel.defFilePaths.map { it.substringAfterLast('/') })
         }
-        startActivity(intent)
+        AnalysisNavHelper.openResults(
+            host = this,
+            viewModel = viewModel,
+            sweep = sweep,
+            frameNames = frameNames,
+            subsetSize = currentSubsetSize(),
+            strainWindow = currentStrainWindow(),
+        )
     }
 
     @SuppressLint("Range")
@@ -1446,7 +1266,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             return
         }
         if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT) {
-            startActivity(Intent(this, SessionLimitActivity::class.java))
+            AnalysisNavHelper.openSessionLimit(this)
             return
         }
         if (outcome.totalFrames == 0) {
@@ -1464,7 +1284,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
             // Partial sweeps are still worth browsing; say what was dropped.
             Toast.makeText(
                 this,
-                getString(R.string.sweep_partial_fmt, skipped, skipped + outcome.totalFrames),
+                resources.getQuantityString(
+                    R.plurals.sweep_partial_fmt,
+                    skipped,
+                    skipped,
+                    skipped + outcome.totalFrames,
+                ),
                 Toast.LENGTH_LONG,
             ).show()
         }
@@ -1508,22 +1333,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
             .show()
     }
 
-    /**
-     * Hard stop for a new session when quota is full. Returns false after
-     * navigating to the limit screen; re-runs of an existing session still pass.
-     * Reads the local session index off the main thread.
-     */
-    @Suppress("ReturnCount") // early-outs for re-run / under-quota / blocked
-    private suspend fun ensureSessionQuota(): Boolean {
-        if (!viewModel.wouldCreateNewSession()) return true
-        val localCount = withContext(Dispatchers.IO) {
-            SessionStore.list(this@StaticAnalysisActivity).size
-        }
-        TokenStore.refreshSessionLimit(this, localCount)
-        if (!TokenStore.isSessionLimitReached(this)) return true
-        startActivity(Intent(this, SessionLimitActivity::class.java))
-        return false
-    }
+    private suspend fun ensureSessionQuota(): Boolean =
+        AnalysisNavHelper.ensureSessionQuota(this, viewModel)
 
     private fun wireCancelButton(onConfirm: () -> Unit) {
         findViewById<View>(R.id.btnRunCancel).apply {
@@ -1640,48 +1451,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun checkReady() {
-        val ready = viewModel.isReadyToCompute()
-
-        // Page-1 / page-2 (sweep) gate: Next stays disabled + faded until images are set
-        val nextEnabled = ready && !isProcessing
-        btnNext.isEnabled = nextEnabled
-        btnNext.alpha = if (nextEnabled) 1.0f else 0.4f
-        tvNextReason.text = when {
-            viewModel.refBytes == null -> getString(R.string.next_reason_ref)
-            viewModel.defFilePaths.isEmpty() -> getString(R.string.next_reason_def)
-            else -> ""
-        }
-
-        // Frames that don't match the reference would reach the engine as a
-        // silently degraded solve — say so instead, and hold Compute.
-        val sizeError = viewModel.frameSizeError
-        if (sizeError != null) tvResult.text = sizeError
-
-        // Single-setting Compute: images + settings visited.
-        val computeEnabled = ready &&
-            viewModel.settingsReviewed &&
-            !isProcessing &&
-            sizeError == null &&
-            !viewModel.sweepMode
-        btnCalculateFullField.isEnabled = computeEnabled
-        btnCalculateFullField.alpha = if (computeEnabled) 1.0f else 0.4f
-
-        // Sweep Run: same gates plus a non-empty planned lattice.
-        val sweepEnabled = ready &&
-            viewModel.settingsReviewed &&
-            !isProcessing &&
-            sizeError == null &&
-            viewModel.sweepMode &&
-            ::sweepHelper.isInitialized &&
-            sweepHelper.currentPlan().isNotEmpty()
-        if (::sweepHelper.isInitialized) {
-            sweepHelper.setRunSweepEnabled(sweepEnabled)
-        }
-
-        btnDefineRoi.isEnabled = (viewModel.refBytes != null) && !isProcessing
-        btnBack.isEnabled = !isProcessing
-        // Enabled/disabled visuals are handled by the Material theme —
-        // no more hand-painted setBackgroundColor state juggling.
+        AnalysisReadyGate.apply(
+            activity = this,
+            viewModel = viewModel,
+            isProcessing = isProcessing,
+            btnNext = btnNext,
+            tvNextReason = tvNextReason,
+            tvResult = tvResult,
+            btnCalculateFullField = btnCalculateFullField,
+            btnDefineRoi = btnDefineRoi,
+            btnBack = btnBack,
+            sweepHelper = if (::sweepHelper.isInitialized) sweepHelper else null,
+        )
     }
 
     private fun restoreUiFromViewModel() {
@@ -1691,7 +1472,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 val preview = withContext(SemperNativeLib.nativeDispatcher) {
                     SemperNativeLib.getPreviewFromBytes(
                         bytes,
-                        com.indicvision.semper.ui.common.BitmapDecode.PREVIEW_MAX_EDGE,
+                        com.indicvision.semper.imaging.BitmapDecode.PREVIEW_MAX_EDGE,
                     )
                 }
                 withContext(Dispatchers.Main) {
@@ -1733,7 +1514,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         defDropzone.visibility = if (n > 0) View.GONE else View.VISIBLE
         defCard.visibility = if (n > 0) View.VISIBLE else View.GONE
         if (n > 0) {
-            tvDefName.text = getString(R.string.def_count_fmt, n)
+            tvDefName.text = resources.getQuantityString(R.plurals.def_count_fmt, n, n)
             val first = viewModel.defFilePaths.first().substringAfterLast('/')
             val last = viewModel.defFilePaths.last().substringAfterLast('/')
             tvDefMeta.text = if (n == 1) first else "$first … $last"
@@ -1742,7 +1523,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             ivDefIcon.setImageResource(
                 if (viewModel.defFromVideo) R.drawable.ic_video else R.drawable.ic_photos_share,
             )
-            rvFrameOrder.visibility = View.VISIBLE
+            rvFrameOrder.isVisible = true
             frameOrderAdapter.submit(viewModel.defFilePaths)
             val showSort = n > 1 && !viewModel.defFromVideo
             btnFrameOrderSort.visibility = if (showSort) View.VISIBLE else View.GONE
@@ -1750,8 +1531,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 showSort &&
                 viewModel.defOrderMode == FrameOrderMode.MANUAL
         } else {
-            rvFrameOrder.visibility = View.GONE
-            btnFrameOrderSort.visibility = View.GONE
+            rvFrameOrder.isVisible = false
+            btnFrameOrderSort.isVisible = false
             frameOrderAdapter.submit(emptyList())
         }
         updateJpegChip()
@@ -1760,7 +1541,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
     /** Confirm-settings inputs summary card. */
     private fun refreshInputsCard() {
         tvInputsTitle.text = viewModel.refName
-        tvInputsMeta.text = getString(R.string.inputs_meta_fmt, viewModel.defFilePaths.size)
+        tvInputsMeta.text = resources.getQuantityString(
+            R.plurals.inputs_meta_fmt,
+            viewModel.defFilePaths.size,
+            viewModel.defFilePaths.size,
+        )
         refPreviewBmp?.let { ivInputsThumb.setImageBitmap(it) }
     }
 

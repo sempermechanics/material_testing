@@ -5,9 +5,10 @@ package com.indicvision.semper.data
 import android.content.Context
 import android.graphics.Bitmap
 import com.indicvision.semper.SemperNativeLib
+import com.indicvision.semper.imaging.BitmapDecode
+import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.VisualizationEngine
-import com.indicvision.semper.ui.common.BitmapDecode
 import timber.log.Timber
 import java.io.File
 import java.io.FileInputStream
@@ -18,13 +19,9 @@ import java.util.Locale
 
 /**
  * Session on-disk persistence helpers extracted from [com.indicvision.semper.ui.analysis.AnalysisViewModel].
- * Keeps file/index bookkeeping off the ViewModel surface without introducing Hilt yet.
+ * Keeps file/index bookkeeping off the ViewModel surface.
  */
 class SessionRepository {
-
-    private companion object {
-        const val PNG_QUALITY_MAX = 100
-    }
 
     /** Writes a display-sized PNG of the reference into the session dir. */
     fun writeReferenceCopy(sessionDir: File, refBytes: ByteArray): String {
@@ -38,7 +35,7 @@ class SessionRepository {
             val bmp = refBmp
             if (bmp != null) {
                 refPngFile.outputStream().use { out ->
-                    bmp.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY_MAX, out)
+                    bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, out)
                 }
             } else {
                 refPngFile.writeBytes(refBytes)

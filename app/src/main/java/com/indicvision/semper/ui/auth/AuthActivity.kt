@@ -3,6 +3,7 @@
 @file:Suppress("TooManyFunctions", "ReturnCount")
 
 package com.indicvision.semper.ui.auth
+
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -13,6 +14,7 @@ import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.toColorInt
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.lifecycleScope
@@ -384,7 +386,7 @@ class AuthActivity : AppCompatActivity() {
 
     private fun showSnackbar(message: String, isError: Boolean) {
         val snackbar = Snackbar.make(findViewById(android.R.id.content), message, Snackbar.LENGTH_LONG)
-        snackbar.setBackgroundTint(if (isError) Color.parseColor("#D32F2F") else Color.parseColor("#388E3C"))
+        snackbar.setBackgroundTint(if (isError) "#D32F2F".toColorInt() else "#388E3C".toColorInt())
         snackbar.setTextColor(Color.WHITE)
         snackbar.show()
     }

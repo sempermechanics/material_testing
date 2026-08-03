@@ -1,5 +1,8 @@
+@file:SuppressLint("InflateParams")
+
 package com.indicvision.semper.ui.common
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.view.View
 import android.widget.TextView

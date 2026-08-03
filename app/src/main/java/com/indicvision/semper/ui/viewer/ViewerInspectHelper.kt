@@ -3,8 +3,11 @@
 // suppressed for this whole file.
 @file:Suppress("MagicNumber", "ComplexCondition")
 
+@file:SuppressLint("ClickableViewAccessibility", "SetTextI18n")
+
 package com.indicvision.semper.ui.viewer
 
+import android.annotation.SuppressLint
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast

@@ -12,17 +12,18 @@
 package com.indicvision.semper.data
 
 import android.content.Context
-import android.content.Intent
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
+import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.SessionCreateRequest
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
-import com.indicvision.semper.ui.limit.SessionLimitActivity
+import com.indicvision.semper.navigation.AppIntents
+import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -33,7 +34,6 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.BufferedOutputStream
 import java.io.File
-import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -439,22 +439,14 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             Result.failure()
         } catch (e: IndicApi.ApiException) {
             when {
-                // 409 = analysis quota reached, 413 = too many files: retrying won't help.
-                e.code == 409 || e.code == 413 -> {
+                // CONFLICT = analysis quota reached, PAYLOAD_TOO_LARGE = too many files.
+                UploadWorkOutcomes.isTerminalClientError(e.code) -> {
                     Timber.e("Upload rejected (%d): %s", e.code, e.detail)
-                    // 409 means the account's analysis quota is full — raise the
+                    // CONFLICT means the account's analysis quota is full — raise the
                     // persistent limit gate so the user is told to email support.
                     if (UploadWorkOutcomes.isQuotaExhausted(e.code)) {
                         TokenStore.setSessionLimitReached(applicationContext, true)
-                        applicationContext.startActivity(
-                            Intent(applicationContext, SessionLimitActivity::class.java).apply {
-                                addFlags(
-                                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
-                                )
-                            },
-                        )
+                        applicationContext.startActivity(AppIntents.sessionLimit(applicationContext))
                     }
                     SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
                     stagingDir.deleteRecursively()
@@ -464,7 +456,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 // files (a session from an earlier build, or content that changed).
                 // The session is unrecoverable: drop the pointer + staged files so
                 // the next run rebuilds a fresh session that matches.
-                e.code == 400 -> {
+                e.code == HttpStatus.BAD_REQUEST -> {
                     Timber.e(
                         "Upload 400 (%s) — discarding stale session %s, rebuilding",
                         e.detail,
@@ -503,7 +495,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
      * not re-read the whole archive.
      */
     private fun buildSessionBundle(payload: List<Artifact>, out: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
+        val digest = Digests.sha256()
         java.security.DigestOutputStream(BufferedOutputStream(out.outputStream()), digest).use { digOut ->
             ZipOutputStream(digOut).use { zip ->
                 payload.forEach { art ->
@@ -530,7 +522,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 
     private fun sha256(file: File): String {
-        val md = MessageDigest.getInstance("SHA-256")
+        val md = Digests.sha256()
         file.inputStream().use { ins ->
             val buf = ByteArray(1 shl 16)
             while (true) {

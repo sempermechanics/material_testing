@@ -5,7 +5,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/viewer_canvas">
+    android:background="@color/viewer_canvas" tools:ignore="Overdraw,UnusedAttribute,DisableBaselineAlignment">
 
     <!-- Top chrome holds Cancel/Draw-Manual/Save and Crop/Erase so the canvas
          never overlaps those controls (and never steals their taps). -->

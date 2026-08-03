@@ -2,7 +2,7 @@
 
 package com.indicvision.semper.analysis
 
-import com.indicvision.semper.ui.common.BitmapDecode
+import com.indicvision.semper.imaging.BitmapDecode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -10,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentTop="true"
-        android:orientation="vertical">
+        android:orientation="vertical" tools:ignore="Overdraw,UnusedAttribute">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -201,6 +202,7 @@
         android:layout_marginHorizontal="12dp"
         android:layout_marginTop="2dp"
         android:forceDarkAllowed="false"
+        tools:targetApi="29"
         android:background="@drawable/bg_viewer_panel"
         android:clickable="true"
         android:focusable="true"
@@ -247,7 +249,8 @@
         android:layout_height="match_parent"
         android:layout_above="@id/layoutScrubber"
         android:layout_below="@id/layoutColorScale"
-        android:forceDarkAllowed="false">
+        android:forceDarkAllowed="false"
+        tools:targetApi="29">
 
         <com.indicvision.semper.ui.viewer.TouchImageView
             android:id="@+id/imgBaseResult"
@@ -260,6 +263,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:alpha="0.7"
+            android:contentDescription="@string/viewer_heatmap_overlay_desc"
             android:outlineProvider="bounds"
             android:scaleType="matrix" />
 
@@ -334,6 +338,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="6dp"
+            android:baselineAligned="false"
             android:orientation="horizontal">
 
             <LinearLayout
@@ -351,7 +356,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/stat_max"
                     android:textColor="@color/viewer_on_dark"
-                    android:textSize="10sp" />
+                    android:textSize="11sp" />
 
                 <TextView
                     android:id="@+id/tvStatMax"
@@ -378,7 +383,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/stat_min"
                     android:textColor="@color/viewer_on_dark"
-                    android:textSize="10sp" />
+                    android:textSize="11sp" />
 
                 <TextView
                     android:id="@+id/tvStatMin"
@@ -405,7 +410,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/stat_mean"
                     android:textColor="@color/viewer_on_dark"
-                    android:textSize="10sp" />
+                    android:textSize="11sp" />
 
                 <TextView
                     android:id="@+id/tvStatMean"

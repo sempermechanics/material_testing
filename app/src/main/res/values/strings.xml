@@ -1,4 +1,5 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="TypographyDashes,UnusedResources">
     <string name="app_name">Semper</string>
 
     <!-- Digital Asset Links for Credential Manager. Not user-facing. -->
@@ -11,6 +12,8 @@
     <!-- Accessibility -->
     <string name="prev_frame">Previous frame</string>
     <string name="next_frame">Next frame</string>
+
+    <string name="analysis_caching_images">Caching images…</string>
 
     <!-- Common actions -->
     <string name="cancel">Cancel</string>
@@ -73,7 +76,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="video_extract_insufficient">Could not extract enough frames from this segment.</string>
     <string name="video_read_error">Failed to read video: %1$s</string>
     <string name="error_loading_images">Error loading images: %1$s</string>
-    <string name="video_loaded_frames">Video loaded: 1 reference + %1$d deformed frames</string>
+    
 
     <!-- Result viewer -->
     <string name="toggle_inspect">Inspect</string>
@@ -169,30 +172,30 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="badge_synced">synced</string>
     <string name="badge_pending">upload pending</string>
     <string name="badge_local">local only</string>
-    <string name="session_frames_fmt">%1$d frames</string>
+    
     <plurals name="session_frames_of_fmt">
         <item quantity="one">%1$d of %2$d frame</item>
         <item quantity="other">%1$d of %2$d frames</item>
     </plurals>
     <string name="session_sweep_kind">VSG study</string>
     <string name="session_sweep_name_fmt">VSG study · %1$s · %2$s</string>
-    <string name="session_sweep_headline_fmt">%1$s · %2$d of %3$d solved · subset %4$d–%5$d</string>
+    
     <string name="session_data_gone_title">Data no longer on this device</string>
     <string name="session_data_gone_body">This analysis was cleaned up locally. If it was synced, the files are still in your cloud folder.</string>
     <string name="action_rename">Rename</string>
     <string name="action_delete">Delete</string>
 
     <!-- Home multi-select -->
-    <string name="selection_count_fmt">%1$d selected</string>
+    
     <string name="selection_clear">Clear selection</string>
     <string name="selection_select_all">Select all</string>
     <string name="selection_selected_desc">Selected</string>
-    <string name="delete_confirm_title_multi">Delete %1$d analyses?</string>
+    
     <string name="delete_confirm_body_local_multi">Permanently removes them from your phone. This can\'t be undone.</string>
     <string name="delete_confirm_body_cloud_multi">%1$d of these are backed up. Deleting everywhere permanently erases the selected analyses from your phone and from cloud storage — the images, results, reports and their details. This can\'t be undone.</string>
-    <string name="delete_multi_working">Deleting %1$d analyses…</string>
-    <string name="delete_multi_done">%1$d analyses deleted.</string>
-    <string name="delete_multi_partial">%1$d deleted · %2$d still in the cloud (couldn\'t reach it).</string>
+    
+    
+    
     <string name="delete_confirm_title">Delete this analysis?</string>
     <string name="delete_confirm_body_local">Permanently removes this analysis from your phone. This can\'t be undone.</string>
     <string name="delete_confirm_body_cloud">This analysis is backed up. Deleting everywhere permanently erases it from your phone and from cloud storage — the images, results, reports and their details. This can\'t be undone.</string>
@@ -211,7 +214,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="setting_roi">Region of interest</string>
     <string name="setting_image_size">Image size</string>
     <string name="setting_px_fmt">%1$d px</string>
-    <string name="setting_subsets_fmt">%1$d subsets</string>
+    
     <string name="setting_roi_fmt">%1$d × %2$d at (%3$d, %4$d)</string>
     <string name="setting_size_fmt">%1$d × %2$d px</string>
     <string name="export_data">Export my data</string>
@@ -258,9 +261,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_delete_forever_title">Delete this backup forever?</string>
     <string name="cloud_delete_forever_body">This permanently erases the cloud copy of \"%1$s\" — raw images, results and report. It cannot be undone, and it can never be restored to this or any other device.\n\nAnalyses still on this phone are not touched.</string>
     <string name="cloud_delete_forever_confirm">Delete forever</string>
-    <string name="home_quota_fmt">%1$d / %2$d analyses used</string>
+    
     <string name="cloud_backfill_title">Back up local analyses?</string>
-    <string name="cloud_backfill_body">%1$d analysis(es) on this phone are not in the cloud. Upload them now?</string>
+    
     <string name="cloud_backfill_confirm">Upload</string>
     <string name="your_data_section">Your data</string>
     <string name="your_data_delete_hint">To delete one analysis, use the list on Home (device only or everywhere).</string>
@@ -275,9 +278,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="info">Info</string>
     <string name="action_sign_out">Sign out</string>
     <string name="about_title">About</string>
-    <string name="frames_capped_fmt">First %1$d frames kept — raise Max frames in Settings</string>
+    
     <string name="advanced_parameters">Advanced parameters</string>
-    <string name="frames_size_mismatch_fmt">❌ %1$d frame(s) are not %2$d × %3$d like the reference. Deformed frames must match the reference exactly — reload matching frames to continue.</string>
+    
 
     <!-- Parameter sweep / virtual strain gauge study (Good Practices Guide §5.4.5) -->
     <string name="analysis_mode">Analysis mode</string>
@@ -306,7 +309,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <string name="sweep_frame">Frame to sweep</string>
     <string name="sweep_frame_btn_fmt">Frame %1$d</string>
-    <string name="sweep_plan_grid_fmt">%1$d analyses · subset %2$d–%3$d px · window %4$d–%5$d</string>
+    
     <string name="sweep_plan_empty">No combination fits this ceiling — raise Max strain window or lower the subset range.</string>
     <string name="sweep_plan_subset_too_big_fmt">Subset range starts above what this image and ROI can hold (max %1$d px). Lower the minimum subset, or draw a larger region of interest.</string>
     <string name="next_sweep">Next: Sweep →</string>
@@ -320,7 +323,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · window %5$d</string>
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d · VSG %4$d</string>
     <string name="sweep_failed">The parameter sweep could not run.</string>
-    <string name="sweep_partial_fmt">%1$d of %2$d combinations could not be solved and were skipped — the rest are shown.</string>
+    
     <string name="sweep_fail_features">The engine couldn\'t match the two images (AKAZE feature extraction failed). \n\nThe image pair:During the test, specimen might have moved or too much deformation could have decorrelated with the reference.</string>
     <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area or use a different image.</string>
     <string name="sweep_fail_init">The engine couldn\'t start — an image failed to decode. Re-import them as PNG or TIFF.</string>
@@ -364,8 +367,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Sweep lattice staging screen (VsgLatticeActivity) -->
     <string name="vsg_lattice_title">Parameter sweep</string>
     <string name="vsg_lattice_heading">Result lattice</string>
-    <string name="vsg_lattice_summary_fmt">%1$d combinations · %2$d solved · %3$d skipped · step subset÷%4$d</string>
-    <string name="vsg_lattice_summary_short_fmt">%1$d combinations · %2$d solved · %3$d skipped</string>
+    
+    
     <string name="vsg_lattice_caption">Tap a node to focus its curve · double-tap to open it</string>
     <string name="vsg_lattice_axis_subset">Subset size (px)</string>
     <string name="vsg_lattice_axis_vsg">Strain window</string>
@@ -407,7 +410,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="new_analysis_title">New analysis</string>
     <string name="step_of_fmt">Step %1$d of %2$d</string>
     <string name="reference_meta_fmt">Reference · %1$d × %2$d px</string>
-    <string name="def_count_fmt">%1$d deformed frames</string>
+    
     <string name="frame_order_label">Analysis order</string>
     <string name="frame_order_name_asc">Name · A–Z</string>
     <string name="frame_order_name_desc">Name · Z–A</string>
@@ -429,7 +432,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="coach_sweep_graph">Each node is one combination: subset size across, strain window up. Filled nodes solved — tap one to focus its curve, double-tap to open it. Hollow ones failed; tap for the reason.</string>
     <string name="coach_sweep_scrub">Drag across the plot to read every curve at one position. Each value is shown in its own curve\'s colour, so you can tell them apart without checking the legend.</string>
     <string name="coach_sweep_run">Run the sweep when the plan looks right.</string>
-    <string name="inputs_meta_fmt">Reference · %1$d deformed frames</string>
+    
     <string name="roi_full_fmt">Full image · %1$d × %2$d px</string>
     <string name="roi_custom_fmt">%1$d × %2$d px at (%3$d, %4$d)</string>
     <string name="picker_select_reference">Select the reference — a photo, or a video of the deformation</string>
@@ -442,6 +445,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="action_share">Share</string>
     <string name="viewer_back_desc">Back to settings</string>
     <string name="viewer_home_desc">Home</string>
+    <string name="viewer_heatmap_overlay_desc">Strain or displacement heatmap overlay</string>
     <string name="field_u">U</string>
     <string name="field_v">V</string>
     <string name="field_exx">Exx</string>
@@ -451,15 +455,15 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="stat_min">MIN</string>
     <string name="stat_mean">MEAN</string>
     <string name="stat_empty">--</string>
-    <string name="share_caption_fmt">frame %1$d of %2$d shown · photos share the current frame</string>
+    
     <string name="share_photo">Result photo</string>
     <string name="share_photo_sub_fmt">%1$s field, %2$s</string>
     <string name="share_all_photos">All field photos</string>
     <string name="share_all_photos_sub">U V Exx Eyy Exy · 5 images</string>
     <string name="share_pdf">PDF report</string>
-    <string name="share_pdf_sub_fmt">All %1$d frames · fields, stats, telemetry</string>
+    
     <string name="share_csv">CSV data</string>
-    <string name="share_csv_sub_fmt">Whole analysis · %1$d frames, one file</string>
+    
     <string name="share_animations">Field animations (GIF)</string>
     <string name="share_animations_sub">U V Exx Eyy Exy · every frame, one scale</string>
     <string name="share_zip">Everything (.zip)</string>
@@ -477,7 +481,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="check_now">Check now</string>
     <string name="action_request_access">Request access</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
-    <string name="cloud_resync_fmt">%1$d analysis backup(s) missing from the cloud — re-uploading.</string>
+    
     <string name="cloud_check_failed_fmt">Couldn\'t check your cloud backups (%1$s). Backup status shown may be out of date.</string>
     <string name="badge_not_backed_up">Not backed up</string>
     <string name="restore_action">Restore</string>
@@ -497,9 +501,15 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- Settings: help & support -->
     <string name="help_support_section">Help &amp; support</string>
-    <string name="help_support_hint">Questions, bugs, or feature requests — email us and we\'ll get back to you.</string>
+    <string name="help_support_hint">Questions, bugs, and feature requests go to the Semper community. Use email for account or private matters.</string>
+    <string name="help_support_community_action">Ask the community</string>
+    <string name="help_support_bug_action">Report a bug</string>
+    <string name="help_support_feature_action">Request a feature</string>
     <string name="help_support_email_action">Email support</string>
     <string name="help_support_subject">Semper support request</string>
+    <string name="url_community">https://semperdic.github.io/website/community/</string>
+    <string name="url_report_bug">https://semperdic.github.io/website/bugs/</string>
+    <string name="url_request_feature">https://semperdic.github.io/website/features/</string>
 
     <!-- First-login beta / data-use declaration (shown once per account on Home) -->
     <string name="beta_notice_title">Beta notice</string>
@@ -509,7 +519,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Session/analysis quota limit screen -->
     <string name="limit_title">Analysis limit reached</string>
     <string name="limit_body">You\'ve reached the maximum number of saved analyses on your account. New cloud analyses are blocked until the limit is raised.\n\nPlease email %1$s to request a higher limit. You can also delete an existing analysis, then tap Re-check limit.</string>
-    <string name="limit_quota_fmt">Using %1$d of %2$d analyses</string>
+    
     <string name="limit_email_support">Email support@indicvision.com</string>
     <string name="limit_recheck">Re-check limit</string>
     <string name="limit_back">Back to my analyses</string>
@@ -521,7 +531,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="error_email_invalid">That does not look like an email address</string>
     <string name="error_password_short">Password needs at least 6 characters</string>
     <string name="extract_frames_title">Extract frames</string>
-    <string name="extract_n_frames_fmt">Extract %1$d frames</string>
+    
     <string name="video_capped_suffix">" (capped — raise Max frames in Settings)"</string>
     <string name="video_first_frame_note">First frame becomes the reference</string>
     <string name="info_subset">Bigger means more robust on weak speckle, but smoothens sharp strain gradients.</string>
@@ -558,4 +568,104 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="logout_confirm_body">Are you sure you want to log out of Semper on this device?</string>
     <string name="action_log_out">Log Out</string>
     <string name="logout_success">You have been successfully logged out.</string>
+    <plurals name="video_loaded_frames">
+        <item quantity="one">Video loaded: 1 reference + 1 deformed frame</item>
+        <item quantity="other">Video loaded: 1 reference + %1$d deformed frames</item>
+    </plurals>
+    <plurals name="session_frames_fmt">
+        <item quantity="one">1 frame</item>
+        <item quantity="other">%1$d frames</item>
+    </plurals>
+    <plurals name="session_sweep_headline_fmt">
+        <item quantity="one">%1$s · 1 of 1 solved · subset 1–1</item>
+        <item quantity="other">%1$s · %2$d of %3$d solved · subset %4$d–%5$d</item>
+    </plurals>
+    <plurals name="selection_count_fmt">
+        <item quantity="one">1 selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <plurals name="delete_confirm_title_multi">
+        <item quantity="one">Delete 1 analysis?</item>
+        <item quantity="other">Delete %1$d analyses?</item>
+    </plurals>
+    <plurals name="delete_multi_working">
+        <item quantity="one">Deleting 1 analysis…</item>
+        <item quantity="other">Deleting %1$d analyses…</item>
+    </plurals>
+    <plurals name="delete_multi_done">
+        <item quantity="one">1 analysis deleted.</item>
+        <item quantity="other">%1$d analyses deleted.</item>
+    </plurals>
+    <plurals name="delete_multi_partial">
+        <item quantity="one">1 deleted · 1 still in the cloud (couldn\'t reach it).</item>
+        <item quantity="other">%1$d deleted · %2$d still in the cloud (couldn\'t reach it).</item>
+    </plurals>
+    <plurals name="setting_subsets_fmt">
+        <item quantity="one">1 subset</item>
+        <item quantity="other">%1$d subsets</item>
+    </plurals>
+    <plurals name="home_quota_fmt">
+        <item quantity="one">1 / 1 analyses used</item>
+        <item quantity="other">%1$d / %2$d analyses used</item>
+    </plurals>
+    <plurals name="cloud_backfill_body">
+        <item quantity="one">1 analysis(es) on this phone are not in the cloud. Upload them now?</item>
+        <item quantity="other">%1$d analysis(es) on this phone are not in the cloud. Upload them now?</item>
+    </plurals>
+    <plurals name="frames_capped_fmt">
+        <item quantity="one">First 1 frame kept — raise Max frame in Settings</item>
+        <item quantity="other">First %1$d frames kept — raise Max frames in Settings</item>
+    </plurals>
+    <plurals name="frames_size_mismatch_fmt">
+        <item quantity="one">❌ 1 frame(s) are not 1 × 1 like the reference. Deformed frame must match the reference exactly — reload matching frame to continue.</item>
+        <item quantity="other">❌ %1$d frame(s) are not %2$d × %3$d like the reference. Deformed frames must match the reference exactly — reload matching frames to continue.</item>
+    </plurals>
+    <plurals name="sweep_plan_grid_fmt">
+        <item quantity="one">1 analyses · subset 1–1 px · window 1–1</item>
+        <item quantity="other">%1$d analyses · subset %2$d–%3$d px · window %4$d–%5$d</item>
+    </plurals>
+    <plurals name="sweep_partial_fmt">
+        <item quantity="one">1 of 1 combinations could not be solved and were skipped — the rest are shown.</item>
+        <item quantity="other">%1$d of %2$d combinations could not be solved and were skipped — the rest are shown.</item>
+    </plurals>
+    <plurals name="vsg_lattice_summary_fmt">
+        <item quantity="one">1 combinations · 1 solved · 1 skipped · step subset÷1</item>
+        <item quantity="other">%1$d combinations · %2$d solved · %3$d skipped · step subset÷%4$d</item>
+    </plurals>
+    <plurals name="vsg_lattice_summary_short_fmt">
+        <item quantity="one">1 combinations · 1 solved · 1 skipped</item>
+        <item quantity="other">%1$d combinations · %2$d solved · %3$d skipped</item>
+    </plurals>
+    <plurals name="def_count_fmt">
+        <item quantity="one">1 deformed frame</item>
+        <item quantity="other">%1$d deformed frames</item>
+    </plurals>
+    <plurals name="inputs_meta_fmt">
+        <item quantity="one">Reference · 1 deformed frame</item>
+        <item quantity="other">Reference · %1$d deformed frames</item>
+    </plurals>
+    <plurals name="share_caption_fmt">
+        <item quantity="one">frame 1 of 1 shown · photos share the current frame</item>
+        <item quantity="other">frame %1$d of %2$d shown · photos share the current frame</item>
+    </plurals>
+    <plurals name="share_pdf_sub_fmt">
+        <item quantity="one">All 1 frame · fields, stats, telemetry</item>
+        <item quantity="other">All %1$d frames · fields, stats, telemetry</item>
+    </plurals>
+    <plurals name="share_csv_sub_fmt">
+        <item quantity="one">Whole analysis · 1 frame, one file</item>
+        <item quantity="other">Whole analysis · %1$d frames, one file</item>
+    </plurals>
+    <plurals name="cloud_resync_fmt">
+        <item quantity="one">1 analysis backup(s) missing from the cloud — re-uploading.</item>
+        <item quantity="other">%1$d analysis backup(s) missing from the cloud — re-uploading.</item>
+    </plurals>
+    <plurals name="limit_quota_fmt">
+        <item quantity="one">Using 1 of 1 analyses</item>
+        <item quantity="other">Using %1$d of %2$d analyses</item>
+    </plurals>
+    <plurals name="extract_n_frames_fmt">
+        <item quantity="one">Extract 1 frame</item>
+        <item quantity="other">Extract %1$d frames</item>
+    </plurals>
 </resources>

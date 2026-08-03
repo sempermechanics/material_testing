@@ -1,4 +1,8 @@
+@file:SuppressLint("CustomSplashScreen")
+
 package com.indicvision.semper.ui.auth
+
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity

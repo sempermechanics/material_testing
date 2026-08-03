@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
+import androidx.core.graphics.toColorInt
 
 class InspectOverlayView @JvmOverloads constructor(
     context: Context,
@@ -49,7 +50,7 @@ class InspectOverlayView @JvmOverloads constructor(
         isAntiAlias = true
     }
     private val paintShadow = Paint().apply {
-        color = Color.parseColor("#88000000")
+        color = "#88000000".toColorInt()
         style = Paint.Style.STROKE
         strokeWidth = 6f
         isAntiAlias = true

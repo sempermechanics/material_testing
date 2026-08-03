@@ -1,6 +1,7 @@
-// Sweep setup wires many sliders/fields and seeds their suggested values; the
-// literal UI/parameter constants and per-control methods read clearest inline.
-// Findings are tracked in detekt-baseline.xml rather than blanket-suppressed.
+// Sweep setup wires many sliders/fields and seeds suggested values. Per-control
+// methods and literal UI constants are inherent; suppress rather than baseline.
+
+@file:Suppress("TooManyFunctions", "MagicNumber")
 
 package com.indicvision.semper.ui.analysis
 
@@ -18,6 +19,8 @@ import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButtonToggleGroup
@@ -26,7 +29,7 @@ import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.slider.RangeSlider
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
-import com.indicvision.semper.ui.common.BitmapDecode
+import com.indicvision.semper.imaging.BitmapDecode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -159,8 +162,8 @@ class SweepSetupHelper(
         }
 
         activity.findViewById<View>(R.id.btnLatticeSamples).setOnClickListener {
-            val expanded = latticeSamplesBody.visibility == View.VISIBLE
-            latticeSamplesBody.visibility = if (expanded) View.GONE else View.VISIBLE
+            val expanded = latticeSamplesBody.isVisible
+            latticeSamplesBody.isVisible = !expanded
         }
 
         wireControls()
@@ -179,8 +182,8 @@ class SweepSetupHelper(
      */
     fun applyAnalysisModeUi() {
         val sweep = viewModel.sweepMode
-        advancedParamsCard.visibility = if (sweep) View.GONE else View.VISIBLE
-        lineCutPreviewCard.visibility = if (sweep) View.VISIBLE else View.GONE
+        advancedParamsCard.isVisible = !sweep
+        lineCutPreviewCard.isVisible = sweep
         if (sweep) refreshLineCutPreview()
         callbacks.updateWizardChrome()
         callbacks.checkReady()
@@ -276,8 +279,9 @@ class SweepSetupHelper(
     }
 
     /** "N analyses · subset a–b px · window c–d" for a plan. */
-    fun planSummary(plan: List<VsgStudy.Point>): String = activity.getString(
-        R.string.sweep_plan_grid_fmt,
+    fun planSummary(plan: List<VsgStudy.Point>): String = activity.resources.getQuantityString(
+        R.plurals.sweep_plan_grid_fmt,
+        plan.size,
         plan.size,
         plan.minOf { it.subset },
         plan.maxOf { it.subset },
@@ -681,17 +685,15 @@ class SweepSetupHelper(
             bytes.size >= it.first * it.second * RGBA_BYTES_PER_PIXEL
         } ?: return null
         return runCatching {
-            val full = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val full = createBitmap(w, h, Bitmap.Config.ARGB_8888)
             full.copyPixelsFromBuffer(ByteBuffer.wrap(bytes, 0, w * h * RGBA_BYTES_PER_PIXEL))
             val scale = min(1f, PREVIEW_MAX_EDGE.toFloat() / maxOf(w, h))
             if (scale >= 1f) {
                 full
             } else {
-                val scaled = Bitmap.createScaledBitmap(
-                    full,
+                val scaled = full.scale(
                     (w * scale).toInt().coerceAtLeast(1),
                     (h * scale).toInt().coerceAtLeast(1),
-                    true,
                 )
                 if (scaled !== full) full.recycle()
                 scaled
@@ -703,11 +705,11 @@ class SweepSetupHelper(
         if (!::btnPickSweepFrame.isInitialized) return
         val count = viewModel.defCount
         if (count <= 1) {
-            btnPickSweepFrame.visibility = View.GONE
+            btnPickSweepFrame.isVisible = false
             return
         }
         val index = resolvedSweepFrame()
-        btnPickSweepFrame.visibility = View.VISIBLE
+        btnPickSweepFrame.isVisible = true
         btnPickSweepFrame.text = activity.getString(
             R.string.sweep_frame_summary_fmt,
             frameLabel(index),

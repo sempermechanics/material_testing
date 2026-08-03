@@ -2,8 +2,11 @@
 // literal view-type/dimension constants read clearest there too.
 @file:Suppress("MagicNumber", "CyclomaticComplexMethod")
 
+@file:SuppressLint("NotifyDataSetChanged")
+
 package com.indicvision.semper.ui.home
 
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
@@ -111,7 +114,7 @@ class SessionListAdapter(
                 ),
             )
         } else {
-            append(ctx.getString(R.string.session_frames_fmt, r.frameCount))
+            append(ctx.resources.getQuantityString(R.plurals.session_frames_fmt, r.frameCount, r.frameCount))
         }
         if (r.headline.isNotBlank()) {
             append(" · ")

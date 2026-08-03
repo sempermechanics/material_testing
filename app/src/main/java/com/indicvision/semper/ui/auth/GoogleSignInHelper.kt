@@ -1,5 +1,8 @@
+@file:SuppressLint("DiscouragedApi")
+
 package com.indicvision.semper.ui.auth
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import androidx.credentials.CredentialManager

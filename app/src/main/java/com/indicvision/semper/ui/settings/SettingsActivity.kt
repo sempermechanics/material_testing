@@ -176,9 +176,9 @@ class SettingsActivity : AppCompatActivity() {
             if (localOnly.isEmpty()) return@launch
             MaterialAlertDialogBuilder(this@SettingsActivity)
                 .setTitle(R.string.cloud_backfill_title)
-                .setMessage(getString(R.string.cloud_backfill_body, localOnly.size))
+                .setMessage(resources.getQuantityString(R.plurals.cloud_backfill_body, localOnly.size, localOnly.size))
                 .setPositiveButton(R.string.cloud_backfill_confirm) { _, _ ->
-                    localOnly.forEach { CloudSync.enqueueUpload(this@SettingsActivity, it.id, allowMetered = true) }
+                    localOnly.forEach { CloudSync.enqueueUpload(this@SettingsActivity, it.id) }
                 }
                 .setNegativeButton(R.string.action_cancel, null)
                 .show()
@@ -255,7 +255,7 @@ class SettingsActivity : AppCompatActivity() {
         val record = entry.record ?: return
         val label = backupLabel(entry) ?: return
         SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-        CloudSync.enqueueUpload(this, record.id, allowMetered = true)
+        CloudSync.enqueueUpload(this, record.id)
         Toast.makeText(this, label, Toast.LENGTH_SHORT).show()
         wireAnalysesDataSection()
     }
@@ -435,7 +435,27 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun wireHelpSupportSection() {
+        findViewById<View>(R.id.btnCommunity).setOnClickListener {
+            openExternalUrl(getString(R.string.url_community))
+        }
+        findViewById<View>(R.id.btnReportBug).setOnClickListener {
+            openExternalUrl(getString(R.string.url_report_bug))
+        }
+        findViewById<View>(R.id.btnRequestFeature).setOnClickListener {
+            openExternalUrl(getString(R.string.url_request_feature))
+        }
         findViewById<View>(R.id.btnEmailSupport).setOnClickListener { emailSupport() }
+    }
+
+    /** Opens a https URL in the browser; toast if nothing can handle it. */
+    private fun openExternalUrl(url: String) {
+        val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+        try {
+            startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            Timber.w(e, "No browser to open %s", url)
+            Toast.makeText(this, url, Toast.LENGTH_LONG).show()
+        }
     }
 
     /** Opens the mail app pre-filled to support with account + device context. */

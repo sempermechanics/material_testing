@@ -3,8 +3,11 @@
 // constants read clearest inline, so these rules are suppressed for this file.
 @file:Suppress("MagicNumber", "ReturnCount", "TooGenericExceptionCaught", "TooManyFunctions")
 
+@file:SuppressLint("InflateParams")
+
 package com.indicvision.semper.ui.viewer
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -14,12 +17,15 @@ import android.graphics.Rect
 import android.view.View
 import android.widget.TextView
 import androidx.core.content.FileProvider
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
@@ -55,13 +61,18 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
         val frameName = s.defNames.getOrNull(s.frameIndex) ?: "Frame ${s.frameIndex + 1}"
         v.findViewById<TextView>(R.id.tvShareCaption).text =
-            host.getString(R.string.share_caption_fmt, s.frameIndex + 1, s.batchFiles.size)
+            host.resources.getQuantityString(
+                R.plurals.share_caption_fmt,
+                s.batchFiles.size,
+                s.frameIndex + 1,
+                s.batchFiles.size,
+            )
         v.findViewById<TextView>(R.id.tvSharePhotoSub).text =
             host.getString(R.string.share_photo_sub_fmt, s.typeString, frameName)
         v.findViewById<TextView>(R.id.tvSharePdfSub).text =
-            host.getString(R.string.share_pdf_sub_fmt, s.batchFiles.size)
+            host.resources.getQuantityString(R.plurals.share_pdf_sub_fmt, s.batchFiles.size, s.batchFiles.size)
         v.findViewById<TextView>(R.id.tvShareCsvSub).text =
-            host.getString(R.string.share_csv_sub_fmt, s.batchFiles.size)
+            host.resources.getQuantityString(R.plurals.share_csv_sub_fmt, s.batchFiles.size, s.batchFiles.size)
 
         v.findViewById<View>(R.id.rowSharePhoto).setOnClickListener {
             sheet.dismiss()
@@ -184,7 +195,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             maxLongEdge = null,
         )
         val base = loadFullResBase(s)
-        val out = Bitmap.createBitmap(s.imgW, s.imgH, Bitmap.Config.ARGB_8888)
+        val out = createBitmap(s.imgW, s.imgH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         canvas.drawBitmap(base, null, Rect(0, 0, s.imgW, s.imgH), null)
         canvas.drawBitmap(heatmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
@@ -206,12 +217,12 @@ class ShareCenter(private val host: ResultViewerActivity) {
         }
         val display = s.baseImage ?: error("No reference image for export")
         if (display.width == s.imgW && display.height == s.imgH) return display
-        return Bitmap.createScaledBitmap(display, s.imgW, s.imgH, true)
+        return display.scale(s.imgW, s.imgH)
     }
 
     private fun writePng(bmp: Bitmap, name: String): File {
         val f = File(shareDir(), name)
-        f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, it) }
+        f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, it) }
         bmp.recycle()
         return f
     }
@@ -372,7 +383,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             // in-memory base image so the folder is never empty.
             zip.putNextEntry(ZipEntry("$dir/reference.png"))
             val base = s.baseImage ?: loadFullResBase(s)
-            base.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, zip)
+            base.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, zip)
             if (base !== s.baseImage) base.recycle()
             zip.closeEntry()
         }
@@ -400,7 +411,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 try {
                     bmp = renderAnnotated(data, idx, label, index)
                     zip.putNextEntry(ZipEntry("$folder/inDIC_$label.png"))
-                    bmp.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, zip)
+                    bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, zip)
                     zip.closeEntry()
                 } catch (e: Exception) {
                     // One unrenderable field shouldn't abort the whole export.
@@ -456,7 +467,6 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     private companion object {
         const val HEATMAP_ALPHA = 180
-        const val PNG_QUALITY = 100
 
         val FIELDS = listOf(
             "U" to DicResult.IDX_U,

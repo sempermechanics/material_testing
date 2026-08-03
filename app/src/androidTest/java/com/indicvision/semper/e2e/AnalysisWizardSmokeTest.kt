@@ -29,4 +29,24 @@ class AnalysisWizardSmokeTest {
     fun analysisActivity_showsWizardNextWithoutCrashing() {
         onView(withId(R.id.btnNext)).check(matches(isDisplayed()))
     }
+
+    @Test
+    fun analysisActivity_showsInstructionChrome() {
+        onView(withId(R.id.tvInstruction)).check(matches(isDisplayed()))
+    }
+
+    @Test
+    fun analysisActivity_showsWizardBackControl() {
+        onView(withId(R.id.btnBack)).check(matches(isDisplayed()))
+    }
+
+    @Test
+    fun analysisActivity_showsComputeControl() {
+        onView(withId(R.id.btnCalculateFullField)).check(matches(isDisplayed()))
+    }
+
+    @Test
+    fun analysisActivity_showsToolbar() {
+        onView(withId(R.id.toolbar)).check(matches(isDisplayed()))
+    }
 }

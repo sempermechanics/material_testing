@@ -2,9 +2,9 @@
 @file:Suppress("MagicNumber")
 
 package com.indicvision.semper.ui.auth
+
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -14,6 +14,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.DicKeys
@@ -88,7 +89,7 @@ class PendingApprovalActivity : AppCompatActivity() {
         }
         val support = getString(R.string.support_email)
         val intent = Intent(Intent.ACTION_SENDTO).apply {
-            data = Uri.parse("mailto:")
+            data = "mailto:".toUri()
             putExtra(Intent.EXTRA_EMAIL, arrayOf(support))
             putExtra(Intent.EXTRA_SUBJECT, getString(R.string.request_access_subject) + " — " + email)
             putExtra(Intent.EXTRA_TEXT, body)

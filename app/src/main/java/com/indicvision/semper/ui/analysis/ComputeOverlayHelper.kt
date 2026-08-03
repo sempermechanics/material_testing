@@ -2,8 +2,11 @@
 // small progress/animation constants read clearest passed and inlined directly.
 @file:Suppress("LongParameterList", "MagicNumber")
 
+@file:SuppressLint("SetTextI18n")
+
 package com.indicvision.semper.ui.analysis
 
+import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock

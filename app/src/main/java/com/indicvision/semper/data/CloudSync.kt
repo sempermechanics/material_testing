@@ -1,6 +1,7 @@
 package com.indicvision.semper.data
 
 import android.content.Context
+import androidx.core.content.edit
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.Data
@@ -119,7 +120,7 @@ object CloudSync {
                     if (reupload) enqueueUpload(appContext, record.id)
                 }
             }
-            prefs.edit().putLong(K_LAST_RECONCILE_AT, System.currentTimeMillis()).apply()
+            prefs.edit { putLong(K_LAST_RECONCILE_AT, System.currentTimeMillis()) }
             Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
         }
     }
@@ -288,14 +289,11 @@ object CloudSync {
      * [SessionStore], so only the id travels in the input Data.
      *
      * Uses [ExistingWorkPolicy.KEEP] so a reconcile pass cannot cancel an
-     * in-flight upload. Defaults to [NetworkType.UNMETERED] for background
-     * repair; pass [allowMetered] = true for an explicit post-analysis upload.
+     * in-flight upload. Network constraint follows [DicSettings.uploadWifiOnly].
      */
-    @Suppress("UNUSED_PARAMETER") // kept for call-site clarity (post-analysis vs repair)
     fun enqueueUpload(
         context: Context,
         localSessionId: String,
-        allowMetered: Boolean = false,
     ) {
         // One policy for post-analysis and repair: Wi‑Fi-only when opted in;
         // otherwise any connected network.

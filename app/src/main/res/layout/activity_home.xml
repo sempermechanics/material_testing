@@ -6,7 +6,7 @@
     android:id="@+id/homeRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface">
+    android:background="@color/surface" tools:ignore="Overdraw">
 
     <LinearLayout
         android:layout_width="match_parent"

@@ -1,5 +1,8 @@
+@file:SuppressLint("ClickableViewAccessibility")
+
 package com.indicvision.semper.ui.analysis
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -10,6 +13,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.withSave
 import com.indicvision.semper.R
 import kotlin.math.hypot
 
@@ -226,6 +230,7 @@ class VsgLatticeView @JvmOverloads constructor(
         },
     )
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!interactionEnabled) return super.onTouchEvent(event)
         val handled = gestureDetector.onTouchEvent(event)
@@ -331,11 +336,11 @@ class VsgLatticeView @JvmOverloads constructor(
             f.bottom + textPaint.textSize * AXIS_TITLE_OFFSET + dp(TICK_GAP_DP),
             textPaint,
         )
-        canvas.save()
-        val pivot = f.bottom / 2f
-        canvas.rotate(-QUARTER_TURN, textPaint.textSize, pivot)
-        canvas.drawText(context.getString(R.string.vsg_lattice_axis_vsg), textPaint.textSize, pivot, textPaint)
-        canvas.restore()
+        canvas.withSave {
+            val pivot = f.bottom / 2f
+            rotate(-QUARTER_TURN, textPaint.textSize, pivot)
+            drawText(context.getString(R.string.vsg_lattice_axis_vsg), textPaint.textSize, pivot, textPaint)
+        }
         textPaint.textAlign = Paint.Align.LEFT
     }
 }

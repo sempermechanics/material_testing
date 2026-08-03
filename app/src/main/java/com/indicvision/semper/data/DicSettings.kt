@@ -45,7 +45,7 @@ object DicSettings {
     fun saveToCloud(context: Context): Boolean = prefs(context).getBoolean(KEY_SAVE_TO_CLOUD, true)
 
     fun setSaveToCloud(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean(KEY_SAVE_TO_CLOUD, value).apply()
+        prefs(context).edit { putBoolean(KEY_SAVE_TO_CLOUD, value) }
 
     /**
      * When true, uploads (post-analysis and reconcile repair) wait for unmetered
@@ -54,13 +54,13 @@ object DicSettings {
     fun uploadWifiOnly(context: Context): Boolean = prefs(context).getBoolean(KEY_UPLOAD_WIFI_ONLY, false)
 
     fun setUploadWifiOnly(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean(KEY_UPLOAD_WIFI_ONLY, value).apply()
+        prefs(context).edit { putBoolean(KEY_UPLOAD_WIFI_ONLY, value) }
 
     /** Cap on deformed frames per analysis (picker + video extraction). */
     fun maxFrames(context: Context): Int = prefs(context).getInt(KEY_MAX_FRAMES, DEFAULT_MAX_FRAMES)
         .coerceIn(MIN_MAX_FRAMES, MAX_MAX_FRAMES)
 
-    fun setMaxFrames(context: Context, value: Int) = prefs(context).edit()
-        .putInt(KEY_MAX_FRAMES, value.coerceIn(MIN_MAX_FRAMES, MAX_MAX_FRAMES))
-        .apply()
+    fun setMaxFrames(context: Context, value: Int) = prefs(context).edit {
+        putInt(KEY_MAX_FRAMES, value.coerceIn(MIN_MAX_FRAMES, MAX_MAX_FRAMES))
+    }
 }

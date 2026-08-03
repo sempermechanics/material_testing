@@ -15,6 +15,7 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.createBitmap
 import com.indicvision.semper.R
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -173,7 +174,7 @@ class LineCutPreviewView @JvmOverloads constructor(
                 pixels[oy * ow + ox] = if (included) greenPx else redPx
             }
         }
-        holeOverlay = Bitmap.createBitmap(ow, oh, Bitmap.Config.ARGB_8888).also {
+        holeOverlay = createBitmap(ow, oh, Bitmap.Config.ARGB_8888).also {
             it.setPixels(pixels, 0, ow, 0, 0, ow, oh)
         }
     }

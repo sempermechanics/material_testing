@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.content.edit
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.Signature
@@ -78,7 +79,7 @@ class DeviceKeyManager(private val context: Context) {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs.getString(K_DEVICE_ID, null)?.let { return it }
         val id = "dev-" + UUID.randomUUID().toString()
-        prefs.edit().putString(K_DEVICE_ID, id).apply()
+        prefs.edit { putString(K_DEVICE_ID, id) }
         return id
     }
 

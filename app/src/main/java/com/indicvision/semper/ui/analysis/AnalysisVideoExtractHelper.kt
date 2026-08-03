@@ -1,0 +1,117 @@
+@file:Suppress("TooGenericExceptionCaught", "LongMethod", "LongParameterList")
+
+package com.indicvision.semper.ui.analysis
+
+import android.graphics.Bitmap
+import android.net.Uri
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.indicvision.semper.R
+import com.indicvision.semper.data.DicSettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import timber.log.Timber
+import java.io.File
+
+/**
+ * Video frame extraction orchestration extracted from [StaticAnalysisActivity].
+ * Frame 0 of the segment becomes the reference; the rest feed defFilePaths.
+ */
+object AnalysisVideoExtractHelper {
+
+    data class AppliedResult(
+        val refPreview: Bitmap?,
+        val frameCount: Int,
+    )
+
+    fun extract(
+        activity: AppCompatActivity,
+        viewModel: AnalysisViewModel,
+        uri: Uri,
+        fpsExtract: Double,
+        startMs: Long,
+        endMs: Long,
+        cacheDir: File,
+        overlayHelper: ComputeOverlayHelper,
+        onApplied: (AppliedResult) -> Unit,
+    ) {
+        overlayHelper.processingStartTime = System.currentTimeMillis()
+        overlayHelper.show(title = "Extracting Frames", status = "Reading video…")
+
+        activity.lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                viewModel.clearPreviousResults()
+                val result = VideoFrameExtractor.extract(
+                    context = activity,
+                    uri = uri,
+                    fpsExtract = fpsExtract,
+                    startMs = startMs,
+                    endMs = endMs,
+                    maxFrames = DicSettings.maxFrames(activity),
+                    cacheDir = cacheDir,
+                    onProgress = { percent, status ->
+                        overlayHelper.update(percent = percent, status = status)
+                    },
+                )
+
+                withContext(Dispatchers.Main) {
+                    overlayHelper.hide()
+                    if (result == null) {
+                        Toast.makeText(
+                            activity,
+                            R.string.video_extract_insufficient,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                        return@withContext
+                    }
+
+                    viewModel.realRefWidth = result.refWidth
+                    viewModel.realRefHeight = result.refHeight
+                    viewModel.refBytes = result.refPng
+                    viewModel.refName = result.refName
+                    if (!viewModel.hasCustomRoi) {
+                        viewModel.roiX = 0
+                        viewModel.roiY = 0
+                        viewModel.roiW = result.refWidth
+                        viewModel.roiH = result.refHeight
+                    }
+                    viewModel.defFilePaths = result.batch.filePaths
+                    viewModel.defOriginalNames = result.batch.originalNames
+                    viewModel.defFrameSizes = result.batch.frameSizes
+                    viewModel.defFrameDates = emptyList()
+                    viewModel.defOrderMode = FrameOrderMode.PICKER
+                    viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
+                    viewModel.defFromVideo = result.batch.fromVideo
+
+                    onApplied(
+                        AppliedResult(
+                            refPreview = result.refPreview,
+                            frameCount = result.batch.filePaths.size,
+                        ),
+                    )
+                    Toast.makeText(
+                        activity,
+                        activity.resources.getQuantityString(
+                            R.plurals.video_loaded_frames,
+                            result.batch.filePaths.size,
+                            result.batch.filePaths.size,
+                        ),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Error extracting video frames")
+                withContext(Dispatchers.Main) {
+                    overlayHelper.hide()
+                    Toast.makeText(
+                        activity,
+                        activity.getString(R.string.video_read_error, e.message),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
+    }
+}

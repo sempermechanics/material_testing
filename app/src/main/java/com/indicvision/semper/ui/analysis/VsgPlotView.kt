@@ -9,6 +9,7 @@ import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.withRotation
 import com.indicvision.semper.R
 import java.util.Locale
 import kotlin.math.abs
@@ -304,10 +305,13 @@ class VsgPlotView @JvmOverloads constructor(
             bottom + textPaint.textSize * 2f + dp(TICK_GAP_DP),
             textPaint,
         )
-        canvas.save()
-        canvas.rotate(-QUARTER_TURN, dp(TICK_GAP_DP) + textPaint.textSize, (bottom) / 2f)
-        canvas.drawText(yLabel, dp(TICK_GAP_DP) + textPaint.textSize, bottom / 2f, textPaint)
-        canvas.restore()
+        canvas.withRotation(
+            -QUARTER_TURN,
+            dp(TICK_GAP_DP) + textPaint.textSize,
+            bottom / 2f,
+        ) {
+            drawText(yLabel, dp(TICK_GAP_DP) + textPaint.textSize, bottom / 2f, textPaint)
+        }
         textPaint.textAlign = Paint.Align.LEFT
     }
 

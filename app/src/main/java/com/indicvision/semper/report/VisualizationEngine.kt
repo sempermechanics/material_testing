@@ -11,8 +11,10 @@
 )
 
 package com.indicvision.semper.report
+
 import android.graphics.Bitmap
 import android.graphics.Color
+import androidx.core.graphics.createBitmap
 import com.indicvision.semper.DicResult
 import kotlin.math.max
 
@@ -136,7 +138,7 @@ object VisualizationEngine {
             val index = plane.indices[i].toInt() and 0xFF
             if (index == TRANSPARENT_INDEX) 0 else JET_LUT[index]
         }
-        val bitmap = Bitmap.createBitmap(plane.width, plane.height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(plane.width, plane.height, Bitmap.Config.ARGB_8888)
         bitmap.setPixels(pixels, 0, plane.width, 0, 0, plane.width, plane.height)
         return Triple(bitmap, plane.min, plane.max)
     }

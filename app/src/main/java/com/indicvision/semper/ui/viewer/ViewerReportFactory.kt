@@ -6,6 +6,7 @@ package com.indicvision.semper.ui.viewer
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.core.graphics.scale
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.ReportBuilder
@@ -30,7 +31,7 @@ object ViewerReportFactory {
         val baseImg = when {
             decodedFull != null -> decodedFull
             cached != null && cached.width == host.imgW && cached.height == host.imgH -> cached
-            cached != null -> Bitmap.createScaledBitmap(cached, host.imgW, host.imgH, true)
+            cached != null -> cached.scale(host.imgW, host.imgH)
             else -> return null
         }
         val ownsBase = baseImg !== cached

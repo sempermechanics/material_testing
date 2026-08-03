@@ -2,7 +2,6 @@ package com.indicvision.semper.ui.limit
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -11,6 +10,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.R
@@ -18,7 +18,6 @@ import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DeviceKeyManager
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.Insets
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -28,7 +27,6 @@ import timber.log.Timber
  * the user to email support@indicvision.com to raise their limit, and lets them
  * re-check or go back to manage (delete) existing analyses.
  */
-@AndroidEntryPoint
 class SessionLimitActivity : AppCompatActivity() {
 
     private lateinit var tvBody: TextView
@@ -61,7 +59,7 @@ class SessionLimitActivity : AppCompatActivity() {
         val max = TokenStore.quotaMax(this)
         // Only show the counter when the backend actually reported numbers.
         tvQuota.visibility = if (max > 0) View.VISIBLE else View.GONE
-        if (max > 0) tvQuota.text = getString(R.string.limit_quota_fmt, used, max)
+        if (max > 0) tvQuota.text = resources.getQuantityString(R.plurals.limit_quota_fmt, used, used, max)
     }
 
     /** Opens the mail app pre-filled to support with account + device context. */
@@ -82,7 +80,7 @@ class SessionLimitActivity : AppCompatActivity() {
         }
         val support = getString(R.string.support_email)
         val intent = Intent(Intent.ACTION_SENDTO).apply {
-            data = Uri.parse("mailto:")
+            data = "mailto:".toUri()
             putExtra(Intent.EXTRA_EMAIL, arrayOf(support))
             putExtra(Intent.EXTRA_SUBJECT, getString(R.string.limit_subject) + " — " + email)
             putExtra(Intent.EXTRA_TEXT, body)

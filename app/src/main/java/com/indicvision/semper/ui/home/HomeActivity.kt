@@ -279,7 +279,7 @@ class HomeActivity : AppCompatActivity() {
             return
         }
         tvHomeQuota.isVisible = true
-        tvHomeQuota.text = getString(R.string.home_quota_fmt, used, max)
+        tvHomeQuota.text = resources.getQuantityString(R.plurals.home_quota_fmt, used, used, max)
         tvHomeQuota.setTextColor(
             getColor(
                 if (used >= max) R.color.semantic_danger else R.color.text_secondary,
@@ -321,7 +321,7 @@ class HomeActivity : AppCompatActivity() {
                     adapter.submit(sessions)
                     Toast.makeText(
                         this,
-                        getString(R.string.cloud_resync_fmt, outcome.repaired),
+                        resources.getQuantityString(R.plurals.cloud_resync_fmt, outcome.repaired, outcome.repaired),
                         Toast.LENGTH_LONG,
                     ).show()
                 }
@@ -347,13 +347,13 @@ class HomeActivity : AppCompatActivity() {
         when (record.syncState) {
             SessionRecord.SyncState.FAILED, SessionRecord.SyncState.PENDING -> {
                 SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-                CloudSync.enqueueUpload(this, record.id, allowMetered = true)
+                CloudSync.enqueueUpload(this, record.id)
                 adapter.rebindRow(record.id)
                 Toast.makeText(this, R.string.cloud_retry_backup, Toast.LENGTH_SHORT).show()
             }
             SessionRecord.SyncState.LOCAL_ONLY -> if (DicSettings.saveToCloud(this)) {
                 SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-                CloudSync.enqueueUpload(this, record.id, allowMetered = true)
+                CloudSync.enqueueUpload(this, record.id)
                 adapter.rebindRow(record.id)
                 Toast.makeText(this, R.string.cloud_backup_now, Toast.LENGTH_SHORT).show()
             } else {

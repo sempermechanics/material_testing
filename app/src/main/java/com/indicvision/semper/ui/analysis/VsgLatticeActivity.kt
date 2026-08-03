@@ -2,8 +2,11 @@
 // strain plot, the coach mark — so TooManyFunctions is suppressed here.
 @file:Suppress("TooManyFunctions")
 
+@file:SuppressLint("PrivateResource")
+
 package com.indicvision.semper.ui.analysis
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.text.Spannable
@@ -226,9 +229,22 @@ class VsgLatticeActivity : AppCompatActivity() {
             return
         }
         summary.text = if (stepDenom > 0) {
-            getString(R.string.vsg_lattice_summary_fmt, nodes.size, solvedCount, skippedCount, stepDenom)
+            resources.getQuantityString(
+                R.plurals.vsg_lattice_summary_fmt,
+                nodes.size,
+                nodes.size,
+                solvedCount,
+                skippedCount,
+                stepDenom,
+            )
         } else {
-            getString(R.string.vsg_lattice_summary_short_fmt, nodes.size, solvedCount, skippedCount)
+            resources.getQuantityString(
+                R.plurals.vsg_lattice_summary_short_fmt,
+                nodes.size,
+                nodes.size,
+                solvedCount,
+                skippedCount,
+            )
         }
         btnViewResults.setOnClickListener { openViewer(0) }
     }

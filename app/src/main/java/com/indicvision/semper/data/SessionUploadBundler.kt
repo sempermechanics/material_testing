@@ -8,7 +8,9 @@ package com.indicvision.semper.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.core.graphics.scale
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.FieldResult
@@ -77,7 +79,7 @@ object SessionUploadBundler {
                 Timber.e("No decodable base image (reference %s) — skipping reports", refFile.absolutePath)
                 null
             } else {
-                val scaled = Bitmap.createScaledBitmap(originalBaseImg, record.imgW, record.imgH, true)
+                val scaled = originalBaseImg.scale(record.imgW, record.imgH)
                 if (scaled !== originalBaseImg) originalBaseImg.recycle()
                 scaled
             }
@@ -136,7 +138,7 @@ object SessionUploadBundler {
                 val ok = renderFrame(ctx, data, defFile, frameName, index) { fields ->
                     fields.forEach { field ->
                         File(frameDir, "${field.fieldKey}.png").outputStream().buffered().use { out ->
-                            field.bakedHeatmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out)
+                            field.bakedHeatmap.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, out)
                         }
                         processed++
                     }
@@ -190,7 +192,7 @@ object SessionUploadBundler {
         // reference rather than losing the whole report over it.
         val originalDefImg = BitmapFactory.decodeFile(defFile.absolutePath)
         val defImg = if (originalDefImg != null) {
-            Bitmap.createScaledBitmap(originalDefImg, record.imgW, record.imgH, true)
+            originalDefImg.scale(record.imgW, record.imgH)
         } else {
             ctx.baseImg
         }
@@ -247,5 +249,4 @@ object SessionUploadBundler {
             ?: defName?.let { BitmapFactory.decodeFile(File(rawDeformedDir, it).absolutePath) }
 
     private const val ENGINE_STATS_SIZE = 16
-    private const val PNG_QUALITY = 100
 }

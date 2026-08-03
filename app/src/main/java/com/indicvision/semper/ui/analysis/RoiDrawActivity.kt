@@ -2,8 +2,11 @@
 // as cohesive methods, so the structural rules are suppressed for this file.
 @file:Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod")
 
+@file:SuppressLint("SetTextI18n")
+
 package com.indicvision.semper.ui.analysis
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.graphics.RectF

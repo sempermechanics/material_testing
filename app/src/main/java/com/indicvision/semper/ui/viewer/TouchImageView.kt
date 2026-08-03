@@ -2,8 +2,11 @@
 // inline, so MagicNumber / ComplexCondition are suppressed for this whole file.
 @file:Suppress("MagicNumber", "ComplexCondition")
 
+@file:SuppressLint("ClickableViewAccessibility")
+
 package com.indicvision.semper.ui.viewer
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix

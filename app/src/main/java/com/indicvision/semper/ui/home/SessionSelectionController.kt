@@ -115,7 +115,11 @@ class SessionSelectionController(
         topBar.isVisible = !active
         backCallback.isEnabled = active
         if (active) fab.hide() else fab.show()
-        selectionCount.text = activity.getString(R.string.selection_count_fmt, selectedIds.size)
+        selectionCount.text = activity.resources.getQuantityString(
+            R.plurals.selection_count_fmt,
+            selectedIds.size,
+            selectedIds.size,
+        )
         btnSelectionRename.isVisible = selectedIds.size == 1
         // Ticked only when every row is in the selection, so the box reports
         // the real state rather than just what was last tapped.
@@ -140,7 +144,13 @@ class SessionSelectionController(
             it.syncState == SessionRecord.SyncState.SYNCED || it.cloudSessionId.isNotBlank()
         }
         val dialog = MaterialAlertDialogBuilder(activity)
-            .setTitle(activity.getString(R.string.delete_confirm_title_multi, records.size))
+            .setTitle(
+                activity.resources.getQuantityString(
+                    R.plurals.delete_confirm_title_multi,
+                    records.size,
+                    records.size,
+                ),
+            )
             .setNegativeButton(R.string.action_cancel, null)
 
         if (backedUp == 0) {
@@ -210,7 +220,7 @@ class SessionSelectionController(
         activity.lifecycleScope.launch {
             Toast.makeText(
                 activity,
-                activity.getString(R.string.delete_multi_working, records.size),
+                activity.resources.getQuantityString(R.plurals.delete_multi_working, records.size, records.size),
                 Toast.LENGTH_SHORT,
             ).show()
 
@@ -229,9 +239,14 @@ class SessionSelectionController(
             // Report what actually happened — never imply a cloud copy is gone
             // when the backend could not be reached.
             val message = if (stillInCloud > 0) {
-                activity.getString(R.string.delete_multi_partial, records.size, stillInCloud)
+                activity.resources.getQuantityString(
+                    R.plurals.delete_multi_partial,
+                    records.size,
+                    records.size,
+                    stillInCloud,
+                )
             } else {
-                activity.getString(R.string.delete_multi_done, records.size)
+                activity.resources.getQuantityString(R.plurals.delete_multi_done, records.size, records.size)
             }
             Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
             if (!cloudToo) onDeviceOnlyDeleted()

@@ -5,6 +5,7 @@
 @file:Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList", "MagicNumber", "NestedBlockDepth")
 
 package com.indicvision.semper.report
+
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -13,10 +14,11 @@ import android.graphics.Paint
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.DicUploadWorker
-import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -24,7 +26,7 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
- * Headless report assembly shared by [ResultViewerActivity] and [DicUploadWorker].
+ * Headless report assembly shared by the result viewer and [DicUploadWorker].
  * No Activity or UI dependencies.
  */
 object ReportBuilder {
@@ -83,8 +85,8 @@ object ReportBuilder {
         val newWidth = (width * ratio).toInt()
         val newHeight = (height * ratio).toInt()
 
-        val scaled = Bitmap.createScaledBitmap(this, newWidth, newHeight, true)
-        val strippedBmp = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.RGB_565)
+        val scaled = this.scale(newWidth, newHeight)
+        val strippedBmp = createBitmap(newWidth, newHeight, Bitmap.Config.RGB_565)
         Canvas(strippedBmp).drawBitmap(scaled, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG))
         if (scaled != this) scaled.recycle()
         return strippedBmp
@@ -215,7 +217,7 @@ object ReportBuilder {
             // canvas is a throwaway — compressForPdf() returns a *new* small bitmap,
             // so the original must be recycled here or we leak one full-res
             // ARGB_8888 bitmap per field (6×), which OOMs large-image reports.
-            val fullResComposite = Bitmap.createBitmap(params.imgW, params.imgH, Bitmap.Config.ARGB_8888).also { bmp ->
+            val fullResComposite = createBitmap(params.imgW, params.imgH, Bitmap.Config.ARGB_8888).also { bmp ->
                 val tempCanvas = Canvas(bmp)
                 tempCanvas.drawBitmap(baseImg, 0f, 0f, null)
                 tempCanvas.drawBitmap(heatmapBmp, 0f, 0f, Paint().apply { alpha = 180 })
@@ -268,8 +270,8 @@ object ReportBuilder {
             deformedImageName = params.deformedImageName,
             fieldResults = fieldResults,
             engineStats = params.engineStats,
-            znssdHeatmap = correlationHeatmap ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
-            solverPathMap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
+            znssdHeatmap = correlationHeatmap ?: createBitmap(1, 1, Bitmap.Config.ARGB_8888),
+            solverPathMap = createBitmap(1, 1, Bitmap.Config.ARGB_8888),
             globalAvgZnssd = computeGlobalAvgZnssd(data),
             appBuild = appBuildLabel(),
         )

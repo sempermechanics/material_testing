@@ -2,10 +2,11 @@
 // clearest inline, so MagicNumber is suppressed for this whole file.
 @file:Suppress("MagicNumber")
 
-package com.indicvision.semper.ui.common
+package com.indicvision.semper.imaging
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.core.graphics.scale
 import com.indicvision.semper.report.VisualizationEngine
 import java.io.File
 import java.io.InputStream
@@ -14,6 +15,7 @@ import kotlin.math.max
 
 /**
  * Shared BitmapFactory helpers for display-sized decodes and RAW→RGBA import.
+ * Lives outside `ui` so data/report layers can decode without reverse UI deps.
  */
 object BitmapDecode {
 
@@ -109,11 +111,9 @@ object BitmapDecode {
             bitmap
         } else {
             val scale = previewMaxEdge.toFloat() / longEdge
-            Bitmap.createScaledBitmap(
-                bitmap,
+            bitmap.scale(
                 (width * scale).toInt().coerceAtLeast(1),
                 (height * scale).toInt().coerceAtLeast(1),
-                true,
             ).also { scaled ->
                 if (scaled !== bitmap) bitmap.recycle()
             }

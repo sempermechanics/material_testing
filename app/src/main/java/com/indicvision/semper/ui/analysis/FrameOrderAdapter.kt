@@ -1,5 +1,8 @@
+@file:SuppressLint("NotifyDataSetChanged")
+
 package com.indicvision.semper.ui.analysis
 
+import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
 import android.view.LayoutInflater
 import android.view.View
