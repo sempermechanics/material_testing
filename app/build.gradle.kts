@@ -1,10 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
-    kotlin("plugin.serialization") version "1.9.22"
+    alias(libs.plugins.kotlin.serialization)
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     id("com.google.gms.google-services")
-    alias(libs.plugins.hilt.android)
-    alias(libs.plugins.ksp)
     // Coverage measurement only (report-only, no gate). Generate with
     // `./gradlew :app:koverHtmlReport` → app/build/reports/kover/.
     id("org.jetbrains.kotlinx.kover") version "0.9.1"
@@ -153,6 +151,8 @@ android {
     buildTypes {
         debug {
             buildConfigField("boolean", "DEV_AUTH_BYPASS", "$devAuthBypass")
+            // Enables JVM unit-test coverage collection for Kover/JaCoCo tooling.
+            enableUnitTestCoverage = true
 
             // Emulators are x86_64. An arm64-only APK does install there and
             // runs under ARM translation (berberis), but libomp aborts inside
@@ -216,13 +216,21 @@ android {
         }
     }
 
-    // Android Lint gate: existing findings frozen in lint-baseline.xml;
-    // only new issues fail `./gradlew :app:lintDebug` (CI).
+    // Android Lint gate: empty baseline; new issues fail CI.
+    // Version-availability noise is silenced — bumps are deliberate catalog PRs.
     lint {
         baseline = file("lint-baseline.xml")
         abortOnError = true
         // Layouts are fully extracted to strings.xml — keep it that way.
         error += "HardcodedText"
+        disable +=
+            setOf(
+                "GradleDependency",
+                "NewerVersionAvailable",
+                "AndroidGradlePluginVersion",
+                // Photo Picker is the primary path; broad gallery access is unused.
+                "SelectedPhotoAccess",
+            )
     }
 }
 
@@ -232,53 +240,66 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.activity)
-    implementation(platform("com.google.firebase:firebase-bom:34.16.0"))
-    implementation("com.google.firebase:firebase-analytics")
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
     // Firebase Authentication (email/password, email-link, Google) — the identity layer.
-    implementation("com.google.firebase:firebase-auth")
+    implementation(libs.firebase.auth)
     // Await() on Firebase Task<T> from coroutines.
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    implementation(libs.kotlinx.coroutines.play.services)
     // AndroidX transitions power the shared-element / expand-collapse motion in ui/Motion.kt
-    implementation("androidx.transition:transition:1.5.1")
+    implementation(libs.androidx.transition)
     // Pull-to-refresh on the Home list (re-checks cloud backup state on demand)
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation(libs.androidx.swiperefreshlayout)
     testImplementation(libs.junit)
     // JVM tests for the network layer: MockWebServer fakes the backend/Drive,
     // Robolectric supplies a real Context + org.json without a device.
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
-    testImplementation("org.robolectric:robolectric:4.14.1")
-    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.okhttp.mockwebserver.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core.ktx)
     androidTestImplementation(libs.androidx.junit)
     // 3.6.1 crashes on API 37 (Espresso's InputManagerEventInjectionStrategy
     // calls the hidden InputManager.getInstance, removed in Android 17).
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
-    androidTestImplementation("androidx.test:rules:1.7.0")
+    androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.test.rules)
 
-    implementation("androidx.activity:activity-ktx:1.8.2")
-
-    // 🚀 Google SSO via Credential Manager (native one-tap) → Google ID token
-    implementation("androidx.credentials:credentials:1.3.0")
-    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
-    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    // Google SSO via Credential Manager (native one-tap) → Google ID token
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     // Semper GCP backend client: OkHttp + kotlinx.serialization
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
-    implementation("com.jakewharton.timber:timber:5.0.1")
-    implementation("androidx.exifinterface:exifinterface:1.3.7")
-    implementation("androidx.recyclerview:recyclerview:1.3.2")
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.timber)
+    implementation(libs.androidx.exifinterface)
+    implementation(libs.androidx.recyclerview)
 }
 
-// Static analysis gate: `./gradlew :app:detekt` (CI). The codebase is kept
-// clean of findings, so there is no baseline — any new issue fails the build.
+// Static analysis gate: `./gradlew :app:detekt` (CI). New findings fail the
+// build. A few large UI orchestration files use targeted @file:Suppress for
+// inherent size/complexity; keep that list small and prefer extracts instead.
 detekt {
     buildUponDefaultConfig = true
-    // Existing findings in the large UI files live here instead of blanket
-    // @file:Suppress blocks, so the debt is counted and visibly burnable.
-    // Any NEW finding still fails the build. Regenerate deliberately (and
-    // only to remove entries) with `./gradlew :app:detektBaseline`.
+    // Empty baseline retained so `./gradlew :app:detektBaseline` can still
+    // freeze accidental regressions deliberately if needed.
     baseline = file("detekt-baseline.xml")
+}
+
+// Coverage: exclude UI; verify a modest line floor on remaining first-party code.
+kover {
+    reports {
+        filters {
+            excludes {
+                packages("com.indicvision.semper.ui")
+            }
+        }
+        verify {
+            // Modest floor after excluding UI; raise deliberately when measured higher.
+            rule {
+                minBound(15)
+            }
+        }
+    }
 }
