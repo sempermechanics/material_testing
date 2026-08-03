@@ -13,7 +13,7 @@ Each chunk owns one layer; no duplicate assertions across chunks.
 | **viewer** | Result viewer controls | `viewer/FrameNumberEntryTest` | — |
 | **cloud** | Upload, API, restore, account deletion | `cloud/ApiDtosContractTest`, `UploadResumableTest`, `AccountDeletionTest`, `SessionEverythingExporterTest` | — |
 | **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest` | — |
-| **e2e** | Wizard chrome smoke (Next / instruction / Back / Compute) | — | `AnalysisWizardSmokeTest` |
+| **e2e** | Wizard chrome smoke (Next + toolbar; Back / Compute / instruction GONE on step 1) | — | `AnalysisWizardSmokeTest` |
 | **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
 
 ## Overlap rules
