@@ -898,6 +898,15 @@ int run_full_field(
                 auto search_flag = ALLOW_SIMPLEX_RESCUE ? INIT_NO_SEARCH : INIT_NO_SIMPLEX;
                 Semper::AnalysisResult res = prewarm_engine.calculate_deformation(
                         prewarm_subset, defImg, seed.u, seed.v, 0.f, 0.f, 0.f, 0.f, search_flag);
+                // 🚀 VSG PROTECTOR: Reject if > 5% of the subset fell into the Ghost Wall
+                // Matters more here than on the other paths: an accepted prewarm seed is
+                // pushed onto the propagation queue below, so a subset sitting in the mask
+                // seeds every point that floods out from it.
+                float ghost_fraction = (float)res.invalid_ref_pixels / (float)(params.subset_size * params.subset_size);
+                if (ghost_fraction > 0.05f) {
+                    res.correlation_score = 2.0f;
+                    res.status = 1;
+                }
                 stats_pathB[0].icgn_iters += res.iters;
                 bool needed_rescue = (prewarm_engine.count_simplex > simplex_count_before);
                 int icgn_iters_used = prewarm_engine.count_icgn - icgn_count_before;
@@ -907,7 +916,11 @@ int run_full_field(
                 if (needed_rescue) {
                     stats_pathB[0].simplex_calls++;
 
-                    if (icgn_iters_used >= 500) {
+                    // Match Path A: classify on the REAL iteration count against
+                    // max_iter (50). The old >= 500 was a stale threshold from when
+                    // max_iter was 500, so simplex_from_timeout here never fired and
+                    // every prewarm rescue was misreported as simplex_from_crash.
+                    if (res.iters >= 50) {
                         stats_pathB[0].simplex_from_timeout++;
                     } else {
                         stats_pathB[0].simplex_from_crash++;
@@ -1119,7 +1132,18 @@ int run_full_field(
                             if (!pending_pushes.empty()) { std::lock_guard<std::mutex> lq(gq.mtx); for (auto &node : pending_pushes) { gq.q.push(std::move(node)); gq.cv.notify_one(); } }
                             { std::lock_guard<std::mutex> lq(gq.mtx); gq.active--; if (gq.q.empty() && gq.active == 0) { bool seeds_exhausted = seed_idx.load(std::memory_order_relaxed) >= (int)global_seeds.size(); if (seeds_exhausted) { gq.done = true; } gq.cv.notify_all(); } }
                         }
-                    } catch (...) {}
+                    } catch (const std::exception &e) {
+                        // A worker that throws mid-item never runs its gq.active--,
+                        // so the queue's (active == 0) termination becomes
+                        // unreachable and the remaining workers park until cancel.
+                        // Log it (it used to vanish silently) and signal done so the
+                        // solve finishes with a partial field instead of hanging.
+                        LOGE("Path B worker %d aborted: %s", t, e.what());
+                        std::lock_guard<std::mutex> lq(gq.mtx); gq.done = true; gq.cv.notify_all();
+                    } catch (...) {
+                        LOGE("Path B worker %d aborted: unknown exception", t);
+                        std::lock_guard<std::mutex> lq(gq.mtx); gq.done = true; gq.cv.notify_all();
+                    }
                 });
             }
         }
