@@ -2,24 +2,26 @@
 
 package com.indicvision.semper.e2e
 
+import android.view.View
+import android.widget.TextView
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.Visibility
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.indicvision.semper.R
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
  * Instrumented UI smoke: open the analysis screen and assert cold-start wizard
- * chrome. Step 1 hides Back / Compute and the settings-page instruction; those
- * are asserted GONE rather than displayed. Not a full E2E (no fixture pick).
+ * chrome. Step 1 shows Next + toolbar; Back / Compute / settings instruction
+ * stay in the hierarchy as [View.GONE]. Not a full E2E (no fixture pick).
  */
 @RunWith(AndroidJUnit4::class)
 class AnalysisWizardSmokeTest {
@@ -33,26 +35,35 @@ class AnalysisWizardSmokeTest {
     }
 
     @Test
+    fun analysisActivity_showsToolbar() {
+        onView(withId(R.id.toolbar)).check(matches(isDisplayed()))
+    }
+
+    @Test
     fun analysisActivity_keepsInstructionOnSettingsPage() {
-        // tvInstruction lives on the settings page, which is GONE on step 1.
-        onView(withId(R.id.tvInstruction))
-            .check(matches(withEffectiveVisibility(Visibility.GONE)))
+        scenarioRule.scenario.onActivity { activity ->
+            val instruction = activity.findViewById<TextView>(R.id.tvInstruction)
+            assertNotNull(instruction)
+            // Settings page is not showing on step 1, so the row is not shown.
+            assertEquals(false, instruction.isShown)
+        }
     }
 
     @Test
     fun analysisActivity_hidesWizardBackOnFirstStep() {
-        onView(withId(R.id.btnBack))
-            .check(matches(withEffectiveVisibility(Visibility.GONE)))
+        scenarioRule.scenario.onActivity { activity ->
+            val back = activity.findViewById<View>(R.id.btnBack)
+            assertNotNull(back)
+            assertEquals(View.GONE, back.visibility)
+        }
     }
 
     @Test
     fun analysisActivity_hidesComputeOnFirstStep() {
-        onView(withId(R.id.btnCalculateFullField))
-            .check(matches(withEffectiveVisibility(Visibility.GONE)))
-    }
-
-    @Test
-    fun analysisActivity_showsToolbar() {
-        onView(withId(R.id.toolbar)).check(matches(isDisplayed()))
+        scenarioRule.scenario.onActivity { activity ->
+            val compute = activity.findViewById<View>(R.id.btnCalculateFullField)
+            assertNotNull(compute)
+            assertEquals(View.GONE, compute.visibility)
+        }
     }
 }
