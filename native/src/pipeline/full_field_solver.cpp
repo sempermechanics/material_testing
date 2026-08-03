@@ -3,6 +3,7 @@
 #include <semper/solver.hpp>
 #include <semper/strain.hpp>
 #include <semper/subset.hpp>
+#include <semper/tuning.hpp>
 #include "util/log.hpp"
 
 #include <atomic>
@@ -86,8 +87,316 @@ struct ThreadStats {
 // point loops: the cost is one relaxed atomic load per point against a full ICGN
 // solve, and a late poll only means one more point, never a wrong result.
 
-/** How often a Path B worker parked on the queue re-checks the cancel flag. */
-static constexpr int kCancelPollMs = 20;
+
+namespace {
+
+// Debug-only export (maps/CSV). Production leaves debug_dir empty.
+// Extracted from run_full_field so the solve path stays readable; behaviour identical.
+template <typename GridPoint, typename AffineTriangle>
+void export_full_field_debug_suite(
+        const std::string& local_debug_dir,
+        int gridW,
+        int gridH,
+        const FullFieldParams& params,
+        const cv::Mat& roiMask,
+        int cache_width,
+        int cache_height,
+        Image* ref_img,
+        const std::vector<std::vector<GridPoint>>& resultGrid,
+        const StrainField& strainField,
+        const std::vector<AffineTriangle>& affTriangles) {
+if (!local_debug_dir.empty()) {
+    try {
+        int max_order = 1;
+        float max_corr = 0.0001f, max_exx = -1e9f, min_exx = 1e9f;
+
+        cv::Mat propMap(gridH, gridW, CV_8UC1, cv::Scalar(0));
+        cv::Mat threadMap(gridH, gridW, CV_8UC3, cv::Scalar(30, 30, 30));
+        cv::Mat meshAssignMap(gridH, gridW, CV_8UC3, cv::Scalar(0, 0, 0));
+        cv::Mat corrMap(gridH, gridW, CV_8UC1, cv::Scalar(0));
+        cv::Mat strainMap(gridH, gridW, CV_8UC1, cv::Scalar(0));
+        cv::Mat simplexMap(gridH, gridW, CV_8UC3, cv::Scalar(30, 30, 30));
+
+        static const cv::Vec3b THREAD_COLORS[12] = {
+                {60, 20, 220}, {20, 200, 20}, {200, 60, 20}, {200, 200, 20}, {20, 200, 200}, {200, 20, 200},
+                {100, 180, 255}, {255, 140, 30}, {50, 255, 180}, {180, 50, 255}, {255, 50, 130}, {130, 255, 50}};
+
+        for (int y = 0; y < gridH; ++y) {
+            for (int x = 0; x < gridW; ++x) {
+                const auto &gp = resultGrid[y][x];
+                if (gp.solved && gp.corr > 0.0f) {
+                    if (gp.compute_order > max_order) max_order = gp.compute_order;
+                    if (gp.corr > max_corr) max_corr = gp.corr;
+                    int idx = y * gridW + x;
+                    if (strainField.exx[idx] > max_exx) max_exx = strainField.exx[idx];
+                    if (strainField.exx[idx] < min_exx) min_exx = strainField.exx[idx];
+                }
+            }
+        }
+
+        if (max_exx == min_exx) { max_exx += 0.001f; min_exx -= 0.001f; }
+        max_corr = std::min(max_corr, tuning::kCorrAccept);
+
+        for (int y = 0; y < gridH; ++y) {
+            for (int x = 0; x < gridW; ++x) {
+                const auto &gp = resultGrid[y][x];
+
+                bool is_masked = (!roiMask.empty() &&
+                                  roiMask.at<uchar>(params.rect_y + y * params.step, params.rect_x + x * params.step) < 128);
+
+                if (!is_masked) {
+                    if (gp.solved && gp.corr > 0.0f) {
+                        if (!gp.used_simplex) {
+                            simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 0);
+                        } else if (gp.icgn_iters < tuning::kIcgnMaxIter) {
+                            simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 255);
+                        } else {
+                            simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 255, 0);
+                        }
+                    } else {
+                        if (!gp.used_simplex) {
+                            simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 0, 255);
+                        } else if (gp.icgn_iters < tuning::kIcgnMaxIter) {
+                            simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 165, 255);
+                        } else {
+                            simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 0, 255);
+                        }
+                    }
+                }
+
+                if (!is_masked) {
+                    if (gp.mesh_assignment_type == 1) {
+                        meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 0);
+                    } else if (gp.mesh_assignment_type == 2) {
+                        meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 255);
+                    } else if (gp.mesh_assignment_type >= 1000) {
+                        int dist = gp.mesh_assignment_type - 1000;
+                        int r = std::max(0, std::min(255, (dist - 127) * 2));
+                        int g = 255 - std::abs(dist - 127) * 2;
+                        int b = std::max(0, std::min(255, (127 - dist) * 2));
+                        meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(b, g, r);
+                    } else if (gp.mesh_assignment_type == 4) {
+                        meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 165, 255);
+                    } else {
+                        meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(100, 100, 100);
+                    }
+                }
+
+                if (!gp.solved || gp.compute_order < 0) continue;
+
+                propMap.at<uchar>(y, x) = (uchar) ((float) gp.compute_order / max_order * 255.0f);
+                threadMap.at<cv::Vec3b>(y, x) = THREAD_COLORS[std::max(0, std::min(gp.thread_id, 11))];
+                corrMap.at<uchar>(y, x) = (uchar) ((gp.corr / max_corr) * 255.0f);
+
+                int idx = y * gridW + x;
+                strainMap.at<uchar>(y, x) = (uchar) (
+                        ((strainField.exx[idx] - min_exx) / (max_exx - min_exx)) * 255.0f);
+            }
+        }
+
+        cv::Mat propColor, corrColor, strainColor;
+        cv::applyColorMap(propMap, propColor, cv::COLORMAP_JET);
+        cv::applyColorMap(corrMap, corrColor, cv::COLORMAP_JET);
+        cv::applyColorMap(strainMap, strainColor, cv::COLORMAP_JET);
+
+        for (int y = 0; y < gridH; ++y) {
+            for (int x = 0; x < gridW; ++x) {
+                if (!resultGrid[y][x].solved || resultGrid[y][x].compute_order < 0) {
+                    propColor.at<cv::Vec3b>(y, x) = {0, 0, 0};
+                    threadMap.at<cv::Vec3b>(y, x) = {30, 30, 30};
+                    corrColor.at<cv::Vec3b>(y, x) = {0, 0, 0};
+                    strainColor.at<cv::Vec3b>(y, x) = {0, 0, 0};
+                }
+            }
+        }
+
+        cv::Mat outProp, outThread, outMesh, outCorr, outStrain, outSimplex;
+        cv::Size sz(gridW * params.step, gridH * params.step);
+        cv::resize(propColor, outProp, sz, 0, 0, cv::INTER_NEAREST);
+        cv::resize(threadMap, outThread, sz, 0, 0, cv::INTER_NEAREST);
+        cv::resize(meshAssignMap, outMesh, sz, 0, 0, cv::INTER_NEAREST);
+        cv::resize(corrColor, outCorr, sz, 0, 0, cv::INTER_NEAREST);
+        cv::resize(strainColor, outStrain, sz, 0, 0, cv::INTER_NEAREST);
+        cv::resize(simplexMap, outSimplex, sz, 0, 0, cv::INTER_NEAREST);
+
+        seeding::draw_outlined_text(outProp, "Propagation Debug", cv::Point(10, 25), 0.6);
+        seeding::draw_outlined_text(outThread, "8-Core Thread Execution Map", cv::Point(10, 25), 0.6);
+        seeding::draw_outlined_text(outMesh, "Mesh Assign (Grn=In, Yel=Ex, Gry=PathB)", cv::Point(10, 25), 0.6);
+        seeding::draw_outlined_text(outCorr, "ZNSSD Quality (Blue=Perfect, Red=Marginal)", cv::Point(10, 25), 0.6);
+        seeding::draw_outlined_text(outStrain, "Exx Strain (Raw Plot)", cv::Point(10, 25), 0.6);
+        seeding::draw_outlined_text(outSimplex, "Grn=Perfect | Yel=Save(Crash) | Cya=Save(Time) | Org=Dead(Crash) | Pur=Dead(Time) | Red=Insta-Dead", cv::Point(10, 25), 0.4);
+
+        cv::imwrite(local_debug_dir + "/propagation_debug.png", outProp);
+        cv::imwrite(local_debug_dir + "/thread_debug.png", outThread);
+        cv::imwrite(local_debug_dir + "/mesh_assignment_map.png", outMesh);
+        cv::imwrite(local_debug_dir + "/correlation_heatmap.png", outCorr);
+        cv::imwrite(local_debug_dir + "/strain_exx_debug.png", outStrain);
+        cv::imwrite(local_debug_dir + "/simplex_health_map.png", outSimplex);
+
+        cv::Mat outSimplexOverlap = outSimplex.clone();
+
+        for (const auto &tri : affTriangles) {
+            cv::Point pt1(tri.pts[0].x - params.rect_x, tri.pts[0].y - params.rect_y);
+            cv::Point pt2(tri.pts[1].x - params.rect_x, tri.pts[1].y - params.rect_y);
+            cv::Point pt3(tri.pts[2].x - params.rect_x, tri.pts[2].y - params.rect_y);
+
+            cv::line(outSimplexOverlap, pt1, pt2, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
+            cv::line(outSimplexOverlap, pt2, pt3, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
+            cv::line(outSimplexOverlap, pt3, pt1, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
+        }
+        seeding::draw_outlined_text(outSimplexOverlap, "Simplex Health + Delaunay Overlap", cv::Point(10, 45), 0.4);
+        cv::imwrite(local_debug_dir + "/simplex_mesh_overlap.png", outSimplexOverlap);
+
+        std::string csvPath = local_debug_dir + "/debug_grid_data.csv";
+        std::ofstream csvFile(csvPath);
+        if (csvFile.is_open()) {
+            csvFile << "# PIPELINE=2_HYBRID_CORE\n";
+            csvFile << "RealX,RealY,GridX,GridY,ThreadID,ComputeOrder,U,V,Correlation,MeshType,UsedSimplex,ItersICGN,SolverState,GuessU,GuessV,GuessUx,GuessUy,GuessVx,GuessVy\n";
+            for (int y = 0; y < gridH; ++y) {
+                for (int x = 0; x < gridW; ++x) {
+                    const auto &gp = resultGrid[y][x];
+
+                    bool is_masked = (!roiMask.empty() && roiMask.at<uchar>(params.rect_y + y * params.step, params.rect_x + x * params.step) < 128);
+                    if (is_masked) continue;
+
+                    int solver_state = 0;
+                    if (gp.solved && gp.corr > 0.0f) {
+                        if (!gp.used_simplex) solver_state = 0;
+                        else if (gp.icgn_iters < tuning::kIcgnMaxIter) solver_state = 1;
+                        else solver_state = 2;
+                    } else {
+                        if (!gp.used_simplex) solver_state = 5;
+                        else if (gp.icgn_iters < tuning::kIcgnMaxIter) solver_state = 3;
+                        else solver_state = 4;
+                    }
+
+                    // 🚀 UPDATE THE EXPORT LINE
+                    csvFile << gp.x << "," << gp.y << "," << x << "," << y << ","
+                            << gp.thread_id << "," << gp.compute_order << "," << gp.u
+                            << "," << gp.v << "," << gp.corr << ","
+                            << gp.mesh_assignment_type << ","
+                            << (gp.used_simplex ? 1 : 0) << ","
+                            << gp.icgn_iters << ","
+                            << solver_state << ","
+                            << gp.guess_u << "," << gp.guess_v << ","
+                            << gp.guess_ux << "," << gp.guess_uy << ","
+                            << gp.guess_vx << "," << gp.guess_vy << "\n";
+                }
+            }
+            csvFile.close();
+        }
+
+        if (!affTriangles.empty()) {
+            std::string meshCsvPath = local_debug_dir + "/delaunay_mesh_data.csv";
+            std::ofstream meshCsvFile(meshCsvPath);
+            if (meshCsvFile.is_open()) {
+                meshCsvFile << "TriangleID,Pt1_X,Pt1_Y,Pt2_X,Pt2_Y,Pt3_X,Pt3_Y\n";
+                for (size_t i = 0; i < affTriangles.size(); ++i) {
+                    const auto &tri = affTriangles[i];
+                    meshCsvFile << i << ","
+                                << tri.pts[0].x << "," << tri.pts[0].y << ","
+                                << tri.pts[1].x << "," << tri.pts[1].y << ","
+                                << tri.pts[2].x << "," << tri.pts[2].y << "\n";
+                }
+                meshCsvFile.close();
+            }
+        }
+
+        try {
+            cv::Mat refFloat(cache_height, cache_width, CV_32FC1, (void *)ref_img->intensities.data());
+            cv::Mat ref8U, refColor;
+            refFloat.convertTo(ref8U, CV_8UC1);
+            cv::cvtColor(ref8U, refColor, cv::COLOR_GRAY2BGR);
+
+            cv::Rect roiRect(params.rect_x, params.rect_y, params.rect_w, params.rect_h);
+            roiRect = roiRect & cv::Rect(0, 0, cache_width, cache_height);
+
+            cv::Mat imgAll = refColor(roiRect).clone();
+            cv::Mat imgDead = imgAll.clone();
+
+            int shiftX = roiRect.x;
+            int shiftY = roiRect.y;
+
+            cv::Scalar meshColor(214, 174, 107);
+            for (const auto &tri : affTriangles) {
+                cv::Point pt1(tri.pts[0].x - shiftX, tri.pts[0].y - shiftY);
+                cv::Point pt2(tri.pts[1].x - shiftX, tri.pts[1].y - shiftY);
+                cv::Point pt3(tri.pts[2].x - shiftX, tri.pts[2].y - shiftY);
+
+                cv::line(imgAll, pt1, pt2, meshColor, 1, cv::LINE_AA);
+                cv::line(imgAll, pt2, pt3, meshColor, 1, cv::LINE_AA);
+                cv::line(imgAll, pt3, pt1, meshColor, 1, cv::LINE_AA);
+
+                cv::line(imgDead, pt1, pt2, meshColor, 1, cv::LINE_AA);
+                cv::line(imgDead, pt2, pt3, meshColor, 1, cv::LINE_AA);
+                cv::line(imgDead, pt3, pt1, meshColor, 1, cv::LINE_AA);
+            }
+
+            for (int y = 0; y < gridH; ++y) {
+                for (int x = 0; x < gridW; ++x) {
+                    const auto &gp = resultGrid[y][x];
+                    bool is_masked = (!roiMask.empty() && roiMask.at<uchar>(params.rect_y + y * params.step, params.rect_x + x * params.step) < 128);
+                    if (is_masked) continue;
+
+                    int solver_state = 0;
+                    if (gp.solved && gp.corr > 0.0f) {
+                        if (!gp.used_simplex) solver_state = 0;
+                        else if (gp.icgn_iters < tuning::kIcgnMaxIter) solver_state = 1;
+                        else solver_state = 2;
+                    } else {
+                        if (!gp.used_simplex) solver_state = 5;
+                        else if (gp.icgn_iters < tuning::kIcgnMaxIter) solver_state = 3;
+                        else solver_state = 4;
+                    }
+
+                    if (solver_state == 0) continue;
+
+                    cv::Point pt(gp.x - shiftX, gp.y - shiftY);
+                    int radius = 4;
+                    int markerSize = 10;
+                    int thickness = 2;
+
+                    if (solver_state == 1) {
+                        cv::circle(imgAll, pt, radius, cv::Scalar(0, 255, 255), -1, cv::LINE_AA);
+                        cv::circle(imgAll, pt, radius, cv::Scalar(0, 0, 0), 1, cv::LINE_AA);
+                    }
+                    else if (solver_state == 2) {
+                        cv::circle(imgAll, pt, radius, cv::Scalar(255, 255, 0), -1, cv::LINE_AA);
+                        cv::circle(imgAll, pt, radius, cv::Scalar(0, 0, 0), 1, cv::LINE_AA);
+                    }
+                    else if (solver_state == 3) {
+                        cv::Scalar col(0, 165, 255);
+                        cv::drawMarker(imgAll, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                        cv::drawMarker(imgDead, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                    }
+                    else if (solver_state == 4) {
+                        cv::Scalar col(255, 0, 255);
+                        cv::drawMarker(imgAll, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                        cv::drawMarker(imgDead, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                    }
+                    else if (solver_state == 5) {
+                        cv::Scalar col(0, 0, 255);
+                        cv::drawMarker(imgAll, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                        cv::drawMarker(imgDead, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
+                    }
+                }
+            }
+
+            seeding::draw_outlined_text(imgAll, "ALL Simplex Interventions vs. Mesh", cv::Point(10, 25), 0.6);
+            seeding::draw_outlined_text(imgDead, "ONLY Dead Points vs. Mesh", cv::Point(10, 25), 0.6);
+
+            cv::imwrite(local_debug_dir + "/mesh_overlap_ALL_simplex.jpg", imgAll);
+            cv::imwrite(local_debug_dir + "/mesh_overlap_ONLY_dead.jpg", imgDead);
+
+        } catch (...) {
+            LOGE("Failed to generate C++ Mesh Overlap plots");
+        }
+    } catch (...) { LOGE("Unknown Exception during Debug Export"); }
+}
+
+}
+
+} // namespace
 
 int run_full_field(
     ReferenceCache& cache,
@@ -202,7 +511,7 @@ int run_full_field(
                             if (inlier_bb_area_ratio >= 0.30f) {
                                 mesh_quality = MeshQuality::FULL;
                                 LOGD("ROUTING: FULL Mesh at scale %.2fx (Pts: %d, Cov: %.2f)", current_scale, (int)akaze_ref_pts.size(), inlier_bb_area_ratio);
-                            } else if (inlier_bb_area_ratio >= 0.05f) {
+                            } else if (inlier_bb_area_ratio >= tuning::kAkazeSparseCoverage) {
                                 mesh_quality = MeshQuality::SPARSE;
                                 LOGD("ROUTING: SPARSE Mesh at scale %.2fx (Pts: %d, Cov: %.2f)", current_scale, (int)akaze_ref_pts.size(), inlier_bb_area_ratio);
                             } else {
@@ -274,7 +583,7 @@ int run_full_field(
         // ZNSSD is >= 0 for every real solve, so a negative value can never be
         // confused with a genuinely perfect match (ZNSSD == 0.0), which the old
         // corr==0 convention silently discarded.
-        constexpr float CORR_INVALID = -1.0f;
+        constexpr float CORR_INVALID = tuning::kCorrInvalid;
 
         // Default-initialized so a new field can never leave a call site
         // reading indeterminate memory. The aggregate-init sites below fill the
@@ -687,7 +996,7 @@ int run_full_field(
                 seed_engine.use_6x6_interpolator = params.use_6x6_interpolator;
                 auto res = seed_engine.calculate_deformation(seed_subset, defImg, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, INIT_AUTO_SEARCH);
 
-                if (res.status == 0 && res.correlation_score <= 0.15f) {
+                if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept) {
                     globalU = res.u; globalV = res.v;
                     LOGD("PATH C SUCCESS: Seed locked at u=%.2f, v=%.2f", globalU, globalV);
                 } else {
@@ -708,7 +1017,7 @@ int run_full_field(
                 OptimizationEngine local_engine; Semper::SubsetData local_subset;
                 // 🚀 ENABLE LEVENBERG-MARQUARDT (TIKHONOV REGULARIZATION) - PATH A
                 local_engine.lm_enabled = true;
-                local_engine.lm_alpha = 0.05f; // <--- TUNE THIS VALUE
+                local_engine.lm_alpha = tuning::kLmAlpha; // <--- TUNE THIS VALUE
                 local_engine.use_6x6_interpolator = params.use_6x6_interpolator;
                 double local_hessian = 0.0, local_wait = 0.0; int local_pts = 0;
                 EngineStatFlusher flusher(local_engine, stats_pathA[tid], local_pts, local_hessian, local_wait);
@@ -742,7 +1051,7 @@ int run_full_field(
                                 local_subset, defImg, guessU[idx], guessV[idx], guessUx[idx], guessUy[idx], guessVx[idx], guessVy[idx], search_flag);
                         // 🚀 VSG PROTECTOR: Reject if > 5% of the subset fell into the Ghost Wall
                         float ghost_fraction = (float)res.invalid_ref_pixels / (float)(params.subset_size * params.subset_size);
-                        if (ghost_fraction > 0.05f) {
+                        if (ghost_fraction > tuning::kGhostRejectFraction) {
                             res.correlation_score = 2.0f;
                             res.status = 1;
                         }
@@ -755,20 +1064,20 @@ int run_full_field(
                             stats_pathA[tid].simplex_calls++;
 
                             // 🚀 FIX: Now correctly checks the REAL iterations for timeout!
-                            if (res.iters >= 50) {
+                            if (res.iters >= tuning::kIcgnMaxIter) {
                                 stats_pathA[tid].simplex_from_timeout++;
                             } else {
                                 stats_pathA[tid].simplex_from_crash++;
                             }
 
-                            if (res.status == 0 && res.correlation_score <= 0.15f && ALLOW_SIMPLEX_RESCUE) {
+                            if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept && ALLOW_SIMPLEX_RESCUE) {
                                 stats_pathA[tid].simplex_saved++;
                             } else {
                                 stats_pathA[tid].simplex_dead++;
                             }
                         }
 
-                        if (res.status == 0 && res.correlation_score <= 0.15f) {
+                        if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept) {
                             int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
                             // 🚀 FIX: Passed res.iters at the end instead of icgn_iters_used
                             resultGrid[y][x] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy,
@@ -874,7 +1183,7 @@ int run_full_field(
             OptimizationEngine prewarm_engine;
             // 🚀 ENABLE LEVENBERG-MARQUARDT - PATH B (PREWARM)
             prewarm_engine.lm_enabled = true;
-            prewarm_engine.lm_alpha = 0.05f; // <--- TUNE THIS VALUE
+            prewarm_engine.lm_alpha = tuning::kLmAlpha; // <--- TUNE THIS VALUE
             prewarm_engine.use_6x6_interpolator = params.use_6x6_interpolator;
 
             Semper::SubsetData prewarm_subset;
@@ -893,7 +1202,6 @@ int run_full_field(
                 if (!prewarm_subset.is_initialized) continue;
 
                 int simplex_count_before = prewarm_engine.count_simplex;
-                int icgn_count_before = prewarm_engine.count_icgn;
 
                 auto search_flag = ALLOW_SIMPLEX_RESCUE ? INIT_NO_SEARCH : INIT_NO_SIMPLEX;
                 Semper::AnalysisResult res = prewarm_engine.calculate_deformation(
@@ -903,13 +1211,12 @@ int run_full_field(
                 // pushed onto the propagation queue below, so a subset sitting in the mask
                 // seeds every point that floods out from it.
                 float ghost_fraction = (float)res.invalid_ref_pixels / (float)(params.subset_size * params.subset_size);
-                if (ghost_fraction > 0.05f) {
+                if (ghost_fraction > tuning::kGhostRejectFraction) {
                     res.correlation_score = 2.0f;
                     res.status = 1;
                 }
                 stats_pathB[0].icgn_iters += res.iters;
                 bool needed_rescue = (prewarm_engine.count_simplex > simplex_count_before);
-                int icgn_iters_used = prewarm_engine.count_icgn - icgn_count_before;
 
                 if (!ALLOW_SIMPLEX_RESCUE && res.status != 0) { res.correlation_score = 1.0f; }
 
@@ -920,27 +1227,27 @@ int run_full_field(
                     // max_iter (50). The old >= 500 was a stale threshold from when
                     // max_iter was 500, so simplex_from_timeout here never fired and
                     // every prewarm rescue was misreported as simplex_from_crash.
-                    if (res.iters >= 50) {
+                    if (res.iters >= tuning::kIcgnMaxIter) {
                         stats_pathB[0].simplex_from_timeout++;
                     } else {
                         stats_pathB[0].simplex_from_crash++;
                     }
 
-                    if (res.status == 0 && res.correlation_score <= 0.15f && ALLOW_SIMPLEX_RESCUE) {
+                    if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept && ALLOW_SIMPLEX_RESCUE) {
                         stats_pathB[0].simplex_saved++;
                     } else {
                         stats_pathB[0].simplex_dead++;
                     }
                 }
 
-                if (res.status == 0 && res.correlation_score <= 0.15f) {
+                if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept) {
                     int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
-                    resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, -1, order, resultGrid[seed.y_idx][seed.x_idx].mesh_assignment_type, needed_rescue, icgn_iters_used};                global_points_solved.fetch_add(1, std::memory_order_relaxed);
+                    resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, -1, order, resultGrid[seed.y_idx][seed.x_idx].mesh_assignment_type, needed_rescue, res.iters};                global_points_solved.fetch_add(1, std::memory_order_relaxed);
                     gq.q.push(Semper::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
                 } else {
                     resultGrid[seed.y_idx][seed.x_idx].corr = CORR_INVALID;
                     resultGrid[seed.y_idx][seed.x_idx].used_simplex = needed_rescue;
-                    resultGrid[seed.y_idx][seed.x_idx].icgn_iters = icgn_iters_used;
+                    resultGrid[seed.y_idx][seed.x_idx].icgn_iters = res.iters;
                 }
             }
 
@@ -959,7 +1266,7 @@ int run_full_field(
                         OptimizationEngine local_engine;
                         // 🚀 ENABLE LEVENBERG-MARQUARDT - PATH B (WORKERS)
                         local_engine.lm_enabled = true;
-                        local_engine.lm_alpha = .05f; // <--- TUNE THIS VALUE
+                        local_engine.lm_alpha = tuning::kLmAlpha; // <--- TUNE THIS VALUE
                         local_engine.use_6x6_interpolator = params.use_6x6_interpolator;
                         Semper::SubsetData local_subset;
                         double local_hessian_ms = 0.0, local_wait_ms = 0.0;
@@ -977,7 +1284,7 @@ int run_full_field(
                                 // one to notify it of a cancel, so it re-checks on a
                                 // timer instead. A timeout is not an error — it just
                                 // sends the worker round the loop again.
-                                bool ready = gq.cv.wait_for(lk, std::chrono::milliseconds(kCancelPollMs), [&] { return !gq.q.empty() || gq.done || cancel_requested() || (gq.active == 0 && seed_idx.load(std::memory_order_relaxed) < (int)global_seeds.size()); });
+                                bool ready = gq.cv.wait_for(lk, std::chrono::milliseconds(tuning::kCancelPollMs), [&] { return !gq.q.empty() || gq.done || cancel_requested() || (gq.active == 0 && seed_idx.load(std::memory_order_relaxed) < (int)global_seeds.size()); });
                                 local_wait_ms += std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - wait_start).count();
                                 if (gq.done || cancel_requested()) return;
                                 if (!ready) continue;
@@ -999,15 +1306,17 @@ int run_full_field(
 
                                             int simplex_count_before = local_engine.count_simplex;
 
+                                            auto search_flag = ALLOW_SIMPLEX_RESCUE ? INIT_NO_SEARCH : INIT_NO_SIMPLEX;
                                             Semper::AnalysisResult res = local_engine.calculate_deformation(
-                                                    local_subset, defImg, seed.u, seed.v, 0.f, 0.f, 0.f, 0.f, INIT_NO_SEARCH);
+                                                    local_subset, defImg, seed.u, seed.v, 0.f, 0.f, 0.f, 0.f, search_flag);
 
                                             // 🚀 VSG PROTECTOR: Reject if > 5% of the subset fell into the Ghost Wall
                                             float ghost_fraction = (float)res.invalid_ref_pixels / (float)(params.subset_size * params.subset_size);
-                                            if (ghost_fraction > 0.05f) {
+                                            if (ghost_fraction > tuning::kGhostRejectFraction) {
                                                 res.correlation_score = 2.0f;
                                                 res.status = 1;
                                             }
+                                            stats_pathB[tid].icgn_iters += res.iters;
                                             bool needed_rescue = (local_engine.count_simplex > simplex_count_before);
 
                                             if (!ALLOW_SIMPLEX_RESCUE && res.status != 0) { res.correlation_score = 1.0f; }
@@ -1016,20 +1325,20 @@ int run_full_field(
                                                 stats_pathB[tid].simplex_calls++;
 
                                                 // 🚀 FIX: Use res.iters
-                                                if (res.iters >= 50) {
+                                                if (res.iters >= tuning::kIcgnMaxIter) {
                                                     stats_pathB[tid].simplex_from_timeout++;
                                                 } else {
                                                     stats_pathB[tid].simplex_from_crash++;
                                                 }
 
-                                                if (res.status == 0 && res.correlation_score <= 0.15f && ALLOW_SIMPLEX_RESCUE) {
+                                                if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept && ALLOW_SIMPLEX_RESCUE) {
                                                     stats_pathB[tid].simplex_saved++;
                                                 } else {
                                                     stats_pathB[tid].simplex_dead++;
                                                 }
                                             }
 
-                                            if (res.status == 0 && res.correlation_score <= 0.15f) {
+                                            if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept) {
                                                 int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
                                                 {
                                                     std::lock_guard<std::mutex> lg(grid_mutex);
@@ -1084,7 +1393,7 @@ int run_full_field(
                                         local_subset, defImg, guess_u, guess_v, cur.ux, cur.uy, cur.vx, cur.vy, search_flag);
                                 // 🚀 VSG PROTECTOR: Reject if > 5% of the subset fell into the Ghost Wall
                                 float ghost_fraction = (float)res.invalid_ref_pixels / (float)(params.subset_size * params.subset_size);
-                                if (ghost_fraction > 0.05f) {
+                                if (ghost_fraction > tuning::kGhostRejectFraction) {
                                     res.correlation_score = 2.0f;
                                     res.status = 1;
                                 }
@@ -1097,20 +1406,20 @@ int run_full_field(
                                     stats_pathB[tid].simplex_calls++;
 
                                     // 🚀 FIX: Use res.iters
-                                    if (res.iters >= 50) {
+                                    if (res.iters >= tuning::kIcgnMaxIter) {
                                         stats_pathB[tid].simplex_from_timeout++;
                                     } else {
                                         stats_pathB[tid].simplex_from_crash++;
                                     }
 
-                                    if (res.status == 0 && res.correlation_score <= 0.15f && ALLOW_SIMPLEX_RESCUE) {
+                                    if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept && ALLOW_SIMPLEX_RESCUE) {
                                         stats_pathB[tid].simplex_saved++;
                                     } else {
                                         stats_pathB[tid].simplex_dead++;
                                     }
                                 }
 
-                                if (res.status == 0 && res.correlation_score <= 0.15f) {
+                                if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept) {
                                     const int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
                                     {
                                         std::lock_guard<std::mutex> lg(grid_mutex);
@@ -1192,9 +1501,9 @@ int run_full_field(
 
                     // === 🚀 ROBUST STRAIN FILTER (FAST-MATH SAFE) ===
                     // Since the compiler strips NaN, we check for our hard sentinel.
-                    // Any value <= -999.0f means the Strain Calculator refused to solve it.
+                    // Any value <= kStrainFailSentinel means VSG refused the window.
                     // We completely drop the point to protect the Android UI and Python analysis.
-                    if (strainField.exx[idx] <= -999.0f) {
+                    if (strainField.exx[idx] <= tuning::kStrainFailSentinel) {
                         dropped_by_post_filter++;
                         resultGrid[y][x].solved = false; // Mark dead for debug map
                         continue;
@@ -1293,295 +1602,13 @@ int run_full_field(
         LOGD("=======================================");
 
         // =========================================================
-        // 🐛 EXPORT FULL DEBUG SUITE
+        // 🐛 EXPORT FULL DEBUG SUITE (extracted — behaviour unchanged)
         // =========================================================
         if (!local_debug_dir.empty()) {
-            try {
-                int max_order = 1;
-                float max_corr = 0.0001f, max_exx = -1e9f, min_exx = 1e9f;
-
-                cv::Mat propMap(gridH, gridW, CV_8UC1, cv::Scalar(0));
-                cv::Mat threadMap(gridH, gridW, CV_8UC3, cv::Scalar(30, 30, 30));
-                cv::Mat meshAssignMap(gridH, gridW, CV_8UC3, cv::Scalar(0, 0, 0));
-                cv::Mat corrMap(gridH, gridW, CV_8UC1, cv::Scalar(0));
-                cv::Mat strainMap(gridH, gridW, CV_8UC1, cv::Scalar(0));
-                cv::Mat simplexMap(gridH, gridW, CV_8UC3, cv::Scalar(30, 30, 30));
-
-                static const cv::Vec3b THREAD_COLORS[12] = {
-                        {60, 20, 220}, {20, 200, 20}, {200, 60, 20}, {200, 200, 20}, {20, 200, 200}, {200, 20, 200},
-                        {100, 180, 255}, {255, 140, 30}, {50, 255, 180}, {180, 50, 255}, {255, 50, 130}, {130, 255, 50}};
-
-                for (int y = 0; y < gridH; ++y) {
-                    for (int x = 0; x < gridW; ++x) {
-                        const auto &gp = resultGrid[y][x];
-                        if (gp.solved && gp.corr > 0.0f) {
-                            if (gp.compute_order > max_order) max_order = gp.compute_order;
-                            if (gp.corr > max_corr) max_corr = gp.corr;
-                            int idx = y * gridW + x;
-                            if (strainField.exx[idx] > max_exx) max_exx = strainField.exx[idx];
-                            if (strainField.exx[idx] < min_exx) min_exx = strainField.exx[idx];
-                        }
-                    }
-                }
-
-                if (max_exx == min_exx) { max_exx += 0.001f; min_exx -= 0.001f; }
-                max_corr = std::min(max_corr, 0.15f);
-
-                for (int y = 0; y < gridH; ++y) {
-                    for (int x = 0; x < gridW; ++x) {
-                        const auto &gp = resultGrid[y][x];
-
-                        bool is_masked = (!roiMask.empty() &&
-                                          roiMask.at<uchar>(params.rect_y + y * params.step, params.rect_x + x * params.step) < 128);
-
-                        if (!is_masked) {
-                            if (gp.solved && gp.corr > 0.0f) {
-                                if (!gp.used_simplex) {
-                                    simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 0);
-                                } else if (gp.icgn_iters < 50) {
-                                    simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 255);
-                                } else {
-                                    simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 255, 0);
-                                }
-                            } else {
-                                if (!gp.used_simplex) {
-                                    simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 0, 255);
-                                } else if (gp.icgn_iters < 50) {
-                                    simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 165, 255);
-                                } else {
-                                    simplexMap.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 0, 255);
-                                }
-                            }
-                        }
-
-                        if (!is_masked) {
-                            if (gp.mesh_assignment_type == 1) {
-                                meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 0);
-                            } else if (gp.mesh_assignment_type == 2) {
-                                meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 255);
-                            } else if (gp.mesh_assignment_type >= 1000) {
-                                int dist = gp.mesh_assignment_type - 1000;
-                                int r = std::max(0, std::min(255, (dist - 127) * 2));
-                                int g = 255 - std::abs(dist - 127) * 2;
-                                int b = std::max(0, std::min(255, (127 - dist) * 2));
-                                meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(b, g, r);
-                            } else if (gp.mesh_assignment_type == 4) {
-                                meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 165, 255);
-                            } else {
-                                meshAssignMap.at<cv::Vec3b>(y, x) = cv::Vec3b(100, 100, 100);
-                            }
-                        }
-
-                        if (!gp.solved || gp.compute_order < 0) continue;
-
-                        propMap.at<uchar>(y, x) = (uchar) ((float) gp.compute_order / max_order * 255.0f);
-                        threadMap.at<cv::Vec3b>(y, x) = THREAD_COLORS[std::max(0, std::min(gp.thread_id, 11))];
-                        corrMap.at<uchar>(y, x) = (uchar) ((gp.corr / max_corr) * 255.0f);
-
-                        int idx = y * gridW + x;
-                        strainMap.at<uchar>(y, x) = (uchar) (
-                                ((strainField.exx[idx] - min_exx) / (max_exx - min_exx)) * 255.0f);
-                    }
-                }
-
-                cv::Mat propColor, corrColor, strainColor;
-                cv::applyColorMap(propMap, propColor, cv::COLORMAP_JET);
-                cv::applyColorMap(corrMap, corrColor, cv::COLORMAP_JET);
-                cv::applyColorMap(strainMap, strainColor, cv::COLORMAP_JET);
-
-                for (int y = 0; y < gridH; ++y) {
-                    for (int x = 0; x < gridW; ++x) {
-                        if (!resultGrid[y][x].solved || resultGrid[y][x].compute_order < 0) {
-                            propColor.at<cv::Vec3b>(y, x) = {0, 0, 0};
-                            threadMap.at<cv::Vec3b>(y, x) = {30, 30, 30};
-                            corrColor.at<cv::Vec3b>(y, x) = {0, 0, 0};
-                            strainColor.at<cv::Vec3b>(y, x) = {0, 0, 0};
-                        }
-                    }
-                }
-
-                cv::Mat outProp, outThread, outMesh, outCorr, outStrain, outSimplex;
-                cv::Size sz(gridW * params.step, gridH * params.step);
-                cv::resize(propColor, outProp, sz, 0, 0, cv::INTER_NEAREST);
-                cv::resize(threadMap, outThread, sz, 0, 0, cv::INTER_NEAREST);
-                cv::resize(meshAssignMap, outMesh, sz, 0, 0, cv::INTER_NEAREST);
-                cv::resize(corrColor, outCorr, sz, 0, 0, cv::INTER_NEAREST);
-                cv::resize(strainColor, outStrain, sz, 0, 0, cv::INTER_NEAREST);
-                cv::resize(simplexMap, outSimplex, sz, 0, 0, cv::INTER_NEAREST);
-
-                seeding::draw_outlined_text(outProp, "Propagation Debug", cv::Point(10, 25), 0.6);
-                seeding::draw_outlined_text(outThread, "8-Core Thread Execution Map", cv::Point(10, 25), 0.6);
-                seeding::draw_outlined_text(outMesh, "Mesh Assign (Grn=In, Yel=Ex, Gry=PathB)", cv::Point(10, 25), 0.6);
-                seeding::draw_outlined_text(outCorr, "ZNSSD Quality (Blue=Perfect, Red=Marginal)", cv::Point(10, 25), 0.6);
-                seeding::draw_outlined_text(outStrain, "Exx Strain (Raw Plot)", cv::Point(10, 25), 0.6);
-                seeding::draw_outlined_text(outSimplex, "Grn=Perfect | Yel=Save(Crash) | Cya=Save(Time) | Org=Dead(Crash) | Pur=Dead(Time) | Red=Insta-Dead", cv::Point(10, 25), 0.4);
-
-                cv::imwrite(local_debug_dir + "/propagation_debug.png", outProp);
-                cv::imwrite(local_debug_dir + "/thread_debug.png", outThread);
-                cv::imwrite(local_debug_dir + "/mesh_assignment_map.png", outMesh);
-                cv::imwrite(local_debug_dir + "/correlation_heatmap.png", outCorr);
-                cv::imwrite(local_debug_dir + "/strain_exx_debug.png", outStrain);
-                cv::imwrite(local_debug_dir + "/simplex_health_map.png", outSimplex);
-
-                cv::Mat outSimplexOverlap = outSimplex.clone();
-
-                for (const auto &tri : affTriangles) {
-                    cv::Point pt1(tri.pts[0].x - params.rect_x, tri.pts[0].y - params.rect_y);
-                    cv::Point pt2(tri.pts[1].x - params.rect_x, tri.pts[1].y - params.rect_y);
-                    cv::Point pt3(tri.pts[2].x - params.rect_x, tri.pts[2].y - params.rect_y);
-
-                    cv::line(outSimplexOverlap, pt1, pt2, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
-                    cv::line(outSimplexOverlap, pt2, pt3, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
-                    cv::line(outSimplexOverlap, pt3, pt1, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
-                }
-                seeding::draw_outlined_text(outSimplexOverlap, "Simplex Health + Delaunay Overlap", cv::Point(10, 45), 0.4);
-                cv::imwrite(local_debug_dir + "/simplex_mesh_overlap.png", outSimplexOverlap);
-
-                std::string csvPath = local_debug_dir + "/debug_grid_data.csv";
-                std::ofstream csvFile(csvPath);
-                if (csvFile.is_open()) {
-                    csvFile << "# PIPELINE=2_HYBRID_CORE\n";
-                    csvFile << "RealX,RealY,GridX,GridY,ThreadID,ComputeOrder,U,V,Correlation,MeshType,UsedSimplex,ItersICGN,SolverState,GuessU,GuessV,GuessUx,GuessUy,GuessVx,GuessVy\n";
-                    for (int y = 0; y < gridH; ++y) {
-                        for (int x = 0; x < gridW; ++x) {
-                            const auto &gp = resultGrid[y][x];
-
-                            bool is_masked = (!roiMask.empty() && roiMask.at<uchar>(params.rect_y + y * params.step, params.rect_x + x * params.step) < 128);
-                            if (is_masked) continue;
-
-                            int solver_state = 0;
-                            if (gp.solved && gp.corr > 0.0f) {
-                                if (!gp.used_simplex) solver_state = 0;
-                                else if (gp.icgn_iters < 50) solver_state = 1;
-                                else solver_state = 2;
-                            } else {
-                                if (!gp.used_simplex) solver_state = 5;
-                                else if (gp.icgn_iters < 50) solver_state = 3;
-                                else solver_state = 4;
-                            }
-
-                            // 🚀 UPDATE THE EXPORT LINE
-                            csvFile << gp.x << "," << gp.y << "," << x << "," << y << ","
-                                    << gp.thread_id << "," << gp.compute_order << "," << gp.u
-                                    << "," << gp.v << "," << gp.corr << ","
-                                    << gp.mesh_assignment_type << ","
-                                    << (gp.used_simplex ? 1 : 0) << ","
-                                    << gp.icgn_iters << ","
-                                    << solver_state << ","
-                                    << gp.guess_u << "," << gp.guess_v << ","
-                                    << gp.guess_ux << "," << gp.guess_uy << ","
-                                    << gp.guess_vx << "," << gp.guess_vy << "\n";
-                        }
-                    }
-                    csvFile.close();
-                }
-
-                if (!affTriangles.empty()) {
-                    std::string meshCsvPath = local_debug_dir + "/delaunay_mesh_data.csv";
-                    std::ofstream meshCsvFile(meshCsvPath);
-                    if (meshCsvFile.is_open()) {
-                        meshCsvFile << "TriangleID,Pt1_X,Pt1_Y,Pt2_X,Pt2_Y,Pt3_X,Pt3_Y\n";
-                        for (size_t i = 0; i < affTriangles.size(); ++i) {
-                            const auto &tri = affTriangles[i];
-                            meshCsvFile << i << ","
-                                        << tri.pts[0].x << "," << tri.pts[0].y << ","
-                                        << tri.pts[1].x << "," << tri.pts[1].y << ","
-                                        << tri.pts[2].x << "," << tri.pts[2].y << "\n";
-                        }
-                        meshCsvFile.close();
-                    }
-                }
-
-                try {
-                    cv::Mat refFloat(cache.height, cache.width, CV_32FC1, (void *)cache.ref_img->intensities.data());
-                    cv::Mat ref8U, refColor;
-                    refFloat.convertTo(ref8U, CV_8UC1);
-                    cv::cvtColor(ref8U, refColor, cv::COLOR_GRAY2BGR);
-
-                    cv::Rect roiRect(params.rect_x, params.rect_y, params.rect_w, params.rect_h);
-                    roiRect = roiRect & cv::Rect(0, 0, cache.width, cache.height);
-
-                    cv::Mat imgAll = refColor(roiRect).clone();
-                    cv::Mat imgDead = imgAll.clone();
-
-                    int shiftX = roiRect.x;
-                    int shiftY = roiRect.y;
-
-                    cv::Scalar meshColor(214, 174, 107);
-                    for (const auto &tri : affTriangles) {
-                        cv::Point pt1(tri.pts[0].x - shiftX, tri.pts[0].y - shiftY);
-                        cv::Point pt2(tri.pts[1].x - shiftX, tri.pts[1].y - shiftY);
-                        cv::Point pt3(tri.pts[2].x - shiftX, tri.pts[2].y - shiftY);
-
-                        cv::line(imgAll, pt1, pt2, meshColor, 1, cv::LINE_AA);
-                        cv::line(imgAll, pt2, pt3, meshColor, 1, cv::LINE_AA);
-                        cv::line(imgAll, pt3, pt1, meshColor, 1, cv::LINE_AA);
-
-                        cv::line(imgDead, pt1, pt2, meshColor, 1, cv::LINE_AA);
-                        cv::line(imgDead, pt2, pt3, meshColor, 1, cv::LINE_AA);
-                        cv::line(imgDead, pt3, pt1, meshColor, 1, cv::LINE_AA);
-                    }
-
-                    for (int y = 0; y < gridH; ++y) {
-                        for (int x = 0; x < gridW; ++x) {
-                            const auto &gp = resultGrid[y][x];
-                            bool is_masked = (!roiMask.empty() && roiMask.at<uchar>(params.rect_y + y * params.step, params.rect_x + x * params.step) < 128);
-                            if (is_masked) continue;
-
-                            int solver_state = 0;
-                            if (gp.solved && gp.corr > 0.0f) {
-                                if (!gp.used_simplex) solver_state = 0;
-                                else if (gp.icgn_iters < 50) solver_state = 1;
-                                else solver_state = 2;
-                            } else {
-                                if (!gp.used_simplex) solver_state = 5;
-                                else if (gp.icgn_iters < 50) solver_state = 3;
-                                else solver_state = 4;
-                            }
-
-                            if (solver_state == 0) continue;
-
-                            cv::Point pt(gp.x - shiftX, gp.y - shiftY);
-                            int radius = 4;
-                            int markerSize = 10;
-                            int thickness = 2;
-
-                            if (solver_state == 1) {
-                                cv::circle(imgAll, pt, radius, cv::Scalar(0, 255, 255), -1, cv::LINE_AA);
-                                cv::circle(imgAll, pt, radius, cv::Scalar(0, 0, 0), 1, cv::LINE_AA);
-                            }
-                            else if (solver_state == 2) {
-                                cv::circle(imgAll, pt, radius, cv::Scalar(255, 255, 0), -1, cv::LINE_AA);
-                                cv::circle(imgAll, pt, radius, cv::Scalar(0, 0, 0), 1, cv::LINE_AA);
-                            }
-                            else if (solver_state == 3) {
-                                cv::Scalar col(0, 165, 255);
-                                cv::drawMarker(imgAll, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
-                                cv::drawMarker(imgDead, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
-                            }
-                            else if (solver_state == 4) {
-                                cv::Scalar col(255, 0, 255);
-                                cv::drawMarker(imgAll, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
-                                cv::drawMarker(imgDead, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
-                            }
-                            else if (solver_state == 5) {
-                                cv::Scalar col(0, 0, 255);
-                                cv::drawMarker(imgAll, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
-                                cv::drawMarker(imgDead, pt, col, cv::MARKER_TILTED_CROSS, markerSize, thickness, cv::LINE_AA);
-                            }
-                        }
-                    }
-
-                    seeding::draw_outlined_text(imgAll, "ALL Simplex Interventions vs. Mesh", cv::Point(10, 25), 0.6);
-                    seeding::draw_outlined_text(imgDead, "ONLY Dead Points vs. Mesh", cv::Point(10, 25), 0.6);
-
-                    cv::imwrite(local_debug_dir + "/mesh_overlap_ALL_simplex.jpg", imgAll);
-                    cv::imwrite(local_debug_dir + "/mesh_overlap_ONLY_dead.jpg", imgDead);
-
-                } catch (...) {
-                    LOGE("Failed to generate C++ Mesh Overlap plots");
-                }
-            } catch (...) { LOGE("Unknown Exception during Debug Export"); }
+            export_full_field_debug_suite(
+                    local_debug_dir, gridW, gridH, params, roiMask,
+                    cache.width, cache.height, cache.ref_img,
+                    resultGrid, strainField, affTriangles);
         }
 
         // ==========================================

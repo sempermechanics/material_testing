@@ -1,5 +1,6 @@
 #include <semper/solver.hpp>
 #include <semper/simd.hpp>
+#include <semper/tuning.hpp>
 #include "util/log.hpp"
 #include <algorithm>
 #include <chrono>
@@ -49,7 +50,7 @@ namespace Semper {
             res = run_icgn(guess_u, guess_v, guess_ux, guess_uy, guess_vx, guess_vy);
 
             // 🚀 THE KILL SWITCH: Only run Simplex if the mode IS NOT INIT_NO_SIMPLEX!
-            if ((res.status != 0 || res.correlation_score > 0.4f) && init_mode != INIT_NO_SIMPLEX) {
+            if ((res.status != 0 || res.correlation_score > tuning::kCorrSimplexTrigger) && init_mode != INIT_NO_SIMPLEX) {
                 AnalysisResult start_guess = {guess_u, guess_v, guess_ux, guess_uy, guess_vx, guess_vy, 0, 1.0f};
                 AnalysisResult rescue_res = run_simplex(start_guess, false);
                 res = run_icgn(rescue_res.u, rescue_res.v, rescue_res.ux, rescue_res.uy, rescue_res.vx, rescue_res.vy);
@@ -144,7 +145,7 @@ namespace Semper {
         // ── END LM ADDITION ─────────────────────────────────────────────────────
         std::vector<float> &def_vals = this->icgn_buffer;
         float final_score = 1.0f;
-        int max_iter = 50;
+        int max_iter = tuning::kIcgnMaxIter;
 
         // 🚀 Use the centralized builder
         std::vector<bool> ref_valid = build_ref_valid(subset);
@@ -507,7 +508,7 @@ namespace Semper {
         for (int k = 1; k < n_pts; ++k)
             if (y[k] < y[best])
                 best = k;
-        int final_status = (y[best] > 0.1f) ? -2 : 0;
+        int final_status = (y[best] > tuning::kSimplexFailScore) ? -2 : 0;
 
         if (translation_only) {
             return {p[best][0], p[best][1], 0.0f, 0.0f, 0.0f, 0.0f, final_status, y[best]};

@@ -1,4 +1,5 @@
 #include <semper/strain.hpp>
+#include <semper/tuning.hpp>
 #include "util/log.hpp"
 #include <Eigen/Dense>
 #include <cmath>
@@ -11,9 +12,9 @@ namespace Semper {
 
         // === 🚀 COMPILER-SAFE SENTINEL FIX ===
         // Android NDK fast-math strips out std::isnan checks.
-        // Instead, we initialize with an impossible physical strain (-1000.0f).
+        // Instead, we initialize with an impossible physical strain sentinel.
         // If the VSG window fails the 90% symmetry check, it leaves this sentinel.
-        float sentinel = -1000.0f;
+        float sentinel = tuning::kStrainUninitSentinel;
         strain.exx.assign(total_pts, sentinel);
         strain.eyy.assign(total_pts, sentinel);
         strain.exy.assign(total_pts, sentinel);
@@ -26,7 +27,7 @@ namespace Semper {
         // === 🚀 100% STRICT RULE: CALCULATE PERFECT CIRCLE ===
         // Before we process any pixels, calculate EXACTLY how many points
         // belong in a 100% mathematically full circular window.
-        const double tiny = 1.0e-5;
+        const double tiny = tuning::kVsgRadiusTiny;
         double d_radius_sq = static_cast<double>(radius_sq) + tiny;
         int expected_full_window_pts = 0;
 
@@ -53,7 +54,7 @@ namespace Semper {
                 int valid_pts = 0;
 
                 // 🚀 DICe PARITY: Floating-point truncation buffer (tiny)
-                const double tiny = 1.0e-5;
+                const double tiny = tuning::kVsgRadiusTiny;
                 double d_radius_sq = static_cast<double>(radius_sq) + tiny;
 
                 for (int dy = -grid_rad; dy <= grid_rad; ++dy) {
