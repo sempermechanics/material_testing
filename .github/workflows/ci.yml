@@ -4,6 +4,12 @@ on:
   push:
     branches: [damodar, main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      full_ci:
+        description: 'Run every tier (ignore path filters)'
+        type: boolean
+        default: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -11,32 +17,101 @@ concurrency:
 
 jobs:
   # ===================================================================
-  # Detect which areas a PR touches, so the expensive tiers below run
-  # only when relevant. On push everything runs regardless (see each
-  # tier's `if`). This replaces the earlier `github.event.pull_request
-  # .changed_files` expression, which compared against an integer count
-  # and so never matched.
+  # Path filters — same rules on PR and push. Prove only what the diff
+  # can break. Optional full matrix via `full-ci` label or workflow_dispatch.
+  # No scheduled/weekly runs.
   # ===================================================================
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      native: ${{ steps.filter.outputs.native }}
+      app: ${{ steps.flags.outputs.app }}
+      native_core: ${{ steps.flags.outputs.native_core }}
+      native_jni: ${{ steps.flags.outputs.native_jni }}
+      backend: ${{ steps.flags.outputs.backend }}
+      full_ci: ${{ steps.flags.outputs.full_ci }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
         id: filter
         with:
           filters: |
+            app:
+              - 'app/**'
+              - '!app/src/main/cpp/**'
+              - 'gradle/**'
+              - '*.gradle.kts'
+              - 'gradlew'
+              - 'gradlew.bat'
+              - 'settings.gradle.kts'
+            native_core:
+              - 'native/src/**'
+              - 'native/include/**'
+              - 'native/tests/**'
+              - 'native/cmake/**'
+              - 'native/CMakeLists.txt'
+              - 'native/README.md'
+            native_jni:
+              - 'native/adapters/**'
+              - 'app/src/main/cpp/**'
+              - 'app/src/main/java/com/indicvision/semper/SemperNativeLib.kt'
+              # Headers consumed by SemperJNI — ABI-visible edits need Tier 3/5.
+              - 'native/include/semper/io.hpp'
+              - 'native/include/semper/pipeline.hpp'
             backend:
               - 'backend/**'
+            ci_workflow:
               - '.github/workflows/ci.yml'
-            native:
-              - 'native/**'
-              - 'app/src/main/cpp/**'
-              - '.github/workflows/ci.yml'
+            android_test:
+              - 'app/src/androidTest/**'
+            packaging:
+              - 'app/build.gradle.kts'
+              - 'app/proguard-rules.pro'
+              - 'gradle/libs.versions.toml'
+
+      - name: Resolve tier flags
+        id: flags
+        env:
+          FILTER_APP: ${{ steps.filter.outputs.app }}
+          FILTER_NATIVE_CORE: ${{ steps.filter.outputs.native_core }}
+          FILTER_NATIVE_JNI: ${{ steps.filter.outputs.native_jni }}
+          FILTER_BACKEND: ${{ steps.filter.outputs.backend }}
+          FILTER_CI: ${{ steps.filter.outputs.ci_workflow }}
+          FILTER_ANDROID_TEST: ${{ steps.filter.outputs.android_test }}
+          FILTER_PACKAGING: ${{ steps.filter.outputs.packaging }}
+          FULL_DISPATCH: ${{ github.event_name == 'workflow_dispatch' && inputs.full_ci || false }}
+          FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+        run: |
+          full=false
+          if [ "$FULL_DISPATCH" = "true" ] || [ "$FULL_LABEL" = "true" ] || [ "$FILTER_CI" = "true" ]; then
+            full=true
+          fi
+          # Fail open: if paths-filter produced no outputs (empty before SHA), run all.
+          if [ -z "$FILTER_APP$FILTER_NATIVE_CORE$FILTER_NATIVE_JNI$FILTER_BACKEND$FILTER_CI" ]; then
+            full=true
+          fi
+
+          app=false; native_core=false; native_jni=false; backend=false
+          if [ "$full" = "true" ]; then
+            app=true; native_core=true; native_jni=true; backend=true
+          else
+            if [ "$FILTER_APP" = "true" ] || [ "$FILTER_ANDROID_TEST" = "true" ] || [ "$FILTER_PACKAGING" = "true" ]; then
+              app=true
+            fi
+            if [ "$FILTER_NATIVE_CORE" = "true" ]; then native_core=true; fi
+            if [ "$FILTER_NATIVE_JNI" = "true" ]; then native_jni=true; fi
+            if [ "$FILTER_BACKEND" = "true" ]; then backend=true; fi
+          fi
+
+          {
+            echo "app=$app"
+            echo "native_core=$native_core"
+            echo "native_jni=$native_jni"
+            echo "backend=$backend"
+            echo "full_ci=$full"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved: app=$app native_core=$native_core native_jni=$native_jni backend=$backend full_ci=$full"
 
   # ===================================================================
   # Tier 1 — Kotlin compile + JVM unit tests + quality gates (no NDK)
@@ -45,6 +120,10 @@ jobs:
     name: Tier 1 — App fast
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: changes
+    if: >-
+      needs.changes.outputs.app == 'true'
+      || needs.changes.outputs.full_ci == 'true'
     steps:
       - uses: actions/checkout@v7
 
@@ -81,9 +160,10 @@ jobs:
       contents: read
       actions: write   # prune-cache
     if: >-
-      github.event_name == 'push'
+      needs.changes.outputs.native_core == 'true'
+      || needs.changes.outputs.native_jni == 'true'
+      || needs.changes.outputs.full_ci == 'true'
       || contains(github.event.pull_request.labels.*.name, 'engine')
-      || needs.changes.outputs.native == 'true'
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 500M
@@ -132,14 +212,13 @@ jobs:
         if: always()
         run: ccache --show-stats
 
-      # Last main step: the old entries go before actions/cache saves the new one.
       - uses: ./.github/actions/prune-cache
         with:
           key-prefix: ccache-host-tests-
           except-key: ccache-host-tests-${{ github.sha }}
 
   # ===================================================================
-  # Tier 2b — Sanitizers (ASan+UBSan, TSan)
+  # Tier 2b — Sanitizers (ASan+UBSan, TSan) on every native change
   # ===================================================================
   tier2-sanitizers:
     name: Tier 2 — Sanitized (${{ matrix.sanitizer }})
@@ -150,9 +229,10 @@ jobs:
       contents: read
       actions: write   # prune-cache
     if: >-
-      github.event_name == 'push'
+      needs.changes.outputs.native_core == 'true'
+      || needs.changes.outputs.native_jni == 'true'
+      || needs.changes.outputs.full_ci == 'true'
       || contains(github.event.pull_request.labels.*.name, 'engine')
-      || needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -204,19 +284,26 @@ jobs:
 
   # ===================================================================
   # Tier 3 — Emulator (JNI smoke + AnalysisWizardSmokeTest; not full E2E)
+  # Decoupled from Tier 1 so native-jni can run when app Tier 1 is skipped.
   # ===================================================================
   tier3-emulator-e2e:
     name: Tier 3 — Emulator E2E
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    needs: [tier1-app-fast]
+    needs: [changes, tier1-app-fast]
     permissions:
       contents: read
       actions: write   # prune-cache
     if: >-
-      github.event_name == 'push'
-      || contains(github.event.pull_request.labels.*.name, 'engine')
-      || contains(github.event.pull_request.labels.*.name, 'e2e')
+      always()
+      && needs.changes.result == 'success'
+      && (needs.tier1-app-fast.result == 'success' || needs.tier1-app-fast.result == 'skipped')
+      && (
+        needs.changes.outputs.native_jni == 'true'
+        || needs.changes.outputs.full_ci == 'true'
+        || contains(github.event.pull_request.labels.*.name, 'e2e')
+        || contains(github.event.pull_request.labels.*.name, 'engine')
+      )
     steps:
       - uses: actions/checkout@v7
         with:
@@ -291,8 +378,8 @@ jobs:
     timeout-minutes: 15
     needs: changes
     if: >-
-      github.event_name == 'push'
-      || needs.changes.outputs.backend == 'true'
+      needs.changes.outputs.backend == 'true'
+      || needs.changes.outputs.full_ci == 'true'
     defaults:
       run:
         working-directory: backend
@@ -317,19 +404,26 @@ jobs:
 
   # ===================================================================
   # Tier 5 — Signed release build (arm64-v8a)
+  # Decoupled from Tier 1 so native-jni can run when app Tier 1 is skipped.
   # ===================================================================
   tier5-signed-release:
     name: Tier 5 — Signed release
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    needs: [tier1-app-fast]
+    needs: [changes, tier1-app-fast]
     permissions:
       contents: read
       actions: write   # prune-cache
     if: >-
-      github.event_name == 'push'
-      || contains(github.event.pull_request.labels.*.name, 'engine')
-      || contains(github.event.pull_request.labels.*.name, 'release')
+      always()
+      && needs.changes.result == 'success'
+      && (needs.tier1-app-fast.result == 'success' || needs.tier1-app-fast.result == 'skipped')
+      && (
+        needs.changes.outputs.native_jni == 'true'
+        || needs.changes.outputs.full_ci == 'true'
+        || contains(github.event.pull_request.labels.*.name, 'release')
+        || contains(github.event.pull_request.labels.*.name, 'engine')
+      )
     steps:
       - uses: actions/checkout@v7
         with:
@@ -387,18 +481,11 @@ jobs:
 
       - name: Verify arm64-v8a .so in release APK
         run: |
-          # assembleRelease always emits a release APK; if it is missing the build
-          # broke, so treat that as failure rather than falling back to the debug
-          # APK (which was letting this "signed release" job pass green on a build
-          # that produced no release artifact at all).
           APK=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1)
           if [ -z "$APK" ]; then echo "No release APK produced by assembleRelease"; exit 1; fi
           unzip -l "$APK" | grep -q "lib/arm64-v8a/libsemper_core.so" \
             || { echo "MISSING arm64-v8a native lib"; exit 1; }
 
-      # Prove the APK is actually signed with the release key — the one thing this
-      # job's name promises. Runs only when a keystore secret was provided (absent
-      # on fork PRs); when it IS present, an unsigned APK fails the job.
       - name: Verify release signature
         if: env.KEYSTORE_BASE64 != ''
         env:
@@ -423,9 +510,6 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: ignore
 
-      # See release.yml: mapping.txt is required to read obfuscated field crashes
-      # and cannot be regenerated later. Not attached to any release — it is the
-      # deobfuscation key.
       - name: Upload R8 mapping
         if: always()
         uses: actions/upload-artifact@v7
@@ -468,7 +552,6 @@ jobs:
     steps:
       - name: Check all tiers
         run: |
-          results=()
           for result in \
             "${{ needs.changes.result }}" \
             "${{ needs.tier1-app-fast.result }}" \

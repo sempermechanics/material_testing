@@ -1,24 +1,29 @@
-# CI — what runs on every push
+# CI — path-filtered tiers (PR and push)
 
-Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Six
-tiers run on every push to `main` and `damodar`, and on pull requests.
-Long-running tiers (emulator, signed release) start in parallel after tier 1 so
-the wall clock is the **max** of the two, not the sum.
+Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
+Each tier runs only when the diff can break what that tier proves. The same
+rules apply on pull requests and on pushes to `main` / `damodar`. There is
+**no weekly/scheduled full matrix** — use the `full-ci` label or
+**Actions → CI → Run workflow** (`workflow_dispatch`) for an on-demand full run.
 
 ```
-tier1-app-fast ──┬──> tier3-emulator-e2e ──┐
-                 └──> tier5-signed-release ─┤
-tier2-engine-host ──────────────────────────┤
-tier2-sanitizers ───────────────────────────┤
-tier4-backend ──────────────────────────────┤
-                                            └──> ci-ok
+changes ──┬──> tier1-app-fast ─────────────┐
+          ├──> tier2-engine-host ──────────┤
+          ├──> tier2-sanitizers ───────────┤
+          ├──> tier3-emulator-e2e (*) ─────┤
+          ├──> tier4-backend ──────────────┤
+          └──> tier5-signed-release (*) ───┤
+                                           └──> ci-ok
+
+(*) Tier 3/5 need `changes` (+ optional Tier 1). They do **not** require Tier 1
+    to have run — skipped Tier 1 no longer cascade-skips JNI/release jobs.
 ```
 
 | Tier | Job | Proves | Typical (warm / cold) |
 |------|-----|--------|-----------------------|
 | **1** | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin` | ~5–8 / ~10 min |
-| **2a** | `tier2-engine-host` | Host C++ + OpenCV fixtures | ~2 / ~3 min |
-| **2b** | `tier2-sanitizers` | ASan+UBSan and TSan matrix | ~5 / ~8 min each |
+| **2a** | `tier2-engine-host` | Host C++ + OpenCV fixtures + perf floor | ~2 / ~3 min |
+| **2b** | `tier2-sanitizers` | ASan+UBSan and TSan | ~5 / ~8 min each |
 | **3** | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + Espresso UI | ~20–40 / ~60–90 min |
 | **4** | `tier4-backend` | Backend pytest + ruff lint | ~2–5 min |
 | **5** | `tier5-signed-release` | R8 + signed `assembleRelease` arm64 + `.so` check | ~15–40 / up to ~90 min |
@@ -26,14 +31,36 @@ tier4-backend ──────────────────────
 
 ## Path filters
 
-On push to `main`/`damodar`, all tiers always run. On PRs, expensive tiers
-(emulator, signed release, engine) can be skipped when the change set does not
-affect them. Skipped jobs count as success for `ci-ok`.
+| Output | Paths (summary) | Tiers |
+|--------|-----------------|-------|
+| `app` | `app/**` except `app/src/main/cpp/**`, Gradle wrapper/catalog | 1 |
+| `native_core` | `native/src`, `include`, `tests`, `cmake`, top-level CMake | 2a + 2b |
+| `native_jni` | `native/adapters`, `app/src/main/cpp`, `SemperNativeLib.kt`, JNI headers (`io.hpp`, `pipeline.hpp`) | 2a + 2b + 3 + 5 |
+| `backend` | `backend/**` | 4 |
+| `full_ci` | `full-ci` label, `workflow_dispatch`, or `.github/workflows/ci.yml` edit | all |
+
+| Diff class | T1 | T2a | Sanitizers | T3 | T4 | T5 |
+|------------|----|-----|------------|----|----|-----|
+| native-core only | — | run | run | — | — | — |
+| native-jni (or core+jni) | — | run | run | run | — | run |
+| app only | run | — | — | —† | — | —† |
+| backend only | — | — | — | — | run | — |
+| app + native | run | run | run | run | — | run |
+| `full-ci` / CI workflow edit | run | run | run | run | run | run |
+
+† Also with `e2e` / `release` / `engine` labels, or when instrumented tests / packaging force a wider run via `full-ci`.
+
+Skipped jobs count as success for `ci-ok`. Empty base SHA (force-push / first commit) fails open and runs the full matrix.
 
 ## Required check
 
 Set **`ci-ok`** as the single required status check in branch protection. It
 gates on all tiers and treats skipped jobs as passing.
+
+## On-demand full matrix
+
+- PR label: `full-ci`
+- Or: Actions tab → **CI** → **Run workflow** (defaults to full)
 
 ## Reproducing a failure locally
 
@@ -104,4 +131,4 @@ produces leak/thread-pool noise. The synthetic suites cover the same engine path
 
 **Wrapper validation is off in NDK jobs only.** OpenCV's repo bundles ancient
 `gradle-wrapper.jar` files that fail checksum validation. Our wrapper is
-validated by tier 1.
+validated by tier 1 when Tier 1 runs.
