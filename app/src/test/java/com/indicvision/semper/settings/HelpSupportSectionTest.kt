@@ -52,6 +52,21 @@ class HelpSupportSectionTest {
     }
 
     @Test
+    fun `open manual opens the public manual URL`() {
+        val activity = settings()
+
+        activity.findViewById<View>(R.id.btnOpenManual).performClick()
+
+        val started = shadowOf(activity).nextStartedActivity
+        assertNotNull("no intent was started", started)
+        assertEquals(Intent.ACTION_VIEW, started.action)
+        assertEquals(
+            activity.getString(R.string.url_manual),
+            started.data.toString(),
+        )
+    }
+
+    @Test
     fun `community opens the public community URL`() {
         val activity = settings()
 

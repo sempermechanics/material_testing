@@ -425,13 +425,14 @@ signs you out. If the cloud cannot be reached nothing is deleted at all.
 Not a paywall — email support from the limit screen, or delete something and
 tap **Re-check**.
 
-**Help & support** is the last section. Prefer the community on
-[semperdic.github.io/website](https://semperdic.github.io/website/community/) for
-questions, bugs, and feature requests (GitHub login required to post). The section
-also shows `support@indicvision.com` — selectable, so you can copy it if this
-device has no mail app — and **Email support**, which opens a mail already
-carrying your account, device ID, app version and phone model for private or
-account issues. Write above that block; leave it in place.
+**Help & support** is the last section. Prefer the
+[Manual](https://semperdic.github.io/website/manual/) for how-to, and the
+[community](https://semperdic.github.io/website/community/) for questions, bugs,
+and feature requests (GitHub login required to post). The section also shows
+`support@indicvision.com` — selectable, so you can copy it if this device has no
+mail app — and **Email support**, which opens a mail already carrying your
+account, device ID, app version and phone model for private or account issues.
+Write above that block; leave it in place.
 
 ---
 

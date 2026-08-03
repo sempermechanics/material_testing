@@ -435,6 +435,9 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun wireHelpSupportSection() {
+        findViewById<View>(R.id.btnOpenManual).setOnClickListener {
+            openExternalUrl(getString(R.string.url_manual))
+        }
         findViewById<View>(R.id.btnCommunity).setOnClickListener {
             openExternalUrl(getString(R.string.url_community))
         }

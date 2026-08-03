@@ -501,12 +501,14 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- Settings: help & support -->
     <string name="help_support_section">Help &amp; support</string>
-    <string name="help_support_hint">Questions, bugs, and feature requests go to the Semper community. Use email for account or private matters.</string>
+    <string name="help_support_hint">Read the Manual for how-to. Questions, bugs, and feature requests go to the Semper community. Use email for account or private matters.</string>
+    <string name="help_support_manual_action">Open Manual</string>
     <string name="help_support_community_action">Ask the community</string>
     <string name="help_support_bug_action">Report a bug</string>
     <string name="help_support_feature_action">Request a feature</string>
     <string name="help_support_email_action">Email support</string>
     <string name="help_support_subject">Semper support request</string>
+    <string name="url_manual">https://semperdic.github.io/website/manual/</string>
     <string name="url_community">https://semperdic.github.io/website/community/</string>
     <string name="url_report_bug">https://semperdic.github.io/website/bugs/</string>
     <string name="url_request_feature">https://semperdic.github.io/website/features/</string>

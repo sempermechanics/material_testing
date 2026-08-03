@@ -519,6 +519,14 @@
                     android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnOpenManual"
+                    style="@style/Widget.Semper.Button.Outlined"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/help_support_manual_action" />
+
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCommunity"
                     style="@style/Widget.Semper.Button.Outlined"
                     android:layout_width="match_parent"
