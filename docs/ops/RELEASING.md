@@ -34,7 +34,14 @@ here is needed for day-to-day contributions.
    workflow requires `release` environment approval before publishing.
 6. **Smoke the release build on a device** — clean install, sign in,
    run one analysis, confirm the session syncs and each share target works.
-7. **Distribute** to the approved-tester group and announce in Discussions.
+7. **Distribute publicly (manual)** — this workflow only builds a signed APK and
+   a **private** GitHub Release. Customer distribution is separate:
+   - Upload the APK (GitHub Release on
+     [semperdic/website](https://github.com/semperdic/website) preferred) + update
+     `downloads/manifest.json`, push so GitHub Pages redeploys — see that repo’s
+     `RELEASING.md` — and/or publish on Play Store.
+   - Announce on https://semperdic.github.io/website/ / Discussions on
+     `semperdic/website` (not this private repo).
 
 ## CI-based release (workflow_dispatch)
 

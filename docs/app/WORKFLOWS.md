@@ -245,6 +245,8 @@ two-button footer.
    ├── Analysis preferences
    │   └── Max frames per analysis      (10–150, default 50) + info dialog
    ├── Help & support
+   │   ├── Ask the community / Report a bug / Request a feature
+   │   │     → https://semperdic.github.io/website/…
    │   ├── support@indicvision.com      (selectable, copyable)
    │   └── Email support                (mailto, prefilled with account/device/build)
    ├── About                            (version dialog only)
@@ -287,7 +289,7 @@ any sync badge). **Exit:** Home, Admin, a result, or Login.
 | [ ] 4.23 | Drag the **Max frames** slider | Value label tracks in steps of 10 between 10 and 150 |
 | [ ] 4.24 | Tap the ⓘ next to it | Explains the cost of more frames |
 | [ ] 4.25 | Set it to 20, then import 40 frames in an analysis | Only the first 20 are kept, with a "capped" toast |
-| [ ] 4.26 | Expand **Help & support** | The support address is shown and can be selected and copied |
+| [ ] 4.26 | Expand **Help & support** | Community / bug / feature buttons and the support address are shown; address can be selected and copied |
 | [ ] 4.27 | Tap **Email support** | Mail app opens to support@, subject "Semper support request", body carrying account, device ID, app version and device model |
 | [ ] 4.28 | Same with no mail app installed | "No email app found…" toast naming the address; no crash |
 | [ ] 4.29 | Tap **About** | "Semper v<name> (<code>)" |
@@ -835,5 +837,5 @@ then the link opens in a browser and the flow is effectively dead. See
   one-line version dialog.
 - **An interrupted solve cannot be resumed** — it is a foreground coroutine, so
   process death loses the run.
-- **`AppFlowEspressoTest` is a stub** that only asserts Splash renders. Nothing
-  in this file is covered end-to-end by automation.
+- **`AnalysisWizardSmokeTest`** opens the analysis wizard and asserts chrome
+  (`btnNext` / instruction). Full Home → analyze → results E2E is not automated.

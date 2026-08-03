@@ -155,5 +155,5 @@ and the engine tests run on your PC with no Android at all. Issues tagged
 
 ## License
 
-License to be finalized before public release — see the repository license
-file status. Until then, all rights reserved.
+See [LICENSE](LICENSE). Terms will be finalized before a public release; until
+then, all rights reserved.

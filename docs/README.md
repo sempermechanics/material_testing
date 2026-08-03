@@ -17,6 +17,7 @@ build it. This page routes you to the rest.
 | Add or run engine tests | [engine/TESTING.md](engine/TESTING.md) |
 | Know why CI is red | [ops/CI.md](ops/CI.md) |
 | Cut a release | [ops/RELEASING.md](ops/RELEASING.md) |
+| Tech-debt status / deferred gates | [ops/TECH_DEBT.md](ops/TECH_DEBT.md) |
 | Work on the cloud backend | [backend/CLOUD_ARCHITECTURE_GCP.md](backend/CLOUD_ARCHITECTURE_GCP.md) |
 | Deploy the backend myself | [backend/BACKEND_SETUP_GCP.md](backend/BACKEND_SETUP_GCP.md) (CLI) or [BACKEND_SETUP_CONSOLE.md](backend/BACKEND_SETUP_CONSOLE.md) (browser) |
 | Fix sign-in / set up auth | [backend/AUTH_SETUP.md](backend/AUTH_SETUP.md) |
@@ -89,5 +90,6 @@ in [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md).
 - Engine changes must keep `dic_tests` green, and results must stay inside the
   tolerance contract in [engine/TESTING.md](engine/TESTING.md). If a change
   legitimately moves results, say so explicitly and update the contract.
-- Only *new* detekt/lint findings fail CI; existing ones are baselined. Run
-  `./gradlew spotlessApply` before pushing.
+- Lint and detekt baselines are empty — new findings fail CI. A few large UI
+  files use targeted `@file:Suppress` for inherent size; prefer extracts.
+- Run `./gradlew spotlessApply` before pushing.

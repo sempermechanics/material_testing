@@ -25,15 +25,6 @@ checkout so unused `doc/`, `samples/`, `data/`, and `apps/` trees are dropped
 
 Eigen stays a normal submodule (headers only, small).
 
-### History rewrite (maintainers)
-
-The old prebuilt OpenCV Android SDK under `app/src/main/cpp/opencv/` (pre-`native/` layout) was
-removed from HEAD but lingered in git history. That path (and orphaned
-`README.pdf`) was purged with `git filter-repo`. **If you cloned before the
-purge, re-clone** (or fetch and hard-reset to the rewritten tip). Do not merge
-pre-rewrite local branches into the rewritten remote without rebasing onto the
-new history. See [docs/ops/RELEASING.md](docs/ops/RELEASING.md).
-
 ### Local disk hygiene
 
 Native OpenCV builds cache under `app/.cxx/` (~GB). Safe to delete when you
@@ -107,9 +98,10 @@ parallel). Kotlin/docs-only PRs run ~10–15 min via path filters.
 | CI / release | [docs/ops/CI.md](docs/ops/CI.md), [docs/ops/RELEASING.md](docs/ops/RELEASING.md) |
 
 Prefer extracting a `*Helper` / `*Runner` next to existing ones over growing a
-god Activity. Do not introduce a DI framework for tiny helpers. Hilt is bootstrapped
-(`@HiltAndroidApp` / screen-by-screen `@AndroidEntryPoint`); extend it when a screen
-gains injectable dependencies — do not sneak a framework into an unrelated PR.
+god Activity. Do not introduce a DI framework for tiny helpers — there is no
+Hilt/Dagger in this app (removed as unused, zero `@Inject` sites); if a screen
+grows real injectable dependencies, propose the framework in its own PR rather
+than sneaking it into an unrelated one.
 
 ## Pull requests
 
@@ -120,4 +112,4 @@ gains injectable dependencies — do not sneak a framework into an unrelated PR.
 
 ## License
 
-License to be finalized before public release. Until then, all rights reserved.
+See [LICENSE](LICENSE). Until public license terms are finalized, all rights are reserved as stated there.
