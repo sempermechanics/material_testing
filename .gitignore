@@ -34,6 +34,7 @@ app/src/main/cpp/third_party/*
 .claude/*
 .artifacts/
 .vscode/*
+.cursor/
 
 # === Kotlin compiler session data ===
 .kotlin/

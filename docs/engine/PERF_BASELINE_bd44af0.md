@@ -5,23 +5,18 @@
 
 ## Speed (host Release, no sanitizers)
 
-Captured on this machine via `build/native-tests/dic_tests` (`Perf.SubsetSolveThroughput`).
-
-ICGN math at HEAD differs from `bd44af0` only by `float x[N] = {0.0f}` → `= {}` in `optimization_engine.cpp` (identical codegen intent), so the Release host binary is a valid speed proxy for this baseline.
+Captured via `dic_tests` (`Perf.SubsetSolveThroughput`). Gate for later phases: **≥ 95% of 4797 ⇒ ≥ 4557 solves/s**.
 
 | Metric | Value |
 |---|---|
 | Subsets precomputed | 196 |
 | Subsets solved | 162 |
-| Solve rate | **≥ 4797 solves/s** (repeat run ~5019) |
-| Time per solve | **≤ 0.208 ms** (repeat ~0.199 ms) |
-| Gate for later phases | **≥ 95% of 4797 ⇒ ≥ 4557 solves/s** |
-
-Raw log: [`bd44af0-throughput-capture.txt`](bd44af0-throughput-capture.txt).
+| Solve rate | **≥ 4797 solves/s** |
+| Time per solve | **≤ 0.208 ms** |
 
 ## Quality floors (do not loosen)
 
-From `EnginePipelineSmokeTest` (emulator) at the same product line:
+From `EnginePipelineSmokeTest` (emulator):
 
 - translation / rotation / skew: median |U|,|V| error &lt; **0.25 px**; coverage floors unchanged
 - blurred deformed: median error &lt; **0.4 px**; min coverage **0.10**
@@ -30,11 +25,3 @@ From `EnginePipelineSmokeTest` (emulator) at the same product line:
 ## Compile flags to preserve on release pipeline
 
 `-O3 -ffast-math` (math + pipeline); `-flto -fopenmp` on pipeline. Do not drop `-ffast-math` without a measured A/B that still meets the 95% speed gate and quality floors.
-
-## Post-debt verification (this branch)
-
-Host Release (uild/native-host-probe/bin/dic_tests, WSL):
-
-- **57/57** tests passed (includes 4 FullField.* contracts)
-- Throughput after N1–N4: **4646–4758 solves/s** (≥ 95% of 4797 gate)
-- -ffast-math retained; no hot-loop / uild_ref_valid changes
