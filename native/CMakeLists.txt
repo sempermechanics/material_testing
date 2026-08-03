@@ -62,6 +62,10 @@ target_compile_definitions(semper_math PRIVATE
 if(NOT MSVC)
     target_compile_options(semper_math PRIVATE -O3 -ffast-math -fPIC -fvisibility=hidden -Wall -Wextra)
 endif()
+if(SEMPER_SANITIZER AND NOT MSVC)
+    target_compile_options(semper_math PRIVATE -fsanitize=${SEMPER_SANITIZER} -g -fno-omit-frame-pointer)
+    target_link_options(semper_math PUBLIC -fsanitize=${SEMPER_SANITIZER})
+endif()
 
 # ---------------------------------------------------------------------------
 # semper_pipeline — seeding + full-field orchestration (OpenCV + OpenMP)
@@ -101,6 +105,11 @@ if(NOT MSVC)
     # Apply aggressive flags only to our TUs, not OpenCV (added after add_subdirectory).
     target_compile_options(semper_pipeline PRIVATE -O3 -flto -ffast-math -fopenmp -fPIC -fvisibility=hidden -fexceptions -Wall -Wextra)
     target_link_options(semper_pipeline PUBLIC -fopenmp)
+endif()
+if(SEMPER_SANITIZER AND NOT MSVC)
+    # Sanitizers and -flto fight; drop LTO when instrumenting.
+    target_compile_options(semper_pipeline PRIVATE -fsanitize=${SEMPER_SANITIZER} -g -fno-omit-frame-pointer -fno-lto)
+    target_link_options(semper_pipeline PUBLIC -fsanitize=${SEMPER_SANITIZER})
 endif()
 
 add_library(semper INTERFACE)

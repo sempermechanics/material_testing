@@ -79,6 +79,18 @@ set(DIC_ENGINE_SOURCES
         ${NATIVE_ROOT}/src/pipeline/cancel.cpp
 )
 
+# Full-field solver + seeding (OpenCV). Linked only when OpenCV is present so
+# hosts without it still build the math suite; CI sets DIC_REQUIRE_OPENCV=ON.
+set(DIC_PIPELINE_SOURCES
+        ${NATIVE_ROOT}/src/pipeline/full_field_solver.cpp
+        ${NATIVE_ROOT}/src/pipeline/reference_cache.cpp
+        ${NATIVE_ROOT}/src/seeding/akaze_seed.cpp
+)
+
+set(DIC_PIPELINE_TESTS
+        integration/test_full_field_contracts.cpp
+)
+
 add_executable(dic_tests
         test_main.cpp
         ${DIC_UNIT_TESTS}
@@ -107,23 +119,69 @@ target_compile_definitions(dic_tests PRIVATE
 
 option(DIC_REQUIRE_OPENCV "Fail configure if OpenCV is missing (CI sets this)" OFF)
 
-find_package(OpenCV QUIET COMPONENTS core imgcodecs)
-if (OpenCV_FOUND)
-    message(STATUS "OpenCV ${OpenCV_VERSION} found — image-backed DICe tests enabled")
-    add_library(dic_test_imageio STATIC framework/image_io.cpp)
-    target_include_directories(dic_test_imageio PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR})
-    target_include_directories(dic_test_imageio SYSTEM PRIVATE
-            ${OpenCV_INCLUDE_DIRS})
-    target_link_libraries(dic_test_imageio PRIVATE ${OpenCV_LIBS})
+# Prefer OpenCV targets already built by the parent `native/` package (vendored
+# third_party). Fall back to find_package for the standalone host-tests tree (CI).
+set(_SEMPER_OPENCV_READY FALSE)
+if (TARGET opencv_core AND TARGET opencv_imgcodecs AND TARGET opencv_features2d)
+    set(_SEMPER_OPENCV_READY TRUE)
+    set(OpenCV_LIBS opencv_core opencv_imgproc opencv_imgcodecs opencv_features2d opencv_calib3d opencv_flann)
+    message(STATUS "Using parent-built OpenCV targets — full_field_solver linked")
+else ()
+    find_package(OpenCV QUIET COMPONENTS core imgcodecs imgproc features2d calib3d flann)
+    if (OpenCV_FOUND)
+        set(_SEMPER_OPENCV_READY TRUE)
+        message(STATUS "OpenCV ${OpenCV_VERSION} found — image-backed DICe + full_field_solver linked")
+    endif ()
+endif ()
+
+if (_SEMPER_OPENCV_READY)
+    if (NOT TARGET dic_test_imageio)
+        add_library(dic_test_imageio STATIC framework/image_io.cpp)
+        target_include_directories(dic_test_imageio PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR})
+        target_link_libraries(dic_test_imageio PRIVATE ${OpenCV_LIBS})
+        if (OpenCV_INCLUDE_DIRS)
+            target_include_directories(dic_test_imageio SYSTEM PRIVATE
+                    ${OpenCV_INCLUDE_DIRS})
+        endif ()
+        # Parent native/ package exposes SEMPER_OPENCV_INCLUDE_DIRS for the
+        # vendored OpenCV tree (find_package leaves these empty).
+        if (DEFINED SEMPER_OPENCV_INCLUDE_DIRS)
+            target_include_directories(dic_test_imageio SYSTEM PRIVATE
+                    ${SEMPER_OPENCV_INCLUDE_DIRS})
+        endif ()
+    endif ()
     target_compile_definitions(dic_tests PRIVATE DIC_HAVE_OPENCV=1)
+    if (OpenCV_INCLUDE_DIRS)
+        target_include_directories(dic_tests SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS})
+    endif ()
+    if (DEFINED SEMPER_OPENCV_INCLUDE_DIRS)
+        target_include_directories(dic_tests SYSTEM PRIVATE ${SEMPER_OPENCV_INCLUDE_DIRS})
+    endif ()
     target_link_libraries(dic_tests PRIVATE dic_test_imageio ${OpenCV_LIBS})
+
+    # N1: host-link the production full-field solver so characterization can
+    # pin contracts without the Android emulator. Additive — no algorithm change.
+    target_sources(dic_tests PRIVATE
+            ${DIC_PIPELINE_SOURCES}
+            ${DIC_PIPELINE_TESTS})
+    target_include_directories(dic_tests PRIVATE ${NATIVE_ROOT}/src)
+    find_package(OpenMP)
+    if (OpenMP_CXX_FOUND)
+        target_link_libraries(dic_tests PRIVATE OpenMP::OpenMP_CXX)
+    elseif (NOT MSVC)
+        # Match production pipeline flags when CMake's OpenMP package is absent.
+        target_compile_options(dic_tests PRIVATE -fopenmp)
+        target_link_options(dic_tests PRIVATE -fopenmp)
+    endif ()
 elseif (DIC_REQUIRE_OPENCV)
     message(FATAL_ERROR
-            "DIC_REQUIRE_OPENCV=ON but OpenCV (core, imgcodecs) was not found. "
-            "Install it (Debian/Ubuntu: libopencv-dev) or unset the flag.")
+            "DIC_REQUIRE_OPENCV=ON but OpenCV (core, imgcodecs, imgproc, features2d, "
+            "calib3d, flann) was not found. "
+            "Install it (Debian/Ubuntu: libopencv-dev) or build via native/ with "
+            "SEMPER_BUILD_TESTS=ON.")
 else ()
-    message(STATUS "OpenCV not found — image-backed DICe tests will be skipped")
+    message(STATUS "OpenCV not found — image-backed DICe and full_field contracts skipped")
 endif ()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
