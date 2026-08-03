@@ -120,17 +120,24 @@ class AnalysisViewModel : ViewModel() {
     var roiH: Int = 0
 
     var lastStep: Int = 5
-    var lastBatchDirPath: String? = null
-    var lastRefPath: String? = null
+
+    // These are written from the native solve dispatcher (runBatchAnalysis) and
+    // read on Main — e.g. restoreUiFromViewModel() when the Activity is recreated
+    // mid-run — so they must be @Volatile for the reader to see the latest write.
+    @Volatile var lastBatchDirPath: String? = null
+
+    @Volatile var lastRefPath: String? = null
     var lastDefPath: String? = null
     var hasCompletedAnalysis: Boolean = false
 
     /** Why the last run stopped early (0 = ran to completion), and its planned size. */
-    var lastStopCode: Int = 0
-    var lastPlannedFrames: Int = 0
+    @Volatile var lastStopCode: Int = 0
 
-    var currentSessionId: String? = null
-    var engineStatsArray: FloatArray? = null
+    @Volatile var lastPlannedFrames: Int = 0
+
+    @Volatile var currentSessionId: String? = null
+
+    @Volatile var engineStatsArray: FloatArray? = null
 
     var wizardStep: Int = 1
     var settingsReviewed: Boolean = false

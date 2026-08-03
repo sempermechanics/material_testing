@@ -137,10 +137,14 @@ class ComputeOverlayHelper(
         flushScheduled = true
         val now = SystemClock.uptimeMillis()
         val elapsedSince = now - lastFlushUptimeMs
+        // Post through mainHandler, not overlay.post: show()/hide()/release() cancel
+        // the flush via mainHandler.removeCallbacks, and a View's post() enqueues on
+        // a different Handler instance, so those cancels would silently miss it and
+        // a queued flush could still fire into a torn-down view hierarchy.
         if (elapsedSince >= THROTTLE_MS) {
-            overlay.post(flushRunnable)
+            mainHandler.post(flushRunnable)
         } else {
-            overlay.postDelayed(flushRunnable, THROTTLE_MS - elapsedSince)
+            mainHandler.postDelayed(flushRunnable, THROTTLE_MS - elapsedSince)
         }
     }
 

@@ -235,14 +235,19 @@ class EnginePipelineSmokeTest {
     private fun compute(
         refBytes: ByteArray,
         defBytes: ByteArray,
-        roiX: Int = 0, roiY: Int = 0, roiW: Int = W, roiH: Int = H,
+        roiX: Int = 0,
+        roiY: Int = 0,
+        roiW: Int = W,
+        roiH: Int = H,
         bufferPoints: Int = (W / STEP) * (H / STEP),
     ): Int {
         SemperNativeLib.initializeReference(refBytes, null, W, H)
         val buffer = ByteBuffer.allocateDirect(maxOf(1, bufferPoints) * DicResult.BYTES_PER_POINT)
             .order(ByteOrder.nativeOrder())
         val metrics = FloatArray(17) { if (it == 16) -1f else 0f }
-        val cb = object : ProgressCallback { override fun onProgressUpdate(percentage: Int) {} }
+        val cb = object : ProgressCallback {
+            override fun onProgressUpdate(percentage: Int) {}
+        }
         return SemperNativeLib.computeFullFieldDirect(
             refBytes, defBytes, ByteArray(0),
             roiX, roiY, roiW, roiH, STEP, SUBSET, 15, false, buffer, cb, metrics,

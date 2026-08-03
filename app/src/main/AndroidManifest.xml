@@ -81,10 +81,13 @@
             android:label="@string/share_save_to_files"
             android:theme="@style/Theme.Semper.Transparent" />
 
+        <!-- A solve runs for minutes and onDestroy cancels it, so this screen has to
+             absorb every config change rather than be recreated. uiMode covers the
+             night-mode toggle, which is the one users actually hit mid-run. -->
         <activity
             android:name=".ui.analysis.StaticAnalysisActivity"
             android:exported="false"
-            android:configChanges="orientation|screenSize|keyboardHidden" />
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|fontScale|density|locale|layoutDirection" />
 
         <activity
             android:name=".ui.analysis.RoiDrawActivity"

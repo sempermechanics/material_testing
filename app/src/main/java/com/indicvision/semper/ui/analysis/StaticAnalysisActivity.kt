@@ -419,6 +419,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
         VsgStudyRunner.cancelRequested = true // stop a sweep run too
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::overlayHelper.isInitialized) overlayHelper.release()
+        // Reclaim the retained reference thumbnail deterministically on close. The
+        // thumbnail ImageViews won't be drawn again after onDestroy, so this is
+        // safe. (Replace sites intentionally don't recycle: the prior bitmap may
+        // still be shown in a slot until its refresh runs, and recycling a live
+        // bitmap crashes on the next draw — the superseded ones are GC-eligible.)
+        refPreviewBmp?.recycle()
+        refPreviewBmp = null
         super.onDestroy()
     }
 
