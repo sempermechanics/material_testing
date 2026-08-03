@@ -84,6 +84,13 @@ set(DIC_ENGINE_SOURCES
 # hosts without it still build the math suite; CI sets DIC_REQUIRE_OPENCV=ON.
 set(DIC_PIPELINE_SOURCES
         ${NATIVE_ROOT}/src/pipeline/full_field_solver.cpp
+        ${NATIVE_ROOT}/src/pipeline/full_field_akaze.cpp
+        ${NATIVE_ROOT}/src/pipeline/full_field_mesh.cpp
+        ${NATIVE_ROOT}/src/pipeline/full_field_path_a.cpp
+        ${NATIVE_ROOT}/src/pipeline/full_field_path_b.cpp
+        ${NATIVE_ROOT}/src/pipeline/full_field_path_c.cpp
+        ${NATIVE_ROOT}/src/pipeline/full_field_solver_stats.cpp
+        ${NATIVE_ROOT}/src/pipeline/full_field_debug_export.cpp
         ${NATIVE_ROOT}/src/pipeline/reference_cache.cpp
         ${NATIVE_ROOT}/src/seeding/akaze_seed.cpp
 )
