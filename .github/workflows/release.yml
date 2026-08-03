@@ -41,7 +41,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
         with:
           validate-wrappers: false
 
@@ -115,6 +115,20 @@ jobs:
           name: release-apk
           path: app/build/outputs/apk/release/*.apk
 
+      # R8 obfuscates release builds, so a field stack trace is unreadable without
+      # the mapping for the exact build that produced it. It cannot be regenerated
+      # afterwards — if this file is lost, those crashes stay unreadable forever.
+      # Deliberately NOT attached to the GitHub release: it is the deobfuscation
+      # key, and publishing it would undo the obfuscation for everyone. Archive it
+      # somewhere durable before the 90-day artifact retention expires.
+      - name: Upload R8 mapping
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-mapping-${{ github.event.inputs.version }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+          retention-days: 90
+
       - name: ccache statistics
         if: always()
         env:
@@ -144,7 +158,7 @@ jobs:
           path: release-apk/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ github.event.inputs.version }}
           name: ${{ github.event.inputs.version }}

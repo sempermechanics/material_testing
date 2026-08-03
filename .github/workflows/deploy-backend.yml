@@ -25,31 +25,65 @@ permissions:
   contents: read
   id-token: write   # Workload Identity Federation
 
+# One deploy at a time: two concurrent dispatches would race on the same Cloud
+# Run service and could interleave revisions.
+concurrency:
+  group: deploy-backend-${{ github.event.inputs.service }}
+  cancel-in-progress: false
+
 jobs:
+  # Gate the deploy on the same checks CI runs. This workflow is manual-dispatch
+  # and can be pointed at any ref, so without this it could ship code that never
+  # passed tests. Cross-workflow `needs:` is not possible, so the checks run here.
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt -r requirements-test.txt
+      - run: ruff check app/ tests/
+      - run: python -m pytest -q
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v7
 
       - id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SA }}
 
-      - uses: google-github-actions/deploy-cloudrun@v2
+      - uses: google-github-actions/deploy-cloudrun@251330ba9a8a34bfbc1622895f42e1d53fd14522 # v2
         with:
           service: ${{ github.event.inputs.service }}
           region: ${{ github.event.inputs.region }}
           source: backend
-          # Non-secret runtime config. Sensitive values (RESEND_API_KEY) come
-          # from Secret Manager via --set-secrets, configured on the service.
+          # Non-secret runtime config. Keep this in step with the documented
+          # `gcloud run deploy` in docs/backend/BACKEND_SETUP_GCP.md §B1 — a
+          # service deployed here must match the hand-deployed one. FIREBASE_
+          # PROJECT_ID is the ID-token audience (falls back to the project) and
+          # AUTO_APPROVE_HD is the domain auto-approve gate; omitting them
+          # silently changes auth behaviour.
           env_vars: |-
             GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
+            FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}
             SHARED_DRIVE_ID=${{ vars.SHARED_DRIVE_ID }}
             SERVICE_ACCOUNT_EMAIL=${{ vars.SERVICE_ACCOUNT_EMAIL }}
+            AUTO_APPROVE_HD=${{ vars.AUTO_APPROVE_HD }}
             ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
             SUPPORT_EMAIL=${{ vars.SUPPORT_EMAIL }}
             NOTIFY_FROM=${{ vars.NOTIFY_FROM }}
-          flags: --cpu=1 --memory=512Mi --min-instances=0
+          # RESEND_API_KEY is the one secret this service holds; it comes from
+          # Secret Manager, never --set-env-vars.
+          secrets: |-
+            RESEND_API_KEY=resend-api-key:latest
+          flags: --allow-unauthenticated --cpu=1 --memory=512Mi --min-instances=0 --max-instances=10 --concurrency=40 --timeout=120

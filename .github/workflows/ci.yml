@@ -26,7 +26,7 @@ jobs:
       native: ${{ steps.filter.outputs.native }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
         id: filter
         with:
           filters: |
@@ -53,7 +53,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
 
@@ -226,7 +226,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
         with:
           validate-wrappers: false
           cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
@@ -235,7 +235,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: app/.cxx
-          key: cxx-x86_64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
+          key: cxx-x86_64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
           restore-keys: cxx-x86_64-
 
       - name: Install ccache
@@ -255,7 +255,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Run instrumented tests on emulator
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: 30
           arch: x86_64
@@ -274,7 +274,7 @@ jobs:
       - uses: ./.github/actions/prune-cache
         with:
           key-prefix: cxx-x86_64-
-          except-key: cxx-x86_64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
+          except-key: cxx-x86_64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
 
       - uses: ./.github/actions/prune-cache
         with:
@@ -339,7 +339,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
         with:
           validate-wrappers: false
           cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
@@ -348,7 +348,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: app/.cxx
-          key: cxx-arm64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
+          key: cxx-arm64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
           restore-keys: cxx-arm64-
 
       - name: Install ccache
@@ -382,16 +382,37 @@ jobs:
           :app:assembleRelease
           -PabiFilters=arm64-v8a
           -PnativeCompilerLauncher=ccache
+          -PversionCode="${{ github.run_number }}"
 
       - name: Verify arm64-v8a .so in release APK
         run: |
+          # assembleRelease always emits a release APK; if it is missing the build
+          # broke, so treat that as failure rather than falling back to the debug
+          # APK (which was letting this "signed release" job pass green on a build
+          # that produced no release artifact at all).
           APK=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1)
-          if [ -z "$APK" ]; then
-            echo "No release APK found — signing secrets may be missing (unsigned build skipped)"
-            APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
-          fi
+          if [ -z "$APK" ]; then echo "No release APK produced by assembleRelease"; exit 1; fi
           unzip -l "$APK" | grep -q "lib/arm64-v8a/libsemper_core.so" \
             || { echo "MISSING arm64-v8a native lib"; exit 1; }
+
+      # Prove the APK is actually signed with the release key — the one thing this
+      # job's name promises. Runs only when a keystore secret was provided (absent
+      # on fork PRs); when it IS present, an unsigned APK fails the job.
+      - name: Verify release signature
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
+            || { echo "APK is NOT validly signed"; exit 1; }
+
+      - name: Note unsigned build
+        if: env.KEYSTORE_BASE64 == ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "::notice::No signing secrets available — release APK built but signature NOT verified."
 
       - name: Upload release APK
         if: always()
@@ -399,6 +420,17 @@ jobs:
         with:
           name: release-apk
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: ignore
+
+      # See release.yml: mapping.txt is required to read obfuscated field crashes
+      # and cannot be regenerated later. Not attached to any release — it is the
+      # deobfuscation key.
+      - name: Upload R8 mapping
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-mapping
+          path: app/build/outputs/mapping/release/mapping.txt
           if-no-files-found: ignore
 
       - name: ccache statistics
@@ -410,7 +442,7 @@ jobs:
       - uses: ./.github/actions/prune-cache
         with:
           key-prefix: cxx-arm64-
-          except-key: cxx-arm64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
+          except-key: cxx-arm64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
 
       - uses: ./.github/actions/prune-cache
         with:
