@@ -30,3 +30,11 @@ From `EnginePipelineSmokeTest` (emulator) at the same product line:
 ## Compile flags to preserve on release pipeline
 
 `-O3 -ffast-math` (math + pipeline); `-flto -fopenmp` on pipeline. Do not drop `-ffast-math` without a measured A/B that still meets the 95% speed gate and quality floors.
+
+## Post-debt verification (this branch)
+
+Host Release (uild/native-host-probe/bin/dic_tests, WSL):
+
+- **57/57** tests passed (includes 4 FullField.* contracts)
+- Throughput after N1–N4: **4646–4758 solves/s** (≥ 95% of 4797 gate)
+- -ffast-math retained; no hot-loop / uild_ref_valid changes
