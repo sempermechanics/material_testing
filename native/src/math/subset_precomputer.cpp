@@ -1,4 +1,5 @@
 #include <semper/subset.hpp>
+#include <semper/assert.hpp>
 #include "util/log.hpp"
 #include <cmath>
 
@@ -8,6 +9,7 @@ namespace Semper {
     // EXISTING: Full Precompute (Fallback / Original logic)
     // =========================================================
     void SubsetPrecomputer::precompute_subset(SubsetData& data, const Image& ref_img, int_t cx, int_t cy, int_t dim) {
+        SEMPER_ASSERT(dim > 0);
         int n = dim * dim;
         int half = dim / 2;
 

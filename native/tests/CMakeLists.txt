@@ -18,9 +18,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(NATIVE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # Treat any first-party warning as an error under -DSEMPER_WERROR=ON.
-# Off by default so a local build still completes and shows the warnings.
-# The engine sources + non-image tests are already warning-clean; enable this
-# in CI once a green run confirms the OpenCV-backed dice tests are clean too.
+# Off by default for local builds; CI host job enables it (-DSEMPER_WERROR=ON).
 option(SEMPER_WERROR "Fail the build on compiler warnings in first-party code" OFF)
 
 if (NOT MSVC)

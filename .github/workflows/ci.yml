@@ -118,6 +118,7 @@ jobs:
           cmake -S native/tests -B build/native-tests
           -DCMAKE_BUILD_TYPE=Release
           -DDIC_REQUIRE_OPENCV=ON
+          -DSEMPER_WERROR=ON
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -202,7 +203,7 @@ jobs:
           except-key: ccache-san-${{ matrix.id }}-${{ github.sha }}
 
   # ===================================================================
-  # Tier 3 — Emulator E2E (JNI smoke + Espresso)
+  # Tier 3 — Emulator (JNI smoke + AnalysisWizardSmokeTest; not full E2E)
   # ===================================================================
   tier3-emulator-e2e:
     name: Tier 3 — Emulator E2E

@@ -58,6 +58,9 @@ namespace Semper {
                              float v, float ux, float uy, float vx, float vy,
                              std::vector<float> &buffer, const std::vector<bool> *ref_valid_mask = nullptr);
         // 🚀 NEW: Centralized mask builder
+        // build_ref_valid stays vector<bool> until a measured A/B proves a
+        // packed bitmask (or similar) still clears ≥95% of bd44af0 throughput.
+        // Do not rewrite as a drive-by cleanup.
         std::vector<bool> build_ref_valid(const SubsetData& subset) const {
             const size_t n = subset.x_offsets.size();
             std::vector<bool> rv(n, true);

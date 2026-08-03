@@ -4,6 +4,7 @@
 #include <semper/strain.hpp>
 #include <semper/subset.hpp>
 #include <semper/tuning.hpp>
+#include <semper/assert.hpp>
 #include "util/log.hpp"
 
 #include <atomic>
@@ -393,7 +394,78 @@ if (!local_debug_dir.empty()) {
         }
     } catch (...) { LOGE("Unknown Exception during Debug Export"); }
 }
+} // export_full_field_debug_suite
 
+// Phase: strain + pack output floats (extracted for structure; behaviour unchanged).
+template <typename GridPoint>
+struct PackedFieldResult {
+    StrainField strain;
+    int valid_count = 0;
+    int dropped_by_post_filter = 0;
+    bool output_truncated = false;
+    double time_strain_ms = 0.0;
+};
+
+template <typename GridPoint>
+PackedFieldResult<GridPoint> pack_full_field_output(
+        std::vector<std::vector<GridPoint>>& resultGrid,
+        int gridW,
+        int gridH,
+        int step,
+        int strain_window,
+        float* output_ptr,
+        int output_capacity) {
+    PackedFieldResult<GridPoint> out;
+    auto t_strain_start = std::chrono::high_resolution_clock::now();
+    DisplacementField dispField;
+    dispField.width = gridW;
+    dispField.height = gridH;
+    dispField.step = step;
+    dispField.u.resize(static_cast<size_t>(gridW * gridH), 0.0f);
+    dispField.v.resize(static_cast<size_t>(gridW * gridH), 0.0f);
+    dispField.valid.resize(static_cast<size_t>(gridW * gridH), false);
+
+    for (int y = 0; y < gridH; ++y) {
+        for (int x = 0; x < gridW; ++x) {
+            int idx = y * gridW + x;
+            if (resultGrid[y][x].solved && resultGrid[y][x].corr >= 0.0f) {
+                dispField.u[idx] = resultGrid[y][x].u;
+                dispField.v[idx] = resultGrid[y][x].v;
+                dispField.valid[idx] = true;
+            }
+        }
+    }
+
+    out.strain = StrainCalculator::compute_vsg_strain(dispField, strain_window);
+
+    for (int y = 0; y < gridH && !out.output_truncated; ++y) {
+        for (int x = 0; x < gridW; ++x) {
+            int idx = y * gridW + x;
+            if (!dispField.valid[idx]) continue;
+            if ((out.valid_count + 1) * 8 > output_capacity) {
+                out.output_truncated = true;
+                break;
+            }
+            if (out.strain.exx[idx] <= tuning::kStrainFailSentinel) {
+                out.dropped_by_post_filter++;
+                resultGrid[y][x].solved = false;
+                continue;
+            }
+            int out_idx = out.valid_count * 8;
+            output_ptr[out_idx + 0] = resultGrid[y][x].x;
+            output_ptr[out_idx + 1] = resultGrid[y][x].y;
+            output_ptr[out_idx + 2] = dispField.u[idx];
+            output_ptr[out_idx + 3] = dispField.v[idx];
+            output_ptr[out_idx + 4] = out.strain.exx[idx];
+            output_ptr[out_idx + 5] = out.strain.eyy[idx];
+            output_ptr[out_idx + 6] = out.strain.exy[idx];
+            output_ptr[out_idx + 7] = resultGrid[y][x].corr;
+            out.valid_count++;
+        }
+    }
+    out.time_strain_ms = std::chrono::duration<double, std::milli>(
+            std::chrono::high_resolution_clock::now() - t_strain_start).count();
+    return out;
 }
 
 } // namespace
@@ -418,6 +490,9 @@ int run_full_field(
 
         // 🚀 PRIORITY 3: Return -3 for memory/init errors
         if (output_ptr == nullptr || cache.ref_img == nullptr || def_gray.empty()) return -3;
+        SEMPER_ASSERT(params.subset_size > 0);
+        SEMPER_ASSERT(params.step > 0);
+        SEMPER_ASSERT(output_capacity >= 0);
         // Clear any leftover cancel from a previous solve so this run starts fresh.
         // The flag is process-global; without this, a caller that cancelled and
         // then started a new solve without resetting would get an instant -99.
@@ -562,12 +637,12 @@ int run_full_field(
                         globalU = us[us.size() / 2]; globalV = vs[vs.size() / 2];
                     }
                 }
-            } catch (...) {}
+            } catch (...) {
+                // AKAZE/mesh seeding failed — fall through to Path C rather than abort.
+                LOGE("AKAZE/scale pyramid threw; continuing with Path C fallback");
+            }
         }
 
-        // 🚀 PRIORITY 4 & 6: Path C Smart Seed Fallback
-        // If AKAZE found too few points, or they are too clustered (<30% convex hull coverage),
-        // trigger the Path C Seed Hunter instead of aborting.
         // 🚀 IMPLEMENTATION: If we didn't even get a SPARSE mesh, trigger Path C
         execute_path_c = (mesh_quality == MeshQuality::NONE);
 
@@ -591,6 +666,8 @@ int run_full_field(
         //   0:x 1:y 2:u 3:v 4:ux 5:uy 6:vx 7:vy 8:corr 9:solved 10:thread_id
         //   11:compute_order 12:mesh_assignment_type 13:used_simplex 14:icgn_iters
         // (guess_* default to 0). Keep that order in sync with those sites.
+        // PointState (see point_state.hpp) documents skip/mesh/solved semantics;
+        // the hot GridPoint keeps a bool `solved` so layout/throughput stay stable.
         struct GridPoint {
             float x = 0, y = 0, u = 0, v = 0, ux = 0, uy = 0, vx = 0, vy = 0, corr = 0;
             bool solved = false;
@@ -682,7 +759,9 @@ int run_full_field(
                 int solved = global_points_solved.load(std::memory_order_relaxed);
                 int percentage = (int)((((float)solved / total_valid_points) * 80.0f) + 10.0f);
                 percentage = std::max(0, std::min(100, percentage));
-                try { on_progress(percentage); } catch (...) {}
+                try { on_progress(percentage); } catch (...) {
+                    LOGE("on_progress callback threw; ignoring");
+                }
                 for (int i = 0; i < 10; ++i) {
                     if (progress_thread_should_stop.load(std::memory_order_acquire)) break;
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -789,7 +868,9 @@ int run_full_field(
                     at.boundingBox = cv::Rect2f(minX - 15.0f, minY - 15.0f, (maxX - minX) + 30.0f, (maxY - minY) + 30.0f);
                     affTriangles.push_back(at);
                 }
-            } catch (...) {}
+            } catch (...) {
+                LOGE("Delaunay triangle affine fit threw; mesh may be incomplete");
+            }
 
             if (!local_debug_dir.empty()) {
                 try {
@@ -811,7 +892,9 @@ int run_full_field(
                     }
                     seeding::draw_outlined_text(meshDebug, "Delaunay 6-DOF Mesh", cv::Point(10, 25), 0.6);
                     cv::imwrite(local_debug_dir + "/delaunay_mesh_debug.jpg", meshDebug);
-                } catch (...) {}
+                } catch (...) {
+                    LOGE("Delaunay mesh debug export threw");
+                }
             }
             time_delaunay = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_mesh_start).count();
 
@@ -1242,7 +1325,8 @@ int run_full_field(
 
                 if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept) {
                     int order = compute_order_counter.fetch_add(1, std::memory_order_relaxed);
-                    resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, -1, order, resultGrid[seed.y_idx][seed.x_idx].mesh_assignment_type, needed_rescue, res.iters};                global_points_solved.fetch_add(1, std::memory_order_relaxed);
+                    resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score, true, -1, order, resultGrid[seed.y_idx][seed.x_idx].mesh_assignment_type, needed_rescue, res.iters};
+                    global_points_solved.fetch_add(1, std::memory_order_relaxed);
                     gq.q.push(Semper::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
                 } else {
                     resultGrid[seed.y_idx][seed.x_idx].corr = CORR_INVALID;
@@ -1461,70 +1545,14 @@ int run_full_field(
         // partial, so there is nothing worth deriving strain from.
         if (cancel_requested()) return kCancelled;
 
-        auto t_strain_start = std::chrono::high_resolution_clock::now();
-        DisplacementField dispField;
-        dispField.width = gridW; dispField.height = gridH; dispField.step = params.step;
-        dispField.u.resize(gridW * gridH, 0.0f); dispField.v.resize(gridW * gridH, 0.0f);
-        dispField.valid.resize(gridW * gridH, false);
-
-        for (int y = 0; y < gridH; ++y) {
-            for (int x = 0; x < gridW; ++x) {
-                int idx = y * gridW + x;
-                // corr >= 0 accepts a genuinely perfect solve (ZNSSD == 0.0)
-                // while still rejecting skipped/failed points (CORR_INVALID).
-                if (resultGrid[y][x].solved && resultGrid[y][x].corr >= 0.0f) {
-                    dispField.u[idx] = resultGrid[y][x].u;
-                    dispField.v[idx] = resultGrid[y][x].v;
-                    dispField.valid[idx] = true;
-                }
-            }
-        }
-
-        StrainField strainField = StrainCalculator::compute_vsg_strain(dispField, params.strain_window);
-
-        int valid_count = 0;
-        int dropped_by_post_filter = 0; // 🚀 NEW: Track dropped points
-        bool output_truncated = false;
-
-        for (int y = 0; y < gridH && !output_truncated; ++y) {
-            for (int x = 0; x < gridW; ++x) {
-                int idx = y * gridW + x;
-
-                if (dispField.valid[idx]) {
-                    // Never write past the caller's buffer. In the normal path the
-                    // capacity is exactly gridW*gridH*8, so this never trips; it is
-                    // the backstop against a caller under-allocating output_ptr.
-                    if ((valid_count + 1) * 8 > output_capacity) {
-                        output_truncated = true;
-                        break;
-                    }
-
-                    // === 🚀 ROBUST STRAIN FILTER (FAST-MATH SAFE) ===
-                    // Since the compiler strips NaN, we check for our hard sentinel.
-                    // Any value <= kStrainFailSentinel means VSG refused the window.
-                    // We completely drop the point to protect the Android UI and Python analysis.
-                    if (strainField.exx[idx] <= tuning::kStrainFailSentinel) {
-                        dropped_by_post_filter++;
-                        resultGrid[y][x].solved = false; // Mark dead for debug map
-                        continue;
-                    }
-                    // =================================================
-
-                    int out_idx = valid_count * 8;
-                    output_ptr[out_idx + 0] = resultGrid[y][x].x;
-                    output_ptr[out_idx + 1] = resultGrid[y][x].y;
-                    output_ptr[out_idx + 2] = dispField.u[idx];
-                    output_ptr[out_idx + 3] = dispField.v[idx];
-                    output_ptr[out_idx + 4] = strainField.exx[idx];
-                    output_ptr[out_idx + 5] = strainField.eyy[idx];
-                    output_ptr[out_idx + 6] = strainField.exy[idx];
-                    output_ptr[out_idx + 7] = resultGrid[y][x].corr;
-                    valid_count++;
-                }
-            }
-        }
-
-        time_strain = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_strain_start).count();
+        auto packed = pack_full_field_output(
+                resultGrid, gridW, gridH, params.step, params.strain_window,
+                output_ptr, output_capacity);
+        StrainField& strainField = packed.strain;
+        int valid_count = packed.valid_count;
+        int dropped_by_post_filter = packed.dropped_by_post_filter;
+        bool output_truncated = packed.output_truncated;
+        time_strain = packed.time_strain_ms;
 
         // 🚀 DIAGNOSTIC: Print exactly how many points the filter caught
         LOGD("DIAGNOSTIC POST-FILTER: Dropped %d noisy points. Final Valid Output: %d", dropped_by_post_filter, valid_count);
@@ -1532,7 +1560,11 @@ int run_full_field(
             LOGE("Output buffer full at %d points (capacity %d floats); remaining points dropped.", valid_count, output_capacity);
         }
 
-        if (on_progress) { try { on_progress(100); } catch (...) {} }
+        if (on_progress) {
+            try { on_progress(100); } catch (...) {
+                LOGE("on_progress(100) callback threw; ignoring");
+            }
+        }
 
         // ==========================================
         // ⏱️ AGGREGATE PROFILING METRICS
