@@ -1,8 +1,11 @@
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.serialization)
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     // Coverage measurement only (report-only, no gate). Generate with
     // `./gradlew :app:koverHtmlReport` → app/build/reports/kover/.
     id("org.jetbrains.kotlinx.kover") version "0.9.1"
@@ -197,6 +200,12 @@ android {
             if (releaseKeystore != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            // Keep the build offline/credential-free: the plugin still injects the
+            // build-ID resource the SDK needs, it just skips uploading the R8
+            // mapping to Firebase at build time.
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = false
+            }
         }
     }
 
@@ -258,9 +267,11 @@ dependencies {
     implementation(libs.firebase.analytics)
     // Firebase Authentication (email/password, email-link, Google) — the identity layer.
     implementation(libs.firebase.auth)
-    // Crash + non-fatal reporting (field visibility for release builds). Used via
-    // the SDK only — no Crashlytics Gradle plugin — so build-time mapping upload
-    // is not wired; non-fatals and breadcrumbs from CrashReportingTree still flow.
+    // Crash + non-fatal reporting (field visibility for release builds). The
+    // Crashlytics Gradle plugin (applied above) injects the build-ID resource the
+    // SDK requires at startup; mapping-file upload is disabled below so no build-time
+    // network/credentials are needed. Non-fatals and breadcrumbs from
+    // CrashReportingTree still flow.
     implementation(libs.firebase.crashlytics)
     // Await() on Firebase Task<T> from coroutines.
     implementation(libs.kotlinx.coroutines.play.services)

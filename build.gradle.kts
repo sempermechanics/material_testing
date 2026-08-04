@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
     id("com.diffplug.spotless") version "8.0.0"
     id("com.google.gms.google-services") version "4.5.0" apply false
+    // Required by the Crashlytics SDK: injects the build-ID resource the SDK reads
+    // at startup. Without it the SDK throws at Firebase init and crashes the app.
+    id("com.google.firebase.crashlytics") version "3.0.7" apply false
 }
 
 tasks.register("ciReleaseGate") {
