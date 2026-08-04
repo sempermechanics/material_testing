@@ -18,6 +18,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
@@ -57,6 +59,12 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var selection: SessionSelectionController
     private lateinit var fab: FloatingActionButton
     private lateinit var tvHomeQuota: TextView
+
+    /** Upload WorkInfo ids already surfaced, so one failure isn't snackbar-spammed. */
+    private val shownUploadFailures = mutableSetOf<java.util.UUID>()
+
+    /** Upload WorkInfo ids already refreshed on success, so we refresh once each. */
+    private val shownSucceededUploads = mutableSetOf<java.util.UUID>()
 
     private val backCallback = object : androidx.activity.OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = selection.clearSelection()
@@ -206,6 +214,63 @@ class HomeActivity : AppCompatActivity() {
             TokenStore.refreshSessionLimit(this@HomeActivity, localCount)
             if (TokenStore.isSessionLimitReached(this@HomeActivity)) openSessionLimitScreen()
         }
+
+        observeUploadFailures()
+    }
+
+    /**
+     * Background uploads run in WorkManager, so a failure would otherwise be
+     * silent (only the row badge changed). Watch the "upload" work tag and, when
+     * a run ends in a terminal failure carrying a reason, tell the user with a
+     * Retry action. Quota-full is excluded — it has its own persistent screen and
+     * returns no reason.
+     */
+    private fun observeUploadFailures() {
+        WorkManager.getInstance(this)
+            .getWorkInfosByTagLiveData("upload")
+            .observe(this) { infos ->
+                val list = infos.orEmpty()
+
+                // Live per-row progress from every running backup.
+                val running = list
+                    .filter { it.state == WorkInfo.State.RUNNING }
+                    .mapNotNull { info ->
+                        val id = info.progress.getString(DicKeys.SESSION_LOCAL_ID) ?: return@mapNotNull null
+                        val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, -1)
+                        if (pct < 0) return@mapNotNull null
+                        val phase = info.progress.getString(DicKeys.UPLOAD_PHASE) ?: "upload"
+                        id to SessionListAdapter.RowProgress(phase, pct)
+                    }
+                    .toMap()
+                adapter.setUploadProgress(running)
+
+                list.forEach { info ->
+                    when (info.state) {
+                        // A finished backup — flip the row's badge to "synced".
+                        WorkInfo.State.SUCCEEDED -> if (shownSucceededUploads.add(info.id)) refresh()
+                        WorkInfo.State.FAILED -> {
+                            if (!shownUploadFailures.add(info.id)) return@forEach
+                            val reason = info.outputData.getString(DicKeys.UPLOAD_FAIL_REASON)
+                                ?: return@forEach // no reason = handled elsewhere (e.g. quota)
+                            showUploadFailure(reason)
+                        }
+                        else -> Unit
+                    }
+                }
+            }
+    }
+
+    /**
+     * Informative only — every reason that reaches here is terminal (device
+     * conflict, too large, render OOM), so a one-tap Retry would just re-fail.
+     * The badge remains the place to deliberately re-attempt (see [retryOrBackup]).
+     */
+    private fun showUploadFailure(reason: String) {
+        Snackbar.make(
+            findViewById(R.id.homeRoot),
+            getString(R.string.cloud_backup_failed_fmt, reason),
+            Snackbar.LENGTH_LONG,
+        ).show()
     }
 
     override fun onResume() {
@@ -354,23 +419,49 @@ class HomeActivity : AppCompatActivity() {
     /** Retry a failed/pending upload, or back up a local-only session when cloud is on. */
     private fun retryOrBackup(record: SessionRecord) {
         when (record.syncState) {
-            SessionRecord.SyncState.FAILED, SessionRecord.SyncState.PENDING -> {
-                SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-                CloudSync.enqueueUpload(this, record.id)
-                adapter.rebindRow(record.id)
-                Toast.makeText(this, R.string.cloud_retry_backup, Toast.LENGTH_SHORT).show()
-            }
+            // A terminal failure: explain why (from the retained WorkInfo) before
+            // offering a deliberate retry, instead of silently re-queuing a doomed
+            // upload every tap.
+            SessionRecord.SyncState.FAILED -> showFailedBackupDialog(record)
+            SessionRecord.SyncState.PENDING -> enqueueBackup(record, R.string.cloud_retry_backup)
             SessionRecord.SyncState.LOCAL_ONLY -> if (DicSettings.saveToCloud(this)) {
-                SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-                CloudSync.enqueueUpload(this, record.id)
-                adapter.rebindRow(record.id)
-                Toast.makeText(this, R.string.cloud_backup_now, Toast.LENGTH_SHORT).show()
+                enqueueBackup(record, R.string.cloud_backup_now)
             } else {
                 findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
             }
             SessionRecord.SyncState.SYNCED -> findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
         }
     }
+
+    private fun enqueueBackup(record: SessionRecord, toastRes: Int) {
+        SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
+        CloudSync.enqueueUpload(this, record.id)
+        adapter.rebindRow(record.id)
+        Toast.makeText(this, toastRes, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showFailedBackupDialog(record: SessionRecord) {
+        lifecycleScope.launch {
+            val reason = withContext(Dispatchers.IO) { lastUploadFailureReason(record.id) }
+            MaterialAlertDialogBuilder(this@HomeActivity)
+                .setTitle(R.string.cloud_backup_failed_title)
+                .setMessage(reason ?: getString(R.string.cloud_backup_failed_generic))
+                .setPositiveButton(R.string.cloud_backup_retry_action) { _, _ ->
+                    enqueueBackup(record, R.string.cloud_retry_backup)
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+    }
+
+    /** The reason attached to the last terminal upload failure for [localId], if still retained. */
+    private fun lastUploadFailureReason(localId: String): String? = runCatching {
+        WorkManager.getInstance(this)
+            .getWorkInfosForUniqueWork("upload-$localId")
+            .get()
+            .firstOrNull { it.state == WorkInfo.State.FAILED }
+            ?.outputData?.getString(DicKeys.UPLOAD_FAIL_REASON)
+    }.getOrNull()
 
     private fun showDeviceOnlyKeptSnackbar() {
         Snackbar.make(findViewById(R.id.homeRoot), R.string.delete_device_kept_snackbar, Snackbar.LENGTH_LONG)

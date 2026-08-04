@@ -15,7 +15,9 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.R
 import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
 import com.indicvision.semper.data.net.HttpStatus
@@ -29,6 +31,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -204,6 +209,15 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val record = SessionStore.get(applicationContext, localId)
             ?: return@withContext Result.failure()
 
+        // Terminal failure carrying a reason the UI can show. localId lets Home
+        // find the row for a Retry action.
+        fun failure(reason: String): Result = Result.failure(
+            workDataOf(
+                DicKeys.UPLOAD_FAIL_REASON to reason,
+                DicKeys.SESSION_LOCAL_ID to localId,
+            ),
+        )
+
         val sessionDir = File(record.sessionDir)
         val rawDeformedDir = File(sessionDir, SessionPaths.RAW_DEFORMED_SUBDIR)
 
@@ -220,6 +234,28 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             stagingDir.deleteRecursively()
         }
         stagingDir.mkdirs()
+
+        // Live progress for the Home row: one throttled sampler emits phase+percent,
+        // fed by the bundling frame count ("prepare") then the uploaded byte count
+        // ("upload"). Decoupling the emit from the producers keeps WorkManager DB
+        // writes cheap regardless of how fast frames/chunks complete.
+        val progPhase = java.util.concurrent.atomic.AtomicReference("prepare")
+        val progDone = java.util.concurrent.atomic.AtomicLong(0)
+        val progTotal = java.util.concurrent.atomic.AtomicLong(record.defNames.size.toLong())
+        val sampler = launch {
+            while (isActive) {
+                val total = progTotal.get()
+                val pct = if (total > 0) (progDone.get() * 100 / total).toInt().coerceIn(0, 100) else 0
+                setProgress(
+                    workDataOf(
+                        DicKeys.SESSION_LOCAL_ID to localId,
+                        DicKeys.UPLOAD_PHASE to progPhase.get(),
+                        DicKeys.UPLOAD_PERCENT to pct,
+                    ),
+                )
+                delay(PROGRESS_SAMPLE_MS)
+            }
+        }
 
         try {
             val artifacts = mutableListOf<Artifact>()
@@ -286,6 +322,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     stagingDir,
                     csvFile = if (needCsv) analysisCsv else null,
                     writeReports = needBundles,
+                    onFrame = { d, t ->
+                        progDone.set(d.toLong())
+                        progTotal.set(t.toLong())
+                    },
                 )
                 if (needBundles) bundlesDone.createNewFile()
             }
@@ -395,7 +435,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             // Sequential uploads left most of the link idle: every 8 MiB chunk
             // waits a full round-trip before the next starts, and a session is
             // mostly many smallish files. A few in flight keeps the pipe full.
-            val done = java.util.concurrent.atomic.AtomicInteger(0)
+            // Switch the Home progress to byte-based upload tracking.
+            progPhase.set("upload")
+            progDone.set(0)
+            progTotal.set(plan.work.sumOf { it.file.length() })
             val total = plan.work.size
             coroutineScope {
                 val gate = Semaphore(uploadConcurrency(applicationContext))
@@ -403,19 +446,15 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     async {
                         gate.withPermit {
                             Timber.d("Uploading %s (%d bytes)…", job.name, job.file.length())
-                            val (driveId, md5) = api.uploadResumable(job.uploadUrl, job.file, job.chunkSize)
+                            val (driveId, md5) = api.uploadResumable(
+                                job.uploadUrl, job.file, job.chunkSize,
+                            ) { n -> progDone.addAndGet(n) }
                             // Re-read the token: a long upload can outlive it.
                             val tk = TokenProvider.usableIdToken() ?: idToken
                             api.completeFile(
                                 tk,
                                 job.fileId,
                                 FileCompleteRequest(plan.sessionId, driveId, job.file.length(), md5),
-                            )
-                            setProgress(
-                                androidx.work.workDataOf(
-                                    "done" to done.incrementAndGet(),
-                                    "total" to total,
-                                ),
                             )
                         }
                     }
@@ -440,7 +479,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             Timber.e("This account is bound to a different device — cannot upload")
             SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
             stagingDir.deleteRecursively()
-            Result.failure()
+            failure(applicationContext.getString(R.string.cloud_backup_failed_device))
         } catch (e: IndicApi.ApiException) {
             when {
                 // CONFLICT = analysis quota reached, PAYLOAD_TOO_LARGE = too many files.
@@ -448,13 +487,18 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     Timber.e("Upload rejected (%d): %s", e.code, e.detail)
                     // CONFLICT means the account's analysis quota is full — raise the
                     // persistent limit gate so the user is told to email support.
-                    if (UploadWorkOutcomes.isQuotaExhausted(e.code)) {
-                        TokenStore.setSessionLimitReached(applicationContext, true)
-                        applicationContext.startActivity(AppIntents.sessionLimit(applicationContext))
-                    }
                     SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
                     stagingDir.deleteRecursively()
-                    UploadWorkOutcomes.fromHttpCode(e.code)
+                    if (UploadWorkOutcomes.isQuotaExhausted(e.code)) {
+                        // Quota full has its own persistent "email support" screen —
+                        // surface it there, not via a transient Home snackbar.
+                        TokenStore.setSessionLimitReached(applicationContext, true)
+                        applicationContext.startActivity(AppIntents.sessionLimit(applicationContext))
+                        Result.failure()
+                    } else {
+                        // Payload too large — retrying won't help; tell the user.
+                        failure(applicationContext.getString(R.string.cloud_backup_failed_too_large))
+                    }
                 }
                 // 400 = the resumable session's expected size no longer matches our
                 // files (a session from an earlier build, or content that changed).
@@ -481,9 +525,22 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     UploadWorkOutcomes.fromHttpCode(e.code)
                 }
             }
+        } catch (e: OutOfMemoryError) {
+            // OOM is an Error, not an Exception, so it would otherwise escape every
+            // catch above and surface as an untracked WorkManager failure with no
+            // reason — the badge would stay "pending" and a manual retry would just
+            // re-OOM forever. Treat it as terminal with a clear reason instead.
+            Timber.e(e, "Upload ran out of memory bundling %s — failing terminally", localId)
+            SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
+            stagingDir.deleteRecursively()
+            failure(applicationContext.getString(R.string.cloud_backup_failed_too_large))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.e(e, "Upload failed for %s; will retry", localId)
             Result.retry()
+        } finally {
+            // Stop the progress sampler so this coroutine can complete (a live
+            // child would otherwise keep the worker from returning).
+            sampler.cancel()
         }
     }
 
@@ -539,6 +596,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 
     private companion object {
+        /** How often the progress sampler pushes phase+percent to WorkManager. */
+        const val PROGRESS_SAMPLE_MS = 700L
+
         /** Files uploaded concurrently. Keeps the link busy without thrashing. */
         const val UPLOAD_CONCURRENCY = 4
 

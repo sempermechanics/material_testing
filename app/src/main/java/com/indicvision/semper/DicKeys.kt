@@ -48,6 +48,16 @@ object DicKeys {
 
     // ── AnalysisViewModel  DicUploadWorker (WorkManager Data)
     const val SESSION_LOCAL_ID = "SESSION_LOCAL_ID"
+
+    // ── DicUploadWorker → UI (terminal-failure output Data)
+    /** Human-readable reason attached to a terminal upload Result.failure(). */
+    const val UPLOAD_FAIL_REASON = "UPLOAD_FAIL_REASON"
+
+    // ── DicUploadWorker → UI (running progress Data)
+    /** "prepare" (bundling reports/GIFs) or "upload" (bytes to Drive). */
+    const val UPLOAD_PHASE = "UPLOAD_PHASE"
+    /** 0–100 percent for the current [UPLOAD_PHASE]. */
+    const val UPLOAD_PERCENT = "UPLOAD_PERCENT"
     const val STEP = "STEP"
     const val SUBSET = "SUBSET"
     const val STRAIN_WIN = "STRAIN_WIN"

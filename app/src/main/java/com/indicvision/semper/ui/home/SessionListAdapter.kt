@@ -1,6 +1,6 @@
 // List adapter: onBindViewHolder assembles one row's subtitle/badges inline, and
 // literal view-type/dimension constants read clearest there too.
-@file:Suppress("MagicNumber", "CyclomaticComplexMethod")
+@file:Suppress("MagicNumber", "CyclomaticComplexMethod", "TooManyFunctions")
 
 @file:SuppressLint("NotifyDataSetChanged")
 
@@ -41,6 +41,9 @@ class SessionListAdapter(
     private var items: List<SessionRecord> = emptyList()
     private val dateFmt = SimpleDateFormat("MMM d", Locale.getDefault())
 
+    /** id → live upload progress; empty except for rows currently backing up. */
+    private var progress: Map<String, RowProgress> = emptyMap()
+
     /** Path → thumbnail; recycles evicted bitmaps. Cap keeps scroll GC mild. */
     private val thumbCache =
         object : LinkedHashMap<String, Bitmap>(THUMB_CACHE_MAX + 1, 0.75f, true) {
@@ -64,6 +67,16 @@ class SessionListAdapter(
         if (index >= 0) notifyItemChanged(index)
     }
 
+    /** Update live backup progress; rebinds only the rows whose progress changed. */
+    fun setUploadProgress(new: Map<String, RowProgress>) {
+        val old = progress
+        if (old == new) return
+        progress = new
+        (old.keys + new.keys).forEach { id ->
+            if (old[id] != new[id]) rebindRow(id)
+        }
+    }
+
     /** Rows whose ids are in [ids], in list order. */
     fun recordsFor(ids: Collection<String>): List<SessionRecord> =
         items.filter { it.id in ids }
@@ -76,6 +89,9 @@ class SessionListAdapter(
         thumbCache.clear()
     }
 
+    /** Live backup progress for a row while its upload work is running. */
+    data class RowProgress(val phase: String, val percent: Int)
+
     class Holder(v: View) : RecyclerView.ViewHolder(v) {
         val card: com.google.android.material.card.MaterialCardView =
             v.findViewById(R.id.sessionCard)
@@ -84,6 +100,8 @@ class SessionListAdapter(
         val title: TextView = v.findViewById(R.id.sessionTitle)
         val subtitle: TextView = v.findViewById(R.id.sessionSubtitle)
         val badge: TextView = v.findViewById(R.id.sessionBadge)
+        val progressBar: com.google.android.material.progressindicator.LinearProgressIndicator =
+            v.findViewById(R.id.sessionProgress)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
@@ -131,19 +149,34 @@ class SessionListAdapter(
         val ctx = holder.itemView.context
         holder.title.text = r.name
         holder.subtitle.text = subtitleFor(ctx, r)
-        holder.badge.text = when (r.syncState) {
-            SessionRecord.SyncState.SYNCED -> ctx.getString(R.string.badge_synced)
-            SessionRecord.SyncState.PENDING -> ctx.getString(R.string.badge_pending)
-            SessionRecord.SyncState.LOCAL_ONLY -> ctx.getString(R.string.badge_local)
-            SessionRecord.SyncState.FAILED -> ctx.getString(R.string.badge_not_backed_up)
+
+        // While a backup is running, the badge shows live progress and a bar
+        // appears under the subtitle; otherwise it's the normal sync-state badge.
+        val prog = progress[r.id]
+        if (prog != null) {
+            holder.progressBar.isVisible = true
+            holder.progressBar.setProgressCompat(prog.percent.coerceIn(0, 100), true)
+            holder.badge.text = ctx.getString(
+                if (prog.phase == "prepare") R.string.badge_preparing_fmt else R.string.badge_uploading_fmt,
+                prog.percent,
+            )
+            holder.badge.setTextColor(ctx.getColor(R.color.sky_on_container))
+        } else {
+            holder.progressBar.isVisible = false
+            holder.badge.text = when (r.syncState) {
+                SessionRecord.SyncState.SYNCED -> ctx.getString(R.string.badge_synced)
+                SessionRecord.SyncState.PENDING -> ctx.getString(R.string.badge_pending)
+                SessionRecord.SyncState.LOCAL_ONLY -> ctx.getString(R.string.badge_local)
+                SessionRecord.SyncState.FAILED -> ctx.getString(R.string.badge_not_backed_up)
+            }
+            holder.badge.setTextColor(
+                if (r.syncState == SessionRecord.SyncState.FAILED) {
+                    ctx.getColor(R.color.semantic_danger)
+                } else {
+                    ctx.getColor(R.color.sky_on_container)
+                },
+            )
         }
-        holder.badge.setTextColor(
-            if (r.syncState == SessionRecord.SyncState.FAILED) {
-                ctx.getColor(R.color.semantic_danger)
-            } else {
-                ctx.getColor(R.color.sky_on_container)
-            },
-        )
         holder.badge.setOnClickListener { onBadgeClick(r) }
 
         bindThumbnail(holder, r)
