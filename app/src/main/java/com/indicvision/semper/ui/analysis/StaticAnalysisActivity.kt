@@ -57,7 +57,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import kotlin.math.roundToInt
 
 /**
  * The analysis setup wizard: page 1 loads reference/deformed images (or
