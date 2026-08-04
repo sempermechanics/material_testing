@@ -244,6 +244,10 @@ dependencies {
     implementation(libs.firebase.analytics)
     // Firebase Authentication (email/password, email-link, Google) — the identity layer.
     implementation(libs.firebase.auth)
+    // Crash + non-fatal reporting (field visibility for release builds). Used via
+    // the SDK only — no Crashlytics Gradle plugin — so build-time mapping upload
+    // is not wired; non-fatals and breadcrumbs from CrashReportingTree still flow.
+    implementation(libs.firebase.crashlytics)
     // Await() on Firebase Task<T> from coroutines.
     implementation(libs.kotlinx.coroutines.play.services)
     // AndroidX transitions power the shared-element / expand-collapse motion in ui/Motion.kt
