@@ -552,6 +552,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             cacheDir = cacheDir,
             displayName = ::getFileName,
             tvResult = tvResult,
+            overlayHelper = overlayHelper,
             onApplied = {
                 refreshDefSlot()
                 validateFrameSizes()

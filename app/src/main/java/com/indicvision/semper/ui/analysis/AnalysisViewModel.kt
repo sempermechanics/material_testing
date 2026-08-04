@@ -28,6 +28,7 @@ import com.indicvision.semper.report.EngineStats
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -166,8 +167,17 @@ class AnalysisViewModel : ViewModel() {
     private val _runResult = MutableStateFlow(RunResult())
     val runResult: StateFlow<RunResult> = _runResult.asStateFlow()
 
-    private val _progress = MutableStateFlow<BatchProgressUpdate?>(null)
-    val progress: StateFlow<BatchProgressUpdate?> = _progress.asStateFlow()
+    // Buffered (not conflated): a StateFlow would drop intermediate per-frame /
+    // intra-frame ticks when the native solve emits faster than Main collects, so
+    // the bar appeared to stall between frames. replay=1 keeps the latest for a
+    // late collector; the buffer + DROP_OLDEST preserves ordering without blocking
+    // the solve thread.
+    private val _progress = MutableSharedFlow<BatchProgressUpdate?>(
+        replay = 1,
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val progress: SharedFlow<BatchProgressUpdate?> = _progress.asSharedFlow()
 
     private val _batchOutcome =
         MutableSharedFlow<Result<BatchAnalysisOutcome>>(extraBufferCapacity = 1)
@@ -183,10 +193,10 @@ class AnalysisViewModel : ViewModel() {
     fun launchBatchAnalysis(appContext: Context, params: BatchAnalysisParams) {
         if (batchJob?.isActive == true) return
         batchJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
-            _progress.value = null
+            _progress.tryEmit(null)
             try {
                 val outcome = runBatchAnalysis(appContext, params) { update ->
-                    if (isActive) _progress.value = update
+                    if (isActive) _progress.tryEmit(update)
                 }
                 _batchOutcome.emit(Result.success(outcome))
             } catch (e: CancellationException) {
@@ -195,7 +205,7 @@ class AnalysisViewModel : ViewModel() {
                 Timber.e(e, "Batch processing failed")
                 _batchOutcome.emit(Result.failure(e))
             } finally {
-                _progress.value = null
+                _progress.tryEmit(null)
             }
         }
     }
@@ -477,12 +487,19 @@ class AnalysisViewModel : ViewModel() {
         val solvedLabels = result.runs.map { labelByPoint[it.point].orEmpty() }
         val totalPlanned = result.runs.size + result.skipped.size
         val existing = SessionStore.get(appContext, localSessionId)
-        val stamp = timestamp(System.currentTimeMillis())
-        val name = existing?.name ?: appContext.getString(
-            R.string.session_sweep_name_fmt,
-            defDisplay.substringBeforeLast('.').ifBlank { defDisplay },
-            stamp,
-        )
+        // Regenerate the sweep auto-name each run (keyed to the original createdAt
+        // so the timestamp is stable), unless the user renamed the session — so a
+        // single re-run that becomes a sweep now reads as a sweep, and vice-versa.
+        val stamp = timestamp(existing?.createdAt ?: System.currentTimeMillis())
+        val name = if (existing?.renamedByUser == true) {
+            existing.name
+        } else {
+            appContext.getString(
+                R.string.session_sweep_name_fmt,
+                defDisplay.substringBeforeLast('.').ifBlank { defDisplay },
+                stamp,
+            )
+        }
         val headline = appContext.resources.getQuantityString(
             R.plurals.session_sweep_headline_fmt,
             result.runs.size,
@@ -643,7 +660,11 @@ class AnalysisViewModel : ViewModel() {
         val batchDir = SessionStore.dirFor(appContext, localSessionId)
         batchDir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
 
-        lastBatchDirPath = batchDir.absolutePath
+        // Start every run from a clean result snapshot. Fields below (engineStats,
+        // sessionId, refPath, completed, stopCode, plannedFrames) are only written
+        // on the success path, so a re-run that fails early or yields 0 valid points
+        // would otherwise keep the PREVIOUS run's numbers — the stale-results bug.
+        _runResult.value = RunResult(batchDirPath = batchDir.absolutePath)
         lastStep = params.step
 
         if (!params.debugDir.exists()) params.debugDir.mkdirs()

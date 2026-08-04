@@ -74,6 +74,10 @@ class ComputeOverlayHelper(
         percent.text = "0%"
         this.status.text = status
         elapsed.text = "Elapsed 0s"
+        // Reset the run tiles too, so a re-run doesn't flash the PREVIOUS run's
+        // points/convergence until its first frame completes.
+        runPoints?.text = "0"
+        runConvergence?.text = "0.0%"
         overlay.visibility = View.VISIBLE
         mainHandler.removeCallbacks(elapsedTicker)
         mainHandler.post(elapsedTicker)

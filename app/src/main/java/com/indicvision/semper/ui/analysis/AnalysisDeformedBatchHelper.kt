@@ -30,6 +30,7 @@ object AnalysisDeformedBatchHelper {
         cacheDir: File,
         displayName: (Uri) -> String,
         tvResult: TextView,
+        overlayHelper: ComputeOverlayHelper,
         onApplied: () -> Unit,
     ) {
         val cap = DicSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity))
@@ -47,6 +48,11 @@ object AnalysisDeformedBatchHelper {
             try {
                 withContext(Dispatchers.Main) {
                     tvResult.setText(R.string.analysis_caching_images)
+                    overlayHelper.processingStartTime = System.currentTimeMillis()
+                    overlayHelper.show(
+                        title = activity.getString(R.string.analysis_importing_title),
+                        status = activity.getString(R.string.analysis_caching_images),
+                    )
                 }
 
                 val meta = FrameOrderHelper.loadMeta(activity, capped, displayName)
@@ -58,6 +64,12 @@ object AnalysisDeformedBatchHelper {
                     uris = uris,
                     cacheDir = cacheDir,
                     displayName = displayName,
+                    onProgress = { done, total ->
+                        overlayHelper.update(
+                            percent = if (total > 0) done * 100 / total else 0,
+                            status = activity.getString(R.string.analysis_importing_fmt, done, total),
+                        )
+                    },
                 )
                 val frameDates = batch?.filePaths?.map { path ->
                     val name = File(path).name
@@ -66,6 +78,7 @@ object AnalysisDeformedBatchHelper {
                 }
 
                 withContext(Dispatchers.Main) {
+                    overlayHelper.hide()
                     viewModel.clearPreviousResults()
                     viewModel.defOrderMode = FrameOrderMode.PICKER
                     viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
@@ -88,6 +101,7 @@ object AnalysisDeformedBatchHelper {
             } catch (e: Exception) {
                 Timber.e(e, "Error handling batch")
                 withContext(Dispatchers.Main) {
+                    overlayHelper.hide()
                     Toast.makeText(
                         activity,
                         activity.getString(R.string.error_loading_images, e.message),

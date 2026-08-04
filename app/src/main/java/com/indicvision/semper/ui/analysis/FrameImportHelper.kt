@@ -39,6 +39,7 @@ object FrameImportHelper {
         uris: List<Uri>,
         cacheDir: File,
         displayName: (Uri) -> String,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): ImportedBatch? {
         val tempDir = File(cacheDir, "temp_deformed")
         if (!tempDir.exists()) tempDir.mkdirs()
@@ -64,6 +65,8 @@ object FrameImportHelper {
             } else {
                 importStreamedUri(context, uri, file)
             }
+
+            onProgress(index + 1, uris.size)
 
             if (!file.exists() || file.length() == 0L) continue
 
