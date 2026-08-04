@@ -1,5 +1,6 @@
 {
   "//": "Firestore index source of truth. Deploy with `firebase deploy --only firestore:indexes`. Every backend query (firestore_repo.py) is a single-field equality (users.access_status, files.sessionId/uid, sessions.uid, devices.uid) plus optional limit()/count(), which Firestore single-field-indexes automatically — so no composite index is required today. Add composite entries here if a query ever combines fields or adds orderBy.",
+  "//ttl": "Nonce cleanup is NOT expressed here — Firestore TTL is a field policy, not an index. `challenges.expireAt` must have a TTL policy enabled (see docs/backend/BACKEND_SETUP_GCP.md step A2a: `gcloud firestore fields ttls update expireAt --collection-group=challenges --enable-ttl`), otherwise consumed/expired challenge docs accumulate. consume_nonce deletes on use; TTL reclaims the ones never consumed.",
   "indexes": [],
   "fieldOverrides": []
 }

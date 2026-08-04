@@ -31,6 +31,12 @@ paths:
       operationId: deleteAccount
       responses:
         '200': { description: OK }
+  /v1/config:
+    get:
+      operationId: getConfig
+      description: Resolved product limits for the caller (per-user override or fleet default).
+      responses:
+        '200': { description: OK }
   /v1/me/export:
     get:
       operationId: exportAccount
@@ -153,3 +159,16 @@ paths:
           type: string
       responses:
         '200': { description: OK }
+  /v1/admin/users/{uid}/config:
+    patch:
+      operationId: adminPatchUserConfig
+      description: Set or clear per-user product-limit overrides (maxSessions, maxFilesPerSession, maxFrames).
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: Empty patch }
+        '404': { description: User not found }

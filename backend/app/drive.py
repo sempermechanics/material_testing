@@ -19,6 +19,15 @@ UPLOAD = (
 )
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
+# The timeout ladder must decrease inward: gateway deadline (60s, gateway/
+# openapi.yaml) ≥ Cloud Run request timeout ≥ any single Drive call. A Drive
+# timeout longer than the outer budget is wasted work on a request the client
+# has already been told timed out. Quick metadata calls keep their own tighter
+# 30s; this is the ceiling for the slower ones (recursive delete, and the
+# time-to-first-byte of a streaming download — the body itself then streams
+# under the outer Cloud Run / gateway limits).
+_TIMEOUT_S = 45
+
 
 def access_token() -> str:
     return drive_access_token()
@@ -161,7 +170,7 @@ def delete_file(token: str, file_id: str) -> None:
         f"{API}/files/{file_id}",
         headers=_headers(token),
         params={"supportsAllDrives": "true"},
-        timeout=120,
+        timeout=_TIMEOUT_S,
     )
     if r.status_code in (200, 204):
         return  # explicit success
@@ -221,7 +230,7 @@ def open_download(
         headers=headers,
         params={"alt": "media", "supportsAllDrives": "true"},
         stream=True,
-        timeout=600,
+        timeout=_TIMEOUT_S,
     )
     if r.status_code not in (200, 206):
         r.raise_for_status()

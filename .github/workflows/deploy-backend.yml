@@ -86,4 +86,8 @@ jobs:
           # Secret Manager, never --set-env-vars.
           secrets: |-
             RESEND_API_KEY=resend-api-key:latest
-          flags: --allow-unauthenticated --cpu=1 --memory=512Mi --min-instances=0 --max-instances=10 --concurrency=40 --timeout=120
+          # Timeout ladder (must not invert): gateway deadline 60s (gateway/
+          # openapi.yaml) ≥ Cloud Run 60s ≥ Drive per-call 45s (app/drive.py).
+          # Bytes never transit Cloud Run and every request is tiny JSON, so a
+          # request that outlives 60s is stuck work, not a slow-but-valid call.
+          flags: --allow-unauthenticated --cpu=1 --memory=512Mi --min-instances=0 --max-instances=10 --concurrency=40 --timeout=60

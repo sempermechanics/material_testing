@@ -92,6 +92,9 @@ def get_or_create_user(claims: dict) -> dict:
 
 
 def list_users(status: str = "", limit: int = 200) -> list:
+    # `limit` is caller-capped in the route (admin_list_users) so an operator can
+    # page past the old hard 200. A cursor (`start_after`) is the next step if the
+    # user base outgrows a single capped page; not needed at pilot scale.
     col = db().collection("users")
     query = col.where("access_status", "==", status) if status else col
     out = []
@@ -114,6 +117,56 @@ def set_user_status(uid: str, status: str) -> bool:
         return False
     ref.update({"access_status": status, "updatedAt": firestore.SERVER_TIMESTAMP})
     return True
+
+
+def _positive_int_override(user: dict, key: str):
+    """Optional positive int on the user doc; invalid/missing → None (inherit default)."""
+    raw = user.get(key)
+    if raw is None:
+        return None
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def resolve_user_config(user: dict) -> dict:
+    """Product limits for this account: per-user override, else fleet env default.
+
+    Missing fields are not written at user creation so changing the env default
+    updates everyone who has not been individually overridden.
+    """
+    return {
+        "maxSessions": (
+            _positive_int_override(user, "maxSessions") or settings.MAX_SESSIONS_PER_USER
+        ),
+        "maxFilesPerSession": (
+            _positive_int_override(user, "maxFilesPerSession")
+            or settings.MAX_FILES_PER_SESSION
+        ),
+        "maxFrames": (
+            _positive_int_override(user, "maxFrames") or settings.MAX_FRAMES_PER_ANALYSIS
+        ),
+    }
+
+
+def set_user_config(uid: str, patch: dict) -> dict | None:
+    """Persist per-user limit overrides. Returns resolved config, or None if missing."""
+    ref = db().collection("users").document(uid)
+    snap = ref.get()
+    if not snap.exists:
+        return None
+    allowed = ("maxSessions", "maxFilesPerSession", "maxFrames")
+    update = {k: int(patch[k]) for k in allowed if k in patch and patch[k] is not None}
+    # Explicit null clears an override so the user re-inherits the fleet default.
+    deletes = {k: firestore.DELETE_FIELD for k in allowed if k in patch and patch[k] is None}
+    if update or deletes:
+        ref.update({**update, **deletes, "updatedAt": firestore.SERVER_TIMESTAMP})
+    user = {**(snap.to_dict() or {}), **update, "uid": uid}
+    for k in deletes:
+        user.pop(k, None)
+    return resolve_user_config(user)
 
 
 # ---------------- devices ----------------
@@ -307,7 +360,14 @@ def count_user_sessions(uid: str) -> int:
     return int(agg[0][0].value)
 
 
-def create_session(sid: str, user: dict, device: dict, body: SessionCreate, folders: dict):
+def create_session(sid: str, user: dict, device: dict, body: SessionCreate):
+    """Reserve the session doc BEFORE any Drive folder or file doc is created.
+
+    Writing the parent first means a failure while staging files can never leave
+    file docs (or a Drive subtree) with no session pointing at them: the reserved
+    doc counts toward the quota and is reclaimable. `driveFolderId` is filled in
+    by [set_session_folder] once the folder exists.
+    """
     db().collection("sessions").document(sid).set(
         {
             "uid": user["uid"],
@@ -315,7 +375,7 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate, fold
             "specimen": body.specimen,
             "localSessionId": body.localSessionId,
             "status": "UPLOADING",
-            "driveFolderId": folders["sessionFolderId"],
+            "driveFolderId": None,
             "totalBytes": sum(f.bytes for f in body.files),
             "fileCount": len(body.files),
             "completedCount": 0,
@@ -323,6 +383,13 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate, fold
             "createdAt": firestore.SERVER_TIMESTAMP,
             "updatedAt": firestore.SERVER_TIMESTAMP,
         }
+    )
+
+
+def set_session_folder(sid: str, folder_id: str):
+    """Record the session's Drive folder id once it has been created."""
+    db().collection("sessions").document(sid).update(
+        {"driveFolderId": folder_id, "updatedAt": firestore.SERVER_TIMESTAMP}
     )
 
 

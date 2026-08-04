@@ -1,0 +1,73 @@
+"""create_session reserves the session doc first and rolls back on a staging error.
+
+The session doc is written BEFORE any Drive folder or file doc, so a failure part
+way through staging can never leave file docs (or a Drive subtree) with no parent
+session — which would be invisible to the quota and never reclaimed. On such a
+failure the reserved session (and any file docs already written) are rolled back
+so nothing lingers against the user's quota.
+"""
+import fake_firestore
+import pytest
+
+from app import audit, drive
+from app import firestore_repo as repo
+
+DEV_UID = "dev-user"  # deps._DEV_USER in DEV_INSECURE_AUTH mode
+_SHA = "a" * 64
+
+
+def _file(name: str) -> dict:
+    return {"name": name, "role": "bundle", "bytes": 10, "sha256": _SHA}
+
+
+@pytest.fixture
+def store(monkeypatch):
+    store = fake_firestore.install(monkeypatch)
+    store._data["users"] = {DEV_UID: {"email": "dev@test", "access_status": "APPROVED"}}
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    monkeypatch.setattr(audit, "record", lambda *a, **k: None)
+    monkeypatch.setattr(drive, "access_token", lambda: "tok")
+    monkeypatch.setattr(
+        drive, "ensure_session_folders",
+        lambda *a, **k: {"sessionFolderId": "sf", "userFolderId": "uf", "bundle": "sf"},
+    )
+    return store
+
+
+async def test_staging_failure_leaves_no_orphans(store, monkeypatch, client):
+    """init_resumable raises on the 2nd of 3 files → no session/file docs remain."""
+    calls = {"n": 0}
+
+    def flaky_init(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("drive blew up mid-stage")
+        return "https://drive/resumable"
+
+    monkeypatch.setattr(drive, "init_resumable", flaky_init)
+
+    # The staging error surfaces (the ASGI test transport re-raises it); what
+    # matters is that the except-block rollback ran before it propagated.
+    with pytest.raises(RuntimeError):
+        await client.post(
+            "/v1/sessions",
+            json={"specimen": "s", "files": [_file("a"), _file("b"), _file("c")]},
+        )
+    assert store._data.get("sessions", {}) == {}, "reserved session left orphaned"
+    assert store._data.get("files", {}) == {}, "file docs left with no parent session"
+
+
+async def test_success_reserves_session_before_files(store, monkeypatch, client):
+    """The happy path still creates exactly one session with its files."""
+    monkeypatch.setattr(drive, "init_resumable", lambda *a, **k: "https://drive/resumable")
+
+    r = await client.post(
+        "/v1/sessions",
+        json={"specimen": "s", "files": [_file("a"), _file("b")]},
+    )
+    assert r.status_code == 200
+    assert len(store._data["sessions"]) == 1
+    sid = next(iter(store._data["sessions"]))
+    # The reserved doc was created, then its Drive folder recorded.
+    assert store._data["sessions"][sid]["driveFolderId"] == "sf"
+    assert len(store._data["files"]) == 2

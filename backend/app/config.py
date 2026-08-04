@@ -23,11 +23,16 @@ class Settings:
     # and must be approved individually. Empty = nobody auto-approved by domain.
     AUTO_APPROVE_HD = os.environ.get("AUTO_APPROVE_HD", "")
 
-    # Per-user quotas. MAX_SESSIONS_PER_USER = how many analyses a user may keep
-    # in the cloud; MAX_FILES_PER_SESSION bounds one analysis (150 frames x
-    # raw+dat+csv + reference + report + metadata ≈ 460, so 600 gives headroom).
+    # Fleet-wide defaults for product limits. Per-user overrides live on the
+    # Firestore users/{uid} document (maxSessions / maxFilesPerSession /
+    # maxFrames); resolve_user_config merges override → these defaults.
+    # MAX_SESSIONS_PER_USER = how many analyses a user may keep in the cloud;
+    # MAX_FILES_PER_SESSION bounds one analysis (150 frames x raw+dat+csv +
+    # reference + report + metadata ≈ 460, so 600 gives headroom);
+    # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces.
     MAX_SESSIONS_PER_USER = _env_int("MAX_SESSIONS_PER_USER", "4")
     MAX_FILES_PER_SESSION = _env_int("MAX_FILES_PER_SESSION", "600")
+    MAX_FRAMES_PER_ANALYSIS = _env_int("MAX_FRAMES_PER_ANALYSIS", "150")
 
     # Comma-separated emails that are treated as admins (role=admin, always
     # approved) — they can call the /v1/admin/* endpoints. e.g.

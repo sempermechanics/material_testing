@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from . import audit, drive, firestore_repo as repo
 from .config import settings
 from .deps import admin_user, current_user, verified_device
-from .models import DeviceReg, FileComplete, SessionCreate
+from .models import DeviceReg, FileComplete, SessionCreate, UserConfigPatch
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("indic")
@@ -85,6 +85,15 @@ async def access_log(request: Request, call_next):
         }))
 
 
+# Route handlers are deliberately plain `def`, not `async def`. Every Firestore
+# and Drive call in this service is synchronous/blocking (google-cloud-firestore
+# sync client + `requests`), so an `async def` handler would run that blocking
+# I/O directly on the event loop and stall all other requests sharing the worker.
+# A `def` handler is instead dispatched to Starlette's threadpool, which is the
+# correct model here. Async dependencies (e.g. verified_device awaiting the body)
+# still resolve on the loop first — mixing a sync route with an async dependency
+# is fully supported. Only genuinely-awaiting code stays async (lifespan, the
+# access_log middleware). Do not "modernize" these back to async def.
 @app.get("/healthz")
 def healthz():
     # Unauthenticated endpoint: it must not report the service's auth posture.
@@ -93,13 +102,19 @@ def healthz():
 
 
 @app.get("/v1/me")
-async def me(user=Depends(current_user)):
+def me(user=Depends(current_user)):
     return {"uid": user["uid"], "email": user.get("email"),
             "role": user.get("role"), "access_status": user["access_status"]}
 
 
+@app.get("/v1/config")
+def app_config(user=Depends(current_user)):
+    """Resolved product limits for the caller (per-user override → fleet default)."""
+    return repo.resolve_user_config(user)
+
+
 @app.get("/v1/me/export")
-async def export_account(ctx=Depends(verified_device)):
+def export_account(ctx=Depends(verified_device)):
     """GDPR data portability (Art. 20): everything we hold about the caller, as JSON.
 
     Structured and machine-readable: the profile, registered devices, and every
@@ -143,7 +158,7 @@ async def export_account(ctx=Depends(verified_device)):
 
 
 @app.delete("/v1/me")
-async def delete_account(ctx=Depends(verified_device)):
+def delete_account(ctx=Depends(verified_device)):
     """Erase the account and ALL of its data (GDPR right to erasure).
 
     Deletes the user's entire Drive subtree in one shot (every analysis, plus
@@ -209,7 +224,7 @@ async def delete_account(ctx=Depends(verified_device)):
 
 
 @app.post("/v1/devices/register", status_code=201)
-async def register_device(body: DeviceReg, user=Depends(current_user)):
+def register_device(body: DeviceReg, user=Depends(current_user)):
     active = user.get("activeDeviceId")
     # This ACCOUNT is already bound to a different device → real device switch,
     # needs a reset/rebind. (Same device id re-registering after a reinstall is
@@ -231,14 +246,14 @@ async def register_device(body: DeviceReg, user=Depends(current_user)):
 
 
 @app.post("/v1/challenge")
-async def challenge(user=Depends(current_user), x_device_id: str = Header(default="")):
+def challenge(user=Depends(current_user), x_device_id: str = Header(default="")):
     if not x_device_id:
         raise HTTPException(400, "missing_device_id")
     return {"nonce": repo.issue_nonce(user["uid"], x_device_id)}
 
 
 @app.get("/v1/sessions")
-async def list_sessions(verify: bool = False, user=Depends(current_user)):
+def list_sessions(verify: bool = False, user=Depends(current_user)):
     """The caller's cloud analyses. The app reconciles local sync state against
     this, so a session deleted in the cloud stops showing as 'synced'.
 
@@ -269,12 +284,12 @@ async def list_sessions(verify: bool = False, user=Depends(current_user)):
 
     return {
         "sessions": sessions,
-        "quota": {"used": len(sessions), "max": settings.MAX_SESSIONS_PER_USER},
+        "quota": {"used": len(sessions), "max": repo.resolve_user_config(user)["maxSessions"]},
     }
 
 
 @app.delete("/v1/sessions/{sid}")
-async def delete_session(sid: str, ctx=Depends(verified_device)):
+def delete_session(sid: str, ctx=Depends(verified_device)):
     """Erase one analysis from the cloud (GDPR right to erasure).
 
     Permanently deletes the Drive folder — every raw image, .dat, csv and report
@@ -300,7 +315,7 @@ async def delete_session(sid: str, ctx=Depends(verified_device)):
 
 
 @app.get("/v1/sessions/{sid}/uploads")
-async def session_uploads(sid: str, user=Depends(current_user)):
+def session_uploads(sid: str, user=Depends(current_user)):
     """What still needs uploading for a session — the resume path.
 
     An interrupted upload re-reads this instead of calling POST /v1/sessions
@@ -318,7 +333,7 @@ async def session_uploads(sid: str, user=Depends(current_user)):
 
 
 @app.get("/v1/sessions/{sid}/files")
-async def list_session_files(sid: str, user=Depends(current_user)):
+def list_session_files(sid: str, user=Depends(current_user)):
     """The manifest for one analysis — what the app needs to restore it."""
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
@@ -333,7 +348,7 @@ async def list_session_files(sid: str, user=Depends(current_user)):
 
 
 @app.get("/v1/files/{file_id}/content")
-async def download_file(file_id: str, request: Request, ctx=Depends(verified_device)):
+def download_file(file_id: str, request: Request, ctx=Depends(verified_device)):
     """Stream one file back from Drive (restore).
 
     Drive has no anonymous signed download, so — unlike uploads, which go
@@ -388,54 +403,78 @@ async def download_file(file_id: str, request: Request, ctx=Depends(verified_dev
 
 
 @app.post("/v1/sessions")
-async def create_session(body: SessionCreate, ctx=Depends(verified_device)):
+def create_session(body: SessionCreate, ctx=Depends(verified_device)):
     user, device = ctx["user"], ctx["device"]
+    cfg = repo.resolve_user_config(user)
 
     # Quotas: one session == one analysis.
-    if len(body.files) > settings.MAX_FILES_PER_SESSION:
+    if len(body.files) > cfg["maxFilesPerSession"]:
         raise HTTPException(413, "too_many_files")
     used = repo.count_user_sessions(user["uid"])
-    if used >= settings.MAX_SESSIONS_PER_USER:
+    if used >= cfg["maxSessions"]:
         raise HTTPException(
             409,
-            f"session_quota_exceeded: {used}/{settings.MAX_SESSIONS_PER_USER} analyses stored. "
+            f"session_quota_exceeded: {used}/{cfg['maxSessions']} analyses stored. "
             "Delete an older analysis to sync a new one.",
         )
 
     sid = uuid.uuid4().hex
-    token = drive.access_token()
-    # Only create the Drive subfolders this manifest actually uses (a bundle
-    # upload needs none — Session.zip and metadata.json sit at the session root).
-    folders = drive.ensure_session_folders(token, user["uid"], sid,
-                                           roles={f.role for f in body.files})
-    # Remember the user's Drive subtree so account erasure can delete it by id.
-    repo.remember_user_folder(user["uid"], folders["userFolderId"])
+    # Reserve the session doc immediately after the quota check and BEFORE any
+    # Drive work, so a failure while staging folders/files can never leave file
+    # docs or a Drive subtree with no parent session (which would be invisible to
+    # the quota and never reclaimed). The count→reserve window is now two
+    # back-to-back Firestore ops with no Drive I/O between them; the residual
+    # concurrent-create race is on a *soft* quota, not a security boundary, and is
+    # accepted deliberately (a transactional cross-doc count is not modelled by
+    # the Firestore client uniformly and adds no security value here).
+    repo.create_session(sid, user, device, body)
 
-    uploads = []
-    for f in body.files:
-        session_uri = drive.init_resumable(token, folders[f.role], f.name, f.bytes)
-        file_id = f"{sid}_{f.role}_{f.name}"
-        repo.create_file(sid, user["uid"], file_id, f, session_uri)
-        # 32 MiB (a 256 KiB multiple, as Drive requires): a session is now one
-        # large Session.zip, so throughput is chunk-size × round-trips — small
-        # chunks leave the link idle waiting on RTTs.
-        uploads.append({"fileId": file_id, "uploadUrl": session_uri,
-                        "chunkSize": 32 * 1024 * 1024})
+    try:
+        token = drive.access_token()
+        # Only create the Drive subfolders this manifest actually uses (a bundle
+        # upload needs none — Session.zip and metadata.json sit at the session root).
+        folders = drive.ensure_session_folders(token, user["uid"], sid,
+                                               roles={f.role for f in body.files})
+        # Remember the user's Drive subtree so account erasure can delete it by id,
+        # and record the session's own folder for the delete / verify paths.
+        repo.remember_user_folder(user["uid"], folders["userFolderId"])
+        repo.set_session_folder(sid, folders["sessionFolderId"])
 
-    repo.create_session(sid, user, device, body, folders)
+        uploads = []
+        for f in body.files:
+            session_uri = drive.init_resumable(token, folders[f.role], f.name, f.bytes)
+            file_id = f"{sid}_{f.role}_{f.name}"
+            repo.create_file(sid, user["uid"], file_id, f, session_uri)
+            # 32 MiB (a 256 KiB multiple, as Drive requires): a session is now one
+            # large Session.zip, so throughput is chunk-size × round-trips — small
+            # chunks leave the link idle waiting on RTTs.
+            uploads.append({"fileId": file_id, "uploadUrl": session_uri,
+                            "chunkSize": 32 * 1024 * 1024})
+    except Exception:
+        # Staging failed after the reserve. Roll back the reserved session (and any
+        # file docs written so far) so it does not sit against the user's quota as
+        # an unusable shell; the client can safely retry a fresh create.
+        repo.delete_session(sid)
+        raise
+
     audit.record(user["uid"], device.get("deviceId"), action="SESSION_CREATE",
                  target={"type": "session", "id": sid})
     return {"sessionId": sid, "uploads": uploads}
 
 
 @app.get("/v1/admin/users")
-async def admin_list_users(status: str = "", admin=Depends(admin_user)):
-    """List users, optionally filtered by access_status (e.g. ?status=PENDING)."""
-    return {"users": repo.list_users(status)}
+def admin_list_users(status: str = "", limit: int = 200, admin=Depends(admin_user)):
+    """List users, optionally filtered by access_status (e.g. ?status=PENDING).
+
+    `limit` (1..1000, default 200) lets an admin page past the old hard 200-user
+    ceiling; values are clamped so a huge scan can't be requested by accident.
+    """
+    limit = max(1, min(limit, 1000))
+    return {"users": repo.list_users(status, limit=limit)}
 
 
 @app.post("/v1/admin/users/{uid}/approve")
-async def admin_approve_user(uid: str, admin=Depends(admin_user)):
+def admin_approve_user(uid: str, admin=Depends(admin_user)):
     if not repo.set_user_status(uid, "APPROVED"):
         raise HTTPException(404, "user_not_found")
     audit.record(admin["uid"], action="ADMIN_APPROVE", target={"type": "user", "id": uid})
@@ -443,15 +482,31 @@ async def admin_approve_user(uid: str, admin=Depends(admin_user)):
 
 
 @app.post("/v1/admin/users/{uid}/revoke")
-async def admin_revoke_user(uid: str, admin=Depends(admin_user)):
+def admin_revoke_user(uid: str, admin=Depends(admin_user)):
     if not repo.set_user_status(uid, "SUSPENDED"):
         raise HTTPException(404, "user_not_found")
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
     return {"uid": uid, "access_status": "SUSPENDED"}
 
 
+@app.patch("/v1/admin/users/{uid}/config")
+def admin_patch_user_config(uid: str, body: UserConfigPatch, admin=Depends(admin_user)):
+    """Set or clear per-user product-limit overrides on the Firestore user doc."""
+    # model_dump(exclude_unset=True) keeps omitted fields out; explicit nulls
+    # remain so set_user_config can DELETE_FIELD them.
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        raise HTTPException(400, "empty_patch")
+    resolved = repo.set_user_config(uid, patch)
+    if resolved is None:
+        raise HTTPException(404, "user_not_found")
+    audit.record(admin["uid"], action="ADMIN_CONFIG", target={"type": "user", "id": uid},
+                 detail={"patch": patch, "resolved": resolved})
+    return {"uid": uid, "config": resolved}
+
+
 @app.post("/v1/files/{file_id}/complete")
-async def complete_file(file_id: str, body: FileComplete, ctx=Depends(verified_device)):
+def complete_file(file_id: str, body: FileComplete, ctx=Depends(verified_device)):
     user = ctx["user"]
     rec = repo.get_file(file_id)
     if not rec or rec.get("uid") != user["uid"]:
@@ -468,7 +523,12 @@ async def complete_file(file_id: str, body: FileComplete, ctx=Depends(verified_d
             raise HTTPException(502, "drive_meta_failed") from e
         if meta["size"] != rec.get("sizeBytes"):
             raise HTTPException(422, "size_mismatch")
-        if body.md5 and meta["md5"] and body.md5 != meta["md5"]:
+        # Whenever Drive reports an md5 (always, for our binary blobs), the client
+        # MUST supply a matching one. Previously a client that simply omitted md5
+        # skipped the checksum entirely — a corrupt-but-right-sized upload could be
+        # accepted. md5 is only skipped when Drive itself has none (Docs-native
+        # types we never store).
+        if meta["md5"] and body.md5 != meta["md5"]:
             raise HTTPException(422, "checksum_mismatch")
     outcome = repo.complete_file(file_id, user["uid"], body)
     if not outcome:

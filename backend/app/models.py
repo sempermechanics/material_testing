@@ -45,9 +45,37 @@ class SessionCreate(BaseModel):
     # state against what actually exists in the cloud (and restore later).
     localSessionId: str = Field(default="", max_length=128)
 
+    @field_validator("metrics")
+    @classmethod
+    def _bounded_metrics(cls, v: dict) -> dict:
+        # metrics is written verbatim to the Firestore session doc, so an
+        # unbounded client dict could inflate it toward the 1 MiB doc limit.
+        # It is meant to be a small map of scalar run stats (pointsConverged,
+        # avgIcgnIters, execMs), so reject anything larger or nested.
+        if len(v) > 32:
+            raise ValueError("metrics has too many keys")
+        for key, val in v.items():
+            if not isinstance(key, str) or len(key) > 64:
+                raise ValueError("metrics keys must be strings <= 64 chars")
+            # bool is a subclass of int; strings are length-bounded; no nesting.
+            if isinstance(val, str):
+                if len(val) > 256:
+                    raise ValueError("metrics string values must be <= 256 chars")
+            elif not isinstance(val, (int, float, bool)):
+                raise ValueError("metrics values must be scalar (num / bool / short str)")
+        return v
+
 
 class FileComplete(BaseModel):
     sessionId: str
     driveFileId: str
     bytes: int
     md5: Optional[str] = None
+
+
+class UserConfigPatch(BaseModel):
+    """Admin overrides for per-user product limits. Omitted fields stay unchanged;
+    send JSON null to clear an override and re-inherit the fleet default."""
+    maxSessions: Optional[int] = Field(default=None, gt=0)
+    maxFilesPerSession: Optional[int] = Field(default=None, gt=0)
+    maxFrames: Optional[int] = Field(default=None, gt=0)

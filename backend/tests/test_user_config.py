@@ -1,0 +1,125 @@
+"""Per-user product limits: resolve defaults/overrides, config API, admin patch."""
+import pytest
+
+import fake_firestore
+
+from app import firestore_repo as repo
+from app.config import settings
+
+
+@pytest.fixture
+def store(monkeypatch):
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    return fake_firestore.install(monkeypatch)
+
+
+def test_resolve_uses_fleet_defaults_when_no_override(store, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_SESSIONS_PER_USER", 4)
+    monkeypatch.setattr(settings, "MAX_FILES_PER_SESSION", 600)
+    monkeypatch.setattr(settings, "MAX_FRAMES_PER_ANALYSIS", 150)
+    cfg = repo.resolve_user_config({"uid": "u1"})
+    assert cfg == {
+        "maxSessions": 4,
+        "maxFilesPerSession": 600,
+        "maxFrames": 150,
+    }
+
+
+def test_resolve_prefers_positive_user_overrides(store, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_SESSIONS_PER_USER", 4)
+    monkeypatch.setattr(settings, "MAX_FILES_PER_SESSION", 600)
+    monkeypatch.setattr(settings, "MAX_FRAMES_PER_ANALYSIS", 150)
+    cfg = repo.resolve_user_config({
+        "uid": "u1",
+        "maxSessions": 12,
+        "maxFilesPerSession": 800,
+        "maxFrames": 100,
+    })
+    assert cfg == {
+        "maxSessions": 12,
+        "maxFilesPerSession": 800,
+        "maxFrames": 100,
+    }
+
+
+def test_resolve_ignores_invalid_overrides(store, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_SESSIONS_PER_USER", 4)
+    monkeypatch.setattr(settings, "MAX_FILES_PER_SESSION", 600)
+    monkeypatch.setattr(settings, "MAX_FRAMES_PER_ANALYSIS", 150)
+    cfg = repo.resolve_user_config({
+        "uid": "u1",
+        "maxSessions": 0,
+        "maxFilesPerSession": "nope",
+        "maxFrames": -3,
+    })
+    assert cfg["maxSessions"] == 4
+    assert cfg["maxFilesPerSession"] == 600
+    assert cfg["maxFrames"] == 150
+
+
+def test_set_user_config_writes_and_clears(store, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_SESSIONS_PER_USER", 4)
+    monkeypatch.setattr(settings, "MAX_FILES_PER_SESSION", 600)
+    monkeypatch.setattr(settings, "MAX_FRAMES_PER_ANALYSIS", 150)
+    store._data["users"] = {"u1": {"email": "a@b.com", "access_status": "APPROVED"}}
+
+    resolved = repo.set_user_config("u1", {"maxSessions": 25})
+    assert resolved["maxSessions"] == 25
+    assert store._data["users"]["u1"]["maxSessions"] == 25
+
+    cleared = repo.set_user_config("u1", {"maxSessions": None})
+    assert cleared["maxSessions"] == 4
+    assert "maxSessions" not in store._data["users"]["u1"]
+
+
+def test_set_user_config_missing_user(store):
+    assert repo.set_user_config("missing", {"maxSessions": 10}) is None
+
+
+@pytest.mark.asyncio
+async def test_config_endpoint_returns_defaults(client):
+    resp = await client.get("/v1/config")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["maxSessions"] == settings.MAX_SESSIONS_PER_USER
+    assert body["maxFilesPerSession"] == settings.MAX_FILES_PER_SESSION
+    assert body["maxFrames"] == settings.MAX_FRAMES_PER_ANALYSIS
+
+
+@pytest.mark.asyncio
+async def test_admin_patch_user_config(client, monkeypatch):
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    store._data["users"] = {"u1": {"email": "a@b.com", "access_status": "APPROVED"}}
+
+    resp = await client.patch("/v1/admin/users/u1/config", json={"maxSessions": 9})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["uid"] == "u1"
+    assert body["config"]["maxSessions"] == 9
+    assert store._data["users"]["u1"]["maxSessions"] == 9
+
+
+@pytest.mark.asyncio
+async def test_admin_patch_empty_rejected(client):
+    resp = await client.patch("/v1/admin/users/u1/config", json={})
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_list_sessions_quota_uses_resolved_max(client, monkeypatch):
+    fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    # DEV user uid is "dev-user"; plant an override on that doc and stub
+    # current_user's resolve path by putting fields on _DEV_USER via deps.
+    from app import deps
+    monkeypatch.setattr(
+        deps,
+        "_DEV_USER",
+        {**deps._DEV_USER, "maxSessions": 7},
+    )
+    monkeypatch.setattr(repo, "list_user_sessions", lambda uid: [])
+
+    resp = await client.get("/v1/sessions")
+    assert resp.status_code == 200
+    assert resp.json()["quota"] == {"used": 0, "max": 7}
