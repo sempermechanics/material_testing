@@ -59,7 +59,7 @@ change (see §19).
 ```
                          ┌───────────────────────────────────────────┐
                          │             Android device                 │
-                         │  Jetpack Compose UI                        │
+                         │  Android Views UI (XML + findViewById)     │
                          │  ├─ Firebase Auth (Firebase ID token)      │
                          │  ├─ Android Keystore (device private key)  │
                          │  ├─ WorkManager CoroutineWorker            │
