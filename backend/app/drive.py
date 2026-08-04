@@ -17,6 +17,7 @@ API = "https://www.googleapis.com/drive/v3"
 UPLOAD = (
     "https://www.googleapis.com/upload/drive/v3/files"
     "?uploadType=resumable&supportsAllDrives=true"
+    "&fields=id,md5Checksum,size"
 )
 FOLDER_MIME = "application/vnd.google-apps.folder"
 

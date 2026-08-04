@@ -3,13 +3,14 @@ package com.indicvision.semper.cloud
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.Headers
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -61,13 +62,13 @@ class UploadResumableTest {
         writeBytes(1000)
         // Probe: Drive already holds bytes 0-399.
         enqueue(308, Headers.headersOf("Range", "bytes=0-399"))
-        // The continuation PUT completes the file.
-        enqueue(200, body = """{"id":"drv1","md5Checksum":"md5x"}""")
+        // The continuation PUT completes the file — no md5Checksum (Drive v3 default).
+        enqueue(200, body = """{"id":"drv1"}""")
 
         val (driveId, md5) = api.uploadResumable(server.url("/u").toString(), file, chunk256k)
 
         assertEquals("drv1", driveId)
-        assertEquals("md5x", md5)
+        assertEquals(Digests.md5Hex(file), md5)
         // Request 1 = probe; request 2 must continue at byte 400, not 0.
         assertEquals("bytes */1000", server.takeRequest().headers["Content-Range"])
         val put = server.takeRequest()
@@ -76,15 +77,27 @@ class UploadResumableTest {
     }
 
     @Test
-    fun `already-complete upload returns the Drive resource from the probe alone`() = runBlocking {
+    fun `already-complete upload returns local md5 when Drive omits md5Checksum`() = runBlocking {
         writeBytes(500)
         enqueue(200, body = """{"id":"done1"}""")
 
         val (driveId, md5) = api.uploadResumable(server.url("/u").toString(), file, chunk256k)
 
         assertEquals("done1", driveId)
-        assertNull(md5)
+        assertEquals(Digests.md5Hex(file), md5)
         // No bytes may be re-sent: the probe must be the only request.
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `already-complete upload prefers Drive md5Checksum when present`() = runBlocking {
+        writeBytes(500)
+        enqueue(200, body = """{"id":"done2","md5Checksum":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}""")
+
+        val (driveId, md5) = api.uploadResumable(server.url("/u").toString(), file, chunk256k)
+
+        assertEquals("done2", driveId)
+        assertEquals("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", md5)
         assertEquals(1, server.requestCount)
     }
 
@@ -97,9 +110,11 @@ class UploadResumableTest {
         enqueue(200, body = """{"id":"drv2"}""")
 
         // chunkSize=1 is below Drive's 256 KiB minimum — the clamp must raise it.
-        val (driveId, _) = api.uploadResumable(server.url("/u").toString(), file, 1)
+        val (driveId, md5) = api.uploadResumable(server.url("/u").toString(), file, 1)
 
         assertEquals("drv2", driveId)
+        assertNotNull(md5)
+        assertEquals(Digests.md5Hex(file), md5)
         server.takeRequest() // probe
         assertEquals("bytes 0-${chunk256k - 1}/$total", server.takeRequest().headers["Content-Range"])
         assertEquals("bytes $chunk256k-${total - 1}/$total", server.takeRequest().headers["Content-Range"])

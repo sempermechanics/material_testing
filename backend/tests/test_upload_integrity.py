@@ -59,3 +59,16 @@ async def test_complete_rejects_checksum_mismatch(seeded, client, monkeypatch):
         json={"sessionId": "s1", "driveFileId": "drive1", "bytes": 100, "md5": _MD5},
     )
     assert r.status_code == 422
+
+
+async def test_complete_rejects_omitted_md5_when_drive_has_one(seeded, client, monkeypatch):
+    # Client must supply md5 whenever Drive reports one — omitting it used to
+    # skip the check entirely (corrupt-but-right-sized uploads would pass).
+    monkeypatch.setattr(drive, "get_file_meta", lambda t, fid: _meta())
+    r = await client.post(
+        "/v1/files/f1/complete",
+        json={"sessionId": "s1", "driveFileId": "drive1", "bytes": 100},
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"] == "checksum_mismatch"
+    assert seeded._data["files"]["f1"]["status"] == "PENDING"

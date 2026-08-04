@@ -235,7 +235,7 @@ sequenceDiagram
     W->>D: PUT final chunk
     D-->>W: 200/201 {id, md5Checksum, size}
     W->>R: POST /v1/files/{fileId}/complete {driveFileId, md5, bytes}
-    R->>R: verify size + (md5 vs client sha256 policy) 
+    R->>R: verify size + (client md5 vs Drive md5Checksum)
     R->>Firestore: files/{fid}=COMPLETED; if all done → sessions/{sid}=COMPLETED
     R->>Firestore: audit_logs += UPLOAD_COMPLETED
     R-->>W: 200
@@ -253,9 +253,12 @@ retry/offline.
 `checksum_mismatch`), leaving the file `PENDING` rather than marking it
 `COMPLETED` — see `complete_file` in `main.py`. It does **not** currently mark
 `FAILED`, delete the Drive object, or auto-re-enqueue; the client retries the
-completion. (Note: Drive omits `md5Checksum` for some Docs-native types; for our
-binary blobs it is present, and the md5 check is skipped only when the client
-sends no md5.)
+completion. Whenever Drive reports an `md5Checksum` (always for our binary
+blobs), the client **must** supply a matching `md5`; omitting it is treated as
+`checksum_mismatch`. The check is skipped only when Drive itself has no md5
+(Docs-native types we never store). The Android client computes the local file
+MD5 during upload so `:complete` does not depend on Drive's completion JSON
+including `md5Checksum`.
 
 **One Session.zip per session (current), not per-file objects.** The product now
 uploads a single `bundle`-role `Session.zip` holding `raw/`, `dat/`, `csv/` and

@@ -360,13 +360,15 @@ class IndicApi private constructor(context: Context) {
     /**
      * Resumable upload of [file] to a Drive [uploadUrl], in [chunkSize] chunks
      * (multiple of 256 KiB). Resumes from the server offset on reconnect. Bytes
-     * go straight to Drive — not through the backend. Returns (driveFileId, md5).
+     * go straight to Drive — not through the backend.
+     * Returns (driveFileId, localMd5Hex) — md5 is always set for `:complete`.
      */
     suspend fun uploadResumable(
         uploadUrl: String,
         file: java.io.File,
         chunkSize: Int,
-    ): Pair<String, String?> = drive.uploadResumable(uploadUrl, file, chunkSize)
+        onBytes: (Long) -> Unit = {},
+    ): Pair<String, String> = drive.uploadResumable(uploadUrl, file, chunkSize, onBytes)
 
     companion object {
         // One connection pool + dispatcher shared by every IndicApi instance.
