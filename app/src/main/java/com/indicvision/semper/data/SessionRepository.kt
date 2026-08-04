@@ -103,11 +103,21 @@ class SessionRepository {
     ): SessionRecord {
         val now = System.currentTimeMillis()
         val existing = SessionStore.get(appContext, localSessionId)
+        val createdAt = existing?.createdAt ?: now
         val convergence = engineStatsArray?.getOrNull(EngineStats.SLOT_CONVERGENCE) ?: 0f
+        // Regenerate the auto-name for THIS run's kind (single here), keyed to the
+        // original createdAt so re-runs don't churn the timestamp — but never
+        // override a name the user set themselves.
+        val autoName = if (existing?.renamedByUser == true) {
+            existing.name
+        } else {
+            defaultSessionName(refName, createdAt)
+        }
         return SessionRecord(
             id = localSessionId,
-            name = existing?.name ?: defaultSessionName(refName, now),
-            createdAt = existing?.createdAt ?: now,
+            name = autoName,
+            createdAt = createdAt,
+            renamedByUser = existing?.renamedByUser ?: false,
             updatedAt = now,
             frameCount = frameCount,
             subset = settings.subset,

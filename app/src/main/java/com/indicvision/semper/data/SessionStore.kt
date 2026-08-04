@@ -101,6 +101,13 @@ data class SessionRecord(
 
     /** Frames the run set out to solve; 0 for records predating this field. */
     val plannedFrameCount: Int = 0,
+
+    /**
+     * True once the user has renamed this session, so a re-run keeps their name
+     * instead of regenerating the auto-name. Auto-names ARE regenerated per run
+     * so a sweep re-run as a single (or vice-versa) stops carrying the old kind.
+     */
+    val renamedByUser: Boolean = false,
 ) {
 
     /** True when the run stopped itself before working through every frame. */
@@ -240,7 +247,11 @@ object SessionStore {
     fun rename(context: Context, id: String, newName: String) = synchronized(lock) {
         mutateIndex(context) { records ->
             records.map {
-                if (it.id == id) it.copy(name = newName, updatedAt = System.currentTimeMillis()) else it
+                if (it.id == id) {
+                    it.copy(name = newName, renamedByUser = true, updatedAt = System.currentTimeMillis())
+                } else {
+                    it
+                }
             }
         }
     }

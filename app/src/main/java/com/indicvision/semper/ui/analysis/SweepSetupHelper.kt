@@ -40,7 +40,7 @@ import java.util.Locale
 import kotlin.math.min
 
 /**
- * Parameter-sweep setup UI for the analysis wizard (§5.4.5 VSG study): mode
+ * Parameter-sweep setup UI for the analysis wizard (§5.4.5 parameter sweep): mode
  * toggle, subset/VSG/sample fields, lattice + line-cut previews, and plan
  * summary. Orchestration ([startVsgSweep], progress, lifecycle) stays in the
  * Activity.

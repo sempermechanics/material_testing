@@ -456,7 +456,7 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Card: analysis mode — one setting, or a VSG study sweep -->
+                <!-- Card: analysis mode — one setting, or a parameter sweep -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
