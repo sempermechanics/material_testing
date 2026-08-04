@@ -21,6 +21,8 @@ object AppRemoteConfig {
     private const val K_MAX_SESSIONS = "max_sessions"
     private const val K_MAX_FILES = "max_files_per_session"
     private const val K_MAX_FRAMES = "max_frames"
+    private const val K_FAIL_STREAK = "config_fail_streak"
+    private const val FAIL_STREAK_HINT = 3
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -36,8 +38,22 @@ object AppRemoteConfig {
             putInt(K_MAX_SESSIONS, config.maxSessions.coerceAtLeast(0))
             putInt(K_MAX_FILES, config.maxFilesPerSession.coerceAtLeast(0))
             putInt(K_MAX_FRAMES, config.maxFrames.coerceAtLeast(0))
+            putInt(K_FAIL_STREAK, 0)
         }
     }
+
+    /** Record a failed /v1/config fetch (uploads stay gated until config lands). */
+    fun recordFetchFailure(context: Context) {
+        val prefs = prefs(context)
+        prefs.edit { putInt(K_FAIL_STREAK, prefs.getInt(K_FAIL_STREAK, 0) + 1) }
+    }
+
+    /**
+     * True when several consecutive config fetches failed while the quota is
+     * still unknown — surface a "can't sync yet" hint so this is not silent.
+     */
+    fun shouldHintSyncBlocked(context: Context): Boolean =
+        !isKnown(context) && prefs(context).getInt(K_FAIL_STREAK, 0) >= FAIL_STREAK_HINT
 
     /** True once the backend has reported a positive maxSessions. */
     fun isKnown(context: Context): Boolean = maxSessions(context) > 0

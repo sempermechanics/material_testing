@@ -288,7 +288,10 @@ class AuthRepository(context: Context) {
             TokenStore.setRole(appContext, me.role ?: "user")
             runCatching { api.getConfig(token) }
                 .onSuccess { AppRemoteConfig.apply(appContext, it) }
-                .onFailure { Timber.d(it, "Could not fetch app remote config") }
+                .onFailure {
+                    AppRemoteConfig.recordFetchFailure(appContext)
+                    Timber.d(it, "Could not fetch app remote config")
+                }
             ensureDeviceRegistered(token)
             Result.success(AccessStatus.APPROVED)
         } catch (e: IndicApi.NotApprovedException) {

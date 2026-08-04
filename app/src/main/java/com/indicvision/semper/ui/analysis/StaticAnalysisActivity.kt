@@ -57,6 +57,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * The analysis setup wizard: page 1 loads reference/deformed images (or
@@ -305,6 +306,22 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         restoreUiFromViewModel()
+        BatchRunController(
+            activity = this,
+            viewModel = viewModel,
+            overlayHelper = overlayHelper,
+            tvResult = tvResult,
+            setProcessing = { isProcessing = it },
+            checkReady = ::checkReady,
+            onPartialRun = ::onPartialRun,
+            openResultViewer = { openResultViewer() },
+            engineFailureMessage = { code, frameIndex, frameName ->
+                engineFailureMessage(code, frameIndex, frameName)
+            },
+            showEngineFailureDialog = { code, titleRes, frameIndex, frameName ->
+                showEngineFailureDialog(code, titleRes, frameIndex, frameName)
+            },
+        ).observe()
 
         // Reference: one image, from either source. Files (SAF) is the route that
         // reaches DNG/RAW, which the Photo Picker does not index.
@@ -924,8 +941,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             wireCancelButton { viewModel.cancelRequested = true }
 
-            // Strain is always VSG; pre-correlation blur is not offered. Both were
-            // removed from the engine signature, not just pinned in the UI.
             val use6x6 = currentUseKeysInterpolator()
             val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
 
@@ -933,109 +948,22 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (!debugDir.exists()) debugDir.mkdirs()
             SemperNativeLib.setDebugOutputDir(debugDir.absolutePath)
 
-            withContext(SemperNativeLib.nativeDispatcher) {
-                try {
-                    val params = AnalysisViewModel.BatchAnalysisParams(
-                        cacheDir = cacheDir,
-                        subset = subset,
-                        step = step,
-                        strainWin = strainWin,
-                        finalRectX = finalRectX,
-                        finalRectY = finalRectY,
-                        finalRectW = finalRectW,
-                        finalRectH = finalRectH,
-                        use6x6 = use6x6,
-                        maskData = maskData,
-                        debugDir = debugDir,
-                        processingStartTime = overlayHelper.processingStartTime,
-                    )
-
-                    val outcome = viewModel.runBatchAnalysis(applicationContext, params) { progress ->
-                        overlayHelper.update(
-                            percent = progress.percent,
-                            status = progress.status,
-                            title = progress.status,
-                            pointsSolved = progress.pointsSolved,
-                            convergencePercent = progress.convergencePercent,
-                        )
-                    }
-
-                    withContext(Dispatchers.Main) {
-                        isProcessing = false
-                        overlayHelper.hide()
-                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-                        if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED) {
-                            // User cancelled: stay on settings, nothing to report.
-                            checkReady()
-                        } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT) {
-                            checkReady()
-                            AnalysisNavHelper.openSessionLimit(this@StaticAnalysisActivity)
-                        } else if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_LOW_CONVERGENCE &&
-                            outcome.totalFrames > 0
-                        ) {
-                            // Stopped early, but the frames before the collapse are
-                            // real and already saved: report it as a short run and
-                            // open them, rather than as a failure with no way through
-                            // to data the session quietly kept.
-                            onPartialRun(outcome)
-                        } else if (outcome.engineErrorCode < 0 &&
-                            outcome.totalFrames > 0
-                        ) {
-                            onPartialRun(outcome)
-                        } else if (outcome.engineErrorCode < 0
-                        ) {
-                            val errorMsg = engineFailureMessage(
-                                outcome.engineErrorCode,
-                                frameIndex = outcome.failedFrameIndex,
-                                frameName = outcome.failedFrameName,
-                            )
-                            tvResult.text = "❌ Error: $errorMsg"
-                            showEngineFailureDialog(
-                                outcome.engineErrorCode,
-                                R.string.analysis_failed_title,
-                                frameIndex = outcome.failedFrameIndex,
-                                frameName = outcome.failedFrameName,
-                            )
-                        } else if (outcome.firstFrameValidPoints <= 0) {
-                            // Distinct from a negative code: the engine ran and
-                            // rejected everything, which points at the speckle or
-                            // the region rather than at a hard failure.
-                            tvResult.text = getString(R.string.analysis_no_data_title)
-                            MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                                .setTitle(R.string.analysis_no_data_title)
-                                .setMessage(R.string.analysis_no_data)
-                                .setPositiveButton(android.R.string.ok, null)
-                                .show()
-                        } else {
-                            tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
-
-                            viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
-                            viewModel.lastBatchDirPath = outcome.batchDirPath
-                            viewModel.hasCompletedAnalysis = true
-                            checkReady()
-                            openResultViewer()
-                        }
-                    }
-                } catch (e: Exception) {
-                    Timber.e(e, "Batch processing failed")
-                    withContext(Dispatchers.Main) {
-                        isProcessing = false
-                        overlayHelper.hide()
-                        // Anything unmodelled — an OOM on a large ROI is the usual
-                        // one — used to surface as a raw exception string and nothing
-                        // else. Say what it was and what tends to cause it.
-                        val detail = e.message ?: e::class.java.simpleName
-                        tvResult.text = getString(R.string.analysis_unexpected_title)
-                        MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                            .setTitle(R.string.analysis_unexpected_title)
-                            .setMessage(getString(R.string.analysis_unexpected_fmt, detail))
-                            .setPositiveButton(android.R.string.ok, null)
-                            .show()
-                        checkReady()
-                    }
-                }
-            }
+            val params = AnalysisViewModel.BatchAnalysisParams(
+                cacheDir = cacheDir,
+                subset = subset,
+                step = step,
+                strainWin = strainWin,
+                finalRectX = finalRectX,
+                finalRectY = finalRectY,
+                finalRectW = finalRectW,
+                finalRectH = finalRectH,
+                use6x6 = use6x6,
+                maskData = maskData,
+                debugDir = debugDir,
+                processingStartTime = overlayHelper.processingStartTime,
+            )
+            // Survives Activity destroy; progress/outcome observed via StateFlow / SharedFlow.
+            viewModel.launchBatchAnalysis(applicationContext, params)
         }
     }
 

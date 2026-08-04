@@ -13,11 +13,11 @@
 package com.indicvision.semper.ui.analysis
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.ProgressCallback
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
-import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionRecordSettings
@@ -25,10 +25,18 @@ import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -157,6 +165,40 @@ class AnalysisViewModel : ViewModel() {
 
     private val _runResult = MutableStateFlow(RunResult())
     val runResult: StateFlow<RunResult> = _runResult.asStateFlow()
+
+    private val _progress = MutableStateFlow<BatchProgressUpdate?>(null)
+    val progress: StateFlow<BatchProgressUpdate?> = _progress.asStateFlow()
+
+    private val _batchOutcome =
+        MutableSharedFlow<Result<BatchAnalysisOutcome>>(extraBufferCapacity = 1)
+    val batchOutcome: SharedFlow<Result<BatchAnalysisOutcome>> = _batchOutcome.asSharedFlow()
+
+    private var batchJob: Job? = null
+
+    /**
+     * Runs [runBatchAnalysis] on [viewModelScope] so destroying the Activity mid-run
+     * does not cancel a minutes-long native solve. Progress is published on
+     * [progress]; completion (or failure) on [batchOutcome].
+     */
+    fun launchBatchAnalysis(appContext: Context, params: BatchAnalysisParams) {
+        if (batchJob?.isActive == true) return
+        batchJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
+            _progress.value = null
+            try {
+                val outcome = runBatchAnalysis(appContext, params) { update ->
+                    if (isActive) _progress.value = update
+                }
+                _batchOutcome.emit(Result.success(outcome))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Batch processing failed")
+                _batchOutcome.emit(Result.failure(e))
+            } finally {
+                _progress.value = null
+            }
+        }
+    }
 
     var lastBatchDirPath: String?
         get() = _runResult.value.batchDirPath
@@ -412,9 +454,7 @@ class AnalysisViewModel : ViewModel() {
             plannedFrameCount = result.runs.size + skipped.size,
             headline = summary.headline,
         )
-        if (SessionStore.upsert(appContext, record) && cloudEnabled) {
-            CloudSync.enqueueUpload(appContext, localSessionId)
-        }
+        sessions.saveSession(appContext, record, enqueueCloudIfSaved = cloudEnabled)
     }
 
     /** The Home-list name, headline and per-frame labels of a finished sweep. */
@@ -650,6 +690,7 @@ class AnalysisViewModel : ViewModel() {
         val persistedRawNames = MutableList(plannedFrames) { "" }
 
         for ((frameIndex, defPath) in defFilePaths.withIndex()) {
+            ensureActive()
             if (cancelRequested) {
                 engineErrorCode = ERROR_CANCELLED
                 break
@@ -778,7 +819,7 @@ class AnalysisViewModel : ViewModel() {
             lastRefPath = refPngPath
 
             val cloudEnabled = DicSettings.saveToCloud(appContext)
-            val saved = SessionStore.upsert(
+            val saved = sessions.saveSession(
                 appContext,
                 sessions.buildSessionRecord(
                     appContext = appContext,
@@ -815,14 +856,12 @@ class AnalysisViewModel : ViewModel() {
                     },
                     engineStatsArray = engineStatsArray,
                 ),
+                enqueueCloudIfSaved = cloudEnabled,
             )
             if (!saved) {
                 // Race: limit filled between the pre-check and persist.
                 engineErrorCode = ERROR_SESSION_LIMIT
-            } else if (cloudEnabled) {
-                // Everything the worker needs now lives in the SessionRecord.
-                CloudSync.enqueueUpload(appContext, localSessionId)
-            } else {
+            } else if (!cloudEnabled) {
                 Timber.d("Save to cloud is off — session %s stays local only", localSessionId)
             }
         }

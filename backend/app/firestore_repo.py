@@ -13,6 +13,10 @@ _DB = None
 # Firestore caps a write batch at 500 operations.
 _BATCH_LIMIT = 400
 
+# Soft cap on streams that list a user's sessions/files for erasure or
+# manifests. Generous enough for real accounts; bounds worst-case memory.
+_LIST_SOFT_LIMIT = 2000
+
 
 def db() -> firestore.Client:
     global _DB
@@ -206,16 +210,30 @@ def issue_nonce(uid: str, device_id: str) -> str:
 
 
 def consume_nonce(nonce: str, uid: str, device_id: str) -> bool:
+    """Atomically claim a challenge. Delete only when uid/device/expiry match.
+
+    A plain get→delete race let two concurrent callers both read a live nonce;
+    wrapping in a transaction means only one commit wins. Invalid callers must
+    not delete — otherwise a wrong-uid probe would burn a valid challenge.
+    """
     ref = db().collection("challenges").document(nonce)
-    snap = ref.get()
-    if not snap.exists:
-        return False
-    d = snap.to_dict()
-    ref.delete()  # single-use
-    if d.get("uid") != uid or d.get("deviceId") != device_id:
-        return False
-    exp = d.get("expireAt")
-    return bool(exp and exp > _now())
+    transaction = db().transaction()
+
+    @firestore.transactional
+    def _consume(tx):
+        snap = ref.get(transaction=tx)
+        if not snap.exists:
+            return False
+        d = snap.to_dict()
+        if d.get("uid") != uid or d.get("deviceId") != device_id:
+            return False
+        exp = d.get("expireAt")
+        if not (exp and exp > _now()):
+            return False
+        tx.delete(ref)
+        return True
+
+    return _consume(transaction)
 
 
 # ---------------- sessions / files ----------------
@@ -225,7 +243,9 @@ def delete_session(sid: str) -> int:
     GDPR erasure — records are removed, not flagged. Returns the file count.
     Firestore batches cap at 500 writes, so this chunks.
     """
-    files = list(db().collection("files").where("sessionId", "==", sid).stream())
+    files = list(
+        db().collection("files").where("sessionId", "==", sid).limit(_LIST_SOFT_LIMIT).stream()
+    )
     _delete_refs([d.reference for d in files])
     db().collection("sessions").document(sid).delete()
     return len(files)
@@ -266,9 +286,15 @@ def delete_all_user_data(uid: str) -> dict:
     # File docs carry the uid, so the whole account is one query rather than one
     # per session. Deleting session by session meant a query and a batch commit
     # each — sequential round-trips that made erasing a busy account crawl.
-    sessions = list(db().collection("sessions").where("uid", "==", uid).stream())
-    files = list(db().collection("files").where("uid", "==", uid).stream())
-    devices = list(db().collection("devices").where("uid", "==", uid).stream())
+    sessions = list(
+        db().collection("sessions").where("uid", "==", uid).limit(_LIST_SOFT_LIMIT).stream()
+    )
+    files = list(
+        db().collection("files").where("uid", "==", uid).limit(_LIST_SOFT_LIMIT).stream()
+    )
+    devices = list(
+        db().collection("devices").where("uid", "==", uid).limit(_LIST_SOFT_LIMIT).stream()
+    )
 
     refs = [d.reference for d in files] + [d.reference for d in sessions] + [d.reference for d in devices]
     refs.append(db().collection("users").document(uid))
@@ -303,7 +329,7 @@ def list_pending_uploads(sid: str) -> list:
     COMPLETED have their uploadUrl cleared, so they're naturally excluded.
     """
     out = []
-    for d in db().collection("files").where("sessionId", "==", sid).stream():
+    for d in db().collection("files").where("sessionId", "==", sid).limit(_LIST_SOFT_LIMIT).stream():
         f = d.to_dict()
         url = f.get("uploadUrl")
         if f.get("status") == "COMPLETED" or not url:
@@ -322,7 +348,7 @@ def list_pending_uploads(sid: str) -> list:
 def list_session_files(sid: str) -> list:
     """Every file in an analysis — the manifest the app restores from."""
     out = []
-    for d in db().collection("files").where("sessionId", "==", sid).stream():
+    for d in db().collection("files").where("sessionId", "==", sid).limit(_LIST_SOFT_LIMIT).stream():
         f = d.to_dict()
         out.append({
             "fileId": d.id,
@@ -358,6 +384,27 @@ def count_user_sessions(uid: str) -> int:
     """How many analyses this user already has in the cloud (quota check)."""
     agg = db().collection("sessions").where("uid", "==", uid).count().get()
     return int(agg[0][0].value)
+
+
+def find_incomplete_session(uid: str, local_session_id: str):
+    """An UPLOADING session for (uid, localSessionId), if any.
+
+    Lets a retried POST /v1/sessions return the same session instead of minting
+    a duplicate (and burning quota). Empty localSessionId is never matched —
+    clients that omit it still get a fresh session each call.
+    """
+    if not local_session_id:
+        return None
+    q = (
+        db().collection("sessions")
+        .where("uid", "==", uid)
+        .where("localSessionId", "==", local_session_id)
+        .where("status", "==", "UPLOADING")
+        .limit(1)
+    )
+    for d in q.stream():
+        return {**d.to_dict(), "sessionId": d.id}
+    return None
 
 
 def create_session(sid: str, user: dict, device: dict, body: SessionCreate):
@@ -416,26 +463,37 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
     """Record a file's Drive pointer. Returns "ok", "already" (a retry of a
     completion that landed — idempotent, must NOT bump the session counter
     again) or "" (rejected).
+
+    Read-status→update runs in a transaction so two concurrent completions of
+    the same PENDING file yield exactly one "ok" (the other sees COMPLETED and
+    returns "already"). Without this, both could bump the session counter.
     """
     ref = db().collection("files").document(file_id)
-    snap = ref.get()
-    if not snap.exists:
-        return ""
-    d = snap.to_dict()
-    if d["uid"] != uid or d["sizeBytes"] != body.bytes:
-        return ""
-    if d.get("status") == "COMPLETED":
-        return "already"
-    ref.update(
-        {
-            "status": "COMPLETED",
-            "driveFileId": body.driveFileId,
-            "driveMd5": body.md5,
-            "uploadUrl": firestore.DELETE_FIELD,  # capability no longer needed
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        }
-    )
-    return "ok"
+    transaction = db().transaction()
+
+    @firestore.transactional
+    def _complete(tx):
+        snap = ref.get(transaction=tx)
+        if not snap.exists:
+            return ""
+        d = snap.to_dict()
+        if d["uid"] != uid or d["sizeBytes"] != body.bytes:
+            return ""
+        if d.get("status") == "COMPLETED":
+            return "already"
+        tx.update(
+            ref,
+            {
+                "status": "COMPLETED",
+                "driveFileId": body.driveFileId,
+                "driveMd5": body.md5,
+                "uploadUrl": firestore.DELETE_FIELD,  # capability no longer needed
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            },
+        )
+        return "ok"
+
+    return _complete(transaction)
 
 
 def bump_session_progress(sid: str):

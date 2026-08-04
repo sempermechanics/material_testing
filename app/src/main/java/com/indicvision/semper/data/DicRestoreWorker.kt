@@ -5,6 +5,7 @@ package com.indicvision.semper.data
 
 import android.content.Context
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.indicvision.semper.data.net.IndicApi
@@ -22,6 +23,9 @@ import timber.log.Timber
  * on flaky networks, and reports progress the UI can observe if it's watching.
  */
 class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+
+    override suspend fun getForegroundInfo(): ForegroundInfo =
+        TransferNotifications.restoreForeground(applicationContext)
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val cloudSessionId = inputData.getString(CloudRestore.KEY_CLOUD_SESSION_ID)

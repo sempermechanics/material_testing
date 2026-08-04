@@ -169,6 +169,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="home_new_analysis">New analysis</string>
     <string name="home_settings">Settings</string>
     <string name="home_thumb_desc">Reference image preview</string>
+    <string name="home_sync_config_unavailable">Can\'t sync yet — check your connection and pull to refresh</string>
+    <string name="transfer_channel_name">Cloud transfers</string>
+    <string name="transfer_upload_title">Uploading analysis…</string>
+    <string name="transfer_restore_title">Restoring analysis…</string>
     <string name="badge_synced">synced</string>
     <string name="badge_pending">upload pending</string>
     <string name="badge_local">local only</string>

@@ -135,6 +135,22 @@ class SessionRepository {
             syncState = if (cloudEnabled) SessionRecord.SyncState.PENDING else SessionRecord.SyncState.LOCAL_ONLY,
         )
     }
+
+    /**
+     * Persist [record] via [SessionStore.upsert] and optionally enqueue a cloud
+     * upload. Returns the upsert result (false = quota refuse / corrupt index).
+     */
+    fun saveSession(
+        context: Context,
+        record: SessionRecord,
+        enqueueCloudIfSaved: Boolean = false,
+    ): Boolean {
+        val saved = SessionStore.upsert(context, record)
+        if (saved && enqueueCloudIfSaved) {
+            CloudSync.enqueueUpload(context, record.id)
+        }
+        return saved
+    }
 }
 
 /** Geometry + subset settings captured into a [SessionRecord]. */

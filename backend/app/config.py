@@ -21,7 +21,7 @@ class Settings:
     # Accounts whose verified email is in this domain are created APPROVED
     # automatically (e.g. "indicvision.com"). Everyone else is created PENDING
     # and must be approved individually. Empty = nobody auto-approved by domain.
-    AUTO_APPROVE_HD = os.environ.get("AUTO_APPROVE_HD", "")
+    AUTO_APPROVE_HD = os.environ.get("AUTO_APPROVE_HD", "").lower()
 
     # Fleet-wide defaults for product limits. Per-user overrides live on the
     # Firestore users/{uid} document (maxSessions / maxFilesPerSession /

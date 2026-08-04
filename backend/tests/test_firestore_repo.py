@@ -39,11 +39,15 @@ def test_nonce_round_trip_consumes_once(store):
 def test_nonce_rejects_wrong_uid_or_device(store):
     nonce = repo.issue_nonce("u1", "d1")
     assert repo.consume_nonce(nonce, "someone-else", "d1") is False
+    # Invalid callers must not burn the challenge — owner can still consume it.
+    assert nonce in store._data["challenges"]
+    assert repo.consume_nonce(nonce, "u1", "d1") is True
 
 
 def test_nonce_wrong_device_rejected(store):
     nonce = repo.issue_nonce("u1", "d1")
     assert repo.consume_nonce(nonce, "u1", "d2") is False
+    assert nonce in store._data["challenges"]
 
 
 def test_nonce_expired_rejected(store):
@@ -51,6 +55,8 @@ def test_nonce_expired_rejected(store):
     # Force the stored challenge to be in the past.
     store._data["challenges"][nonce]["expireAt"] = datetime.now(timezone.utc) - timedelta(seconds=1)
     assert repo.consume_nonce(nonce, "u1", "d1") is False
+    # Expired docs are left for TTL reclaim, not deleted by a failed consume.
+    assert nonce in store._data["challenges"]
 
 
 def test_nonce_unknown_rejected(store):
@@ -109,16 +115,19 @@ def _seed_pending_file(store, file_id="f1", uid="u1", size=100):
     }
 
 
+_MD5 = "a" * 32
+
+
 def test_complete_file_first_call_ok(store):
     _seed_pending_file(store)
-    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5="abc")
+    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5=_MD5)
     assert repo.complete_file("f1", "u1", body) == "ok"
     assert store._data["files"]["f1"]["status"] == "COMPLETED"
 
 
 def test_complete_file_retry_is_idempotent(store):
     _seed_pending_file(store)
-    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5="abc")
+    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5=_MD5)
     assert repo.complete_file("f1", "u1", body) == "ok"
     # A retried completion must return "already" and NOT bump again.
     assert repo.complete_file("f1", "u1", body) == "already"
@@ -126,18 +135,18 @@ def test_complete_file_retry_is_idempotent(store):
 
 def test_complete_file_rejects_wrong_uid(store):
     _seed_pending_file(store, uid="u1")
-    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5="abc")
+    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5=_MD5)
     assert repo.complete_file("f1", "someone-else", body) == ""
 
 
 def test_complete_file_rejects_size_mismatch(store):
     _seed_pending_file(store, size=100)
-    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=999, md5="abc")
+    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=999, md5=_MD5)
     assert repo.complete_file("f1", "u1", body) == ""
 
 
 def test_complete_file_missing_returns_empty(store):
-    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5="abc")
+    body = FileComplete(sessionId="s1", driveFileId="drive1", bytes=100, md5=_MD5)
     assert repo.complete_file("nope", "u1", body) == ""
 
 

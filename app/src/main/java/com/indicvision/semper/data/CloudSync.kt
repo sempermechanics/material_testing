@@ -8,6 +8,7 @@ import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.data.net.AppRemoteConfig
@@ -149,7 +150,10 @@ object CloudSync {
         if (throttled && AppRemoteConfig.isKnown(appContext)) return
         runCatching { api.getConfig(token) }
             .onSuccess { AppRemoteConfig.apply(appContext, it) }
-            .onFailure { Timber.d(it, "App remote config fetch failed during reconcile") }
+            .onFailure {
+                AppRemoteConfig.recordFetchFailure(appContext)
+                Timber.d(it, "App remote config fetch failed during reconcile")
+            }
     }
 
     /** Outcome of an erase request, so the UI can tell the user what happened. */
@@ -340,6 +344,7 @@ object CloudSync {
             NetworkType.CONNECTED
         }
         val work = OneTimeWorkRequestBuilder<DicUploadWorker>()
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setConstraints(
                 Constraints.Builder().setRequiredNetworkType(network).build(),
             )

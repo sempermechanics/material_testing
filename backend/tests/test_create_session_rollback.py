@@ -71,3 +71,53 @@ async def test_success_reserves_session_before_files(store, monkeypatch, client)
     # The reserved doc was created, then its Drive folder recorded.
     assert store._data["sessions"][sid]["driveFolderId"] == "sf"
     assert len(store._data["files"]) == 2
+
+
+async def test_duplicate_local_session_id_is_idempotent(store, monkeypatch, client):
+    """Two creates with the same localSessionId return one session."""
+    monkeypatch.setattr(drive, "init_resumable", lambda *a, **k: "https://drive/resumable")
+    body = {
+        "specimen": "s",
+        "localSessionId": "local-abc",
+        "files": [_file("a")],
+    }
+    r1 = await client.post("/v1/sessions", json=body)
+    r2 = await client.post("/v1/sessions", json=body)
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r1.json()["sessionId"] == r2.json()["sessionId"]
+    assert len(store._data["sessions"]) == 1
+
+
+async def test_too_many_files_returns_413(store, monkeypatch, client):
+    monkeypatch.setattr(drive, "init_resumable", lambda *a, **k: "https://drive/resumable")
+    from app import deps, rate_limit
+    monkeypatch.setattr(rate_limit.session_bucket, "allow", lambda uid: True)
+    monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "maxFilesPerSession": 2})
+
+    r = await client.post(
+        "/v1/sessions",
+        json={"specimen": "s", "files": [_file("a"), _file("b"), _file("c")]},
+    )
+    assert r.status_code == 413
+    assert r.json()["detail"] == "too_many_files"
+    assert store._data.get("sessions", {}) == {}
+
+
+async def test_session_quota_exceeded_returns_409(store, monkeypatch, client):
+    monkeypatch.setattr(drive, "init_resumable", lambda *a, **k: "https://drive/resumable")
+    from app import deps, rate_limit
+    monkeypatch.setattr(rate_limit.session_bucket, "allow", lambda uid: True)
+    monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "maxSessions": 1})
+    # One existing analysis already fills the quota.
+    store._data["sessions"] = {
+        "existing": {"uid": DEV_UID, "status": "COMPLETED", "fileCount": 1, "completedCount": 1},
+    }
+
+    r = await client.post(
+        "/v1/sessions",
+        json={"specimen": "s", "files": [_file("a")]},
+    )
+    assert r.status_code == 409
+    assert "session_quota_exceeded" in r.json()["detail"]
+    assert len(store._data["sessions"]) == 1

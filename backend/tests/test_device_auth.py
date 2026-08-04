@@ -51,7 +51,7 @@ def wired(monkeypatch, keypair):
     priv, pem = keypair
     monkeypatch.setattr(deps.settings, "DEV_INSECURE_AUTH", False)
 
-    async def fake_current_user(*a, **k):
+    def fake_current_user(*a, **k):
         return {"uid": "u1", "email": "a@b.com", "access_status": "APPROVED"}
 
     monkeypatch.setattr(deps, "current_user", fake_current_user)
@@ -73,10 +73,10 @@ def wired(monkeypatch, keypair):
 
 async def _call(priv, method="POST", path="/v1/sessions", body=b'{"x":1}', nonce="n1", sig=None):
     request = _make_request(method, path, body)
+    user = {"uid": "u1", "email": "a@b.com", "access_status": "APPROVED"}
     return await deps.verified_device(
         request=request,
-        authorization="Bearer tok",
-        x_forwarded_authorization="",
+        user=user,
         x_device_id="d1",
         x_nonce=nonce,
         x_signature=sig if sig is not None else _sign(priv, nonce, method, path, body),

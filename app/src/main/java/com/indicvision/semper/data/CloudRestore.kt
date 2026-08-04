@@ -11,6 +11,7 @@ import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import com.indicvision.semper.data.net.CloudFileDto
 import com.indicvision.semper.data.net.CloudSessionDto
@@ -62,6 +63,7 @@ object CloudRestore {
     fun enqueueRestore(context: Context, cloudSessionId: String): String {
         val name = workName(cloudSessionId)
         val work = OneTimeWorkRequestBuilder<DicRestoreWorker>()
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setConstraints(
                 Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
             )

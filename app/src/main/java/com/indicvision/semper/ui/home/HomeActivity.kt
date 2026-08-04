@@ -28,6 +28,8 @@ import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.common.CoachMarkController
@@ -275,7 +277,12 @@ class HomeActivity : AppCompatActivity() {
         val max = TokenStore.effectiveQuotaMax(this)
         val used = TokenStore.quotaUsed(this).coerceAtLeast(localSessionCount)
         if (max <= 0) {
-            tvHomeQuota.isVisible = false
+            if (AppRemoteConfig.shouldHintSyncBlocked(this) && IndicApi.get(this).enabled) {
+                tvHomeQuota.isVisible = true
+                tvHomeQuota.text = getString(R.string.home_sync_config_unavailable)
+            } else {
+                tvHomeQuota.isVisible = false
+            }
             return
         }
         tvHomeQuota.isVisible = true

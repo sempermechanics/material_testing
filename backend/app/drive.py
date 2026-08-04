@@ -4,6 +4,7 @@ Metadata calls only. File BYTES never pass through here — the client PUTs
 directly to the resumable session URI returned by init_resumable().
 """
 import logging
+import time
 
 import requests
 
@@ -28,6 +29,9 @@ FOLDER_MIME = "application/vnd.google-apps.folder"
 # under the outer Cloud Run / gateway limits).
 _TIMEOUT_S = 45
 
+_RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+_MAX_ATTEMPTS = 5
+
 
 def access_token() -> str:
     return drive_access_token()
@@ -37,13 +41,67 @@ def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _retry_delay(response: requests.Response, attempt: int) -> float:
+    """Seconds to wait before retrying: honor Retry-After, else exponential."""
+    raw = response.headers.get("Retry-After")
+    if raw is not None:
+        try:
+            return max(0.0, float(raw))
+        except ValueError:
+            pass
+    return float(min(2 ** attempt, 16))
+
+
+def _request_with_retry(
+    method: str,
+    url: str,
+    *,
+    headers: dict | None = None,
+    params: dict | None = None,
+    json: dict | None = None,
+    timeout: float = 30,
+    stream: bool = False,
+    max_attempts: int = _MAX_ATTEMPTS,
+) -> requests.Response:
+    """HTTP call with exponential backoff on 429/5xx (honors Retry-After).
+
+    Used for idempotent Drive GETs and folder find-or-create. Timeouts are
+    kept per attempt so a stuck socket still fails within the outer budget.
+    """
+    last: requests.Response | None = None
+    for attempt in range(max_attempts):
+        r = requests.request(
+            method,
+            url,
+            headers=headers,
+            params=params,
+            json=json,
+            timeout=timeout,
+            stream=stream,
+        )
+        if r.status_code not in _RETRY_STATUSES or attempt == max_attempts - 1:
+            return r
+        delay = _retry_delay(r, attempt)
+        log.warning(
+            "Drive %s %s → HTTP %s; retry in %.1fs (%d/%d)",
+            method, url, r.status_code, delay, attempt + 1, max_attempts,
+        )
+        if stream:
+            r.close()
+        time.sleep(delay)
+        last = r
+    assert last is not None
+    return last
+
+
 def _find_or_create_folder(token: str, name: str, parent: str) -> str:
     safe = name.replace("'", "\\'")
     q = (
         f"name='{safe}' and mimeType='{FOLDER_MIME}' and "
         f"'{parent}' in parents and trashed=false"
     )
-    r = requests.get(
+    r = _request_with_retry(
+        "GET",
         f"{API}/files",
         headers=_headers(token),
         params={
@@ -60,7 +118,8 @@ def _find_or_create_folder(token: str, name: str, parent: str) -> str:
     files = r.json().get("files", [])
     if files:
         return files[0]["id"]
-    r = requests.post(
+    r = _request_with_retry(
+        "POST",
         f"{API}/files",
         headers=_headers(token),
         params={"supportsAllDrives": "true"},
@@ -79,7 +138,8 @@ def _find_folder(token: str, name: str, parent: str):
         f"name='{safe}' and mimeType='{FOLDER_MIME}' and "
         f"'{parent}' in parents and trashed=false"
     )
-    r = requests.get(
+    r = _request_with_retry(
+        "GET",
         f"{API}/files",
         headers=_headers(token),
         params={
@@ -123,6 +183,9 @@ def ensure_session_folders(token: str, uid: str, sid: str, roles=None) -> dict:
     """Build Research Storage/user/{uid}/session/{sid}/ plus the role subfolders
     the manifest actually uses. "bundle" (Session.zip) and "metadata" live at the
     session root — no subfolder, no extra Drive round-trips.
+
+    Partial failure mid-walk may leave an empty orphan folder under session/;
+    that is monitored / accepted rather than rolled back.
     """
     root = settings.ROOT_FOLDER_ID
     research = _find_or_create_folder(token, "Research Storage", root)
@@ -147,7 +210,8 @@ def file_exists(token: str, file_id: str) -> bool:
     Firestore is only an index — if someone deletes a session folder straight in
     Drive, the index still claims COMPLETED. This is the check that catches that.
     """
-    r = requests.get(
+    r = _request_with_retry(
+        "GET",
         f"{API}/files/{file_id}",
         headers=_headers(token),
         params={"fields": "id,trashed", "supportsAllDrives": "true"},
@@ -225,7 +289,8 @@ def open_download(
     headers = _headers(token)
     if byte_range:
         headers["Range"] = byte_range
-    r = requests.get(
+    r = _request_with_retry(
+        "GET",
         f"{API}/files/{drive_file_id}",
         headers=headers,
         params={"alt": "media", "supportsAllDrives": "true"},
@@ -238,22 +303,29 @@ def open_download(
 
 
 def get_file_meta(token: str, drive_file_id: str) -> dict:
-    """The size (bytes) and md5 Drive actually recorded for an uploaded file.
+    """The size (bytes), md5, and parents Drive recorded for an uploaded file.
 
     The client PUTs bytes straight to Drive, so its claimed size/checksum are not
     authoritative — this is how the backend verifies the upload landed intact.
-    Returns {"size": int|None, "md5": str|None}.
+    `parents` lets complete_file reject a driveFileId that is not in the
+    session's own folder (confused-deputy / shared-drive object binding).
+    Returns {"size": int|None, "md5": str|None, "parents": list[str]}.
     """
-    r = requests.get(
+    r = _request_with_retry(
+        "GET",
         f"{API}/files/{drive_file_id}",
         headers=_headers(token),
-        params={"fields": "size,md5Checksum", "supportsAllDrives": "true"},
+        params={"fields": "size,md5Checksum,parents", "supportsAllDrives": "true"},
         timeout=30,
     )
     r.raise_for_status()
     j = r.json()
     size = j.get("size")
-    return {"size": int(size) if size is not None else None, "md5": j.get("md5Checksum")}
+    return {
+        "size": int(size) if size is not None else None,
+        "md5": j.get("md5Checksum"),
+        "parents": list(j.get("parents") or []),
+    }
 
 
 def init_resumable(token: str, parent_folder_id: str, filename: str, size_bytes: int) -> str:

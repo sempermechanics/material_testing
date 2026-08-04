@@ -7,7 +7,8 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
-from fastapi import Header, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 from . import audit, firestore_repo as repo
 from .config import settings
@@ -31,40 +32,51 @@ def _client_bearer(authorization: str, x_forwarded_authorization: str) -> str:
     return x_forwarded_authorization or authorization
 
 
-async def current_user(
+def current_user(
+    request: Request,
     authorization: str = Header(default=""),
     x_forwarded_authorization: str = Header(default=""),
 ) -> dict:
+    """Resolve the caller from a Google ID token.
+
+    Plain `def` (no awaits) so FastAPI/Starlette runs this in the threadpool —
+    `verify_id_token` and Firestore must not block the event loop. Sets
+    `request.state.uid` so access logs work on authn-only routes (not only
+    device-attested ones).
+    """
     if settings.DEV_INSECURE_AUTH:
-        return _DEV_USER
-    bearer = _client_bearer(authorization, x_forwarded_authorization)
-    if not bearer.startswith("Bearer "):
-        log.warning("no bearer token: authorization=%s x_forwarded=%s",
-                    bool(authorization), bool(x_forwarded_authorization))
-        raise HTTPException(401, "missing_bearer")
+        user = _DEV_USER
+    else:
+        bearer = _client_bearer(authorization, x_forwarded_authorization)
+        if not bearer.startswith("Bearer "):
+            log.warning("no bearer token: authorization=%s x_forwarded=%s",
+                        bool(authorization), bool(x_forwarded_authorization))
+            raise HTTPException(401, "missing_bearer")
+        try:
+            claims = verify_id_token(bearer[7:])
+        except Exception as e:  # noqa: BLE001
+            log.warning("id_token verify FAILED (x_forwarded_present=%s): %s",
+                        bool(x_forwarded_authorization), e)
+            audit.record(action="AUTH_DENIED", outcome="DENIED", detail={"stage": "id_token"})
+            raise HTTPException(401, "invalid_token")
+        user = repo.get_or_create_user(claims)
+        if user["access_status"] != "APPROVED":
+            raise HTTPException(403, "not_approved")
     try:
-        claims = verify_id_token(bearer[7:])
-    except Exception as e:  # noqa: BLE001
-        log.warning("id_token verify FAILED (x_forwarded_present=%s): %s",
-                    bool(x_forwarded_authorization), e)
-        audit.record(action="AUTH_DENIED", outcome="DENIED", detail={"stage": "id_token"})
-        raise HTTPException(401, "invalid_token")
-    user = repo.get_or_create_user(claims)
-    if user["access_status"] != "APPROVED":
-        raise HTTPException(403, "not_approved")
+        request.state.uid = user["uid"]
+    except Exception:  # noqa: BLE001 - logging enrichment must never fail a request
+        pass
     return user
 
 
-async def admin_user(
-    authorization: str = Header(default=""),
-    x_forwarded_authorization: str = Header(default=""),
-) -> dict:
+def admin_user(user: dict = Depends(current_user)) -> dict:
     """Authenticated caller that is an admin (role=admin or in ADMIN_EMAILS).
 
-    ID-token based (no device signature) so it works from an in-app admin screen
-    or from curl in dev mode. Admin actions are low-frequency and audited.
+    ID-token based (no device signature) so list/read admin screens and curl in
+    dev mode work without a registered device. **Mutating** admin routes
+    (approve / revoke / config-patch) additionally require `verified_device` so
+    a stolen ID token alone cannot change access — see those handlers.
     """
-    user = await current_user(authorization, x_forwarded_authorization)
     email = (user.get("email") or "").lower()
     if user.get("role") != "admin" and email not in settings.ADMIN_EMAILS:
         raise HTTPException(403, "not_admin")
@@ -73,25 +85,23 @@ async def admin_user(
 
 async def verified_device(
     request: Request,
-    authorization: str = Header(default=""),
-    x_forwarded_authorization: str = Header(default=""),
+    user: dict = Depends(current_user),
     x_device_id: str = Header(default=""),
     x_nonce: str = Header(default=""),
     x_signature: str = Header(default=""),
 ) -> dict:
-    user = await current_user(authorization, x_forwarded_authorization)
-    # Surface the caller to the access-log middleware (best-effort).
-    try:
-        request.state.uid = user["uid"]
-    except Exception:  # noqa: BLE001 - logging enrichment must never fail a request
-        pass
+    """Device-attested caller: active device + single-use nonce + ECDSA signature.
+
+    Keeps `async` only for `await request.body()`. Firestore device/nonce lookups
+    run in the threadpool so they do not stall the event loop.
+    """
     if settings.DEV_INSECURE_AUTH:
         return {"user": user, "device": _DEV_DEVICE}
 
-    dev = repo.get_device(x_device_id)
+    dev = await run_in_threadpool(repo.get_device, x_device_id)
     if not dev or dev["uid"] != user["uid"] or dev["status"] != "ACTIVE":
         raise HTTPException(409, "device_not_active")
-    if not repo.consume_nonce(x_nonce, user["uid"], x_device_id):
+    if not await run_in_threadpool(repo.consume_nonce, x_nonce, user["uid"], x_device_id):
         raise HTTPException(401, "nonce_invalid_or_replayed")
 
     body = await request.body()

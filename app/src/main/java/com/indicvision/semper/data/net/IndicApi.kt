@@ -9,28 +9,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.CertificatePinner
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import timber.log.Timber
 import java.io.IOException
-import java.io.RandomAccessFile
 import java.util.concurrent.TimeUnit
-
-/** Drive resumable chunks must be 256 KiB multiples (except the final one). */
-private const val MIN_CHUNK_BYTES = 256 * 1024
-
-/** Upper bound on the per-chunk buffer allocation, whatever the server says. */
-private const val MAX_CHUNK_BYTES = 32 * 1024 * 1024
-
-/** How many times a truncated download may resume from the last byte. */
-private const val DOWNLOAD_MAX_ATTEMPTS = 5
-
-/** Copy buffer for proxied restore downloads. */
-private const val DOWNLOAD_COPY_BUFFER = 1 shl 16
 
 // OkHttp client timeouts, in seconds.
 private const val CONNECT_TIMEOUT_S = 30L
@@ -60,7 +47,11 @@ class IndicApi private constructor(context: Context) {
         encodeDefaults = true
     }
 
-    private val base = BuildConfig.INDIC_API_BASE_URL.trimEnd('/')
+    private val base = BuildConfig.INDIC_API_BASE_URL.trimEnd('/').also { url ->
+        require(url.isEmpty() || url.startsWith("https://")) {
+            "INDIC_API_BASE_URL must be https (or empty to disable cloud): $url"
+        }
+    }
 
     /**
      * Cloud calls are possible: a base URL is configured and we are not running
@@ -71,6 +62,7 @@ class IndicApi private constructor(context: Context) {
 
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val octet = "application/octet-stream".toMediaType()
+    private val drive = DriveTransfer(client, downloadClient, octet)
 
     class ApiException(val code: Int, val detail: String) : IOException("HTTP $code: $detail")
     class NotApprovedException : IOException("not_approved")
@@ -245,68 +237,11 @@ class IndicApi private constructor(context: Context) {
      * drops mid-stream, retries with `Range: bytes=N-` so already-received
      * bytes are kept (backend forwards Range to Drive and returns 206).
      */
-    @Suppress("CyclomaticComplexMethod") // one branch per HTTP status × resume/retry outcome
-    suspend fun downloadFile(idToken: String, fileId: String, dest: java.io.File) = withContext(Dispatchers.IO) {
-        dest.parentFile?.mkdirs()
-        val part = java.io.File(dest.parentFile, "${dest.name}.part")
-        val path = "/v1/files/$fileId/content"
-        var attempt = 0
-        while (true) {
-            attempt++
-            val offset = if (part.exists()) part.length() else 0L
-            try {
-                // Fresh challenge per attempt so a resumed Range request never
-                // replays a consumed nonce.
-                val nonce = fetchChallenge(idToken)
-                val headers = signedHeaders(idToken, "GET", path, ByteArray(0), nonce)
-                val builder = Request.Builder()
-                    .url("$base$path")
-                    .headers(headers)
-                    .get()
-                if (offset > 0L) builder.header("Range", "bytes=$offset-")
-                downloadClient.newCall(builder.build()).execute().use { resp ->
-                    when (resp.code) {
-                        HttpStatus.OK, HttpStatus.PARTIAL_CONTENT -> {
-                            // 200 = full body (fresh start / proxy ignored Range) → overwrite;
-                            // 206 = partial → append to the bytes already on disk.
-                            val append = resp.code == HttpStatus.PARTIAL_CONTENT
-                            java.io.FileOutputStream(part, append).use { out ->
-                                resp.body.byteStream().use { input -> input.copyTo(out, DOWNLOAD_COPY_BUFFER) }
-                            }
-                        }
-                        HttpStatus.RANGE_NOT_SATISFIABLE -> {
-                            // Stale offset (partial longer than the object). Restart once.
-                            if (offset > 0L && attempt < DOWNLOAD_MAX_ATTEMPTS) {
-                                part.delete()
-                                throw IOException("range_not_satisfiable; restarting $fileId")
-                            }
-                            throw ApiException(resp.code, IndicApiHttp.bodyText(resp))
-                        }
-                        else -> throw ApiException(resp.code, IndicApiHttp.bodyText(resp))
-                    }
-                }
-                if (dest.exists() && !dest.delete()) {
-                    Timber.w("Could not replace existing download target %s", dest)
-                }
-                if (!part.renameTo(dest)) {
-                    part.copyTo(dest, overwrite = true)
-                    part.delete()
-                }
-                return@withContext
-            } catch (e: ApiException) {
-                throw e
-            } catch (e: IOException) {
-                if (attempt >= DOWNLOAD_MAX_ATTEMPTS) throw e
-                Timber.w(
-                    e,
-                    "download %s interrupted at %d bytes (attempt %d); resuming",
-                    fileId,
-                    if (part.exists()) part.length() else 0L,
-                    attempt,
-                )
-            }
+    suspend fun downloadFile(idToken: String, fileId: String, dest: java.io.File) =
+        drive.downloadFile(fileId, dest, base) { path ->
+            val nonce = fetchChallenge(idToken)
+            signedHeaders(idToken, "GET", path, ByteArray(0), nonce)
         }
-    }
 
     // ------------------------------------------------------------------- admin
 
@@ -324,12 +259,9 @@ class IndicApi private constructor(context: Context) {
         ).users
     }
 
-    /** POST /v1/admin/users/{uid}/{action} where action is "approve" or "revoke". */
+    /** POST /v1/admin/users/{uid}/{action} — device-attested (approve/revoke). */
     suspend fun setUserStatus(idToken: String, uid: String, action: String) = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url("$base/v1/admin/users/$uid/$action")
-            .header("Authorization", "Bearer $idToken")
-            .post(ByteArray(0).toRequestBody(jsonMedia)).build()
-        client.newCall(req).execute().use { resp ->
+        signedPost(idToken, "/v1/admin/users/$uid/$action", ByteArray(0)).use { resp ->
             if (resp.code != HttpStatus.OK) throw ApiException(resp.code, IndicApiHttp.bodyText(resp))
         }
     }
@@ -434,84 +366,32 @@ class IndicApi private constructor(context: Context) {
         uploadUrl: String,
         file: java.io.File,
         chunkSize: Int,
-    ): Pair<String, String?> = withContext(Dispatchers.IO) {
-        val total = file.length()
-        // The buffer is allocated at chunk size — clamp what the server
-        // sent so a misconfigured value can never OOM the app. Drive needs
-        // chunks in 256 KiB multiples (except the last).
-        val chunk = chunkSize.coerceIn(MIN_CHUNK_BYTES, MAX_CHUNK_BYTES)
-
-        // Where does Drive want us to continue — or does it already have the
-        // whole file? A file fully uploaded in a prior attempt (but whose
-        // completeFile never ran) reports COMPLETE here; return its resource
-        // instead of trying to re-send zero bytes and failing.
-        val probe = probeStatus(uploadUrl, total)
-        probe.result?.let { return@withContext it }
-        var offset = probe.offset
-
-        RandomAccessFile(file, "r").use { raf ->
-            val buf = ByteArray(chunk)
-            while (offset < total) {
-                raf.seek(offset)
-                val n = raf.read(buf, 0, minOf(chunk.toLong(), total - offset).toInt())
-                if (n <= 0) throw IOException("unexpected EOF at $offset/$total")
-                val end = offset + n - 1
-                val req = Request.Builder().url(uploadUrl)
-                    .header("Content-Range", "bytes $offset-$end/$total")
-                    .put(buf.toRequestBody(octet, 0, n)).build()
-                client.newCall(req).execute().use { resp ->
-                    when (resp.code) {
-                        HttpStatus.RESUME_INCOMPLETE -> offset = end + 1
-                        HttpStatus.OK, HttpStatus.CREATED -> {
-                            val bodyStr = resp.body.string()
-                            return@withContext IndicApiHttp.parseDriveResult(bodyStr)
-                        }
-                        else -> throw ApiException(resp.code, resp.body.string())
-                    }
-                }
-            }
-        }
-
-        // Loop reached `total` without a final 200/201 — the last bytes were
-        // already on Drive from a previous attempt. Re-probe to finalize and
-        // get the resource, rather than failing.
-        probeStatus(uploadUrl, total).result
-            ?: throw IOException("upload finished without a final Drive response")
-    }
-
-    /** Current state of a resumable session: continue at [offset], or already [result]. */
-    private data class UploadProbe(val offset: Long, val result: Pair<String, String?>?)
-
-    /** Ask Drive what it already has: PUT `bytes * /total` with an empty body. */
-    private fun probeStatus(uploadUrl: String, total: Long): UploadProbe {
-        val req = Request.Builder().url(uploadUrl)
-            .header("Content-Range", "bytes */$total")
-            .put(ByteArray(0).toRequestBody(octet)).build()
-        client.newCall(req).execute().use { resp ->
-            return when (resp.code) {
-                // Resume Incomplete: Range tells us the last byte received (may be absent = nothing yet).
-                HttpStatus.RESUME_INCOMPLETE ->
-                    UploadProbe(resp.header("Range")?.substringAfterLast('-')?.toLongOrNull()?.plus(1) ?: 0L, null)
-                // Already complete — the body is the Drive file resource.
-                HttpStatus.OK, HttpStatus.CREATED -> UploadProbe(
-                    total,
-                    IndicApiHttp.parseDriveResult(resp.body.string()),
-                )
-                // 404/410 = session expired; start fresh (caller re-inits on retry).
-                else -> UploadProbe(0L, null)
-            }
-        }
-    }
+    ): Pair<String, String?> = drive.uploadResumable(uploadUrl, file, chunkSize)
 
     companion object {
         // One connection pool + dispatcher shared by every IndicApi instance.
         // The class is constructed per worker/repo (many times), and a fresh
         // OkHttpClient each time would throw away TLS session reuse and
         // keep-alive. downloadClient shares this pool via newBuilder().
-        private val client = OkHttpClient.Builder()
+        private val client: OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
             .writeTimeout(WRITE_TIMEOUT_S, TimeUnit.SECONDS) // large chunk PUTs to Drive
             .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
+            .apply {
+                val pins = BuildConfig.INDIC_API_CERT_PINS.trim()
+                val host = runCatching {
+                    BuildConfig.INDIC_API_BASE_URL.trimEnd('/')
+                        .removePrefix("https://")
+                        .substringBefore('/')
+                }.getOrNull().orEmpty()
+                if (pins.isNotEmpty() && host.isNotEmpty()) {
+                    val pinner = CertificatePinner.Builder().also { b ->
+                        pins.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                            .forEach { b.add(host, it) }
+                    }.build()
+                    certificatePinner(pinner)
+                }
+            }
             .build()
 
         /** Longer read idle for large Session.zip / legacy restores through the proxy. */

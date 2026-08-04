@@ -1,18 +1,33 @@
 from typing import List, Literal, Optional
 
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from pydantic import BaseModel, Field, field_validator
 
 # "bundle" = one Session.zip holding raw/, dat/, csv/ and the report archives —
 # uploaded as a single file so a session costs ~2 Firestore file docs, not 3F+4.
 Role = Literal["raw", "processed", "reports", "metadata", "csv", "dat", "bundle"]
 
+_HEX = frozenset("0123456789abcdefABCDEF")
+
 
 class DeviceReg(BaseModel):
     deviceId: str = Field(min_length=8, max_length=128)
-    publicKeyPem: str
+    publicKeyPem: str = Field(max_length=4096)
     model: str = ""
     osVersion: str = ""
     appVersion: str = ""
+
+    @field_validator("publicKeyPem")
+    @classmethod
+    def _ec_public_pem(cls, v: str) -> str:
+        try:
+            key = load_pem_public_key(v.encode())
+        except Exception as e:
+            raise ValueError("publicKeyPem must be a valid PEM public key") from e
+        if not isinstance(key, ec.EllipticCurvePublicKey):
+            raise ValueError("publicKeyPem must be an EC public key")
+        return v
 
 
 class FileSpec(BaseModel):
@@ -36,10 +51,17 @@ class FileSpec(BaseModel):
             raise ValueError("name must not contain control characters")
         return v
 
+    @field_validator("sha256")
+    @classmethod
+    def _sha256_hex(cls, v: str) -> str:
+        if len(v) != 64 or any(c not in _HEX for c in v):
+            raise ValueError("sha256 must be 64 hex characters")
+        return v
+
 
 class SessionCreate(BaseModel):
     specimen: str = Field(min_length=1, max_length=200)
-    files: List[FileSpec] = Field(min_length=1, max_length=600)
+    files: List[FileSpec] = Field(min_length=1, max_length=5000)
     metrics: dict = {}
     # The app's local analysis id. Lets the client reconcile its local sync
     # state against what actually exists in the cloud (and restore later).
@@ -67,10 +89,19 @@ class SessionCreate(BaseModel):
 
 
 class FileComplete(BaseModel):
-    sessionId: str
-    driveFileId: str
-    bytes: int
+    sessionId: str = Field(min_length=1, max_length=128)
+    driveFileId: str = Field(min_length=1, max_length=256)
+    bytes: int = Field(gt=0)
     md5: Optional[str] = None
+
+    @field_validator("md5")
+    @classmethod
+    def _md5_hex(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if len(v) != 32 or any(c not in _HEX for c in v):
+            raise ValueError("md5 must be 32 hex characters")
+        return v
 
 
 class UserConfigPatch(BaseModel):

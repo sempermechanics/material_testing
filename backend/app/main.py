@@ -14,6 +14,7 @@ from . import audit, drive, firestore_repo as repo
 from .config import settings
 from .deps import admin_user, current_user, verified_device
 from .models import DeviceReg, FileComplete, SessionCreate, UserConfigPatch
+from . import rate_limit
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("indic")
@@ -249,6 +250,8 @@ def register_device(body: DeviceReg, user=Depends(current_user)):
 def challenge(user=Depends(current_user), x_device_id: str = Header(default="")):
     if not x_device_id:
         raise HTTPException(400, "missing_device_id")
+    if not rate_limit.challenge_bucket.allow(user["uid"]):
+        raise HTTPException(429, "rate_limited")
     return {"nonce": repo.issue_nonce(user["uid"], x_device_id)}
 
 
@@ -367,14 +370,18 @@ def download_file(file_id: str, request: Request, ctx=Depends(verified_device)):
         raise HTTPException(409, "file_not_uploaded")
     token = drive.access_token()
     audit.record(user["uid"], action="FILE_DOWNLOAD", target={"type": "file", "id": file_id})
+    if not rate_limit.download_bucket.allow(user["uid"]):
+        raise HTTPException(429, "rate_limited")
     byte_range = request.headers.get("range")
     try:
         dl = drive.open_download(token, drive_file_id, byte_range=byte_range)
-    except requests.HTTPError as e:
-        status = e.response.status_code if e.response is not None else 502
-        if status == 416:
-            raise HTTPException(416, "range_not_satisfiable") from e
-        log.error("drive download %s failed: HTTP %s", drive_file_id, status)
+    except requests.RequestException as e:
+        status = 502
+        if isinstance(e, requests.HTTPError) and e.response is not None:
+            status = e.response.status_code
+            if status == 416:
+                raise HTTPException(416, "range_not_satisfiable") from e
+        log.error("drive download %s failed: %s", drive_file_id, e)
         raise HTTPException(502, "drive_download_failed") from e
 
     # The stored name is client-supplied (validated for length only), so strip
@@ -406,6 +413,18 @@ def download_file(file_id: str, request: Request, ctx=Depends(verified_device)):
 def create_session(body: SessionCreate, ctx=Depends(verified_device)):
     user, device = ctx["user"], ctx["device"]
     cfg = repo.resolve_user_config(user)
+
+    if not rate_limit.session_bucket.allow(user["uid"]):
+        raise HTTPException(429, "rate_limited")
+
+    # Idempotent retry: same localSessionId + still UPLOADING → return existing.
+    existing = repo.find_incomplete_session(user["uid"], body.localSessionId)
+    if existing:
+        sid = existing["sessionId"]
+        return {
+            "sessionId": sid,
+            "uploads": repo.list_pending_uploads(sid),
+        }
 
     # Quotas: one session == one analysis.
     if len(body.files) > cfg["maxFilesPerSession"]:
@@ -474,7 +493,7 @@ def admin_list_users(status: str = "", limit: int = 200, admin=Depends(admin_use
 
 
 @app.post("/v1/admin/users/{uid}/approve")
-def admin_approve_user(uid: str, admin=Depends(admin_user)):
+def admin_approve_user(uid: str, ctx=Depends(verified_device), admin=Depends(admin_user)):
     if not repo.set_user_status(uid, "APPROVED"):
         raise HTTPException(404, "user_not_found")
     audit.record(admin["uid"], action="ADMIN_APPROVE", target={"type": "user", "id": uid})
@@ -482,7 +501,7 @@ def admin_approve_user(uid: str, admin=Depends(admin_user)):
 
 
 @app.post("/v1/admin/users/{uid}/revoke")
-def admin_revoke_user(uid: str, admin=Depends(admin_user)):
+def admin_revoke_user(uid: str, ctx=Depends(verified_device), admin=Depends(admin_user)):
     if not repo.set_user_status(uid, "SUSPENDED"):
         raise HTTPException(404, "user_not_found")
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
@@ -490,7 +509,8 @@ def admin_revoke_user(uid: str, admin=Depends(admin_user)):
 
 
 @app.patch("/v1/admin/users/{uid}/config")
-def admin_patch_user_config(uid: str, body: UserConfigPatch, admin=Depends(admin_user)):
+def admin_patch_user_config(uid: str, body: UserConfigPatch,
+                            ctx=Depends(verified_device), admin=Depends(admin_user)):
     """Set or clear per-user product-limit overrides on the Firestore user doc."""
     # model_dump(exclude_unset=True) keeps omitted fields out; explicit nulls
     # remain so set_user_config can DELETE_FIELD them.
@@ -530,6 +550,14 @@ def complete_file(file_id: str, body: FileComplete, ctx=Depends(verified_device)
         # types we never store).
         if meta["md5"] and body.md5 != meta["md5"]:
             raise HTTPException(422, "checksum_mismatch")
+        # Bind the object to this session's Drive folder — never trust a client
+        # pointer into an arbitrary shared-drive file the download proxy would
+        # then stream under the SA.
+        session = repo.get_session(rec["sessionId"])
+        folder = (session or {}).get("driveFolderId")
+        parents = meta.get("parents") or []
+        if not folder or folder not in parents:
+            raise HTTPException(403, "file_not_in_session")
     outcome = repo.complete_file(file_id, user["uid"], body)
     if not outcome:
         raise HTTPException(409, "size_or_state_mismatch")

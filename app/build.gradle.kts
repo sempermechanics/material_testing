@@ -48,6 +48,19 @@ val indicApiBaseUrl =
         ""
     }
 
+// Optional comma-separated CertificatePinner pins for the API host
+// (e.g. sha256/AAAA...=). Empty = system trust store only.
+val indicApiCertPins =
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile
+            .readLines()
+            .find { it.startsWith("INDIC_API_CERT_PINS=") }
+            ?.substringAfter("=")
+            ?.trim() ?: ""
+    } else {
+        ""
+    }
+
 // Release signing. The keystore and passwords come from the environment
 // (SIGNING_* — set by .github/workflows/release.yml and the tier-5 CI job),
 // never from the repo. When the keystore is absent — every local build, and
@@ -74,6 +87,7 @@ android {
         versionName = (project.findProperty("versionName") as String?)?.takeIf { it.isNotBlank() } ?: "1.0"
 
         buildConfigField("String", "INDIC_API_BASE_URL", "\"$indicApiBaseUrl\"")
+        buildConfigField("String", "INDIC_API_CERT_PINS", "\"$indicApiCertPins\"")
         // Overridden per build type below; the default keeps the flag defined
         // for any variant that doesn't set it (androidTest, lint models).
         buildConfigField("boolean", "DEV_AUTH_BYPASS", "false")

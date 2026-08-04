@@ -38,3 +38,9 @@ def test_missing_required_empty_when_all_present(monkeypatch):
     monkeypatch.setenv("SHARED_DRIVE_ID", "drive")
     reloaded = importlib.reload(config_module)
     assert reloaded.settings.missing_required() == []
+
+
+def test_auto_approve_hd_is_lowercased(monkeypatch):
+    monkeypatch.setenv("AUTO_APPROVE_HD", "Corp.COM")
+    reloaded = importlib.reload(config_module)
+    assert reloaded.settings.AUTO_APPROVE_HD == "corp.com"

@@ -1,6 +1,8 @@
 name: Deploy Backend
 
 # Versioned replacement for the by-hand `gcloud run deploy` in the runbook.
+# Reminder: challenges.expireAt Firestore TTL is a one-time field policy
+# (docs/backend/BACKEND_SETUP_GCP.md §A2a), not applied by this workflow.
 # Manual trigger; the caller supplies the target. Auth is via Workload Identity
 # Federation (no service-account key in the repo) — set the two secrets below
 # before first use. Until then this is a template that will fail at the auth

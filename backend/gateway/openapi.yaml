@@ -1,7 +1,11 @@
 swagger: '2.0'
 info:
-  title: indic-api
-  description: API Gateway front door for the private Semper Cloud Run service.
+  title: Semper API
+  description: >
+    API Gateway front door for the private Semper Cloud Run service.
+    Device-attested routes require headers X-Device-Id, X-Nonce, X-Signature
+    (ECDSA-P256 over nonce+METHOD+path+sha256(body)) in addition to the
+    end-user Bearer ID token (Authorization or X-Forwarded-Authorization).
   version: '1.0'
 schemes:
   - https
@@ -16,6 +20,40 @@ x-google-backend:
   address: https://REPLACE_WITH_CLOUD_RUN_URL
   path_translation: APPEND_PATH_TO_ADDRESS
   deadline: 60.0
+# Per-consumer quotas (ESPv2 / Service Management). Deploy with the gateway
+# OpenAPI config so these metrics are registered; in-process token buckets in
+# app/rate_limit.py are belt-and-braces per Cloud Run instance.
+x-google-management:
+  metrics:
+    - name: challenge-requests
+      displayName: Challenge requests
+      valueType: INT64
+      metricKind: DELTA
+    - name: session-create-requests
+      displayName: Session create requests
+      valueType: INT64
+      metricKind: DELTA
+    - name: download-requests
+      displayName: File download requests
+      valueType: INT64
+      metricKind: DELTA
+  quota:
+    limits:
+      - name: challenge-per-minute
+        metric: challenge-requests
+        unit: 1/min/{project}
+        values:
+          STANDARD: 60
+      - name: session-create-per-minute
+        metric: session-create-requests
+        unit: 1/min/{project}
+        values:
+          STANDARD: 30
+      - name: download-per-minute
+        metric: download-requests
+        unit: 1/min/{project}
+        values:
+          STANDARD: 60
 paths:
   /healthz:
     get:
@@ -29,8 +67,10 @@ paths:
         '200': { description: OK }
     delete:
       operationId: deleteAccount
+      description: Device-attested GDPR erasure.
       responses:
         '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
   /v1/config:
     get:
       operationId: getConfig
@@ -40,18 +80,26 @@ paths:
   /v1/me/export:
     get:
       operationId: exportAccount
+      description: Device-attested GDPR data portability export.
       responses:
         '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
   /v1/devices/register:
     post:
       operationId: registerDevice
       responses:
         '201': { description: Created }
+        '409': { description: Another device already bound }
   /v1/challenge:
     post:
       operationId: challenge
+      description: Mint a single-use nonce for device attestation.
+      x-google-quota:
+        metricCosts:
+          challenge-requests: 1
       responses:
         '200': { description: OK }
+        '429': { description: Rate limited }
   /v1/sessions:
     get:
       operationId: listSessions
@@ -65,8 +113,18 @@ paths:
         '200': { description: OK }
     post:
       operationId: createSession
+      description: >
+        Device-attested. Idempotent on localSessionId while status is UPLOADING.
+        Requires attestation headers (X-Device-Id, X-Nonce, X-Signature).
+      x-google-quota:
+        metricCosts:
+          session-create-requests: 1
       responses:
         '200': { description: OK }
+        '409': { description: session_quota_exceeded }
+        '413': { description: too_many_files }
+        '429': { description: Rate limited }
+        '401': { description: Missing or invalid device attestation }
   /v1/sessions/{sid}:
     delete:
       operationId: deleteSession
@@ -77,6 +135,7 @@ paths:
           type: string
       responses:
         '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
   /v1/sessions/{sid}/uploads:
     get:
       operationId: sessionUploads
@@ -100,6 +159,7 @@ paths:
   /v1/files/{fileId}/complete:
     post:
       operationId: completeFile
+      description: Device-attested. driveFileId must be a child of the session Drive folder.
       parameters:
         - name: fileId
           in: path
@@ -107,6 +167,8 @@ paths:
           type: string
       responses:
         '200': { description: OK }
+        '403': { description: file_not_in_session }
+        '422': { description: size or checksum mismatch }
   /v1/files/{fileId}/content:
     get:
       operationId: downloadFile
@@ -115,6 +177,9 @@ paths:
         Signature covers GET + path + empty body; Range is an unsigned header.
       produces:
         - application/octet-stream
+      x-google-quota:
+        metricCosts:
+          download-requests: 1
       parameters:
         - name: fileId
           in: path
@@ -129,6 +194,9 @@ paths:
         '200': { description: OK }
         '206': { description: Partial content }
         '401': { description: Missing or invalid device attestation }
+        '416': { description: range_not_satisfiable }
+        '429': { description: Rate limited }
+        '502': { description: Drive download failed }
   /v1/admin/users:
     get:
       operationId: adminListUsers
@@ -137,11 +205,17 @@ paths:
           in: query
           required: false
           type: string
+        - name: limit
+          in: query
+          required: false
+          type: integer
+          description: 1..1000 (default 200); clamped server-side.
       responses:
         '200': { description: OK }
   /v1/admin/users/{uid}/approve:
     post:
       operationId: adminApproveUser
+      description: Device-attested admin mutation.
       parameters:
         - name: uid
           in: path
@@ -149,9 +223,11 @@ paths:
           type: string
       responses:
         '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
   /v1/admin/users/{uid}/revoke:
     post:
       operationId: adminRevokeUser
+      description: Device-attested admin mutation.
       parameters:
         - name: uid
           in: path
@@ -159,10 +235,13 @@ paths:
           type: string
       responses:
         '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
   /v1/admin/users/{uid}/config:
     patch:
       operationId: adminPatchUserConfig
-      description: Set or clear per-user product-limit overrides (maxSessions, maxFilesPerSession, maxFrames).
+      description: >
+        Device-attested. Set or clear per-user product-limit overrides
+        (maxSessions, maxFilesPerSession, maxFrames).
       parameters:
         - name: uid
           in: path
@@ -171,4 +250,5 @@ paths:
       responses:
         '200': { description: OK }
         '400': { description: Empty patch }
+        '401': { description: Missing or invalid device attestation }
         '404': { description: User not found }

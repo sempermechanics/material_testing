@@ -13,6 +13,7 @@ package com.indicvision.semper.data
 
 import android.content.Context
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.data.net.FileCompleteRequest
@@ -63,6 +64,9 @@ import java.util.zip.ZipOutputStream
  * ```
  */
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+
+    override suspend fun getForegroundInfo(): ForegroundInfo =
+        TransferNotifications.uploadForeground(applicationContext)
 
     private data class Artifact(
         val role: String,
@@ -394,7 +398,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val done = java.util.concurrent.atomic.AtomicInteger(0)
             val total = plan.work.size
             coroutineScope {
-                val gate = Semaphore(UPLOAD_CONCURRENCY)
+                val gate = Semaphore(uploadConcurrency(applicationContext))
                 plan.work.map { job ->
                     async {
                         gate.withPermit {
@@ -537,6 +541,13 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     private companion object {
         /** Files uploaded concurrently. Keeps the link busy without thrashing. */
         const val UPLOAD_CONCURRENCY = 4
+
+        /** Soft cap on concurrent 32 MiB chunk buffers on low-RAM devices. */
+        fun uploadConcurrency(context: Context): Int {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val lowRam = am?.isLowRamDevice == true
+            return if (lowRam) 1 else UPLOAD_CONCURRENCY
+        }
 
         /** Hex length of a SHA-256 digest. */
         const val SHA256_HEX_LEN = 64

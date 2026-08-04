@@ -1,18 +1,20 @@
 // Session index store: one accessor per query/mutation of the on-disk index,
 // with broad catches around JSON/file IO so a corrupt entry never crashes the
 // list; hence TooManyFunctions / TooGenericExceptionCaught are suppressed here.
-@file:Suppress("TooManyFunctions", "TooGenericExceptionCaught")
+@file:Suppress("TooManyFunctions", "TooGenericExceptionCaught", "ReturnCount")
 
 package com.indicvision.semper.data
 
 import android.content.Context
-import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
 
 /**
  * One completed (or re-run) analysis as shown on the Home list. Metadata only —
@@ -138,9 +140,15 @@ data class SessionRecord(
 /**
  * The local session index behind the Home list: one JSON file in app-private
  * storage plus one directory per session for its frames and reference copy.
- * All methods are synchronous and lock-guarded (the index is small). Prefer
- * calling mutations and [list] from a background dispatcher when on the UI
- * thread — see Home / ResultViewer / SessionListAdapter.
+ *
+ * Writes are atomic (tmp → rename) with a `.bak` of the prior good index.
+ * A truncated/corrupt index never returns an empty list that mutations would
+ * then overwrite with a one-record file — mutations refuse to write until the
+ * index is readable again (from the primary file or `.bak`).
+ *
+ * Sync accessors take the lock on the calling thread. Prefer the `suspend`
+ * variants ([listAsync], [upsertAsync], …) from UI code so disk+JSON never
+ * block Main.
  */
 object SessionStore {
 
@@ -150,9 +158,17 @@ object SessionStore {
     }
     private val lock = Any()
 
+    /** In-process flag: last successful read of the index failed (primary + bak). */
+    @Volatile
+    private var indexCorrupt = false
+
     private fun root(context: Context): File = File(context.filesDir, "sessions").apply { mkdirs() }
 
     private fun indexFile(context: Context): File = File(root(context), "index.json")
+
+    private fun indexBakFile(context: Context): File = File(root(context), "index.json.bak")
+
+    private fun indexTmpFile(context: Context): File = File(root(context), "index.json.tmp")
 
     /** Directory holding a session's .dat frames and reference copy. */
     fun dirFor(context: Context, id: String): File = File(root(context), id).apply { mkdirs() }
@@ -161,113 +177,225 @@ object SessionStore {
     fun rawDeformedDir(sessionDir: File): File =
         File(sessionDir, SessionPaths.RAW_DEFORMED_SUBDIR)
 
+    /** True when the on-disk index is unreadable (mutations must not clobber it). */
+    fun isIndexCorrupt(): Boolean = indexCorrupt
+
     fun list(context: Context): List<SessionRecord> = synchronized(lock) {
-        val f = indexFile(context)
-        if (!f.exists()) return emptyList()
-        try {
-            @Suppress("TooGenericExceptionCaught") // corrupt index must never crash Home
-            json.decodeFromString<List<SessionRecord>>(f.readText())
-                .sortedByDescending { it.createdAt }
-        } catch (e: Exception) {
-            Timber.e(e, "Session index unreadable; starting fresh")
-            emptyList()
+        when (val snap = readIndex(context)) {
+            is IndexRead.Ok -> snap.records.sortedByDescending { it.createdAt }
+            IndexRead.Empty -> emptyList()
+            IndexRead.Corrupt -> {
+                Timber.e("Session index unreadable (primary + bak); refusing empty clobber")
+                emptyList()
+            }
         }
     }
 
+    suspend fun listAsync(context: Context): List<SessionRecord> =
+        withContext(Dispatchers.IO) { list(context) }
+
     fun get(context: Context, id: String): SessionRecord? = list(context).firstOrNull { it.id == id }
+
+    suspend fun getAsync(context: Context, id: String): SessionRecord? =
+        withContext(Dispatchers.IO) { get(context, id) }
 
     /**
      * Insert or update a session row. New sessions are hard-stopped when the
-     * account is at its analysis quota — re-runs of an existing id still upsert.
+     * account is at its analysis quota ([SessionQuotaGate]) — re-runs of an
+     * existing id still upsert.
      * @param allowOverLimit true for cloud restore (session already counts against quota).
-     * @return false if a new session was refused because the limit is reached.
+     * @return false if a new session was refused (quota) or the index is corrupt.
      */
     fun upsert(
         context: Context,
         record: SessionRecord,
         allowOverLimit: Boolean = false,
     ): Boolean = synchronized(lock) {
-        val existing = list(context)
+        val snap = readIndex(context)
+        if (snap is IndexRead.Corrupt) {
+            Timber.e("Refusing upsert: session index is corrupt")
+            return false
+        }
+        val existing = when (snap) {
+            is IndexRead.Ok -> snap.records
+            IndexRead.Empty -> emptyList()
+            IndexRead.Corrupt -> error("unreachable")
+        }
         val isNew = existing.none { it.id == record.id }
-        if (isNew && !allowOverLimit) {
-            // Cloud-backed accounts use the server quota. A quota that is *known
-            // and full* is a hard stop; an *unknown* quota is not — the analysis
-            // is already computed and must be saved locally (upload is separately
-            // gated in CloudSync until config arrives). Never invent a local max.
-            if (IndicApi.get(context).enabled) {
-                val max = TokenStore.quotaMax(context)
-                if (max > 0) {
-                    val used = maxOf(TokenStore.quotaUsed(context), existing.size)
-                    if (used >= max) {
-                        // Persist the used count; isSessionLimitReached recomputes
-                        // the hard stop live (used >= max) from this.
-                        TokenStore.setQuota(context, used, existing.size)
-                        Timber.w("Hard stop: refusing new session (at %d/%d)", used, max)
-                        return false
-                    }
-                }
-            }
+        if (isNew && !allowOverLimit && !SessionQuotaGate.allowNewSession(context, existing.size)) {
+            return false
         }
         val next = existing.filterNot { it.id == record.id } + record
-        write(context, next)
+        if (!write(context, next)) return false
         TokenStore.refreshSessionLimit(context, next.size)
         true
     }
 
+    suspend fun upsertAsync(
+        context: Context,
+        record: SessionRecord,
+        allowOverLimit: Boolean = false,
+    ): Boolean = withContext(Dispatchers.IO) { upsert(context, record, allowOverLimit) }
+
     fun rename(context: Context, id: String, newName: String) = synchronized(lock) {
-        write(
-            context,
-            list(context).map {
+        mutateIndex(context) { records ->
+            records.map {
                 if (it.id == id) it.copy(name = newName, updatedAt = System.currentTimeMillis()) else it
-            },
-        )
+            }
+        }
     }
 
+    suspend fun renameAsync(context: Context, id: String, newName: String) =
+        withContext(Dispatchers.IO) { rename(context, id, newName) }
+
     fun updateHeadline(context: Context, id: String, headline: String) = synchronized(lock) {
-        write(
-            context,
-            list(context).map {
+        mutateIndex(context) { records ->
+            records.map {
                 if (it.id == id) it.copy(headline = headline, updatedAt = System.currentTimeMillis()) else it
-            },
-        )
+            }
+        }
     }
+
+    suspend fun updateHeadlineAsync(context: Context, id: String, headline: String) =
+        withContext(Dispatchers.IO) { updateHeadline(context, id, headline) }
 
     fun markSynced(context: Context, id: String) = setSyncState(context, id, SessionRecord.SyncState.SYNCED)
 
     /** Remember which cloud session backs this analysis (so it can be erased). */
     fun setCloudSessionId(context: Context, id: String, cloudSessionId: String) = synchronized(lock) {
-        write(
-            context,
-            list(context).map { if (it.id == id) it.copy(cloudSessionId = cloudSessionId) else it },
-        )
+        mutateIndex(context) { records ->
+            records.map { if (it.id == id) it.copy(cloudSessionId = cloudSessionId) else it }
+        }
     }
 
     /** Set a session's sync state — used by cloud reconciliation as well as uploads. */
     fun setSyncState(context: Context, id: String, state: SessionRecord.SyncState) = synchronized(lock) {
-        write(
-            context,
-            list(context).map { if (it.id == id) it.copy(syncState = state) else it },
-        )
+        mutateIndex(context) { records ->
+            records.map { if (it.id == id) it.copy(syncState = state) else it }
+        }
     }
+
+    suspend fun setSyncStateAsync(context: Context, id: String, state: SessionRecord.SyncState) =
+        withContext(Dispatchers.IO) { setSyncState(context, id, state) }
 
     /** Removes the index row AND the local files. Cloud copies are untouched. */
     fun delete(context: Context, id: String) = synchronized(lock) {
-        write(context, list(context).filterNot { it.id == id })
+        if (!mutateIndex(context) { it.filterNot { r -> r.id == id } }) return
         dirFor(context, id).deleteRecursively()
-        TokenStore.refreshSessionLimit(context, list(context).size)
+        val remaining = when (val snap = readIndex(context)) {
+            is IndexRead.Ok -> snap.records.size
+            else -> 0
+        }
+        TokenStore.refreshSessionLimit(context, remaining)
     }
+
+    suspend fun deleteAsync(context: Context, id: String) =
+        withContext(Dispatchers.IO) { delete(context, id) }
 
     /**
      * Wipes every local analysis — the index and all per-session directories.
      * Used by account deletion (GDPR); cloud erasure is handled separately.
+     * Always allowed: intentional wipe, not a partial clobber of a corrupt file.
      */
     fun deleteAll(context: Context) = synchronized(lock) {
         root(context).deleteRecursively()
         root(context).mkdirs()
+        indexCorrupt = false
         TokenStore.refreshSessionLimit(context, 0)
     }
 
-    private fun write(context: Context, records: List<SessionRecord>) {
-        indexFile(context).writeText(json.encodeToString(records))
+    suspend fun deleteAllAsync(context: Context) =
+        withContext(Dispatchers.IO) { deleteAll(context) }
+
+    private sealed class IndexRead {
+        data class Ok(val records: List<SessionRecord>) : IndexRead()
+        data object Empty : IndexRead()
+        data object Corrupt : IndexRead()
+    }
+
+    private fun decodeFile(f: File): List<SessionRecord>? = try {
+        json.decodeFromString<List<SessionRecord>>(f.readText())
+    } catch (e: Exception) {
+        Timber.e(e, "Failed to parse %s", f.name)
+        null
+    }
+
+    private fun readIndex(context: Context): IndexRead {
+        val primary = indexFile(context)
+        val bak = indexBakFile(context)
+        if (!primary.exists() && !bak.exists()) {
+            indexCorrupt = false
+            return IndexRead.Empty
+        }
+        if (primary.exists()) {
+            val decoded = decodeFile(primary)
+            if (decoded != null) {
+                indexCorrupt = false
+                return IndexRead.Ok(decoded)
+            }
+        }
+        if (bak.exists()) {
+            val decoded = decodeFile(bak)
+            if (decoded != null) {
+                Timber.w("Restored session index from .bak")
+                indexCorrupt = false
+                // Heal the primary so the next write starts from a good base.
+                write(context, decoded)
+                return IndexRead.Ok(decoded)
+            }
+        }
+        indexCorrupt = true
+        return IndexRead.Corrupt
+    }
+
+    /** @return false if the index was corrupt and the mutation was refused. */
+    private fun mutateIndex(
+        context: Context,
+        transform: (List<SessionRecord>) -> List<SessionRecord>,
+    ): Boolean {
+        val snap = readIndex(context)
+        if (snap is IndexRead.Corrupt) {
+            Timber.e("Refusing index mutation: session index is corrupt")
+            return false
+        }
+        val existing = when (snap) {
+            is IndexRead.Ok -> snap.records
+            IndexRead.Empty -> emptyList()
+            IndexRead.Corrupt -> error("unreachable")
+        }
+        return write(context, transform(existing))
+    }
+
+    /**
+     * Atomic replace: backup prior good file, write tmp, flush, rename.
+     * @return false only if something unexpected fails mid-write (rare).
+     */
+    private fun write(context: Context, records: List<SessionRecord>): Boolean {
+        val target = indexFile(context)
+        val bak = indexBakFile(context)
+        val tmp = indexTmpFile(context)
+        try {
+            root(context).mkdirs()
+            // Only promote a *parseable* primary to .bak — never overwrite a good
+            // backup with a truncated file we're about to replace (e.g. heal path).
+            if (target.exists() && decodeFile(target) != null) {
+                target.copyTo(bak, overwrite = true)
+            }
+            val payload = json.encodeToString(records)
+            FileOutputStream(tmp).use { out ->
+                out.write(payload.toByteArray(Charsets.UTF_8))
+                out.fd.sync()
+            }
+            if (!tmp.renameTo(target)) {
+                tmp.copyTo(target, overwrite = true)
+                tmp.delete()
+            }
+            indexCorrupt = false
+            return true
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to write session index")
+            tmp.delete()
+            return false
+        }
     }
 }
