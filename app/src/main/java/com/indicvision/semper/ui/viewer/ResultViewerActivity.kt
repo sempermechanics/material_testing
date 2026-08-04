@@ -673,6 +673,21 @@ class ResultViewerActivity : AppCompatActivity() {
         ViewerReportFactory.buildReportData(this, frameIndex, data)
 
     /** Everything ShareCenter needs, captured from the viewer's state. */
+    /**
+     * A filename-safe base for exports, drawn from the specimen/reference name so
+     * shared files read like "IMG_0768_report.pdf" instead of a generic prefix.
+     * Falls back to the session name, then the first deformed frame, then "analysis".
+     */
+    private fun shareBaseName(): String {
+        val record = intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
+            ?.let { runCatching { com.indicvision.semper.data.SessionStore.get(this, it) }.getOrNull() }
+        val raw = record?.refName?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }
+            ?: record?.name?.takeIf { it.isNotBlank() }
+            ?: originalDefNames.firstOrNull()?.substringBeforeLast('.')
+            ?: "analysis"
+        return raw.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_').take(60).ifBlank { "analysis" }
+    }
+
     internal fun buildShareSnapshot(): ShareCenter.Snapshot? {
         val data = rawData ?: return null
         // Snapshot can open with ref path alone while display decode is still in flight.
@@ -681,6 +696,7 @@ class ResultViewerActivity : AppCompatActivity() {
             data = data,
             batchFiles = batchFiles,
             defNames = originalDefNames,
+            baseName = shareBaseName(),
             frameIndex = currentFrameIndex,
             imgW = imgW,
             imgH = imgH,

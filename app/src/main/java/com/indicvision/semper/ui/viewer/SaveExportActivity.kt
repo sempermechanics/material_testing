@@ -33,9 +33,12 @@ class SaveExportActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
-                    contentResolver.openOutputStream(uri)?.use { out ->
+                    // Treat the copy as successful only if bytes actually landed —
+                    // an opened-but-empty stream shouldn't report "Saved".
+                    val copied = contentResolver.openOutputStream(uri)?.use { out ->
                         file.inputStream().use { it.copyTo(out) }
-                    } != null
+                    } ?: 0L
+                    copied > 0L
                 }.onFailure { Timber.e(it, "Save to Files failed") }.getOrDefault(false)
             }
             Toast.makeText(

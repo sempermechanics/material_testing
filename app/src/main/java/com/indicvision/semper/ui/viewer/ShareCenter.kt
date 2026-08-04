@@ -8,7 +8,6 @@
 package com.indicvision.semper.ui.viewer
 
 import android.annotation.SuppressLint
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -16,15 +15,14 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.view.View
 import android.widget.TextView
-import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.ui.common.DeterminateProgressDialog
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.PdfReportGenerator
@@ -45,9 +43,8 @@ import java.util.zip.ZipOutputStream
 /**
  * The Results share sheet (wireframe 08). One scope rule: photos share the
  * current frame; the PDF and CSV cover the whole analysis; the ZIP bundles
- * everything. Files are generated into `cacheDir/share` and handed to the
- * Android share sheet via FileProvider, with Save to Files as an initial
- * chooser target alongside other apps.
+ * everything. Files are generated into `cacheDir/share` and handed to
+ * [SendToSheet], which offers Save to Files (folder icon) and Share.
  */
 class ShareCenter(private val host: ResultViewerActivity) {
 
@@ -88,7 +85,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         }
         v.findViewById<View>(R.id.rowSharePdf).setOnClickListener {
             sheet.dismiss()
-            runJob(R.string.share_generating_pdf) { listOf(allFramesPdf()) to "application/pdf" }
+            runJob(R.string.share_generating_pdf) { report -> listOf(allFramesPdf(report)) to "application/pdf" }
         }
         v.findViewById<View>(R.id.rowShareCsv).setOnClickListener {
             sheet.dismiss()
@@ -96,28 +93,41 @@ class ShareCenter(private val host: ResultViewerActivity) {
         }
         v.findViewById<View>(R.id.rowShareZip).setOnClickListener {
             sheet.dismiss()
-            runJob(R.string.share_generating_pdf) { listOf(everythingZip()) to "application/zip" }
+            runJob(R.string.share_generating_pdf) { report -> listOf(everythingZip(report)) to "application/zip" }
         }
         sheet.show()
     }
 
     // ── Job runner: progress dialog → system share sheet (+ Local) ───────
 
-    private fun runJob(progressText: Int, build: suspend () -> Pair<List<File>, String>) {
-        val progress = MaterialAlertDialogBuilder(host)
-            .setMessage(progressText)
-            .setCancelable(false)
-            .show()
+    private fun runJob(
+        progressText: Int,
+        build: suspend (report: (Int, String) -> Unit) -> Pair<List<File>, String>,
+    ) {
+        val progress = DeterminateProgressDialog(host, host.getString(progressText))
+        progress.show()
         host.lifecycleScope.launch {
             try {
-                val (files, mime) = withContext(Dispatchers.Default) { build() }
+                val report: (Int, String) -> Unit = { pct, label -> progress.update(pct, label) }
+                val (files, mime) = withContext(Dispatchers.Default) { build(report) }
+                // Safety: never hand an empty or missing file to the share sheet —
+                // a generator that silently produced nothing would otherwise share
+                // a 0-byte document.
+                if (files.isEmpty() || files.any { !it.exists() || it.length() == 0L }) {
+                    fail(progress, null, "Share produced no usable files")
+                    return@launch
+                }
                 // SAF saves one document; bundle multi-file exports into a zip first.
                 val handoff = withContext(Dispatchers.Default) {
                     if (files.size == 1) {
                         files[0] to mime
                     } else {
-                        zipInto(files, "inDIC_export.zip") to "application/zip"
+                        zipInto(files, "${snap?.baseName ?: "analysis"}_export.zip") to "application/zip"
                     }
+                }
+                if (!handoff.first.exists() || handoff.first.length() == 0L) {
+                    fail(progress, null, "Bundled export was empty")
+                    return@launch
                 }
                 progress.dismiss()
                 shareWithLocalOption(handoff.first, handoff.second)
@@ -128,35 +138,28 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 // Throwable, not just Exception: a large multi-frame ZIP/PDF export
                 // can hit OutOfMemoryError (an Error), which we'd rather surface as
                 // a snackbar than let crash the app.
-                progress.dismiss()
-                Timber.e(e, "Share generation failed")
-                Snackbar.make(
-                    host.findViewById(android.R.id.content),
-                    R.string.share_failed,
-                    Snackbar.LENGTH_LONG,
-                ).show()
+                fail(progress, e, "Share generation failed")
             }
         }
     }
 
+    private fun fail(progress: DeterminateProgressDialog, e: Throwable?, log: String) {
+        progress.dismiss()
+        if (e != null) Timber.e(e, log) else Timber.e(log)
+        Snackbar.make(
+            host.findViewById(android.R.id.content),
+            R.string.share_failed,
+            Snackbar.LENGTH_LONG,
+        ).show()
+    }
+
     /**
-     * System share chooser with an initial "Save to Files" target so Local sits
-     * alongside other apps — no mode toggle on the sheet.
+     * Our own "Send to" sheet: Save to Files (folder icon) + Share. Owning the
+     * rows is the only reliable way to show a folder icon — the system share
+     * sheet ignores custom icons on EXTRA_INITIAL_INTENTS on Android 12+.
      */
     private fun shareWithLocalOption(file: File, mime: String) {
-        val uri = FileProvider.getUriForFile(host, "${host.packageName}.fileprovider", file)
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = mime
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        val chooser = Intent.createChooser(send, host.getString(R.string.action_share)).apply {
-            putExtra(
-                Intent.EXTRA_INITIAL_INTENTS,
-                arrayOf(SaveExportActivity.intent(host, file, mime)),
-            )
-        }
-        host.startActivity(chooser)
+        SendToSheet.show(host, file, mime)
     }
 
     private fun shareDir(): File = File(host.cacheDir, "share").apply { mkdirs() }
@@ -231,7 +234,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val s = snap!!
         return writePng(
             renderAnnotated(s.data, s.dataIndex, s.typeString, s.frameIndex),
-            "inDIC_${s.typeString}_frame${s.frameIndex + 1}.png",
+            "${s.baseName}_${s.typeString}_frame${s.frameIndex + 1}.png",
         )
     }
 
@@ -240,7 +243,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         return FIELDS.map { (label, idx) ->
             writePng(
                 renderAnnotated(s.data, idx, label, s.frameIndex),
-                "inDIC_${label}_frame${s.frameIndex + 1}.png",
+                "${s.baseName}_${label}_frame${s.frameIndex + 1}.png",
             )
         }
     }
@@ -283,7 +286,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 data = { DicResult.decodeDatBytes(file.readBytes()) },
             )
         }
-        val f = File(shareDir(), "inDIC_analysis_data.csv")
+        val f = File(shareDir(), "${s.baseName}_data.csv")
         AnalysisCsvWriter.write(f, sweep, frames)
         return f
     }
@@ -293,9 +296,9 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * the same cover / field-pages structure a single-frame report has, and one
      * telemetry page closes the document.
      */
-    private suspend fun allFramesPdf(): File {
+    private suspend fun allFramesPdf(report: (Int, String) -> Unit = { _, _ -> }): File {
         val s = snap!!
-        val f = File(shareDir(), "inDIC_report_all_frames.pdf")
+        val f = File(shareDir(), "${s.baseName}_report.pdf")
         f.outputStream().use { out ->
             PdfReportGenerator.generateBatch(
                 frameCount = s.batchFiles.size,
@@ -303,10 +306,14 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 outputStream = out,
                 frameTitle = { index -> frameTitle(index) },
             ).collect { progress ->
-                // generateBatch reports failures as a Flow event rather than
-                // throwing; surface it so the share job actually fails (and logs)
-                // instead of silently handing back an empty PDF.
-                if (progress is PdfReportGenerator.Progress.Error) throw progress.ex
+                when (progress) {
+                    // generateBatch reports failures as a Flow event rather than
+                    // throwing; surface it so the share job actually fails (and logs)
+                    // instead of silently handing back an empty PDF.
+                    is PdfReportGenerator.Progress.Error -> throw progress.ex
+                    is PdfReportGenerator.Progress.Status -> report(progress.percent, progress.message)
+                    PdfReportGenerator.Progress.Complete -> Unit
+                }
             }
         }
         return f
@@ -335,21 +342,24 @@ class ShareCenter(private val host: ResultViewerActivity) {
     /**
      * The complete-bundle ZIP (`{ts}` = capture time, `yyyyMMdd_HHmmss`):
      * ```
-     * ├── inDIC_analysis_{ts}_data.csv         (root)
-     * ├── inDIC_report_all_{ts}_frames.pdf     (root)
+     * ├── {base}_data.csv                      (root)
+     * ├── {base}_report.pdf                    (root)
      * └── photos_{ts}/
      *     ├── raw photos/                      reference + deformed originals
      *     ├── animations/                      U, V, Exx, Eyy, Exy as looping GIFs
      *     └── results/<NNN_frame>/             U, V, Exx, Eyy, Exy per frame
      * ```
      */
-    private suspend fun everythingZip(): File {
+    private suspend fun everythingZip(report: (Int, String) -> Unit = { _, _ -> }): File {
         val s = snap!!
-        val pdf = allFramesPdf()
+        // The PDF is the long pole; give it the first 60% of the bar, then the
+        // per-frame result images the last 40%.
+        val pdf = allFramesPdf { pct, label -> report(pct * 60 / 100, label) }
         val csv = batchCsv()
         val animations = fieldAnimations()
+        report(62, "Bundling files…")
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val f = File(shareDir(), "inDIC_everything_$ts.zip")
+        val f = File(shareDir(), "${s.baseName}_everything_$ts.zip")
         ZipOutputStream(f.outputStream().buffered()).use { zip ->
             addRawPhotos(zip, s, ts)
             for (gif in animations) {
@@ -357,15 +367,18 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 gif.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
             }
-            addResultImages(zip, s, ts)
+            addResultImages(zip, s, ts) { done, total ->
+                report(70 + (if (total > 0) done * 30 / total else 0), "Adding result images…")
+            }
             // Home of the archive: the data table and the full report.
-            zip.putNextEntry(ZipEntry("inDIC_analysis_${ts}_data.csv"))
+            zip.putNextEntry(ZipEntry("${s.baseName}_data.csv"))
             csv.inputStream().use { it.copyTo(zip) }
             zip.closeEntry()
-            zip.putNextEntry(ZipEntry("inDIC_report_all_${ts}_frames.pdf"))
+            zip.putNextEntry(ZipEntry("${s.baseName}_report.pdf"))
             pdf.inputStream().use { it.copyTo(zip) }
             zip.closeEntry()
         }
+        report(100, "Bundling files…")
         return f
     }
 
@@ -400,8 +413,14 @@ class ShareCenter(private val host: ResultViewerActivity) {
     }
 
     /** `photos_{ts}/results/<NNN_frame>/` — every field's annotated heatmap per frame. */
-    private fun addResultImages(zip: ZipOutputStream, s: Snapshot, ts: String) {
+    private fun addResultImages(
+        zip: ZipOutputStream,
+        s: Snapshot,
+        ts: String,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ) {
         for ((index, file) in s.batchFiles.withIndex()) {
+            onProgress(index + 1, s.batchFiles.size)
             val data = DicResult.decodeDatBytes(file.readBytes()) ?: continue
             val prefix = (index + 1).toString().padStart(3, '0')
             val frameName = s.defNames.getOrNull(index)?.substringBeforeLast('.') ?: "Frame_${index + 1}"
@@ -410,7 +429,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 var bmp: Bitmap? = null
                 try {
                     bmp = renderAnnotated(data, idx, label, index)
-                    zip.putNextEntry(ZipEntry("$folder/inDIC_$label.png"))
+                    zip.putNextEntry(ZipEntry("$folder/$label.png"))
                     bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, zip)
                     zip.closeEntry()
                 } catch (e: Exception) {
@@ -428,6 +447,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val data: FloatArray,
         val batchFiles: List<File>,
         val defNames: List<String>,
+        /** Filename-safe base for exports, e.g. the specimen/reference name. */
+        val baseName: String,
         val frameIndex: Int,
         val imgW: Int,
         val imgH: Int,

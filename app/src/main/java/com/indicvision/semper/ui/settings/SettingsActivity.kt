@@ -17,7 +17,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -45,9 +44,10 @@ import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.admin.AdminActivity
 import com.indicvision.semper.ui.auth.AuthActivity
 import com.indicvision.semper.ui.common.AuthRoute
+import com.indicvision.semper.ui.common.DeterminateProgressDialog
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.home.SessionOpenHelper
-import com.indicvision.semper.ui.viewer.SaveExportActivity
+import com.indicvision.semper.ui.viewer.SendToSheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -332,28 +332,25 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun exportMyData() {
-        Toast.makeText(this, R.string.export_data_working, Toast.LENGTH_SHORT).show()
+        val progress = DeterminateProgressDialog(this, getString(R.string.export_data_working))
+        progress.show()
         lifecycleScope.launch {
-            val export = SessionEverythingExporter.exportMasterZip(this@SettingsActivity)
-            if (export == null) {
+            val export = SessionEverythingExporter.exportMasterZip(this@SettingsActivity) { done, total ->
+                progress.update(
+                    percent = if (total > 0) done * 100 / total else 0,
+                    text = getString(R.string.export_progress_fmt, done, total),
+                )
+            }
+            progress.dismiss()
+            // Safety: only share a file that actually exists and has content.
+            val file = export?.file?.takeIf { it.exists() && it.length() > 0L }
+            if (file == null) {
                 Toast.makeText(this@SettingsActivity, R.string.export_data_failed, Toast.LENGTH_LONG).show()
                 return@launch
             }
-            val file = export.file
-            val uri = FileProvider.getUriForFile(this@SettingsActivity, "$packageName.fileprovider", file)
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = ZIP_MIME
-                putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, file.name)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            val chooser = Intent.createChooser(send, getString(R.string.export_data_share)).apply {
-                putExtra(
-                    Intent.EXTRA_INITIAL_INTENTS,
-                    arrayOf(SaveExportActivity.intent(this@SettingsActivity, file, ZIP_MIME)),
-                )
-            }
-            startActivity(chooser)
+            // Save to Files (folder icon) + Share, via our own sheet — the system
+            // chooser can't show a custom icon on its initial intents (Android 12+).
+            SendToSheet.show(this@SettingsActivity, file, ZIP_MIME)
         }
     }
 

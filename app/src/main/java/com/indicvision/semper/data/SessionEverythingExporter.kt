@@ -27,7 +27,10 @@ object SessionEverythingExporter {
      * Packages every local session that still has on-device frame data.
      * Returns null when nothing can be exported or writing fails.
      */
-    suspend fun exportMasterZip(context: Context): Result? = withContext(Dispatchers.IO) {
+    suspend fun exportMasterZip(
+        context: Context,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): Result? = withContext(Dispatchers.IO) {
         val app = context.applicationContext
         val sessions = SessionStore.list(app).filter { it.hasLocalData() }
         if (sessions.isEmpty()) return@withContext null
@@ -44,6 +47,7 @@ object SessionEverythingExporter {
         try {
             ZipOutputStream(master.outputStream().buffered()).use { masterZip ->
                 sessions.forEachIndexed { index, record ->
+                    onProgress(index + 1, sessions.size)
                     val sessionZip = buildSessionEverythingZip(app, record, stagingRoot, index, ts)
                         ?: return@forEachIndexed
                     val entryName = sanitizeZipName(record.name, record.id) + ".zip"
@@ -87,7 +91,7 @@ object SessionEverythingExporter {
         val refFile = File(record.refPath).takeIf { it.exists() }
             ?: File(sessionDir, "reference.png")
         val rawDeformedDir = SessionStore.rawDeformedDir(sessionDir)
-        val csvFile = File(work, "inDIC_analysis_${ts}_data.csv")
+        val csvFile = File(work, "analysis_data.csv")
         stageReports(context, record, refFile, work, csvFile)
 
         val zip = File(stagingRoot, "${SESSION_PREFIX}${record.id}.zip")
@@ -148,7 +152,7 @@ object SessionEverythingExporter {
         val rawPrefix = "photos_$ts/raw photos"
         putFile(zipOut, "$rawPrefix/reference_${refFile.name}", refFile)
         rawDeformedDir.listFiles()?.forEach { f -> putFile(zipOut, "$rawPrefix/${f.name}", f) }
-        putFile(zipOut, "inDIC_analysis_${ts}_data.csv", csvFile)
+        putFile(zipOut, "analysis_data.csv", csvFile)
         File(work, "reports").listFiles()?.forEach { f -> putFile(zipOut, "reports/${f.name}", f) }
         val processed = File(work, "processed")
         processed.walkTopDown().filter { it.isFile }.forEach { f ->
@@ -173,8 +177,8 @@ object SessionEverythingExporter {
         return cleaned.ifBlank { "session" }.take(MAX_NAME_CHARS) + "_" + id.take(ID_CHARS)
     }
 
-    private const val MASTER_PREFIX = "inDIC_sessions_export_"
-    private const val SESSION_PREFIX = "inDIC_session_"
+    private const val MASTER_PREFIX = "Semper_sessions_export_"
+    private const val SESSION_PREFIX = "Semper_session_"
 
     /** Entry names stay readable and well clear of any archive path limit. */
     private const val MAX_NAME_CHARS = 40

@@ -84,6 +84,7 @@
         <activity
             android:name=".ui.viewer.SaveExportActivity"
             android:exported="false"
+            android:icon="@drawable/ic_folder"
             android:label="@string/share_save_to_files"
             android:theme="@style/Theme.Semper.Transparent" />
 

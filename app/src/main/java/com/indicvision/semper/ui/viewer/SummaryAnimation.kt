@@ -47,7 +47,7 @@ class SummaryAnimation(private val spec: Spec) {
     /** Bounds a field's GIF on disk was rendered with, so a scale change rebuilds it. */
     private val builtWith = mutableMapOf<Int, Pair<Float, Float>>()
 
-    fun fileFor(label: String): File = File(spec.outputDir, "inDIC_${label}_animation.gif")
+    fun fileFor(label: String): File = File(spec.outputDir, "${label}_animation.gif")
 
     /** True when [fileFor] is on disk and was built against [bounds]. */
     fun isBuilt(dataIndex: Int, label: String, bounds: Pair<Float, Float>): Boolean =
