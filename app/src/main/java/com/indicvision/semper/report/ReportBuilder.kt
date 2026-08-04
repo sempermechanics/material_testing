@@ -11,6 +11,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
@@ -203,6 +204,19 @@ object ReportBuilder {
             val mean = validValues.average().toFloat()
             val stdDev = sqrt(validValues.map { (it - mean) * (it - mean) }.average()).toFloat()
 
+            // Bound the intermediate render to REPORT_MAX_EDGE. Every output here is
+            // downscaled to 600 px by compressForPdf(), so this is invisible — but it
+            // stops the full-resolution ARGB_8888 bitmaps (heatmap + composite, up to
+            // ~100 MB each on a 26 MP reference) from OOMing.
+            val longest = maxOf(params.imgW, params.imgH).coerceAtLeast(1)
+            val renderScale = if (longest > VisualizationEngine.REPORT_MAX_EDGE) {
+                VisualizationEngine.REPORT_MAX_EDGE.toFloat() / longest
+            } else {
+                1f
+            }
+            val renderW = (params.imgW * renderScale).toInt().coerceAtLeast(1)
+            val renderH = (params.imgH * renderScale).toInt().coerceAtLeast(1)
+
             val (heatmapBmp, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
                 data,
                 params.imgW,
@@ -211,24 +225,26 @@ object ReportBuilder {
                 params.step,
                 null,
                 null,
+                maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
             )
 
-            // Compose at full resolution, then downscale for the PDF. The full-res
-            // canvas is a throwaway — compressForPdf() returns a *new* small bitmap,
-            // so the original must be recycled here or we leak one full-res
-            // ARGB_8888 bitmap per field (6×), which OOMs large-image reports.
-            val fullResComposite = createBitmap(params.imgW, params.imgH, Bitmap.Config.ARGB_8888).also { bmp ->
+            // Compose at the capped size, then downscale for the PDF. The composite is
+            // a throwaway — compressForPdf() returns a *new* small bitmap, so the
+            // original must be recycled here or we leak one ARGB_8888 bitmap per field.
+            val composite = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888).also { bmp ->
                 val tempCanvas = Canvas(bmp)
-                tempCanvas.drawBitmap(baseImg, 0f, 0f, null)
+                // baseImg may be larger than the capped composite; scale it in.
+                tempCanvas.drawBitmap(baseImg, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
                 tempCanvas.drawBitmap(heatmapBmp, 0f, 0f, Paint().apply { alpha = 180 })
                 bakeAnnotationsToCanvas(
-                    tempCanvas, params.imgW, params.imgH, actualMin, actualMax,
+                    tempCanvas, renderW, renderH, actualMin, actualMax,
                     FIELD_KEYS[fieldIndex], unit, extrema.maxIdx, extrema.minIdx, data,
                     drawMinMarker = params.drawMinMarker,
+                    coordScale = renderScale,
                 )
             }
-            val bakedHeatmap = fullResComposite.compressForPdf()
-            fullResComposite.recycle()
+            val bakedHeatmap = composite.compressForPdf()
+            composite.recycle()
 
             heatmapBmp.recycle()
 
@@ -291,6 +307,7 @@ object ReportBuilder {
         minIdx: Int,
         dataArray: FloatArray,
         drawMinMarker: Boolean = true,
+        coordScale: Float = 1f,
     ) {
         val multiplier = if (unit == "mε") DicResult.STRAIN_TO_MILLISTRAIN else 1f
         val maxVal = maxValRaw * multiplier
@@ -391,10 +408,12 @@ object ReportBuilder {
         drawScaleLabel(formatMetric(minVal), barBottom)
 
         if (maxIdx != -1 && minIdx != -1) {
-            val maxX = dataArray[maxIdx]
-            val maxY = dataArray[maxIdx + 1]
-            val minX = dataArray[minIdx]
-            val minY = dataArray[minIdx + 1]
+            // Data coords are in full-resolution image space; scale them to the
+            // (possibly capped) canvas so markers land correctly.
+            val maxX = dataArray[maxIdx] * coordScale
+            val maxY = dataArray[maxIdx + 1] * coordScale
+            val minX = dataArray[minIdx] * coordScale
+            val minY = dataArray[minIdx + 1] * coordScale
             val targetRadius = width * 0.015f
             val crosshairLen = targetRadius * 1.5f
             val whiteOutline = Paint(Paint.ANTI_ALIAS_FLAG).apply {

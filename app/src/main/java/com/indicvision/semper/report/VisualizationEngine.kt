@@ -29,6 +29,15 @@ object VisualizationEngine {
     const val DISPLAY_MAX_EDGE = 1080
 
     /**
+     * Longest-edge cap for report/upload compositing. The PDF and cloud heatmaps
+     * are downscaled to 600 px wide by [ReportBuilder.compressForPdf] anyway, so
+     * this is far above the visible output — it exists purely to stop the
+     * intermediate full-resolution ARGB_8888 bitmaps from OOMing on large
+     * (e.g. 26 MP) references.
+     */
+    const val REPORT_MAX_EDGE = 1280
+
+    /**
      * Palette slot for "no correlated data here" — transparent on screen, the
      * animation's background colour in a GIF. It costs the colour ramp its top
      * entry (values map to 0..[LAST_COLOR]), which is one 255th of the scale and

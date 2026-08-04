@@ -7,9 +7,11 @@ package com.indicvision.semper.data
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.scale
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.R
+import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.EngineStats
@@ -17,6 +19,9 @@ import com.indicvision.semper.report.FieldResult
 import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.RoiData
+import com.indicvision.semper.report.VisualizationEngine
+import com.indicvision.semper.ui.viewer.SummaryAnimation
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -59,6 +64,7 @@ object SessionUploadBundler {
         stagingDir: File,
         csvFile: File?,
         writeReports: Boolean,
+        onFrame: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): BundleCounts = withContext(Dispatchers.Default) {
         val reportsDir = File(stagingDir, "reports").apply { if (writeReports) mkdirs() }
         val processedDir = File(stagingDir, "processed").apply { if (writeReports) mkdirs() }
@@ -72,14 +78,17 @@ object SessionUploadBundler {
 
         // The reference is the SAME image in every frame's report — decode and
         // scale it once for the whole session, not once per frame. Falls back
-        // to a deformed frame if the reference won't decode.
+        // to a deformed frame if the reference won't decode. Capped to
+        // REPORT_MAX_EDGE: the report only ever downscales it (to 600 px), so a
+        // full-res resident base is pure memory pressure.
+        val (baseW, baseH) = cappedDims(record.imgW, record.imgH, VisualizationEngine.REPORT_MAX_EDGE)
         val baseImg: Bitmap? = if (canReport) {
             val originalBaseImg = decodeBaseImage(refFile, rawDeformedDir, record.defNames.firstOrNull())
             if (originalBaseImg == null) {
                 Timber.e("No decodable base image (reference %s) — skipping reports", refFile.absolutePath)
                 null
             } else {
-                val scaled = originalBaseImg.scale(record.imgW, record.imgH)
+                val scaled = originalBaseImg.scale(baseW, baseH)
                 if (scaled !== originalBaseImg) originalBaseImg.recycle()
                 scaled
             }
@@ -102,6 +111,7 @@ object SessionUploadBundler {
         val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep) }
         try {
             record.defNames.forEachIndexed { index, defName ->
+                onFrame(index + 1, record.defNames.size)
                 val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
                 if (!datFile.exists()) return@forEachIndexed
                 val data = DicResult.decodeDatBytes(datFile.readBytes()) ?: return@forEachIndexed
@@ -155,10 +165,58 @@ object SessionUploadBundler {
             scratch?.delete()
             baseImg?.recycle()
         }
+        // The per-field looping GIFs the share sheet builds — added to the backup so
+        // a restored/downloaded session has the animations too. Memory-bounded
+        // (640 px, one frame at a time), so no OOM risk like the report render.
+        val animations = if (canReport) stageAnimations(context, record, sessionDir, processedDir) else 0
         if (writeReports) {
-            Timber.i("Staged %d frame reports and %d processed images", reports, processed)
+            Timber.i(
+                "Staged %d frame reports, %d processed images, %d animations",
+                reports, processed, animations,
+            )
         }
         BundleCounts(reports, processed)
+    }
+
+    /**
+     * Builds the five per-field animation GIFs into `processed/animations/` via the
+     * headless [SummaryAnimation]. One failed field is logged and skipped rather
+     * than aborting the whole backup. Returns the number of GIFs written.
+     */
+    private suspend fun stageAnimations(
+        context: Context,
+        record: SessionRecord,
+        sessionDir: File,
+        processedDir: File,
+    ): Int {
+        val batchFiles = record.defNames.indices
+            .map { i -> File(sessionDir, String.format(Locale.US, "frame_%04d.dat", i)) }
+            .filter { it.exists() }
+        if (batchFiles.isEmpty()) return 0
+
+        val animation = SummaryAnimation(
+            SummaryAnimation.Spec(
+                batchFiles = batchFiles,
+                imgW = record.imgW,
+                imgH = record.imgH,
+                stepAt = { i -> record.sweepSteps.getOrElse(i) { record.step } },
+                outputDir = File(processedDir, "animations").apply { mkdirs() },
+                backgroundColor = ContextCompat.getColor(context, R.color.viewer_canvas),
+            ),
+        )
+        val ranges = SummaryAnimation.globalRanges(batchFiles)
+        var gifs = 0
+        for ((label, dataIndex) in SummaryAnimation.FIELDS) {
+            val bounds = ranges[dataIndex] ?: continue
+            try {
+                if (animation.build(dataIndex, label, bounds) != null) gifs++
+            } catch (e: CancellationException) {
+                throw e
+            } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
+                Timber.w(e, "Skipping %s animation for %s in backup", label, record.id)
+            }
+        }
+        return gifs
     }
 
     /** Per-session state shared by every frame's report render. */
@@ -188,11 +246,15 @@ object SessionUploadBundler {
     ): Boolean = withContext(Dispatchers.Default) {
         val record = ctx.record
 
-        // The deformed original is only the cover image; fall back to the
-        // reference rather than losing the whole report over it.
-        val originalDefImg = BitmapFactory.decodeFile(defFile.absolutePath)
+        // The deformed original is only the cover image (downscaled to 600 px in
+        // the report); decode + scale it capped, and fall back to the reference
+        // rather than losing the whole report over it.
+        val (coverW, coverH) = cappedDims(record.imgW, record.imgH, VisualizationEngine.REPORT_MAX_EDGE)
+        val originalDefImg = BitmapDecode.decodeFileForView(
+            defFile.absolutePath, coverW, coverH, VisualizationEngine.REPORT_MAX_EDGE,
+        )
         val defImg = if (originalDefImg != null) {
-            originalDefImg.scale(record.imgW, record.imgH)
+            originalDefImg.scale(coverW, coverH)
         } else {
             ctx.baseImg
         }
@@ -243,10 +305,26 @@ object SessionUploadBundler {
         ok
     }
 
-    /** The base image for a session's reports: the reference, or a deformed frame if the reference won't decode. */
-    private fun decodeBaseImage(refFile: File, rawDeformedDir: File, defName: String?): Bitmap? =
-        BitmapFactory.decodeFile(refFile.absolutePath)
-            ?: defName?.let { BitmapFactory.decodeFile(File(rawDeformedDir, it).absolutePath) }
+    /**
+     * The base image for a session's reports: the reference, or a deformed frame
+     * if the reference won't decode. Decoded capped to [VisualizationEngine.REPORT_MAX_EDGE]
+     * so a huge reference never lands full-res in memory.
+     */
+    private fun decodeBaseImage(refFile: File, rawDeformedDir: File, defName: String?): Bitmap? {
+        val edge = VisualizationEngine.REPORT_MAX_EDGE
+        return BitmapDecode.decodeFileForView(refFile.absolutePath, edge, edge, edge)
+            ?: defName?.let {
+                BitmapDecode.decodeFileForView(File(rawDeformedDir, it).absolutePath, edge, edge, edge)
+            }
+    }
+
+    /** [w]×[h] shrunk so its longest edge is ≤ [maxEdge]; unchanged if already within. */
+    private fun cappedDims(w: Int, h: Int, maxEdge: Int): Pair<Int, Int> {
+        val longest = maxOf(w, h).coerceAtLeast(1)
+        if (longest <= maxEdge) return w to h
+        val s = maxEdge.toFloat() / longest
+        return (w * s).toInt().coerceAtLeast(1) to (h * s).toInt().coerceAtLeast(1)
+    }
 
     private const val ENGINE_STATS_SIZE = 16
 }
