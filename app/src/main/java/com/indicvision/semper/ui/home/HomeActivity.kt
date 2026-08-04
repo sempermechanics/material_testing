@@ -310,7 +310,9 @@ class HomeActivity : AppCompatActivity() {
                 // limit screen reflect the latest server truth.
                 val wasLimited = TokenStore.isSessionLimitReached(this)
                 val localCount = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity).size }
-                TokenStore.setQuota(this, outcome.quotaUsed, outcome.quotaMax, localCount)
+                // Ceiling is owned by AppRemoteConfig (refreshed by the same
+                // reconcile's config fetch); only the used count is stored here.
+                TokenStore.setQuota(this, outcome.quotaUsed, localCount)
                 // Newly at the cap → open the persistent "email support" screen.
                 if (!wasLimited && TokenStore.isSessionLimitReached(this)) {
                     openSessionLimitScreen()

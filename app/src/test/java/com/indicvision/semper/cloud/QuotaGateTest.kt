@@ -1,0 +1,90 @@
+package com.indicvision.semper.cloud
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.indicvision.semper.data.net.AppConfigDto
+import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.data.net.TokenStore
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+/**
+ * The offline-first quota contract (P0-1) and the AppRemoteConfig ↔ TokenStore
+ * ownership split (P1-5):
+ *
+ * - An UNKNOWN cloud quota is never a hard stop — analysis is on-device, so it
+ *   must be allowed to run; only its upload is gated elsewhere.
+ * - The session ceiling is owned by [AppRemoteConfig]; [TokenStore] reads it and
+ *   computes the hard stop live from used-vs-max.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class QuotaGateTest {
+
+    private lateinit var ctx: Context
+
+    @Before
+    fun setUp() {
+        ctx = ApplicationProvider.getApplicationContext()
+        TokenStore.clear(ctx) // also clears AppRemoteConfig
+    }
+
+    @After
+    fun tearDown() {
+        TokenStore.clear(ctx)
+    }
+
+    @Test
+    fun `unknown quota is not a hard stop`() {
+        assertFalse("no config fetched yet", AppRemoteConfig.isKnown(ctx))
+        assertFalse(TokenStore.isQuotaKnown(ctx))
+        // The key offline-first invariant: analysis is NOT blocked when the
+        // ceiling is unknown.
+        assertFalse(TokenStore.isSessionLimitReached(ctx))
+    }
+
+    @Test
+    fun `ceiling comes from AppRemoteConfig, not a TokenStore copy`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 5, maxFilesPerSession = 600, maxFrames = 150))
+        assertTrue(TokenStore.isQuotaKnown(ctx))
+        assertEquals(5, TokenStore.quotaMax(ctx))
+
+        // Under the ceiling → allowed.
+        TokenStore.setQuota(ctx, used = 2, localCount = 2)
+        assertFalse(TokenStore.isSessionLimitReached(ctx))
+
+        // At the ceiling → hard stop, computed live from used vs max.
+        TokenStore.setQuota(ctx, used = 5, localCount = 5)
+        assertTrue(TokenStore.isSessionLimitReached(ctx))
+    }
+
+    @Test
+    fun `a forced stop holds until fresh numbers arrive`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 5, maxFilesPerSession = 600, maxFrames = 150))
+        // 409 from the upload path forces the stop without fresh counts.
+        TokenStore.setSessionLimitReached(ctx, true)
+        assertTrue(TokenStore.isSessionLimitReached(ctx))
+
+        // A reconcile with under-limit numbers clears the forced stop.
+        TokenStore.setQuota(ctx, used = 1, localCount = 1)
+        assertFalse(TokenStore.isSessionLimitReached(ctx))
+    }
+
+    @Test
+    fun `clearing config makes the quota unknown again`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 3, maxFilesPerSession = 600, maxFrames = 150))
+        assertTrue(TokenStore.isQuotaKnown(ctx))
+
+        AppRemoteConfig.clear(ctx)
+        assertFalse(TokenStore.isQuotaKnown(ctx))
+        assertEquals(0, TokenStore.quotaMax(ctx))
+        assertFalse("unknown quota never hard-stops analysis", TokenStore.isSessionLimitReached(ctx))
+    }
+}

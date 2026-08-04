@@ -47,6 +47,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaSourceChooser
@@ -288,7 +289,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
         }
-        tvDefDropHint.text = getString(R.string.def_formats_hint_fmt, DicSettings.maxFrames(this))
+        tvDefDropHint.text =
+            getString(R.string.def_formats_hint_fmt, DicSettings.maxFrames(this, AppRemoteConfig.maxFrames(this)))
         Insets.padBottom(findViewById(R.id.bottomNav))
 
         // Keyboard: the settings/sweep pages hold number fields; pad their scroll
@@ -674,7 +676,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
         range.values = listOf(0f, durationSec)
         tvSegment.text = "${VideoFrameExtractor.formatClock(0)} – ${VideoFrameExtractor.formatClock(meta.durationMs)}"
 
-        val maxFrames = DicSettings.maxFrames(this@StaticAnalysisActivity)
+        val maxFrames = DicSettings.maxFrames(
+            this@StaticAnalysisActivity,
+            AppRemoteConfig.maxFrames(this@StaticAnalysisActivity),
+        )
         fun estimate(): Int {
             val startS = range.values.first()
             val endS = range.values.last()

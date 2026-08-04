@@ -25,6 +25,10 @@ import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -125,23 +129,67 @@ class AnalysisViewModel : ViewModel() {
 
     var lastStep: Int = 5
 
-    // These are written from the native solve dispatcher (runBatchAnalysis) and
-    // read on Main — e.g. restoreUiFromViewModel() when the Activity is recreated
-    // mid-run — so they must be @Volatile for the reader to see the latest write.
-    @Volatile var lastBatchDirPath: String? = null
+    /**
+     * The result of the last (or in-progress) run, as ONE immutable snapshot.
+     *
+     * These fields are written from the native solve dispatcher and read on Main
+     * (e.g. `restoreUiFromViewModel()` on Activity recreation, and
+     * [AnalysisNavHelper] when building the result intent). Holding them in a
+     * single [MutableStateFlow] gives that cross-thread hand-off a consistent
+     * snapshot and one owning source, instead of a bag of separate `@Volatile`
+     * fields. The `lastX` / `currentX` properties below are thin accessors over
+     * it, so every existing call site is unchanged; each setter does an atomic
+     * `update { copy(...) }`. (First increment of the P2-15 state consolidation —
+     * the Main-thread-only wizard-input fields are intentionally left as plain
+     * vars for now.)
+     */
+    @Suppress("ArrayInDataClass") // engineStats identity-compared; never used as a map key
+    data class RunResult(
+        val batchDirPath: String? = null,
+        val refPath: String? = null,
+        val defPath: String? = null,
+        val completed: Boolean = false,
+        val stopCode: Int = 0,
+        val plannedFrames: Int = 0,
+        val sessionId: String? = null,
+        val engineStats: FloatArray? = null,
+    )
 
-    @Volatile var lastRefPath: String? = null
-    var lastDefPath: String? = null
-    var hasCompletedAnalysis: Boolean = false
+    private val _runResult = MutableStateFlow(RunResult())
+    val runResult: StateFlow<RunResult> = _runResult.asStateFlow()
+
+    var lastBatchDirPath: String?
+        get() = _runResult.value.batchDirPath
+        set(v) = _runResult.update { it.copy(batchDirPath = v) }
+
+    var lastRefPath: String?
+        get() = _runResult.value.refPath
+        set(v) = _runResult.update { it.copy(refPath = v) }
+
+    var lastDefPath: String?
+        get() = _runResult.value.defPath
+        set(v) = _runResult.update { it.copy(defPath = v) }
+
+    var hasCompletedAnalysis: Boolean
+        get() = _runResult.value.completed
+        set(v) = _runResult.update { it.copy(completed = v) }
 
     /** Why the last run stopped early (0 = ran to completion), and its planned size. */
-    @Volatile var lastStopCode: Int = 0
+    var lastStopCode: Int
+        get() = _runResult.value.stopCode
+        set(v) = _runResult.update { it.copy(stopCode = v) }
 
-    @Volatile var lastPlannedFrames: Int = 0
+    var lastPlannedFrames: Int
+        get() = _runResult.value.plannedFrames
+        set(v) = _runResult.update { it.copy(plannedFrames = v) }
 
-    @Volatile var currentSessionId: String? = null
+    var currentSessionId: String?
+        get() = _runResult.value.sessionId
+        set(v) = _runResult.update { it.copy(sessionId = v) }
 
-    @Volatile var engineStatsArray: FloatArray? = null
+    var engineStatsArray: FloatArray?
+        get() = _runResult.value.engineStats
+        set(v) = _runResult.update { it.copy(engineStats = v) }
 
     var wizardStep: Int = 1
     var settingsReviewed: Boolean = false
@@ -440,6 +488,9 @@ class AnalysisViewModel : ViewModel() {
     private fun sessionLimitOutcome(appContext: Context, plannedFrames: Int): BatchAnalysisOutcome? {
         if (!wouldCreateNewSession()) return null
         TokenStore.refreshSessionLimit(appContext, SessionStore.list(appContext).size)
+        // An unknown cloud quota does not block: analysis is on-device and costs
+        // the backend nothing. Only a *known and full* quota is a hard stop; the
+        // upload is separately gated in CloudSync until config is known.
         if (!TokenStore.isSessionLimitReached(appContext)) return null
         Timber.w("Hard stop: analysis blocked at session limit")
         return BatchAnalysisOutcome(

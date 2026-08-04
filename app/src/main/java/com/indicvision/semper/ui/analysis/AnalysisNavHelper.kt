@@ -23,8 +23,10 @@ object AnalysisNavHelper {
     }
 
     /**
-     * Hard stop for a new session when quota is full. Returns false after
-     * navigating to the limit screen; re-runs of an existing session still pass.
+     * Hard stop for a new session when the quota is **known and full**. Returns
+     * false after navigating to the limit screen; re-runs of an existing session
+     * still pass, and an unknown quota does not block — analysis is on-device and
+     * only its upload is gated (see [com.indicvision.semper.data.CloudSync]).
      * Reads the local session index off the main thread.
      */
     @Suppress("ReturnCount") // early-outs for re-run / under-quota / blocked

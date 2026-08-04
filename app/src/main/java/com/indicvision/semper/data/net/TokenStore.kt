@@ -27,8 +27,7 @@ object TokenStore {
     private const val K_ROLE = "role" // "admin" | "user"
     private const val K_DEVICE_REGISTERED = "device_registered"
     private const val K_QUOTA_USED = "quota_used"
-    private const val K_QUOTA_MAX = "quota_max"
-    private const val K_LIMIT_REACHED = "session_limit_reached"
+    private const val K_LIMIT_FORCED = "session_limit_forced"
     private const val K_BETA_ACKED_PREFIX = "beta_notice_acked_"
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -61,47 +60,60 @@ object TokenStore {
     }
 
     // ── Cloud analysis quota (max sessions per account) ──────────────────
-    /**
-     * Client hard-stop default when the backend hasn't reported a max yet.
-     * Keep in sync with backend `MAX_SESSIONS_PER_USER` default.
-     */
-    const val DEFAULT_MAX_SESSIONS = 25
+    // The ceiling is owned by [AppRemoteConfig] (from /v1/config); TokenStore
+    // holds only the runtime USED count and a forced-stop flag and reads the
+    // ceiling from there. One dependency direction (TokenStore → AppRemoteConfig),
+    // no cycle. The hard stop is computed live, so a changed ceiling takes effect
+    // without any write-back from AppRemoteConfig.
 
     fun quotaUsed(context: Context): Int = prefs(context).getInt(K_QUOTA_USED, 0)
-    fun quotaMax(context: Context): Int = prefs(context).getInt(K_QUOTA_MAX, 0)
 
-    /** Backend max if known, otherwise [DEFAULT_MAX_SESSIONS]. */
-    fun effectiveQuotaMax(context: Context): Int {
-        val max = quotaMax(context)
-        return if (max > 0) max else DEFAULT_MAX_SESSIONS
-    }
+    /** Session ceiling, owned by [AppRemoteConfig]; 0 until the backend reports it. */
+    fun quotaMax(context: Context): Int = AppRemoteConfig.maxSessions(context)
+
+    /** True when the backend has reported a positive quota ceiling. */
+    fun isQuotaKnown(context: Context): Boolean = quotaMax(context) > 0
 
     /**
-     * Update stored quota and the hard-stop flag. [localCount] is folded in so
-     * the client blocks new analyses even before the next cloud reconcile.
+     * Cached cloud max, or 0 when the backend has not reported one yet.
+     * Callers must not invent a local default — use [isQuotaKnown] / fail closed.
      */
-    fun setQuota(context: Context, used: Int, max: Int, localCount: Int = 0) {
-        val effectiveMax = if (max > 0) max else DEFAULT_MAX_SESSIONS
+    fun effectiveQuotaMax(context: Context): Int = quotaMax(context)
+
+    /**
+     * Refresh the cached USED count. [localCount] is folded in so the client
+     * blocks new analyses even before the next cloud reconcile. Fresh numbers
+     * clear any forced stop; the hard stop itself is recomputed live in
+     * [isSessionLimitReached] from used vs the [AppRemoteConfig] ceiling.
+     */
+    fun setQuota(context: Context, used: Int, localCount: Int = 0) {
         val effectiveUsed = maxOf(used, localCount)
         prefs(context).edit {
             putInt(K_QUOTA_USED, effectiveUsed)
-            putInt(K_QUOTA_MAX, effectiveMax)
-            putBoolean(K_LIMIT_REACHED, effectiveUsed >= effectiveMax)
+            putBoolean(K_LIMIT_FORCED, false)
         }
     }
 
-    /** Recompute the hard-stop flag from local session count (+ cached cloud used). */
-    fun refreshSessionLimit(context: Context, localCount: Int) {
-        setQuota(context, quotaUsed(context), effectiveQuotaMax(context), localCount)
-    }
+    /** Refresh the cached USED count from the local session count (+ cached cloud used). */
+    fun refreshSessionLimit(context: Context, localCount: Int) =
+        setQuota(context, quotaUsed(context), localCount)
 
-    /** Force the limit flag (e.g. an upload rejected 409 without fresh numbers). */
+    /** Force the hard stop (e.g. an upload rejected 409 without fresh numbers). */
     fun setSessionLimitReached(context: Context, v: Boolean) {
-        prefs(context).edit { putBoolean(K_LIMIT_REACHED, v) }
+        prefs(context).edit { putBoolean(K_LIMIT_FORCED, v) }
     }
 
-    /** True when the account may not create another analysis (hard stop). */
-    fun isSessionLimitReached(context: Context): Boolean = prefs(context).getBoolean(K_LIMIT_REACHED, false)
+    /**
+     * True when the account may not create another analysis (hard stop): either a
+     * forced stop is set, or the ceiling is known and the used count has reached
+     * it. An unknown ceiling is never a hard stop — analysis is on-device; only
+     * its upload is gated (see [com.indicvision.semper.data.CloudSync]).
+     */
+    fun isSessionLimitReached(context: Context): Boolean {
+        if (prefs(context).getBoolean(K_LIMIT_FORCED, false)) return true
+        val max = quotaMax(context)
+        return max > 0 && quotaUsed(context) >= max
+    }
 
     /**
      * Whether the current account has acknowledged the beta / data-use notice.
@@ -118,5 +130,8 @@ object TokenStore {
     }
 
     /** Wipe the local session cache (sign-out). Keystore device key is left intact. */
-    fun clear(context: Context) = prefs(context).edit { clear() }
+    fun clear(context: Context) {
+        prefs(context).edit { clear() }
+        AppRemoteConfig.clear(context)
+    }
 }

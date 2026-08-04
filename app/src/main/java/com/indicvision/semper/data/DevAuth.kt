@@ -3,6 +3,8 @@ package com.indicvision.semper.data
 import android.content.Context
 import android.os.Build
 import com.indicvision.semper.BuildConfig
+import com.indicvision.semper.data.net.AppConfigDto
+import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.TokenStore
 import timber.log.Timber
 
@@ -50,7 +52,14 @@ object DevAuth {
         TokenStore.saveIdentity(context, DEV_UID, DEV_EMAIL)
         TokenStore.setStatus(context, "APPROVED")
         TokenStore.setRole(context, "user")
-        TokenStore.setQuota(context, used = 0, max = DEV_QUOTA_MAX)
+        AppRemoteConfig.apply(
+            context,
+            AppConfigDto(
+                maxSessions = DEV_QUOTA_MAX,
+                maxFilesPerSession = 600,
+                maxFrames = DicSettings.MAX_MAX_FRAMES,
+            ),
+        )
         TokenStore.setSessionLimitReached(context, false)
         Timber.w("DEV AUTH BYPASS active (debug build on an emulator) — cloud is off")
     }

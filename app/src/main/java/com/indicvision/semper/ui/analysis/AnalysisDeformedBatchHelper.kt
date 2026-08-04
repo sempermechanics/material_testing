@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
 import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.net.AppRemoteConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,7 +32,7 @@ object AnalysisDeformedBatchHelper {
         tvResult: TextView,
         onApplied: () -> Unit,
     ) {
-        val cap = DicSettings.maxFrames(activity)
+        val cap = DicSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity))
         val capped = if (rawUris.size > cap) {
             Toast.makeText(
                 activity,

@@ -10,8 +10,10 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -81,12 +83,18 @@ object CloudSync {
             // minutes; an explicit pull-to-refresh (deep) always goes through.
             val prefs = appContext.getSharedPreferences("indic_cloudsync", Context.MODE_PRIVATE)
             val sinceLast = System.currentTimeMillis() - prefs.getLong(K_LAST_RECONCILE_AT, 0L)
-            if (!deep && sinceLast in 0 until RECONCILE_MIN_INTERVAL_MS) {
+            val throttled = !deep && sinceLast in 0 until RECONCILE_MIN_INTERVAL_MS
+
+            val token = TokenProvider.usableIdToken() ?: return@withContext Outcome.Offline
+
+            refreshRemoteConfig(appContext, api, token, throttled)
+
+            // The expensive per-session reconcile below is throttled; the cheap
+            // config fetch above is not, so quota still recovers between reconciles.
+            if (throttled) {
                 Timber.d("Reconcile skipped — last successful check %d s ago", sinceLast / MS_PER_SECOND)
                 return@withContext Outcome.Skipped
             }
-
-            val token = TokenProvider.usableIdToken() ?: return@withContext Outcome.Offline
 
             val cloud = try {
                 api.listSessions(token, verify = deep)
@@ -123,6 +131,25 @@ object CloudSync {
             prefs.edit { putLong(K_LAST_RECONCILE_AT, System.currentTimeMillis()) }
             Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
         }
+    }
+
+    /**
+     * Fetch and cache product limits (quota ceiling, frame cap) from cloud config.
+     * Runs on every full reconcile, and additionally whenever config is still
+     * unknown — even on a throttled resume. Analysis runs on-device with its
+     * upload gated until config lands, so the reconcile throttle must never be the
+     * reason quota stays unknown. Best-effort: a failure just leaves it unknown.
+     */
+    private suspend fun refreshRemoteConfig(
+        appContext: Context,
+        api: IndicApi,
+        token: String,
+        throttled: Boolean,
+    ) {
+        if (throttled && AppRemoteConfig.isKnown(appContext)) return
+        runCatching { api.getConfig(token) }
+            .onSuccess { AppRemoteConfig.apply(appContext, it) }
+            .onFailure { Timber.d(it, "App remote config fetch failed during reconcile") }
     }
 
     /** Outcome of an erase request, so the UI can tell the user what happened. */
@@ -290,11 +317,21 @@ object CloudSync {
      *
      * Uses [ExistingWorkPolicy.KEEP] so a reconcile pass cannot cancel an
      * in-flight upload. Network constraint follows [DicSettings.uploadWifiOnly].
+     *
+     * No-op until the server quota is known ([TokenStore.isQuotaKnown]): the
+     * analysis is already saved locally and its [SessionRecord] stays PENDING, so
+     * the next reconcile (which fetches config, then repairs unsynced sessions)
+     * enqueues it once the ceiling arrives. This is the single point that gates
+     * upload on an unknown quota — analysis itself never blocks.
      */
     fun enqueueUpload(
         context: Context,
         localSessionId: String,
     ) {
+        if (!TokenStore.isQuotaKnown(context)) {
+            Timber.i("Upload deferred for %s — cloud quota not yet known", localSessionId)
+            return
+        }
         // One policy for post-analysis and repair: Wi‑Fi-only when opted in;
         // otherwise any connected network.
         val network = if (DicSettings.uploadWifiOnly(context)) {

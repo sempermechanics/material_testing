@@ -39,6 +39,7 @@ import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionEverythingExporter
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.admin.AdminActivity
@@ -417,12 +418,16 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun wirePreferencesSection() {
         val valueLabel = findViewById<TextView>(R.id.tvMaxFramesValue)
+        val remoteMaxFrames = AppRemoteConfig.maxFrames(this)
+        val ceiling = DicSettings.frameCeiling(remoteMaxFrames).toFloat()
         findViewById<Slider>(R.id.sliderMaxFrames).apply {
-            value = DicSettings.maxFrames(this@SettingsActivity).toFloat()
+            valueTo = ceiling
+            value = DicSettings.maxFrames(this@SettingsActivity, remoteMaxFrames)
+                .toFloat().coerceIn(valueFrom, valueTo)
             valueLabel.text = frameCountText(value.toInt())
             addOnChangeListener { _, v, _ ->
                 valueLabel.text = frameCountText(v.toInt())
-                DicSettings.setMaxFrames(this@SettingsActivity, v.toInt())
+                DicSettings.setMaxFrames(this@SettingsActivity, v.toInt(), remoteMaxFrames)
             }
         }
         findViewById<ImageButton>(R.id.btnMaxFramesInfo).setOnClickListener {

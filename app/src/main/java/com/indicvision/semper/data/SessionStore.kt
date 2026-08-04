@@ -6,6 +6,7 @@
 package com.indicvision.semper.data
 
 import android.content.Context
+import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -189,13 +190,22 @@ object SessionStore {
         val existing = list(context)
         val isNew = existing.none { it.id == record.id }
         if (isNew && !allowOverLimit) {
-            val max = TokenStore.effectiveQuotaMax(context)
-            val used = maxOf(TokenStore.quotaUsed(context), existing.size)
-            if (used >= max) {
-                TokenStore.setSessionLimitReached(context, true)
-                TokenStore.setQuota(context, used, max, existing.size)
-                Timber.w("Hard stop: refusing new session (at %d/%d)", used, max)
-                return false
+            // Cloud-backed accounts use the server quota. A quota that is *known
+            // and full* is a hard stop; an *unknown* quota is not — the analysis
+            // is already computed and must be saved locally (upload is separately
+            // gated in CloudSync until config arrives). Never invent a local max.
+            if (IndicApi.get(context).enabled) {
+                val max = TokenStore.quotaMax(context)
+                if (max > 0) {
+                    val used = maxOf(TokenStore.quotaUsed(context), existing.size)
+                    if (used >= max) {
+                        // Persist the used count; isSessionLimitReached recomputes
+                        // the hard stop live (used >= max) from this.
+                        TokenStore.setQuota(context, used, existing.size)
+                        Timber.w("Hard stop: refusing new session (at %d/%d)", used, max)
+                        return false
+                    }
+                }
             }
         }
         val next = existing.filterNot { it.id == record.id } + record

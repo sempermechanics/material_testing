@@ -125,6 +125,15 @@ class IndicApi private constructor(context: Context) {
         )
     }
 
+    /** GET /v1/config — resolved product limits for this account. */
+    suspend fun getConfig(idToken: String): AppConfigDto = withContext(Dispatchers.IO) {
+        json.decodeFromString(
+            authedGet(idToken, "$base/v1/config") { code, body ->
+                if (code == HttpStatus.FORBIDDEN) throw NotApprovedException() else throw ApiException(code, body)
+            },
+        )
+    }
+
     /**
      * POST /v1/devices/register. Registers this device's public key.
      * 201 → registered, 409 → another device already bound (needs admin rebind).

@@ -7,13 +7,20 @@ import androidx.core.content.edit
 /**
  * Behavioral settings surfaced in the Home settings drawer. Plain
  * SharedPreferences — read at the point of use, no caching layer.
+ *
+ * The deformed-frame ceiling comes from cloud config, but this data-layer object
+ * does not reach into `data.net` for it: callers pass the remote ceiling in (from
+ * `AppRemoteConfig.maxFrames`), keeping the dependency pointing UI/net → data.
  */
 object DicSettings {
 
     const val DEFAULT_MAX_FRAMES = 50
     const val MIN_MAX_FRAMES = 10
 
-    /** Hard ceiling: an analysis may use at most this many deformed images. */
+    /**
+     * Compile-time stand-in for the deformed-frame ceiling until cloud config
+     * is known. The live ceiling is the caller-supplied `remoteMaxFrames`.
+     */
     const val MAX_MAX_FRAMES = 150
 
     private const val PREFS = "dic_settings"
@@ -56,11 +63,19 @@ object DicSettings {
     fun setUploadWifiOnly(context: Context, value: Boolean) =
         prefs(context).edit { putBoolean(KEY_UPLOAD_WIFI_ONLY, value) }
 
-    /** Cap on deformed frames per analysis (picker + video extraction). */
-    fun maxFrames(context: Context): Int = prefs(context).getInt(KEY_MAX_FRAMES, DEFAULT_MAX_FRAMES)
-        .coerceIn(MIN_MAX_FRAMES, MAX_MAX_FRAMES)
+    /**
+     * Hard ceiling for deformed frames: the cloud [remoteMaxFrames] when > 0,
+     * else the [MAX_MAX_FRAMES] fallback. Pass `AppRemoteConfig.maxFrames(context)`.
+     */
+    fun frameCeiling(remoteMaxFrames: Int): Int =
+        if (remoteMaxFrames > 0) remoteMaxFrames else MAX_MAX_FRAMES
 
-    fun setMaxFrames(context: Context, value: Int) = prefs(context).edit {
-        putInt(KEY_MAX_FRAMES, value.coerceIn(MIN_MAX_FRAMES, MAX_MAX_FRAMES))
+    /** Cap on deformed frames per analysis (picker + video extraction). */
+    fun maxFrames(context: Context, remoteMaxFrames: Int): Int =
+        prefs(context).getInt(KEY_MAX_FRAMES, DEFAULT_MAX_FRAMES)
+            .coerceIn(MIN_MAX_FRAMES, frameCeiling(remoteMaxFrames))
+
+    fun setMaxFrames(context: Context, value: Int, remoteMaxFrames: Int) = prefs(context).edit {
+        putInt(KEY_MAX_FRAMES, value.coerceIn(MIN_MAX_FRAMES, frameCeiling(remoteMaxFrames)))
     }
 }

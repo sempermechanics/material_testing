@@ -20,6 +20,14 @@ data class MeResponse(
     @SerialName("access_status") val accessStatus: String,
 )
 
+/** Resolved product limits from GET /v1/config (per-user override → fleet default). */
+@Serializable
+data class AppConfigDto(
+    val maxSessions: Int = 0,
+    val maxFilesPerSession: Int = 0,
+    val maxFrames: Int = 0,
+)
+
 @Serializable
 data class DeviceRegisterRequest(
     val deviceId: String,

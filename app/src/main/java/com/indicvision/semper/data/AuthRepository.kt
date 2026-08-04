@@ -11,6 +11,7 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
@@ -285,6 +286,9 @@ class AuthRepository(context: Context) {
             val me = api.me(token) // 200 = APPROVED
             TokenStore.setStatus(appContext, AccessStatus.APPROVED)
             TokenStore.setRole(appContext, me.role ?: "user")
+            runCatching { api.getConfig(token) }
+                .onSuccess { AppRemoteConfig.apply(appContext, it) }
+                .onFailure { Timber.d(it, "Could not fetch app remote config") }
             ensureDeviceRegistered(token)
             Result.success(AccessStatus.APPROVED)
         } catch (e: IndicApi.NotApprovedException) {

@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
 import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.net.AppRemoteConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,7 +50,7 @@ object AnalysisVideoExtractHelper {
                     fpsExtract = fpsExtract,
                     startMs = startMs,
                     endMs = endMs,
-                    maxFrames = DicSettings.maxFrames(activity),
+                    maxFrames = DicSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity)),
                     cacheDir = cacheDir,
                     onProgress = { percent, status ->
                         overlayHelper.update(percent = percent, status = status)

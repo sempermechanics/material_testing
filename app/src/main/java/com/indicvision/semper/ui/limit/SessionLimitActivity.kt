@@ -16,6 +16,7 @@ import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DeviceKeyManager
+import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.launch
@@ -100,7 +101,19 @@ class SessionLimitActivity : AppCompatActivity() {
             // deep=true: the user explicitly tapped Recheck, so bypass the
             // reconcile throttle — a silently skipped check would report
             // "still full" from stale data.
-            CloudSync.reconcile(this@SessionLimitActivity, deep = true)
+            when (val outcome = CloudSync.reconcile(this@SessionLimitActivity, deep = true)) {
+                is CloudSync.Outcome.Ok -> {
+                    val localCount = SessionStore.list(this@SessionLimitActivity).size
+                    // Ceiling is owned by AppRemoteConfig (refreshed by the same
+                    // reconcile's config fetch); only the used count is stored here.
+                    TokenStore.setQuota(
+                        this@SessionLimitActivity,
+                        outcome.quotaUsed,
+                        localCount,
+                    )
+                }
+                else -> Unit
+            }
             setLoading(false)
             if (!TokenStore.isSessionLimitReached(this@SessionLimitActivity)) {
                 Toast.makeText(this@SessionLimitActivity, R.string.limit_cleared, Toast.LENGTH_SHORT).show()
