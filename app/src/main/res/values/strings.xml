@@ -14,6 +14,8 @@
     <string name="next_frame">Next frame</string>
 
     <string name="analysis_caching_images">Caching images…</string>
+    <string name="analysis_importing_title">Importing Images</string>
+    <string name="analysis_importing_fmt">Importing image %1$d of %2$d</string>
 
     <!-- Common actions -->
     <string name="cancel">Cancel</string>
@@ -175,14 +177,16 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="transfer_restore_title">Restoring analysis…</string>
     <string name="badge_synced">synced</string>
     <string name="badge_pending">upload pending</string>
+    <string name="badge_preparing_fmt">preparing %1$d%%</string>
+    <string name="badge_uploading_fmt">uploading %1$d%%</string>
     <string name="badge_local">local only</string>
     
     <plurals name="session_frames_of_fmt">
         <item quantity="one">%1$d of %2$d frame</item>
         <item quantity="other">%1$d of %2$d frames</item>
     </plurals>
-    <string name="session_sweep_kind">VSG study</string>
-    <string name="session_sweep_name_fmt">VSG study · %1$s · %2$s</string>
+    <string name="session_sweep_kind">Parameter sweep</string>
+    <string name="session_sweep_name_fmt">Parameter sweep · %1$s · %2$s</string>
     
     <string name="session_data_gone_title">Data no longer on this device</string>
     <string name="session_data_gone_body">This analysis was cleaned up locally. If it was synced, the files are still in your cloud folder.</string>
@@ -224,6 +228,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="export_data">Export my data</string>
     <string name="export_data_share">Share your Semper session export</string>
     <string name="export_data_working">Preparing your session export…</string>
+    <string name="export_progress_fmt">Exporting session %1$d of %2$d</string>
     <string name="export_data_failed">Couldn\'t prepare the export. Free up some storage and try again.</string>
     <string name="delete_account">Delete my account and data</string>
     <string name="delete_account_title">Delete your account?</string>
@@ -255,6 +260,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="analysis_preferences">Analysis preferences</string>
     <string name="cloud_retry_backup">Retry backup</string>
     <string name="cloud_backup_now">Back up now</string>
+    <string name="cloud_backup_failed_fmt">Backup failed. %1$s</string>
+    <string name="cloud_backup_retry_action">Try again</string>
+    <string name="cloud_backup_failed_title">Backup failed</string>
+    <string name="cloud_backup_failed_generic">This backup couldn\'t be completed. Tap Try again to retry.</string>
+    <string name="cloud_backup_failed_device">This account is backing up from another device.</string>
+    <string name="cloud_backup_failed_too_large">This analysis is too large to back up.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
     <string name="cloud_delete_backup_title">Delete from backup</string>
     <string name="cloud_delete_backup_body">Choose what to remove for this analysis.\n\nDeleting the cloud backup is permanent — the raw images, results and report are erased from the cloud and cannot be recovered.</string>
@@ -477,6 +488,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="share_generating_pdf">Building the report — this can take a moment…</string>
     <string name="share_failed">Could not prepare the files. Try again.</string>
     <string name="share_save_to_files">Save to Files</string>
+    <string name="send_to_title">Send to</string>
+    <string name="send_to_save_sub">Save a copy to this device</string>
+    <string name="send_to_share_sub">Send to another app</string>
     <string name="save_success">Saved to device</string>
     <string name="save_failed">Couldn\'t save the file. Try again.</string>
     <string name="app_name_short">Semper</string>
