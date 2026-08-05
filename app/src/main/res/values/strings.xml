@@ -284,6 +284,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="your_data_delete_hint">To delete one analysis, use the list on Home (device only or everywhere).</string>
     <string name="restore_need_sign_in">Sign in to see cloud backups.</string>
     <string name="restore_api_off">Cloud backup is not configured on this build.</string>
+    <string name="restore_failed_fmt">Restore failed. %1$s</string>
+    <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
     <string name="sync_status_up_to_date">Cloud backups up to date</string>
     <string name="home_empty_restore">Restore from cloud</string>
     <string name="delete_device_kept_snackbar">Kept in the cloud</string>

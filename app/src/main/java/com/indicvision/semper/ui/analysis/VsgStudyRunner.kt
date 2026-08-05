@@ -129,13 +129,14 @@ object VsgStudyRunner {
             onProgress(Progress(index, total, index * PERCENT / maxOf(1, total), point, 0, -1f))
 
             val solved = solve(refBytes, defBytes, params, point, buffer, metrics)
-            if (solved <= 0) {
-                // One combination failing says nothing about the rest — a small
-                // subset can fail to correlate where a larger one succeeds, and
-                // the plan starts at the smallest. Skip it and keep sweeping;
-                // aborting here would throw away every setting that does work.
-                recordSkip(point, solved, skipped, skippedCodes)
-                lastEngineError = solved
+            // One bad node says nothing about the rest — a small subset can fail
+            // where a larger one solves, and the plan starts at the smallest — so
+            // skip and keep sweeping rather than abort. skipCodeFor also rejects a
+            // point count that would overrun the shared buffer (a crash guard).
+            val skipCode = skipCodeFor(solved, buffer)
+            if (skipCode != null) {
+                recordSkip(point, skipCode, skipped, skippedCodes)
+                lastEngineError = skipCode
                 continue
             }
             if (firstMetrics == null) firstMetrics = metrics
@@ -220,6 +221,27 @@ object VsgStudyRunner {
         return ByteBuffer
             .allocateDirect(maxOf(1, gridW * gridH) * DicResult.BYTES_PER_POINT)
             .order(ByteOrder.nativeOrder())
+    }
+
+    /**
+     * Why this node cannot be used — a non-positive engine code, or a point count
+     * that would overrun [buffer]'s capacity — or null when it solved cleanly. The
+     * capacity check is a defensive crash guard: [writeField] reads `solved` points
+     * back, and reading past the direct buffer would crash the whole sweep.
+     */
+    private fun skipCodeFor(solved: Int, buffer: ByteBuffer): Int? {
+        val capacityPoints = buffer.capacity() / DicResult.BYTES_PER_POINT
+        return when {
+            solved <= 0 -> solved
+            solved > capacityPoints -> {
+                Timber.e(
+                    "Sweep engine returned %d points but the buffer holds %d — skipping node",
+                    solved, capacityPoints,
+                )
+                EngineFailure.ENGINE_ERROR_INIT
+            }
+            else -> null
+        }
     }
 
     private fun writeField(buffer: ByteBuffer, validPoints: Int, target: File) {

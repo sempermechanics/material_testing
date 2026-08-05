@@ -79,6 +79,28 @@ When cloud is configured (`INDIC_API_BASE_URL`):
 | Bundle build | `SessionUploadBundler` | Render frame bundles + CSV lists offline-testable |
 | Restore | `CloudRestore` | Pull remote sessions back into local session dirs |
 
+## Memory & failure invariants
+
+Non-obvious rules the analysis and transfer paths depend on. Breaking one tends to
+show up as an OOM, a mid-run crash, or a "nothing happened" report:
+
+- **JNI output buffer is bounded.** `AnalysisViewModel` / `VsgStudyRunner` allocate
+  one direct `ByteBuffer` sized to the ROI grid (`(w/step)·(h/step)` points). The
+  engine's returned point count is checked against that capacity *before* the
+  buffer is read back — a count over capacity is treated as an engine failure, not
+  read past the buffer.
+- **Report/upload compositing is capped to `VisualizationEngine.REPORT_MAX_EDGE`
+  (1280 px).** The PDF/cloud heatmaps downscale to 600 px anyway; the cap only
+  stops intermediate full-res `ARGB_8888` bitmaps from OOMing on large (e.g. 26 MP)
+  references. On-screen scrub uses the separate `DISPLAY_MAX_EDGE` (1080).
+- **Batch progress is a buffered `SharedFlow`** (`replay=1`, `extraBufferCapacity`,
+  `DROP_OLDEST`), not a `StateFlow` — a conflating flow dropped intra-frame ticks
+  when the native solve emitted faster than the UI collected, stalling the bar.
+- **Transfer failures are surfaced, not swallowed.** Terminal worker failures carry
+  a human reason in their `WorkInfo` output; `HomeActivity` observes the `upload`
+  work tag (badge dialog + snackbar) and `SettingsActivity` observes the `restore`
+  tag (snackbar). Quota-full is the one exclusion — it routes to its own screen.
+
 ## Where to edit
 
 | I want to… | Start here |

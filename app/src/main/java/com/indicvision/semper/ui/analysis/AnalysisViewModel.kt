@@ -794,6 +794,21 @@ class AnalysisViewModel : ViewModel() {
                 break
             }
 
+            // Defensive bound: the engine must never report more points than the ROI
+            // grid the direct buffer was sized for (maxPoints). If it ever does (grid
+            // rounding / an engine off-by-one), the get() below would read past the
+            // buffer and crash the whole run with BufferUnderflowException. Treat it
+            // as an init-class engine failure with a clear log instead of crashing.
+            if (validPointsCount > maxPoints) {
+                Timber.e(
+                    "Engine returned %d points but the buffer holds %d (frame %d) — failing frame",
+                    validPointsCount, maxPoints, frameIndex,
+                )
+                engineErrorCode = EngineFailure.ENGINE_ERROR_INIT
+                failedFrameIndex = frameIndex
+                break
+            }
+
             if (frameIndex == 0) {
                 firstFrameValidPoints = validPointsCount
                 engineStatsArray = metricsCatcher.clone()

@@ -260,6 +260,20 @@ blobs), the client **must** supply a matching `md5`; omitting it is treated as
 MD5 during upload so `:complete` does not depend on Drive's completion JSON
 including `md5Checksum`.
 
+**Session binding (confused-deputy guard).** `:complete` does not trust the
+client's claim that a `driveFileId` belongs to its session. `get_file_meta` reads
+the object's `parents` from Drive and the backend rejects any file whose parent is
+not the caller's own session folder — so a valid token cannot bind an arbitrary
+Drive object (or another user's) into its session record. This is why the upload
+init requests `fields=id,md5Checksum,size` and completion re-fetches
+`size,md5Checksum,parents` rather than believing the PUT response.
+
+**Resumable restore download.** Restore streams bytes back through Cloud Run
+(there is no anonymous signed download URL). Drive honors HTTP `Range` on
+`alt=media`, so `open_download` forwards a `Range` header and a truncated restore
+resumes from the last received byte (`206` + `Content-Range`) instead of
+restarting the whole transfer.
+
 **One Session.zip per session (current), not per-file objects.** The product now
 uploads a single `bundle`-role `Session.zip` holding `raw/`, `dat/`, `csv/` and
 the report archives (plus a small `metadata.json` at the session root), so a

@@ -199,6 +199,8 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.6 | Tap a sweep session | **Lattice** opens, not the viewer |
 | [ ] 3.7 | Tap a row whose local files were deleted | "Session data gone" dialog explaining the cloud copy |
 | [ ] 3.8 | Tap a "Pending" sync badge | Upload is retried / queued |
+| [ ] 3.8a | Tap a "Failed" sync badge | A dialog names *why* the last backup failed (device conflict, too large, render ran out of memory) with a **Try again** action — not a silent re-queue |
+| [ ] 3.8b | Let a background backup fail terminally while on Home | A snackbar surfaces the reason once (quota-full is excluded — it has its own screen) |
 | [ ] 3.9 | Tap a badge with cloud backup switched off | Settings opens |
 | [ ] 3.10 | Long-press a row | Selection bar with count, select-all, rename, delete, close |
 | [ ] 3.11 | Select two rows | Rename disappears; delete still offered |
@@ -271,7 +273,8 @@ any sync badge). **Exit:** Home, Admin, a result, or Login.
 | [ ] 4.11 | Same, while signed out or with no backend | An explanatory line instead of an empty list |
 | [ ] 4.12 | Tap a row that exists locally | That analysis opens (viewer or lattice) |
 | [ ] 4.13 | Tap **Back up now** on a local-only row | Upload is queued; the row state changes |
-| [ ] 4.14 | Tap **Restore** on a cloud-only row | Toast says the restore continues in the background; the analysis later appears on Home |
+| [ ] 4.14 | Tap **Restore** on a cloud-only row | Toast says the restore continues in the background; on success the analysis appears in the list without reopening Settings |
+| [ ] 4.14a | Restore a backup that fails terminally (deleted server-side, or not this account) | A snackbar names the failure — the restore is no longer silent |
 | [ ] 4.15 | Tap the bin on a row with a local copy | Choice: cloud backup only / local + cloud / cancel |
 | [ ] 4.16 | Tap the bin on a cloud-only row | "Delete this backup forever?" naming the analysis |
 | [ ] 4.17 | Confirm any backup delete, then tap **Undo** within 5 s | The row returns; nothing is deleted server-side |
@@ -763,16 +766,20 @@ sweep hitting the cap, or a background upload rejected with a quota error.
 
 ## 10. Background work
 
-No UI and — worth knowing — no notifications. Uploads, restores and backup
-deletes run silently; if you background the app you get no progress and no
-completion signal until you return.
+Uploads, restores and backup deletes run in WorkManager and survive leaving the
+screen. They are **no longer silent about failure**: a terminal upload failure
+surfaces on Home (snackbar + a "why + retry" dialog on the badge) and a terminal
+restore failure surfaces in Settings, each carrying a human reason. Success is
+quiet by design — the badge/list simply updates. Progress *while* backgrounded is
+still limited to the transfer's foreground notification, not an in-app bar.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 10.1 | Finish an analysis with cloud backup on | Upload is queued; the Home badge moves Pending → Synced |
+| [ ] 10.1 | Finish an analysis with cloud backup on | Upload is queued; the Home badge moves Pending → Synced, with live progress on the row |
 | [ ] 10.2 | Queue an upload with no network | It retries and eventually succeeds once you reconnect |
-| [ ] 10.3 | Restore from Settings and leave the screen | It completes anyway; the analysis appears on Home |
-| [ ] 10.4 | Background the app during an upload | No notification appears — this is expected today |
+| [ ] 10.3 | Restore from Settings and leave the screen | It completes anyway; the analysis appears on Home / in the list |
+| [ ] 10.3a | Cause a terminal upload or restore failure | The reason is surfaced on return (Home snackbar/badge dialog, or Settings snackbar) — not swallowed |
+| [ ] 10.4 | Background the app during a transfer | Its foreground notification tracks it; no separate in-app progress until you return |
 | [ ] 10.5 | Delete a backup and background the app inside the undo window | The delete still fires after the window |
 
 ---
@@ -832,7 +839,10 @@ then the link opens in a browser and the flow is effectively dead. See
   quota rejection, which Android 10+ blocks — that path likely never fires.
 - **`READ_MEDIA_IMAGES` is declared but never requested.** All media access goes
   through the system picker and SAF, so no runtime permission UI exists at all.
-- **No notification channels anywhere** — see §10.
+- **The only notification channel is for transfers** — `TransferNotifications`
+  creates one channel and upload/restore workers post a foreground notification
+  on it. There are no *completion* notifications; terminal failures surface in-app
+  instead (§10).
 - **No privacy policy, terms or open-source licenses screen.** About is a
   one-line version dialog.
 - **An interrupted solve cannot be resumed** — it is a foreground coroutine, so

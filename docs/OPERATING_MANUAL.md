@@ -411,8 +411,14 @@ local. **Wi-Fi only** holds uploads until Wi-Fi. **Analyses data management**
 lists local and cloud together — back up, restore or delete per row. A deleted
 backup has a **5-second Undo**.
 
-**No notifications exist.** Background uploads and restores report nothing until
-you come back.
+**Background transfers survive leaving the screen and are honest about failure.**
+An upload or restore runs even if you navigate away, showing a system
+notification while it works. Success is quiet — the badge or list just updates —
+but a backup that *fails for good* (another device holds the account, the
+analysis is too large, or a render ran out of memory) raises a dialog on the Home
+badge explaining why, with **Try again**; a restore that fails (the backup was
+deleted, or is not this account's) raises a message in Settings. You are no
+longer left guessing.
 
 **Deleting your account** (Settings → Your data) asks you to confirm your
 identity first, on the sign-in screen itself — whichever way you normally sign
@@ -458,6 +464,8 @@ Write above that block; leave it in place.
 | Summary shows one frame, not a loop | Android 8 or older. The exported GIFs still animate |
 | Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
 | Badge stuck on Pending | Offline, Wi-Fi-only, or backup off |
+| Badge shows Failed | Tap it — the dialog names why (device conflict, too large, ran out of memory) and offers **Try again** |
+| Restore never arrived | If it failed for good, Settings shows a message saying so; otherwise it retries on a flaky network |
 | Still pending approval | Tap **Check status** — it never polls |
 | Sign-in refused after signing up | Open the verification link in your email, then try again |
 | Nothing here matches | **Settings → Help & support** — ask the community at [semperdic.github.io/website](https://semperdic.github.io/website/support/), or **Email support** (the mail carries your account, device and build) |

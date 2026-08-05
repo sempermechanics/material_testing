@@ -50,6 +50,15 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     private val snap by lazy { host.buildShareSnapshot() }
 
+    /**
+     * The share snapshot, which [show] has already confirmed is non-null before
+     * opening the sheet. Every generator below runs inside [runJob]'s try/catch, so
+     * throwing here (rather than a raw `!!` NPE) turns the impossible-but-defended
+     * "no snapshot" case into the normal "share failed" snackbar instead of a crash.
+     */
+    private fun requireSnapshot(): Snapshot =
+        snap ?: error("Share snapshot unavailable")
+
     fun show() {
         val s = snap ?: return
         val sheet = BottomSheetDialog(host)
@@ -186,7 +195,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         typeString: String,
         frameIndex: Int,
     ): Bitmap {
-        val s = snap!!
+        val s = requireSnapshot()
         val (heatmap, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
             data,
             s.imgW,
@@ -231,7 +240,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
     }
 
     private fun currentPhoto(): File {
-        val s = snap!!
+        val s = requireSnapshot()
         return writePng(
             renderAnnotated(s.data, s.dataIndex, s.typeString, s.frameIndex),
             "${s.baseName}_${s.typeString}_frame${s.frameIndex + 1}.png",
@@ -239,7 +248,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
     }
 
     private fun allFieldPhotos(): List<File> {
-        val s = snap!!
+        val s = requireSnapshot()
         return FIELDS.map { (label, idx) ->
             writePng(
                 renderAnnotated(s.data, idx, label, s.frameIndex),
@@ -258,7 +267,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * the moment the screen opens.
      */
     private suspend fun fieldAnimations(): List<File> {
-        val s = snap!!
+        val s = requireSnapshot()
         val animation = s.summary ?: return emptyList()
         return SummaryAnimation.FIELDS.mapNotNull { (label, index) ->
             val bounds = s.summaryBounds(index) ?: return@mapNotNull null
@@ -272,7 +281,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * its settings columns; an ordinary analysis leads with the image name.
      */
     private fun batchCsv(): File {
-        val s = snap!!
+        val s = requireSnapshot()
         val sweep = s.stepPerFrame != null
         // A sweep ran every combination against the one image; a batch has one
         // image per frame.
@@ -297,7 +306,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * telemetry page closes the document.
      */
     private suspend fun allFramesPdf(report: (Int, String) -> Unit = { _, _ -> }): File {
-        val s = snap!!
+        val s = requireSnapshot()
         val f = File(shareDir(), "${s.baseName}_report.pdf")
         f.outputStream().use { out ->
             PdfReportGenerator.generateBatch(
@@ -324,13 +333,13 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * recycles each frame's bitmaps before asking for the next.
      */
     private fun frameReport(index: Int): com.indicvision.semper.report.ReportData? {
-        val s = snap!!
+        val s = requireSnapshot()
         val data = DicResult.decodeDatBytes(s.batchFiles[index].readBytes()) ?: return null
         return s.buildReportAt(index, data)
     }
 
     private fun frameTitle(index: Int): String {
-        val s = snap!!
+        val s = requireSnapshot()
         val name = s.defNames.getOrNull(index)?.takeIf { it.isNotBlank() }
         return if (name == null) {
             "DIC Analysis Report — Frame ${index + 1}"
@@ -351,7 +360,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * ```
      */
     private suspend fun everythingZip(report: (Int, String) -> Unit = { _, _ -> }): File {
-        val s = snap!!
+        val s = requireSnapshot()
         // The PDF is the long pole; give it the first 60% of the bar, then the
         // per-frame result images the last 40%.
         val pdf = allFramesPdf { pct, label -> report(pct * 60 / 100, label) }

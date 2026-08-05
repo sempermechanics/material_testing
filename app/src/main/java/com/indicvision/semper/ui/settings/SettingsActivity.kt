@@ -22,6 +22,8 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.google.android.material.snackbar.Snackbar
@@ -34,6 +36,7 @@ import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DevAuth
 import com.indicvision.semper.data.DeviceKeyManager
+import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionEverythingExporter
 import com.indicvision.semper.data.SessionRecord
@@ -75,6 +78,9 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var analysesProgress: ProgressBar
     private lateinit var analysesState: TextView
 
+    /** Restore WorkInfo ids already surfaced, so one outcome isn't shown twice. */
+    private val shownRestoreOutcomes = mutableSetOf<java.util.UUID>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
@@ -105,6 +111,8 @@ class SettingsActivity : AppCompatActivity() {
         wireCollapsible(R.id.headerYourData, R.id.bodyYourData, R.id.ivYourDataChevron)
         wireCollapsible(R.id.headerAnalysisPrefs, R.id.bodyAnalysisPrefs, R.id.ivAnalysisPrefsChevron)
         wireCollapsible(R.id.headerHelpSupport, R.id.bodyHelpSupport, R.id.ivHelpSupportChevron)
+
+        observeRestoreOutcomes()
 
         wireAccountSection()
         wireCloudSection()
@@ -227,6 +235,47 @@ class SettingsActivity : AppCompatActivity() {
         val cloud = entry.cloud ?: return
         CloudRestore.enqueueRestore(this, cloud.sessionId)
         Toast.makeText(this, R.string.restore_background_note, Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * A restore runs in [com.indicvision.semper.data.DicRestoreWorker], so without
+     * this its outcome would be silent — the user taps Restore, sees "continues in
+     * background", and is never told if it failed (backup gone / not theirs / gave
+     * up). Watch the "restore" work tag and surface each terminal outcome once:
+     * failure with its reason, success with a confirmation + a refreshed list.
+     */
+    private fun observeRestoreOutcomes() {
+        // Best-effort: WorkManager is always initialized in production (its startup
+        // provider runs before any Activity), but not in a unit-test harness that
+        // skips that provider. Missing WorkManager must not crash onCreate — and if
+        // it were truly absent, restore couldn't be enqueued in the first place.
+        val workManager = runCatching { WorkManager.getInstance(this) }.getOrNull() ?: return
+        workManager
+            .getWorkInfosByTagLiveData("restore")
+            .observe(this) { infos ->
+                infos.orEmpty().forEach { info ->
+                    when (info.state) {
+                        WorkInfo.State.FAILED -> {
+                            if (shownRestoreOutcomes.add(info.id)) {
+                                val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR)
+                                    ?: getString(R.string.restore_failed_generic)
+                                Snackbar.make(
+                                    findViewById(android.R.id.content),
+                                    getString(R.string.restore_failed_fmt, reason),
+                                    Snackbar.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                        WorkInfo.State.SUCCEEDED -> {
+                            // Silent on purpose (uploads don't toast success either): just
+                            // refresh so the restored session appears. Deduped so a retained
+                            // old success doesn't reload on every screen open.
+                            if (shownRestoreOutcomes.add(info.id)) wireAnalysesDataSection()
+                        }
+                        else -> Unit
+                    }
+                }
+            }
     }
 
     private fun deleteBackup(entry: AnalysisEntry, row: View) {
