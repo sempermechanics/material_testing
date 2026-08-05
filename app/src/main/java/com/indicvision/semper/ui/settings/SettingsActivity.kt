@@ -750,8 +750,20 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnAbout).setOnClickListener {
             MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.about_title)
-                .setMessage("Semper v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                .setMessage(
+                    getString(
+                        R.string.about_message,
+                        BuildConfig.VERSION_NAME,
+                        BuildConfig.VERSION_CODE,
+                    ),
+                )
                 .setPositiveButton(android.R.string.ok, null)
+                .setNeutralButton(R.string.legal_privacy) { _, _ ->
+                    openExternalUrl(getString(R.string.legal_privacy_url))
+                }
+                .setNegativeButton(R.string.legal_terms) { _, _ ->
+                    openExternalUrl(getString(R.string.legal_terms_url))
+                }
                 .show()
         }
         findViewById<View>(R.id.btnSignOut).setOnClickListener {

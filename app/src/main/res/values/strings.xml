@@ -328,6 +328,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="info">Info</string>
     <string name="action_sign_out">Sign out</string>
     <string name="about_title">About</string>
+    <string name="about_message">Semper v%1$s (%2$d)\n\nPrivacy Policy and Terms of Service are available from the links below.</string>
+    <string name="legal_privacy">Privacy Policy</string>
+    <string name="legal_terms">Terms of Service</string>
+    <!-- Public Hosting URLs for legal pages (firebase-hosting/public/{privacy,terms}/). -->
+    <string name="legal_privacy_url" translatable="false">https://indicvision-dic-app-auth.firebaseapp.com/privacy/</string>
+    <string name="legal_terms_url" translatable="false">https://indicvision-dic-app-auth.firebaseapp.com/terms/</string>
     
     <string name="advanced_parameters">Advanced parameters</string>
     
