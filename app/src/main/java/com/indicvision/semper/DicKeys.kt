@@ -56,6 +56,7 @@ object DicKeys {
     // ── DicUploadWorker → UI (running progress Data)
     /** "prepare" (bundling reports/GIFs) or "upload" (bytes to Drive). */
     const val UPLOAD_PHASE = "UPLOAD_PHASE"
+
     /** 0–100 percent for the current [UPLOAD_PHASE]. */
     const val UPLOAD_PERCENT = "UPLOAD_PERCENT"
     const val STEP = "STEP"

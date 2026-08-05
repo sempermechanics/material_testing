@@ -172,7 +172,9 @@ object SessionUploadBundler {
         if (writeReports) {
             Timber.i(
                 "Staged %d frame reports, %d processed images, %d animations",
-                reports, processed, animations,
+                reports,
+                processed,
+                animations,
             )
         }
         BundleCounts(reports, processed)
@@ -251,7 +253,10 @@ object SessionUploadBundler {
         // rather than losing the whole report over it.
         val (coverW, coverH) = cappedDims(record.imgW, record.imgH, VisualizationEngine.REPORT_MAX_EDGE)
         val originalDefImg = BitmapDecode.decodeFileForView(
-            defFile.absolutePath, coverW, coverH, VisualizationEngine.REPORT_MAX_EDGE,
+            defFile.absolutePath,
+            coverW,
+            coverH,
+            VisualizationEngine.REPORT_MAX_EDGE,
         )
         val defImg = if (originalDefImg != null) {
             originalDefImg.scale(coverW, coverH)

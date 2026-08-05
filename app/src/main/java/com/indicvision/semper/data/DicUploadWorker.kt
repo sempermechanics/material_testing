@@ -447,7 +447,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         gate.withPermit {
                             Timber.d("Uploading %s (%d bytes)…", job.name, job.file.length())
                             val (driveId, md5) = api.uploadResumable(
-                                job.uploadUrl, job.file, job.chunkSize,
+                                job.uploadUrl,
+                                job.file,
+                                job.chunkSize,
                             ) { n -> progDone.addAndGet(n) }
                             // Re-read the token: a long upload can outlive it.
                             val tk = TokenProvider.usableIdToken() ?: idToken

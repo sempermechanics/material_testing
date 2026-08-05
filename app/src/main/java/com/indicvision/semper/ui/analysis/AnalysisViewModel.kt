@@ -27,8 +27,8 @@ import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -802,7 +802,9 @@ class AnalysisViewModel : ViewModel() {
             if (validPointsCount > maxPoints) {
                 Timber.e(
                     "Engine returned %d points but the buffer holds %d (frame %d) — failing frame",
-                    validPointsCount, maxPoints, frameIndex,
+                    validPointsCount,
+                    maxPoints,
+                    frameIndex,
                 )
                 engineErrorCode = EngineFailure.ENGINE_ERROR_INIT
                 failedFrameIndex = frameIndex

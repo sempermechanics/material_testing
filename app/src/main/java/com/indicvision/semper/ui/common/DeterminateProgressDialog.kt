@@ -4,7 +4,6 @@
 
 package com.indicvision.semper.ui.common
 
-import android.content.Context
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
