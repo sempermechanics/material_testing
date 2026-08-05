@@ -16,6 +16,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  secret-scan:
+    name: Secret scan (full history)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Scan repository and Git history
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+
   # ===================================================================
   # Path filters — same rules on PR and push. Prove only what the diff
   # can break. Optional full matrix via `full-ci` label or workflow_dispatch.
@@ -211,12 +228,21 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # ubuntu-latest images leave ~7GB free after SDK/emulator install; default AVD
+      # userdata wants ~7.4GB and fails with "Not enough space to create userdata partition".
+      - name: Free disk space for AVD
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          df -h /
+
       - name: Run instrumented tests on emulator
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: 30
           arch: x86_64
           disable-animations: true
+          # Cap below typical free space so AVD create succeeds on crowded runners.
+          disk-size: 4G
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: >
             ./gradlew :app:connectedDebugAndroidTest
@@ -411,6 +437,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - secret-scan
       - changes
       - tier1-app-fast
       - tier3-emulator-e2e
@@ -420,6 +447,7 @@ jobs:
       - name: Check all tiers
         run: |
           for result in \
+            "${{ needs.secret-scan.result }}" \
             "${{ needs.changes.result }}" \
             "${{ needs.tier1-app-fast.result }}" \
             "${{ needs.tier3-emulator-e2e.result }}" \

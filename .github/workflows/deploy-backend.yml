@@ -1,16 +1,22 @@
 name: Deploy Backend
 
-# Versioned replacement for the by-hand `gcloud run deploy` in the runbook.
+# Staging and production Cloud Run deploys with immutable revision pins,
+# post-deploy smoke on /readyz, and automatic traffic rollback on smoke failure.
 # Reminder: challenges.expireAt Firestore TTL is a one-time field policy
 # (docs/backend/BACKEND_SETUP_GCP.md §A2a), not applied by this workflow.
-# Manual trigger; the caller supplies the target. Auth is via Workload Identity
-# Federation (no service-account key in the repo) — set the two secrets below
-# before first use. Until then this is a template that will fail at the auth
-# step, which is intentional: config is now reviewed in git, not pasted in a
-# terminal.
+# Auth is via Workload Identity Federation — set GCP_WIF_PROVIDER / GCP_DEPLOY_SA
+# in each GitHub Environment (staging / production) before first use.
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: Target environment (GitHub Environment + default service name)
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
       project:
         description: GCP project id
         required: true
@@ -19,24 +25,19 @@ on:
         required: true
         default: us-central1
       service:
-        description: Cloud Run service name
-        required: true
-        default: indic-api
+        description: Cloud Run service name (empty = indic-api / indic-api-staging)
+        required: false
+        default: ""
 
 permissions:
   contents: read
-  id-token: write   # Workload Identity Federation
+  id-token: write
 
-# One deploy at a time: two concurrent dispatches would race on the same Cloud
-# Run service and could interleave revisions.
 concurrency:
-  group: deploy-backend-${{ github.event.inputs.service }}
+  group: deploy-backend-${{ github.event.inputs.environment }}
   cancel-in-progress: false
 
 jobs:
-  # Gate the deploy on the same checks CI runs. This workflow is manual-dispatch
-  # and can be pointed at any ref, so without this it could ship code that never
-  # passed tests. Cross-workflow `needs:` is not possible, so the checks run here.
   test:
     runs-on: ubuntu-latest
     defaults:
@@ -54,9 +55,22 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.event.inputs.environment }}
     steps:
       - uses: actions/checkout@v7
+
+      - id: meta
+        name: Resolve service name
+        run: |
+          SVC="${{ github.event.inputs.service }}"
+          if [ -z "$SVC" ]; then
+            if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+              SVC="indic-api"
+            else
+              SVC="indic-api-staging"
+            fi
+          fi
+          echo "service=$SVC" >> "$GITHUB_OUTPUT"
 
       - id: auth
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
@@ -64,17 +78,29 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SA }}
 
-      - uses: google-github-actions/deploy-cloudrun@251330ba9a8a34bfbc1622895f42e1d53fd14522 # v2
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+
+      - id: previous
+        name: Capture previous serving revision
+        env:
+          PROJECT: ${{ github.event.inputs.project }}
+          REGION: ${{ github.event.inputs.region }}
+          SERVICE: ${{ steps.meta.outputs.service }}
+        run: |
+          set -euo pipefail
+          PREV=$(gcloud run services describe "$SERVICE" \
+            --project "$PROJECT" --region "$REGION" \
+            --format='value(status.traffic[0].revisionName)' 2>/dev/null || true)
+          echo "revision=${PREV}" >> "$GITHUB_OUTPUT"
+
+      - id: deploy
+        uses: google-github-actions/deploy-cloudrun@251330ba9a8a34bfbc1622895f42e1d53fd14522 # v2
         with:
-          service: ${{ github.event.inputs.service }}
+          service: ${{ steps.meta.outputs.service }}
           region: ${{ github.event.inputs.region }}
+          # Dockerfile in backend/ builds an immutable image per git SHA (Cloud
+          # Build tags by digest). Never promote a mutable :latest reference.
           source: backend
-          # Non-secret runtime config. Keep this in step with the documented
-          # `gcloud run deploy` in docs/backend/BACKEND_SETUP_GCP.md §B1 — a
-          # service deployed here must match the hand-deployed one. FIREBASE_
-          # PROJECT_ID is the ID-token audience (falls back to the project) and
-          # AUTO_APPROVE_HD is the domain auto-approve gate; omitting them
-          # silently changes auth behaviour.
           env_vars: |-
             GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
             FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}
@@ -84,12 +110,58 @@ jobs:
             ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
             SUPPORT_EMAIL=${{ vars.SUPPORT_EMAIL }}
             NOTIFY_FROM=${{ vars.NOTIFY_FROM }}
-          # RESEND_API_KEY is the one secret this service holds; it comes from
-          # Secret Manager, never --set-env-vars.
           secrets: |-
             RESEND_API_KEY=resend-api-key:latest
-          # Timeout ladder (must not invert): gateway deadline 60s (gateway/
-          # openapi.yaml) ≥ Cloud Run 60s ≥ Drive per-call 45s (app/drive.py).
-          # Bytes never transit Cloud Run and every request is tiny JSON, so a
-          # request that outlives 60s is stuck work, not a slow-but-valid call.
-          flags: --allow-unauthenticated --cpu=1 --memory=512Mi --min-instances=0 --max-instances=10 --concurrency=40 --timeout=60
+          flags: >-
+            --allow-unauthenticated --cpu=1 --memory=512Mi
+            --min-instances=0 --max-instances=10 --concurrency=40 --timeout=60
+            --revision-suffix=${{ github.sha }}
+
+      - name: Record immutable image digest
+        env:
+          PROJECT: ${{ github.event.inputs.project }}
+          REGION: ${{ github.event.inputs.region }}
+          SERVICE: ${{ steps.meta.outputs.service }}
+        run: |
+          set -euo pipefail
+          REV=$(gcloud run services describe "$SERVICE" \
+            --project "$PROJECT" --region "$REGION" \
+            --format='value(status.latestReadyRevisionName)')
+          IMG=$(gcloud run revisions describe "$REV" \
+            --project "$PROJECT" --region "$REGION" \
+            --format='value(status.imageDigest)')
+          echo "Deployed revision=${REV} imageDigest=${IMG}"
+
+      - name: Post-deploy smoke (/readyz)
+        id: smoke
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -sS -o /tmp/readyz.json -w '%{http_code}' --max-time 15 "${URL}/readyz" || echo 000)
+            if [ "$CODE" = "200" ]; then
+              echo "readyz ok"
+              cat /tmp/readyz.json
+              exit 0
+            fi
+            echo "readyz attempt $i → HTTP $CODE"
+            sleep 5
+          done
+          echo "Smoke failed"
+          cat /tmp/readyz.json || true
+          exit 1
+
+      - name: Rollback traffic on smoke failure
+        if: failure() && steps.smoke.outcome == 'failure' && steps.previous.outputs.revision != ''
+        env:
+          PROJECT: ${{ github.event.inputs.project }}
+          REGION: ${{ github.event.inputs.region }}
+          SERVICE: ${{ steps.meta.outputs.service }}
+          PREV: ${{ steps.previous.outputs.revision }}
+        run: |
+          set -euo pipefail
+          echo "Routing 100% traffic back to ${PREV}"
+          gcloud run services update-traffic "$SERVICE" \
+            --to-revisions="${PREV}=100" \
+            --project "$PROJECT" --region "$REGION"

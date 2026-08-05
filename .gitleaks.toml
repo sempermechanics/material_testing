@@ -1,0 +1,10 @@
+title = "IndicVision secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Firebase Android client configuration is a public client identifier, not an Admin SDK credential"
+paths = [
+  '''^app/google-services\.json$''',
+]

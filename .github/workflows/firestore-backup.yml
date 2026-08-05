@@ -1,0 +1,34 @@
+name: Firestore backup
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: firestore-backup
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production-backup
+    steps:
+      - uses: actions/checkout@v7
+      - name: Authenticate with Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.FIRESTORE_BACKUP_SERVICE_ACCOUNT }}
+      - name: Install Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Export and verify PITR
+        env:
+          GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+          FIRESTORE_BACKUP_BUCKET: ${{ vars.FIRESTORE_BACKUP_BUCKET }}
+        run: bash scripts/firestore-export.sh

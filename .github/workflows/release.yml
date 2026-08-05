@@ -83,14 +83,23 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           SIGNING_STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-        run: >
-          ./gradlew --console=plain
-          :app:minifyReleaseWithR8
-          :app:assembleRelease
-          -PabiFilters=arm64-v8a
-          -PnativeCompilerLauncher=ccache
-          -PversionName="${VERSION_NAME}"
-          -PversionCode="${{ github.run_number }}"
+          # Fail the release if cloud is silently disabled — must be the API
+          # Gateway (or Cloud Run) HTTPS URL for the target environment.
+          INDIC_API_BASE_URL: ${{ vars.INDIC_API_BASE_URL }}
+        run: |
+          if [ -z "${INDIC_API_BASE_URL}" ]; then
+            echo "INDIC_API_BASE_URL is not set in the release environment vars."
+            echo "Set it to the API Gateway URL before shipping."
+            exit 1
+          fi
+          ./gradlew --console=plain \
+            :app:minifyReleaseWithR8 \
+            :app:assembleRelease \
+            -PabiFilters=arm64-v8a \
+            -PnativeCompilerLauncher=ccache \
+            -PversionName="${VERSION_NAME}" \
+            -PversionCode="${{ github.run_number }}" \
+            -PrequireCloudApi=true
 
       - name: Verify arm64-v8a .so in release APK
         run: |
