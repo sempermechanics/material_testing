@@ -154,17 +154,25 @@ class AuthRepository(context: Context) {
     }
 
     /**
-     * Password recovery: email a reset link. This is a pure Firebase identity
-     * operation — it does not sign in and does not touch the backend, so it
-     * works whether or not the cloud is configured. The user follows the link,
-     * sets a new password, then returns here to sign in.
+     * Password recovery: email a reset link that opens this app via App Link
+     * ([RESET_CONTINUE_URL]). The user sets a new password in-app, then signs in.
+     * Works whether or not the cloud backend is configured.
      *
      * A missing account is reported as success on purpose: surfacing "no account
      * for this email" here would let anyone probe which emails are registered.
+     *
+     * **Ops:** Firebase Console → Authentication → Templates → Password reset
+     * must set the custom action URL to [RESET_CONTINUE_URL], or the email still
+     * opens Firebase's hosted form instead of the app.
      */
     suspend fun sendPasswordReset(email: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val settings = ActionCodeSettings.newBuilder()
+            .setUrl(RESET_CONTINUE_URL)
+            .setHandleCodeInApp(true)
+            .setAndroidPackageName(appContext.packageName, true, null)
+            .build()
         try {
-            auth.sendPasswordResetEmail(email.trim()).await()
+            auth.sendPasswordResetEmail(email.trim(), settings).await()
             Result.success(Unit)
         } catch (e: FirebaseAuthInvalidUserException) {
             Timber.d(e, "Password reset for an unregistered email (existence not revealed)")
@@ -174,6 +182,28 @@ class AuthRepository(context: Context) {
             Result.failure(Exception(e.message ?: "Could not send the reset email."))
         }
     }
+
+    /** Validate a password-reset oobCode; returns the account email on success. */
+    suspend fun verifyPasswordResetCode(oobCode: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            Result.success(auth.verifyPasswordResetCode(oobCode).await())
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Password-reset code invalid or expired")
+            Result.failure(Exception(e.message ?: "This reset link is invalid or has expired."))
+        }
+    }
+
+    /** Set a new password from a verified reset oobCode. Does not sign in. */
+    suspend fun confirmPasswordReset(oobCode: String, newPassword: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            try {
+                auth.confirmPasswordReset(oobCode, newPassword).await()
+                Result.success(Unit)
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Timber.w(e, "Could not confirm password reset")
+                Result.failure(Exception(e.message ?: "Could not reset the password."))
+            }
+        }
 
     /** True if [link] is a Firebase email sign-in link. */
     fun isEmailSignInLink(link: String): Boolean = auth.isSignInWithEmailLink(link)
@@ -343,5 +373,8 @@ class AuthRepository(context: Context) {
         // Keep in sync with the backend's FIREBASE_PROJECT_ID — this is that
         // project's default hosting domain.
         const val EMAIL_LINK_CONTINUE_URL = "https://indicvision-dic-app-auth.firebaseapp.com/finishSignIn"
+
+        /** Password-reset App Link continue URL — keep in sync with the manifest filter. */
+        const val RESET_CONTINUE_URL = "https://indicvision-dic-app-auth.firebaseapp.com/finishReset"
     }
 }

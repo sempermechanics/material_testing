@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reset password · Semper DIC</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #f4f6f8; color: #1a1c1e;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #101315; color: #e6e8ea; }
+      .card { background: #191c1f !important; }
+    }
+    .card {
+      background: #fff; max-width: 22rem; margin: 1.5rem; padding: 2rem 1.75rem;
+      border-radius: 16px; box-shadow: 0 6px 24px rgba(0,0,0,.12); text-align: center;
+    }
+    h1 { font-size: 1.35rem; margin: .25rem 0 .75rem; }
+    p { line-height: 1.5; margin: .5rem 0; opacity: .85; }
+    .brand { color: #2f80ed; font-weight: 700; letter-spacing: .02em; }
+    a.button {
+      display: inline-block; margin-top: 1rem; padding: .65rem 1.25rem;
+      background: #2f80ed; color: #fff; text-decoration: none; border-radius: 8px;
+      font-weight: 600;
+    }
+  </style>
+  <script>
+    // App-not-installed fallback: forward the same query to Firebase's default
+    // action handler so a browser can still complete the reset.
+    (function () {
+      var q = location.search || "";
+      if (q.indexOf("mode=") !== -1) {
+        location.replace("/__/auth/action" + q);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div class="card">
+    <p class="brand">Semper DIC</p>
+    <h1>Reset your password</h1>
+    <p>
+      Open this link on the phone where you requested it, with the
+      Semper&nbsp;DIC app installed — it opens the reset screen automatically.
+    </p>
+    <p>
+      If the app is not installed, continue in the browser:
+    </p>
+    <p>
+      <a class="button" id="continueLink" href="#">Continue in browser</a>
+    </p>
+  </div>
+  <script>
+    document.getElementById("continueLink").href = "/__/auth/action" + (location.search || "");
+  </script>
+</body>
+</html>

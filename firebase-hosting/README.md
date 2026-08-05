@@ -7,6 +7,7 @@ that the passwordless **email-link sign-in** depends on:
 |---|---|
 | `/.well-known/assetlinks.json` | Digital Asset Links — lets Android verify the App Link and route the sign-in link to the app instead of a browser. |
 | `/finishSignIn` | The email link's continue URL (`EMAIL_LINK_CONTINUE_URL` in [`AuthRepository.kt`](../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt)). On-device the app's App Link intercepts it; in a plain browser it shows a "finish on your phone" page. |
+| `/finishReset` | Password-reset continue URL (`RESET_CONTINUE_URL`). App Link opens the in-app reset screen; browser falls through to Firebase's `/__/auth/action` handler. Set this as the **custom action URL** in Firebase Console → Authentication → Templates → Password reset. |
 
 Firebase Auth is configured to use **direct continue-URL handlers** (not the
 retired Dynamic Links), so the emailed link lands on `/finishSignIn` carrying

@@ -48,10 +48,18 @@ class AuthActivity : AppCompatActivity() {
      */
     private var reauthMode = false
 
+    /**
+     * In-app password reset from a Firebase email link (`mode=resetPassword`).
+     * Email is fixed from the verified oobCode; the user enters password + confirm.
+     */
+    private var resetPasswordMode = false
+    private var resetOobCode: String? = null
+
     /** The email/password just submitted, pending the outcome that validates it. */
     private var pendingCredential: Pair<String, String>? = null
 
     private lateinit var progressBar: ProgressBar
+    private lateinit var layoutEmail: View
     private lateinit var etEmail: EditText
     private lateinit var etPassword: EditText
     private lateinit var layoutConfirm: View
@@ -62,6 +70,7 @@ class AuthActivity : AppCompatActivity() {
     private lateinit var tvForgotPassword: TextView
     private lateinit var tvEmailLink: TextView
     private lateinit var btnGoogle: Button
+    private lateinit var googleOrDivider: View
     private lateinit var tvPasswordRules: TextView
     private lateinit var btnGeneratePassword: com.google.android.material.button.MaterialButton
 
@@ -70,6 +79,7 @@ class AuthActivity : AppCompatActivity() {
         setContentView(R.layout.activity_auth)
 
         etEmail = findViewById(R.id.etEmail)
+        layoutEmail = findViewById(R.id.layoutEmail)
         etPassword = findViewById(R.id.etPassword)
         layoutConfirm = findViewById(R.id.layoutConfirmPassword)
         etConfirm = findViewById(R.id.etConfirmPassword)
@@ -93,7 +103,7 @@ class AuthActivity : AppCompatActivity() {
             showSnackbar(getString(R.string.password_generated), isError = false)
         }
 
-        val googleOrDivider = findViewById<View>(R.id.googleOrDivider)
+        googleOrDivider = findViewById(R.id.googleOrDivider)
         val googleConfigured = GoogleSignInHelper.isConfigured(this)
         btnGoogle.visibility = if (googleConfigured) View.VISIBLE else View.GONE
         googleOrDivider.visibility = if (googleConfigured) View.VISIBLE else View.GONE
@@ -122,19 +132,21 @@ class AuthActivity : AppCompatActivity() {
         // shrinks the viewport and the focused field scrolls clear of the IME.
         Insets.padTopAndImeBottom(findViewById(R.id.rootLayout))
 
-        // Arriving via a tapped email sign-in link?
+        // Arriving via a tapped email sign-in or password-reset link?
         maybeCompleteEmailLink(intent)
+        maybeHandlePasswordReset(intent)
 
         intent.getStringExtra(DicKeys.ROUTING_ERROR)?.let { msg ->
             showSnackbar(msg, isError = msg != getString(R.string.logout_success))
         }
     }
 
-    /** The email sign-in link may arrive while this activity is already open. */
+    /** The email sign-in / reset link may arrive while this activity is already open. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         maybeCompleteEmailLink(intent)
+        maybeHandlePasswordReset(intent)
     }
 
     private fun maybeCompleteEmailLink(intent: Intent?) {
@@ -142,18 +154,71 @@ class AuthActivity : AppCompatActivity() {
         if (authRepo.isEmailSignInLink(link)) completeEmailLink(link)
     }
 
+    /**
+     * Password-reset App Link: `…/finishReset?mode=resetPassword&oobCode=…`.
+     * Verifies the code, then switches the form into reset-password mode.
+     */
+    private fun maybeHandlePasswordReset(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.getQueryParameter("mode") != "resetPassword") return
+        val oobCode = data.getQueryParameter("oobCode") ?: return
+        setLoading(true)
+        lifecycleScope.launch {
+            val result = authRepo.verifyPasswordResetCode(oobCode)
+            setLoading(false)
+            result.fold(
+                onSuccess = { email -> enterResetPasswordMode(email, oobCode) },
+                onFailure = {
+                    showSnackbar(
+                        it.message ?: getString(R.string.auth_reset_link_invalid),
+                        isError = true,
+                    )
+                },
+            )
+        }
+    }
+
+    private fun enterResetPasswordMode(email: String, oobCode: String) {
+        resetPasswordMode = true
+        resetOobCode = oobCode
+        registerMode = false
+        reauthMode = false
+        etEmail.setText(email)
+        etPassword.setText("")
+        etConfirm.setText("")
+        updateMode()
+    }
+
+    @Suppress("CyclomaticComplexMethod") // reset / reauth / register / sign-in branches
     private fun updateMode() {
         findViewById<TextView>(R.id.tvSubtitle).text = getString(
-            if (reauthMode) R.string.reauth_body else R.string.secure_access_portal,
+            when {
+                resetPasswordMode -> R.string.auth_reset_body
+                reauthMode -> R.string.reauth_body
+                else -> R.string.secure_access_portal
+            },
         )
-        layoutConfirm.visibility = if (registerMode) View.VISIBLE else View.GONE
+        layoutEmail.visibility = if (resetPasswordMode) View.GONE else View.VISIBLE
+        layoutConfirm.visibility =
+            if (registerMode || resetPasswordMode) View.VISIBLE else View.GONE
         // Password recovery and the sign-in link only make sense when signing in.
-        recoveryLinks.visibility = if (registerMode) View.GONE else View.VISIBLE
-        tvPasswordRules.visibility = if (registerMode) View.VISIBLE else View.GONE
+        recoveryLinks.visibility =
+            if (registerMode || resetPasswordMode || reauthMode) View.GONE else View.VISIBLE
+        tvPasswordRules.visibility =
+            if (registerMode || resetPasswordMode) View.VISIBLE else View.GONE
         tvPasswordRules.text = getString(R.string.password_hint_rules)
-        btnGeneratePassword.visibility = if (registerMode) View.VISIBLE else View.GONE
+        btnGeneratePassword.visibility =
+            if (registerMode || resetPasswordMode) View.VISIBLE else View.GONE
+        tvToggle.visibility =
+            if (resetPasswordMode || reauthMode) View.GONE else View.VISIBLE
+        val googleConfigured = GoogleSignInHelper.isConfigured(this)
+        btnGoogle.visibility =
+            if (googleConfigured && !resetPasswordMode) View.VISIBLE else View.GONE
+        googleOrDivider.visibility =
+            if (googleConfigured && !resetPasswordMode) View.VISIBLE else View.GONE
         btnMain.text = getString(
             when {
+                resetPasswordMode -> R.string.auth_reset_password
                 reauthMode -> R.string.reauth_confirm
                 registerMode -> R.string.auth_create_account
                 else -> R.string.auth_sign_in
@@ -165,6 +230,10 @@ class AuthActivity : AppCompatActivity() {
     }
 
     private fun onMainAction() {
+        if (resetPasswordMode) {
+            onConfirmPasswordReset()
+            return
+        }
         val email = etEmail.text.toString().trim()
         val password = etPassword.text.toString()
         if (!validEmail(email)) return
@@ -197,6 +266,37 @@ class AuthActivity : AppCompatActivity() {
             } else {
                 authRepo.signInWithPassword(email, password)
             }
+        }
+    }
+
+    private fun onConfirmPasswordReset() {
+        val oobCode = resetOobCode ?: return
+        val email = etEmail.text.toString().trim()
+        val password = etPassword.text.toString()
+        val failure = PasswordPolicy.validate(password)
+        if (failure != null) {
+            showSnackbar(passwordFailureText(failure), isError = true)
+            return
+        }
+        if (password != etConfirm.text.toString()) {
+            showSnackbar(getString(R.string.error_passwords_mismatch), isError = true)
+            return
+        }
+        setLoading(true)
+        lifecycleScope.launch {
+            val confirmed = authRepo.confirmPasswordReset(oobCode, password)
+            if (confirmed.isFailure) {
+                setLoading(false)
+                showSnackbar(
+                    confirmed.exceptionOrNull()?.message ?: getString(R.string.auth_reset_failed),
+                    isError = true,
+                )
+                return@launch
+            }
+            pendingCredential = email to password
+            resetPasswordMode = false
+            resetOobCode = null
+            routeResult(authRepo.signInWithPassword(email, password))
         }
     }
 

@@ -12,6 +12,10 @@
       {
         "source": "/finishSignIn",
         "destination": "/finishSignIn/index.html"
+      },
+      {
+        "source": "/finishReset",
+        "destination": "/finishReset/index.html"
       }
     ],
     "headers": [
