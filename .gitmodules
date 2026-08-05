@@ -1,8 +1,3 @@
-[submodule "native/third_party/eigen"]
-	path = native/third_party/eigen
-	url = https://gitlab.com/libeigen/eigen.git
-	ignore = dirty
-[submodule "native/third_party/opencv"]
-	path = native/third_party/opencv
-	url = https://github.com/opencv/opencv.git
-	ignore = dirty
+[submodule "native"]
+	path = native
+	url = https://github.com/semperdic/semper-dic-engine.git
