@@ -4,13 +4,17 @@ package com.indicvision.semper.ui.analysis
 
 import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.net.AppRemoteConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -35,15 +39,16 @@ object AnalysisVideoExtractHelper {
         startMs: Long,
         endMs: Long,
         cacheDir: File,
+        tvResult: TextView,
         overlayHelper: ComputeOverlayHelper,
         onApplied: (AppliedResult) -> Unit,
-    ) {
+        onFinished: () -> Unit,
+    ): Job {
         overlayHelper.processingStartTime = System.currentTimeMillis()
         overlayHelper.show(title = "Extracting Frames", status = "Reading video…", showRunTiles = false)
 
-        activity.lifecycleScope.launch(Dispatchers.IO) {
+        return activity.lifecycleScope.launch(Dispatchers.IO) {
             try {
-                viewModel.clearPreviousResults()
                 val result = VideoFrameExtractor.extract(
                     context = activity,
                     uri = uri,
@@ -57,8 +62,9 @@ object AnalysisVideoExtractHelper {
                     },
                 )
 
-                withContext(Dispatchers.Main) {
-                    overlayHelper.hide()
+                // Extraction has committed its staged files; keep ViewModel
+                // state aligned if cancellation arrives before this dispatch.
+                withContext(NonCancellable + Dispatchers.Main) {
                     if (result == null) {
                         Toast.makeText(
                             activity,
@@ -68,6 +74,7 @@ object AnalysisVideoExtractHelper {
                         return@withContext
                     }
 
+                    viewModel.clearPreviousResults()
                     viewModel.realRefWidth = result.refWidth
                     viewModel.realRefHeight = result.refHeight
                     viewModel.refBytes = result.refPng
@@ -102,15 +109,22 @@ object AnalysisVideoExtractHelper {
                         Toast.LENGTH_LONG,
                     ).show()
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "Error extracting video frames")
                 withContext(Dispatchers.Main) {
-                    overlayHelper.hide()
                     Toast.makeText(
                         activity,
                         activity.getString(R.string.video_read_error, e.message),
                         Toast.LENGTH_LONG,
                     ).show()
+                }
+            } finally {
+                withContext(NonCancellable + Dispatchers.Main) {
+                    overlayHelper.hide()
+                    tvResult.text = ""
+                    onFinished()
                 }
             }
         }

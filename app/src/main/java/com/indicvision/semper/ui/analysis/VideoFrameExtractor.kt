@@ -22,6 +22,8 @@ import android.net.Uri
 import androidx.core.graphics.scale
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -108,6 +110,9 @@ object VideoFrameExtractor {
         onProgress: (percent: Int, status: String) -> Unit,
     ): ExtractionResult? {
         val retriever = MediaMetadataRetriever()
+        val stagingDir = FrameImportHelper.createStagingDir(cacheDir)
+        var completed = false
+        var refPreview: Bitmap? = null
         try {
             retriever.setDataSource(context, uri)
 
@@ -115,34 +120,34 @@ object VideoFrameExtractor {
             val span = (endMs - startMs).coerceAtLeast(0L)
             val count = ((span / stepMs).toInt() + 1).coerceIn(1, maxFrames)
 
-            val tempDir = File(cacheDir, "temp_deformed")
-            if (!tempDir.exists()) tempDir.mkdirs()
-            tempDir.listFiles()?.forEach { it.delete() }
-
             val defPaths = mutableListOf<String>()
             var refPng: ByteArray? = null
             var refWidth = 0
             var refHeight = 0
-            var refPreview: Bitmap? = null
 
             for (i in 0 until count) {
+                currentCoroutineContext().ensureActive()
                 val timeMs = startMs + i * stepMs
                 if (timeMs > endMs + stepMs / 2) break
                 val frame = getFrameHybrid(retriever, (timeMs * 1000).toLong()) ?: continue
-
-                if (i == 0) {
-                    refWidth = frame.width
-                    refHeight = frame.height
-                    refPng = compressPngToBytes(frame)
-                    refPreview = scaledPreview(frame)
-                    frame.recycle()
-                } else {
-                    val f = File(tempDir, String.format(Locale.US, "%04d_frame.png", i))
-                    FileOutputStream(f).use { out ->
-                        frame.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, out)
+                try {
+                    currentCoroutineContext().ensureActive()
+                    if (i == 0) {
+                        refWidth = frame.width
+                        refHeight = frame.height
+                        refPng = compressPngToBytes(frame)
+                        currentCoroutineContext().ensureActive()
+                        refPreview = scaledPreview(frame)
+                    } else {
+                        val f = File(stagingDir, String.format(Locale.US, "%04d_frame.png", i))
+                        FileOutputStream(f).use { out ->
+                            frame.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, out)
+                        }
+                        currentCoroutineContext().ensureActive()
+                        defPaths.add(f.absolutePath)
                     }
+                } finally {
                     frame.recycle()
-                    defPaths.add(f.absolutePath)
                 }
 
                 onProgress((i + 1) * 100 / count, "Extracting frame ${i + 1} of $count")
@@ -153,7 +158,7 @@ object VideoFrameExtractor {
 
             val sortedDefPaths = defPaths.sorted()
             val videoFrameSize = refWidth to refHeight
-            val batch = ImportedBatch(
+            val stagedBatch = ImportedBatch(
                 filePaths = sortedDefPaths,
                 originalNames = sortedDefPaths.mapIndexed { idx, _ ->
                     String.format(Locale.US, "frame_%04d.png", idx + 1)
@@ -161,8 +166,12 @@ object VideoFrameExtractor {
                 frameSizes = sortedDefPaths.associateWith { videoFrameSize },
                 fromVideo = true,
             )
+            currentCoroutineContext().ensureActive()
+            val batch = requireNotNull(
+                FrameImportHelper.commitStagedBatch(cacheDir, stagingDir, stagedBatch),
+            )
 
-            return ExtractionResult(
+            val result = ExtractionResult(
                 refPng = pngBytes,
                 refWidth = refWidth,
                 refHeight = refHeight,
@@ -170,9 +179,13 @@ object VideoFrameExtractor {
                 refPreview = refPreview,
                 batch = batch,
             )
+            completed = true
+            return result
         } finally {
             runCatching { retriever.release() }
                 .onFailure { Timber.w(it, "MediaMetadataRetriever.release failed") }
+            stagingDir.deleteRecursively()
+            if (!completed) refPreview?.recycle()
         }
     }
 

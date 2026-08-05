@@ -53,6 +53,7 @@ import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.common.Motion
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -131,6 +132,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     // State
     private var isProcessing = false
+    private var importJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -442,6 +444,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // destroyed keeps burning CPU and holding frame bytes, the progress
         // ticker reposts against dead views, and KEEP_SCREEN_ON leaks.
         viewModel.cancelRequested = true // also flips the native cancel flag via AnalysisCancelGate
+        importJob?.cancel()
+        importJob = null
         // VsgStudyRunner observes the same gate — no separate flag.
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::overlayHelper.isInitialized) overlayHelper.release()
@@ -546,7 +550,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun handleDeformedBatch(rawUris: List<Uri>) {
-        AnalysisDeformedBatchHelper.handle(
+        if (isProcessing) return
+        isProcessing = true
+        checkReady()
+        val job = AnalysisDeformedBatchHelper.handle(
             activity = this,
             viewModel = viewModel,
             rawUris = rawUris,
@@ -559,7 +566,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 validateFrameSizes()
                 checkReady()
             },
+            onFinished = ::finishImportOperation,
         )
+        importJob = job
+        wireCancelButton(
+            titleRes = R.string.cancel_import_title,
+            bodyRes = R.string.cancel_import_body,
+        ) { job.cancel() }
     }
 
     private fun setupFrameOrderStrip() {
@@ -739,7 +752,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Extracts frames at [fpsExtract] over [startMs, endMs] with the progress overlay. */
     private fun extractVideoFrames(uri: Uri, fpsExtract: Double, startMs: Long, endMs: Long) {
-        AnalysisVideoExtractHelper.extract(
+        if (isProcessing) return
+        isProcessing = true
+        checkReady()
+        val job = AnalysisVideoExtractHelper.extract(
             activity = this,
             viewModel = viewModel,
             uri = uri,
@@ -747,6 +763,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             startMs = startMs,
             endMs = endMs,
             cacheDir = cacheDir,
+            tvResult = tvResult,
             overlayHelper = overlayHelper,
             onApplied = { applied ->
                 applied.refPreview?.let { refPreviewBmp = it }
@@ -756,7 +773,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 checkReady()
                 requestSubsetRecommendation()
             },
+            onFinished = ::finishImportOperation,
         )
+        importJob = job
+        wireCancelButton(
+            titleRes = R.string.cancel_import_title,
+            bodyRes = R.string.cancel_import_body,
+        ) { job.cancel() }
     }
 
     private fun currentSubsetSize(): Int = etSubsetSize.value.toInt()
@@ -1270,13 +1293,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private suspend fun ensureSessionQuota(): Boolean =
         AnalysisNavHelper.ensureSessionQuota(this, viewModel)
 
-    private fun wireCancelButton(onConfirm: () -> Unit) {
+    private fun wireCancelButton(
+        titleRes: Int = R.string.cancel_run_title,
+        bodyRes: Int = R.string.cancel_run_body,
+        onConfirm: () -> Unit,
+    ) {
         findViewById<View>(R.id.btnRunCancel).apply {
             isEnabled = true
             setOnClickListener {
                 MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                    .setTitle(R.string.cancel_run_title)
-                    .setMessage(R.string.cancel_run_body)
+                    .setTitle(titleRes)
+                    .setMessage(bodyRes)
                     .setPositiveButton(R.string.action_cancel) { _, _ ->
                         onConfirm()
                         isEnabled = false
@@ -1284,6 +1311,20 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     .setNegativeButton(R.string.keep_running, null)
                     .show()
             }
+        }
+    }
+
+    private fun finishImportOperation() {
+        importJob = null
+        isProcessing = false
+        clearCancelButton()
+        checkReady()
+    }
+
+    private fun clearCancelButton() {
+        findViewById<View>(R.id.btnRunCancel).apply {
+            isEnabled = false
+            setOnClickListener(null)
         }
     }
 

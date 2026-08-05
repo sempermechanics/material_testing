@@ -10,7 +10,10 @@ import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.net.AppRemoteConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -32,7 +35,8 @@ object AnalysisDeformedBatchHelper {
         tvResult: TextView,
         overlayHelper: ComputeOverlayHelper,
         onApplied: () -> Unit,
-    ) {
+        onFinished: () -> Unit,
+    ): Job {
         val cap = DicSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity))
         val capped = if (rawUris.size > cap) {
             Toast.makeText(
@@ -44,7 +48,7 @@ object AnalysisDeformedBatchHelper {
         } else {
             rawUris
         }
-        activity.lifecycleScope.launch(Dispatchers.IO) {
+        return activity.lifecycleScope.launch(Dispatchers.IO) {
             try {
                 withContext(Dispatchers.Main) {
                     tvResult.setText(R.string.analysis_caching_images)
@@ -78,8 +82,9 @@ object AnalysisDeformedBatchHelper {
                     if (idx != null && idx in datesByIndex.indices) datesByIndex[idx] else Long.MAX_VALUE
                 }
 
-                withContext(Dispatchers.Main) {
-                    overlayHelper.hide()
+                // The staged directory is already committed. Apply matching
+                // ViewModel paths even if lifecycle cancellation lands now.
+                withContext(NonCancellable + Dispatchers.Main) {
                     viewModel.clearPreviousResults()
                     viewModel.defOrderMode = FrameOrderMode.PICKER
                     viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
@@ -99,15 +104,22 @@ object AnalysisDeformedBatchHelper {
                     tvResult.text = ""
                     onApplied()
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "Error handling batch")
                 withContext(Dispatchers.Main) {
-                    overlayHelper.hide()
                     Toast.makeText(
                         activity,
                         activity.getString(R.string.error_loading_images, e.message),
                         Toast.LENGTH_LONG,
                     ).show()
+                }
+            } finally {
+                withContext(NonCancellable + Dispatchers.Main) {
+                    overlayHelper.hide()
+                    tvResult.text = ""
+                    onFinished()
                 }
             }
         }

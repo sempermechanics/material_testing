@@ -7,8 +7,11 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.imaging.BitmapDecode
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.InputStream
 import java.util.Locale
 
 /** Result of importing a deformed-frame batch into cacheDir/temp_deformed. */
@@ -29,11 +32,7 @@ object FrameImportHelper {
     /** Cap [uris] to [maxFrames]; return the capped list (caller shows toast if truncated). */
     fun cappedUris(uris: List<Uri>, maxFrames: Int): List<Uri> = uris.take(maxFrames)
 
-    /**
-     * Writes deformed frames into cacheDir/temp_deformed (clears dir first).
-     * Must be called off the main thread.
-     * Returns [ImportedBatch] or null if nothing imported.
-     */
+    /** Writes a complete batch through a staging directory, then commits it. */
     suspend fun importDeformedUris(
         context: Context,
         uris: List<Uri>,
@@ -41,9 +40,7 @@ object FrameImportHelper {
         displayName: (Uri) -> String,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): ImportedBatch? {
-        val tempDir = File(cacheDir, "temp_deformed")
-        if (!tempDir.exists()) tempDir.mkdirs()
-        tempDir.listFiles()?.forEach { it.delete() }
+        val stagingDir = createStagingDir(cacheDir)
 
         val filePaths = mutableListOf<String>()
         // Temp path → original picked filename, kept so exports can use the
@@ -52,38 +49,50 @@ object FrameImportHelper {
         // Temp path → pixel size, so the reference-match check is free later.
         val sizeByPath = mutableMapOf<String, Pair<Int, Int>>()
 
-        for ((index, uri) in uris.withIndex()) {
-            val originalName = displayName(uri)
-            val isRaw = originalName.endsWith(".dng", true) || originalName.endsWith(".raw", true)
+        try {
+            for ((index, uri) in uris.withIndex()) {
+                currentCoroutineContext().ensureActive()
+                val originalName = displayName(uri)
+                val isRaw = originalName.endsWith(".dng", true) || originalName.endsWith(".raw", true)
 
-            val sanitizedName = originalName.replace(Regex("[^a-zA-Z0-9.-]"), "_")
-            val filename = String.format(Locale.US, "%04d_%s", index, sanitizedName)
-            val file = File(tempDir, filename)
+                val sanitizedName = originalName.replace(Regex("[^a-zA-Z0-9.-]"), "_")
+                val filename = String.format(Locale.US, "%04d_%s", index, sanitizedName)
+                val file = File(stagingDir, filename)
 
-            val frameSize: Pair<Int, Int>? = if (isRaw) {
-                importRawUri(context, uri, file)
-            } else {
-                importStreamedUri(context, uri, file)
+                val frameSize: Pair<Int, Int>? = if (isRaw) {
+                    val size = importRawUri(context, uri, file)
+                    currentCoroutineContext().ensureActive()
+                    size
+                } else {
+                    importStreamedUri(context, uri, file)
+                }
+                currentCoroutineContext().ensureActive()
+
+                onProgress(index + 1, uris.size)
+
+                if (!file.exists() || file.length() == 0L) continue
+
+                filePaths.add(file.absolutePath)
+                originalByPath[file.absolutePath] = originalName
+                frameSize?.let { sizeByPath[file.absolutePath] = it }
             }
 
-            onProgress(index + 1, uris.size)
-
-            if (!file.exists() || file.length() == 0L) continue
-
-            filePaths.add(file.absolutePath)
-            originalByPath[file.absolutePath] = originalName
-            frameSize?.let { sizeByPath[file.absolutePath] = it }
+            val stagedPaths = filePaths.sorted()
+            val stagedBatch = if (stagedPaths.isEmpty()) {
+                null
+            } else {
+                ImportedBatch(
+                    filePaths = stagedPaths,
+                    originalNames = stagedPaths.map { originalByPath[it] ?: File(it).name },
+                    frameSizes = sizeByPath,
+                    fromVideo = false,
+                )
+            }
+            currentCoroutineContext().ensureActive()
+            return commitStagedBatch(cacheDir, stagingDir, stagedBatch)
+        } finally {
+            stagingDir.deleteRecursively()
         }
-
-        if (filePaths.isEmpty()) return null
-
-        val sortedPaths = filePaths.sorted()
-        return ImportedBatch(
-            filePaths = sortedPaths,
-            originalNames = sortedPaths.map { originalByPath[it] ?: File(it).name },
-            frameSizes = sizeByPath,
-            fromVideo = false,
-        )
     }
 
     /**
@@ -100,10 +109,22 @@ object FrameImportHelper {
 
     /** Stream URI → file without holding a full ByteArray; probe dims afterwards. */
     private suspend fun importStreamedUri(context: Context, uri: Uri, dest: File): Pair<Int, Int>? {
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            dest.outputStream().use { output -> input.copyTo(output) }
-        } ?: return null
+        val input = context.contentResolver.openInputStream(uri) ?: return null
+        input.use { copyCancellable(it, dest) }
+        currentCoroutineContext().ensureActive()
         return probeImageSize(dest)
+    }
+
+    private suspend fun copyCancellable(input: InputStream, dest: File) {
+        dest.outputStream().buffered().use { output ->
+            val buffer = ByteArray(COPY_BUFFER_SIZE)
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val read = input.read(buffer)
+                if (read < 0) break
+                output.write(buffer, 0, read)
+            }
+        }
     }
 
     /**
@@ -111,16 +132,55 @@ object FrameImportHelper {
      * cannot read the container (rare formats the native stack still accepts).
      */
     private suspend fun probeImageSize(file: File): Pair<Int, Int>? {
+        currentCoroutineContext().ensureActive()
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, opts)
         if (opts.outWidth > 0 && opts.outHeight > 0) {
             return opts.outWidth to opts.outHeight
         }
         return withContext(SemperNativeLib.nativeDispatcher) {
+            currentCoroutineContext().ensureActive()
             runCatching {
                 val dims = SemperNativeLib.getImageDimensions(file.readBytes())
                 if (dims.size >= 2 && dims[0] > 0 && dims[1] > 0) dims[0] to dims[1] else null
             }.getOrNull()
         }
     }
+
+    internal fun createStagingDir(cacheDir: File): File =
+        File(cacheDir, "temp_deformed_staging_${System.nanoTime()}").apply {
+            check(mkdirs()) { "Could not create frame staging directory" }
+        }
+
+    /**
+     * Swap a complete staged batch into the committed location. The previous
+     * batch is renamed aside first and restored if the new rename fails.
+     */
+    internal fun commitStagedBatch(
+        cacheDir: File,
+        stagingDir: File,
+        batch: ImportedBatch?,
+    ): ImportedBatch? {
+        val committedDir = File(cacheDir, "temp_deformed")
+        val previousDir = File(cacheDir, "temp_deformed_previous")
+        previousDir.deleteRecursively()
+
+        if (committedDir.exists()) {
+            check(committedDir.renameTo(previousDir)) { "Could not preserve previous imported frames" }
+        }
+        if (!stagingDir.renameTo(committedDir)) {
+            previousDir.renameTo(committedDir)
+            error("Could not commit imported frames")
+        }
+        previousDir.deleteRecursively()
+
+        if (batch == null) return null
+        fun committed(path: String): String = File(committedDir, File(path).name).absolutePath
+        return batch.copy(
+            filePaths = batch.filePaths.map(::committed),
+            frameSizes = batch.frameSizes.mapKeys { (path, _) -> committed(path) },
+        )
+    }
+
+    private const val COPY_BUFFER_SIZE = 64 * 1024
 }
