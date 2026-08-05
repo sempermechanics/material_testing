@@ -128,9 +128,7 @@ class SessionSelectionController(
     }
 
     /**
-     * Bulk delete. Reuses the single-row semantics: full erasure is the primary
-     * action, and a device-only option appears when any of the selection has a
-     * cloud copy that would otherwise be silently left behind.
+     * Bulk delete. Branches on local data + cloud the same way as [confirmDelete].
      */
     fun confirmDeleteSelected() {
         val records = selectedRecords()
@@ -140,9 +138,10 @@ class SessionSelectionController(
             return
         }
 
-        val backedUp = records.count {
-            it.syncState == SessionRecord.SyncState.SYNCED || it.cloudSessionId.isNotBlank()
-        }
+        val withLocal = records.filter { it.hasLocalData() }
+        val allHaveLocal = withLocal.size == records.size
+        val allHaveCloud = records.all { hasCloudCopy(it) }
+        val anyCloud = records.any { hasCloudCopy(it) }
         val dialog = MaterialAlertDialogBuilder(activity)
             .setTitle(
                 activity.resources.getQuantityString(
@@ -153,13 +152,37 @@ class SessionSelectionController(
             )
             .setNegativeButton(R.string.action_cancel, null)
 
-        if (backedUp == 0) {
-            dialog.setMessage(R.string.delete_confirm_body_local_multi)
-                .setPositiveButton(R.string.action_delete) { _, _ -> eraseSelected(records, cloudToo = true) }
-        } else {
-            dialog.setMessage(activity.getString(R.string.delete_confirm_body_cloud_multi, backedUp))
-                .setPositiveButton(R.string.delete_everywhere) { _, _ -> eraseSelected(records, cloudToo = true) }
-                .setNeutralButton(R.string.delete_device_only) { _, _ -> eraseSelected(records, cloudToo = false) }
+        when {
+            allHaveLocal && allHaveCloud -> {
+                dialog.setMessage(
+                    activity.getString(R.string.delete_confirm_body_cloud_multi, records.size),
+                )
+                    .setPositiveButton(R.string.delete_cloud_backup) { _, _ ->
+                        eraseCloudBackups(records)
+                    }
+                    .setNeutralButton(R.string.delete_device_only) { _, _ ->
+                        eraseSelected(records, cloudToo = false)
+                    }
+            }
+            allHaveLocal && !anyCloud -> {
+                dialog.setMessage(R.string.delete_confirm_body_local_multi)
+                    .setPositiveButton(R.string.action_delete) { _, _ ->
+                        eraseSelected(records, cloudToo = true)
+                    }
+            }
+            else -> {
+                // Only-cloud stubs and mixed selections: full erase covers every case.
+                dialog.setMessage(
+                    if (anyCloud) {
+                        activity.getString(R.string.delete_confirm_body_cloud_multi, records.count { hasCloudCopy(it) })
+                    } else {
+                        activity.getString(R.string.delete_confirm_body_local_multi)
+                    },
+                )
+                    .setPositiveButton(R.string.action_delete) { _, _ ->
+                        eraseSelected(records, cloudToo = true)
+                    }
+            }
         }
         dialog.show()
     }
@@ -183,37 +206,83 @@ class SessionSelectionController(
     }
 
     /**
-     * Delete an analysis. When a cloud backup exists the user gets an explicit
-     * choice, with full erasure (device + cloud) as the primary action — the
-     * GDPR right-to-erasure path.
+     * Delete an analysis. Dual-presence rows offer cloud-backup erase or
+     * device-only; only-cloud stubs erase everywhere; local-only deletes fully.
      */
     fun confirmDelete(record: SessionRecord) {
-        val hasCloudCopy = record.syncState == SessionRecord.SyncState.SYNCED ||
-            record.cloudSessionId.isNotBlank()
+        val hasCloud = hasCloudCopy(record)
+        val hasLocal = record.hasLocalData()
 
-        if (!hasCloudCopy) {
-            MaterialAlertDialogBuilder(activity)
-                .setTitle(R.string.delete_confirm_title)
-                .setMessage(R.string.delete_confirm_body_local)
-                .setPositiveButton(R.string.action_delete) { _, _ -> eraseEverywhere(record) }
-                .setNegativeButton(R.string.action_cancel, null)
-                .show()
-            return
+        when {
+            hasLocal && hasCloud -> {
+                MaterialAlertDialogBuilder(activity)
+                    .setTitle(R.string.delete_confirm_title)
+                    .setMessage(R.string.delete_confirm_body_cloud)
+                    .setPositiveButton(R.string.delete_cloud_backup) { _, _ -> eraseCloudBackup(record) }
+                    .setNeutralButton(R.string.delete_device_only) { _, _ -> eraseDeviceOnly(record) }
+                    .setNegativeButton(R.string.action_cancel, null)
+                    .show()
+            }
+            !hasLocal && hasCloud -> {
+                MaterialAlertDialogBuilder(activity)
+                    .setTitle(R.string.delete_confirm_title)
+                    .setMessage(R.string.delete_confirm_body_cloud_only)
+                    .setPositiveButton(R.string.action_delete) { _, _ -> eraseEverywhere(record) }
+                    .setNegativeButton(R.string.action_cancel, null)
+                    .show()
+            }
+            else -> {
+                MaterialAlertDialogBuilder(activity)
+                    .setTitle(R.string.delete_confirm_title)
+                    .setMessage(R.string.delete_confirm_body_local)
+                    .setPositiveButton(R.string.action_delete) { _, _ -> eraseEverywhere(record) }
+                    .setNegativeButton(R.string.action_cancel, null)
+                    .show()
+            }
         }
+    }
 
-        MaterialAlertDialogBuilder(activity)
-            .setTitle(R.string.delete_confirm_title)
-            .setMessage(R.string.delete_confirm_body_cloud)
-            .setPositiveButton(R.string.delete_everywhere) { _, _ -> eraseEverywhere(record) }
-            .setNeutralButton(R.string.delete_device_only) { _, _ ->
-                activity.lifecycleScope.launch {
-                    CloudSync.eraseLocalOnly(activity, record.id)
-                    onDeviceOnlyDeleted()
-                    onRefresh()
+    private fun hasCloudCopy(record: SessionRecord): Boolean =
+        record.syncState == SessionRecord.SyncState.SYNCED || record.cloudSessionId.isNotBlank()
+
+    private fun eraseDeviceOnly(record: SessionRecord) {
+        activity.lifecycleScope.launch {
+            CloudSync.eraseLocalOnly(activity, record.id)
+            onDeviceOnlyDeleted()
+            onRefresh()
+        }
+    }
+
+    private fun eraseCloudBackup(record: SessionRecord) {
+        activity.lifecycleScope.launch {
+            when (CloudSync.eraseCloudBackup(activity, record)) {
+                CloudSync.EraseResult.ERASED_EVERYWHERE ->
+                    Toast.makeText(activity, R.string.cloud_delete_backup_done, Toast.LENGTH_SHORT).show()
+                CloudSync.EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE ->
+                    Toast.makeText(activity, R.string.delete_cloud_failed, Toast.LENGTH_LONG).show()
+            }
+            onRefresh()
+        }
+    }
+
+    private fun eraseCloudBackups(records: List<SessionRecord>) {
+        activity.lifecycleScope.launch {
+            var failed = 0
+            for (record in records) {
+                if (CloudSync.eraseCloudBackup(activity, record) ==
+                    CloudSync.EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+                ) {
+                    failed++
                 }
             }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
+            if (failed > 0) {
+                Toast.makeText(activity, R.string.delete_cloud_failed, Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(activity, R.string.cloud_delete_backup_done, Toast.LENGTH_SHORT).show()
+            }
+            clearSelection()
+            onRefresh()
+        }
     }
 
     private fun eraseSelected(records: List<SessionRecord>, cloudToo: Boolean) {

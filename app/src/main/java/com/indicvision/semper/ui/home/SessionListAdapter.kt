@@ -44,6 +44,9 @@ class SessionListAdapter(
     /** id → live upload progress; empty except for rows currently backing up. */
     private var progress: Map<String, RowProgress> = emptyMap()
 
+    /** Ids that are SYNCED but have no local `.dat`s — "Only in cloud" badge. */
+    private var cloudOnlyIds: Set<String> = emptySet()
+
     /** Path → thumbnail; recycles evicted bitmaps. Cap keeps scroll GC mild. */
     private val thumbCache =
         object : LinkedHashMap<String, Bitmap>(THUMB_CACHE_MAX + 1, 0.75f, true) {
@@ -75,6 +78,14 @@ class SessionListAdapter(
         (old.keys + new.keys).forEach { id ->
             if (old[id] != new[id]) rebindRow(id)
         }
+    }
+
+    /** Ids with no local frame data (derived on IO); rebinds rows whose badge changes. */
+    fun setCloudOnlyIds(new: Set<String>) {
+        val old = cloudOnlyIds
+        if (old == new) return
+        cloudOnlyIds = new
+        (old + new).forEach { rebindRow(it) }
     }
 
     /** Rows whose ids are in [ids], in list order. */
@@ -163,11 +174,13 @@ class SessionListAdapter(
             holder.badge.setTextColor(ctx.getColor(R.color.sky_on_container))
         } else {
             holder.progressBar.isVisible = false
-            holder.badge.text = when (r.syncState) {
-                SessionRecord.SyncState.SYNCED -> ctx.getString(R.string.badge_synced)
-                SessionRecord.SyncState.PENDING -> ctx.getString(R.string.badge_pending)
-                SessionRecord.SyncState.LOCAL_ONLY -> ctx.getString(R.string.badge_local)
-                SessionRecord.SyncState.FAILED -> ctx.getString(R.string.badge_not_backed_up)
+            holder.badge.text = when {
+                r.id in cloudOnlyIds -> ctx.getString(R.string.badge_cloud_only)
+                r.syncState == SessionRecord.SyncState.SYNCED -> ctx.getString(R.string.badge_synced)
+                r.syncState == SessionRecord.SyncState.PENDING -> ctx.getString(R.string.badge_pending)
+                r.syncState == SessionRecord.SyncState.LOCAL_ONLY -> ctx.getString(R.string.badge_local)
+                r.syncState == SessionRecord.SyncState.FAILED -> ctx.getString(R.string.badge_not_backed_up)
+                else -> ctx.getString(R.string.badge_local)
             }
             holder.badge.setTextColor(
                 if (r.syncState == SessionRecord.SyncState.FAILED) {

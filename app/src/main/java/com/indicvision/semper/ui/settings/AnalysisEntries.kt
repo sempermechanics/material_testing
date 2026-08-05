@@ -26,7 +26,7 @@ data class AnalysisEntry(
 ) {
     val location: AnalysisLocation
         get() = when {
-            cloud != null && record == null -> AnalysisLocation.CLOUD_ONLY
+            cloud != null && (record == null || !record.hasLocalData()) -> AnalysisLocation.CLOUD_ONLY
             cloud != null -> AnalysisLocation.PHONE_AND_CLOUD
             record?.syncState == SessionRecord.SyncState.LOCAL_ONLY -> AnalysisLocation.PHONE_ONLY
             else -> AnalysisLocation.PHONE_SYNC_STATE

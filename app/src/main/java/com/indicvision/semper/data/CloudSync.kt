@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit
  * [reconcile] asks the backend what actually exists and repairs the difference,
  * re-queueing uploads for anything that went missing.
  */
+@Suppress("TooManyFunctions") // reconcile, erase variants, upload enqueue — one cloud facade
 object CloudSync {
 
     /**
@@ -265,9 +266,9 @@ object CloudSync {
                 .isSuccess
     }
 
-    /** Delete only this device's copy; the cloud backup is deliberately kept. */
+    /** Delete only this device's heavy artifacts; the cloud backup and index row stay. */
     suspend fun eraseLocalOnly(context: Context, localSessionId: String) = withContext(Dispatchers.IO) {
-        SessionStore.delete(context.applicationContext, localSessionId)
+        SessionStore.dropLocalArtifacts(context.applicationContext, localSessionId)
     }
 
     /**
@@ -302,6 +303,41 @@ object CloudSync {
             false
         }
     }
+
+    /**
+     * Erase the cloud backup for a local [SessionRecord], resolving the backend
+     * id via [resolveCloudIdFor]. Local files stay; sync state becomes LOCAL_ONLY.
+     */
+    suspend fun eraseCloudBackup(context: Context, record: SessionRecord): EraseResult =
+        withContext(Dispatchers.IO) {
+            val appContext = context.applicationContext
+            val api = IndicApi.get(appContext)
+            if (!api.enabled) return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+            val token = TokenProvider.usableIdToken()
+                ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+            val cloudId = resolveCloudId(api, token, record)
+                ?: run {
+                    // Nothing in the cloud to erase — demote the badge anyway.
+                    SessionStore.setSyncState(appContext, record.id, SessionRecord.SyncState.LOCAL_ONLY)
+                    return@withContext EraseResult.ERASED_EVERYWHERE
+                }
+            if (eraseCloudBackup(appContext, cloudId, record.id)) {
+                EraseResult.ERASED_EVERYWHERE
+            } else {
+                EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+            }
+        }
+
+    /** Backend session id for a local analysis, or null if none is known. */
+    suspend fun resolveCloudIdFor(context: Context, record: SessionRecord): String? =
+        withContext(Dispatchers.IO) {
+            if (record.cloudSessionId.isNotBlank()) return@withContext record.cloudSessionId
+            val appContext = context.applicationContext
+            val api = IndicApi.get(appContext)
+            if (!api.enabled) return@withContext null
+            val token = TokenProvider.usableIdToken() ?: return@withContext null
+            resolveCloudId(api, token, record)
+        }
 
     /**
      * The backend session id for a local analysis. Uses the stored link when we

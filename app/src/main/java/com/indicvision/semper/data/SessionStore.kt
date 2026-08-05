@@ -304,6 +304,30 @@ object SessionStore {
         withContext(Dispatchers.IO) { delete(context, id) }
 
     /**
+     * Drop heavy local artifacts (`.dat` frames, raw images, processed / staging
+     * trees) but keep the index row and `reference.png` so the Home thumbnail
+     * survives. Leaves [SessionRecord.syncState] alone — typically [SYNCED] so
+     * the row renders as "Only in cloud" via [SessionRecord.hasLocalData].
+     */
+    fun dropLocalArtifacts(context: Context, id: String) = synchronized(lock) {
+        val record = get(context, id) ?: return@synchronized
+        val dir = File(record.sessionDir)
+        if (!dir.isDirectory) return@synchronized
+        dir.listFiles()?.forEach { child ->
+            when {
+                child.isFile && child.extension.equals("dat", ignoreCase = true) -> child.delete()
+                child.isDirectory && child.name == SessionPaths.RAW_DEFORMED_SUBDIR ->
+                    child.deleteRecursively()
+                child.isDirectory && child.name == SessionPaths.PROCESSED_SUBDIR -> child.deleteRecursively()
+                child.isDirectory && child.name == SessionPaths.UPLOAD_STAGING_SUBDIR -> child.deleteRecursively()
+            }
+        }
+    }
+
+    suspend fun dropLocalArtifactsAsync(context: Context, id: String) =
+        withContext(Dispatchers.IO) { dropLocalArtifacts(context, id) }
+
+    /**
      * Wipes every local analysis — the index and all per-session directories.
      * Used by account deletion (GDPR); cloud erasure is handled separately.
      * Always allowed: intentional wipe, not a partial clobber of a corrupt file.

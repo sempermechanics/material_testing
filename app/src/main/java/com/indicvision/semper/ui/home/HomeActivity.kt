@@ -14,6 +14,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -25,8 +26,10 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.CoachPrefs
+import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
@@ -35,6 +38,7 @@ import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.common.CoachMarkController
+import com.indicvision.semper.ui.common.DeterminateProgressDialog
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.limit.SessionLimitActivity
@@ -321,7 +325,13 @@ class HomeActivity : AppCompatActivity() {
     private fun refresh(deep: Boolean = false) {
         lifecycleScope.launch {
             val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
+            val cloudOnly = withContext(Dispatchers.IO) {
+                sessions.filter {
+                    it.syncState == SessionRecord.SyncState.SYNCED && !it.hasLocalData()
+                }.map { it.id }.toSet()
+            }
             adapter.submit(sessions)
+            adapter.setCloudOnlyIds(cloudOnly)
             emptyState.isVisible = sessions.isEmpty()
             updateQuotaIndicator(sessions.size)
             // A refresh can drop rows out from under a selection.
@@ -414,7 +424,87 @@ class HomeActivity : AppCompatActivity() {
 
     // ── Row actions ──────────────────────────────────────────────────────
 
-    private fun openSession(record: SessionRecord) = SessionOpenHelper.openOrExplain(this, record)
+    private fun openSession(record: SessionRecord) {
+        if (record.hasLocalData()) {
+            startActivity(SessionOpenHelper.intentFor(this, record))
+            return
+        }
+        val hasCloud = record.syncState == SessionRecord.SyncState.SYNCED ||
+            record.cloudSessionId.isNotBlank()
+        if (!hasCloud) {
+            SessionOpenHelper.openOrExplain(this, record)
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.download_analysis_title)
+            .setMessage(R.string.download_analysis_body)
+            .setPositiveButton(R.string.download_analysis_confirm) { _, _ ->
+                downloadThenOpen(record)
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun downloadThenOpen(record: SessionRecord) {
+        lifecycleScope.launch {
+            val cloudId = CloudSync.resolveCloudIdFor(this@HomeActivity, record)
+            if (cloudId.isNullOrBlank()) {
+                Toast.makeText(this@HomeActivity, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val workName = CloudRestore.enqueueRestore(this@HomeActivity, cloudId)
+            val progress = DeterminateProgressDialog(
+                this@HomeActivity,
+                getString(R.string.download_analysis_working),
+            )
+            progress.show()
+            val liveData = WorkManager.getInstance(this@HomeActivity)
+                .getWorkInfosForUniqueWorkLiveData(workName)
+            val observer = object : Observer<List<WorkInfo>> {
+                override fun onChanged(value: List<WorkInfo>) {
+                    val info = value.firstOrNull() ?: return
+                    val done = info.progress.getInt(DicRestoreWorker.KEY_DONE, 0)
+                    val total = info.progress.getInt(DicRestoreWorker.KEY_TOTAL, 0)
+                    if (total > 0) {
+                        progress.update(
+                            percent = done * 100 / total,
+                            text = getString(R.string.download_analysis_working),
+                        )
+                    }
+                    when (info.state) {
+                        WorkInfo.State.SUCCEEDED -> {
+                            liveData.removeObserver(this)
+                            progress.dismiss()
+                            refresh()
+                            lifecycleScope.launch {
+                                val fresh = withContext(Dispatchers.IO) {
+                                    SessionStore.get(this@HomeActivity, record.id)
+                                }
+                                if (fresh != null && fresh.hasLocalData()) {
+                                    startActivity(SessionOpenHelper.intentFor(this@HomeActivity, fresh))
+                                } else {
+                                    Toast.makeText(
+                                        this@HomeActivity,
+                                        R.string.download_analysis_failed,
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        }
+                        WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
+                            liveData.removeObserver(this)
+                            progress.dismiss()
+                            val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR)
+                                ?: getString(R.string.download_analysis_failed)
+                            Toast.makeText(this@HomeActivity, reason, Toast.LENGTH_LONG).show()
+                        }
+                        else -> Unit
+                    }
+                }
+            }
+            liveData.observe(this@HomeActivity, observer)
+        }
+    }
 
     /** Retry a failed/pending upload, or back up a local-only session when cloud is on. */
     private fun retryOrBackup(record: SessionRecord) {
@@ -464,11 +554,11 @@ class HomeActivity : AppCompatActivity() {
     }.getOrNull()
 
     private fun showDeviceOnlyKeptSnackbar() {
-        Snackbar.make(findViewById(R.id.homeRoot), R.string.delete_device_kept_snackbar, Snackbar.LENGTH_LONG)
-            .setAction(R.string.delete_device_restore_action) {
-                findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
-            }
-            .show()
+        Snackbar.make(
+            findViewById(R.id.homeRoot),
+            R.string.delete_device_only_done,
+            Snackbar.LENGTH_LONG,
+        ).show()
     }
 
     override fun onDestroy() {

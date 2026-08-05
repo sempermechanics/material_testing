@@ -182,7 +182,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="badge_pending">upload pending</string>
     <string name="badge_preparing_fmt">preparing %1$d%%</string>
     <string name="badge_uploading_fmt">uploading %1$d%%</string>
-    <string name="badge_local">local only</string>
+    <string name="badge_local">Not backed up</string>
+    <string name="badge_cloud_only">Only in cloud</string>
     
     <plurals name="session_frames_of_fmt">
         <item quantity="one">%1$d of %2$d frame</item>
@@ -203,17 +204,23 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="selection_selected_desc">Selected</string>
     
     <string name="delete_confirm_body_local_multi">Permanently removes them from your phone. This can\'t be undone.</string>
-    <string name="delete_confirm_body_cloud_multi">%1$d of these are backed up. Deleting everywhere permanently erases the selected analyses from your phone and from cloud storage — the images, results, reports and their details. This can\'t be undone.</string>
-    
-    
-    
+    <string name="delete_confirm_body_cloud_multi">%1$d of these are backed up. Delete cloud backup removes only the cloud copies (phone copies stay). Device only removes phone copies (cloud backups stay — tap a row to re-download).</string>
+
     <string name="delete_confirm_title">Delete this analysis?</string>
     <string name="delete_confirm_body_local">Permanently removes this analysis from your phone. This can\'t be undone.</string>
-    <string name="delete_confirm_body_cloud">This analysis is backed up. Deleting everywhere permanently erases it from your phone and from cloud storage — the images, results, reports and their details. This can\'t be undone.</string>
+    <string name="delete_confirm_body_cloud">Choose what to remove.\n\nDelete cloud backup removes the cloud copy and keeps this phone\'s copy (marked Not backed up).\n\nDevice only removes the phone copy and keeps the cloud backup — tap the row later to download it again.</string>
+    <string name="delete_confirm_body_cloud_only">Permanently erases this analysis from cloud storage and removes it from this list. This can\'t be undone.</string>
+    <string name="delete_cloud_backup">Delete cloud backup</string>
     <string name="delete_everywhere">Delete everywhere</string>
     <string name="delete_device_only">Device only</string>
     <string name="delete_everywhere_done">Analysis erased from this device and the cloud.</string>
+    <string name="delete_device_only_done">Removed from this phone. Tap the row to download from the cloud.</string>
     <string name="delete_cloud_failed">Couldn\'t reach the cloud, so nothing was deleted. Check your connection and try again.</string>
+    <string name="download_analysis_title">Download this analysis?</string>
+    <string name="download_analysis_body">This analysis is only in the cloud on this phone. Download it to open the results.</string>
+    <string name="download_analysis_confirm">Download</string>
+    <string name="download_analysis_working">Downloading…</string>
+    <string name="download_analysis_failed">Couldn\'t download this analysis. Check your connection and try again.</string>
     <string name="viewer_settings_used_desc">Show the settings used for this analysis</string>
     <string name="settings_used_title">Settings used</string>
     <string name="setting_subset">Subset size</string>

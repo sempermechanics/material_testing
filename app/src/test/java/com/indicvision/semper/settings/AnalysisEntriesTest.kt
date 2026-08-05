@@ -6,7 +6,10 @@ import com.indicvision.semper.ui.settings.AnalysisEntries
 import com.indicvision.semper.ui.settings.AnalysisLocation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 
 /**
  * The settings page shows one row per analysis, joining the local index with
@@ -15,32 +18,46 @@ import org.junit.Test
  */
 class AnalysisEntriesTest {
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    /** A session dir with a `.dat` so [SessionRecord.hasLocalData] is true. */
+    private fun sessionDirWithData(id: String): String {
+        val dir = tmp.newFolder(id)
+        File(dir, "frame_0000.dat").writeBytes(ByteArray(1))
+        return dir.absolutePath
+    }
+
     private fun record(
         id: String,
         name: String = id,
         syncState: SessionRecord.SyncState = SessionRecord.SyncState.SYNCED,
         cloudSessionId: String = "",
-    ) = SessionRecord(
-        id = id,
-        name = name,
-        createdAt = 0L,
-        updatedAt = 0L,
-        frameCount = 1,
-        subset = 41,
-        step = 5,
-        strainWindow = 15,
-        imgW = 100,
-        imgH = 100,
-        roiX = 0,
-        roiY = 0,
-        roiW = 100,
-        roiH = 100,
-        refPath = "/ref.png",
-        refName = "ref.png",
-        sessionDir = "/sessions/$id",
-        cloudSessionId = cloudSessionId,
-        syncState = syncState,
-    )
+        withLocalData: Boolean = true,
+    ): SessionRecord {
+        val dir = if (withLocalData) sessionDirWithData(id) else tmp.newFolder("empty-$id").absolutePath
+        return SessionRecord(
+            id = id,
+            name = name,
+            createdAt = 0L,
+            updatedAt = 0L,
+            frameCount = 1,
+            subset = 41,
+            step = 5,
+            strainWindow = 15,
+            imgW = 100,
+            imgH = 100,
+            roiX = 0,
+            roiY = 0,
+            roiW = 100,
+            roiH = 100,
+            refPath = "$dir/ref.png",
+            refName = "ref.png",
+            sessionDir = dir,
+            cloudSessionId = cloudSessionId,
+            syncState = syncState,
+        )
+    }
 
     @Test
     fun `cloud row joins its local record by localSessionId`() {
@@ -64,6 +81,15 @@ class AnalysisEntriesTest {
 
         assertEquals(1, entries.size)
         assertEquals(AnalysisLocation.PHONE_AND_CLOUD, entries[0].location)
+    }
+
+    @Test
+    fun `a stub local row without dat files is cloud-only when joined`() {
+        val entries = AnalysisEntries.merge(
+            records = listOf(record("local-1", withLocalData = false)),
+            cloud = listOf(CloudSessionDto(sessionId = "cloud-1", localSessionId = "local-1")),
+        )
+        assertEquals(AnalysisLocation.CLOUD_ONLY, entries[0].location)
     }
 
     @Test
