@@ -35,21 +35,35 @@ fun localProperty(key: String): String? =
 // below. Put INDIC_DEV_AUTH_BYPASS=false in local.properties to exercise the
 // real sign-in flow on an emulator.
 val devAuthBypass = localProperty("INDIC_DEV_AUTH_BYPASS") != "false"
-// Base URL of the Semper GCP backend (Cloud Run). Empty = cloud sync disabled;
-// the app still runs fully offline. e.g. https://indic-api-xxxx.a.run.app
-// The Google client ID is NOT read here: Firebase Auth supplies it via the
-// google-services plugin as the default_web_client_id resource.
-// See docs/backend/AUTH_SETUP.md.
+// Base URL of the Semper GCP backend (API Gateway or Cloud Run). Empty = cloud
+// sync disabled for local/debug. Release builds that set -PrequireCloudApi=true
+// (CI Release workflow) MUST inject INDIC_API_BASE_URL via env or
+// local.properties — otherwise the build fails instead of silently shipping
+// offline-only.
 val indicApiBaseUrl =
-    if (localPropertiesFile.exists()) {
-        localPropertiesFile
-            .readLines()
-            .find { it.startsWith("INDIC_API_BASE_URL=") }
-            ?.substringAfter("=")
-            ?.trim() ?: ""
-    } else {
-        ""
-    }
+    System.getenv("INDIC_API_BASE_URL")?.trim()?.takeIf { it.isNotEmpty() }
+        ?: if (localPropertiesFile.exists()) {
+            localPropertiesFile
+                .readLines()
+                .find { it.startsWith("INDIC_API_BASE_URL=") }
+                ?.substringAfter("=")
+                ?.trim() ?: ""
+        } else {
+            ""
+        }
+
+val requireCloudApi =
+    (project.findProperty("requireCloudApi") as String?)?.equals("true", ignoreCase = true) == true
+if (requireCloudApi && indicApiBaseUrl.isBlank()) {
+    throw GradleException(
+        "INDIC_API_BASE_URL is required for this release build " +
+            "(-PrequireCloudApi=true). Set the env var or local.properties entry " +
+            "to the API Gateway URL so cloud sync is not silently disabled.",
+    )
+}
+if (requireCloudApi && !indicApiBaseUrl.startsWith("https://")) {
+    throw GradleException("INDIC_API_BASE_URL must be https when requireCloudApi=true: $indicApiBaseUrl")
+}
 
 // Optional comma-separated CertificatePinner pins for the API host
 // (e.g. sha256/AAAA...=). Empty = system trust store only.
