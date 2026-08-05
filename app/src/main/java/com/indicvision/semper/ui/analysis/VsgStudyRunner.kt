@@ -96,6 +96,7 @@ object VsgStudyRunner {
         }
 
     /** Runs every combination of [params].plan in order. */
+    @Suppress("LoopWithTooManyJumpStatements") // cancel break + skip continue are intentional
     fun run(
         refBytes: ByteArray,
         refWidth: Int,
@@ -123,8 +124,11 @@ object VsgStudyRunner {
 
         // A cancel short-circuits the remaining solves; the one already running
         // stops on its own, since the engine polls the same flag. A convergence
-        // collapse ends it the same way.
-        for ((index, point) in params.plan.withIndex().takeWhile { !cancelRequested && !convergenceGate.shouldStop }) {
+        // collapse ends it the same way. The guard must be inside the loop —
+        // Iterable.takeWhile on a List is eager and would capture the whole plan
+        // before cancelRequested can flip.
+        for ((index, point) in params.plan.withIndex()) {
+            if (cancelRequested || convergenceGate.shouldStop) break
             val metrics = newMetrics()
             onProgress(Progress(index, total, index * PERCENT / maxOf(1, total), point, 0, -1f))
 
@@ -236,7 +240,8 @@ object VsgStudyRunner {
             solved > capacityPoints -> {
                 Timber.e(
                     "Sweep engine returned %d points but the buffer holds %d — skipping node",
-                    solved, capacityPoints,
+                    solved,
+                    capacityPoints,
                 )
                 EngineFailure.ENGINE_ERROR_INIT
             }
