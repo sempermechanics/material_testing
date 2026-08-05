@@ -54,13 +54,14 @@ object CloudRestore {
 
     /** Input key for [DicRestoreWorker]: which cloud session to pull down. */
     const val KEY_CLOUD_SESSION_ID = "CLOUD_SESSION_ID"
+    const val KEY_TARGET_LOCAL_ID = "TARGET_LOCAL_ID"
 
     /**
      * Queue a restore. It runs in [DicRestoreWorker] rather than a UI scope so
      * it survives leaving the screen — a restore can be hundreds of megabytes
      * and must not die because the user navigated away.
      */
-    fun enqueueRestore(context: Context, cloudSessionId: String): String {
+    fun enqueueRestore(context: Context, cloudSessionId: String, targetLocalId: String): String {
         val name = workName(cloudSessionId)
         val work = OneTimeWorkRequestBuilder<DicRestoreWorker>()
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
@@ -68,7 +69,12 @@ object CloudRestore {
                 Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
             )
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
-            .setInputData(Data.Builder().putString(KEY_CLOUD_SESSION_ID, cloudSessionId).build())
+            .setInputData(
+                Data.Builder()
+                    .putString(KEY_CLOUD_SESSION_ID, cloudSessionId)
+                    .putString(KEY_TARGET_LOCAL_ID, targetLocalId)
+                    .build(),
+            )
             .addTag("restore")
             .build()
         WorkManager.getInstance(context.applicationContext)
@@ -78,6 +84,9 @@ object CloudRestore {
 
     /** Unique work name for a restore, so the UI can observe its progress. */
     fun workName(cloudSessionId: String): String = "restore-$cloudSessionId"
+
+    fun targetLocalId(cloud: CloudSessionDto): String =
+        cloud.localSessionId.ifBlank { "restored-" + cloud.sessionId.take(12) }
 
     private const val BACKOFF_SECONDS = 30L
 
@@ -156,6 +165,7 @@ object CloudRestore {
     suspend fun restore(
         context: Context,
         sessionId: String,
+        targetLocalId: String,
         onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> },
     ): String = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
@@ -174,11 +184,10 @@ object CloudRestore {
         api.downloadFile(token, metaEntry.fileId, metaTmp)
         val meta = JSONObject(metaTmp.readText())
 
-        // Restore under the original local id when we know it, so a restored
-        // session lines up with its cloud copy for future reconciliation.
-        val localId = meta.optString("localSessionId").ifBlank {
-            manifest.localSessionId.ifBlank { "restored-" + sessionId.take(12) }
-        }
+        // The enqueueing UI already created a row under this id. Never let
+        // metadata select a second id and leave an orphan stub behind.
+        val localId = targetLocalId
+        val existing = SessionStore.get(appContext, localId)
         val sessionDir = SessionStore.dirFor(appContext, localId)
         val rawDeformedDir = File(sessionDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply { mkdirs() }
         metaTmp.copyTo(File(sessionDir, "metadata.json"), overwrite = true)
@@ -205,15 +214,27 @@ object CloudRestore {
         }
 
         // 3. Rebuild the index row from the blueprint.
-        SessionStore.upsert(
-            appContext,
-            recordFrom(meta, localId, sessionDir, refPath),
-            allowOverLimit = true, // already counted in the cloud quota
-        )
+        check(
+            SessionStore.upsert(
+                appContext,
+                recordFrom(
+                    meta,
+                    RestoreRecordTarget(localId, sessionId, sessionDir, refPath, existing),
+                ),
+                allowOverLimit = true, // already counted in the cloud quota
+            ),
+        ) { "Could not update the restored session index" }
         Timber.i("Restored analysis %s from cloud session %s (%d files)", localId, sessionId, files.size)
         // The listing excludes backups already on this device, so it changed.
         invalidateRestorableCache()
         localId
+    }
+
+    /** Remove an interrupted restore's files while retaining its cloud-only index row. */
+    fun clearPartialArtifacts(context: Context, localId: String) {
+        val dir = SessionStore.dirFor(context.applicationContext, localId)
+        dir.deleteRecursively()
+        check(dir.mkdirs()) { "Could not reset partial restore directory" }
     }
 
     /** The on-disk shape of a restored session — where artifacts land. */
@@ -299,32 +320,28 @@ object CloudRestore {
         return dest
     }
 
-    private fun recordFrom(meta: JSONObject, localId: String, sessionDir: File, refPath: String): SessionRecord {
+    private data class RestoreRecordTarget(
+        val localId: String,
+        val cloudSessionId: String,
+        val sessionDir: File,
+        val refPath: String,
+        val existing: SessionRecord?,
+    )
+
+    private fun recordFrom(meta: JSONObject, target: RestoreRecordTarget): SessionRecord {
         val engine = meta.optJSONObject("engine") ?: JSONObject()
         val roi = engine.optJSONObject("roi") ?: JSONObject()
         val metrics = meta.optJSONObject("metrics") ?: JSONObject()
-        val framesArr = meta.optJSONArray("frames")
-
-        val defNames = buildList {
-            if (framesArr != null) {
-                for (i in 0 until framesArr.length()) {
-                    add(framesArr.getJSONObject(i).optString("image"))
-                }
-            }
-        }.filter { it.isNotBlank() }
-
-        val statsArr = engine.optJSONArray("stats")
-        val stats = buildList {
-            if (statsArr != null) for (i in 0 until statsArr.length()) add(statsArr.optDouble(i, 0.0).toFloat())
-        }
-
+        val defNames = restoredFrameNames(meta)
+        val stats = restoredEngineStats(engine)
         val now = System.currentTimeMillis()
         val sweep = engine.optJSONObject("sweep")
         val skipped = sweep?.optJSONObject("skipped")
         return SessionRecord(
-            id = localId,
-            name = meta.optString("name").ifBlank { meta.optString("specimen", "Restored") },
-            createdAt = now,
+            id = target.localId,
+            name = target.existing?.name?.takeIf { it.isNotBlank() }
+                ?: meta.optString("name").ifBlank { meta.optString("specimen", "Restored") },
+            createdAt = target.existing?.createdAt ?: now,
             updatedAt = now,
             frameCount = meta.optInt("frameCount", defNames.size),
             subset = engine.optInt("subset", 41),
@@ -337,9 +354,9 @@ object CloudRestore {
             roiY = roi.optInt("y", 0),
             roiW = roi.optInt("w", 0),
             roiH = roi.optInt("h", 0),
-            refPath = refPath,
+            refPath = target.refPath,
             refName = meta.optString("specimen", "Reference"),
-            sessionDir = sessionDir.absolutePath,
+            sessionDir = target.sessionDir.absolutePath,
             defNames = defNames,
             headline = restoredHeadline(meta, engine, defNames, stats),
             engineStats = stats,
@@ -347,6 +364,7 @@ object CloudRestore {
             pointsConverged = metrics.optInt("pointsConverged", 0),
             avgIterations = metrics.optDouble("avgIterations", 0.0).toFloat(),
             executionTimeMs = metrics.optInt("executionTimeMs", 0),
+            cloudSessionId = target.cloudSessionId,
             // It came from the cloud, so it is by definition backed up.
             syncState = SessionRecord.SyncState.SYNCED,
             sweepSubsets = intList(sweep?.optJSONArray("subsets")),
@@ -358,7 +376,22 @@ object CloudRestore {
             sweepSkipSteps = intList(skipped?.optJSONArray("steps")),
             sweepSkipStrainWindows = intList(skipped?.optJSONArray("strainWindows")),
             sweepSkipCodes = intList(skipped?.optJSONArray("codes")),
+            renamedByUser = target.existing?.renamedByUser ?: false,
         )
+    }
+
+    private fun restoredFrameNames(meta: JSONObject): List<String> {
+        val frames = meta.optJSONArray("frames") ?: return emptyList()
+        return buildList {
+            for (i in 0 until frames.length()) add(frames.getJSONObject(i).optString("image"))
+        }.filter { it.isNotBlank() }
+    }
+
+    private fun restoredEngineStats(engine: JSONObject): List<Float> {
+        val stats = engine.optJSONArray("stats") ?: return emptyList()
+        return buildList {
+            for (i in 0 until stats.length()) add(stats.optDouble(i, 0.0).toFloat())
+        }
     }
 
     /**

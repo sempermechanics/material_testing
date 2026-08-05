@@ -233,8 +233,75 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun restoreBackup(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
-        CloudRestore.enqueueRestore(this, cloud.sessionId)
-        Toast.makeText(this, R.string.restore_background_note, Toast.LENGTH_SHORT).show()
+        val targetLocalId = CloudRestore.targetLocalId(cloud)
+        lifecycleScope.launch {
+            val started = withContext(Dispatchers.IO) { enqueueRestoreWithStub(entry, cloud, targetLocalId) }
+            if (!started) {
+                Toast.makeText(this@SettingsActivity, R.string.restore_failed_generic, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            Toast.makeText(this@SettingsActivity, R.string.restore_background_note, Toast.LENGTH_SHORT).show()
+            wireAnalysesDataSection()
+        }
+    }
+
+    @Suppress("ReturnCount")
+    private fun enqueueRestoreWithStub(
+        entry: AnalysisEntry,
+        cloud: CloudSessionDto,
+        targetLocalId: String,
+    ): Boolean {
+        val existing = SessionStore.get(this, targetLocalId)
+        if (existing?.hasLocalData() == true) return false
+        val stub = restoreStub(entry, cloud, targetLocalId, existing)
+        if (!SessionStore.upsert(this, stub, allowOverLimit = true)) return false
+        return try {
+            CloudRestore.enqueueRestore(this, cloud.sessionId, targetLocalId)
+            true
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.e(e, "Could not enqueue restore %s", cloud.sessionId)
+            if (existing == null) {
+                SessionStore.delete(this, targetLocalId)
+            } else {
+                SessionStore.upsert(this, existing, allowOverLimit = true)
+            }
+            false
+        }
+    }
+
+    private fun restoreStub(
+        entry: AnalysisEntry,
+        cloud: CloudSessionDto,
+        targetLocalId: String,
+        existing: SessionRecord?,
+    ): SessionRecord {
+        val now = System.currentTimeMillis()
+        return existing?.copy(
+            name = existing.name.ifBlank { entry.name },
+            updatedAt = now,
+            cloudSessionId = cloud.sessionId,
+            syncState = SessionRecord.SyncState.SYNCED,
+        ) ?: SessionRecord(
+            id = targetLocalId,
+            name = entry.name,
+            createdAt = now,
+            updatedAt = now,
+            frameCount = 0,
+            subset = 0,
+            step = 0,
+            strainWindow = 0,
+            imgW = 0,
+            imgH = 0,
+            roiX = 0,
+            roiY = 0,
+            roiW = 0,
+            roiH = 0,
+            refPath = "",
+            refName = "",
+            sessionDir = SessionStore.dirFor(this, targetLocalId).absolutePath,
+            cloudSessionId = cloud.sessionId,
+            syncState = SessionRecord.SyncState.SYNCED,
+        )
     }
 
     /**

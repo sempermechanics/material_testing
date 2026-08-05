@@ -1,0 +1,74 @@
+package com.indicvision.semper.cloud
+
+import com.indicvision.semper.data.CloudRestore
+import com.indicvision.semper.data.net.CloudSessionDto
+import com.indicvision.semper.ui.analysis.FrameImportHelper
+import com.indicvision.semper.ui.analysis.ImportedBatch
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
+
+class RestoreAndImportSafetyTest {
+
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    @Test
+    fun `restore target uses cloud local id when present`() {
+        val cloud = CloudSessionDto(sessionId = "cloud-123", localSessionId = "local-456")
+
+        assertEquals("local-456", CloudRestore.targetLocalId(cloud))
+    }
+
+    @Test
+    fun `restore target has deterministic fallback`() {
+        val cloud = CloudSessionDto(sessionId = "abcdefghijklmnop", localSessionId = "")
+
+        assertEquals("restored-abcdefghijkl", CloudRestore.targetLocalId(cloud))
+    }
+
+    @Test
+    fun `staged import replaces committed batch only at commit`() {
+        val cache = tmp.newFolder("cache")
+        val committed = File(cache, "temp_deformed").apply { mkdirs() }
+        File(committed, "old.png").writeText("old")
+
+        val staging = FrameImportHelper.createStagingDir(cache)
+        val stagedFrame = File(staging, "0000_new.png").apply { writeText("new") }
+        assertTrue(File(committed, "old.png").exists())
+
+        val result = FrameImportHelper.commitStagedBatch(
+            cache,
+            staging,
+            ImportedBatch(
+                filePaths = listOf(stagedFrame.absolutePath),
+                originalNames = listOf("new.png"),
+                frameSizes = mapOf(stagedFrame.absolutePath to (10 to 20)),
+            ),
+        )
+
+        assertFalse(File(committed, "old.png").exists())
+        val committedFrame = File(committed, "0000_new.png")
+        assertTrue(committedFrame.exists())
+        assertEquals(listOf(committedFrame.absolutePath), result?.filePaths)
+        assertEquals(10 to 20, result?.frameSizes?.get(committedFrame.absolutePath))
+    }
+
+    @Test
+    fun `discarding staging preserves committed batch`() {
+        val cache = tmp.newFolder("cancel-cache")
+        val committed = File(cache, "temp_deformed").apply { mkdirs() }
+        val old = File(committed, "old.png").apply { writeText("old") }
+        val staging = FrameImportHelper.createStagingDir(cache)
+        File(staging, "partial.png").writeText("partial")
+
+        staging.deleteRecursively()
+
+        assertTrue(old.exists())
+        assertFalse(staging.exists())
+    }
+}

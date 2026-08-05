@@ -168,7 +168,11 @@ class SessionListAdapter(
             holder.progressBar.isVisible = true
             holder.progressBar.setProgressCompat(prog.percent.coerceIn(0, 100), true)
             holder.badge.text = ctx.getString(
-                if (prog.phase == "prepare") R.string.badge_preparing_fmt else R.string.badge_uploading_fmt,
+                when (prog.phase) {
+                    "prepare" -> R.string.badge_preparing_fmt
+                    "download" -> R.string.badge_downloading_fmt
+                    else -> R.string.badge_uploading_fmt
+                },
                 prog.percent,
             )
             holder.badge.setTextColor(ctx.getColor(R.color.sky_on_container))

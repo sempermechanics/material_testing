@@ -70,6 +70,10 @@ class HomeActivity : AppCompatActivity() {
     /** Upload WorkInfo ids already refreshed on success, so we refresh once each. */
     private val shownSucceededUploads = mutableSetOf<java.util.UUID>()
 
+    private val shownRestoreOutcomes = mutableSetOf<java.util.UUID>()
+    private var activeUploadProgress: Map<String, SessionListAdapter.RowProgress> = emptyMap()
+    private var activeRestoreProgress: Map<String, SessionListAdapter.RowProgress> = emptyMap()
+
     private val backCallback = object : androidx.activity.OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = selection.clearSelection()
     }
@@ -220,6 +224,7 @@ class HomeActivity : AppCompatActivity() {
         }
 
         observeUploadFailures()
+        observeRestoreProgress()
     }
 
     /**
@@ -236,7 +241,7 @@ class HomeActivity : AppCompatActivity() {
                 val list = infos.orEmpty()
 
                 // Live per-row progress from every running backup.
-                val running = list
+                activeUploadProgress = list
                     .filter { it.state == WorkInfo.State.RUNNING }
                     .mapNotNull { info ->
                         val id = info.progress.getString(DicKeys.SESSION_LOCAL_ID) ?: return@mapNotNull null
@@ -246,7 +251,7 @@ class HomeActivity : AppCompatActivity() {
                         id to SessionListAdapter.RowProgress(phase, pct)
                     }
                     .toMap()
-                adapter.setUploadProgress(running)
+                publishRowProgress()
 
                 list.forEach { info ->
                     when (info.state) {
@@ -262,6 +267,51 @@ class HomeActivity : AppCompatActivity() {
                     }
                 }
             }
+    }
+
+    private fun observeRestoreProgress() {
+        WorkManager.getInstance(this)
+            .getWorkInfosByTagLiveData("restore")
+            .observe(this) { infos ->
+                val list = infos.orEmpty()
+                activeRestoreProgress = list
+                    .filter { it.state == WorkInfo.State.RUNNING }
+                    .mapNotNull { info ->
+                        val id = info.progress.getString(DicKeys.SESSION_LOCAL_ID) ?: return@mapNotNull null
+                        val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, -1)
+                        if (pct < 0) return@mapNotNull null
+                        id to SessionListAdapter.RowProgress(DicRestoreWorker.PHASE_DOWNLOAD, pct)
+                    }
+                    .toMap()
+                publishRowProgress()
+
+                list.forEach { info ->
+                    when (info.state) {
+                        WorkInfo.State.SUCCEEDED -> {
+                            if (shownRestoreOutcomes.add(info.id)) refresh()
+                        }
+                        WorkInfo.State.FAILED -> {
+                            if (!shownRestoreOutcomes.add(info.id)) return@forEach
+                            val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR)
+                                ?: getString(R.string.restore_failed_generic)
+                            Snackbar.make(
+                                findViewById(R.id.homeRoot),
+                                getString(R.string.restore_failed_fmt, reason),
+                                Snackbar.LENGTH_LONG,
+                            ).show()
+                            refresh()
+                        }
+                        WorkInfo.State.CANCELLED -> {
+                            if (shownRestoreOutcomes.add(info.id)) refresh()
+                        }
+                        else -> Unit
+                    }
+                }
+            }
+    }
+
+    private fun publishRowProgress() {
+        adapter.setUploadProgress(activeUploadProgress + activeRestoreProgress)
     }
 
     /**
@@ -452,7 +502,7 @@ class HomeActivity : AppCompatActivity() {
                 Toast.makeText(this@HomeActivity, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
                 return@launch
             }
-            val workName = CloudRestore.enqueueRestore(this@HomeActivity, cloudId)
+            val workName = CloudRestore.enqueueRestore(this@HomeActivity, cloudId, record.id)
             val progress = DeterminateProgressDialog(
                 this@HomeActivity,
                 getString(R.string.download_analysis_working),
