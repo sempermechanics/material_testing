@@ -1,7 +1,13 @@
 package com.indicvision.semper
 
 import android.app.Application
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.StorageBudget
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
@@ -10,6 +16,10 @@ import timber.log.Timber
  * the WARN breadcrumbs from the quota/upload gates — are no longer invisible.
  */
 class SemperApp : Application() {
+
+    /** Outlives every screen; only startup housekeeping runs here. */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
         if (BuildConfig.DEBUG) {
@@ -18,5 +28,12 @@ class SemperApp : Application() {
             Timber.plant(CrashReportingTree())
         }
         DicSettings.migrate(this)
+
+        // Startup is the one moment nothing is in flight, so it is where cache
+        // leftovers can be reclaimed without racing an import or a share.
+        appScope.launch {
+            CacheJanitor.sweepOnStartup(this@SemperApp)
+            StorageBudget.enforce(this@SemperApp)
+        }
     }
 }

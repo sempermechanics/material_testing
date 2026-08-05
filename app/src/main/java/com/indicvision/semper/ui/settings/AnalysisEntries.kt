@@ -23,6 +23,12 @@ data class AnalysisEntry(
     val name: String,
     val record: SessionRecord?,
     val cloud: CloudSessionDto?,
+    /**
+     * Bytes this analysis holds on the phone. Filled in by the caller after
+     * [AnalysisEntries.merge], which stays free of disk I/O so it can be tested
+     * without a filesystem.
+     */
+    val localBytes: Long = 0L,
 ) {
     val location: AnalysisLocation
         get() = when {

@@ -15,6 +15,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.ProgressCallback
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
@@ -317,7 +318,8 @@ class AnalysisViewModel : ViewModel() {
         val labels: List<String>,
         val roi: IntArray,
         val use6x6: Boolean,
-        val debugDir: File,
+        /** Engine debug-export target; null in release, where the export is off. */
+        val debugDir: File?,
     )
 
     /**
@@ -393,6 +395,21 @@ class AnalysisViewModel : ViewModel() {
     }
 
     /**
+     * Follows the deformed images to wherever a run left them. They are moved
+     * into the session directory rather than copied, so the staged cache paths
+     * this view model was handed at import time go stale the moment a run
+     * finishes; a re-run reading them would find nothing. [defFrameSizes] is
+     * keyed by path, so it is re-keyed alongside.
+     */
+    private fun repointDeformedPaths(resolved: List<String>) {
+        val previous = defFilePaths
+        defFrameSizes = defFrameSizes.mapKeys { (path, _) ->
+            resolved.getOrNull(previous.indexOf(path)) ?: path
+        }
+        defFilePaths = resolved
+    }
+
+    /**
      * The deformed frame the sweep was solved against is persisted once, under
      * the name every combination shares — a sweep varies settings, not images.
      */
@@ -413,7 +430,13 @@ class AnalysisViewModel : ViewModel() {
         lastStep = result.runs.first().point.step
 
         val frameIndex = resolvedVsgFrameIndex()
-        val rawName = sessions.copyRawDeformed(batchDir, frameIndex, defFilePaths, defOriginalNames)
+        val rawName = sessions.persistRawDeformed(batchDir, frameIndex, defFilePaths, defOriginalNames)
+        if (rawName.isNotBlank()) {
+            val moved = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).resolve(rawName)
+            repointDeformedPaths(
+                defFilePaths.toMutableList().also { it[frameIndex] = moved.absolutePath },
+            )
+        }
 
         val cloudEnabled = DicSettings.saveToCloud(appContext)
         val first = result.runs.first().point
@@ -512,10 +535,6 @@ class AnalysisViewModel : ViewModel() {
         return SweepSummary(solvedLabels, name, headline)
     }
 
-    /** Copies one deformed original into the session dir; returns its name. */
-    private fun copyRawDeformed(batchDir: File, frameIndex: Int): String =
-        sessions.copyRawDeformed(batchDir, frameIndex, defFilePaths, defOriginalNames)
-
     fun isReadyToCompute(): Boolean = refBytes != null && defFilePaths.isNotEmpty()
 
     fun clearPreviousResults() {
@@ -597,7 +616,8 @@ class AnalysisViewModel : ViewModel() {
         val finalRectH: Int,
         val use6x6: Boolean,
         val maskData: ByteArray,
-        val debugDir: File,
+        /** Engine debug-export target; null in release, where the export is off. */
+        val debugDir: File?,
         val processingStartTime: Long,
     )
 
@@ -667,8 +687,7 @@ class AnalysisViewModel : ViewModel() {
         _runResult.value = RunResult(batchDirPath = batchDir.absolutePath)
         lastStep = params.step
 
-        if (!params.debugDir.exists()) params.debugDir.mkdirs()
-        SemperNativeLib.setDebugOutputDir(params.debugDir.absolutePath)
+        EngineDebug.attach(params.debugDir)
 
         val plannedFrames = defFilePaths.size
         val refBytes = refBytes ?: error("Reference missing")
@@ -698,17 +717,20 @@ class AnalysisViewModel : ViewModel() {
         var failedFrameIndex = -1
         var solvedFrames = 0
 
-        // Persist the raw deformed originals alongside the reference so exports
-        // (and reopened sessions) can bundle them. Cleared per re-run.
-        val rawDeformedDir = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply {
-            mkdirs()
-            listFiles()?.forEach { it.delete() }
-        }
+        // The raw deformed originals sit alongside the reference so exports (and
+        // reopened sessions) can bundle them. They are MOVED in from the import
+        // cache, not copied, so one set of images exists on disk instead of two —
+        // which makes this directory the run's own input on a re-run. Stale frames
+        // are therefore pruned after the loop, never wiped before it.
+        val rawDeformedDir = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply { mkdirs() }
 
         // The filenames actually written into raw_deformed/, index-aligned with
         // the frames. These (not the cache-copy paths) are what the session index
         // and the cloud upload look the images up by. Blank = persist failed.
         val persistedRawNames = MutableList(plannedFrames) { "" }
+
+        // Where each frame's image ended up, so the view model can follow the move.
+        val resolvedDefPaths = defFilePaths.toMutableList()
 
         for ((frameIndex, defPath) in defFilePaths.withIndex()) {
             ensureActive()
@@ -729,32 +751,43 @@ class AnalysisViewModel : ViewModel() {
                 ),
             )
 
-            // Persist the untouched original under the user's own filename so
-            // exports keep default names — one read feeds both the session copy
-            // and the JNI buffer (avoids Files.copy + a second heap read).
+            val source = File(defPath)
+            // One read feeds both the JNI buffer and the copy fallback below
+            // (avoids Files.copy + a second heap read).
             val defBytes = try {
-                File(defPath).readBytes()
+                source.readBytes()
             } catch (e: Exception) {
                 Timber.e(e, "Could not read deformed frame %d", frameIndex)
                 continue
             }
-            try {
-                val rawName = (defOriginalNames.getOrNull(frameIndex) ?: File(defPath).name)
-                    .baseName()
-                // Keep the default name; only index-prefix if it would collide.
-                val target = File(rawDeformedDir, rawName).let {
-                    if (it.exists()) {
-                        File(rawDeformedDir, String.format(Locale.US, "%04d_%s", frameIndex, rawName))
-                    } else {
-                        it
+            if (source.parentFile?.absolutePath == rawDeformedDir.absolutePath) {
+                // A re-run: the image already lives where it belongs, so there is
+                // nothing to move — and the prune below must not treat it as stale.
+                persistedRawNames[frameIndex] = source.name
+            } else {
+                try {
+                    // Persist the untouched original under the user's own filename
+                    // so exports keep default names.
+                    val rawName = (defOriginalNames.getOrNull(frameIndex) ?: source.name).baseName()
+                    // Keep the default name; only index-prefix if it would collide.
+                    val target = File(rawDeformedDir, rawName).let {
+                        if (it.exists()) {
+                            File(rawDeformedDir, String.format(Locale.US, "%04d_%s", frameIndex, rawName))
+                        } else {
+                            it
+                        }
                     }
+                    // Both directories are app-private storage, so this is a rename
+                    // rather than a second multi-megabyte write; the copy is the
+                    // fallback for the rare cross-volume case.
+                    if (!source.renameTo(target)) target.writeBytes(defBytes)
+                    // Record the name we ACTUALLY wrote: the session index (and the
+                    // cloud upload) must be able to find these files again.
+                    persistedRawNames[frameIndex] = target.name
+                    resolvedDefPaths[frameIndex] = target.absolutePath
+                } catch (e: Exception) {
+                    Timber.w(e, "Could not persist raw deformed frame %d", frameIndex)
                 }
-                target.writeBytes(defBytes)
-                // Record the name we ACTUALLY wrote: the session index (and the
-                // cloud upload) must be able to find these files again.
-                persistedRawNames[frameIndex] = target.name
-            } catch (e: Exception) {
-                Timber.w(e, "Could not persist raw deformed frame %d", frameIndex)
             }
             val callback = object : ProgressCallback {
                 override fun onProgressUpdate(percentage: Int) {
@@ -845,6 +878,21 @@ class AnalysisViewModel : ViewModel() {
                 ),
             )
         }
+
+        // Images an earlier run left behind that this one no longer has. This is
+        // the wipe that used to run before the loop; done here it can never delete
+        // the run's own inputs.
+        val keptRawNames = persistedRawNames.filterTo(HashSet()) { it.isNotBlank() }
+        rawDeformedDir.listFiles()?.forEach { if (it.name !in keptRawNames) it.delete() }
+
+        repointDeformedPaths(resolvedDefPaths)
+
+        // With every frame moved out, the committed import is dead weight that
+        // would otherwise survive until the next import. A partial run leaves it
+        // for CacheJanitor, since the un-processed frames are still only there.
+        File(params.cacheDir, FrameImportHelper.COMMITTED_DIR_NAME)
+            .takeIf { it.isDirectory && it.list()?.isEmpty() == true }
+            ?.delete()
 
         val executionTimeMs = (System.currentTimeMillis() - params.processingStartTime).toInt()
 

@@ -32,6 +32,7 @@ import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.R
 import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.BackupDeleteWorker
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DevAuth
@@ -41,6 +42,7 @@ import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionEverythingExporter
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.StorageBudget
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.TokenStore
@@ -108,6 +110,7 @@ class SettingsActivity : AppCompatActivity() {
         wireCollapsible(R.id.headerAccount, R.id.bodyAccount, R.id.ivAccountChevron)
         wireCollapsible(R.id.headerCloud, R.id.bodyCloud, R.id.ivCloudChevron)
         wireCollapsible(R.id.headerAnalysesData, R.id.bodyAnalysesData, R.id.ivAnalysesDataChevron)
+        wireCollapsible(R.id.headerStorage, R.id.bodyStorage, R.id.ivStorageChevron)
         wireCollapsible(R.id.headerYourData, R.id.bodyYourData, R.id.ivYourDataChevron)
         wireCollapsible(R.id.headerAnalysisPrefs, R.id.bodyAnalysisPrefs, R.id.ivAnalysisPrefsChevron)
         wireCollapsible(R.id.headerHelpSupport, R.id.bodyHelpSupport, R.id.ivHelpSupportChevron)
@@ -117,6 +120,7 @@ class SettingsActivity : AppCompatActivity() {
         wireAccountSection()
         wireCloudSection()
         wireAnalysesDataSection()
+        wireStorageSection()
         wireYourDataSection()
         wirePreferencesSection()
         wireHelpSupportSection()
@@ -210,12 +214,137 @@ class SettingsActivity : AppCompatActivity() {
                 analysesState.text = it
             }
             val cloud = (result as? CloudRestore.ListResult.Ready)?.sessions.orEmpty()
-            val entries = AnalysisEntries.merge(records, cloud)
+            val entries = withContext(Dispatchers.IO) {
+                AnalysisEntries.merge(records, cloud).map { entry ->
+                    val id = entry.record?.id ?: return@map entry
+                    entry.copy(localBytes = SessionStore.sizeOf(this@SettingsActivity, id))
+                }
+            }
             if (entries.isEmpty()) {
                 analysesState.isVisible = true
                 analysesState.setText(R.string.analyses_data_empty)
             }
             analysesAdapter.submit(entries)
+        }
+    }
+
+    // ── Storage ──────────────────────────────────────────────────────────
+
+    private fun wireStorageSection() {
+        findViewById<View>(R.id.btnStorageFreeUp).setOnClickListener { confirmFreeUpSpace() }
+        findViewById<View>(R.id.btnStorageClearCache).setOnClickListener { clearTemporaryFiles() }
+        findViewById<ImageButton>(R.id.btnAutoFreeInfo).setOnClickListener {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.storage_auto_free)
+                .setMessage(R.string.storage_auto_free_info)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+
+        val valueLabel = findViewById<TextView>(R.id.tvAutoFreeValue)
+        findViewById<Slider>(R.id.sliderAutoFree).apply {
+            valueTo = DicSettings.MAX_AUTO_FREE_GB.toFloat()
+            value = DicSettings.autoFreeBudgetGb(this@SettingsActivity)
+                .toFloat().coerceIn(valueFrom, valueTo)
+            valueLabel.text = autoFreeText(value.toInt())
+            addOnChangeListener { _, v, fromUser ->
+                valueLabel.text = autoFreeText(v.toInt())
+                if (!fromUser) return@addOnChangeListener
+                DicSettings.setAutoFreeBudgetGb(this@SettingsActivity, v.toInt())
+                // Applying on release rather than on every tick: dragging past a
+                // low value would otherwise start dropping sessions mid-gesture.
+            }
+            addOnSliderTouchListener(
+                object : com.google.android.material.slider.Slider.OnSliderTouchListener {
+                    override fun onStartTrackingTouch(slider: Slider) = Unit
+                    override fun onStopTrackingTouch(slider: Slider) = applyStorageBudget()
+                },
+            )
+        }
+
+        refreshStorageTotals()
+    }
+
+    private fun autoFreeText(gb: Int): String =
+        if (gb <= DicSettings.AUTO_FREE_OFF) {
+            getString(R.string.storage_auto_free_off)
+        } else {
+            getString(R.string.storage_auto_free_on_fmt, gb)
+        }
+
+    /** Measures off the main thread — a full sessions tree is a lot of stat calls. */
+    private fun refreshStorageTotals() {
+        lifecycleScope.launch {
+            val sizes = withContext(Dispatchers.IO) {
+                Triple(
+                    SessionStore.totalSize(this@SettingsActivity),
+                    CacheJanitor.sizeOf(cacheDir),
+                    StorageBudget.reclaimableBytes(this@SettingsActivity),
+                )
+            }
+            val (analyses, cache, reclaimable) = sizes
+            findViewById<TextView>(R.id.tvStorageAnalysesSize).text = humanSize(analyses)
+            findViewById<TextView>(R.id.tvStorageCacheSize).text = humanSize(cache)
+
+            val freeUpSub = findViewById<TextView>(R.id.tvStorageFreeUpSub)
+            findViewById<View>(R.id.btnStorageFreeUp).isEnabled = reclaimable > 0
+            freeUpSub.text = if (reclaimable > 0) {
+                getString(R.string.storage_free_up_sub_fmt, humanSize(reclaimable))
+            } else {
+                getString(R.string.storage_free_up_none)
+            }
+        }
+    }
+
+    private fun confirmFreeUpSpace() {
+        lifecycleScope.launch {
+            val reclaimable = withContext(Dispatchers.IO) {
+                StorageBudget.reclaimableBytes(this@SettingsActivity)
+            }
+            if (reclaimable <= 0) {
+                toast(getString(R.string.storage_freed_none))
+                return@launch
+            }
+            MaterialAlertDialogBuilder(this@SettingsActivity)
+                .setTitle(R.string.storage_free_up_title)
+                .setMessage(getString(R.string.storage_free_up_body, humanSize(reclaimable)))
+                .setPositiveButton(R.string.storage_free_up_confirm) { _, _ -> freeUpSpace() }
+                .setNegativeButton(R.string.action_cancel, null)
+                .show()
+        }
+    }
+
+    private fun freeUpSpace() {
+        lifecycleScope.launch {
+            val outcome = StorageBudget.freeAllBackedUpAsync(this@SettingsActivity)
+            if (outcome.didAnything) {
+                toast(getString(R.string.storage_freed_fmt, humanSize(outcome.freedBytes), outcome.sessionsDropped))
+            } else {
+                toast(getString(R.string.storage_freed_none))
+            }
+            refreshStorageTotals()
+            wireAnalysesDataSection()
+        }
+    }
+
+    private fun clearTemporaryFiles() {
+        lifecycleScope.launch {
+            val freed = withContext(Dispatchers.IO) {
+                CacheJanitor.sweepUserRequested(this@SettingsActivity)
+            }
+            toast(getString(R.string.storage_cache_cleared_fmt, humanSize(freed)))
+            refreshStorageTotals()
+        }
+    }
+
+    private fun applyStorageBudget() {
+        lifecycleScope.launch {
+            val outcome = StorageBudget.enforceAsync(this@SettingsActivity)
+            if (outcome.didAnything) {
+                toast(getString(R.string.storage_freed_fmt, humanSize(outcome.freedBytes), outcome.sessionsDropped))
+                wireAnalysesDataSection()
+            }
+            refreshStorageTotals()
         }
     }
 
@@ -382,7 +511,12 @@ class SettingsActivity : AppCompatActivity() {
             getString(R.string.analysis_state_cloud_only_fmt, humanSize(entry.cloud?.totalBytes ?: 0L))
         AnalysisLocation.PHONE_AND_CLOUD ->
             getString(R.string.analysis_state_phone_and_cloud_fmt, humanSize(entry.cloud?.totalBytes ?: 0L))
-        AnalysisLocation.PHONE_ONLY -> getString(R.string.analysis_state_phone_only)
+        AnalysisLocation.PHONE_ONLY ->
+            if (entry.localBytes > 0) {
+                getString(R.string.analysis_state_on_phone_fmt, humanSize(entry.localBytes))
+            } else {
+                getString(R.string.analysis_state_phone_only)
+            }
         // The cloud could not confirm this one: keep its badge rather than
         // claiming the backup is gone.
         AnalysisLocation.PHONE_SYNC_STATE ->

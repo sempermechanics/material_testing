@@ -466,6 +466,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             SessionStore.markSynced(applicationContext, localId)
             Timber.i("Upload complete for %s (%d files, session %s)", localId, total, plan.sessionId)
             stagingDir.deleteRecursively() // done — staged files no longer needed
+            // A session only becomes droppable once it is backed up, so this is
+            // the moment an over-budget phone can actually get space back.
+            StorageBudget.enforce(applicationContext)
             Result.success()
         } catch (e: IndicApi.DeviceNotActiveException) {
             // The server has no ACTIVE device record for us (revoked/reset) while

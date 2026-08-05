@@ -49,26 +49,40 @@ class SessionRepository {
         return refPngFile.absolutePath
     }
 
-    /** Copies one deformed original into the session dir; returns its file name. */
-    fun copyRawDeformed(
+    /**
+     * Moves one deformed original into the session dir; returns its file name.
+     *
+     * A sweep varies settings, not images, so it keeps exactly one — anything
+     * else under `raw_deformed/` is left over from an earlier run. The source
+     * itself may already be in there (a re-run, since runs move their images in
+     * rather than copying), so it is resolved before the directory is pruned.
+     */
+    fun persistRawDeformed(
         batchDir: File,
         frameIndex: Int,
         defFilePaths: List<String>,
         defOriginalNames: List<String>,
     ): String {
-        val rawDir = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply {
-            mkdirs()
-            listFiles()?.forEach { it.delete() }
+        val rawDir = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply { mkdirs() }
+        val source = File(defFilePaths[frameIndex])
+        if (source.parentFile?.absolutePath == rawDir.absolutePath) {
+            rawDir.listFiles()?.forEach { if (it.name != source.name) it.delete() }
+            return source.name
         }
-        val name = (defOriginalNames.getOrNull(frameIndex) ?: File(defFilePaths[frameIndex]).name)
+        val name = (defOriginalNames.getOrNull(frameIndex) ?: source.name)
             .substringAfterLast('/')
             .substringAfterLast('\\')
         return runCatching {
+            rawDir.listFiles()?.forEach { it.delete() }
             val target = File(rawDir, name)
-            if (target.exists()) target.delete()
-            FileInputStream(File(defFilePaths[frameIndex])).use { input ->
-                FileOutputStream(target).use { output ->
-                    input.copyTo(output)
+            // Both directories are app-private storage, so this is a rename
+            // rather than a second multi-megabyte write; the stream copy is the
+            // fallback for the rare cross-volume case.
+            if (!source.renameTo(target)) {
+                FileInputStream(source).use { input ->
+                    FileOutputStream(target).use { output ->
+                        input.copyTo(output)
+                    }
                 }
             }
             target.name

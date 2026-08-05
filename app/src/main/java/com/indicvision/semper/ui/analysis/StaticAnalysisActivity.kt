@@ -43,6 +43,7 @@ import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.CoachPrefs
@@ -968,9 +969,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val use6x6 = currentUseKeysInterpolator()
             val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
 
-            val debugDir = File(cacheDir, "dic_debug")
-            if (!debugDir.exists()) debugDir.mkdirs()
-            SemperNativeLib.setDebugOutputDir(debugDir.absolutePath)
+            val debugDir = EngineDebug.dirFor(cacheDir)
 
             val params = AnalysisViewModel.BatchAnalysisParams(
                 cacheDir = cacheDir,
@@ -1171,7 +1170,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             wireCancelButton { viewModel.cancelRequested = true }
 
-            val debugDir = File(cacheDir, "dic_debug").apply { mkdirs() }
+            val debugDir = EngineDebug.dirFor(cacheDir)
             val use6x6 = currentUseKeysInterpolator()
 
             val outcome = runCatching {

@@ -147,8 +147,17 @@ object FrameImportHelper {
         }
     }
 
+    /** Cache dir holding the committed import, until a run moves the frames out. */
+    const val COMMITTED_DIR_NAME = "temp_deformed"
+
+    /** Previous import, held only for the duration of a commit swap. */
+    const val PREVIOUS_DIR_NAME = "temp_deformed_previous"
+
+    /** Prefix of an in-flight import; anything left over is a crashed import. */
+    const val STAGING_DIR_PREFIX = "temp_deformed_staging_"
+
     internal fun createStagingDir(cacheDir: File): File =
-        File(cacheDir, "temp_deformed_staging_${System.nanoTime()}").apply {
+        File(cacheDir, "$STAGING_DIR_PREFIX${System.nanoTime()}").apply {
             check(mkdirs()) { "Could not create frame staging directory" }
         }
 
@@ -161,8 +170,8 @@ object FrameImportHelper {
         stagingDir: File,
         batch: ImportedBatch?,
     ): ImportedBatch? {
-        val committedDir = File(cacheDir, "temp_deformed")
-        val previousDir = File(cacheDir, "temp_deformed_previous")
+        val committedDir = File(cacheDir, COMMITTED_DIR_NAME)
+        val previousDir = File(cacheDir, PREVIOUS_DIR_NAME)
         previousDir.deleteRecursively()
 
         if (committedDir.exists()) {

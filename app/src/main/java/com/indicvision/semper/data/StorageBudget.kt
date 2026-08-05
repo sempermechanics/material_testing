@@ -1,0 +1,85 @@
+package com.indicvision.semper.data
+
+import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import timber.log.Timber
+
+/**
+ * Opt-in ceiling on local analysis storage.
+ *
+ * When the user sets a budget ([DicSettings.autoFreeBudgetGb]), sessions that
+ * already have a cloud copy give up their local files — oldest first — until
+ * the total is back under it. Reopening one downloads it again, which is the
+ * same path the "Only in cloud" rows on Home already use.
+ *
+ * Sessions that are LOCAL_ONLY, PENDING or FAILED are never touched: this
+ * device holds the only copy, so dropping them would be data loss rather than
+ * a cache eviction.
+ */
+object StorageBudget {
+
+    private const val BYTES_PER_GB = 1024L * 1024L * 1024L
+
+    /** Result of one enforcement pass. */
+    data class Outcome(val freedBytes: Long, val sessionsDropped: Int) {
+        val didAnything: Boolean get() = sessionsDropped > 0
+    }
+
+    /** Applies the configured budget, if any. Blocking I/O — call off the main thread. */
+    fun enforce(context: Context): Outcome {
+        val budgetGb = DicSettings.autoFreeBudgetGb(context)
+        if (budgetGb == DicSettings.AUTO_FREE_OFF) return Outcome(0L, 0)
+        return freeDownTo(context, budgetGb * BYTES_PER_GB)
+    }
+
+    suspend fun enforceAsync(context: Context): Outcome = withContext(Dispatchers.IO) { enforce(context) }
+
+    /**
+     * Drops every backed-up session's local files regardless of budget — what
+     * the Storage screen's "Free up space" does.
+     */
+    fun freeAllBackedUp(context: Context): Outcome = freeDownTo(context, target = 0L)
+
+    suspend fun freeAllBackedUpAsync(context: Context): Outcome =
+        withContext(Dispatchers.IO) { freeAllBackedUp(context) }
+
+    /** Bytes that could be reclaimed right now without touching the cloud. */
+    fun reclaimableBytes(context: Context): Long =
+        SessionStore.list(context)
+            .filter { it.canDropLocally() }
+            .sumOf { SessionStore.sizeOf(context, it.id) }
+
+    private fun freeDownTo(context: Context, target: Long): Outcome {
+        var total = SessionStore.totalSize(context)
+        if (total <= target) return Outcome(0L, 0)
+
+        // Oldest first: the session the user is least likely to reopen next.
+        val candidates = SessionStore.list(context)
+            .filter { it.canDropLocally() }
+            .sortedBy { it.updatedAt }
+
+        var freed = 0L
+        var dropped = 0
+        for (record in candidates) {
+            if (total <= target) break
+            val size = SessionStore.sizeOf(context, record.id)
+            SessionStore.dropLocalArtifacts(context, record.id)
+            val reclaimed = size - SessionStore.sizeOf(context, record.id)
+            freed += reclaimed
+            total -= reclaimed
+            dropped++
+        }
+        if (dropped > 0) {
+            Timber.i("Storage budget freed %d bytes from %d backed-up sessions", freed, dropped)
+        }
+        return Outcome(freed, dropped)
+    }
+
+    /**
+     * Safe to drop locally: the cloud has it, and there is something left to
+     * drop (so a pass does not keep "dropping" rows that are already bare).
+     */
+    private fun SessionRecord.canDropLocally(): Boolean =
+        syncState == SessionRecord.SyncState.SYNCED && hasLocalData()
+}

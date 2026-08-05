@@ -12,6 +12,7 @@ import androidx.core.content.edit
  * does not reach into `data.net` for it: callers pass the remote ceiling in (from
  * `AppRemoteConfig.maxFrames`), keeping the dependency pointing UI/net → data.
  */
+@Suppress("TooManyFunctions") // one getter/setter pair per setting; splitting would scatter them
 object DicSettings {
 
     const val DEFAULT_MAX_FRAMES = 50
@@ -31,6 +32,12 @@ object DicSettings {
     private const val KEY_SAVE_TO_CLOUD = "save_to_cloud"
     private const val KEY_UPLOAD_WIFI_ONLY = "upload_wifi_only"
     private const val KEY_MAX_FRAMES = "max_frames"
+    private const val KEY_AUTO_FREE_GB = "auto_free_gb"
+
+    /** [autoFreeBudgetGb] value meaning "never free space automatically". */
+    const val AUTO_FREE_OFF = 0
+    const val MIN_AUTO_FREE_GB = 1
+    const val MAX_AUTO_FREE_GB = 64
 
     private fun prefs(context: Context): SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -77,5 +84,22 @@ object DicSettings {
 
     fun setMaxFrames(context: Context, value: Int, remoteMaxFrames: Int) = prefs(context).edit {
         putInt(KEY_MAX_FRAMES, value.coerceIn(MIN_MAX_FRAMES, frameCeiling(remoteMaxFrames)))
+    }
+
+    /**
+     * Gigabyte ceiling for local analysis storage, past which backed-up sessions
+     * give up their local files (they re-download on open). [AUTO_FREE_OFF] means
+     * nothing is ever removed without the user asking — the default, since a
+     * session that vanishes on its own is a worse surprise than a full disk.
+     */
+    fun autoFreeBudgetGb(context: Context): Int =
+        prefs(context).getInt(KEY_AUTO_FREE_GB, AUTO_FREE_OFF)
+            .let { if (it <= AUTO_FREE_OFF) AUTO_FREE_OFF else it.coerceIn(MIN_AUTO_FREE_GB, MAX_AUTO_FREE_GB) }
+
+    fun setAutoFreeBudgetGb(context: Context, value: Int) = prefs(context).edit {
+        putInt(
+            KEY_AUTO_FREE_GB,
+            if (value <= AUTO_FREE_OFF) AUTO_FREE_OFF else value.coerceIn(MIN_AUTO_FREE_GB, MAX_AUTO_FREE_GB),
+        )
     }
 }

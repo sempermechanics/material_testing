@@ -187,6 +187,12 @@ object SessionStore {
     /** True when the on-disk index is unreadable (mutations must not clobber it). */
     fun isIndexCorrupt(): Boolean = indexCorrupt
 
+    /** Bytes one session occupies on disk, 0 once its artifacts have been dropped. */
+    fun sizeOf(context: Context, id: String): Long = CacheJanitor.sizeOf(File(root(context), id))
+
+    /** Bytes every local analysis occupies, including the index itself. */
+    fun totalSize(context: Context): Long = CacheJanitor.sizeOf(root(context))
+
     fun list(context: Context): List<SessionRecord> = synchronized(lock) {
         when (val snap = readIndex(context)) {
             is IndexRead.Ok -> snap.records.sortedByDescending { it.createdAt }

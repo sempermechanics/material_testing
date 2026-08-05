@@ -1,6 +1,7 @@
 package com.indicvision.semper.ui.analysis
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.ProgressCallback
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.report.EngineStats
@@ -43,7 +44,8 @@ object VsgStudyRunner {
         val roiH: Int,
         val maskData: ByteArray,
         val use6x6: Boolean,
-        val debugDir: File,
+        /** Engine debug-export target; null in release, where the export is off. */
+        val debugDir: File?,
         /** Where the per-combination `.dat` files are written. */
         val outputDir: File,
     )
@@ -105,9 +107,8 @@ object VsgStudyRunner {
         onProgress: (Progress) -> Unit,
     ): Result {
         cancelRequested = false
-        if (!params.debugDir.exists()) params.debugDir.mkdirs()
         params.outputDir.mkdirs()
-        SemperNativeLib.setDebugOutputDir(params.debugDir.absolutePath)
+        EngineDebug.attach(params.debugDir)
         SemperNativeLib.initializeReference(refBytes, params.maskData, refWidth, refHeight)
 
         val defBytes = File(params.defFramePath).readBytes()
