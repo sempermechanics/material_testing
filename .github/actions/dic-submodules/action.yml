@@ -1,20 +1,20 @@
 name: Fetch DIC engine submodules
 description: >
-  Shallow-checkout only the submodules the host test build needs — Eigen and
-  OpenCV's header-only universal-intrinsics — and fall back to a full clone if
-  the shallow fetch is rejected. Used by the host-side (non-NDK) jobs; the
-  NDK/emulator jobs need the whole OpenCV tree and use `submodules: recursive`
-  on checkout instead.
+  Init the pinned semper-dic-engine submodule at native/, then its nested
+  Eigen/OpenCV third_party checkouts. Host engine tests now run in
+  semperdic/semper-dic-engine; this action remains for any app job that
+  needs the engine tree without a full recursive checkout.
 
 runs:
   using: composite
   steps:
-    - name: Fetch Eigen + OpenCV headers (shallow)
+    - name: Fetch engine + Eigen/OpenCV (shallow)
       shell: bash
       run: |
-        git submodule update --init --depth 1 \
-          native/third_party/eigen \
-          native/third_party/opencv \
-        || git submodule update --init \
-          native/third_party/eigen \
-          native/third_party/opencv
+        set -euo pipefail
+        git submodule update --init --depth 1 native \
+          || git submodule update --init native
+        git -C native submodule update --init --depth 1 \
+          third_party/eigen third_party/opencv \
+          || git -C native submodule update --init \
+            third_party/eigen third_party/opencv

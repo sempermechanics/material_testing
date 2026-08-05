@@ -4,7 +4,8 @@
 
 ## Checklist
 
-- [ ] Builds locally (`./gradlew :app:compileDebugKotlin` and/or `dic_tests`)
+- [ ] Builds locally (`./gradlew :app:compileDebugKotlin`)
+- [ ] If bumping `native/` engine pin: engine CI green on [semper-dic-engine](https://github.com/semperdic/semper-dic-engine)
 - [ ] Tests pass; new behavior has a test
 - [ ] `./gradlew spotlessApply` run (CI enforces formatting)
 - [ ] No hardcoded user-facing strings (use `strings.xml`)

@@ -45,20 +45,17 @@ jobs:
               - 'gradlew'
               - 'gradlew.bat'
               - 'settings.gradle.kts'
+            # Engine sources live in semperdic/semper-dic-engine. App CI only
+            # sees pin bumps (gitlink) / .gitmodules — host/sanitizer suites run
+            # in the engine repo's own workflow.
             native_core:
-              - 'native/src/**'
-              - 'native/include/**'
-              - 'native/tests/**'
-              - 'native/cmake/**'
-              - 'native/CMakeLists.txt'
-              - 'native/README.md'
+              - 'native'
+              - '.gitmodules'
             native_jni:
-              - 'native/adapters/**'
+              - 'native'
+              - '.gitmodules'
               - 'app/src/main/cpp/**'
               - 'app/src/main/java/com/indicvision/semper/SemperNativeLib.kt'
-              # Headers consumed by SemperJNI — ABI-visible edits need Tier 3/5.
-              - 'native/include/semper/io.hpp'
-              - 'native/include/semper/pipeline.hpp'
             backend:
               - 'backend/**'
             ci_workflow:
@@ -149,138 +146,10 @@ jobs:
         run: ./gradlew --console=plain :app:koverLog
 
   # ===================================================================
-  # Tier 2a — Host-side engine correctness
+  # Tier 2 — Engine host / sanitizers
+  # Moved to semperdic/semper-dic-engine (.github/workflows/ci.yml).
+  # App CI only links the pinned submodule (Tier 3 / Tier 5).
   # ===================================================================
-  tier2-engine-host:
-    name: Tier 2 — Engine host
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: changes
-    permissions:
-      contents: read
-      actions: write   # prune-cache
-    if: >-
-      needs.changes.outputs.native_core == 'true'
-      || needs.changes.outputs.native_jni == 'true'
-      || needs.changes.outputs.full_ci == 'true'
-      || contains(github.event.pull_request.labels.*.name, 'engine')
-    env:
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 500M
-      CCACHE_COMPILERCHECK: content
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/dic-submodules
-
-      - name: Cache OpenCV packages
-        uses: actions/cache@v6
-        with:
-          path: ~/apt-cache
-          key: apt-libopencv-dev-${{ runner.os }}-v1
-
-      - name: Install OpenCV + ccache
-        run: |
-          mkdir -p ~/apt-cache/partial
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends \
-            -o Dir::Cache::archives="$HOME/apt-cache" libopencv-dev ccache
-          sudo chown -R "$(id -u):$(id -g)" ~/apt-cache
-
-      - name: Cache ccache objects
-        uses: actions/cache@v6
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ccache-host-tests-${{ github.sha }}
-          restore-keys: ccache-host-tests-
-
-      - name: Configure
-        run: >
-          cmake -S native/tests -B build/native-tests
-          -DCMAKE_BUILD_TYPE=Release
-          -DDIC_REQUIRE_OPENCV=ON
-          -DSEMPER_WERROR=ON
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - name: Build
-        run: cmake --build build/native-tests -j
-
-      - name: Run tests
-        run: ./build/native-tests/dic_tests
-
-      - name: ccache statistics
-        if: always()
-        run: ccache --show-stats
-
-      - uses: ./.github/actions/prune-cache
-        with:
-          key-prefix: ccache-host-tests-
-          except-key: ccache-host-tests-${{ github.sha }}
-
-  # ===================================================================
-  # Tier 2b — Sanitizers (ASan+UBSan, TSan) on every native change
-  # ===================================================================
-  tier2-sanitizers:
-    name: Tier 2 — Sanitized (${{ matrix.sanitizer }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: changes
-    permissions:
-      contents: read
-      actions: write   # prune-cache
-    if: >-
-      needs.changes.outputs.native_core == 'true'
-      || needs.changes.outputs.native_jni == 'true'
-      || needs.changes.outputs.full_ci == 'true'
-      || contains(github.event.pull_request.labels.*.name, 'engine')
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - sanitizer: 'address,undefined'
-            id: asan-ubsan
-          - sanitizer: 'thread'
-            id: tsan
-    env:
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 500M
-      CCACHE_COMPILERCHECK: content
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/dic-submodules
-
-      - name: Install ccache
-        run: sudo apt-get install -y -qq ccache
-
-      - name: Cache ccache objects
-        uses: actions/cache@v6
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ccache-san-${{ matrix.id }}-${{ github.sha }}
-          restore-keys: ccache-san-${{ matrix.id }}-
-
-      - name: Configure
-        run: >
-          cmake -S native/tests -B build/native-tests
-          -DCMAKE_BUILD_TYPE=Release
-          -DDIC_SANITIZER=${{ matrix.sanitizer }}
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - name: Build
-        run: cmake --build build/native-tests -j
-
-      - name: Run tests
-        run: ./build/native-tests/dic_tests
-
-      - name: ccache statistics
-        if: always()
-        run: ccache --show-stats
-
-      - uses: ./.github/actions/prune-cache
-        with:
-          key-prefix: ccache-san-${{ matrix.id }}-
-          except-key: ccache-san-${{ matrix.id }}-${{ github.sha }}
 
   # ===================================================================
   # Tier 3 — Emulator (JNI smoke + AnalysisWizardSmokeTest; not full E2E)
@@ -544,8 +413,6 @@ jobs:
     needs:
       - changes
       - tier1-app-fast
-      - tier2-engine-host
-      - tier2-sanitizers
       - tier3-emulator-e2e
       - tier4-backend
       - tier5-signed-release
@@ -555,8 +422,6 @@ jobs:
           for result in \
             "${{ needs.changes.result }}" \
             "${{ needs.tier1-app-fast.result }}" \
-            "${{ needs.tier2-engine-host.result }}" \
-            "${{ needs.tier2-sanitizers.result }}" \
             "${{ needs.tier3-emulator-e2e.result }}" \
             "${{ needs.tier4-backend.result }}" \
             "${{ needs.tier5-signed-release.result }}"; do
@@ -566,3 +431,4 @@ jobs:
             esac
           done
           echo "All tiers passed or were skipped."
+          echo "Note: engine host/sanitizer/C-SDK CI runs in semperdic/semper-dic-engine."
