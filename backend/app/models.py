@@ -1,22 +1,34 @@
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional
 
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator
+
+from .validation import DeviceId, DocumentId, SessionId
 
 # "bundle" = one Session.zip holding raw/, dat/, csv/ and the report archives —
 # uploaded as a single file so a session costs ~2 Firestore file docs, not 3F+4.
 Role = Literal["raw", "processed", "reports", "metadata", "csv", "dat", "bundle"]
 
 _HEX = frozenset("0123456789abcdefABCDEF")
+DisplayString = Annotated[str, StringConstraints(max_length=128)]
 
 
 class DeviceReg(BaseModel):
-    deviceId: str = Field(min_length=8, max_length=128)
+    deviceId: DeviceId
     publicKeyPem: str = Field(max_length=4096)
-    model: str = ""
-    osVersion: str = ""
-    appVersion: str = ""
+    model: DisplayString = ""
+    osVersion: DisplayString = ""
+    appVersion: DisplayString = ""
+
+    @field_validator("model", "osVersion", "appVersion")
+    @classmethod
+    def _display_text(cls, value: str) -> str:
+        # Device names and versions are human-facing and may legitimately be
+        # Unicode. Reject only control characters that can corrupt logs/docs.
+        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
+            raise ValueError("must not contain control characters")
+        return value
 
     @field_validator("publicKeyPem")
     @classmethod
@@ -89,8 +101,8 @@ class SessionCreate(BaseModel):
 
 
 class FileComplete(BaseModel):
-    sessionId: str = Field(min_length=1, max_length=128)
-    driveFileId: str = Field(min_length=1, max_length=256)
+    sessionId: SessionId
+    driveFileId: DocumentId
     bytes: int = Field(gt=0)
     md5: Optional[str] = None
 

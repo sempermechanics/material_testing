@@ -161,3 +161,51 @@ def test_bump_advances_and_completes(store):
     repo.bump_session_progress("s1")
     assert store._data["sessions"]["s1"]["completedCount"] == 2
     assert store._data["sessions"]["s1"]["status"] == "COMPLETED"
+
+
+# ---------------- unbounded erasure ----------------
+def test_account_erasure_deletes_more_than_old_2000_record_cap(store):
+    count = 2005
+    store._data["users"] = {"u1": {"email": "erase@example.com"}}
+    store._data["sessions"] = {
+        f"s{i}": {"uid": "u1"} for i in range(count)
+    }
+    store._data["files"] = {
+        f"f{i}": {"uid": "u1", "sessionId": f"s{i}"} for i in range(count)
+    }
+    store._data["devices"] = {
+        f"d{i}": {"uid": "u1"} for i in range(count)
+    }
+    store._data["audit_logs"] = {
+        "a1": {"uid": "u1", "action": "SESSION_CREATE"}
+    }
+
+    result = repo.delete_all_user_data("u1")
+
+    assert result == {"sessions": count, "files": count, "devices": count}
+    assert store._data["sessions"] == {}
+    assert store._data["files"] == {}
+    assert store._data["devices"] == {}
+    assert store._data["users"] == {}
+    # Explicit policy: append-only security audit facts survive account erasure.
+    assert "a1" in store._data["audit_logs"]
+
+
+def test_session_erasure_deletes_more_than_old_2000_file_cap(store):
+    count = 2005
+    store._data["sessions"] = {"s1": {"uid": "u1"}}
+    store._data["files"] = {
+        f"f{i}": {"uid": "u1", "sessionId": "s1"} for i in range(count)
+    }
+
+    assert repo.delete_session("s1") == count
+    assert store._data["files"] == {}
+    assert store._data["sessions"] == {}
+
+
+def test_new_documents_include_schema_version(store):
+    monkey_claims = _claims(sub="versioned")
+    repo.get_or_create_user(monkey_claims)
+    assert store._data["users"]["versioned"]["schemaVersion"] == repo.SCHEMA_VERSION
+    nonce = repo.issue_nonce("versioned", "device-123")
+    assert store._data["challenges"][nonce]["schemaVersion"] == repo.SCHEMA_VERSION

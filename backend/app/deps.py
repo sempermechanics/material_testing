@@ -1,5 +1,6 @@
 """FastAPI dependencies: user auth (Google ID token) and device assertion."""
 import base64
+import binascii
 import hashlib
 import logging
 
@@ -13,6 +14,8 @@ from starlette.concurrency import run_in_threadpool
 from . import audit, firestore_repo as repo
 from .config import settings
 from .google_auth import verify_id_token
+from .validation import require_header_identifier
+from . import observability as obs
 
 log = logging.getLogger("indic.auth")
 
@@ -59,11 +62,18 @@ def current_user(
                         bool(x_forwarded_authorization), e)
             audit.record(action="AUTH_DENIED", outcome="DENIED", detail={"stage": "id_token"})
             raise HTTPException(401, "invalid_token")
+        try:
+            require_header_identifier(
+                str(claims.get("sub", "")), name="uid", maximum=128
+            )
+        except HTTPException as exc:
+            raise HTTPException(401, "invalid_token") from exc
         user = repo.get_or_create_user(claims)
         if user["access_status"] != "APPROVED":
             raise HTTPException(403, "not_approved")
     try:
         request.state.uid = user["uid"]
+        obs.bind_uid(user["uid"])
     except Exception:  # noqa: BLE001 - logging enrichment must never fail a request
         pass
     return user
@@ -98,6 +108,15 @@ async def verified_device(
     if settings.DEV_INSECURE_AUTH:
         return {"user": user, "device": _DEV_DEVICE}
 
+    x_device_id = require_header_identifier(
+        x_device_id, name="device_id", maximum=128
+    )
+    x_nonce = require_header_identifier(
+        x_nonce, name="nonce", maximum=128
+    )
+    if not x_signature or len(x_signature) > 512:
+        raise HTTPException(400, "invalid_signature")
+
     dev = await run_in_threadpool(repo.get_device, x_device_id)
     if not dev or dev["uid"] != user["uid"] or dev["status"] != "ACTIVE":
         raise HTTPException(409, "device_not_active")
@@ -108,9 +127,15 @@ async def verified_device(
     msg = (x_nonce + request.method + request.url.path).encode() + hashlib.sha256(body).digest()
     try:
         pub = load_pem_public_key(dev["publicKeyPem"].encode())
-        pub.verify(base64.b64decode(x_signature), msg, ec.ECDSA(hashes.SHA256()))
-    except (InvalidSignature, ValueError):
+        signature = base64.b64decode(x_signature, validate=True)
+        pub.verify(signature, msg, ec.ECDSA(hashes.SHA256()))
+    except (binascii.Error, InvalidSignature, ValueError):
         audit.record(user["uid"], x_device_id, action="AUTH_DENIED", outcome="DENIED",
                      detail={"stage": "signature"})
         raise HTTPException(401, "bad_signature")
+    try:
+        request.state.device_id = x_device_id
+        obs.bind_device(x_device_id)
+    except Exception:  # noqa: BLE001
+        pass
     return {"user": user, "device": dev}

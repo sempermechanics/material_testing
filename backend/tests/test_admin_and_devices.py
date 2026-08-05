@@ -54,18 +54,20 @@ async def test_admin_list_users_clamps_limit(store, client, monkeypatch):
     }
     seen = {}
 
-    def spy(status="", limit=200):
+    def spy(status="", limit=50, page_token=None):
         seen["limit"] = limit
-        return [{"uid": uid, "email": u.get("email"), "displayName": None,
-                 "role": u.get("role"), "access_status": u.get("access_status"),
-                 "activeDeviceId": None}
-                for uid, u in list(store._data["users"].items())[:limit]]
+        seen["page_token"] = page_token
+        users = [{"uid": uid, "email": u.get("email"), "displayName": None,
+                  "role": u.get("role"), "access_status": u.get("access_status"),
+                  "activeDeviceId": None}
+                 for uid, u in list(store._data["users"].items())[:limit]]
+        return users, None
 
     monkeypatch.setattr(repo, "list_users", spy)
 
     r = await client.get("/v1/admin/users?limit=9999")
     assert r.status_code == 200
-    assert seen["limit"] == 1000
+    assert seen["limit"] == 200
 
     r = await client.get("/v1/admin/users?limit=0")
     assert r.status_code == 200
@@ -75,6 +77,26 @@ async def test_admin_list_users_clamps_limit(store, client, monkeypatch):
     assert r.status_code == 200
     assert seen["limit"] == 3
     assert len(r.json()["users"]) == 3
+    assert r.json()["page"]["hasMore"] is False
+
+
+async def test_admin_list_users_cursor(store, client):
+    store._data["users"] = {
+        f"u{i:02d}": {"email": f"u{i}@t.com", "access_status": "APPROVED", "role": "user"}
+        for i in range(5)
+    }
+    first = await client.get("/v1/admin/users?limit=2")
+    assert first.status_code == 200
+    body = first.json()
+    assert len(body["users"]) == 2
+    assert body["page"]["hasMore"] is True
+    token = body["page"]["nextPageToken"]
+    second = await client.get(f"/v1/admin/users?limit=2&page_token={token}")
+    assert second.status_code == 200
+    assert len(second.json()["users"]) == 2
+    assert {u["uid"] for u in first.json()["users"]}.isdisjoint(
+        {u["uid"] for u in second.json()["users"]}
+    )
 
 
 # ---------------- register_device conflicts ----------------

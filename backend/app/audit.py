@@ -3,7 +3,7 @@ import logging
 
 from google.cloud import firestore
 
-from .firestore_repo import db
+from .firestore_repo import SCHEMA_VERSION, db
 
 log = logging.getLogger("audit")
 
@@ -20,6 +20,7 @@ def record(uid=None, device_id=None, action="", outcome="OK", target=None, detai
                 "outcome": outcome,
                 "target": target or {},
                 "detail": detail or {},
+                "schemaVersion": SCHEMA_VERSION,
             }
         )
     except Exception as e:  # noqa: BLE001 - auditing must not fail the request

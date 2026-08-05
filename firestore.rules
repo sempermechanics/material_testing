@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // The mobile and web clients use the authenticated FastAPI service only.
+    // Server Admin SDK calls bypass Firestore Security Rules by design.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

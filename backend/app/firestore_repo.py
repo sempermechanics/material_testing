@@ -10,19 +10,40 @@ from .models import DeviceReg, FileComplete, FileSpec, SessionCreate
 
 _DB = None
 
+# Every server-owned document carries this integer. Migrations must be
+# idempotent and advance documents only after an export/restore checkpoint.
+SCHEMA_VERSION = 1
+
 # Firestore caps a write batch at 500 operations.
 _BATCH_LIMIT = 400
 
-# Soft cap on streams that list a user's sessions/files for erasure or
-# manifests. Generous enough for real accounts; bounds worst-case memory.
+# Soft cap on ordinary response manifests. Erasure deliberately does not use
+# this cap; it loops in bounded batches until the relevant query is empty.
 _LIST_SOFT_LIMIT = 2000
 
 
 def db() -> firestore.Client:
+    """Process-wide Firestore singleton.
+
+    Cloud Run concurrency (see deploy flags) shares this client across requests
+    in one instance. The google-cloud-firestore sync client is thread-safe for
+    ordinary reads/writes; do not create per-request clients.
+    """
     global _DB
     if _DB is None:
         _DB = firestore.Client(project=settings.GCP_PROJECT or None)
     return _DB
+
+
+def ping() -> None:
+    """Cheap Firestore reachability probe for readiness."""
+    from .observability import DependencyError
+
+    try:
+        # A missing document is still a successful round-trip.
+        db().collection("users").document("__readyz__").get()
+    except Exception as e:  # noqa: BLE001
+        raise DependencyError("firestore_unreachable", "firestore") from e
 
 
 def _now():
@@ -64,7 +85,11 @@ def get_or_create_user(claims: dict) -> dict:
     provider = (claims.get("firebase") or {}).get("sign_in_provider")
     if snap.exists:
         cur = snap.to_dict()
-        patch = {"lastSeenAt": firestore.SERVER_TIMESTAMP, "emailVerified": verified}
+        patch = {
+            "lastSeenAt": firestore.SERVER_TIMESTAMP,
+            "emailVerified": verified,
+            "schemaVersion": SCHEMA_VERSION,
+        }
         if provider:
             patch["signInProvider"] = provider
         # Keep admin role in sync with ADMIN_EMAILS for pre-existing users.
@@ -86,6 +111,7 @@ def get_or_create_user(claims: dict) -> dict:
         "activeDeviceId": None,
         "createdAt": firestore.SERVER_TIMESTAMP,
         "lastSeenAt": firestore.SERVER_TIMESTAMP,
+        "schemaVersion": SCHEMA_VERSION,
     }
     ref.set(data)
     # Only ever reached once per account — every later sign-in takes the
@@ -95,14 +121,26 @@ def get_or_create_user(claims: dict) -> dict:
     return {**data, "uid": uid}
 
 
-def list_users(status: str = "", limit: int = 200) -> list:
-    # `limit` is caller-capped in the route (admin_list_users) so an operator can
-    # page past the old hard 200. A cursor (`start_after`) is the next step if the
-    # user base outgrows a single capped page; not needed at pilot scale.
+def list_users(
+    status: str = "",
+    limit: int = 50,
+    page_token: str | None = None,
+) -> tuple[list, str | None]:
+    """Cursor-paginated user list. Returns (page, next_page_token_or_None)."""
     col = db().collection("users")
     query = col.where("access_status", "==", status) if status else col
+    query = query.order_by("__name__").limit(limit + 1)
+    if page_token:
+        cursor = col.document(page_token).get()
+        if cursor.exists:
+            query = query.start_after(cursor)
     out = []
-    for d in query.limit(limit).stream():
+    docs = list(query.stream())
+    next_token = None
+    if len(docs) > limit:
+        docs = docs[:limit]
+        next_token = docs[-1].id
+    for d in docs:
         u = d.to_dict()
         out.append({
             "uid": d.id,
@@ -112,7 +150,7 @@ def list_users(status: str = "", limit: int = 200) -> list:
             "access_status": u.get("access_status"),
             "activeDeviceId": u.get("activeDeviceId"),
         })
-    return out
+    return out, next_token
 
 
 def set_user_status(uid: str, status: str) -> bool:
@@ -194,6 +232,7 @@ def register_device(uid: str, body: DeviceReg) -> dict:
         "appVersion": body.appVersion,
         "registeredAt": firestore.SERVER_TIMESTAMP,
         "lastAssertionAt": firestore.SERVER_TIMESTAMP,
+        "schemaVersion": SCHEMA_VERSION,
     }
     db().collection("devices").document(body.deviceId).set(dev)
     db().collection("users").document(uid).update({"activeDeviceId": body.deviceId})
@@ -204,7 +243,12 @@ def register_device(uid: str, body: DeviceReg) -> dict:
 def issue_nonce(uid: str, device_id: str) -> str:
     nonce = secrets.token_urlsafe(32)
     db().collection("challenges").document(nonce).set(
-        {"uid": uid, "deviceId": device_id, "expireAt": _now() + timedelta(seconds=120)}
+        {
+            "uid": uid,
+            "deviceId": device_id,
+            "expireAt": _now() + timedelta(seconds=120),
+            "schemaVersion": SCHEMA_VERSION,
+        }
     )
     return nonce
 
@@ -243,12 +287,11 @@ def delete_session(sid: str) -> int:
     GDPR erasure — records are removed, not flagged. Returns the file count.
     Firestore batches cap at 500 writes, so this chunks.
     """
-    files = list(
-        db().collection("files").where("sessionId", "==", sid).limit(_LIST_SOFT_LIMIT).stream()
+    file_count = _delete_query_until_empty(
+        db().collection("files").where("sessionId", "==", sid)
     )
-    _delete_refs([d.reference for d in files])
     db().collection("sessions").document(sid).delete()
-    return len(files)
+    return file_count
 
 
 def remember_user_folder(uid: str, folder_id: str) -> None:
@@ -286,20 +329,28 @@ def delete_all_user_data(uid: str) -> dict:
     # File docs carry the uid, so the whole account is one query rather than one
     # per session. Deleting session by session meant a query and a batch commit
     # each — sequential round-trips that made erasing a busy account crawl.
-    sessions = list(
-        db().collection("sessions").where("uid", "==", uid).limit(_LIST_SOFT_LIMIT).stream()
+    files = _delete_query_until_empty(
+        db().collection("files").where("uid", "==", uid)
     )
-    files = list(
-        db().collection("files").where("uid", "==", uid).limit(_LIST_SOFT_LIMIT).stream()
+    sessions = _delete_query_until_empty(
+        db().collection("sessions").where("uid", "==", uid)
     )
-    devices = list(
-        db().collection("devices").where("uid", "==", uid).limit(_LIST_SOFT_LIMIT).stream()
+    devices = _delete_query_until_empty(
+        db().collection("devices").where("uid", "==", uid)
     )
+    db().collection("users").document(uid).delete()
+    return {"sessions": sessions, "files": files, "devices": devices}
 
-    refs = [d.reference for d in files] + [d.reference for d in sessions] + [d.reference for d in devices]
-    refs.append(db().collection("users").document(uid))
-    _delete_refs(refs)
-    return {"sessions": len(sessions), "files": len(files), "devices": len(devices)}
+
+def _delete_query_until_empty(query) -> int:
+    """Delete a query result in bounded batches, repeating until empty."""
+    deleted = 0
+    while True:
+        docs = list(query.limit(_BATCH_LIMIT).stream())
+        if not docs:
+            return deleted
+        _delete_refs([doc.reference for doc in docs])
+        deleted += len(docs)
 
 
 def _delete_refs(refs: list) -> None:
@@ -361,11 +412,25 @@ def list_session_files(sid: str) -> list:
     return out
 
 
-def list_user_sessions(uid: str, limit: int = 200) -> list:
-    """The user's cloud analyses — what the app reconciles its sync state against."""
-    q = db().collection("sessions").where("uid", "==", uid).limit(limit)
+def list_user_sessions(
+    uid: str,
+    limit: int = 50,
+    page_token: str | None = None,
+) -> tuple[list, str | None]:
+    """Cursor-paginated cloud analyses. Returns (page, next_page_token_or_None)."""
+    col = db().collection("sessions")
+    q = col.where("uid", "==", uid).order_by("__name__").limit(limit + 1)
+    if page_token:
+        cursor = col.document(page_token).get()
+        if cursor.exists:
+            q = q.start_after(cursor)
     out = []
-    for d in q.stream():
+    docs = list(q.stream())
+    next_token = None
+    if len(docs) > limit:
+        docs = docs[:limit]
+        next_token = docs[-1].id
+    for d in docs:
         s = d.to_dict()
         out.append({
             "sessionId": d.id,
@@ -377,7 +442,56 @@ def list_user_sessions(uid: str, limit: int = 200) -> list:
             "totalBytes": s.get("totalBytes", 0),
             "driveFolderId": s.get("driveFolderId"),
         })
+    return out, next_token
+
+
+def iter_all_user_sessions(uid: str, *, page_size: int = 100):
+    """Yield every session for export without a silent cap."""
+    token = None
+    while True:
+        page, token = list_user_sessions(uid, limit=page_size, page_token=token)
+        for session in page:
+            yield session
+        if not token:
+            return
+
+
+def list_session_files_all(sid: str, *, page_size: int = 200) -> list:
+    """Every file in a session, paging past the soft list cap."""
+    out = []
+    query = db().collection("files").where("sessionId", "==", sid).order_by("__name__")
+    cursor = None
+    while True:
+        page_q = query.limit(page_size)
+        if cursor is not None:
+            page_q = page_q.start_after(cursor)
+        docs = list(page_q.stream())
+        if not docs:
+            break
+        for d in docs:
+            f = d.to_dict()
+            out.append({
+                "fileId": d.id,
+                "name": f.get("name"),
+                "role": f.get("role"),
+                "sizeBytes": f.get("sizeBytes", 0),
+                "sha256": f.get("sha256"),
+                "status": f.get("status"),
+            })
+        if len(docs) < page_size:
+            break
+        cursor = docs[-1]
     return out
+
+
+def iter_user_sessions(uid: str):
+    """Stream every session for destructive Drive cleanup without a silent cap."""
+    for d in db().collection("sessions").where("uid", "==", uid).stream():
+        s = d.to_dict()
+        yield {
+            "sessionId": d.id,
+            "driveFolderId": s.get("driveFolderId"),
+        }
 
 
 def count_user_sessions(uid: str) -> int:
@@ -429,6 +543,7 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate):
             "metrics": body.metrics,
             "createdAt": firestore.SERVER_TIMESTAMP,
             "updatedAt": firestore.SERVER_TIMESTAMP,
+            "schemaVersion": SCHEMA_VERSION,
         }
     )
 
@@ -455,6 +570,7 @@ def create_file(sid: str, uid: str, file_id: str, f: FileSpec, upload_url: str):
             "driveMd5": None,
             "createdAt": firestore.SERVER_TIMESTAMP,
             "updatedAt": firestore.SERVER_TIMESTAMP,
+            "schemaVersion": SCHEMA_VERSION,
         }
     )
 

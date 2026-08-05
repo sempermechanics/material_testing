@@ -48,6 +48,29 @@ class TestDeviceReg:
         with pytest.raises(ValidationError):
             DeviceReg(deviceId="and-12345678", publicKeyPem="x" * 4097)
 
+    def test_unicode_model_is_accepted_and_bounded(self):
+        assert DeviceReg(
+            deviceId="and-12345678", publicKeyPem=_ec_pem(), model="फ़ोन 型号"
+        ).model == "फ़ोन 型号"
+        with pytest.raises(ValidationError):
+            DeviceReg(
+                deviceId="and-12345678", publicKeyPem=_ec_pem(), model="x" * 129
+            )
+
+    @pytest.mark.parametrize("field", ["model", "osVersion", "appVersion"])
+    def test_device_metadata_control_characters_rejected(self, field):
+        with pytest.raises(ValidationError):
+            DeviceReg(
+                deviceId="and-12345678",
+                publicKeyPem=_ec_pem(),
+                **{field: "bad\nvalue"},
+            )
+
+    @pytest.mark.parametrize("device_id", ["bad/id-123", "bad\\id-123", "bad\nid-123"])
+    def test_path_breaking_device_ids_rejected(self, device_id):
+        with pytest.raises(ValidationError):
+            DeviceReg(deviceId=device_id, publicKeyPem=_ec_pem())
+
 
 class TestFileSpec:
     def test_valid(self):
@@ -125,3 +148,12 @@ class TestFileComplete:
             FileComplete(sessionId="", driveFileId="d", bytes=5)
         with pytest.raises(ValidationError):
             FileComplete(sessionId="s", driveFileId="", bytes=5)
+
+    def test_unicode_ids_are_not_rejected(self):
+        item = FileComplete(sessionId="सत्र-一", driveFileId="फ़ाइल-二", bytes=5)
+        assert item.sessionId == "सत्र-一"
+
+    @pytest.mark.parametrize("bad_id", ["../s", "a/b", "a\\b", "bad\nid"])
+    def test_path_breaking_ids_rejected(self, bad_id):
+        with pytest.raises(ValidationError):
+            FileComplete(sessionId=bad_id, driveFileId="d", bytes=5)

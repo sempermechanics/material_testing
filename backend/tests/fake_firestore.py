@@ -86,18 +86,39 @@ class _AggResult:
 
 
 class _Query:
-    def __init__(self, store, collection, filters=None, limit=None):
+    def __init__(self, store, collection, filters=None, limit=None, order_by=None, start_after=None):
         self._store = store
         self._collection = collection
         self._filters = filters or []
         self._limit = limit
+        self._order_by = order_by
+        self._start_after = start_after
 
     def where(self, field, op, value):
         assert op == "==", f"fake store only supports '==', got {op!r}"
-        return _Query(self._store, self._collection, self._filters + [(field, value)], self._limit)
+        return _Query(
+            self._store, self._collection,
+            self._filters + [(field, value)], self._limit,
+            self._order_by, self._start_after,
+        )
 
     def limit(self, n):
-        return _Query(self._store, self._collection, self._filters, n)
+        return _Query(
+            self._store, self._collection, self._filters, n,
+            self._order_by, self._start_after,
+        )
+
+    def order_by(self, field):
+        return _Query(
+            self._store, self._collection, self._filters, self._limit,
+            field, self._start_after,
+        )
+
+    def start_after(self, snapshot_or_doc):
+        return _Query(
+            self._store, self._collection, self._filters, self._limit,
+            self._order_by, snapshot_or_doc,
+        )
 
     def _matching(self):
         bucket = self._store._data.get(self._collection, {})
@@ -105,6 +126,16 @@ class _Query:
         for doc_id, data in bucket.items():
             if all(data.get(f) == v for f, v in self._filters):
                 rows.append(_Snapshot(doc_id, data, _DocRef(self._store, self._collection, doc_id)))
+        if self._order_by == "__name__" or self._order_by is None:
+            rows.sort(key=lambda snap: snap.id)
+        elif self._order_by:
+            field = self._order_by
+            rows.sort(key=lambda snap: ((snap.to_dict() or {}).get(field) is None,
+                                        (snap.to_dict() or {}).get(field)))
+        if self._start_after is not None:
+            after_id = getattr(self._start_after, "id", None)
+            if after_id is not None:
+                rows = [snap for snap in rows if snap.id > after_id]
         if self._limit is not None:
             rows = rows[: self._limit]
         return rows

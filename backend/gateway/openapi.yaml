@@ -13,11 +13,15 @@ produces:
   - application/json
 # All requests are forwarded to the private Cloud Run service, invoked with the
 # gateway's backend-auth service account. The incoming path is appended to the
-# address, so the backend sees the same path. Replace the address with your
-# Cloud Run URL:  gcloud run services describe indic-api --region asia-south1 \
-#                   --format='value(status.url)'
+# address, so the backend sees the same path.
+#
+# Template — replace before `gcloud api-gateway api-configs create`:
+#   CLOUD_RUN_URL=$(gcloud run services describe indic-api --region REGION \
+#                     --format='value(status.url)')
+#   sed "s|__CLOUD_RUN_URL__|${CLOUD_RUN_URL}|g" openapi.yaml > openapi.generated.yaml
+# Never commit a live Cloud Run hostname here.
 x-google-backend:
-  address: https://REPLACE_WITH_CLOUD_RUN_URL
+  address: __CLOUD_RUN_URL__
   path_translation: APPEND_PATH_TO_ADDRESS
   deadline: 60.0
 # Per-consumer quotas (ESPv2 / Service Management). Deploy with the gateway
@@ -37,6 +41,22 @@ x-google-management:
       displayName: File download requests
       valueType: INT64
       metricKind: DELTA
+    - name: health-requests
+      displayName: Health requests
+      valueType: INT64
+      metricKind: DELTA
+    - name: device-register-requests
+      displayName: Device registration requests
+      valueType: INT64
+      metricKind: DELTA
+    - name: session-list-requests
+      displayName: Session listing requests
+      valueType: INT64
+      metricKind: DELTA
+    - name: file-complete-requests
+      displayName: File completion requests
+      valueType: INT64
+      metricKind: DELTA
   quota:
     limits:
       - name: challenge-per-minute
@@ -54,12 +74,45 @@ x-google-management:
         unit: 1/min/{project}
         values:
           STANDARD: 60
+      - name: health-per-minute
+        metric: health-requests
+        unit: 1/min/{project}
+        values:
+          STANDARD: 300
+      - name: device-register-per-minute
+        metric: device-register-requests
+        unit: 1/min/{project}
+        values:
+          STANDARD: 20
+      - name: session-list-per-minute
+        metric: session-list-requests
+        unit: 1/min/{project}
+        values:
+          STANDARD: 60
+      - name: file-complete-per-minute
+        metric: file-complete-requests
+        unit: 1/min/{project}
+        values:
+          STANDARD: 120
 paths:
   /healthz:
     get:
       operationId: healthz
+      x-google-quota:
+        metricCosts:
+          health-requests: 1
       responses:
         '200': { description: OK }
+  /readyz:
+    get:
+      operationId: readyz
+      description: Readiness — Firestore + Drive probes; stable 503 detail codes.
+      x-google-quota:
+        metricCosts:
+          health-requests: 1
+      responses:
+        '200': { description: Ready }
+        '503': { description: Dependency unhealthy }
   /v1/me:
     get:
       operationId: getMe
@@ -87,6 +140,9 @@ paths:
   /v1/devices/register:
     post:
       operationId: registerDevice
+      x-google-quota:
+        metricCosts:
+          device-register-requests: 1
       responses:
         '201': { description: Created }
         '409': { description: Another device already bound }
@@ -103,12 +159,30 @@ paths:
   /v1/sessions:
     get:
       operationId: listSessions
+      description: >
+        Gateway quota covers every list request because OpenAPI v2 quotas cannot
+        vary by the verify query value. The backend additionally rate-limits only
+        verify=true, which performs Drive fan-out.
+      x-google-quota:
+        metricCosts:
+          session-list-requests: 1
       parameters:
         # Deep check: also confirm each session's blobs still exist in Drive.
         - name: verify
           in: query
           required: false
           type: boolean
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          default: 50
+          description: Page size (1..100).
+        - name: page_token
+          in: query
+          required: false
+          type: string
+          description: Opaque cursor from a previous nextPageToken.
       responses:
         '200': { description: OK }
     post:
@@ -160,6 +234,9 @@ paths:
     post:
       operationId: completeFile
       description: Device-attested. driveFileId must be a child of the session Drive folder.
+      x-google-quota:
+        metricCosts:
+          file-complete-requests: 1
       parameters:
         - name: fileId
           in: path

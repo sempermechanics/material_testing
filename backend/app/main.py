@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 import time
@@ -8,13 +7,15 @@ from datetime import datetime, timezone
 
 import requests
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import audit, drive, firestore_repo as repo
+from . import observability as obs
 from .config import settings
 from .deps import admin_user, current_user, verified_device
 from .models import DeviceReg, FileComplete, SessionCreate, UserConfigPatch
 from . import rate_limit
+from .validation import DocumentId, SessionId, Uid, require_header_identifier
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("indic")
@@ -58,32 +59,68 @@ app = FastAPI(title="Semper API", version="1.0", lifespan=lifespan)
 
 
 @app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Apply browser-safe defaults without claiming HTTP is secure in local dev."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    )
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+    if settings.ON_CLOUD_RUN and forwarded_proto == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    return response
+
+
+@app.middleware("http")
 async def access_log(request: Request, call_next):
-    """One structured JSON line per request: method, path, status, latencyMs,
-    outcome, and the caller uid when a dependency resolved it (set on
-    request.state by verified_device). Also stamps an X-Request-Id."""
+    """One structured JSON line per request with UTC timestamp, request ID,
+    device context, and outcome. Stamps X-Request-Id. Never logs tokens."""
     start = time.perf_counter()
     request_id = uuid.uuid4().hex[:12]
     request.state.uid = None
+    request.state.device_id = None
     request.state.request_id = request_id
+    ctx_token = obs.bind_request(request_id)
     status = 500
     try:
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except HTTPException:
+            raise
+        except obs.DependencyError:
+            raise
+        except Exception:
+            obs.report_exception(log, error_code="internal_error")
+            # In production, never leak exception text to clients. Locally and in
+            # tests, re-raise so pytest and debuggers still see the real failure.
+            if settings.ON_CLOUD_RUN:
+                response = JSONResponse(status_code=500, content={"detail": "internal_error"})
+            else:
+                raise
         status = response.status_code
         response.headers["X-Request-Id"] = request_id
         return response
     finally:
         latency_ms = round((time.perf_counter() - start) * 1000, 1)
         outcome = "ok" if status < 400 else ("client_error" if status < 500 else "server_error")
-        _access_log.info(json.dumps({
-            "requestId": request_id,
-            "method": request.method,
-            "path": request.url.path,
-            "status": status,
-            "latencyMs": latency_ms,
-            "outcome": outcome,
-            "uid": getattr(request.state, "uid", None),
-        }))
+        uid = getattr(request.state, "uid", None)
+        device_id = getattr(request.state, "device_id", None)
+        obs.bind_uid(uid)
+        obs.bind_device(device_id)
+        obs.log_event(
+            _access_log, logging.INFO, "http_access",
+            method=request.method,
+            path=request.url.path,
+            status=status,
+            latencyMs=latency_ms,
+            outcome=outcome,
+            errorCode=None if status < 400 else f"http_{status}",
+        )
+        obs.reset_request(ctx_token)
 
 
 # Route handlers are deliberately plain `def`, not `async def`. Every Firestore
@@ -95,11 +132,56 @@ async def access_log(request: Request, call_next):
 # still resolve on the loop first — mixing a sync route with an async dependency
 # is fully supported. Only genuinely-awaiting code stays async (lifespan, the
 # access_log middleware). Do not "modernize" these back to async def.
+
+
+@app.exception_handler(obs.DependencyError)
+async def dependency_error_handler(request: Request, exc: obs.DependencyError):
+    obs.log_event(
+        log, logging.ERROR, "dependency_failure",
+        outcome="error", errorCode=exc.code, dependency=exc.dependency,
+        status=exc.status_code,
+    )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.code})
+
+
 @app.get("/healthz")
-def healthz():
-    # Unauthenticated endpoint: it must not report the service's auth posture.
-    # Whether the bypass is on is visible in the startup logs, to operators.
+def healthz(request: Request):
+    # Liveness only: process is up. Do not probe dependencies here — a slow
+    # Firestore/Drive outage must not restart healthy instances.
+    client = request.client.host if request.client else "unknown"
+    if not rate_limit.health_bucket.allow(client):
+        raise HTTPException(429, "rate_limited")
     return {"ok": True}
+
+
+@app.get("/readyz")
+def readyz(request: Request):
+    """Readiness: Firestore + Drive must answer within a bounded budget.
+
+    Returns stable 503 detail codes (`firestore_unreachable`, `drive_unhealthy`,
+    …) so load balancers and smoke checks can act without parsing messages.
+    """
+    client = request.client.host if request.client else "unknown"
+    if not rate_limit.health_bucket.allow(client):
+        raise HTTPException(429, "rate_limited")
+    started = time.perf_counter()
+    try:
+        repo.ping()
+        drive.ping()
+    except obs.DependencyError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        obs.log_event(
+            log, logging.ERROR, "readyz_unexpected",
+            outcome="error", errorCode="readyz_failed", dependency="unknown",
+        )
+        raise obs.DependencyError("readyz_failed", "unknown") from e
+    latency_ms = round((time.perf_counter() - started) * 1000, 1)
+    obs.log_event(
+        log, logging.INFO, "readyz_ok",
+        outcome="ok", latencyMs=latency_ms, dependency="firestore+drive",
+    )
+    return {"ok": True, "checks": {"firestore": "ok", "drive": "ok"}}
 
 
 @app.get("/v1/me")
@@ -129,9 +211,11 @@ def export_account(ctx=Depends(verified_device)):
     user = ctx["user"]
     uid = user["uid"]
     profile = repo.get_user(uid) or {}
-    sessions = repo.list_user_sessions(uid, limit=1000)
-    for s in sessions:
-        s["files"] = repo.list_session_files(s["sessionId"])
+    sessions = []
+    for s in repo.iter_all_user_sessions(uid):
+        s = dict(s)
+        s["files"] = repo.list_session_files_all(s["sessionId"])
+        sessions.append(s)
 
     audit.record(uid, action="DATA_EXPORT", target={"type": "user", "id": uid},
                  detail={"sessions": len(sessions)})
@@ -150,6 +234,7 @@ def export_account(ctx=Depends(verified_device)):
         },
         "devices": repo.list_user_devices(uid),
         "sessions": sessions,
+        "complete": True,
         "artifactDownload": {
             "endpoint": "/v1/files/{fileId}/content",
             "note": "Images, .dat results, CSVs and reports are downloadable per file "
@@ -190,7 +275,7 @@ def delete_account(ctx=Depends(verified_device)):
         # rather than trusting a lookup by name. If a name lookup missed we would
         # silently skip Drive and still wipe the metadata, stranding the blobs
         # with nothing left pointing at them.
-        sessions = repo.list_user_sessions(uid, limit=1000)
+        sessions = repo.iter_user_sessions(uid)
         for s in sessions:
             folder = s.get("driveFolderId")
             if folder:
@@ -226,6 +311,8 @@ def delete_account(ctx=Depends(verified_device)):
 
 @app.post("/v1/devices/register", status_code=201)
 def register_device(body: DeviceReg, user=Depends(current_user)):
+    if not rate_limit.device_register_bucket.allow(user["uid"]):
+        raise HTTPException(429, "rate_limited")
     active = user.get("activeDeviceId")
     # This ACCOUNT is already bound to a different device → real device switch,
     # needs a reset/rebind. (Same device id re-registering after a reinstall is
@@ -248,51 +335,76 @@ def register_device(body: DeviceReg, user=Depends(current_user)):
 
 @app.post("/v1/challenge")
 def challenge(user=Depends(current_user), x_device_id: str = Header(default="")):
-    if not x_device_id:
-        raise HTTPException(400, "missing_device_id")
+    x_device_id = require_header_identifier(
+        x_device_id, name="device_id", maximum=128
+    )
     if not rate_limit.challenge_bucket.allow(user["uid"]):
         raise HTTPException(429, "rate_limited")
     return {"nonce": repo.issue_nonce(user["uid"], x_device_id)}
 
 
 @app.get("/v1/sessions")
-def list_sessions(verify: bool = False, user=Depends(current_user)):
+def list_sessions(
+    verify: bool = False,
+    page_size: int = 50,
+    page_token: str = "",
+    user=Depends(current_user),
+):
     """The caller's cloud analyses. The app reconciles local sync state against
     this, so a session deleted in the cloud stops showing as 'synced'.
 
+    Cursor-paginated (`page_size` 1..100, `page_token`, `nextPageToken`). Quota
+    `used` is the full account count, not the page length.
+
     Firestore is only an index. `?verify=true` additionally confirms each
-    session's folder still exists in Drive, which catches artifacts deleted
-    out-of-band (straight in Drive) — the index would otherwise keep claiming
-    COMPLETED forever. Any session whose blobs are gone has its orphaned
-    metadata purged here, so the app stops trusting it and the quota is freed.
-
-    Verification costs one Drive call per session, so it's opt-in: the app uses
-    it for an explicit pull-to-refresh, not for every screen resume.
+    session on the *current page* still exists in Drive (bounded parallel
+    probes — not a full-account N+1). Orphaned metadata on that page is purged.
     """
-    sessions = repo.list_user_sessions(user["uid"])
-
+    page_size = max(1, min(page_size, 100))
     if verify:
+        if not rate_limit.session_verify_bucket.allow(user["uid"]):
+            raise HTTPException(429, "rate_limited")
+    sessions, next_token = repo.list_user_sessions(
+        user["uid"], limit=page_size, page_token=page_token or None,
+    )
+
+    purged = 0
+    if verify and sessions:
         token = drive.access_token()
+        folders = [s.get("driveFolderId") for s in sessions if s.get("driveFolderId")]
+        alive_map = drive.files_exist(token, folders)
         alive = []
         for s in sessions:
             folder = s.get("driveFolderId")
-            if folder and not drive.file_exists(token, folder):
+            if folder and not alive_map.get(folder, False):
                 repo.delete_session(s["sessionId"])
                 audit.record(user["uid"], action="SESSION_ORPHAN_PURGED",
                              target={"type": "session", "id": s["sessionId"]})
-                log.info("Purged orphaned session %s (Drive folder gone)", s["sessionId"])
+                obs.log_event(
+                    log, logging.INFO, "session_orphan_purged",
+                    outcome="ok", errorCode="orphan_purged", dependency="drive",
+                )
+                purged += 1
                 continue
             alive.append(s)
         sessions = alive
 
+    used = repo.count_user_sessions(user["uid"])
     return {
         "sessions": sessions,
-        "quota": {"used": len(sessions), "max": repo.resolve_user_config(user)["maxSessions"]},
+        "quota": {"used": used, "max": repo.resolve_user_config(user)["maxSessions"]},
+        "page": {
+            "size": page_size,
+            "count": len(sessions),
+            "nextPageToken": next_token,
+            "hasMore": bool(next_token),
+        },
+        "verify": {"requested": verify, "purged": purged} if verify else None,
     }
 
 
 @app.delete("/v1/sessions/{sid}")
-def delete_session(sid: str, ctx=Depends(verified_device)):
+def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     """Erase one analysis from the cloud (GDPR right to erasure).
 
     Permanently deletes the Drive folder — every raw image, .dat, csv and report
@@ -318,7 +430,7 @@ def delete_session(sid: str, ctx=Depends(verified_device)):
 
 
 @app.get("/v1/sessions/{sid}/uploads")
-def session_uploads(sid: str, user=Depends(current_user)):
+def session_uploads(sid: SessionId, user=Depends(current_user)):
     """What still needs uploading for a session — the resume path.
 
     An interrupted upload re-reads this instead of calling POST /v1/sessions
@@ -336,7 +448,7 @@ def session_uploads(sid: str, user=Depends(current_user)):
 
 
 @app.get("/v1/sessions/{sid}/files")
-def list_session_files(sid: str, user=Depends(current_user)):
+def list_session_files(sid: SessionId, user=Depends(current_user)):
     """The manifest for one analysis — what the app needs to restore it."""
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
@@ -351,7 +463,7 @@ def list_session_files(sid: str, user=Depends(current_user)):
 
 
 @app.get("/v1/files/{file_id}/content")
-def download_file(file_id: str, request: Request, ctx=Depends(verified_device)):
+def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_device)):
     """Stream one file back from Drive (restore).
 
     Drive has no anonymous signed download, so — unlike uploads, which go
@@ -482,18 +594,34 @@ def create_session(body: SessionCreate, ctx=Depends(verified_device)):
 
 
 @app.get("/v1/admin/users")
-def admin_list_users(status: str = "", limit: int = 200, admin=Depends(admin_user)):
+def admin_list_users(
+    status: str = "",
+    limit: int = 50,
+    page_token: str = "",
+    admin=Depends(admin_user),
+):
     """List users, optionally filtered by access_status (e.g. ?status=PENDING).
 
-    `limit` (1..1000, default 200) lets an admin page past the old hard 200-user
-    ceiling; values are clamped so a huge scan can't be requested by accident.
+    Cursor-paginated: `limit` (1..200, default 50) and optional `page_token`.
+    Response includes `nextPageToken` / `hasMore`.
     """
-    limit = max(1, min(limit, 1000))
-    return {"users": repo.list_users(status, limit=limit)}
+    limit = max(1, min(limit, 200))
+    users, next_token = repo.list_users(
+        status, limit=limit, page_token=page_token or None,
+    )
+    return {
+        "users": users,
+        "page": {
+            "size": limit,
+            "count": len(users),
+            "nextPageToken": next_token,
+            "hasMore": bool(next_token),
+        },
+    }
 
 
 @app.post("/v1/admin/users/{uid}/approve")
-def admin_approve_user(uid: str, ctx=Depends(verified_device), admin=Depends(admin_user)):
+def admin_approve_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(admin_user)):
     if not repo.set_user_status(uid, "APPROVED"):
         raise HTTPException(404, "user_not_found")
     audit.record(admin["uid"], action="ADMIN_APPROVE", target={"type": "user", "id": uid})
@@ -501,7 +629,7 @@ def admin_approve_user(uid: str, ctx=Depends(verified_device), admin=Depends(adm
 
 
 @app.post("/v1/admin/users/{uid}/revoke")
-def admin_revoke_user(uid: str, ctx=Depends(verified_device), admin=Depends(admin_user)):
+def admin_revoke_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(admin_user)):
     if not repo.set_user_status(uid, "SUSPENDED"):
         raise HTTPException(404, "user_not_found")
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
@@ -509,7 +637,7 @@ def admin_revoke_user(uid: str, ctx=Depends(verified_device), admin=Depends(admi
 
 
 @app.patch("/v1/admin/users/{uid}/config")
-def admin_patch_user_config(uid: str, body: UserConfigPatch,
+def admin_patch_user_config(uid: Uid, body: UserConfigPatch,
                             ctx=Depends(verified_device), admin=Depends(admin_user)):
     """Set or clear per-user product-limit overrides on the Firestore user doc."""
     # model_dump(exclude_unset=True) keeps omitted fields out; explicit nulls
@@ -526,8 +654,10 @@ def admin_patch_user_config(uid: str, body: UserConfigPatch,
 
 
 @app.post("/v1/files/{file_id}/complete")
-def complete_file(file_id: str, body: FileComplete, ctx=Depends(verified_device)):
+def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_device)):
     user = ctx["user"]
+    if not rate_limit.file_complete_bucket.allow(user["uid"]):
+        raise HTTPException(429, "rate_limited")
     rec = repo.get_file(file_id)
     if not rec or rec.get("uid") != user["uid"]:
         raise HTTPException(404, "file_not_found")

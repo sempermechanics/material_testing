@@ -40,3 +40,11 @@ challenge_bucket = TokenBucket(rate_per_sec=2.0, burst=10.0)
 download_bucket = TokenBucket(rate_per_sec=1.0, burst=5.0)
 # Session create burns quota / Drive folders.
 session_bucket = TokenBucket(rate_per_sec=1.0, burst=5.0)
+# Device registration writes two security-sensitive documents.
+device_register_bucket = TokenBucket(rate_per_sec=0.5, burst=3.0)
+# Completion performs Drive metadata I/O plus transactional Firestore writes.
+file_complete_bucket = TokenBucket(rate_per_sec=2.0, burst=10.0)
+# verify=true fans out to one Drive request per returned session.
+session_verify_bucket = TokenBucket(rate_per_sec=0.2, burst=2.0)
+# Health is public; this limits only accidental/hostile per-instance floods.
+health_bucket = TokenBucket(rate_per_sec=5.0, burst=20.0)

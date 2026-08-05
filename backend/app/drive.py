@@ -224,6 +224,49 @@ def file_exists(token: str, file_id: str) -> bool:
     return not r.json().get("trashed", False)
 
 
+def files_exist(token: str, file_ids: list[str], *, max_workers: int = 8) -> dict[str, bool]:
+    """Bounded parallel existence checks for one page of session folders.
+
+    Replaces a serial N+1 verify loop with a capped fan-out (default 8 workers)
+    over the current page only — callers must paginate so |file_ids| stays small.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    unique = [fid for fid in dict.fromkeys(file_ids) if fid]
+    if not unique:
+        return {}
+    out: dict[str, bool] = {}
+    workers = max(1, min(max_workers, len(unique)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(file_exists, token, fid): fid for fid in unique}
+        for fut in as_completed(futures):
+            fid = futures[fut]
+            try:
+                out[fid] = fut.result()
+            except Exception:  # noqa: BLE001 - treat probe failures as missing
+                log.warning("Drive existence probe failed for %s", fid)
+                out[fid] = False
+    return out
+
+
+def ping(timeout_s: float = 5.0) -> None:
+    """Cheap Drive reachability probe for readiness (Shared Drive about)."""
+    from .observability import DependencyError
+
+    try:
+        token = access_token()
+        r = requests.get(
+            f"{API}/drives/{settings.SHARED_DRIVE_ID}",
+            headers=_headers(token),
+            params={"fields": "id"},
+            timeout=timeout_s,
+        )
+    except Exception as e:  # noqa: BLE001
+        raise DependencyError("drive_unreachable", "drive") from e
+    if r.status_code >= 400:
+        raise DependencyError("drive_unhealthy", "drive")
+
+
 def delete_file(token: str, file_id: str) -> None:
     """**Permanently** delete a file/folder (GDPR erasure).
 
