@@ -129,6 +129,7 @@ class VsgLatticeActivity : AppCompatActivity() {
 
         strainPlotSection = findViewById(R.id.strainPlotSection)
         strainPlot = findViewById(R.id.plotLatticeStrain)
+        strainPlot.zoomEnabled = true
         strainSpinner = findViewById(R.id.spinnerStrainComponent)
         strainPlotTitle = findViewById(R.id.tvStrainPlotTitle)
         strainPlotReadout = findViewById(R.id.tvStrainPlotReadout)

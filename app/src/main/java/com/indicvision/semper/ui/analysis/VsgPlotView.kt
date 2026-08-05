@@ -1,3 +1,12 @@
+@file:Suppress(
+    "TooManyFunctions",
+    "MagicNumber",
+    "ComplexCondition",
+    "LongMethod",
+    "CyclomaticComplexMethod",
+    "ReturnCount",
+)
+
 package com.indicvision.semper.ui.analysis
 
 import android.content.Context
@@ -6,7 +15,9 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.withRotation
@@ -22,11 +33,10 @@ import kotlin.math.max
  *  - peak strain and strain noise against VSG size (the convergence view), and
  *  - strain along the line cut, one polyline per VSG (the line-scan view).
  *
- * Deliberately small: linear axes, no zoom, and the one gesture is a horizontal
- * scrub that reports the value under the finger through [onScrub]. The numbers
- * next to the chart carry the precision; the chart carries the shape.
+ * Linear axes; optional pinch-zoom / pan via a persistent data-space viewport
+ * (not a Canvas Matrix — that would scale strokes and break tick labels). The
+ * one-finger gesture is a horizontal scrub that reports values through [onScrub].
  */
-@Suppress("TooManyFunctions") // the draw pipeline and the scrub gesture, each piece small
 class VsgPlotView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -70,6 +80,9 @@ class VsgPlotView @JvmOverloads constructor(
 
         /** Head-room above/below the data so markers are not clipped. */
         const val Y_MARGIN_FRACTION = 0.08f
+
+        /** Smallest viewport span as a fraction of the full data extent. */
+        const val MIN_SPAN_FRACTION = 0.05f
 
         /** Series colours, reused cyclically for line-scan plots. */
         val PALETTE = intArrayOf(
@@ -123,16 +136,83 @@ class VsgPlotView @JvmOverloads constructor(
     /** Data-unit x of a vertical guide line, e.g. the recommended VSG. */
     private var highlightX: Float? = null
     private var scrubX: Float? = null
-    private var currentBounds: Bounds? = null
+    private var dataBounds: Bounds? = null
+
+    /** Null = show the full [dataBounds]; otherwise a zoomed viewport. */
+    private var viewXMin: Float? = null
+    private var viewXMax: Float? = null
+    private var viewYMin: Float? = null
+    private var viewYMax: Float? = null
+
+    /**
+     * When true, pinch-zoom and two-finger pan are active (lattice strain plot).
+     * The settings-sheet line-cut reuses this view with zoom off.
+     */
+    var zoomEnabled: Boolean = false
 
     /** Called while scrubbing: x position and y values per visible series. */
     var onScrub: ((x: Float, samples: List<Sample>) -> Unit)? = null
+
+    private var multiTouchActive = false
+    private var lastPanFocusX = 0f
+    private var lastPanFocusY = 0f
+    private var hasPanFocus = false
+
+    private val scaleDetector = ScaleGestureDetector(
+        context,
+        object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+                multiTouchActive = true
+                clearScrub()
+                return zoomEnabled
+            }
+
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                if (!zoomEnabled || !hasFrame()) return false
+                val full = dataBounds() ?: return false
+                ensureViewport(full)
+                val vp = viewport(full)
+                val focusX = pxToDataX(detector.focusX, vp)
+                val focusY = pxToDataY(detector.focusY, vp)
+                val factor = detector.scaleFactor
+                val newXSpan = (vp.xMax - vp.xMin) / factor
+                val newYSpan = (vp.yMax - vp.yMin) / factor
+                val minXSpan = (full.xMax - full.xMin) * MIN_SPAN_FRACTION
+                val minYSpan = (full.yMax - full.yMin) * MIN_SPAN_FRACTION
+                val xSpan = newXSpan.coerceAtLeast(minXSpan)
+                val ySpan = newYSpan.coerceAtLeast(minYSpan)
+                // Keep the focus point fixed in data space.
+                val leftFrac = (focusX - vp.xMin) / (vp.xMax - vp.xMin).coerceAtLeast(1e-6f)
+                val bottomFrac = (focusY - vp.yMin) / (vp.yMax - vp.yMin).coerceAtLeast(1e-6f)
+                viewXMin = focusX - leftFrac * xSpan
+                viewXMax = viewXMin!! + xSpan
+                viewYMin = focusY - bottomFrac * ySpan
+                viewYMax = viewYMin!! + ySpan
+                clampViewport(full)
+                invalidate()
+                return true
+            }
+        },
+    )
+
+    private val gestureDetector = GestureDetector(
+        context,
+        object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (!zoomEnabled) return false
+                resetViewport()
+                invalidate()
+                return true
+            }
+        },
+    )
 
     fun setData(series: List<Series>, xLabel: String, yLabel: String, highlightX: Float? = null) {
         this.series = series
         this.xLabel = xLabel
         this.yLabel = yLabel
         this.highlightX = highlightX
+        resetViewport()
         invalidate()
     }
 
@@ -154,7 +234,7 @@ class VsgPlotView @JvmOverloads constructor(
         }
     }
 
-    private fun bounds(): Bounds? {
+    private fun dataBounds(): Bounds? {
         val all = series.flatMap { it.points }
         if (all.isEmpty()) return null
         val xs = all.map { it.first }
@@ -169,11 +249,101 @@ class VsgPlotView @JvmOverloads constructor(
         return Bounds(xMin, if (xMax > xMin) xMax else xMin + 1f, yMin, yMax)
     }
 
+    private fun viewport(full: Bounds): Bounds {
+        val xmin = viewXMin
+        val xmax = viewXMax
+        val ymin = viewYMin
+        val ymax = viewYMax
+        return if (xmin != null && xmax != null && ymin != null && ymax != null) {
+            Bounds(xmin, xmax, ymin, ymax)
+        } else {
+            full
+        }
+    }
+
+    private fun ensureViewport(full: Bounds) {
+        if (viewXMin == null) {
+            viewXMin = full.xMin
+            viewXMax = full.xMax
+            viewYMin = full.yMin
+            viewYMax = full.yMax
+        }
+    }
+
+    private fun resetViewport() {
+        viewXMin = null
+        viewXMax = null
+        viewYMin = null
+        viewYMax = null
+    }
+
+    private fun clampViewport(full: Bounds) {
+        var xmin = viewXMin ?: return
+        var xmax = viewXMax ?: return
+        var ymin = viewYMin ?: return
+        var ymax = viewYMax ?: return
+        val minXSpan = (full.xMax - full.xMin) * MIN_SPAN_FRACTION
+        val minYSpan = (full.yMax - full.yMin) * MIN_SPAN_FRACTION
+        if (xmax - xmin < minXSpan) {
+            val mid = (xmin + xmax) / 2f
+            xmin = mid - minXSpan / 2f
+            xmax = mid + minXSpan / 2f
+        }
+        if (ymax - ymin < minYSpan) {
+            val mid = (ymin + ymax) / 2f
+            ymin = mid - minYSpan / 2f
+            ymax = mid + minYSpan / 2f
+        }
+        val xSpan = xmax - xmin
+        val ySpan = ymax - ymin
+        if (xSpan >= full.xMax - full.xMin) {
+            xmin = full.xMin
+            xmax = full.xMax
+        } else {
+            if (xmin < full.xMin) {
+                xmin = full.xMin
+                xmax = xmin + xSpan
+            }
+            if (xmax > full.xMax) {
+                xmax = full.xMax
+                xmin = xmax - xSpan
+            }
+        }
+        if (ySpan >= full.yMax - full.yMin) {
+            ymin = full.yMin
+            ymax = full.yMax
+        } else {
+            if (ymin < full.yMin) {
+                ymin = full.yMin
+                ymax = ymin + ySpan
+            }
+            if (ymax > full.yMax) {
+                ymax = full.yMax
+                ymin = ymax - ySpan
+            }
+        }
+        viewXMin = xmin
+        viewXMax = xmax
+        viewYMin = ymin
+        viewYMax = ymax
+    }
+
+    private fun pxToDataX(xPx: Float, b: Bounds): Float {
+        val ratio = ((xPx - frame.left) / (frame.right - frame.left)).coerceIn(0f, 1f)
+        return b.xMin + ratio * (b.xMax - b.xMin)
+    }
+
+    private fun pxToDataY(yPx: Float, b: Bounds): Float {
+        val ratio = ((frame.bottom - yPx) / (frame.bottom - frame.top)).coerceIn(0f, 1f)
+        return b.yMin + ratio * (b.yMax - b.yMin)
+    }
+
     @Suppress("CyclomaticComplexMethod") // one branch per optional layer: crosshair, muted series, markers
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val b = bounds() ?: return
-        currentBounds = b
+        val full = dataBounds() ?: return
+        dataBounds = full
+        val b = viewport(full)
 
         val left = dp(PAD_LEFT_DP)
         val right = width - dp(PAD_RIGHT_DP)
@@ -185,7 +355,12 @@ class VsgPlotView @JvmOverloads constructor(
         fun sy(y: Float) = bottom - (y - b.yMin) / (b.yMax - b.yMin) * (bottom - top)
 
         frame.set(left, right, top, bottom)
-        drawGrid(canvas, b, frame)
+        canvas.save()
+        canvas.clipRect(left, top, right, bottom)
+        for (i in 0..GRID_LINES) {
+            val y = bottom - (bottom - top) * i / GRID_LINES
+            canvas.drawLine(left, y, right, y, gridPaint)
+        }
         (scrubX ?: highlightX)?.let {
             gridPaint.color = ContextCompat.getColor(context, R.color.sky_primary)
             canvas.drawLine(sx(it), top, sx(it), bottom, gridPaint)
@@ -206,29 +381,110 @@ class VsgPlotView @JvmOverloads constructor(
                 s.points.forEach { (x, y) -> canvas.drawCircle(sx(x), sy(y), dp(MARKER_RADIUS_DP), markerPaint) }
             }
         }
+        canvas.restore()
 
+        drawGridTicks(canvas, b, frame)
         drawAxisLabels(canvas, left, right, bottom)
     }
 
-    @Suppress("ReturnCount") // one exit per gesture phase, plus the not-ours fall-throughs
+    @Suppress("ReturnCount", "CyclomaticComplexMethod") // gesture phases: scale, pan, scrub, double-tap
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        val b = currentBounds ?: return super.onTouchEvent(event)
-        if (!hasFrame()) return super.onTouchEvent(event)
+        if (dataBounds == null && dataBounds() == null) return super.onTouchEvent(event)
+        if (!hasFrame() && event.actionMasked != MotionEvent.ACTION_DOWN) {
+            // Frame is filled on first draw; still accept DOWN to claim the gesture.
+        }
+
+        if (zoomEnabled) {
+            scaleDetector.onTouchEvent(event)
+            gestureDetector.onTouchEvent(event)
+        }
+
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+            MotionEvent.ACTION_DOWN -> {
                 if (!contains(event.x, event.y)) return false
                 parent?.requestDisallowInterceptTouchEvent(true)
-                updateScrub(event.x, b)
+                multiTouchActive = false
+                hasPanFocus = false
+                if (!zoomEnabled || event.pointerCount == 1) {
+                    val full = dataBounds() ?: return false
+                    updateScrub(event.x, viewport(full))
+                }
+                return true
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (zoomEnabled && event.pointerCount >= 2) {
+                    multiTouchActive = true
+                    clearScrub()
+                    lastPanFocusX = event.focusX()
+                    lastPanFocusY = event.focusY()
+                    hasPanFocus = true
+                }
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                parent?.requestDisallowInterceptTouchEvent(true)
+                if (zoomEnabled && event.pointerCount >= 2) {
+                    multiTouchActive = true
+                    // Two-finger focus translation pans when not mid-pinch scale.
+                    if (!scaleDetector.isInProgress && hasPanFocus) {
+                        panByFocusDelta(event.focusX() - lastPanFocusX, event.focusY() - lastPanFocusY)
+                    }
+                    lastPanFocusX = event.focusX()
+                    lastPanFocusY = event.focusY()
+                    hasPanFocus = true
+                    return true
+                }
+                if (!multiTouchActive && !scaleDetector.isInProgress && event.pointerCount == 1) {
+                    val full = dataBounds() ?: return true
+                    updateScrub(event.x, viewport(full))
+                }
+                return true
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                if (event.pointerCount <= 2) {
+                    hasPanFocus = false
+                }
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
+                multiTouchActive = false
+                hasPanFocus = false
                 clearScrub()
                 if (event.actionMasked == MotionEvent.ACTION_UP) performClick()
                 return true
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    private fun MotionEvent.focusX(): Float {
+        var sum = 0f
+        for (i in 0 until pointerCount) sum += getX(i)
+        return sum / pointerCount
+    }
+
+    private fun MotionEvent.focusY(): Float {
+        var sum = 0f
+        for (i in 0 until pointerCount) sum += getY(i)
+        return sum / pointerCount
+    }
+
+    private fun panByFocusDelta(dxPx: Float, dyPx: Float) {
+        val full = dataBounds() ?: return
+        if (!hasFrame()) return
+        ensureViewport(full)
+        val vp = viewport(full)
+        val xSpan = vp.xMax - vp.xMin
+        val ySpan = vp.yMax - vp.yMin
+        val dxData = -dxPx / (frame.right - frame.left) * xSpan
+        val dyData = dyPx / (frame.bottom - frame.top) * ySpan
+        viewXMin = vp.xMin + dxData
+        viewXMax = vp.xMax + dxData
+        viewYMin = vp.yMin + dyData
+        viewYMax = vp.yMax + dyData
+        clampViewport(full)
+        invalidate()
     }
 
     /** A scrub ends as a click so accessibility services can drive the view. */
@@ -280,11 +536,10 @@ class VsgPlotView @JvmOverloads constructor(
         return null
     }
 
-    private fun drawGrid(canvas: Canvas, b: Bounds, f: Frame) {
+    private fun drawGridTicks(canvas: Canvas, b: Bounds, f: Frame) {
         textPaint.color = ContextCompat.getColor(context, R.color.text_secondary)
         for (i in 0..GRID_LINES) {
             val y = f.bottom - (f.bottom - f.top) * i / GRID_LINES
-            canvas.drawLine(f.left, y, f.right, y, gridPaint)
             val value = b.yMin + (b.yMax - b.yMin) * i / GRID_LINES
             textPaint.textAlign = Paint.Align.RIGHT
             canvas.drawText(format(value), f.left - dp(TICK_GAP_DP), y + textPaint.textSize * TICK_BASELINE, textPaint)
