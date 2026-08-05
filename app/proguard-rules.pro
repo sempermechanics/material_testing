@@ -48,5 +48,20 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
+# ============================================================
+# ROOM-BACKED WORKMANAGER DATABASE
+# WorkManager's WorkDatabase is a Room database, and Room finds
+# its generated `<Database>_Impl` reflectively by canonical name.
+# Under R8 full mode (AGP 8 default) that generated class and its
+# no-arg constructor are stripped, so androidx.startup's
+# InitializationProvider throws "Failed to create an instance of
+# class androidx.work.impl.WorkDatabase" while binding the
+# application — killing every release build at launch, before
+# Application.onCreate ever runs.
+# ============================================================
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
+-keep @androidx.room.Database class * { *; }
+-dontwarn androidx.room.paging.**
+
 # Keep readable crash reports from the field
 -keepattributes SourceFile,LineNumberTable
