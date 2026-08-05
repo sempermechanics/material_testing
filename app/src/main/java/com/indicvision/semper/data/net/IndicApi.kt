@@ -156,21 +156,36 @@ class IndicApi private constructor(context: Context) {
     /**
      * GET /v1/sessions — the caller's cloud analyses (for sync reconciliation).
      *
-     * [verify] makes the backend also confirm each session's blobs still exist
-     * in Drive (catching artifacts deleted straight in Drive, which the
-     * Firestore index alone can't see). It costs a Drive call per session, so
-     * it's for explicit refreshes, not every resume.
+     * Follows `nextPageToken` until the account listing is complete so quota
+     * reconciliation is not silently truncated by server page size.
+     *
+     * [verify] makes the backend also confirm each page's session blobs still
+     * exist in Drive (catching artifacts deleted straight in Drive). It costs
+     * Drive calls per page, so it's for explicit refreshes, not every resume.
      */
     suspend fun listSessions(
         idToken: String,
         verify: Boolean = false,
     ): ListSessionsResponse = withContext(Dispatchers.IO) {
-        val url = if (verify) "$base/v1/sessions?verify=true" else "$base/v1/sessions"
-        json.decodeFromString(
-            authedGet(idToken, url) { code, body ->
-                if (code == HttpStatus.FORBIDDEN) throw NotApprovedException() else throw ApiException(code, body)
-            },
-        )
+        val all = mutableListOf<CloudSessionDto>()
+        var pageToken: String? = null
+        var lastQuota = QuotaDto()
+        do {
+            val qs = buildString {
+                append("page_size=100")
+                if (verify) append("&verify=true")
+                if (!pageToken.isNullOrBlank()) append("&page_token=").append(pageToken)
+            }
+            val page: ListSessionsResponse = json.decodeFromString(
+                authedGet(idToken, "$base/v1/sessions?$qs") { code, body ->
+                    if (code == HttpStatus.FORBIDDEN) throw NotApprovedException() else throw ApiException(code, body)
+                },
+            )
+            all += page.sessions
+            lastQuota = page.quota
+            pageToken = page.page?.nextPageToken?.takeIf { page.page.hasMore }
+        } while (pageToken != null)
+        ListSessionsResponse(sessions = all, quota = lastQuota)
     }
 
     /** POST /v1/sessions (device-signed). Initiates a session + one resumable target per file. */

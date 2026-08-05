@@ -76,6 +76,15 @@ data class QuotaDto(val used: Int = 0, val max: Int = 0)
 data class ListSessionsResponse(
     val sessions: List<CloudSessionDto> = emptyList(),
     val quota: QuotaDto = QuotaDto(),
+    val page: PageDto? = null,
+)
+
+@Serializable
+data class PageDto(
+    val size: Int = 0,
+    val count: Int = 0,
+    val nextPageToken: String? = null,
+    val hasMore: Boolean = false,
 )
 
 @Serializable
