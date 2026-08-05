@@ -31,6 +31,7 @@ class ComputeOverlayHelper(
     private val elapsed: TextView,
     private val runPoints: TextView? = null,
     private val runConvergence: TextView? = null,
+    private val runTilesRow: View? = null,
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val elapsedTicker = object : Runnable {
@@ -65,6 +66,7 @@ class ComputeOverlayHelper(
     fun show(
         title: String = "Computing Strain Field",
         status: String = "Initializing engine…",
+        showRunTiles: Boolean = true,
     ) {
         mainHandler.removeCallbacks(flushRunnable)
         flushScheduled = false
@@ -78,6 +80,7 @@ class ComputeOverlayHelper(
         // points/convergence until its first frame completes.
         runPoints?.text = "0"
         runConvergence?.text = "0.0%"
+        runTilesRow?.visibility = if (showRunTiles) View.VISIBLE else View.GONE
         overlay.visibility = View.VISIBLE
         mainHandler.removeCallbacks(elapsedTicker)
         mainHandler.post(elapsedTicker)

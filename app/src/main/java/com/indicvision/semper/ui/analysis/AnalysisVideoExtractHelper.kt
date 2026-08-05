@@ -39,7 +39,7 @@ object AnalysisVideoExtractHelper {
         onApplied: (AppliedResult) -> Unit,
     ) {
         overlayHelper.processingStartTime = System.currentTimeMillis()
-        overlayHelper.show(title = "Extracting Frames", status = "Reading video…")
+        overlayHelper.show(title = "Extracting Frames", status = "Reading video…", showRunTiles = false)
 
         activity.lifecycleScope.launch(Dispatchers.IO) {
             try {

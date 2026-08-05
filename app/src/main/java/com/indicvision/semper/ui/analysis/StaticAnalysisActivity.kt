@@ -177,6 +177,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             elapsed = findViewById(R.id.overlayElapsed),
             runPoints = tvRunPoints,
             runConvergence = tvRunConvergence,
+            runTilesRow = findViewById(R.id.runTilesRow),
         )
         btnDefineRoi = findViewById(R.id.btnDefineRoi)
         tvResult = findViewById(R.id.tvStaticResult)

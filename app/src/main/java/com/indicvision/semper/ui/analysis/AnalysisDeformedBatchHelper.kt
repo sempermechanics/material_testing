@@ -52,6 +52,7 @@ object AnalysisDeformedBatchHelper {
                     overlayHelper.show(
                         title = activity.getString(R.string.analysis_importing_title),
                         status = activity.getString(R.string.analysis_caching_images),
+                        showRunTiles = false,
                     )
                 }
 

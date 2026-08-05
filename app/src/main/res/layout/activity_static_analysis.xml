@@ -1479,6 +1479,7 @@
                     android:textAppearance="@style/TextAppearance.Semper.Caption" />
 
                 <LinearLayout
+                    android:id="@+id/runTilesRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"

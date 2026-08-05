@@ -409,7 +409,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="line_cut_axis_y">Position along Y (px)</string>
     <string name="line_cut_axis_strain">Strain (mε)</string>
 
-    <string name="run_points_solved">points solved</string>
+    <string name="run_points_solved">Total points converged</string>
     <string name="run_convergence">convergence</string>
     <string name="cancel_run_title">Cancel this analysis?</string>
     <string name="cancel_run_body">Stops after the current frame. Results so far are discarded.</string>
