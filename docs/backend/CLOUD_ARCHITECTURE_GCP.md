@@ -615,22 +615,42 @@ Signing.
 ## 17. Monitoring and logging
 
 **Implemented:**
-- **Structured JSON access log** — one line per request (`requestId`, `method`,
-  `path`, `status`, `latencyMs`, `outcome`, and `uid` when a device-signed
-  dependency resolved it), via the `access_log` middleware in `main.py`. Never
-  logs tokens/signatures/URIs.
+- **Liveness** `GET /healthz` — process up; no dependency probes (safe for
+  restart loops).
+- **Readiness** `GET /readyz` — bounded Firestore + Drive probes; stable 503
+  detail codes (`firestore_unreachable`, `drive_unhealthy`, …).
+- **Structured JSON access log** — UTC `timestamp`, `requestId`, `method`,
+  `path`, `status`, `latencyMs`, `outcome`, `uid` / `deviceId` when resolved,
+  and `errorCode` on failures (`app/observability.py` + middleware). Never logs
+  tokens/signatures/URIs. Client 500 bodies stay opaque (`internal_error`) on
+  Cloud Run.
 - **Audit trail** in Firestore `audit_logs` — the compliance record (Cloud
   Logging is the operational one).
+- **Async Resend notify** — access-request mail is enqueued off the request
+  path with Idempotency-Key + bounded retry (`app/notify.py`).
 
-**Planned (not yet built):**
-- Enrich the access line with `deviceId`/`action`.
-- **Cloud Monitoring** dashboards: Cloud Run req count / p95 latency / error
-  rate / instance count; Drive init failure rate; Firestore write count vs free
-  quota.
-- **Error Reporting** auto-grouping of exceptions.
-- **Log-based alerts:** spike in `AUTH_DENIED` (attack), `storageQuotaExceeded`
-  (misconfig), Drive `429` (quota), sessions stuck `UPLOADING`.
-- **Uptime check** on `/healthz`.
+### Cloud Error Reporting and log-based alerts (operator setup)
+
+Configure in the GCP project that hosts Cloud Run. Ownership: **backend on-call**
+(default: the deployer listed in `ADMIN_EMAILS` / support mailbox) until a
+dedicated rotation exists.
+
+| Signal | How to wire | Threshold (starting point) | Action |
+|---|---|---|---|
+| Unhandled / reported errors | Error Reporting ingests `@type` ReportedErrorEvent lines and Cloud Run stderr | New error group or >5 events / 5 min | Page on-call; check `/readyz` and recent deploys |
+| `outcome=server_error` access lines | Log-based metric on `jsonPayload.outcome="server_error"` | >10 / 5 min | Investigate revision; consider traffic rollback |
+| `errorCode=firestore_unreachable` or `drive_*` | Log-based metric on `jsonPayload.errorCode` | Any sustained >2 min | Dependency outage — do not roll app code first |
+| `AUTH_DENIED` audit / auth warnings | Metric on audit action or `invalid_token` spike | >50 / 5 min from many IPs | Possible attack; tighten gateway quota |
+| Drive `429` / `notify_rejected` | Metric on dependency=drive/resend warnings | Sustained | Quota / Resend misconfig |
+| Uptime | Cloud Monitoring uptime check on `/readyz` (not only `/healthz`) | 2 failed regions | Page; run staging rollback drill if deploy-correlated |
+
+Document the notification channel (email / PagerDuty / Chat) in the project’s
+ops runbook when the channel is created. Until external consoles are verified,
+treat alert wiring as **UNKNOWN** in the completion gate.
+
+**Also useful (optional dashboards):** Cloud Run request count / p95 latency /
+error rate / instance count; Drive init failure rate; Firestore write count vs
+free quota; sessions stuck `UPLOADING`.
 
 ---
 

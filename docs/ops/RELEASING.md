@@ -52,10 +52,13 @@ The [`release.yml`](../../.github/workflows/release.yml) workflow:
    block in `app/build.gradle.kts` reads the `SIGNING_*` env vars the workflow
    sets; if the keystore is absent the variant stays **unsigned** rather than
    silently debug-signed.
-2. Verifies the arm64-v8a `.so` is packaged.
-3. **Verifies the signature** with `apksigner verify` — the release fails here
+2. Requires environment variable **`INDIC_API_BASE_URL`** (HTTPS API Gateway or
+   Cloud Run URL) and builds with `-PrequireCloudApi=true`. Missing/empty URL
+   fails the job — cloud sync must not ship silently disabled.
+3. Verifies the arm64-v8a `.so` is packaged.
+4. **Verifies the signature** with `apksigner verify` — the release fails here
    if the APK is not validly signed with the release key.
-4. Creates a **GitHub Release** with the APK attached.
+5. Creates a **GitHub Release** with the APK attached.
 
 ### Required secrets (in the `release` environment)
 
@@ -65,6 +68,19 @@ The [`release.yml`](../../.github/workflows/release.yml) workflow:
 | `KEY_ALIAS` | Signing key alias |
 | `KEY_PASSWORD` | Key password |
 | `STORE_PASSWORD` | Keystore password |
+
+### Required variables (in the `release` environment)
+
+| Variable | Description |
+|----------|-------------|
+| `INDIC_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
+
+### Backend staging / production
+
+Use [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml): choose
+`staging` or `production`, supply GCP project/region. Post-deploy smoke hits
+`/readyz`; failure auto-rolls traffic to the previous revision. See
+[CI.md](CI.md) § Backend deploy.
 
 ### Local gate before triggering release
 

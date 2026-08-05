@@ -81,6 +81,31 @@ A separate `workflow_dispatch` workflow ([release.yml](../../.github/workflows/r
 builds a signed release APK and publishes it as a GitHub Release. Requires the
 `release` environment approval. See [RELEASING.md](RELEASING.md).
 
+Release builds **require** `INDIC_API_BASE_URL` (GitHub Environment variable) and
+pass `-PrequireCloudApi=true` so an empty URL cannot silently ship with cloud
+sync disabled. Local `assembleRelease` without that flag still allows offline
+inspection builds.
+
+## Backend deploy
+
+[`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml) is
+`workflow_dispatch` with separate **staging** and **production** GitHub
+Environments. It:
+
+1. Runs backend ruff + pytest.
+2. Deploys from `backend/` (Dockerfile → immutable revision suffix = git SHA).
+3. Records the revision image digest.
+4. Smokes `GET /readyz` (Firestore + Drive).
+5. On smoke failure, routes 100% traffic back to the previous revision.
+
+Required per environment: secrets `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`; vars
+`FIREBASE_PROJECT_ID`, `SHARED_DRIVE_ID`, `SERVICE_ACCOUNT_EMAIL`,
+`AUTO_APPROVE_HD`, `ADMIN_EMAILS`, `SUPPORT_EMAIL`, `NOTIFY_FROM`. Until those
+exist in GitHub, treat deploy wiring as **UNKNOWN** (repo template only).
+
+API Gateway OpenAPI uses placeholder `__CLOUD_RUN_URL__` — substitute at config
+create time (see `backend/gateway/openapi.yaml`); never commit a live hostname.
+
 ## Caching
 
 | Cache | Key pattern | Purpose |
