@@ -110,6 +110,11 @@ jobs:
             --format='value(status.traffic[0].revisionName)' 2>/dev/null || true)
           echo "revision=${PREV}" >> "$GITHUB_OUTPUT"
 
+      # Deploy the candidate WITHOUT shifting live traffic. A prior deploy with
+      # no_traffic=false still left 100% on the previous revision while smoke
+      # ran (new revision Ready+Retired with zero requests), so CI validated the
+      # old __readyz__ probe and rolled "back" to itself. Tag + no_traffic makes
+      # the smoke target unambiguous; promote only after /readyz passes.
       - id: deploy
         uses: google-github-actions/deploy-cloudrun@251330ba9a8a34bfbc1622895f42e1d53fd14522 # v2
         with:
@@ -118,6 +123,8 @@ jobs:
           # Dockerfile in backend/ builds an immutable image per git SHA (Cloud
           # Build tags by digest). Never promote a mutable :latest reference.
           source: backend
+          no_traffic: true
+          tag: cand-${{ github.run_id }}-${{ github.run_attempt }}
           env_vars: |-
             GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
             FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}
@@ -139,9 +146,8 @@ jobs:
             --service-account=${{ vars.SERVICE_ACCOUNT_EMAIL }}
             --revision-suffix=${{ github.run_id }}-${{ github.run_attempt }}
 
-      # Mints an ID token for the service URL so the smoke check works whether or
-      # not the service is publicly invokable. A public service ignores the
-      # header; a private one requires it. Needs run.invoker for the deploy SA.
+      # Mints an ID token for the candidate tag URL so the smoke check works
+      # whether or not the service is publicly invokable. Needs run.invoker.
       - id: smoke_token
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
@@ -150,13 +156,14 @@ jobs:
           token_format: id_token
           id_token_audience: ${{ steps.deploy.outputs.url }}
 
-      - name: Post-deploy smoke (/readyz)
+      - name: Post-deploy smoke (/readyz on candidate)
         id: smoke
         env:
           URL: ${{ steps.deploy.outputs.url }}
           ID_TOKEN: ${{ steps.smoke_token.outputs.id_token }}
         run: |
           set -euo pipefail
+          echo "Smoking candidate ${URL}/readyz"
           for i in 1 2 3 4 5; do
             CODE=$(curl -sS -o /tmp/readyz.json -w '%{http_code}' --max-time 15 \
               -H "Authorization: Bearer ${ID_TOKEN}" "${URL}/readyz" || echo 000)
@@ -172,28 +179,39 @@ jobs:
           cat /tmp/readyz.json || true
           exit 1
 
-      # Deliberately AFTER the smoke gate. When this ran between deploy and
-      # smoke, a failure here left steps.smoke.outcome unset, so the rollback
-      # below never fired on a bad deploy.
+      # Only reached when smoke passed — live traffic stays on PREV until here.
+      - id: promote
+        name: Promote candidate to 100% traffic
+        env:
+          PROJECT: ${{ github.event.inputs.project }}
+          REGION: ${{ github.event.inputs.region }}
+          SERVICE: ${{ steps.meta.outputs.service }}
+          REV: ${{ steps.meta.outputs.service }}-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          echo "Routing 100% traffic to ${REV}"
+          gcloud run services update-traffic "$SERVICE" \
+            --to-revisions="${REV}=100" \
+            --project "$PROJECT" --region "$REGION"
+
+      # Deliberately AFTER the smoke + promote gate.
       - name: Record immutable image digest
         env:
           PROJECT: ${{ github.event.inputs.project }}
           REGION: ${{ github.event.inputs.region }}
           SERVICE: ${{ steps.meta.outputs.service }}
+          REV: ${{ steps.meta.outputs.service }}-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          REV=$(gcloud run services describe "$SERVICE" \
-            --project "$PROJECT" --region "$REGION" \
-            --format='value(status.latestReadyRevisionName)')
           IMG=$(gcloud run revisions describe "$REV" \
             --project "$PROJECT" --region "$REGION" \
             --format='value(status.imageDigest)')
           echo "Deployed revision=${REV} imageDigest=${IMG}"
 
-      # Any post-deploy failure reverts, not just a failed smoke check — keyed on
-      # "the deploy succeeded but something after it did not".
-      - name: Rollback traffic on post-deploy failure
-        if: failure() && steps.deploy.outcome == 'success' && steps.previous.outputs.revision != ''
+      # Revert only if we already moved live traffic (promote succeeded) and a
+      # later step failed. A failed smoke leaves PREV serving — nothing to undo.
+      - name: Rollback traffic on post-promote failure
+        if: failure() && steps.promote.outcome == 'success' && steps.previous.outputs.revision != ''
         env:
           PROJECT: ${{ github.event.inputs.project }}
           REGION: ${{ github.event.inputs.region }}
