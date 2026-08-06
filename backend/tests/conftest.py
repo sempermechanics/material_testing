@@ -12,7 +12,23 @@ os.environ.setdefault("SHARED_DRIVE_ID", "test-drive-id")
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app import rate_limit
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """Token buckets are process-global singletons shared by every test.
+
+    Without this, requests made by one test spend another test's budget and a
+    suite that passes alone starts returning 429 depending on file order — the
+    tight buckets (session_verify: burst 2) are exhausted in three calls.
+    """
+    buckets = [v for v in vars(rate_limit).values() if isinstance(v, rate_limit.TokenBucket)]
+    for bucket in buckets:
+        bucket._tokens.clear()
+        bucket._updated.clear()
+    yield
 
 
 @pytest.fixture

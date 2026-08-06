@@ -297,6 +297,33 @@ jobs:
         # Coverage is reported, not gated — visibility first (no --cov-fail-under).
         run: pytest tests/ -v --cov=app --cov-report=term-missing
 
+      # Everything above runs against tests/fake_firestore.py, whose transactions
+      # apply writes immediately with no isolation and no retries. That makes the
+      # concurrency guarantees consume_nonce / complete_file / bump_session_progress
+      # exist to provide structurally untestable there. This tier runs the same
+      # code against a real Firestore.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Set up Java for the emulator
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Run Firestore emulator tier
+        env:
+          GOOGLE_CLOUD_PROJECT: semper-ci-emulator
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+        run: |
+          npm install -g firebase-tools@13
+          firebase emulators:exec \
+            --only firestore \
+            --config firebase.emulator.json \
+            --project semper-ci-emulator \
+            'pytest tests/test_firestore_emulator_integration.py -v'
+
   # ===================================================================
   # Tier 5 — Signed release build (arm64-v8a)
   # Decoupled from Tier 1 so native-jni can run when app Tier 1 is skipped.

@@ -6,6 +6,8 @@ batches, and a pass-through transaction. Install it with `install(monkeypatch)`.
 """
 from datetime import datetime, timezone
 
+from google.api_core.exceptions import NotFound
+
 
 class _Sentinel:
     def __init__(self, name):
@@ -17,6 +19,13 @@ class _Sentinel:
 
 SERVER_TIMESTAMP = _Sentinel("SERVER_TIMESTAMP")
 DELETE_FIELD = _Sentinel("DELETE_FIELD")
+
+
+class Increment:
+    """Server-side atomic increment, as used by bump_session_progress."""
+
+    def __init__(self, value):
+        self.value = value
 
 
 def transactional(fn):
@@ -67,12 +76,16 @@ class _DocRef:
     def update(self, patch):
         cur = self._bucket().get(self.id)
         if cur is None:
-            raise KeyError(f"update on missing doc {self._collection}/{self.id}")
+            # The real client raises NotFound, and callers catch that — a KeyError
+            # here would let a wrong except clause pass in tests and fail in prod.
+            raise NotFound(f"update on missing doc {self._collection}/{self.id}")
         for k, v in patch.items():
             if v is DELETE_FIELD:
                 cur.pop(k, None)
             elif v is SERVER_TIMESTAMP:
                 cur[k] = datetime.now(timezone.utc)
+            elif isinstance(v, Increment):
+                cur[k] = int(cur.get(k, 0)) + v.value
             else:
                 cur[k] = v
 
@@ -173,16 +186,35 @@ class _Transaction:
 
 
 class _Batch:
+    """Buffers writes until commit(), like a real WriteBatch.
+
+    Ordering is preserved across mixed op types — a real batch applies writes in
+    the order they were added, and callers rely on that (e.g. superseding the
+    previous device before setting the new one).
+    """
+
     def __init__(self, store):
         self._ops = []
 
     def delete(self, ref):
-        self._ops.append(ref)
+        self._ops.append(("delete", ref, None))
+
+    def set(self, ref, data, merge=False):
+        self._ops.append(("set", ref, (data, merge)))
+
+    def update(self, ref, data):
+        self._ops.append(("update", ref, data))
 
     def commit(self):
-        for ref in self._ops:
-            ref.delete()
-        self._ops = []
+        ops, self._ops = self._ops, []
+        for kind, ref, payload in ops:
+            if kind == "delete":
+                ref.delete()
+            elif kind == "set":
+                data, merge = payload
+                ref.set(data, merge=merge) if merge else ref.set(data)
+            else:
+                ref.update(payload)
 
 
 class FakeClient:
@@ -195,7 +227,9 @@ class FakeClient:
     def batch(self):
         return _Batch(self)
 
-    def transaction(self):
+    def transaction(self, **kwargs):
+        # Real Client.transaction takes max_attempts; accept and ignore it so a
+        # caller tuning retries does not blow up only in tests.
         return _Transaction()
 
 
@@ -212,6 +246,7 @@ def install(monkeypatch):
     class _FakeFirestore:
         SERVER_TIMESTAMP = SERVER_TIMESTAMP
         DELETE_FIELD = DELETE_FIELD
+        Increment = Increment
         transactional = staticmethod(transactional)
 
     monkeypatch.setattr(repo, "firestore", _FakeFirestore)
