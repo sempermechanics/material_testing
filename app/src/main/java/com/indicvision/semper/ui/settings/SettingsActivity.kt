@@ -1,7 +1,11 @@
-// The settings page wires every section in one screen; kept together for
-// locality, so LongMethod / TooManyFunctions are suppressed for this file.
+// The settings page wires every section in one screen — account, cloud,
+// per-analysis data, export/erasure and defaults — kept together for locality.
+// The many small wireX/helpers push it past the LongMethod / TooManyFunctions /
+// LargeClass thresholds; splitting a screen whose handlers share this Activity's
+// launchers and views would trade that locality for cross-class state plumbing,
+// so those rules are suppressed for this file rather than worked around.
 
-@file:Suppress("TooManyFunctions")
+@file:Suppress("TooManyFunctions", "LargeClass")
 
 package com.indicvision.semper.ui.settings
 
@@ -617,7 +621,9 @@ class SettingsActivity : AppCompatActivity() {
             progress.dismiss()
             if (!ok || !dest.exists() || dest.length() == 0L) {
                 Toast.makeText(
-                    this@SettingsActivity, R.string.export_cloud_data_failed, Toast.LENGTH_LONG,
+                    this@SettingsActivity,
+                    R.string.export_cloud_data_failed,
+                    Toast.LENGTH_LONG,
                 ).show()
                 return@launch
             }

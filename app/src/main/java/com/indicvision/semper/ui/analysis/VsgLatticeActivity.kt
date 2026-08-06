@@ -64,6 +64,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         )
         const val EXPORT_WIDTH_PX = 2400
         const val EXPORT_HEIGHT_PX = 1600
+        const val PNG_QUALITY = 100
     }
 
     /** Decoded `.dat` payloads for each solved combination, in frame order. */
@@ -135,6 +136,22 @@ class VsgLatticeActivity : AppCompatActivity() {
 
         showSummary(nodes, solved.size, skipped.size)
 
+        bindStrainControls()
+
+        if (solvedNodes.isNotEmpty()) {
+            selectFocus(solvedNodes.first().frameIndex)
+        } else {
+            stepperRow.visibility = View.GONE
+            btnCopyParams.isEnabled = false
+            btnSaveGraph.isEnabled = false
+        }
+
+        loadStrainProfiles()
+        maybeCoachTheGraph()
+    }
+
+    /** Binds the strain-plot section views and wires their listeners. */
+    private fun bindStrainControls() {
         strainPlotSection = findViewById(R.id.strainPlotSection)
         strainPlot = findViewById(R.id.plotLatticeStrain)
         strainPlot.zoomEnabled = true
@@ -159,17 +176,6 @@ class VsgLatticeActivity : AppCompatActivity() {
 
         strainPlot.onScrub = { x, samples -> strainPlotReadout.text = scrubReadout(x, samples) }
         setupStrainSpinner()
-
-        if (solvedNodes.isNotEmpty()) {
-            selectFocus(solvedNodes.first().frameIndex)
-        } else {
-            stepperRow.visibility = View.GONE
-            btnCopyParams.isEnabled = false
-            btnSaveGraph.isEnabled = false
-        }
-
-        loadStrainProfiles()
-        maybeCoachTheGraph()
     }
 
     /** Scrub readout for the selected node only: (x, y) and its param chip label. */
@@ -331,27 +337,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val baseStep = intent.getIntExtra(DicKeys.STEP, 1).coerceAtLeast(1)
         val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
 
-        val seriesByFrame = frameData.mapIndexedNotNull { index, data ->
-            val node = solvedNodes.find { it.frameIndex == index }
-            val step = frameSteps.getOrNull(index)?.coerceAtLeast(1) ?: baseStep
-            val points = VsgStudy.profileAlong(data, component, line, step / 2f)
-            if (points.isEmpty()) return@mapIndexedNotNull null
-            val label = if (node != null) {
-                getString(R.string.vsg_lattice_param_fmt, node.subset, node.step, node.window)
-            } else {
-                getString(R.string.sweep_frame_btn_fmt, index + 1)
-            }
-            FrameSeries(
-                frameIndex = index,
-                series = VsgPlotView.Series(
-                    label = label,
-                    color = strainPlot.paletteColor(index),
-                    points = points,
-                    markers = false,
-                    muted = index != focusedFrameIndex,
-                ),
-            )
-        }
+        val seriesByFrame = buildFrameSeries(component, line, baseStep)
         if (seriesByFrame.isEmpty()) {
             strainPlotSection.visibility = View.GONE
             return
@@ -385,6 +371,34 @@ class VsgLatticeActivity : AppCompatActivity() {
         )
         strainPlotReadout.text = ""
     }
+
+    /** One plot series per solved frame along [line], muted except the focused one. */
+    private fun buildFrameSeries(
+        component: Int,
+        line: VsgStudy.StudyLine,
+        baseStep: Int,
+    ): List<FrameSeries> =
+        frameData.mapIndexedNotNull { index, data ->
+            val node = solvedNodes.find { it.frameIndex == index }
+            val step = frameSteps.getOrNull(index)?.coerceAtLeast(1) ?: baseStep
+            val points = VsgStudy.profileAlong(data, component, line, step / 2f)
+            if (points.isEmpty()) return@mapIndexedNotNull null
+            val label = if (node != null) {
+                getString(R.string.vsg_lattice_param_fmt, node.subset, node.step, node.window)
+            } else {
+                getString(R.string.sweep_frame_btn_fmt, index + 1)
+            }
+            FrameSeries(
+                frameIndex = index,
+                series = VsgPlotView.Series(
+                    label = label,
+                    color = strainPlot.paletteColor(index),
+                    points = points,
+                    markers = false,
+                    muted = index != focusedFrameIndex,
+                ),
+            )
+        }
 
     private fun selectFocus(frameIndex: Int) {
         focusedFrameIndex = frameIndex
@@ -452,7 +466,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             val dir = File(cacheDir, "share").apply { mkdirs() }
             val file = File(dir, "vsg_strain_graph_${System.currentTimeMillis()}.png")
             FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                bitmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out)
             }
             file
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -462,7 +476,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     }
 
     private fun sharePng(file: File) {
-        val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
