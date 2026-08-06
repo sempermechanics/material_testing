@@ -46,6 +46,8 @@ jobs:
           # OpenCV's android samples ship ancient gradle-wrapper.jar files that
           # fail checksum validation; same carve-out as NDK jobs in ci.yml.
           validate-wrappers: false
+
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
