@@ -25,6 +25,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.CloudSync
@@ -157,16 +158,20 @@ class HomeActivity : AppCompatActivity() {
             findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
         }
 
-        fab.post {
-            CoachMarkController(this).maybeShow(
-                CoachPrefs.Screen.HOME,
-                listOf(
-                    CoachMarkController.Step(
-                        fab,
-                        getString(R.string.coach_home_fab),
+        // Consent first, then the coach mark — two overlays at once is noise, and
+        // the diagnostics choice must be made before anything is collected.
+        maybeAskDiagnostics {
+            fab.post {
+                CoachMarkController(this).maybeShow(
+                    CoachPrefs.Screen.HOME,
+                    listOf(
+                        CoachMarkController.Step(
+                            fab,
+                            getString(R.string.coach_home_fab),
+                        ),
                     ),
-                ),
-            )
+                )
+            }
         }
 
         // Adapter callbacks close over selection; both must exist before the
@@ -342,6 +347,33 @@ class HomeActivity : AppCompatActivity() {
             .setPositiveButton(R.string.beta_notice_ack) { _, _ ->
                 TokenStore.setBetaNoticeAcked(this)
             }
+            .show()
+    }
+
+    /**
+     * First-run diagnostics choice, then [next].
+     *
+     * Crashlytics and Analytics are disabled in the manifest, so nothing has been
+     * collected before this point — the app previously started reporting on first
+     * launch with no notice and no way to decline. Asked once: a "Not now" is
+     * recorded, so this does not nag, and the toggle stays in Settings.
+     */
+    private fun maybeAskDiagnostics(next: () -> Unit) {
+        if (DicSettings.diagnosticsAsked(this)) {
+            next()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.diagnostics_prompt_title)
+            .setMessage(R.string.diagnostics_prompt_body)
+            .setPositiveButton(R.string.diagnostics_prompt_accept) { _, _ ->
+                Diagnostics.setEnabled(this, true)
+            }
+            .setNegativeButton(R.string.diagnostics_prompt_decline) { _, _ ->
+                Diagnostics.setEnabled(this, false)
+            }
+            .setCancelable(false)
+            .setOnDismissListener { next() }
             .show()
     }
 

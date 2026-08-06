@@ -28,6 +28,10 @@ class SemperApp : Application() {
             Timber.plant(CrashReportingTree())
         }
         DicSettings.migrate(this)
+        // Manifest disables Crashlytics/Analytics collection, so a fresh install
+        // sends nothing until the user opts in. This re-applies their choice on
+        // every launch — including turning collection back OFF after a withdrawal.
+        Diagnostics.apply(this)
 
         // Startup is the one moment nothing is in flight, so it is where cache
         // leftovers can be reclaimed without racing an import or a share.

@@ -127,6 +127,37 @@ class IndicApi private constructor(context: Context) {
     }
 
     /**
+     * GET /v1/me/export — everything the cloud holds about this account, as JSON
+     * (GDPR Art. 20 portability): profile, registered devices, and every analysis
+     * with its file manifest.
+     *
+     * Streams straight to [dest] rather than into memory: the response is
+     * unbounded in principle, and the backend emits it incrementally.
+     *
+     * Device-signed like account erasure — a full-account dump is high enough
+     * consequence that a stolen ID token alone must not trigger it.
+     *
+     * Distinct from the local "Export my data" zip, which only bundles what is on
+     * this device.
+     */
+    suspend fun exportAccount(idToken: String, dest: java.io.File): Unit = withContext(Dispatchers.IO) {
+        val resp = signedRequest(idToken, "GET", "/v1/me/export", ByteArray(0))
+        resp.use {
+            if (it.code != HttpStatus.OK) failSigned(it.code, IndicApiHttp.bodyText(it))
+            val part = java.io.File(dest.parentFile, dest.name + ".part")
+            it.body.byteStream().use { input ->
+                part.outputStream().buffered().use { output -> input.copyTo(output) }
+            }
+            // Rename only after the whole body landed: a truncated transfer must
+            // not look like a complete export.
+            if (!part.renameTo(dest)) {
+                part.copyTo(dest, overwrite = true)
+                part.delete()
+            }
+        }
+    }
+
+    /**
      * POST /v1/devices/register. Registers this device's public key.
      * 201 → registered, 409 → another device already bound (needs admin rebind).
      * Requires an APPROVED user.

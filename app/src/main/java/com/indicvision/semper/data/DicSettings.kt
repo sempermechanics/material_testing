@@ -33,6 +33,8 @@ object DicSettings {
     private const val KEY_UPLOAD_WIFI_ONLY = "upload_wifi_only"
     private const val KEY_MAX_FRAMES = "max_frames"
     private const val KEY_AUTO_FREE_GB = "auto_free_gb"
+    private const val KEY_DIAGNOSTICS = "diagnostics_enabled"
+    private const val KEY_DIAGNOSTICS_ASKED = "diagnostics_asked"
 
     /** [autoFreeBudgetGb] value meaning "never free space automatically". */
     const val AUTO_FREE_OFF = 0
@@ -54,6 +56,28 @@ object DicSettings {
             putInt(KEY_SCHEMA, SCHEMA_VERSION)
         }
     }
+
+    /**
+     * Whether the user has agreed to send crash reports and diagnostics.
+     *
+     * Defaults to **off**, and stays off until [setDiagnosticsEnabled] is called
+     * — Crashlytics and Analytics used to collect from first launch with no
+     * notice and no way to decline, which is not a defensible position for EU
+     * users. [diagnosticsAsked] records that the first-run notice was shown, so
+     * it is not shown again after a considered "no".
+     */
+    fun diagnosticsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_DIAGNOSTICS, false)
+
+    fun setDiagnosticsEnabled(context: Context, value: Boolean) =
+        prefs(context).edit {
+            putBoolean(KEY_DIAGNOSTICS, value)
+            putBoolean(KEY_DIAGNOSTICS_ASKED, true)
+        }
+
+    /** True once the first-run diagnostics choice has been made either way. */
+    fun diagnosticsAsked(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_DIAGNOSTICS_ASKED, false)
 
     /** Master switch for the upload worker; off = sessions stay "local only". */
     fun saveToCloud(context: Context): Boolean = prefs(context).getBoolean(KEY_SAVE_TO_CLOUD, true)

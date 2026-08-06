@@ -29,6 +29,7 @@ import com.google.android.material.slider.Slider
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.indicvision.semper.BuildConfig
+import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.R
 import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.BackupDeleteWorker
@@ -45,6 +46,8 @@ import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.StorageBudget
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.CloudSessionDto
+import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.admin.AdminActivity
 import com.indicvision.semper.ui.auth.AuthActivity
@@ -578,7 +581,48 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun wireYourDataSection() {
         findViewById<View>(R.id.btnExportData).setOnClickListener { exportMyData() }
+        findViewById<View>(R.id.btnExportCloudData).setOnClickListener { exportCloudAccountData() }
         findViewById<View>(R.id.btnDeleteAccount).setOnClickListener { confirmDeleteAccount() }
+
+        val switchDiagnostics = findViewById<SwitchMaterial>(R.id.switchDiagnostics)
+        switchDiagnostics.isChecked = DicSettings.diagnosticsEnabled(this)
+        switchDiagnostics.setOnCheckedChangeListener { _, checked ->
+            // Applies immediately in both directions: turning this off also
+            // deletes any crash report still queued on disk.
+            Diagnostics.setEnabled(this, checked)
+        }
+    }
+
+    /**
+     * Download what the *cloud* holds about this account (GDPR Art. 20).
+     *
+     * Separate from [exportMyData], which bundles the sessions on this device.
+     * The policy has always promised this; until now it existed only as an API
+     * endpoint with no way for a user to reach it.
+     */
+    private fun exportCloudAccountData() {
+        val api = IndicApi.get(this)
+        if (!api.enabled) {
+            Toast.makeText(this, R.string.export_cloud_data_offline, Toast.LENGTH_LONG).show()
+            return
+        }
+        val progress = DeterminateProgressDialog(this, getString(R.string.export_cloud_data_working))
+        progress.show()
+        lifecycleScope.launch {
+            val dest = java.io.File(cacheDir, "semper-account-export.json")
+            val ok = runCatching {
+                val idToken = TokenProvider.usableIdToken() ?: error("not signed in")
+                api.exportAccount(idToken, dest)
+            }.onFailure { Timber.w(it, "Cloud account export failed") }.isSuccess
+            progress.dismiss()
+            if (!ok || !dest.exists() || dest.length() == 0L) {
+                Toast.makeText(
+                    this@SettingsActivity, R.string.export_cloud_data_failed, Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+            SendToSheet.show(this@SettingsActivity, dest, JSON_MIME)
+        }
     }
 
     private fun exportMyData() {
@@ -802,6 +846,7 @@ class SettingsActivity : AppCompatActivity() {
         const val BYTES_PER_MB = 1_048_576L
         const val BYTES_PER_GB = 1_073_741_824L
         const val ZIP_MIME = "application/zip"
+        const val JSON_MIME = "application/json"
 
         /** Snackbar shows for exactly as long as the delete stays cancellable. */
         val UNDO_WINDOW_MS = TimeUnit.SECONDS.toMillis(BackupDeleteWorker.UNDO_WINDOW_SECONDS).toInt()

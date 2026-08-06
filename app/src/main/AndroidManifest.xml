@@ -26,6 +26,18 @@
         android:hardwareAccelerated="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
+        <!-- Diagnostics collection is OFF until the user opts in. Both SDKs
+             otherwise start collecting on first launch, before any notice is
+             shown — SemperApp re-enables them at startup when the user has
+             agreed (DicSettings.diagnosticsEnabled). These flags are the
+             build-time default, not the runtime state. -->
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+
         <!-- Credential Manager: tells password managers which domain's
              credentials belong to this app, via the same Digital Asset
              Links file the sign-in App Link already verifies against. -->
