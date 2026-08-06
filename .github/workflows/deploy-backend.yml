@@ -146,19 +146,34 @@ jobs:
             --service-account=${{ vars.SERVICE_ACCOUNT_EMAIL }}
             --revision-suffix=${{ github.run_id }}-${{ github.run_attempt }}
 
-      # Mints an ID token for the candidate tag URL so the smoke check works
-      # whether or not the service is publicly invokable. Needs run.invoker.
+      # Cloud Run requires aud = the *service* URL even when calling a traffic
+      # tag (docs: authenticating/service-to-service). Minting against the tag
+      # URL yields HTML 401 before the container runs.
+      - id: service_url
+        name: Resolve service URL (ID token audience)
+        env:
+          PROJECT: ${{ github.event.inputs.project }}
+          REGION: ${{ github.event.inputs.region }}
+          SERVICE: ${{ steps.meta.outputs.service }}
+        run: |
+          set -euo pipefail
+          URL=$(gcloud run services describe "$SERVICE" \
+            --project "$PROJECT" --region "$REGION" \
+            --format='value(status.url)')
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
       - id: smoke_token
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SA }}
           token_format: id_token
-          id_token_audience: ${{ steps.deploy.outputs.url }}
+          id_token_audience: ${{ steps.service_url.outputs.url }}
 
       - name: Post-deploy smoke (/readyz on candidate)
         id: smoke
         env:
+          # Tag URL from deploy (cand-…---indic-api-….run.app); aud is service URL.
           URL: ${{ steps.deploy.outputs.url }}
           ID_TOKEN: ${{ steps.smoke_token.outputs.id_token }}
         run: |
