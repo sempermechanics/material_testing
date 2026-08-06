@@ -291,11 +291,66 @@ jobs:
         run: pip install -r requirements-test.txt
 
       - name: Lint
-        run: ruff check app/ tests/
+        # scripts/ included deliberately: the migration runner and the ops shell
+        # scripts are run by hand against production and were previously neither
+        # executed nor linted anywhere, so a syntax error surfaced there first.
+        run: ruff check app/ tests/ scripts/ ../scripts/
+
+      - name: Check ops shell scripts parse
+        working-directory: .
+        run: bash -n scripts/firestore-export.sh scripts/firestore-restore-drill.sh
+
+      # Secret scanning (see the secret-scan job) covers what we committed; this
+      # covers what we depend on. Audits the pinned runtime set, not the test
+      # tooling. If a CVE lands with no fixed release, pin the advisory with
+      # --ignore-vuln rather than deleting the gate.
+      - name: Audit dependencies
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --strict
+
+      # The image installs from requirements.lock with --require-hashes. Prove it
+      # resolves on the runtime's Python (3.12) and still covers every direct
+      # dependency, so a stale or mis-generated lock fails here rather than in
+      # the Cloud Build step of a deploy.
+      - name: Verify the hashed lock
+        run: |
+          python -m venv /tmp/lockcheck
+          /tmp/lockcheck/bin/pip install --quiet --require-hashes -r requirements.lock
+          /tmp/lockcheck/bin/python -c "import fastapi, uvicorn, google.auth, \
+            google.cloud.firestore, google.cloud.tasks_v2, firebase_admin, \
+            requests, cryptography, pydantic; print('lock imports OK')"
+          python - <<'PY'
+          import re, pathlib
+
+          def names(text):
+              """Package names, extras stripped: the lock writes uvicorn[standard]."""
+              found = set()
+              for line in text.splitlines():
+                  line = line.strip().lower()
+                  if not line or line.startswith(("#", "-", " ")):
+                      continue
+                  m = re.match(r"^([a-z0-9._-]+)(\[[^\]]*\])?\s*==", line)
+                  if m:
+                      found.add(m.group(1))
+                  elif re.match(r"^[a-z0-9._-]+(\[[^\]]*\])?\s*$", line):
+                      found.add(re.split(r"\[", line)[0])
+              return found
+
+          direct = names(pathlib.Path("requirements.txt").read_text())
+          locked = names(pathlib.Path("requirements.lock").read_text())
+          missing = sorted(direct - locked)
+          if missing:
+              raise SystemExit(f"requirements.txt entries absent from the lock: {missing}")
+          print(f"lock covers all {len(direct)} direct dependencies")
+          PY
 
       - name: Test
-        # Coverage is reported, not gated — visibility first (no --cov-fail-under).
-        run: pytest tests/ -v --cov=app --cov-report=term-missing
+        # Gated, not just reported. The floor sits just under the measured value
+        # (78% at the time of writing) so ordinary churn does not break unrelated
+        # PRs, while a real drop in coverage fails. Raise it when it climbs;
+        # never lower it to make a red build green.
+        run: pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=75
 
       # Everything above runs against tests/fake_firestore.py, whose transactions
       # apply writes immediately with no isolation and no retries. That makes the

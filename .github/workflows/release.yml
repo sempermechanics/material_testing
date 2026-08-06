@@ -23,8 +23,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Green CI was previously only a manual checklist item in RELEASING.md, so a
+  # red suite could still be signed and published. This is the gate.
+  verify:
+    name: Verify before release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Legal pages match their source
+        run: python scripts/render_legal_pages.py --check
+
+      - name: Android unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Backend lint and tests
+        working-directory: backend
+        run: |
+          pip install -r requirements-test.txt
+          ruff check app/ tests/ scripts/ ../scripts/
+          pytest tests/ -q --cov=app --cov-fail-under=75
+
   build-release:
     name: Build signed release
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: release
@@ -117,6 +155,30 @@ jobs:
             || { echo "APK is NOT validly signed"; exit 1; }
           echo "Release APK is signed:"
           "$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | grep -i "Signer #1 certificate SHA-256"
+
+      # App Links only verify if the RELEASE signing certificate is listed in the
+      # hosted assetlinks.json. When it is not, email sign-in and reset links stop
+      # opening the app and silently fall back to a browser disambiguation dialog
+      # — which is phishable and looks like an app bug. Catch it at release time
+      # instead of in the field.
+      - name: Verify assetlinks lists the release signing certificate
+        run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          DIGEST=$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
+            | grep -i "Signer #1 certificate SHA-256 digest:" \
+            | awk '{print $NF}')
+          # apksigner prints bare lowercase hex; assetlinks uses colon-separated
+          # uppercase.
+          FP=$(echo "$DIGEST" | tr 'a-z' 'A-Z' | sed 's/../&:/g; s/:$//')
+          echo "Release certificate fingerprint: $FP"
+          if ! grep -qF "$FP" firebase-hosting/public/.well-known/assetlinks.json; then
+            echo "::error::Release signing certificate $FP is not in assetlinks.json."
+            echo "Add it to firebase-hosting/public/.well-known/assetlinks.json and redeploy Hosting."
+            exit 1
+          fi
+          echo "assetlinks.json lists the release certificate."
 
       - name: Upload release APK
         uses: actions/upload-artifact@v7
