@@ -1,0 +1,101 @@
+name: Firestore restore drill
+
+# A backup you have never restored is not a backup. This imports a real export
+# into a throwaway project, waits for it, and fails if the restored contents do
+# not match the manifest captured at export time.
+#
+# Monthly rather than daily: an import is slow and costs a full write of the
+# dataset, and the thing being tested (does our export actually restore?) does
+# not change day to day.
+on:
+  schedule:
+    - cron: '40 3 1 * *'
+  workflow_dispatch:
+    inputs:
+      export_uri:
+        description: 'gs://... export URI to restore (default: latest)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: firestore-restore-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: restore-drill
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Authenticate with Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.FIRESTORE_RESTORE_DRILL_SERVICE_ACCOUNT }}
+
+      - name: Install Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install verification dependencies
+        run: pip install google-cloud-firestore==2.21.0
+
+      - id: pick
+        name: Resolve export URI
+        env:
+          BUCKET: ${{ vars.FIRESTORE_BACKUP_BUCKET }}
+          PROJECT: ${{ vars.GCP_PROJECT }}
+          REQUESTED: ${{ github.event.inputs.export_uri }}
+        run: |
+          set -euo pipefail
+          if [ -n "${REQUESTED}" ]; then
+            URI="${REQUESTED}"
+          else
+            # Timestamped prefixes sort lexicographically, so the last listed
+            # directory is the newest export.
+            URI=$(gsutil ls "gs://${BUCKET}/firestore/${PROJECT}/" | tail -1)
+            URI="${URI%/}"
+          fi
+          if [ -z "${URI}" ]; then
+            echo "::error::No export found to restore."
+            exit 1
+          fi
+          echo "Restoring from ${URI}"
+          echo "uri=${URI}" >> "$GITHUB_OUTPUT"
+
+      - name: Run restore drill
+        env:
+          RESTORE_DRILL_PROJECT: ${{ vars.FIRESTORE_RESTORE_DRILL_PROJECT }}
+          PRODUCTION_PROJECT: ${{ vars.GCP_PROJECT }}
+          FIRESTORE_EXPORT_URI: ${{ steps.pick.outputs.uri }}
+        run: bash scripts/firestore-restore-drill.sh
+
+      # The drill project now holds a full copy of production data. Leaving it
+      # populated between monthly runs would be a second copy of everything, in
+      # a project with weaker access controls than production.
+      - name: Purge the drill database
+        if: always()
+        env:
+          RESTORE_DRILL_PROJECT: ${{ vars.FIRESTORE_RESTORE_DRILL_PROJECT }}
+          PRODUCTION_PROJECT: ${{ vars.GCP_PROJECT }}
+        run: |
+          set -euo pipefail
+          if [ "${RESTORE_DRILL_PROJECT}" = "${PRODUCTION_PROJECT}" ]; then
+            echo "::error::Drill project equals production; refusing to purge."
+            exit 2
+          fi
+          for c in users devices sessions files audit_logs challenges _migrations; do
+            gcloud firestore bulk-delete \
+              --collection-ids="$c" \
+              --project="${RESTORE_DRILL_PROJECT}" \
+              --quiet || echo "bulk-delete of $c reported a problem"
+          done

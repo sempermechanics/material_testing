@@ -27,6 +27,12 @@ jobs:
           service_account: ${{ vars.FIRESTORE_BACKUP_SERVICE_ACCOUNT }}
       - name: Install Google Cloud CLI
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      # firestore_verify.py emits the manifest the restore drill checks against.
+      - name: Install manifest dependencies
+        run: pip install google-cloud-firestore==2.21.0
       - name: Export and verify PITR
         env:
           GCP_PROJECT: ${{ vars.GCP_PROJECT }}
