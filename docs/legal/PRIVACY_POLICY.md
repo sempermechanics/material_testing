@@ -1,7 +1,7 @@
 # Semper — Privacy Policy
 
 **Last updated:** 2026-08-05  
-**Product:** Semper (IndicVision DIC) Android app and optional cloud sync backend  
+**Product:** Semper DIC Android app and optional cloud sync backend  
 **Contact:** support mailbox configured as `SUPPORT_EMAIL` for the deployment
 
 This policy describes personal data processed by Semper when you use the app
@@ -22,8 +22,7 @@ No large-language-model or generative-AI provider is integrated.
 
 ### 2.1 Account and authentication (Firebase Authentication)
 
-- Email address, display name, and provider identifiers from Google / Microsoft /
-  email sign-in (as configured for the Firebase project).
+- Email address, display name, and provider identifiers from Google / email sign-in (as configured for the Firebase project).
 - Authentication tokens used to call the backend (not stored as long-lived
   secrets on the server beyond normal session verification).
 
@@ -43,11 +42,19 @@ No large-language-model or generative-AI provider is integrated.
   company Shared Drive under the Cloud Run service account — **bytes are
   uploaded by the device directly to Drive**, not through Cloud Run.
 
-### 2.4 Diagnostics (Firebase Crashlytics)
+### 2.4 Diagnostics (Firebase Crashlytics and Analytics) — opt-in
 
-- Crash reports and non-fatal diagnostics from the Android app, including
-  device/app version metadata as provided by the Crashlytics SDK. R8 mapping
-  files are retained by operators for deobfuscation and are not published.
+- **Off by default, and nothing is collected until you agree.** Collection is
+  disabled in the app manifest; the app asks once on first launch and you can
+  change the answer at any time in **Settings → Your data → Send crash reports**.
+  Declining, or switching it off later, also deletes any report still queued on
+  the device.
+- When enabled: crash reports and non-fatal diagnostics from the Android app,
+  including device/app version metadata as provided by the Crashlytics SDK. R8
+  mapping files are retained by operators for deobfuscation and are not
+  published.
+- Diagnostics never include your images, measurement results, specimen names, or
+  file contents.
 
 ### 2.5 Operational logs (Cloud Logging / Error Reporting)
 
@@ -74,7 +81,8 @@ No large-language-model or generative-AI provider is integrated.
 | Provide the product | Sign-in, sync, restore, quotas | Contract / legitimate interest |
 | Access control | Pending approval, admin approve/revoke | Legitimate interest / compliance |
 | Security | Device attestation, rate limits, audit | Legitimate interest |
-| Reliability | Crashlytics, Cloud Logging, readiness | Legitimate interest |
+| Reliability (server) | Cloud Logging, readiness probes | Legitimate interest |
+| Reliability (app diagnostics) | Crashlytics / Analytics crash reports | **Consent** — opt-in, withdrawable in Settings |
 | Support onboarding | Resend access-request mail | Legitimate interest |
 
 Exact legal bases depend on your jurisdiction and the deploying organization’s
@@ -98,9 +106,11 @@ Scheduled Firestore exports / PITR, where enabled, follow
 
 ## 5. Your rights — export and deletion
 
-- **Export:** Authenticated, device-attested `GET /v1/me/export` returns profile,
-  devices, and complete session manifests (`complete: true`). Binary artifacts
-  are downloaded via `GET /v1/files/{id}/content` (or the app Restore flow).
+- **Export:** In the app, **Settings → Your data → Download my cloud account
+  data**. (Directly: authenticated, device-attested `GET /v1/me/export`, which
+  returns profile, devices, and complete session manifests — `complete: true` is
+  written last, so a truncated download is detectable.) Binary artifacts are
+  downloaded via `GET /v1/files/{id}/content` (or the app Restore flow).
 - **Delete session:** Device-attested `DELETE /v1/sessions/{id}` removes Drive
   folder + Firestore metadata for that analysis.
 - **Delete account:** Device-attested `DELETE /v1/me` removes the Drive user

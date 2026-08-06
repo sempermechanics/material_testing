@@ -125,6 +125,56 @@ In **Google Drive → `Semper-Research-Storage` → Manage members**, add
 
 **Check:** the SA appears as **Manager** on the Shared Drive.
 
+### A6. Cloud Tasks queue for session provisioning
+
+`POST /v1/sessions` opens one Drive resumable session per file. At the 600-file
+ceiling that is ~1200 sequential round-trips, which does not fit in a 60 s
+request — so provisioning runs as a Cloud Task and the request just reserves the
+session. The client polls `GET /v1/sessions/{sid}/uploads`, which it already
+does for resume.
+
+Without a queue the service provisions **inline** instead: correct, but slow,
+and large analyses will time out. Small deployments can skip this.
+
+```bash
+gcloud services enable cloudtasks.googleapis.com --project $PROJECT
+
+gcloud tasks queues create indic-provision \
+  --location=$REGION --project=$PROJECT \
+  --max-attempts=5 --max-concurrent-dispatches=20
+
+# Cloud Tasks delivers with an OIDC token for this SA. Reusing $API_SA keeps it
+# to one identity; the service only accepts tokens whose email matches
+# TASKS_INVOKER_SA, so this is the identity /v1/tasks/* trusts.
+gcloud run services add-iam-policy-binding indic-api \
+  --member="serviceAccount:$API_SA" --role="roles/run.invoker" \
+  --region=$REGION --project=$PROJECT
+
+# The API SA enqueues its own tasks.
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member="serviceAccount:$API_SA" --role="roles/cloudtasks.enqueuer"
+```
+
+Then set these on the service (GitHub Environment `vars` for the deploy
+workflow, or `--set-env-vars` by hand):
+
+| Variable | Value |
+|---|---|
+| `TASKS_QUEUE` | `indic-provision` |
+| `TASKS_LOCATION` | `$REGION` |
+| `TASKS_TARGET_BASE_URL` | the Cloud Run service URL (not the gateway) |
+| `TASKS_INVOKER_SA` | `$API_SA` |
+
+`TASKS_TARGET_BASE_URL` is the **Cloud Run** URL on purpose: the callback is not
+part of the public API and is absent from `gateway/openapi.yaml`. It is also the
+OIDC audience, so it must match exactly.
+
+**Check:** create a session with a few files; the response is
+`{"status": "PROVISIONING", "uploads": []}` and, within a second or two,
+`GET /v1/sessions/{sid}/uploads` reports `UPLOADING` with one target per file.
+`gcloud tasks queues describe indic-provision --location=$REGION` should show no
+backlog.
+
 ---
 
 ## Part B — Deploy & smoke-test the backend
@@ -137,7 +187,7 @@ gcloud run deploy indic-api \
   --service-account "$API_SA" \
   --allow-unauthenticated \
   --min-instances 0 --max-instances 10 \
-  --concurrency 40 --cpu 1 --memory 512Mi --timeout 120 \
+  --concurrency 40 --cpu 1 --memory 512Mi --timeout 60 \
   --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
   --set-env-vars "SUPPORT_EMAIL=support@indicvision.com,NOTIFY_FROM=Semper <noreply@yourdomain.com>" \
   --set-secrets "RESEND_API_KEY=resend-api-key:latest"

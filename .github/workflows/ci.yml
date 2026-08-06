@@ -33,6 +33,21 @@ jobs:
           GITLEAKS_CONFIG: .gitleaks.toml
           GITLEAKS_ENABLE_COMMENTS: 'false'
 
+  legal-pages:
+    name: Legal pages match their source
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # The published /privacy/ and /terms/ pages are generated from
+    # docs/legal/*.md. They were previously placeholders whose own body said
+    # "keep this in sync before launch" while the app linked to them as the real
+    # policy. This makes drift a build failure instead of a promise.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python scripts/render_legal_pages.py --check
+
   # ===================================================================
   # Path filters — same rules on PR and push. Prove only what the diff
   # can break. Optional full matrix via `full-ci` label or workflow_dispatch.
@@ -520,6 +535,7 @@ jobs:
     if: always()
     needs:
       - secret-scan
+      - legal-pages
       - changes
       - tier1-app-fast
       - tier3-emulator-e2e
@@ -530,6 +546,7 @@ jobs:
         run: |
           for result in \
             "${{ needs.secret-scan.result }}" \
+            "${{ needs.legal-pages.result }}" \
             "${{ needs.changes.result }}" \
             "${{ needs.tier1-app-fast.result }}" \
             "${{ needs.tier3-emulator-e2e.result }}" \

@@ -5,28 +5,111 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Semper — Privacy Policy</title>
   <style>
-    body { font-family: Georgia, "Times New Roman", serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #1a1a1a; }
+    body { font-family: Georgia, "Times New Roman", serif; max-width: 44rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; color: #1a1a1a; }
     h1 { font-size: 1.75rem; }
+    h2 { font-size: 1.3rem; margin-top: 2rem; }
+    h3 { font-size: 1.08rem; margin-top: 1.5rem; }
     a { color: #0b3d2e; }
-    .meta { color: #555; font-size: 0.9rem; }
+    code { background: #f2f2f2; padding: .1rem .3rem; border-radius: 3px; font-size: .92em; }
+    hr { border: 0; border-top: 1px solid #ddd; margin: 2rem 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; display: block; overflow-x: auto; }
+    th, td { border: 1px solid #ddd; padding: .5rem .6rem; text-align: left; vertical-align: top; }
+    th { background: #f7f7f7; }
+    footer { margin-top: 3rem; font-size: .9rem; color: #555; }
   </style>
 </head>
 <body>
-  <h1>Semper Privacy Policy</h1>
-  <p class="meta">Last updated: 2026-08-05</p>
-  <p>
-    The canonical policy text lives in the Semper repository at
-    <code>docs/legal/PRIVACY_POLICY.md</code>. This Hosting page is the public URL
-    target for in-app links. Operators should keep this page in sync with that
-    document (or replace this body with the full HTML rendering) before launch.
-  </p>
-  <p>
-    Summary: Semper analysis runs on-device. Optional cloud sync uses Firebase
-    Authentication, Cloud Firestore, Google Drive, Firebase Crashlytics, Cloud
-    Logging, and Resend for access-request email. You can export and delete
-    account data via the app/API; audit logs and third-party retention may
-    outlive application erasure. Contact support for privacy requests.
-  </p>
-  <p><a href="/terms/">Terms of Service</a></p>
+<!-- GENERATED FROM docs/legal/PRIVACY_POLICY.md — DO NOT EDIT.
+     Regenerate with: python scripts/render_legal_pages.py -->
+<h1>Semper — Privacy Policy</h1>
+<p><strong>Last updated:</strong> 2026-08-05 <strong>Product:</strong> Semper DIC Android app and optional cloud sync backend <strong>Contact:</strong> support mailbox configured as <code>SUPPORT_EMAIL</code> for the deployment</p>
+<p>This policy describes personal data processed by Semper when you use the app and, if enabled, the Semper cloud backend. Analysis itself runs <strong>on-device</strong>; the cloud path is optional and only active when the app is built with an API base URL.</p>
+<h2>1. Controllers and processors</h2>
+<table>
+<thead><tr><th>Role</th><th>Who</th></tr></thead>
+<tbody>
+<tr><td>App operator / controller</td><td>The organization that distributes your build and operates the GCP/Firebase project</td></tr>
+<tr><td>Subprocessors (typical)</td><td>Google (Firebase Auth, Firestore, Google Drive, Firebase Crashlytics, Cloud Logging / Cloud Run), Resend (transactional email for access-request notifications)</td></tr>
+</tbody></table>
+<p>No large-language-model or generative-AI provider is integrated.</p>
+<h2>2. Data we process</h2>
+<h3>2.1 Account and authentication (Firebase Authentication)</h3>
+<ul>
+<li>Email address, display name, and provider identifiers from Google / email sign-in (as configured for the Firebase project).</li>
+<li>Authentication tokens used to call the backend (not stored as long-lived secrets on the server beyond normal session verification).</li>
+</ul>
+<h3>2.2 Access control and devices (Firestore)</h3>
+<ul>
+<li>User profile: uid, email, role, access status (PENDING / APPROVED / SUSPENDED), optional product-limit overrides, Drive folder pointer.</li>
+<li>Registered device: device id, public key material for attestation, model / OS / app version strings.</li>
+<li>Short-lived auth challenges (nonces) with TTL.</li>
+</ul>
+<h3>2.3 Analysis metadata and files (Firestore + Google Drive)</h3>
+<ul>
+<li>Session metadata (specimen label, status, sizes, engine metrics you sync).</li>
+<li>File manifests (names, roles, checksums, Drive object ids).</li>
+<li>Binary artifacts (images, archives, reports, <code>.dat</code> / CSV) stored in a company Shared Drive under the Cloud Run service account — <strong>bytes are uploaded by the device directly to Drive</strong>, not through Cloud Run.</li>
+</ul>
+<h3>2.4 Diagnostics (Firebase Crashlytics and Analytics) — opt-in</h3>
+<ul>
+<li><strong>Off by default, and nothing is collected until you agree.</strong> Collection is disabled in the app manifest; the app asks once on first launch and you can change the answer at any time in <strong>Settings → Your data → Send crash reports</strong>. Declining, or switching it off later, also deletes any report still queued on the device.</li>
+<li>When enabled: crash reports and non-fatal diagnostics from the Android app, including device/app version metadata as provided by the Crashlytics SDK. R8 mapping files are retained by operators for deobfuscation and are not published.</li>
+<li>Diagnostics never include your images, measurement results, specimen names, or file contents.</li>
+</ul>
+<h3>2.5 Operational logs (Cloud Logging / Error Reporting)</h3>
+<ul>
+<li>Structured request logs: timestamp, request id, path, status, latency, opaque error codes, and uid/device id when resolved. Tokens, signatures, and upload URIs are not logged.</li>
+</ul>
+<h3>2.6 Notifications (Resend)</h3>
+<ul>
+<li>When a new account is created in PENDING status, support may receive an email containing the applicant’s email, display name, sign-in provider, and user id so an admin can approve access.</li>
+</ul>
+<h3>2.7 Audit trail</h3>
+<ul>
+<li>Append-only <code>audit_logs</code> in Firestore record security-relevant actions (auth denials, approvals, deletes, exports). They intentionally retain the fact of actions after account erasure and do <strong>not</strong> store analysis content.</li>
+</ul>
+<h2>3. Purposes and legal bases (summary)</h2>
+<table>
+<thead><tr><th>Purpose</th><th>Examples</th><th>Basis (typical)</th></tr></thead>
+<tbody>
+<tr><td>Provide the product</td><td>Sign-in, sync, restore, quotas</td><td>Contract / legitimate interest</td></tr>
+<tr><td>Access control</td><td>Pending approval, admin approve/revoke</td><td>Legitimate interest / compliance</td></tr>
+<tr><td>Security</td><td>Device attestation, rate limits, audit</td><td>Legitimate interest</td></tr>
+<tr><td>Reliability (server)</td><td>Cloud Logging, readiness probes</td><td>Legitimate interest</td></tr>
+<tr><td>Reliability (app diagnostics)</td><td>Crashlytics / Analytics crash reports</td><td><strong>Consent</strong> — opt-in, withdrawable in Settings</td></tr>
+<tr><td>Support onboarding</td><td>Resend access-request mail</td><td>Legitimate interest</td></tr>
+</tbody></table>
+<p>Exact legal bases depend on your jurisdiction and the deploying organization’s policies; replace this section with counsel-approved language before public launch if required.</p>
+<h2>4. Retention</h2>
+<table>
+<thead><tr><th>Data</th><th>Retention</th></tr></thead>
+<tbody>
+<tr><td>Firebase Auth account</td><td>Until you delete the account or an admin removes it</td></tr>
+<tr><td>Firestore profile, devices, sessions, file docs</td><td>Until account/session erasure via the app/API</td></tr>
+<tr><td>Drive artifacts</td><td>Deleted with session or account erasure (Shared Drive trash may retain per Workspace policy)</td></tr>
+<tr><td>Crashlytics</td><td>Per Firebase project retention settings (<strong>UNKNOWN</strong> until verified in console)</td></tr>
+<tr><td>Cloud Logging</td><td>Per GCP log retention (<strong>UNKNOWN</strong> until verified; default often 30 days)</td></tr>
+<tr><td>Resend message content</td><td>Per Resend retention (<strong>UNKNOWN</strong> until verified)</td></tr>
+<tr><td>Audit logs</td><td>Retained after erasure for security/compliance; not included in user export of analysis content</td></tr>
+</tbody></table>
+<p>Scheduled Firestore exports / PITR, where enabled, follow FIRESTORE_DATA_PROTECTION.md.</p>
+<h2>5. Your rights — export and deletion</h2>
+<ul>
+<li><strong>Export:</strong> In the app, <strong>Settings → Your data → Download my cloud account data</strong>. (Directly: authenticated, device-attested <code>GET /v1/me/export</code>, which returns profile, devices, and complete session manifests — <code>complete: true</code> is written last, so a truncated download is detectable.) Binary artifacts are downloaded via <code>GET /v1/files/{id}/content</code> (or the app Restore flow).</li>
+<li><strong>Delete session:</strong> Device-attested <code>DELETE /v1/sessions/{id}</code> removes Drive folder + Firestore metadata for that analysis.</li>
+<li><strong>Delete account:</strong> Device-attested <code>DELETE /v1/me</code> removes the Drive user subtree and Firestore user/session/device/file docs. <strong>Audit logs remain.</strong></li>
+<li><strong>Limits:</strong> Third-party processor retention (Crashlytics, Logging, Resend, Workspace trash) may outlive application erasure until those systems’ own retention/TTL elapse. Export does not include other users’ data or raw Cloud Logging streams.</li>
+</ul>
+<h2>6. Sharing</h2>
+<p>Data is shared with subprocessors above to operate the service. It is not sold. Admin operators of your deployment can approve users and view operational logs according to project IAM.</p>
+<h2>7. Security (summary)</h2>
+<p>TLS in transit (Cloud Run / Gateway), deny-all client Firestore rules (server SDK only), device attestation for high-consequence mutations, rate limits, security headers, and opaque client error bodies on Cloud Run. See CLOUD_ARCHITECTURE_GCP.md.</p>
+<h2>8. Children</h2>
+<p>Semper is intended for professional / research use, not for children under 16 (or the applicable age of digital consent).</p>
+<h2>9. Changes</h2>
+<p>Material changes will update the “Last updated” date. Significant changes to cloud processing should be reflected in-app or in release notes.</p>
+<h2>10. Contact</h2>
+<p>Use the in-app support / help action or the configured support email for privacy requests (export, deletion, access questions).</p>
+<footer><a href="/privacy/">Privacy Policy</a> &middot; <a href="/terms/">Terms of Service</a></footer>
 </body>
 </html>

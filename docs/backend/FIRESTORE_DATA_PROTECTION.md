@@ -37,20 +37,39 @@ export unless PITR is enabled and waits for export completion. Alert on workflow
 failure and review bucket objects weekly. API Gateway/in-process application
 rate limits are unrelated to these Admin API operations.
 
-## Quarterly restore drill
+## Restore drill
 
-1. Select a completed export and a non-production recovery project.
-2. Ensure its Firestore database/location and indexes are compatible.
-3. Run:
+Automated: `.github/workflows/firestore-restore-drill.yml` runs monthly and on
+demand. It imports the latest export into the drill project, **waits** for the
+operation, verifies the result, and purges the drill database afterwards so a
+second full copy of production is not left sitting in a weaker project.
 
-   `PRODUCTION_PROJECT=prod RESTORE_DRILL_PROJECT=recovery FIRESTORE_EXPORT_URI=gs://... bash scripts/firestore-restore-drill.sh`
+Verification is not a checklist — it is `scripts/firestore_verify.py`, which
+compares the restored database against `manifest.json`, written beside each
+export by `scripts/firestore-export.sh` at export time:
 
-   The script refuses to target the named production project.
-4. Wait for the import operation to complete. Compare collection/document
-   counts, inspect `schemaVersion`, run backend smoke tests against recovery,
-   and sample user/session/file relationships. Audit logs must be present.
-5. Record recovery point, elapsed restore time, verification evidence, and any
-   RPO/RTO gap. Delete the drill project under the approved cleanup process.
+* per-collection document counts, exactly (`challenges` is excluded — 120 s TTL
+  nonces legitimately differ between export and restore);
+* a 25-session sample re-walked as `session → files`, so a restore that keeps the
+  counts but loses the relationships fails;
+* `schemaVersion` presence, which catches importing a stale or wrong export.
+
+Any mismatch fails the workflow. Exports taken before manifests existed cannot be
+verified automatically — the drill exits 3 rather than passing silently.
+
+To run it by hand against a specific export:
+
+```
+PRODUCTION_PROJECT=prod RESTORE_DRILL_PROJECT=recovery \
+FIRESTORE_EXPORT_URI=gs://... bash scripts/firestore-restore-drill.sh
+```
+
+The script refuses to target the named production project.
+
+**RTO is whatever the drill reports.** The import is timed and printed; record
+that number, the recovery point, and the verification output against
+`docs/ops/PRODUCTION_READINESS_GATE.md`. Until a drill has passed at least once,
+treat the restore path as unproven.
 
 PITR complements exports; it does not replace independently retained exports or
 restore drills.

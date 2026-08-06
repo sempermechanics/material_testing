@@ -472,7 +472,7 @@ The shape it deploys into, and why:
 | Min instances | 0 | Scale to zero — $0 when idle |
 | Max instances | 10 | Pilot-sized ceiling |
 | CPU / memory | 1 / 512Mi | Bytes never transit Cloud Run; requests are tiny |
-| Timeout | 120 s | Same reason — no long-lived request bodies |
+| Timeout | 60 s | Must not exceed the API Gateway deadline (60 s, `gateway/openapi.yaml`), which bounds every Drive call inside it. Session provisioning — the one operation that could not fit — now runs as a Cloud Task. |
 | Public endpoint | yes | Auth is enforced in the app layer (ID token + device signature), not the network layer |
 
 No mounted secrets. All identity comes from the attached SA + metadata server.

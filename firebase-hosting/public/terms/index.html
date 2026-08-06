@@ -5,27 +5,51 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Semper — Terms of Service</title>
   <style>
-    body { font-family: Georgia, "Times New Roman", serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #1a1a1a; }
+    body { font-family: Georgia, "Times New Roman", serif; max-width: 44rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; color: #1a1a1a; }
     h1 { font-size: 1.75rem; }
+    h2 { font-size: 1.3rem; margin-top: 2rem; }
+    h3 { font-size: 1.08rem; margin-top: 1.5rem; }
     a { color: #0b3d2e; }
-    .meta { color: #555; font-size: 0.9rem; }
+    code { background: #f2f2f2; padding: .1rem .3rem; border-radius: 3px; font-size: .92em; }
+    hr { border: 0; border-top: 1px solid #ddd; margin: 2rem 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; display: block; overflow-x: auto; }
+    th, td { border: 1px solid #ddd; padding: .5rem .6rem; text-align: left; vertical-align: top; }
+    th { background: #f7f7f7; }
+    footer { margin-top: 3rem; font-size: .9rem; color: #555; }
   </style>
 </head>
 <body>
-  <h1>Semper Terms of Service</h1>
-  <p class="meta">Last updated: 2026-08-05</p>
-  <p>
-    The canonical terms live in the Semper repository at
-    <code>docs/legal/TERMS_OF_SERVICE.md</code>. This Hosting page is the public
-    URL target for in-app links. Keep it aligned with that document before
-    public distribution; governing-law clauses need operator/counsel review.
-  </p>
-  <p>
-    Summary: Semper is provided for professional/research measurement workflows.
-    Cloud features require an approved account and device attestation for
-    sensitive actions. The service is provided as-is; see the Privacy Policy for
-    data handling.
-  </p>
-  <p><a href="/privacy/">Privacy Policy</a></p>
+<!-- GENERATED FROM docs/legal/TERMS_OF_SERVICE.md — DO NOT EDIT.
+     Regenerate with: python scripts/render_legal_pages.py -->
+<h1>Semper — Terms of Service</h1>
+<p><strong>Last updated:</strong> 2026-08-05 <strong>Product:</strong> Semper (IndicVision DIC)</p>
+<p>These Terms govern use of the Semper Android application and any optional cloud sync backend operated with it. By signing in or using cloud features, you agree to these Terms. If you do not agree, do not use the cloud features; offline analysis may still be available depending on your build.</p>
+<h2>1. The service</h2>
+<p>Semper performs digital image correlation / related analysis <strong>on the device</strong>. Optional cloud features provide identity, metadata storage (Firestore), artifact storage (Google Drive Shared Drive), sync, restore, and admin access control. There is <strong>no</strong> generative AI / LLM feature in this product.</p>
+<h2>2. Accounts and access</h2>
+<ul>
+<li>Access may require Firebase Authentication and operator approval (PENDING → APPROVED). Operators may suspend accounts.</li>
+<li>You must keep credentials secure. Device attestation binds an account to a registered device; transferring devices may require re-registration per product rules.</li>
+<li>You are responsible for activity under your account.</li>
+</ul>
+<h2>3. Acceptable use</h2>
+<p>You may not: attempt to bypass authentication or attestation; abuse rate limits or quotas; upload unlawful content; interfere with other users; reverse-engineer the service except where mandatory law allows; or use the service to process data you are not authorized to handle.</p>
+<h2>4. Your content</h2>
+<p>You retain rights to analysis data you create. By syncing, you grant the operator a limited license to store and process that data solely to provide sync, restore, support, and security. Cloud quotas and file-size limits apply.</p>
+<h2>5. Privacy</h2>
+<p>Personal data is described in the <a href="/privacy/">Privacy Policy</a>. Export and deletion capabilities and their limits are part of that policy.</p>
+<h2>6. Availability and disclaimers</h2>
+<p>The service is provided <strong>“as is”</strong>. Offline-first design means core measurement work can continue when cloud is unavailable; sync may be delayed. We do not warrant uninterrupted cloud availability. To the maximum extent permitted by law, liability for cloud features is limited to direct damages not exceeding fees paid (if any) for the service in the prior three months — or zero if the service is provided without charge.</p>
+<h2>7. Research / professional use</h2>
+<p>Results are tools for engineering/research workflows. You are responsible for validation, calibration, and decisions made from outputs.</p>
+<h2>8. Termination</h2>
+<p>You may stop using the app and request account deletion. Operators may suspend or terminate access for breach or risk. Survival: sections on content license (for residual backups), disclaimers, liability limits, and audit retention.</p>
+<h2>9. Changes</h2>
+<p>Terms may be updated; continued use after notice constitutes acceptance where permitted. Material changes should appear in release notes or in-app notice.</p>
+<h2>10. Contact</h2>
+<p>Support / help from the app settings, or the deployment’s configured support email.</p>
+<h2>11. Governing law</h2>
+<p>Replace with the deploying organization’s chosen jurisdiction before public distribution. Until then, these Terms are a <strong>template</strong> for operator review.</p>
+<footer><a href="/privacy/">Privacy Policy</a> &middot; <a href="/terms/">Terms of Service</a></footer>
 </body>
 </html>
