@@ -59,4 +59,59 @@ class DicUploadWorkerOutcomesTest {
             UploadWorkOutcomes.classifyResume("UPLOADING", pendingCount = 2, allPendingMatchArtifacts = true),
         )
     }
+
+    @Test
+    fun `resume classifier — provisioning waits instead of rebuilding`() {
+        // The backend opens Drive upload targets in a Cloud Task, so a fresh
+        // session legitimately reports zero pending uploads for a moment.
+        // Rebuilding here would spin: every poll would mint another session.
+        assertEquals(
+            UploadWorkOutcomes.ResumeKind.WAIT,
+            UploadWorkOutcomes.classifyResume(
+                "PROVISIONING",
+                pendingCount = 0,
+                allPendingMatchArtifacts = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `resume classifier — provisioning wins over an apparent mismatch`() {
+        // Nothing is provisioned yet, so "the pending set does not match our
+        // artifacts" is not evidence of anything. Waiting must take precedence.
+        assertEquals(
+            UploadWorkOutcomes.ResumeKind.WAIT,
+            UploadWorkOutcomes.classifyResume(
+                "PROVISIONING",
+                pendingCount = 0,
+                allPendingMatchArtifacts = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `resume classifier — failed provisioning rebuilds`() {
+        // Terminal: this session will never get upload targets, so polling it
+        // forever would strand the analysis.
+        assertEquals(
+            UploadWorkOutcomes.ResumeKind.REBUILD,
+            UploadWorkOutcomes.classifyResume(
+                "PROVISION_FAILED",
+                pendingCount = 0,
+                allPendingMatchArtifacts = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `resume classifier — completed still wins over provisioning`() {
+        assertEquals(
+            UploadWorkOutcomes.ResumeKind.DONE,
+            UploadWorkOutcomes.classifyResume(
+                "COMPLETED",
+                pendingCount = 0,
+                allPendingMatchArtifacts = true,
+            ),
+        )
+    }
 }

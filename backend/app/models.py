@@ -116,6 +116,12 @@ class FileComplete(BaseModel):
         return v
 
 
+class ProvisionTask(BaseModel):
+    """Body of the Cloud Tasks provisioning callback. Validated like any other
+    input — the queue is trusted to be Google, not to be well-behaved."""
+    sessionId: SessionId
+
+
 class UserConfigPatch(BaseModel):
     """Admin overrides for per-user product limits. Omitted fields stay unchanged;
     send JSON null to clear an override and re-inherit the fleet default."""

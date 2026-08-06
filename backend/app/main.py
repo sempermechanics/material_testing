@@ -1,7 +1,9 @@
+import json
 import logging
 import re
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -11,9 +13,16 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import audit, drive, firestore_repo as repo
 from . import observability as obs
+from . import tasks
 from .config import settings
 from .deps import admin_user, current_user, device_or_legacy_reader, verified_device
-from .models import DeviceReg, FileComplete, SessionCreate, UserConfigPatch
+from .models import (
+    DeviceReg,
+    FileComplete,
+    ProvisionTask,
+    SessionCreate,
+    UserConfigPatch,
+)
 from . import rate_limit
 from .validation import (
     AccessStatus,
@@ -27,6 +36,12 @@ from .validation import (
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("indic")
 _access_log = logging.getLogger("indic.access")
+
+
+def json_dumps(value) -> str:
+    """Compact JSON for the streamed export. `default=str` because Firestore
+    hands back datetimes, which json cannot serialise."""
+    return json.dumps(value, separators=(",", ":"), default=str)
 
 
 def _startup_checks():
@@ -259,15 +274,9 @@ def export_account(ctx=Depends(verified_device)):
     if not rate_limit.export_bucket.allow(uid):
         raise HTTPException(429, "rate_limited")
     profile = repo.get_user(uid) or {}
-    sessions = []
-    for s in repo.iter_all_user_sessions(uid):
-        s = dict(s)
-        s["files"] = repo.list_session_files_all(s["sessionId"])
-        sessions.append(s)
 
-    audit.record(uid, action="DATA_EXPORT", target={"type": "user", "id": uid},
-                 detail={"sessions": len(sessions)})
-    return {
+    audit.record(uid, action="DATA_EXPORT", target={"type": "user", "id": uid})
+    header = {
         "exportedAtUtc": datetime.now(timezone.utc).isoformat(),
         "schema": "indic.account.export/1",
         "profile": {
@@ -281,14 +290,47 @@ def export_account(ctx=Depends(verified_device)):
             "lastSeenAt": str(profile.get("lastSeenAt")),
         },
         "devices": repo.list_user_devices(uid),
-        "sessions": sessions,
-        "complete": True,
         "artifactDownload": {
             "endpoint": "/v1/files/{fileId}/content",
             "note": "Images, .dat results, CSVs and reports are downloadable per file "
                     "using the fileId values above, or via the app's Restore screen.",
         },
     }
+
+    def stream():
+        """Emit the document incrementally.
+
+        The previous version built the whole account in memory first — every
+        session, plus a files query per session — before writing a byte. For a
+        busy account that is an unbounded allocation and a long silence before
+        the first byte, on a request with a 60s budget. Streaming keeps memory
+        flat and starts the response immediately; `"complete": true` is written
+        last, so a truncated transfer is detectable rather than looking like a
+        smaller-but-valid export.
+        """
+        prefix = json_dumps(header)
+        yield prefix[:-1].encode()  # drop the closing brace; we continue the object
+        yield b',"sessions":['
+        first = True
+        count = 0
+        for s in repo.iter_all_user_sessions(uid):
+            s = dict(s)
+            s["files"] = repo.list_session_files_all(s["sessionId"])
+            yield (b"" if first else b",") + json_dumps(s).encode()
+            first = False
+            count += 1
+        yield b'],"sessionCount":' + str(count).encode()
+        yield b',"complete":true}'
+
+    return StreamingResponse(
+        stream(),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": 'attachment; filename="semper-account-export.json"',
+            # A full-account dump of personal data must not sit in a shared cache.
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.delete("/v1/me")
@@ -501,7 +543,12 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
 
 
 @app.get("/v1/sessions/{sid}/uploads")
-def session_uploads(sid: SessionId, ctx=Depends(device_or_legacy_reader)):
+def session_uploads(
+    sid: SessionId,
+    page_size: int = 1000,
+    page_token: PageToken = "",
+    ctx=Depends(device_or_legacy_reader),
+):
     """What still needs uploading for a session — the resume path.
 
     An interrupted upload re-reads this instead of calling POST /v1/sessions
@@ -525,27 +572,59 @@ def session_uploads(sid: SessionId, ctx=Depends(device_or_legacy_reader)):
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
         raise HTTPException(404, "session_not_found")
+    page_size = max(1, min(page_size, 1000))
+    uploads, next_token = repo.list_pending_uploads(
+        sid, limit=page_size, page_token=page_token or None,
+    )
     return {
         "sessionId": sid,
+        # PROVISIONING means the upload targets are still being opened — the
+        # client should poll rather than treat an empty list as "nothing to do".
         "status": session.get("status"),
-        "uploads": repo.list_pending_uploads(sid),
+        "provisionError": session.get("provisionError"),
+        "uploads": uploads,
+        "page": {
+            "size": page_size,
+            "count": len(uploads),
+            "nextPageToken": next_token,
+            "hasMore": bool(next_token),
+        },
     }
 
 
 @app.get("/v1/sessions/{sid}/files")
-def list_session_files(sid: SessionId, user=Depends(current_user)):
-    """The manifest for one analysis — what the app needs to restore it."""
+def list_session_files(
+    sid: SessionId,
+    page_size: int = 1000,
+    page_token: PageToken = "",
+    user=Depends(current_user),
+):
+    """The manifest for one analysis — what the app needs to restore it.
+
+    Cursor-paginated. This silently truncated at 2000 files before, which for a
+    restore means a manifest quietly missing entries.
+    """
     if not rate_limit.listing_bucket.allow(user["uid"]):
         raise HTTPException(429, "rate_limited")
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
         raise HTTPException(404, "session_not_found")
+    page_size = max(1, min(page_size, 1000))
+    files, next_token = repo.list_session_files(
+        sid, limit=page_size, page_token=page_token or None,
+    )
     return {
         "sessionId": sid,
         "localSessionId": session.get("localSessionId", ""),
         "specimen": session.get("specimen"),
         "status": session.get("status"),
-        "files": repo.list_session_files(sid),
+        "files": files,
+        "page": {
+            "size": page_size,
+            "count": len(files),
+            "nextPageToken": next_token,
+            "hasMore": bool(next_token),
+        },
     }
 
 
@@ -619,13 +698,15 @@ def create_session(body: SessionCreate, ctx=Depends(verified_device)):
     if not rate_limit.session_bucket.allow(user["uid"]):
         raise HTTPException(429, "rate_limited")
 
-    # Idempotent retry: same localSessionId + still UPLOADING → return existing.
+    # Idempotent retry: same localSessionId + still in flight → return existing.
     existing = repo.find_incomplete_session(user["uid"], body.localSessionId)
     if existing:
         sid = existing["sessionId"]
+        uploads, _ = repo.list_pending_uploads(sid)
         return {
             "sessionId": sid,
-            "uploads": repo.list_pending_uploads(sid),
+            "status": existing.get("status"),
+            "uploads": uploads,
         }
 
     # Quotas: one session == one analysis.
@@ -650,37 +731,131 @@ def create_session(body: SessionCreate, ctx=Depends(verified_device)):
     # the Firestore client uniformly and adds no security value here).
     repo.create_session(sid, user, device, body)
 
+    # Write the file docs (cheap, no Drive I/O) so the manifest is durable before
+    # any upload target exists. Provisioning then only has to fill in uploadUrl,
+    # which is what makes the task idempotent and resumable.
     try:
-        token = drive.access_token()
-        # Only create the Drive subfolders this manifest actually uses (a bundle
-        # upload needs none — Session.zip and metadata.json sit at the session root).
-        folders = drive.ensure_session_folders(token, user["uid"], sid,
-                                               roles={f.role for f in body.files})
-        # Remember the user's Drive subtree so account erasure can delete it by id,
-        # and record the session's own folder for the delete / verify paths.
-        repo.remember_user_folder(user["uid"], folders["userFolderId"])
-        repo.set_session_folder(sid, folders["sessionFolderId"])
-
-        uploads = []
         for f in body.files:
-            session_uri = drive.init_resumable(token, folders[f.role], f.name, f.bytes)
-            file_id = f"{sid}_{f.role}_{f.name}"
-            repo.create_file(sid, user["uid"], file_id, f, session_uri)
-            # 32 MiB (a 256 KiB multiple, as Drive requires): a session is now one
-            # large Session.zip, so throughput is chunk-size × round-trips — small
-            # chunks leave the link idle waiting on RTTs.
-            uploads.append({"fileId": file_id, "uploadUrl": session_uri,
-                            "chunkSize": 32 * 1024 * 1024})
+            repo.create_file(sid, user["uid"], f"{sid}_{f.role}_{f.name}", f, None)
     except Exception:
-        # Staging failed after the reserve. Roll back the reserved session (and any
-        # file docs written so far) so it does not sit against the user's quota as
-        # an unusable shell; the client can safely retry a fresh create.
         repo.delete_session(sid)
         raise
 
     audit.record(user["uid"], device.get("deviceId"), action="SESSION_CREATE",
                  target={"type": "session", "id": sid})
-    return {"sessionId": sid, "uploads": uploads}
+
+    # Opening a Drive resumable session per file is ~2 round-trips each; at the
+    # 600-file ceiling that cannot fit in a 60s request. Hand it to Cloud Tasks
+    # and let the client poll /uploads, which it already does for resume.
+    if tasks.enqueue_provision(sid):
+        repo.set_session_status(sid, "PROVISIONING")
+        obs.log_event(log, logging.INFO, "session_provision_queued",
+                      outcome="ok", stage="queued", count=len(body.files))
+        return {"sessionId": sid, "status": "PROVISIONING", "uploads": []}
+
+    # No queue configured (local dev, tests, or an environment that has not
+    # created it): provision inline. Same outcome, slower request. Because
+    # nothing will retry, a failure here rolls the whole session back rather
+    # than leaving a shell against the user's quota.
+    provision_session(sid, purge_on_failure=True)
+    session = repo.get_session(sid) or {}
+    uploads, _ = repo.list_pending_uploads(sid)
+    return {"sessionId": sid, "status": session.get("status"), "uploads": uploads}
+
+
+def purge_session(sid: str) -> None:
+    """Delete a session's Drive folder AND its Firestore docs.
+
+    repo.delete_session is Firestore-only, so using it alone as a rollback left
+    the Drive subtree (and any resumable sessions already opened inside it)
+    orphaned, with nothing left pointing at them.
+    """
+    session = repo.get_session(sid) or {}
+    folder = session.get("driveFolderId")
+    if folder:
+        try:
+            drive.delete_file(drive.access_token(), folder)
+        except Exception as e:  # noqa: BLE001
+            # Best effort: the Firestore rollback below still has to happen, or
+            # the user is charged quota for a session they cannot use.
+            log.warning("rollback could not delete Drive folder %s: %s", folder, e)
+    repo.delete_session(sid)
+
+
+def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
+    """Open a Drive resumable session for every file that still lacks one.
+
+    Idempotent and resumable: it only looks at files with no uploadUrl, so a
+    retried task never mints a second upload URI for a file that already has
+    one. Runs in the Cloud Tasks worker, or inline when no queue is configured.
+
+    `purge_on_failure` is for the inline path, where no retry is coming: the
+    session is rolled back completely. The queued path instead leaves it
+    PROVISION_FAILED so Cloud Tasks can retry and a polling client is told to
+    stop waiting.
+    """
+    session = repo.get_session(sid)
+    if not session:
+        return {"sessionId": sid, "provisioned": 0, "status": "gone"}
+    uid = session["uid"]
+    started = time.monotonic()
+
+    try:
+        token = drive.access_token()
+        roles = {f["role"] for f in repo.iter_unprovisioned_files(sid)}
+        if roles:
+            # Only create the Drive subfolders this manifest actually uses (a
+            # bundle upload needs none — Session.zip and metadata.json sit at
+            # the session root).
+            folders = drive.ensure_session_folders(token, uid, sid, roles=roles)
+            repo.remember_user_folder(uid, folders["userFolderId"])
+            repo.set_session_folder(sid, folders["sessionFolderId"])
+
+            pending = list(repo.iter_unprovisioned_files(sid))
+
+            def open_one(f):
+                uri = drive.init_resumable(token, folders[f["role"]], f["name"], f["sizeBytes"])
+                repo.set_file_upload_url(f["fileId"], uri)
+
+            # Bounded fan-out rather than a serial loop — same pattern as
+            # drive.probe_files. Serially this was the whole problem.
+            if pending:
+                workers = max(1, min(settings.TASKS_PROVISION_WORKERS, len(pending)))
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    for result in pool.map(open_one, pending):
+                        _ = result
+            provisioned = len(pending)
+        else:
+            provisioned = 0
+    except Exception as e:  # noqa: BLE001
+        obs.log_event(log, logging.ERROR, "session_provision_failed",
+                      outcome="error", errorCode="drive_provision_failed", dependency="drive")
+        log.error("provisioning session %s failed: %s", sid, e)
+        if purge_on_failure:
+            # Nothing will retry, so leave nothing behind — including the Drive
+            # subtree and any resumable sessions already opened inside it.
+            purge_session(sid)
+        else:
+            # A retry is coming. Keep the session so the task can resume, and
+            # mark it so a polling client stops waiting and rebuilds instead.
+            repo.set_session_status(sid, "PROVISION_FAILED", error_code="drive_provision_failed")
+        raise
+
+    repo.set_session_status(sid, "UPLOADING")
+    obs.log_event(log, logging.INFO, "session_provisioned", outcome="ok",
+                  count=provisioned, latencyMs=round((time.monotonic() - started) * 1000, 1))
+    return {"sessionId": sid, "provisioned": provisioned, "status": "UPLOADING"}
+
+
+@app.post("/v1/tasks/provision-session")
+def provision_session_task(body: ProvisionTask, caller=Depends(tasks.tasks_caller)):
+    """Cloud Tasks callback: open the Drive upload targets for one session.
+
+    Authenticated by the OIDC token Cloud Tasks attaches (see tasks.tasks_caller)
+    — not a user route. Cloud Tasks retries on a non-2xx, and provision_session
+    is idempotent, so a retry resumes rather than duplicating work.
+    """
+    return provision_session(body.sessionId)
 
 
 @app.get("/v1/admin/users")

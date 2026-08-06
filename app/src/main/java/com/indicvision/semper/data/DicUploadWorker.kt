@@ -103,6 +103,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
         /** Unusable (gone, or its files don't match ours): delete it and start fresh. */
         data object Rebuild : Resume
+
+        /** The backend is still opening upload targets — poll again shortly. */
+        data object Wait : Resume
     }
 
     /**
@@ -156,17 +159,53 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             UploadWorkOutcomes.ResumeKind.DONE -> Resume.Done
             UploadWorkOutcomes.ResumeKind.REBUILD -> Resume.Rebuild
             UploadWorkOutcomes.ResumeKind.CONTINUE -> Resume.Continue(work)
+            UploadWorkOutcomes.ResumeKind.WAIT -> Resume.Wait
         }
     }
 
-    /** Declare the whole analysis and get one resumable target per file. */
+    /**
+     * Poll until the backend has opened this session's upload targets.
+     *
+     * Provisioning runs as a Cloud Task, so a freshly created session reports
+     * PROVISIONING with an empty upload list for a moment. Bounded: if it has
+     * not finished within [PROVISION_POLL_ATTEMPTS], hand back to WorkManager
+     * rather than holding a foreground worker open indefinitely.
+     */
+    private suspend fun awaitProvisioned(
+        api: IndicApi,
+        idToken: String,
+        cloudSessionId: String,
+        artifacts: List<Artifact>,
+    ): Resume {
+        var delayMs = PROVISION_POLL_INITIAL_MS
+        repeat(PROVISION_POLL_ATTEMPTS) {
+            delay(delayMs)
+            when (val resumed = resumeSession(api, idToken, cloudSessionId, artifacts)) {
+                is Resume.Wait -> delayMs = (delayMs * 2).coerceAtMost(PROVISION_POLL_MAX_MS)
+                else -> return resumed
+            }
+        }
+        Timber.w("Session %s still provisioning after polling — will retry later", cloudSessionId)
+        return Resume.Wait
+    }
+
+    /**
+     * Declare the whole analysis and obtain one resumable target per file.
+     *
+     * The backend opens those targets in a Cloud Task rather than inside the
+     * request (600 files was ~1200 sequential Drive round-trips in a 60s
+     * budget), so the response may come back PROVISIONING with an empty upload
+     * list. In that case we record the session id and poll the resume endpoint
+     * until the targets exist. Returns null when provisioning has not finished
+     * in time — the caller retries the whole job later.
+     */
     private suspend fun createSession(
         api: IndicApi,
         idToken: String,
         localId: String,
         record: SessionRecord,
         artifacts: List<Artifact>,
-    ): Plan {
+    ): Plan? {
         val specs = artifacts.map {
             FileSpecDto(it.name, it.role, it.file.length(), it.sha256Hex ?: sha256(it.file))
         }
@@ -182,6 +221,21 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             idToken,
             SessionCreateRequest(record.refName, specs, metrics, localSessionId = localId),
         )
+        // Persist the pointer before anything can fail: a session that exists in
+        // the cloud but is not recorded here would be orphaned against quota.
+        SessionStore.setCloudSessionId(applicationContext, localId, session.sessionId)
+
+        if (session.status == UploadWorkOutcomes.STATUS_PROVISIONING || session.uploads.isEmpty()) {
+            Timber.i("Session %s is provisioning — waiting for upload targets", session.sessionId)
+            return when (val r = awaitProvisioned(api, idToken, session.sessionId, artifacts)) {
+                is Resume.Continue -> Plan(session.sessionId, r.work)
+                // Provisioning failed, or the manifest no longer matches: let the
+                // caller's rebuild path erase this session and start over.
+                Resume.Rebuild, Resume.Done -> null
+                Resume.Wait -> null
+            }
+        }
+
         require(session.uploads.size == artifacts.size) {
             "Backend returned ${session.uploads.size} targets for ${artifacts.size} files"
         }
@@ -397,6 +451,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val plan: Plan = if (existingId == null) {
                 Timber.i("No resumable session for %s — creating a new one", localId)
                 createSession(api, idToken, localId, record, uploadSet)
+                    // Still provisioning when we ran out of patience. The session
+                    // id is already stored, so the next run resumes it rather
+                    // than creating a second one.
+                    ?: return@withContext Result.retry()
             } else {
                 when (val r = resumeSession(api, idToken, existingId, uploadSet)) {
                     is Resume.Continue -> {
@@ -425,6 +483,13 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                             .onFailure { Timber.w(it, "Could not delete unusable session") }
                         SessionStore.setCloudSessionId(applicationContext, localId, "")
                         stagingDir.deleteRecursively()
+                        return@withContext Result.retry()
+                    }
+                    Resume.Wait -> {
+                        // Backend is still opening upload targets. Keep the
+                        // session pointer and the staged files — retrying is the
+                        // whole point — and come back later.
+                        Timber.i("Session %s still provisioning — retrying later", existingId)
                         return@withContext Result.retry()
                     }
                 }
@@ -616,6 +681,14 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
         /** Hex length of a SHA-256 digest. */
         const val SHA256_HEX_LEN = 64
+
+        // Polling while the backend provisions upload targets in a Cloud Task.
+        // Bounded on purpose: past this the job hands back to WorkManager rather
+        // than holding a foreground worker (and its notification) open. The
+        // session pointer is already stored, so the retry resumes it.
+        const val PROVISION_POLL_ATTEMPTS = 6
+        const val PROVISION_POLL_INITIAL_MS = 1_000L
+        const val PROVISION_POLL_MAX_MS = 8_000L
 
         /** Extensions that are already compressed — stored, not re-deflated, in Session.zip. */
         val NO_RECOMPRESS = setOf("jpg", "jpeg", "png", "pdf", "webp", "zip")

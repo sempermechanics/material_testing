@@ -71,6 +71,30 @@ class Settings:
     # one. Verification only needs the project id, not that project's resources.
     FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "") or GCP_PROJECT
 
+    # --- async session provisioning (Cloud Tasks) ---
+    # Opening one Drive resumable session per file, inline, meant a 600-file
+    # analysis made ~1200 sequential round-trips inside a 60s request budget.
+    # Provisioning now runs as a Cloud Task; POST /v1/sessions returns
+    # immediately with status PROVISIONING and the client polls the existing
+    # /uploads resume endpoint.
+    #
+    # Leave TASKS_QUEUE empty to provision inline (local dev, tests, and any
+    # deployment that has not created the queue) — the request is slower but the
+    # behaviour is identical from the client's point of view.
+    TASKS_QUEUE = os.environ.get("TASKS_QUEUE", "")
+    TASKS_LOCATION = os.environ.get("TASKS_LOCATION", "asia-south1")
+    # Where Cloud Tasks delivers the job. The service's own base URL.
+    TASKS_TARGET_BASE_URL = os.environ.get("TASKS_TARGET_BASE_URL", "")
+    # The service account Cloud Tasks signs the OIDC token with, and therefore
+    # the only identity /v1/tasks/* accepts.
+    TASKS_INVOKER_SA = os.environ.get("TASKS_INVOKER_SA", "") or SERVICE_ACCOUNT_EMAIL
+    # Bounded fan-out when the worker opens resumable sessions.
+    TASKS_PROVISION_WORKERS = _env_int("TASKS_PROVISION_WORKERS", "8")
+
+    @property
+    def tasks_enabled(self) -> bool:
+        return bool(self.TASKS_QUEUE and self.TASKS_TARGET_BASE_URL and self.GCP_PROJECT)
+
     # --- pilot / testing switches (turn OFF for production) ---
     # 1 = skip ID-token + device-signature checks entirely. Lets you smoke-test
     # the Drive + Firestore path with curl before wiring the app. NEVER in prod:

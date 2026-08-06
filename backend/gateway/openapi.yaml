@@ -6,6 +6,11 @@ info:
     Device-attested routes require headers X-Device-Id, X-Nonce, X-Signature
     (ECDSA-P256 over nonce+METHOD+path+sha256(body)) in addition to the
     end-user Bearer ID token (Authorization or X-Forwarded-Authorization).
+
+    POST /v1/tasks/provision-session is deliberately absent: it is the Cloud
+    Tasks callback, delivered straight to the Cloud Run URL with an OIDC token
+    for the task invoker service account, and must not be reachable through the
+    public front door at all.
   version: '1.0'
 schemes:
   - https
@@ -18,12 +23,36 @@ produces:
 # Template — replace before `gcloud api-gateway api-configs create`:
 #   CLOUD_RUN_URL=$(gcloud run services describe indic-api --region REGION \
 #                     --format='value(status.url)')
-#   sed "s|__CLOUD_RUN_URL__|${CLOUD_RUN_URL}|g" openapi.yaml > openapi.generated.yaml
-# Never commit a live Cloud Run hostname here.
+#   sed -e "s|__CLOUD_RUN_URL__|${CLOUD_RUN_URL}|g" \
+#       -e "s|__FIREBASE_PROJECT_ID__|${GOOGLE_CLOUD_PROJECT}|g" \
+#       openapi.yaml > openapi.generated.yaml
+# Never commit a live Cloud Run hostname or project id here.
+#
+# jwt_audience makes ESPv2 mint an ID token for the Cloud Run service on each
+# forwarded request. That is what lets the service drop --allow-unauthenticated
+# and grant run.invoker to the gateway SA alone. Without it the Cloud Run URL is
+# directly reachable and every quota below is bypassable.
 x-google-backend:
   address: __CLOUD_RUN_URL__
+  jwt_audience: __CLOUD_RUN_URL__
   path_translation: APPEND_PATH_TO_ADDRESS
   deadline: 60.0
+# End-user authentication at the edge. ESPv2 validates the Firebase ID token,
+# rejects a malformed/expired one before it ever reaches Cloud Run, and moves
+# the original token to X-Forwarded-Authorization — which is exactly what
+# app/deps.py::_client_bearer already reads. The backend still verifies the
+# token itself; this is defence in depth, not a replacement.
+securityDefinitions:
+  firebase:
+    authorizationUrl: ''
+    flow: implicit
+    type: oauth2
+    x-google-issuer: https://securetoken.google.com/__FIREBASE_PROJECT_ID__
+    x-google-jwks_uri: https://www.googleapis.com/service_accounts/v1/metadata/x509/securetoken@system.gserviceaccount.com
+    x-google-audiences: __FIREBASE_PROJECT_ID__
+# Applies to every operation; the health probes opt out with `security: []`.
+security:
+  - firebase: []
 # Per-consumer quotas (ESPv2 / Service Management). Deploy with the gateway
 # OpenAPI config so these metrics are registered; in-process token buckets in
 # app/rate_limit.py are belt-and-braces per Cloud Run instance.
@@ -98,6 +127,8 @@ paths:
   /healthz:
     get:
       operationId: healthz
+      # Load balancers and uptime checks have no ID token.
+      security: []
       x-google-quota:
         metricCosts:
           health-requests: 1
@@ -107,6 +138,7 @@ paths:
     get:
       operationId: readyz
       description: Readiness — Firestore + Drive probes; stable 503 detail codes.
+      security: []
       x-google-quota:
         metricCosts:
           health-requests: 1
@@ -188,8 +220,12 @@ paths:
     post:
       operationId: createSession
       description: >
-        Device-attested. Idempotent on localSessionId while status is UPLOADING.
+        Device-attested. Idempotent on localSessionId while the session is
+        in flight (PROVISIONING or UPLOADING).
         Requires attestation headers (X-Device-Id, X-Nonce, X-Signature).
+        Returns status PROVISIONING with an empty uploads list when the Drive
+        upload targets are being opened by a Cloud Task; poll
+        GET /v1/sessions/{sid}/uploads until status is UPLOADING.
       x-google-quota:
         metricCosts:
           session-create-requests: 1

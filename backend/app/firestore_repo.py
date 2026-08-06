@@ -434,15 +434,46 @@ def get_file(file_id: str):
     return {**snap.to_dict(), "fileId": file_id} if snap.exists else None
 
 
-def list_pending_uploads(sid: str) -> list:
+def _page_session_files(sid: str, limit: int, page_token: str | None):
+    """One cursor-paged slice of a session's files. Returns (docs, next_token).
+
+    Both public listings below used to take a flat `.limit(_LIST_SOFT_LIMIT)`
+    with no cursor and no signal, so a session larger than the cap was silently
+    truncated — a restore manifest would simply be missing files, and the resume
+    list would stop offering them.
+    """
+    col = db().collection("files")
+    q = col.where("sessionId", "==", sid).order_by("__name__").limit(limit + 1)
+    if page_token:
+        cursor = col.document(page_token).get()
+        if cursor.exists:
+            q = q.start_after(cursor)
+    docs = list(q.stream())
+    next_token = None
+    if len(docs) > limit:
+        docs = docs[:limit]
+        next_token = docs[-1].id
+    return docs, next_token
+
+
+def list_pending_uploads(
+    sid: str,
+    limit: int = _LIST_SOFT_LIMIT,
+    page_token: str | None = None,
+) -> tuple[list, str | None]:
     """Files in a session that still need bytes, with their resumable URIs.
 
     Lets an interrupted upload resume the SAME session instead of creating a
     duplicate (which would also burn the per-user analysis quota). Files already
     COMPLETED have their uploadUrl cleared, so they're naturally excluded.
+
+    Returns (page, next_page_token_or_None). A file that has no uploadUrl yet
+    because provisioning has not reached it is also excluded — the session's
+    PROVISIONING status is what tells the client to wait.
     """
+    docs, next_token = _page_session_files(sid, limit, page_token)
     out = []
-    for d in db().collection("files").where("sessionId", "==", sid).limit(_LIST_SOFT_LIMIT).stream():
+    for d in docs:
         f = d.to_dict()
         url = f.get("uploadUrl")
         if f.get("status") == "COMPLETED" or not url:
@@ -455,13 +486,21 @@ def list_pending_uploads(sid: str) -> list:
             "role": f.get("role"),
             "sizeBytes": f.get("sizeBytes", 0),
         })
-    return out
+    return out, next_token
 
 
-def list_session_files(sid: str) -> list:
-    """Every file in an analysis — the manifest the app restores from."""
+def list_session_files(
+    sid: str,
+    limit: int = _LIST_SOFT_LIMIT,
+    page_token: str | None = None,
+) -> tuple[list, str | None]:
+    """Every file in an analysis — the manifest the app restores from.
+
+    Returns (page, next_page_token_or_None).
+    """
+    docs, next_token = _page_session_files(sid, limit, page_token)
     out = []
-    for d in db().collection("files").where("sessionId", "==", sid).limit(_LIST_SOFT_LIMIT).stream():
+    for d in docs:
         f = d.to_dict()
         out.append({
             "fileId": d.id,
@@ -471,7 +510,57 @@ def list_session_files(sid: str) -> list:
             "sha256": f.get("sha256"),
             "status": f.get("status"),
         })
-    return out
+    return out, next_token
+
+
+# ---------------- async provisioning ----------------
+def set_session_status(sid: str, status: str, error_code: str | None = None) -> None:
+    patch = {"status": status, "updatedAt": firestore.SERVER_TIMESTAMP}
+    if error_code:
+        patch["provisionError"] = error_code
+    elif status != "PROVISION_FAILED":
+        patch["provisionError"] = firestore.DELETE_FIELD
+    try:
+        db().collection("sessions").document(sid).update(patch)
+    except NotFound:
+        return
+
+
+def iter_unprovisioned_files(sid: str):
+    """Files in a session that still have no resumable URI.
+
+    Drives the provisioning worker and makes it resumable: a task that dies
+    halfway re-runs and picks up only what is left, so a retry never mints a
+    second upload URI for a file that already has one.
+    """
+    page_token = None
+    while True:
+        docs, page_token = _page_session_files(sid, _BATCH_LIMIT, page_token)
+        if not docs:
+            return
+        for d in docs:
+            f = d.to_dict()
+            if f.get("status") == "COMPLETED" or f.get("uploadUrl"):
+                continue
+            yield {
+                "fileId": d.id,
+                "name": f.get("name"),
+                "role": f.get("role"),
+                "sizeBytes": f.get("sizeBytes", 0),
+            }
+        if not page_token:
+            return
+
+
+def set_file_upload_url(file_id: str, url: str) -> None:
+    db().collection("files").document(file_id).update({
+        "uploadUrl": url,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+
+
+def count_unprovisioned_files(sid: str) -> int:
+    return sum(1 for _ in iter_unprovisioned_files(sid))
 
 
 def list_user_sessions(
@@ -562,24 +651,35 @@ def count_user_sessions(uid: str) -> int:
     return int(agg[0][0].value)
 
 
+#: Session states that still expect more bytes. PROVISIONING is included so a
+#: retried POST /v1/sessions joins the session whose upload targets are still
+#: being opened, instead of minting a duplicate alongside it.
+IN_FLIGHT_STATUSES = ("PROVISIONING", "UPLOADING")
+
+
 def find_incomplete_session(uid: str, local_session_id: str):
-    """An UPLOADING session for (uid, localSessionId), if any.
+    """An in-flight session for (uid, localSessionId), if any.
 
     Lets a retried POST /v1/sessions return the same session instead of minting
     a duplicate (and burning quota). Empty localSessionId is never matched —
     clients that omit it still get a fresh session each call.
+
+    One exact query per status rather than an `in` filter: both are indexed the
+    same way, and this keeps the match precise instead of over-fetching and
+    filtering in Python.
     """
     if not local_session_id:
         return None
-    q = (
-        db().collection("sessions")
-        .where("uid", "==", uid)
-        .where("localSessionId", "==", local_session_id)
-        .where("status", "==", "UPLOADING")
-        .limit(1)
-    )
-    for d in q.stream():
-        return {**d.to_dict(), "sessionId": d.id}
+    for status in IN_FLIGHT_STATUSES:
+        q = (
+            db().collection("sessions")
+            .where("uid", "==", uid)
+            .where("localSessionId", "==", local_session_id)
+            .where("status", "==", status)
+            .limit(1)
+        )
+        for d in q.stream():
+            return {**d.to_dict(), "sessionId": d.id}
     return None
 
 
@@ -597,7 +697,9 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate):
             "deviceId": device.get("deviceId"),
             "specimen": body.specimen,
             "localSessionId": body.localSessionId,
-            "status": "UPLOADING",
+            # Reserved, but no upload targets yet. set_session_status moves it to
+            # PROVISIONING → UPLOADING (or PROVISION_FAILED).
+            "status": "PROVISIONING",
             "driveFolderId": None,
             "totalBytes": sum(f.bytes for f in body.files),
             "fileCount": len(body.files),
@@ -617,7 +719,9 @@ def set_session_folder(sid: str, folder_id: str):
     )
 
 
-def create_file(sid: str, uid: str, file_id: str, f: FileSpec, upload_url: str):
+def create_file(sid: str, uid: str, file_id: str, f: FileSpec, upload_url: str | None):
+    """Write the file doc. `upload_url` is None until provisioning opens the
+    Drive resumable session for it (see iter_unprovisioned_files)."""
     db().collection("files").document(file_id).set(
         {
             "sessionId": sid,

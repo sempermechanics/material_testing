@@ -71,6 +71,23 @@ jobs:
             fi
           fi
           echo "service=$SVC" >> "$GITHUB_OUTPUT"
+          # Production is reachable only through API Gateway, which invokes the
+          # service with its own SA (see gateway/openapi.yaml jwt_audience). A
+          # publicly-invokable prod service would let callers bypass every
+          # x-google-management quota by hitting the Cloud Run URL directly.
+          # Staging stays public so it can be smoke-tested without the gateway.
+          #
+          # One-time IAM prerequisite before the first private prod deploy:
+          #   gcloud run services add-iam-policy-binding indic-api \
+          #     --member="serviceAccount:${GATEWAY_SA}" --role=roles/run.invoker
+          #     --project PROJECT --region REGION
+          # plus the same binding for the deploy SA, so the smoke step below can
+          # still reach /readyz. Flipping this flag first takes the API down.
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "ingress=--no-allow-unauthenticated" >> "$GITHUB_OUTPUT"
+          else
+            echo "ingress=--allow-unauthenticated" >> "$GITHUB_OUTPUT"
+          fi
 
       - id: auth
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
@@ -110,13 +127,53 @@ jobs:
             ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
             SUPPORT_EMAIL=${{ vars.SUPPORT_EMAIL }}
             NOTIFY_FROM=${{ vars.NOTIFY_FROM }}
+            TASKS_QUEUE=${{ vars.TASKS_QUEUE }}
+            TASKS_LOCATION=${{ vars.TASKS_LOCATION }}
+            TASKS_TARGET_BASE_URL=${{ vars.TASKS_TARGET_BASE_URL }}
+            TASKS_INVOKER_SA=${{ vars.TASKS_INVOKER_SA }}
           secrets: |-
             RESEND_API_KEY=resend-api-key:latest
           flags: >-
-            --allow-unauthenticated --cpu=1 --memory=512Mi
+            ${{ steps.meta.outputs.ingress }} --cpu=1 --memory=512Mi
             --min-instances=0 --max-instances=10 --concurrency=40 --timeout=60
             --revision-suffix=${{ github.sha }}
 
+      # Mints an ID token for the service URL so the smoke check works whether or
+      # not the service is publicly invokable. A public service ignores the
+      # header; a private one requires it. Needs run.invoker for the deploy SA.
+      - id: smoke_token
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+          token_format: id_token
+          id_token_audience: ${{ steps.deploy.outputs.url }}
+
+      - name: Post-deploy smoke (/readyz)
+        id: smoke
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+          ID_TOKEN: ${{ steps.smoke_token.outputs.id_token }}
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -sS -o /tmp/readyz.json -w '%{http_code}' --max-time 15 \
+              -H "Authorization: Bearer ${ID_TOKEN}" "${URL}/readyz" || echo 000)
+            if [ "$CODE" = "200" ]; then
+              echo "readyz ok"
+              cat /tmp/readyz.json
+              exit 0
+            fi
+            echo "readyz attempt $i → HTTP $CODE"
+            sleep 5
+          done
+          echo "Smoke failed"
+          cat /tmp/readyz.json || true
+          exit 1
+
+      # Deliberately AFTER the smoke gate. When this ran between deploy and
+      # smoke, a failure here left steps.smoke.outcome unset, so the rollback
+      # below never fired on a bad deploy.
       - name: Record immutable image digest
         env:
           PROJECT: ${{ github.event.inputs.project }}
@@ -132,28 +189,10 @@ jobs:
             --format='value(status.imageDigest)')
           echo "Deployed revision=${REV} imageDigest=${IMG}"
 
-      - name: Post-deploy smoke (/readyz)
-        id: smoke
-        env:
-          URL: ${{ steps.deploy.outputs.url }}
-        run: |
-          set -euo pipefail
-          for i in 1 2 3 4 5; do
-            CODE=$(curl -sS -o /tmp/readyz.json -w '%{http_code}' --max-time 15 "${URL}/readyz" || echo 000)
-            if [ "$CODE" = "200" ]; then
-              echo "readyz ok"
-              cat /tmp/readyz.json
-              exit 0
-            fi
-            echo "readyz attempt $i → HTTP $CODE"
-            sleep 5
-          done
-          echo "Smoke failed"
-          cat /tmp/readyz.json || true
-          exit 1
-
-      - name: Rollback traffic on smoke failure
-        if: failure() && steps.smoke.outcome == 'failure' && steps.previous.outputs.revision != ''
+      # Any post-deploy failure reverts, not just a failed smoke check — keyed on
+      # "the deploy succeeded but something after it did not".
+      - name: Rollback traffic on post-deploy failure
+        if: failure() && steps.deploy.outcome == 'success' && steps.previous.outputs.revision != ''
         env:
           PROJECT: ${{ github.event.inputs.project }}
           REGION: ${{ github.event.inputs.region }}

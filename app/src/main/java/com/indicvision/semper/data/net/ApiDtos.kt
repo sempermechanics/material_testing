@@ -97,7 +97,13 @@ data class UploadTargetDto(
 @Serializable
 data class SessionCreateResponse(
     val sessionId: String,
-    val uploads: List<UploadTargetDto>,
+    /**
+     * PROVISIONING while the backend opens the Drive resumable sessions in a
+     * Cloud Task; UPLOADING once [uploads] is populated. Nullable so an older
+     * backend that always provisions inline still parses.
+     */
+    val status: String? = null,
+    val uploads: List<UploadTargetDto> = emptyList(),
 )
 
 @Serializable
@@ -123,6 +129,8 @@ data class PendingUploadDto(
 data class SessionUploadsResponse(
     val sessionId: String,
     val status: String? = null,
+    /** Set when status is PROVISION_FAILED — why the targets were never opened. */
+    val provisionError: String? = null,
     val uploads: List<PendingUploadDto> = emptyList(),
 )
 

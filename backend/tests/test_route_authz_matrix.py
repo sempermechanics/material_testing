@@ -25,6 +25,7 @@ from app import audit, deps, drive, firestore_repo as repo
 from app.config import settings
 from app.deps import admin_user, current_user, device_or_legacy_reader, verified_device
 from app.main import app
+from app.tasks import tasks_caller
 
 NONE, USER, ADMIN, DEVICE, DEVICE_ADMIN = "none", "user", "admin", "device", "device+admin"
 # Not a user tier: authenticated by the OIDC token Cloud Tasks attaches, and
@@ -58,6 +59,7 @@ EXPECTED = {
     ("POST", "/v1/admin/users/{uid}/approve"): DEVICE_ADMIN,
     ("POST", "/v1/admin/users/{uid}/revoke"): DEVICE_ADMIN,
     ("PATCH", "/v1/admin/users/{uid}/config"): DEVICE_ADMIN,
+    ("POST", "/v1/tasks/provision-session"): TASK,
 }
 
 
@@ -70,6 +72,8 @@ def _flatten(dependant):
 
 def _tier(route) -> str:
     calls = set(_flatten(route.dependant))
+    if tasks_caller in calls:
+        return TASK
     # The migration wrapper calls verified_device directly (not via Depends), so
     # it never appears in the flattened deps — detect the wrapper itself.
     if device_or_legacy_reader in calls:

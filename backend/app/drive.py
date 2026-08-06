@@ -4,9 +4,11 @@ Metadata calls only. File BYTES never pass through here — the client PUTs
 directly to the resumable session URI returned by init_resumable().
 """
 import logging
+import threading
 import time
 
 import requests
+from requests.adapters import HTTPAdapter
 
 from .config import settings
 from .google_auth import drive_access_token
@@ -32,6 +34,31 @@ _TIMEOUT_S = 45
 
 _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 _MAX_ATTEMPTS = 5
+
+# Ceiling on time spent *sleeping* between retries within one call. Backoff is
+# min(2**attempt, 16), so five attempts could sleep ~30s — inside a request whose
+# total Cloud Run budget is 60s. Without a cap, a slow Drive turned one retrying
+# call into a request that timed out with nothing to show for it.
+_RETRY_BUDGET_S = 20.0
+
+# One pooled session for every Drive call. Bare `requests.request` opens a fresh
+# TCP + TLS connection per call; a session that provisions N files made N+ full
+# handshakes to the same host. Sized for Cloud Run's --concurrency=40.
+_session_lock = threading.Lock()
+_http: requests.Session | None = None
+
+
+def http() -> requests.Session:
+    """Process-wide pooled HTTP session (thread-safe, like the Firestore client)."""
+    global _http
+    if _http is None:
+        with _session_lock:
+            if _http is None:
+                session = requests.Session()
+                adapter = HTTPAdapter(pool_connections=8, pool_maxsize=64, max_retries=0)
+                session.mount("https://", adapter)
+                _http = session
+    return _http
 
 
 def access_token() -> str:
@@ -70,8 +97,9 @@ def _request_with_retry(
     kept per attempt so a stuck socket still fails within the outer budget.
     """
     last: requests.Response | None = None
+    slept = 0.0
     for attempt in range(max_attempts):
-        r = requests.request(
+        r = http().request(
             method,
             url,
             headers=headers,
@@ -83,6 +111,15 @@ def _request_with_retry(
         if r.status_code not in _RETRY_STATUSES or attempt == max_attempts - 1:
             return r
         delay = _retry_delay(r, attempt)
+        # Stop retrying once the sleep budget is spent, and return the last
+        # response so the caller reports Drive's own status rather than having
+        # the whole request killed by the Cloud Run timeout mid-backoff.
+        if slept + delay > _RETRY_BUDGET_S:
+            log.warning(
+                "Drive %s %s → HTTP %s; retry budget spent after %.1fs, giving up",
+                method, url, r.status_code, slept,
+            )
+            return r
         log.warning(
             "Drive %s %s → HTTP %s; retry in %.1fs (%d/%d)",
             method, url, r.status_code, delay, attempt + 1, max_attempts,
@@ -90,6 +127,7 @@ def _request_with_retry(
         if stream:
             r.close()
         time.sleep(delay)
+        slept += delay
         last = r
     assert last is not None
     return last
@@ -277,7 +315,7 @@ def ping(timeout_s: float = 5.0) -> None:
 
     try:
         token = access_token()
-        r = requests.get(
+        r = http().get(
             f"{API}/drives/{settings.SHARED_DRIVE_ID}",
             headers=_headers(token),
             params={"fields": "id"},
@@ -296,7 +334,7 @@ def delete_file(token: str, file_id: str) -> None:
     deleting a session folder erases every artifact inside it. A 404 is treated
     as success — the goal is "it is gone", and it already is.
     """
-    r = requests.delete(
+    r = http().delete(
         f"{API}/files/{file_id}",
         headers=_headers(token),
         params={"supportsAllDrives": "true"},
@@ -396,7 +434,7 @@ def get_file_meta(token: str, drive_file_id: str) -> dict:
 
 def init_resumable(token: str, parent_folder_id: str, filename: str, size_bytes: int) -> str:
     """Start a resumable session; return the URI the client uploads bytes to."""
-    r = requests.post(
+    r = http().post(
         UPLOAD,
         headers={**_headers(token), "Content-Type": "application/json; charset=UTF-8",
                  "X-Upload-Content-Length": str(size_bytes)},
