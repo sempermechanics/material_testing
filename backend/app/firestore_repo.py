@@ -175,10 +175,27 @@ def list_users(
 
 
 def set_user_status(uid: str, status: str) -> bool:
+    """Set access_status, revoking the account's devices when suspending.
+
+    Revoking access used to leave devices/{id}.status == "ACTIVE". Nothing broke
+    — current_user rejects a non-APPROVED account before any device check — but
+    the binding survived the revocation, so re-approving silently restored the
+    old device's authority and `device_in_use` still held the id against another
+    account. Revocation should mean the same thing at both layers.
+    """
     ref = db().collection("users").document(uid)
     if not ref.get().exists:
         return False
-    ref.update({"access_status": status, "updatedAt": firestore.SERVER_TIMESTAMP})
+    batch = db().batch()
+    batch.update(ref, {"access_status": status, "updatedAt": firestore.SERVER_TIMESTAMP})
+    if status != "APPROVED":
+        batch.update(ref, {"activeDeviceId": firestore.DELETE_FIELD})
+        for dev in db().collection("devices").where("uid", "==", uid).stream():
+            batch.update(dev.reference, {
+                "status": "REVOKED",
+                "revokedAt": firestore.SERVER_TIMESTAMP,
+            })
+    batch.commit()
     return True
 
 
@@ -255,8 +272,21 @@ def register_device(uid: str, body: DeviceReg) -> dict:
         "lastAssertionAt": firestore.SERVER_TIMESTAMP,
         "schemaVersion": SCHEMA_VERSION,
     }
-    db().collection("devices").document(body.deviceId).set(dev)
-    db().collection("users").document(uid).update({"activeDeviceId": body.deviceId})
+    user_ref = db().collection("users").document(uid)
+    # Only one device may be active per account (activeDeviceId is the single
+    # binding). Superseded devices used to keep status ACTIVE forever, so an
+    # account accumulated stale ACTIVE docs that still held their device ids
+    # against other accounts via the device_in_use check.
+    previous = user_ref.get().to_dict().get("activeDeviceId") if user_ref.get().exists else None
+    batch = db().batch()
+    if previous and previous != body.deviceId:
+        batch.update(db().collection("devices").document(previous), {
+            "status": "SUPERSEDED",
+            "revokedAt": firestore.SERVER_TIMESTAMP,
+        })
+    batch.set(db().collection("devices").document(body.deviceId), dev)
+    batch.update(user_ref, {"activeDeviceId": body.deviceId})
+    batch.commit()
     return {**dev, "deviceId": body.deviceId}
 
 
