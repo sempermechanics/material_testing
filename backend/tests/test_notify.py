@@ -75,7 +75,12 @@ def test_duplicate_enqueue_is_idempotent(configured, sent):
 
 
 def test_send_failure_is_swallowed(configured, monkeypatch):
+    """A dead mail provider must not break sign-in, and must not kill the worker
+    thread — every later notification would be silently lost."""
+    attempts = {"n": 0}
+
     def boom(url, **kwargs):
+        attempts["n"] += 1
         raise RuntimeError("resend is down")
 
     monkeypatch.setattr(notify.requests, "post", boom)
@@ -83,14 +88,32 @@ def test_send_failure_is_swallowed(configured, monkeypatch):
     notify.access_request("uid-2", "other@example.com", None, None)
     notify.flush_for_tests()
 
+    assert attempts["n"] >= 1, "no send was attempted at all"
+    # The worker survived: a subsequent notification is still processed.
+    sent_after = []
+    monkeypatch.setattr(
+        notify.requests, "post",
+        lambda url, **kwargs: sent_after.append(kwargs) or _Response(200, "{}"),
+    )
+    notify.access_request("uid-2b", "later@example.com", None, None)
+    notify.flush_for_tests()
+    assert len(sent_after) == 1, "worker died on the failing job"
+
 
 def test_rejected_send_is_swallowed(configured, monkeypatch):
-    monkeypatch.setattr(
-        notify.requests, "post", lambda url, **kwargs: _Response(422, "invalid from address")
-    )
+    """A 4xx is permanent — it must be given up on, not retried forever."""
+    attempts = {"n": 0}
+
+    def reject(url, **kwargs):
+        attempts["n"] += 1
+        return _Response(422, "invalid from address")
+
+    monkeypatch.setattr(notify.requests, "post", reject)
 
     notify.access_request("uid-3", "third@example.com", None, "password")
     notify.flush_for_tests()
+
+    assert attempts["n"] == 1, f"a permanent 422 was retried {attempts['n']} times"
 
 
 def test_retries_on_transient_status(configured, monkeypatch):

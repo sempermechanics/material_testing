@@ -95,8 +95,18 @@ def _request_with_retry(
     return last
 
 
+def _escape_q_value(value: str) -> str:
+    """Escape a literal for a single-quoted Drive `q=` string value.
+
+    The backslash must be escaped first. Escaping only the quote leaves a
+    trailing backslash free to consume the closing quote we add (`x\\` becomes
+    `x\\'`, which closes the literal), letting a crafted name alter the query.
+    """
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
 def _find_or_create_folder(token: str, name: str, parent: str) -> str:
-    safe = name.replace("'", "\\'")
+    safe = _escape_q_value(name)
     q = (
         f"name='{safe}' and mimeType='{FOLDER_MIME}' and "
         f"'{parent}' in parents and trashed=false"
@@ -134,7 +144,7 @@ def _find_or_create_folder(token: str, name: str, parent: str) -> str:
 
 def _find_folder(token: str, name: str, parent: str):
     """Look a folder up WITHOUT creating it — used on the erasure path."""
-    safe = name.replace("'", "\\'")
+    safe = _escape_q_value(name)
     q = (
         f"name='{safe}' and mimeType='{FOLDER_MIME}' and "
         f"'{parent}' in parents and trashed=false"

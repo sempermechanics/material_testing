@@ -1,5 +1,5 @@
 """Reusable validation for identifiers crossing HTTP and Firestore boundaries."""
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import HTTPException
 from pydantic import AfterValidator, StringConstraints
@@ -12,6 +12,19 @@ def _valid_identifier(value: str) -> str:
     if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
         raise ValueError("identifier must not contain control characters")
     return value
+
+
+def _valid_page_token(value: str) -> str:
+    """A cursor token is a bare document ID; empty means "first page".
+
+    It is fed straight to `CollectionReference.document()`, which accepts a
+    slash-separated *path* — not just an ID. Without this an unvalidated token
+    can address a document in a different collection, and an odd-segment token
+    raises deep inside the Firestore client and surfaces as an opaque 500.
+    """
+    if not value:
+        return value
+    return _valid_identifier(value)
 
 
 DocumentId = Annotated[
@@ -34,6 +47,15 @@ DeviceId = Annotated[
     StringConstraints(min_length=8, max_length=128),
     AfterValidator(_valid_identifier),
 ]
+PageToken = Annotated[
+    str,
+    StringConstraints(max_length=512),
+    AfterValidator(_valid_page_token),
+]
+# The only values ever written to users/{uid}.access_status. Constraining the
+# admin filter to these keeps an unbounded caller-supplied string out of the
+# Firestore `where()` on every listing.
+AccessStatus = Literal["", "PENDING", "APPROVED", "SUSPENDED"]
 
 
 def require_header_identifier(

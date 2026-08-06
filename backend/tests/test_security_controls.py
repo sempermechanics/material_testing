@@ -30,7 +30,10 @@ async def test_hsts_only_on_cloud_run_https(client, monkeypatch):
     insecure = await client.get("/healthz", headers={"x-forwarded-proto": "http"})
     assert "strict-transport-security" not in insecure.headers
     secure = await client.get("/healthz", headers={"x-forwarded-proto": "https"})
-    assert secure.headers["strict-transport-security"] == "max-age=31536000"
+    hsts = secure.headers["strict-transport-security"]
+    assert "max-age=31536000" in hsts
+    # Subdomains must be covered too, or a sibling host can be stripped to HTTP.
+    assert "includeSubDomains" in hsts
 
 
 def test_firestore_rules_are_deny_all_and_wired_to_existing_hosting():

@@ -15,7 +15,14 @@ from .config import settings
 from .deps import admin_user, current_user, verified_device
 from .models import DeviceReg, FileComplete, SessionCreate, UserConfigPatch
 from . import rate_limit
-from .validation import DocumentId, SessionId, Uid, require_header_identifier
+from .validation import (
+    AccessStatus,
+    DocumentId,
+    PageToken,
+    SessionId,
+    Uid,
+    require_header_identifier,
+)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("indic")
@@ -55,7 +62,19 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Semper API", version="1.0", lifespan=lifespan)
+# Interactive docs are served locally (useful) but never from a deployed
+# service: /docs, /redoc and /openapi.json publish the full route inventory —
+# including every /v1/admin/* path — to anyone who reaches the origin, and they
+# are not declared in gateway/openapi.yaml so nothing else gates them.
+_docs_enabled = not settings.ON_CLOUD_RUN
+app = FastAPI(
+    title="Semper API",
+    version="1.0",
+    lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 
 
 @app.middleware("http")
@@ -71,7 +90,9 @@ async def security_headers(request: Request, call_next):
     )
     forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
     if settings.ON_CLOUD_RUN and forwarded_proto == "https":
-        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
     return response
 
 
@@ -144,12 +165,28 @@ async def dependency_error_handler(request: Request, exc: obs.DependencyError):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.code})
 
 
+def _client_key(request: Request) -> str:
+    """Best available caller identity for the unauthenticated health limiter.
+
+    `request.client.host` behind API Gateway / the Cloud Run front end is the
+    *proxy*, so keying on it alone puts every external caller in one bucket —
+    one noisy client would then starve the load balancer's own probes. Trust the
+    leftmost X-Forwarded-For entry, which the Google front end sets, and fall
+    back to the socket peer when the header is absent (direct/local calls).
+    """
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        first = forwarded.split(",", 1)[0].strip()
+        if first:
+            return first[:64]
+    return request.client.host if request.client else "unknown"
+
+
 @app.get("/healthz")
 def healthz(request: Request):
     # Liveness only: process is up. Do not probe dependencies here — a slow
     # Firestore/Drive outage must not restart healthy instances.
-    client = request.client.host if request.client else "unknown"
-    if not rate_limit.health_bucket.allow(client):
+    if not rate_limit.health_bucket.allow(_client_key(request)):
         raise HTTPException(429, "rate_limited")
     return {"ok": True}
 
@@ -161,8 +198,7 @@ def readyz(request: Request):
     Returns stable 503 detail codes (`firestore_unreachable`, `drive_unhealthy`,
     …) so load balancers and smoke checks can act without parsing messages.
     """
-    client = request.client.host if request.client else "unknown"
-    if not rate_limit.health_bucket.allow(client):
+    if not rate_limit.health_bucket.allow(_client_key(request)):
         raise HTTPException(429, "rate_limited")
     started = time.perf_counter()
     try:
@@ -210,6 +246,8 @@ def export_account(ctx=Depends(verified_device)):
     """
     user = ctx["user"]
     uid = user["uid"]
+    if not rate_limit.export_bucket.allow(uid):
+        raise HTTPException(429, "rate_limited")
     profile = repo.get_user(uid) or {}
     sessions = []
     for s in repo.iter_all_user_sessions(uid):
@@ -258,6 +296,8 @@ def delete_account(ctx=Depends(verified_device)):
     """
     user, device = ctx["user"], ctx["device"]
     uid = user["uid"]
+    if not rate_limit.erase_bucket.allow(uid):
+        raise HTTPException(429, "rate_limited")
     started = time.monotonic()
     token = drive.access_token()
 
@@ -347,7 +387,7 @@ def challenge(user=Depends(current_user), x_device_id: str = Header(default=""))
 def list_sessions(
     verify: bool = False,
     page_size: int = 50,
-    page_token: str = "",
+    page_token: PageToken = "",
     user=Depends(current_user),
 ):
     """The caller's cloud analyses. The app reconciles local sync state against
@@ -413,6 +453,8 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     only trace kept is the audit record that the erasure happened.
     """
     user, device = ctx["user"], ctx["device"]
+    if not rate_limit.erase_bucket.allow(user["uid"]):
+        raise HTTPException(429, "rate_limited")
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
         raise HTTPException(404, "session_not_found")
@@ -437,6 +479,8 @@ def session_uploads(sid: SessionId, user=Depends(current_user)):
     again, so it continues into the same session/Drive folder rather than
     creating a duplicate.
     """
+    if not rate_limit.listing_bucket.allow(user["uid"]):
+        raise HTTPException(429, "rate_limited")
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
         raise HTTPException(404, "session_not_found")
@@ -450,6 +494,8 @@ def session_uploads(sid: SessionId, user=Depends(current_user)):
 @app.get("/v1/sessions/{sid}/files")
 def list_session_files(sid: SessionId, user=Depends(current_user)):
     """The manifest for one analysis — what the app needs to restore it."""
+    if not rate_limit.listing_bucket.allow(user["uid"]):
+        raise HTTPException(429, "rate_limited")
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
         raise HTTPException(404, "session_not_found")
@@ -474,6 +520,11 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     206 + Content-Range so a truncated restore can resume into a partial file.
     """
     user = ctx["user"]
+    # Check the bucket before the audit write: audit.record is a Firestore
+    # .add(), so limiting afterwards still charges a write per rejected request
+    # and files a FILE_DOWNLOAD entry for a download that never happened.
+    if not rate_limit.download_bucket.allow(user["uid"]):
+        raise HTTPException(429, "rate_limited")
     f = repo.get_file(file_id)
     if not f or f.get("uid") != user["uid"]:
         raise HTTPException(404, "file_not_found")
@@ -482,8 +533,6 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
         raise HTTPException(409, "file_not_uploaded")
     token = drive.access_token()
     audit.record(user["uid"], action="FILE_DOWNLOAD", target={"type": "file", "id": file_id})
-    if not rate_limit.download_bucket.allow(user["uid"]):
-        raise HTTPException(429, "rate_limited")
     byte_range = request.headers.get("range")
     try:
         dl = drive.open_download(token, drive_file_id, byte_range=byte_range)
@@ -595,9 +644,9 @@ def create_session(body: SessionCreate, ctx=Depends(verified_device)):
 
 @app.get("/v1/admin/users")
 def admin_list_users(
-    status: str = "",
+    status: AccessStatus = "",
     limit: int = 50,
-    page_token: str = "",
+    page_token: PageToken = "",
     admin=Depends(admin_user),
 ):
     """List users, optionally filtered by access_status (e.g. ?status=PENDING).
@@ -605,6 +654,8 @@ def admin_list_users(
     Cursor-paginated: `limit` (1..200, default 50) and optional `page_token`.
     Response includes `nextPageToken` / `hasMore`.
     """
+    if not rate_limit.admin_bucket.allow(admin["uid"]):
+        raise HTTPException(429, "rate_limited")
     limit = max(1, min(limit, 200))
     users, next_token = repo.list_users(
         status, limit=limit, page_token=page_token or None,
@@ -622,6 +673,8 @@ def admin_list_users(
 
 @app.post("/v1/admin/users/{uid}/approve")
 def admin_approve_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(admin_user)):
+    if not rate_limit.admin_bucket.allow(admin["uid"]):
+        raise HTTPException(429, "rate_limited")
     if not repo.set_user_status(uid, "APPROVED"):
         raise HTTPException(404, "user_not_found")
     audit.record(admin["uid"], action="ADMIN_APPROVE", target={"type": "user", "id": uid})
@@ -630,6 +683,8 @@ def admin_approve_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(adm
 
 @app.post("/v1/admin/users/{uid}/revoke")
 def admin_revoke_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(admin_user)):
+    if not rate_limit.admin_bucket.allow(admin["uid"]):
+        raise HTTPException(429, "rate_limited")
     if not repo.set_user_status(uid, "SUSPENDED"):
         raise HTTPException(404, "user_not_found")
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
@@ -640,6 +695,8 @@ def admin_revoke_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(admi
 def admin_patch_user_config(uid: Uid, body: UserConfigPatch,
                             ctx=Depends(verified_device), admin=Depends(admin_user)):
     """Set or clear per-user product-limit overrides on the Firestore user doc."""
+    if not rate_limit.admin_bucket.allow(admin["uid"]):
+        raise HTTPException(429, "rate_limited")
     # model_dump(exclude_unset=True) keeps omitted fields out; explicit nulls
     # remain so set_user_config can DELETE_FIELD them.
     patch = body.model_dump(exclude_unset=True)
