@@ -136,7 +136,7 @@ jobs:
           flags: >-
             ${{ steps.meta.outputs.ingress }} --cpu=1 --memory=512Mi
             --min-instances=0 --max-instances=10 --concurrency=40 --timeout=60
-            --revision-suffix=${{ github.sha }}
+            --revision-suffix=${{ github.sha }}-${{ github.run_attempt }}
 
       # Mints an ID token for the service URL so the smoke check works whether or
       # not the service is publicly invokable. A public service ignores the
