@@ -8,24 +8,28 @@ package com.indicvision.semper.ui.analysis
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
-import android.text.Spannable
-import android.text.SpannableStringBuilder
-import android.text.style.ForegroundColorSpan
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CoachPrefs
+import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
@@ -34,22 +38,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
 /**
- * The swept parameter space as a 2-D lattice (subset across, VSG up): solved
- * combinations filled, skipped ones hollow. It sits in front of the result
- * viewer for a sweep — both after a fresh run and when a saved sweep is
- * reopened from Home — so the frames have a map.
+ * The swept parameter space as a 2-D lattice (subset across, strain window up):
+ * solved combinations filled, skipped ones hollow. Staging screen in front of
+ * the result viewer for a sweep — walk solved nodes one-thumb, read each strain
+ * curve, then copy the winning params into single-analysis settings.
  *
- * It is interactive: tapping a solved node focuses its line-cut curve; double
- * tap, long-press, or "Open analysis" opens that specific result. "View
- * results" still opens the first frame. The lattice stays on the back stack
- * while the viewer is up, so Back from the viewer returns here.
+ * Double-tap or long-press a solved node still opens that frame in the viewer.
+ * The lattice stays on the back stack while the viewer is up.
  *
  * The Intent it receives is exactly the one the result viewer needs (plus the
  * sweep lattice arrays); it forwards those extras on, adding only the frame to
- * start at. So it never has to understand the viewer's payload.
+ * start at.
  */
 class VsgLatticeActivity : AppCompatActivity() {
 
@@ -59,6 +62,8 @@ class VsgLatticeActivity : AppCompatActivity() {
             R.string.field_eyy to DicResult.IDX_EYY,
             R.string.field_exy to DicResult.IDX_EXY,
         )
+        const val EXPORT_WIDTH_PX = 2400
+        const val EXPORT_HEIGHT_PX = 1600
     }
 
     /** Decoded `.dat` payloads for each solved combination, in frame order. */
@@ -67,7 +72,10 @@ class VsgLatticeActivity : AppCompatActivity() {
     /** Grid pitch per solved frame (from the sweep plan). */
     private var frameSteps: IntArray = IntArray(0)
 
-    /** The solved frame currently focused on the lattice/plot; -1 means all. */
+    /** Solved nodes in lattice order (ascending subset, then window). */
+    private var solvedNodes: List<VsgLatticeView.Node> = emptyList()
+
+    /** The solved frame currently selected; always a solved index when any exist. */
     private var focusedFrameIndex: Int = -1
 
     private lateinit var strainPlotSection: View
@@ -75,10 +83,14 @@ class VsgLatticeActivity : AppCompatActivity() {
     private lateinit var strainPlot: VsgPlotView
     private lateinit var strainSpinner: Spinner
     private lateinit var strainPlotTitle: TextView
-
-    /** Blank until a drag; shows the scrubbed (x, y) of each plotted series. */
     private lateinit var strainPlotReadout: TextView
-    private lateinit var btnOpenAnalysis: MaterialButton
+    private lateinit var stepperRow: View
+    private lateinit var chipSelectedParams: Chip
+    private lateinit var btnPrevNode: ImageButton
+    private lateinit var btnNextNode: ImageButton
+    private lateinit var togglePlotMode: MaterialButtonToggleGroup
+    private lateinit var btnSaveGraph: MaterialButton
+    private lateinit var btnCopyParams: MaterialButton
 
     private data class FrameSeries(val frameIndex: Int, val series: VsgPlotView.Series)
 
@@ -86,9 +98,6 @@ class VsgLatticeActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_vsg_lattice)
 
-        // Edge-to-edge: push the toolbar below the status bar so its back arrow
-        // lines up with the other screens' top bars (it would otherwise sit
-        // under the clock).
         Insets.padTop(findViewById(R.id.toolbar))
 
         findViewById<MaterialToolbar>(R.id.toolbar).apply {
@@ -96,8 +105,6 @@ class VsgLatticeActivity : AppCompatActivity() {
             setNavigationOnClickListener { finish() }
         }
 
-        // Solved nodes carry their frame index (their position in plan order,
-        // which is the viewer's frame order); skipped ones have no frame.
         val solved = nodesFrom(
             DicKeys.SWEEP_SUBSETS,
             DicKeys.SWEEP_STEPS,
@@ -113,13 +120,14 @@ class VsgLatticeActivity : AppCompatActivity() {
             codes = skippedCodes,
         )
         val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.window }))
+        solvedNodes = nodes.filter { it.solved }
 
-        latticeView = findViewById<VsgLatticeView>(R.id.latticeView)
+        latticeView = findViewById(R.id.latticeView)
         latticeView.apply {
             interactionEnabled = true
             setNodes(nodes)
             onNodeClick = { node ->
-                if (node.solved) toggleFocus(node.frameIndex) else showSkipReason(node)
+                if (node.solved) selectFocus(node.frameIndex) else showSkipReason(node)
             }
             onNodeDoubleClick = { node -> if (node.solved) openViewer(node.frameIndex) }
             onNodeLongClick = { node -> if (node.solved) openViewer(node.frameIndex) }
@@ -133,46 +141,44 @@ class VsgLatticeActivity : AppCompatActivity() {
         strainSpinner = findViewById(R.id.spinnerStrainComponent)
         strainPlotTitle = findViewById(R.id.tvStrainPlotTitle)
         strainPlotReadout = findViewById(R.id.tvStrainPlotReadout)
-        btnOpenAnalysis = findViewById(R.id.btnOpenAnalysis)
-        btnOpenAnalysis.setOnClickListener {
-            if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex)
+        stepperRow = findViewById(R.id.stepperRow)
+        chipSelectedParams = findViewById(R.id.chipSelectedParams)
+        btnPrevNode = findViewById(R.id.btnPrevNode)
+        btnNextNode = findViewById(R.id.btnNextNode)
+        togglePlotMode = findViewById(R.id.togglePlotMode)
+        btnSaveGraph = findViewById(R.id.btnSaveGraph)
+        btnCopyParams = findViewById(R.id.btnCopyParams)
+
+        btnPrevNode.setOnClickListener { stepFocus(-1) }
+        btnNextNode.setOnClickListener { stepFocus(1) }
+        togglePlotMode.addOnButtonCheckedListener { _, _, isChecked ->
+            if (isChecked) redrawStrainPlot()
         }
+        btnCopyParams.setOnClickListener { copySelectedParams() }
+        btnSaveGraph.setOnClickListener { saveGraph() }
+
         strainPlot.onScrub = { x, samples -> strainPlotReadout.text = scrubReadout(x, samples) }
         setupStrainSpinner()
-        loadStrainProfiles()
 
+        if (solvedNodes.isNotEmpty()) {
+            selectFocus(solvedNodes.first().frameIndex)
+        } else {
+            stepperRow.visibility = View.GONE
+            btnCopyParams.isEnabled = false
+            btnSaveGraph.isEnabled = false
+        }
+
+        loadStrainProfiles()
         maybeCoachTheGraph()
     }
 
-    /**
-     * The scrub readout, each curve's value in that curve's own colour.
-     *
-     * With several combinations plotted at once the numbers are otherwise
-     * unattributable — the label alone makes you match text to a legend while
-     * dragging. Colouring them ties each value to the line it came from.
-     */
+    /** Scrub readout for the selected node only: (x, y) and its param chip label. */
     private fun scrubReadout(x: Float, samples: List<VsgPlotView.Sample>): CharSequence {
-        val out = SpannableStringBuilder()
-        samples.forEachIndexed { index, sample ->
-            if (index > 0) out.append(getString(R.string.dot_separator))
-            val text = getString(R.string.vsg_lattice_scrub_value_fmt, x, sample.value, sample.label)
-            val start = out.length
-            out.append(text)
-            out.setSpan(
-                ForegroundColorSpan(sample.color),
-                start,
-                out.length,
-                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
-            )
-        }
-        return out
+        if (x.isNaN() || samples.isEmpty()) return ""
+        val sample = samples.first()
+        return getString(R.string.vsg_lattice_scrub_value_fmt, x, sample.value, sample.label)
     }
 
-    /**
-     * Explained here rather than on the setup screen: there the lattice is an
-     * inert preview of a plan, so there is nothing to tap and nothing the advice
-     * applies to yet. This is the first time the graph is real.
-     */
     private fun maybeCoachTheGraph() {
         latticeView.post {
             CoachMarkController(this).maybeShow(
@@ -212,21 +218,12 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * The headline under the lattice, and whether opening results is offered at
-     * all — a sweep where nothing solved has nothing to view, so the button goes
-     * rather than opening an empty viewer.
-     */
     private fun showSummary(nodes: List<VsgLatticeView.Node>, solvedCount: Int, skippedCount: Int) {
-        // The whole sweep shares one step fraction, subset ÷ D; recover D from a
-        // node (step = round(subset / D)).
         val stepDenom = nodes.firstOrNull()?.takeIf { it.step > 0 }
             ?.let { (it.subset.toDouble() / it.step).roundToInt() } ?: 0
         val summary = findViewById<TextView>(R.id.tvLatticeSummary)
-        val btnViewResults = findViewById<MaterialButton>(R.id.btnViewResults)
         if (solvedCount == 0) {
             summary.text = getString(R.string.vsg_lattice_all_failed)
-            btnViewResults.visibility = View.GONE
             return
         }
         summary.text = if (stepDenom > 0) {
@@ -247,18 +244,8 @@ class VsgLatticeActivity : AppCompatActivity() {
                 skippedCount,
             )
         }
-        btnViewResults.setOnClickListener { openViewer(0) }
     }
 
-    /**
-     * Why one combination was skipped, named by the combination itself.
-     *
-     * A dialog rather than a toast: on a grid of hollow nodes the question is
-     * "why this one", so the answer has to stay on screen next to the settings it
-     * belongs to. There is always something to say — a node with no recorded code
-     * still gets the generic line, because a tap that does nothing reads as a
-     * broken chart.
-     */
     private fun showSkipReason(node: VsgLatticeView.Node) {
         val reason = node.failureReason.ifEmpty { getString(R.string.sweep_node_skipped) }
         MaterialAlertDialogBuilder(this)
@@ -270,7 +257,6 @@ class VsgLatticeActivity : AppCompatActivity() {
             .show()
     }
 
-    /** Reads one set of (subset, step, window) triples into lattice nodes. */
     private fun nodesFrom(
         subsetsKey: String,
         stepsKey: String,
@@ -290,8 +276,6 @@ class VsgLatticeActivity : AppCompatActivity() {
                 vsg = VsgStudy.vsgFor(steps[i], windows[i]),
                 solved = solved,
                 frameIndex = if (solved) i else -1,
-                // The short label, not the paragraph: this is read a node at a
-                // time against a grid of them.
                 failureReason = codes.getOrNull(i)
                     ?.let { code -> getString(EngineFailure.shortReasonRes(code)) }
                     .orEmpty(),
@@ -299,11 +283,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Loads each solved combination's `.dat` and shows the centre-line strain
-     * plot when at least one profile has data.
-     */
-    @Suppress("ReturnCount") // one bail per missing sweep extra before the load starts
+    @Suppress("ReturnCount")
     private fun loadStrainProfiles() {
         val batchDirPath = intent.getStringExtra(DicKeys.BATCH_DIR_PATH) ?: return
         val steps = intent.getIntArrayExtra(DicKeys.SWEEP_STEPS) ?: return
@@ -332,8 +312,8 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
     }
 
-    /** Rebuilds the line-cut plot for the selected Exx / Eyy / Exy component. */
-    @Suppress("ReturnCount") // nothing to plot, or a dropped focus that re-enters after clearing it
+    /** Rebuilds the line-cut plot for Highlight or Isolate mode. */
+    @Suppress("ReturnCount")
     private fun redrawStrainPlot() {
         if (frameData.isEmpty()) {
             strainPlotSection.visibility = View.GONE
@@ -348,21 +328,27 @@ class VsgLatticeActivity : AppCompatActivity() {
             intent.getIntExtra(DicKeys.ROI_H, 0),
             horizontal,
         )
-        val labels = intent.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES).orEmpty()
         val baseStep = intent.getIntExtra(DicKeys.STEP, 1).coerceAtLeast(1)
+        val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
 
         val seriesByFrame = frameData.mapIndexedNotNull { index, data ->
+            val node = solvedNodes.find { it.frameIndex == index }
             val step = frameSteps.getOrNull(index)?.coerceAtLeast(1) ?: baseStep
             val points = VsgStudy.profileAlong(data, component, line, step / 2f)
             if (points.isEmpty()) return@mapIndexedNotNull null
+            val label = if (node != null) {
+                getString(R.string.vsg_lattice_param_fmt, node.subset, node.step, node.window)
+            } else {
+                getString(R.string.sweep_frame_btn_fmt, index + 1)
+            }
             FrameSeries(
                 frameIndex = index,
                 series = VsgPlotView.Series(
-                    label = labels.getOrNull(index) ?: getString(R.string.sweep_frame_btn_fmt, index + 1),
+                    label = label,
                     color = strainPlot.paletteColor(index),
                     points = points,
                     markers = false,
-                    muted = focusedFrameIndex >= 0 && index != focusedFrameIndex,
+                    muted = index != focusedFrameIndex,
                 ),
             )
         }
@@ -371,32 +357,119 @@ class VsgLatticeActivity : AppCompatActivity() {
             return
         }
         if (focusedFrameIndex >= 0 && seriesByFrame.none { it.frameIndex == focusedFrameIndex }) {
-            focusedFrameIndex = -1
-            latticeView.selectedFrameIndex = -1
-            btnOpenAnalysis.visibility = View.GONE
-            redrawStrainPlot()
+            val fallback = seriesByFrame.first().frameIndex
+            selectFocus(fallback)
             return
         }
+
+        val toShow = if (isolate) {
+            seriesByFrame.filter { it.frameIndex == focusedFrameIndex }
+                .map { it.series.copy(muted = false) }
+        } else {
+            // Selected last so it paints bold on top of muted curves.
+            val muted = seriesByFrame.filter { it.frameIndex != focusedFrameIndex }.map { it.series }
+            val selected = seriesByFrame.filter { it.frameIndex == focusedFrameIndex }
+                .map { it.series.copy(muted = false) }
+            muted + selected
+        }
+
         strainPlotSection.visibility = View.VISIBLE
-        // The cut is always through the ROI centre; the title carries the axis
-        // it runs along, the x axis label carries the position on it.
         strainPlotTitle.text = getString(
             R.string.line_cut_title_axis_fmt,
             getString(if (horizontal) R.string.axis_x else R.string.axis_y),
         )
         strainPlot.setData(
-            seriesByFrame.map { it.series },
+            toShow,
             getString(if (horizontal) R.string.line_cut_axis_x else R.string.line_cut_axis_y),
             getString(R.string.line_cut_axis_strain),
         )
         strainPlotReadout.text = ""
     }
 
-    private fun toggleFocus(frameIndex: Int) {
-        focusedFrameIndex = if (focusedFrameIndex == frameIndex) -1 else frameIndex
+    private fun selectFocus(frameIndex: Int) {
+        focusedFrameIndex = frameIndex
         latticeView.selectedFrameIndex = focusedFrameIndex
-        btnOpenAnalysis.visibility = if (focusedFrameIndex >= 0) View.VISIBLE else View.GONE
+        updateChipAndStepper()
         redrawStrainPlot()
+    }
+
+    private fun stepFocus(delta: Int) {
+        if (solvedNodes.isEmpty()) return
+        val current = solvedNodes.indexOfFirst { it.frameIndex == focusedFrameIndex }
+            .coerceAtLeast(0)
+        val next = (current + delta).coerceIn(0, solvedNodes.lastIndex)
+        selectFocus(solvedNodes[next].frameIndex)
+    }
+
+    private fun updateChipAndStepper() {
+        val node = solvedNodes.find { it.frameIndex == focusedFrameIndex }
+        if (node == null) {
+            stepperRow.visibility = View.GONE
+            btnCopyParams.isEnabled = false
+            return
+        }
+        stepperRow.visibility = View.VISIBLE
+        chipSelectedParams.text = getString(
+            R.string.vsg_lattice_param_fmt,
+            node.subset,
+            node.step,
+            node.window,
+        )
+        val idx = solvedNodes.indexOfFirst { it.frameIndex == focusedFrameIndex }
+        btnPrevNode.isEnabled = idx > 0
+        btnNextNode.isEnabled = idx in 0 until solvedNodes.lastIndex
+        btnCopyParams.isEnabled = true
+        btnSaveGraph.isEnabled = true
+    }
+
+    private fun selectedNode(): VsgLatticeView.Node? =
+        solvedNodes.find { it.frameIndex == focusedFrameIndex }
+
+    private fun copySelectedParams() {
+        val node = selectedNode() ?: return
+        ParamClipboard.copy(this, node.subset, node.step, node.window)
+        Toast.makeText(this, R.string.vsg_lattice_params_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun saveGraph() {
+        if (frameData.isEmpty() || focusedFrameIndex < 0) return
+        lifecycleScope.launch {
+            val bitmap = strainPlot.renderToBitmap(EXPORT_WIDTH_PX, EXPORT_HEIGHT_PX)
+            val file = withContext(Dispatchers.IO) {
+                writePng(bitmap)
+            }
+            bitmap.recycle()
+            if (file == null) {
+                Toast.makeText(this@VsgLatticeActivity, R.string.save_failed, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            sharePng(file)
+        }
+    }
+
+    private fun writePng(bitmap: Bitmap): File? {
+        return try {
+            val dir = File(cacheDir, "share").apply { mkdirs() }
+            val file = File(dir, "vsg_strain_graph_${System.currentTimeMillis()}.png")
+            FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            file
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Failed to write strain graph PNG")
+            null
+        }
+    }
+
+    private fun sharePng(file: File) {
+        val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, file.name)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(send, getString(R.string.vsg_lattice_share_graph)))
     }
 
     private fun selectedStrainComponent(): Int {
@@ -404,10 +477,6 @@ class VsgLatticeActivity : AppCompatActivity() {
         return STRAIN_OPTIONS[index].second
     }
 
-    /**
-     * Opens the result viewer at [frameIndex], forwarding this screen's own
-     * extras. The lattice stays behind it, so Back returns here.
-     */
     private fun openViewer(frameIndex: Int) {
         val extras = intent.extras ?: return
         startActivity(

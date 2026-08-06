@@ -48,6 +48,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.Insets
@@ -130,6 +131,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var btnBack: Button
     private lateinit var wizardChrome: AnalysisWizardChrome
     private lateinit var sweepHelper: SweepSetupHelper
+    private lateinit var settingsSheetHelper: AnalysisSettingsSheetHelper
 
     // State
     private var isProcessing = false
@@ -458,6 +460,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
         refPreviewBmp?.recycle()
         refPreviewBmp = null
         super.onDestroy()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::settingsSheetHelper.isInitialized) settingsSheetHelper.refreshPasteVisibility()
     }
 
     private fun handleReferenceImage(uri: Uri) {
@@ -1120,7 +1127,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // read via slider.value everywhere.
     // ------------------------------------------------------------------
     private fun setupParameterControls() {
-        AnalysisSettingsSheetHelper(
+        settingsSheetHelper = AnalysisSettingsSheetHelper(
             root = findViewById(android.R.id.content),
             subset = etSubsetSize,
             step = etStepSize,
@@ -1148,7 +1155,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     sweepHelper.seedSweepSuggestions()
                 }
             },
-        ).bind()
+            onPasteParams = { pasteCopiedParams() },
+        ).also { it.bind() }
+    }
+
+    /** Applies ParamClipboard subset/step/window into the analysis sliders. */
+    private fun pasteCopiedParams() {
+        val params = ParamClipboard.peek(this) ?: return
+        commitParamFields()
+        viewModel.subsetUserModified = true
+        etSubsetSize.value = snapToSlider(etSubsetSize, params.subset).toFloat()
+        etStepSize.value = snapToSlider(etStepSize, params.step).toFloat()
+        etStrainWindow.value = snapToSlider(etStrainWindow, params.window).toFloat()
+        if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
     }
 
     // ------------------------------------------------------------------

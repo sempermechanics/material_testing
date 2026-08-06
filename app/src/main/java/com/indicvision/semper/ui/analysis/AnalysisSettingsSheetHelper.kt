@@ -4,11 +4,12 @@ import android.view.View
 import android.widget.EditText
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.R
+import com.indicvision.semper.data.ParamClipboard
 
 /**
  * Wires the analysis settings sheet listeners (param fields, info buttons,
- * slider label sync). Reset / recommendation logic stays in the Activity so
- * it can touch ViewModel + sweep state without putting disk or network on Main.
+ * slider label sync). Reset / paste / recommendation logic stays in the Activity
+ * so it can touch ViewModel + sweep state without putting disk or network on Main.
  */
 @Suppress("LongParameterList") // sheet owns a fixed set of named views + callbacks
 class AnalysisSettingsSheetHelper(
@@ -25,6 +26,7 @@ class AnalysisSettingsSheetHelper(
     private val onSubsetUserModified: () -> Unit,
     private val onSubsetRecommendationRefresh: () -> Unit,
     private val onAdvancedReset: () -> Unit,
+    private val onPasteParams: () -> Unit,
 ) {
     fun bind() {
         val updateLabels = {
@@ -39,6 +41,9 @@ class AnalysisSettingsSheetHelper(
         bindParamField(strainValue, strain, null)
 
         root.findViewById<View>(R.id.btnAdvancedReset).setOnClickListener { onAdvancedReset() }
+        val pasteChip = root.findViewById<View>(R.id.btnPasteParams)
+        pasteChip.setOnClickListener { onPasteParams() }
+        refreshPasteVisibility()
         root.findViewById<View>(R.id.btnSubsetInfo)
             .setOnClickListener { showInfo(R.string.subset_size, R.string.info_subset) }
         root.findViewById<View>(R.id.btnStepInfo)
@@ -55,5 +60,12 @@ class AnalysisSettingsSheetHelper(
         }
         step.addOnChangeListener { _, _, _ -> updateLabels() }
         strain.addOnChangeListener { _, _, _ -> updateLabels() }
+    }
+
+    /** Show Paste only when the sweep clipboard has values. */
+    fun refreshPasteVisibility() {
+        val pasteChip = root.findViewById<View>(R.id.btnPasteParams)
+        pasteChip.visibility =
+            if (ParamClipboard.peek(root.context) != null) View.VISIBLE else View.GONE
     }
 }

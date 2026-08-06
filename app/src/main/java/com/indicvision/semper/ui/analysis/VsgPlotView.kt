@@ -10,7 +10,9 @@
 package com.indicvision.semper.ui.analysis
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
@@ -214,6 +216,33 @@ class VsgPlotView @JvmOverloads constructor(
         this.highlightX = highlightX
         resetViewport()
         invalidate()
+    }
+
+    /**
+     * Renders the current plot at [widthPx]×[heightPx] (full resolution, not a
+     * screenshot of the on-screen size). Restores the view's prior layout after.
+     */
+    fun renderToBitmap(widthPx: Int, heightPx: Int): Bitmap {
+        val prevW = width
+        val prevH = height
+        val wSpec = MeasureSpec.makeMeasureSpec(widthPx, MeasureSpec.EXACTLY)
+        val hSpec = MeasureSpec.makeMeasureSpec(heightPx, MeasureSpec.EXACTLY)
+        measure(wSpec, hSpec)
+        layout(0, 0, widthPx, heightPx)
+        val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.WHITE)
+        draw(canvas)
+        if (prevW > 0 && prevH > 0) {
+            measure(
+                MeasureSpec.makeMeasureSpec(prevW, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(prevH, MeasureSpec.EXACTLY),
+            )
+            layout(left, top, left + prevW, top + prevH)
+        } else {
+            requestLayout()
+        }
+        return bitmap
     }
 
     private class Bounds(val xMin: Float, val xMax: Float, val yMin: Float, val yMax: Float)

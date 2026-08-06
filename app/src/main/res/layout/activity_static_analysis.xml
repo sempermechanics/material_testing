@@ -627,6 +627,20 @@
                                 android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
 
                             <com.google.android.material.chip.Chip
+                                android:id="@+id/btnPasteParams"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="4dp"
+                                android:text="@string/action_paste_params"
+                                android:textColor="@color/sky_primary"
+                                android:visibility="gone"
+                                app:chipBackgroundColor="@color/sky_container"
+                                app:chipStrokeColor="@color/surface_outline"
+                                app:chipStrokeWidth="1dp"
+                                app:ensureMinTouchTargetSize="false"
+                                tools:visibility="visible" />
+
+                            <com.google.android.material.chip.Chip
                                 android:id="@+id/btnAdvancedReset"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"

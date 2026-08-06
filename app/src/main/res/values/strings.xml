@@ -423,16 +423,24 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Sweep lattice staging screen (VsgLatticeActivity) -->
     <string name="vsg_lattice_title">Parameter sweep</string>
     <string name="vsg_lattice_heading">Result lattice</string>
-    
-    
-    <string name="vsg_lattice_caption">Tap a node to focus its curve · double-tap to open it</string>
+    <string name="vsg_lattice_caption">Step through solved nodes · scrub the curve · copy params for full analysis</string>
     <string name="vsg_lattice_axis_subset">Subset size (px)</string>
     <string name="vsg_lattice_axis_vsg">Strain window</string>
     <string name="vsg_lattice_legend_solved">Solved</string>
     <string name="vsg_lattice_legend_skipped">Skipped</string>
     <string name="vsg_lattice_view_results">View results</string>
     <string name="vsg_lattice_open_analysis">Open analysis</string>
+    <string name="vsg_lattice_param_fmt">%1$d · %2$d · %3$d</string>
     <string name="vsg_lattice_scrub_value_fmt">(%1$.1f, %2$.2f) %3$s</string>
+    <string name="vsg_lattice_highlight">Highlight</string>
+    <string name="vsg_lattice_isolate">Isolate</string>
+    <string name="vsg_lattice_copy_params">Copy params</string>
+    <string name="vsg_lattice_save_graph">Save graph</string>
+    <string name="vsg_lattice_params_copied">Parameters copied</string>
+    <string name="vsg_lattice_prev">Previous solved node</string>
+    <string name="vsg_lattice_next">Next solved node</string>
+    <string name="vsg_lattice_share_graph">Share strain graph</string>
+    <string name="action_paste_params">Paste params</string>
 
     <string name="setting_vsg">Virtual strain gauge</string>
     <string name="line_cut_title">Strain along the centre line cut</string>
