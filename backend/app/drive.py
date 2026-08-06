@@ -234,28 +234,40 @@ def file_exists(token: str, file_id: str) -> bool:
     return not r.json().get("trashed", False)
 
 
-def files_exist(token: str, file_ids: list[str], *, max_workers: int = 8) -> dict[str, bool]:
+# Probe outcomes. Deliberately tristate: the caller deletes user data on
+# MISSING, so "we could not tell" must never collapse into "it is gone".
+ALIVE = "alive"
+MISSING = "missing"
+UNKNOWN = "unknown"
+
+
+def probe_files(token: str, file_ids: list[str], *, max_workers: int = 8) -> dict[str, str]:
     """Bounded parallel existence checks for one page of session folders.
 
     Replaces a serial N+1 verify loop with a capped fan-out (default 8 workers)
     over the current page only — callers must paginate so |file_ids| stays small.
+
+    Returns ALIVE / MISSING / UNKNOWN per id. A probe that raises (Drive 5xx, a
+    timeout, an expired token) yields UNKNOWN, not MISSING: the caller purges
+    Firestore session metadata on MISSING, so mapping a transient outage to
+    "missing" turned a Drive blip into permanent data loss.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     unique = [fid for fid in dict.fromkeys(file_ids) if fid]
     if not unique:
         return {}
-    out: dict[str, bool] = {}
+    out: dict[str, str] = {}
     workers = max(1, min(max_workers, len(unique)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(file_exists, token, fid): fid for fid in unique}
         for fut in as_completed(futures):
             fid = futures[fut]
             try:
-                out[fid] = fut.result()
-            except Exception:  # noqa: BLE001 - treat probe failures as missing
-                log.warning("Drive existence probe failed for %s", fid)
-                out[fid] = False
+                out[fid] = ALIVE if fut.result() else MISSING
+            except Exception:  # noqa: BLE001 - unreachable != absent
+                log.warning("Drive existence probe failed for %s — treating as unknown", fid)
+                out[fid] = UNKNOWN
     return out
 
 

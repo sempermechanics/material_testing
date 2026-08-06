@@ -111,11 +111,11 @@ async def test_verify_uses_batched_existence(client, monkeypatch):
     monkeypatch.setattr(drive, "access_token", lambda: "tok")
     seen = {}
 
-    def fake_exist(token, ids, max_workers=8):
+    def fake_probe(token, ids, max_workers=8):
         seen["ids"] = list(ids)
-        return {fid: fid == "fold-alive" for fid in ids}
+        return {fid: (drive.ALIVE if fid == "fold-alive" else drive.MISSING) for fid in ids}
 
-    monkeypatch.setattr(drive, "files_exist", fake_exist)
+    monkeypatch.setattr(drive, "probe_files", fake_probe)
     r = await client.get("/v1/sessions?verify=true&page_size=50")
     assert r.status_code == 200
     assert set(seen["ids"]) == {"fold-alive", "fold-gone"}

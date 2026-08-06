@@ -419,14 +419,20 @@ def list_sessions(
     )
 
     purged = 0
+    indeterminate = 0
     if verify and sessions:
         token = drive.access_token()
         folders = [s.get("driveFolderId") for s in sessions if s.get("driveFolderId")]
-        alive_map = drive.files_exist(token, folders)
+        probe = drive.probe_files(token, folders)
         alive = []
         for s in sessions:
             folder = s.get("driveFolderId")
-            if folder and not alive_map.get(folder, False):
+            state = probe.get(folder, drive.UNKNOWN) if folder else drive.ALIVE
+            # Purge ONLY on a confirmed miss. An unreachable Drive (5xx, timeout,
+            # token failure) reports UNKNOWN, and deleting the user's session
+            # metadata on that would turn a transient outage into data loss —
+            # the Drive bytes would survive with nothing left pointing at them.
+            if state == drive.MISSING:
                 repo.delete_session(s["sessionId"])
                 audit.record(user["uid"], action="SESSION_ORPHAN_PURGED",
                              target={"type": "session", "id": s["sessionId"]})
@@ -436,8 +442,16 @@ def list_sessions(
                 )
                 purged += 1
                 continue
+            if state == drive.UNKNOWN:
+                indeterminate += 1
             alive.append(s)
         sessions = alive
+        if indeterminate:
+            obs.log_event(
+                log, logging.WARNING, "session_verify_indeterminate",
+                outcome="degraded", errorCode="drive_probe_unknown",
+                dependency="drive", count=indeterminate,
+            )
 
     used = repo.count_user_sessions(user["uid"])
     return {
@@ -449,7 +463,12 @@ def list_sessions(
             "nextPageToken": next_token,
             "hasMore": bool(next_token),
         },
-        "verify": {"requested": verify, "purged": purged} if verify else None,
+        # `indeterminate` tells the client the verification was incomplete, so a
+        # session still listed is not proof it was confirmed present.
+        "verify": (
+            {"requested": verify, "purged": purged, "indeterminate": indeterminate}
+            if verify else None
+        ),
     }
 
 
