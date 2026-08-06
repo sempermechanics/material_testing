@@ -67,9 +67,14 @@ gcloud services enable \
   drive.googleapis.com \
   iamcredentials.googleapis.com \
   artifactregistry.googleapis.com \
-  cloudbuild.googleapis.com
+  cloudbuild.googleapis.com \
+  cloudtasks.googleapis.com
 ```
-**Check:** `gcloud services list --enabled | grep -E 'run|firestore|drive|iamcredentials'` shows all four.
+`cloudtasks` is only needed if you follow A6 (async provisioning); enabling it
+here saves a second round trip later.
+
+**Check:** `gcloud services list --enabled | grep -E 'run|firestore|drive|iamcredentials|artifactregistry|cloudbuild|cloudtasks'`
+lists all seven.
 
 ### A2. Create the Firestore database (Native mode)
 ```bash
@@ -88,6 +93,20 @@ gcloud firestore fields ttls update expireAt \
 ```
 **Check:** `gcloud firestore fields ttls list --collection-group=challenges`
 shows `expireAt` in state `ACTIVE` (may take a few minutes to apply).
+
+### A2b. Deploy the composite indexes
+
+`backend/firestore.indexes.json` declares four composite indexes that the
+paginated session listing and the admin pending-user query need. A missing index
+does not fail at deploy time — it fails at runtime with `FAILED_PRECONDITION`, so
+deploy them before the first real client.
+
+```bash
+firebase deploy --only firestore:indexes --project $PROJECT
+```
+
+**Check:** `gcloud firestore indexes composite list` shows four indexes in state
+`READY` (building can take a few minutes on a populated database).
 
 ### A3. Create the runtime service account
 ```bash
@@ -188,14 +207,38 @@ gcloud run deploy indic-api \
   --allow-unauthenticated \
   --min-instances 0 --max-instances 10 \
   --concurrency 40 --cpu 1 --memory 512Mi --timeout 60 \
-  --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
+  --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
   --set-env-vars "SUPPORT_EMAIL=support@indicvision.com,NOTIFY_FROM=Semper <noreply@yourdomain.com>" \
   --set-secrets "RESEND_API_KEY=resend-api-key:latest"
 ```
 > `FIREBASE_PROJECT_ID` can be omitted when Firebase Auth lives in the same
-> project as the backend — it defaults to `GOOGLE_CLOUD_PROJECT`. See
+> project as the backend — it defaults to `GOOGLE_CLOUD_PROJECT`. If you do set
+> it, export it alongside the other shell variables in §0 first
+> (`export FIREBASE_PROJECT_ID=indicvision-dic-app-auth`). See
 > [AUTH_SETUP.md](AUTH_SETUP.md) §3 for what `AUTO_APPROVE_HD` and
 > `ADMIN_EMAILS` do.
+
+#### Optional environment variables
+
+Everything above is required (or near enough). These are the rest of what
+[`config.py`](../../backend/app/config.py) reads, all with working defaults:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `MAX_SESSIONS_PER_USER` | `4` | How many analyses a user may keep in the cloud. Overridable per user via `PATCH /v1/admin/users/{uid}/config` |
+| `MAX_FILES_PER_SESSION` | `600` | Upper bound on files in one analysis |
+| `MAX_FRAMES_PER_ANALYSIS` | `150` | Deformed-frame ceiling the app enforces |
+| `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |
+| `TASKS_QUEUE` · `TASKS_LOCATION` · `TASKS_TARGET_BASE_URL` · `TASKS_INVOKER_SA` | unset / `asia-south1` / unset / `SERVICE_ACCOUNT_EMAIL` | Async provisioning — see A6. Leave `TASKS_QUEUE` empty to provision inline |
+| `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
+| `REQUIRE_ATTESTED_UPLOADS` | off | Set to `1` in production once every client attests. See the hardening note below |
+
+**Production hardening: `REQUIRE_ATTESTED_UPLOADS=1`.**
+`GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While this
+flag is off, the route accepts a bare Firebase ID token as well as a full device
+signature, because older tester builds only send the former. The service logs a
+startup warning while the window is open. Set the flag once the fleet has moved;
+it never weakens a client that already attests.
 
 > `NOTIFY_FROM` / `RESEND_API_KEY` drive the "a new user is waiting for
 > approval" mail to `SUPPORT_EMAIL` (see B1a). Leave both unset and the backend
@@ -257,9 +300,35 @@ RESP=$(curl -s -X POST "$URL/v1/sessions" -H "content-type: application/json" -d
 }")
 echo "$RESP"
 SID=$(echo "$RESP" | python -c "import sys,json;print(json.load(sys.stdin)['sessionId'])")
-UP=$(echo "$RESP"  | python -c "import sys,json;print(json.load(sys.stdin)['uploads'][0]['uploadUrl'])")
-FID=$(echo "$RESP" | python -c "import sys,json;print(json.load(sys.stdin)['uploads'][0]['fileId'])")
 ```
+
+If you configured a Cloud Tasks queue in A6, this response is
+`{"sessionId": "...", "status": "PROVISIONING", "uploads": []}` — the upload
+targets are opened by a background task, exactly as the app sees it. Poll the
+resume endpoint until they arrive:
+
+```bash
+for i in $(seq 1 20); do
+  UPRESP=$(curl -s "$URL/v1/sessions/$SID/uploads")
+  echo "$UPRESP" | grep -q '"uploadUrl"' && break
+  sleep 1
+done
+echo "$UPRESP"
+```
+
+Without a queue, `POST /v1/sessions` returns the targets inline and `$UPRESP`
+above is simply the first poll. Either way, pull the target out of it:
+
+```bash
+UP=$(echo "$UPRESP"  | python -c "import sys,json;print(json.load(sys.stdin)['uploads'][0]['uploadUrl'])")
+FID=$(echo "$UPRESP" | python -c "import sys,json;print(json.load(sys.stdin)['uploads'][0]['fileId'])")
+```
+
+If the loop times out, check `sessions/$SID.status` in Firestore: `PROVISION_FAILED`
+means the task ran and Drive rejected it (look at the Cloud Run logs), while a
+stuck `PROVISIONING` means the task never arrived (check the queue's backlog and
+that `TASKS_TARGET_BASE_URL` matches the Cloud Run URL exactly — it is also the
+OIDC audience).
 
 **B2b. Upload the 9 bytes directly to Drive** (single-shot; bytes never touch Cloud Run):
 ```bash
@@ -268,13 +337,17 @@ DRIVE=$(printf 'hello dic' | curl -s -X PUT "$UP" \
   -H "Content-Range: bytes 0-8/9" --data-binary @-)
 echo "$DRIVE"
 DRIVE_ID=$(echo "$DRIVE" | python -c "import sys,json;print(json.load(sys.stdin)['id'])")
+MD5=$(echo "$DRIVE" | python -c "import sys,json;print(json.load(sys.stdin).get('md5Checksum',''))")
 ```
 
 **B2c. Complete the file:**
 ```bash
 curl -s -X POST "$URL/v1/files/$FID/complete" -H "content-type: application/json" \
-  -d "{\"sessionId\":\"$SID\",\"driveFileId\":\"$DRIVE_ID\",\"bytes\":9}"
+  -d "{\"sessionId\":\"$SID\",\"driveFileId\":\"$DRIVE_ID\",\"md5\":\"$MD5\",\"bytes\":9}"
 ```
+> The `md5` is not optional. Whenever Drive reports an `md5Checksum` — which it
+> does for every binary blob we store — omitting it is treated as
+> `checksum_mismatch` and you get a `422` with the file left `PENDING`.
 
 **Check (the payoff):**
 - `Semper-Research-Storage/Research Storage/user/dev-user/session/$SID/metadata/note.txt` exists in Drive.
@@ -361,14 +434,21 @@ gcloud run services add-iam-policy-binding indic-api --region $REGION \
   --member="serviceAccount:$GW_SA" --role="roles/run.invoker"
 
 # 3. Spec is committed at backend/gateway/openapi.yaml (covers all current
-#    routes). Inject your Cloud Run URL into a working copy:
-sed "s#https://REPLACE_WITH_CLOUD_RUN_URL#$RUN_URL#" \
-  backend/gateway/openapi.yaml > /tmp/openapi.yaml
+#    routes) with two placeholders. Substitute BOTH into a generated copy —
+#    the generated file is gitignored because it carries the live hostname.
+sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g" \
+    -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g" \
+  backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
+
+# Fail loudly rather than shipping a spec with a placeholder still in it.
+grep -q '__' backend/gateway/openapi.generated.yaml && \
+  echo "unsubstituted placeholder remains" && exit 1
 
 # 4. Create the API, config (with backend-auth SA), and gateway
 gcloud api-gateway apis create indic-api
 gcloud api-gateway api-configs create v1 --api=indic-api \
-  --openapi-spec=/tmp/openapi.yaml --backend-auth-service-account=$GW_SA
+  --openapi-spec=backend/gateway/openapi.generated.yaml \
+  --backend-auth-service-account=$GW_SA
 gcloud api-gateway gateways create indic-gw --api=indic-api \
   --api-config=v1 --location=$REGION
 
@@ -385,9 +465,16 @@ the gateway gets through. In **C1**, set `INDIC_API_BASE_URL` to
 
 In `local.properties`:
 ```properties
-INDIC_API_BASE_URL=https://indic-api-xxxx.a.run.app
+INDIC_API_BASE_URL=https://indic-gw-xxxx.an.gateway.dev
 ```
 Blank `INDIC_API_BASE_URL` = offline-only (cloud disabled). Rebuild after editing.
+
+Release builds go further. The release workflow passes `-PrequireCloudApi=true`,
+and `app/build.gradle.kts` then **fails the build** if `INDIC_API_BASE_URL` is
+blank or does not start with `https://` — offline-only must not ship by accident,
+and cleartext would put ID tokens and device signatures on the wire in plain
+text. Set the variable from the environment or `local.properties` when building a
+release locally.
 
 ### C2. Make sure Google sign-in works on-device
 

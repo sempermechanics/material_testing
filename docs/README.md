@@ -11,10 +11,12 @@ build it. This page routes you to the rest.
 | Change the Android UI / understand app flow | [app/ARCHITECTURE.md](app/ARCHITECTURE.md) |
 | Walk every user flow, or run a manual test pass | [app/WORKFLOWS.md](app/WORKFLOWS.md) |
 | Operate the app to analyse a DIC image set | [OPERATING_MANUAL.md](OPERATING_MANUAL.md) |
-| Change the correlation engine (C++) | [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md) |
+| Change the correlation engine (C++) | [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md) — the engine is a submodule, so this points into `native/docs/` |
+| Know what the app may assume of the engine | [engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md) |
 | Check the math, or write it up | [engine/MATHEMATICS.md](engine/MATHEMATICS.md) |
 | Add or run app tests | [app/TESTING.md](app/TESTING.md) |
 | Add or run engine tests | [engine/TESTING.md](engine/TESTING.md) |
+| Build, test or bump the engine pin | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | Know why CI is red | [ops/CI.md](ops/CI.md) |
 | Cut a release | [ops/RELEASING.md](ops/RELEASING.md) |
 | Tech-debt status / deferred gates | [ops/TECH_DEBT.md](ops/TECH_DEBT.md) |
@@ -30,10 +32,17 @@ analysis engine is entirely on-device and offline.
 ```
 docs/
   app/       Android UI layer — Activity flow, packages, session layout
-  engine/    the C++ correlation engine — architecture, math, tests
+  engine/    the app-facing engine contract, plus stubs into the submodule's own docs
   backend/   the optional GCP cloud side — architecture, setup, sign-in
-  ops/       running the project — CI, releases
+  legal/     privacy policy and terms — the source the hosted pages are generated from
+  ops/       running the project — CI, releases, tech debt
 ```
+
+`docs/engine/` is mostly signposts: the engine lives in its own repository, and
+its architecture, math and test docs are canonical at `native/docs/`. The one
+real document here is
+[engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md), which states what
+the app is allowed to assume across the JNI boundary.
 
 ## DIC in five minutes
 
@@ -54,7 +63,7 @@ Digital Image Correlation measures deformation from photographs:
 
 That is enough theory for most contributions. The full pipeline — AKAZE feature
 seeding → Delaunay mesh → RGDIC propagation → ICGN refinement → VSG strain — is
-in [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md).
+in `native/docs/ARCHITECTURE.md` inside the engine submodule.
 
 ## Terms you'll meet in the code
 
@@ -68,28 +77,19 @@ in [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md).
 | `VSG` / strain window | Least-squares plane fit over neighboring points that turns displacement into strain. Odd width |
 | `.dat` files | Binary results: 8 floats per point (x, y, u, v, exx, eyy, exy, znssd) |
 
-## Where things live
-
-| Path | What it is |
-|---|---|
-| `native/src/math/` | ICGN solver + SIMD kernels (the hot loops) |
-| `native/src/pipeline/` + `seeding/` | Full-field orchestration + AKAZE |
-| `native/adapters/android/` | Thin JNI → `libsemper_core.so` |
-| `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI drawing |
-| `app/src/main/java/.../ui/viewer/` | Heatmap viewer, exports, share sheet |
-| `app/src/main/java/.../report/` | PDF report generation |
-| `app/src/main/java/.../data/` | Cloud sync client, upload/restore workers |
-| `native/tests/` | Native test suite — runs on your PC, no device |
-| `backend/` | GCP backend (FastAPI on Cloud Run) |
+For the directory layout, see the [repository map](../README.md#repository-map)
+in the project README — it is maintained in one place so the two cannot drift.
 
 ## Conventions
 
 - UI strings belong in `strings.xml`, never hardcoded.
 - Shared intent keys live in `DicKeys.kt`; binary-format constants in
   `DicResult.kt`.
-- Engine changes must keep `dic_tests` green, and results must stay inside the
-  tolerance contract in [engine/TESTING.md](engine/TESTING.md). If a change
-  legitimately moves results, say so explicitly and update the contract.
+- Engine changes happen in the engine repository and must keep `dic_tests`
+  green there. Results must stay inside the tolerance contract in
+  [engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md); if a change
+  legitimately moves results, say so explicitly and update the contract on both
+  sides.
 - Lint and detekt baselines are empty — new findings fail CI. A few large UI
   files use targeted `@file:Suppress` for inherent size; prefer extracts.
 - Run `./gradlew spotlessApply` before pushing.

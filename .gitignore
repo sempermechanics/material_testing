@@ -50,3 +50,6 @@ htmlcov/
 
 # === Firebase Hosting CLI cache ===
 firebase-hosting/.firebase/
+
+# === Generated API Gateway spec (contains the live Cloud Run hostname) ===
+backend/gateway/openapi.generated.yaml

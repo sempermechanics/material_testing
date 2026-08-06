@@ -12,7 +12,7 @@ you have images. -->
 
 | | |
 |---|---|
-| [1. What it does](#1-what-it-does) | [7. Sweeps](#7-sweeps) |
+| [1. What it does](#1-what-it-does) | [7. Parameter sweeps](#7-parameter-sweeps) |
 | [2. Getting in](#2-getting-in) | [8. Reading results](#8-reading-results) |
 | [3. Images it accepts](#3-images-it-accepts) | [9. Exports](#9-exports) |
 | [4. Running an analysis](#4-running-an-analysis) | [10. Managing analyses](#10-managing-analyses) |
@@ -48,8 +48,9 @@ Accounts need approval, not just sign-up.
 1. Sign in with Google or email.
 2. **Passwords** need 8+ characters with upper and lower case, a digit and a
    special character. **Generate secure password** fills a strong one in for you
-   and reveals it so you can save it. (A forgotten password is reset through
-   Firebase's own page, which these rules cannot reach.)
+   and reveals it so you can save it. **Forgot password** mails you a link;
+   opening it on this device reopens the app on a set-new-password form, where
+   the same rules apply. You never leave the app to reset a password.
 3. **Signing up with email?** Creating the account sends a verification link and
    puts you back on the sign-in form with your address still filled in. Open the
    link, then sign in there. Until you do, sign-in is refused and a fresh link is
@@ -66,6 +67,11 @@ Google and email-link sign-ins skip step 2 — both already prove the address.
 
 Offline works if you have been approved on this device before. Import, solve and
 read results all work without a network. Uploads wait.
+
+**Crash reports are opt-in.** After the beta notice on first run the app asks
+once whether it may send crash diagnostics. Nothing is collected unless you say
+yes, and you can change your mind at any time under **Settings → Your data →
+Send crash reports**.
 
 <img src="images/home.png" width="300" alt="Home screen">
 
@@ -135,9 +141,11 @@ Three decisions:
 
 - **Region of interest** — defaults to the full image. **Edit** opens the editor
   ([§6](#6-region-of-interest)).
-- **Single** or **Sweep** — Single solves every frame once. Sweep solves one
-  frame many times ([§7](#7-sweeps)).
-- **Advanced parameters** — [§5](#5-parameters).
+- **Single setting** or **Parameter sweep** — Single solves every frame once. A
+  parameter sweep solves one frame many times ([§7](#7-parameter-sweeps)).
+- **Advanced parameters** — [§5](#5-parameters). If you copied a set of
+  parameters from a sweep lattice, a **Paste params** chip appears here and fills
+  all three in one tap.
 
 Then **Compute**.
 
@@ -145,9 +153,14 @@ Then **Compute**.
 
 <img src="images/running.png" width="300" alt="Progress dialog">
 
-Points solved and convergence update live. **Cancel** stops the run where it is,
-within a moment — it does not wait out the frame being solved. Nothing is kept.
-Back is blocked.
+**Total points converged** and convergence update live. **Cancel** stops the run
+where it is, within a moment — it does not wait out the frame being solved.
+Nothing is kept. Back is blocked. Cancelling a parameter sweep abandons the whole
+sweep, not just the combination in flight.
+
+The same overlay covers importing frames and extracting video, but there it
+counts frames instead: the two compute tiles are hidden, because nothing is being
+solved yet. Cancelling an import asks for confirmation and leaves nothing behind.
 
 **A run stops itself if the images decorrelate.** Two consecutive frames below
 50% convergence end it — the frames after them would be no better, and the
@@ -170,11 +183,11 @@ gone.
 
 | Result | You land on |
 |---|---|
-| Single | Result viewer, frame 1 |
-| Sweep | Result lattice |
+| Single setting | Result viewer, frame 1 |
+| Parameter sweep | Result lattice |
 | Some sweep points failed | `N of M skipped` toast, then the lattice |
 | Engine failed | A dialog naming the cause, and which frame and image it failed on |
-| Every sweep combination failed | The lattice, every node hollow — tap one for its reason. No **View results** |
+| Every sweep combination failed | The lattice, every node hollow — tap one for its reason. **View** and **Save graph** are disabled |
 
 Re-running the same inputs updates the same analysis. Different inputs make a
 new one.
@@ -250,7 +263,7 @@ An ROI smaller than the subset will not run.
 
 ---
 
-## 7. Sweeps
+## 7. Parameter sweeps
 
 ### Why
 
@@ -296,12 +309,43 @@ run. The coach mark points it out on a first visit.
 | Filled dot | Solved |
 | Hollow red ring | Skipped — tap it and the reason names the combination and what went wrong |
 
-- **Tap** a node — its curve is highlighted, the rest fade.
-- **Double-tap** or **long-press** — opens that result.
-- **Drag across the plot** — a guide follows your finger and the readout gives
-  `(x, y)` for every curve, **each in that curve's own colour**, so you can read
-  several combinations at one position without matching text to a legend.
+Each filled node is drawn in the same colour as its curve on the plot below, so
+you can read the two together without a legend.
+
+The screen is built to be worked with one thumb. It scrolls — lattice, then
+controls, then plot — while **Save graph** and **View** stay pinned at the
+bottom.
+
+**Choosing a combination**
+
+- **Tap** a node, or use the **‹ · ›** stepper above the plot to walk the solved
+  nodes in order. The chip between the arrows names the current one.
+- **Double-tap** or **long-press** a node — opens that result. So does **View**.
+- Tapping a hollow node explains why that combination was skipped.
+
+**Reading the plot**
+
+- **Isolate** (the default) shows only the selected combination. **Highlight**
+  draws all of them, with the selected one at full strength.
+- **Drag across the plot** — a guide follows your finger, a dot marks the curve
+  and the value is printed beside it. The **slider** under the plot does the same
+  thing and stays in sync with the drag, which is easier one-handed.
+- The readout reads `x=… · y=… · subset N · step N · strain N`.
+- **Pinch to zoom**, **two-finger drag** to pan, **double-tap** to reset. The
+  zoom survives stepping to another node; changing component resets it, because
+  Exx, Eyy and Exy differ in magnitude.
 - The **Exx / Eyy / Exy** selector switches component.
+
+**Taking the answer with you**
+
+- **Double-tap the readout** to copy that combination's subset, step and strain
+  window. Start a new single-setting analysis and a **Paste params** chip on
+  step 2 fills them in — this is how you go from "the sweep says 41 · 5 · 15" to
+  running the whole batch at it.
+- **Save graph** writes a PNG: a header naming the study, the reference image and
+  deformed count, and the parameters (or the combination count in Highlight
+  mode); the plot; and a colour legend. It is rendered fit-to-data, so your
+  on-screen zoom neither leaks into the file nor is disturbed by saving.
 
 Look for the VSG where the curves stop separating.
 
@@ -367,7 +411,11 @@ provenance record.
 
 ## 9. Exports
 
-**Share** gives six targets. Every chooser offers **Save to Files**.
+**Share** gives six targets. Whichever you pick, the app builds the file with a
+progress dialog and then offers it through a **Send to** sheet with two rows:
+**Save to Files** (a folder picker, so it lands somewhere you choose and stays)
+or **Share** (the usual system chooser). Exports are named after the analysis, so
+a folder of them is still readable a month later.
 
 | Export | Contents |
 |---|---|
@@ -404,6 +452,11 @@ goes from the phone and that is that:
 With a backup you are asked *where* instead — **on this device only**, keeping
 the backup, or **everywhere**. Read that dialog before tapping.
 
+**Deleting on this device only is not losing it.** The row stays on Home, badged
+**Only in cloud**, and tapping it offers to download the analysis back before
+opening it. That is the point of the badge: a cloud-backed analysis is one tap
+from being local again, so freeing space is a reversible decision.
+
 <img src="images/settings.png" width="300" alt="Settings sections">
 
 **Cloud backup**: turn it on and it offers to back up what is already
@@ -411,14 +464,29 @@ local. **Wi-Fi only** holds uploads until Wi-Fi. **Analyses data management**
 lists local and cloud together — back up, restore or delete per row. A deleted
 backup has a **5-second Undo**.
 
+**Storage** is the section to reach for when the phone fills up. It measures what
+the analyses and the cache actually occupy, and gives you three tools:
+
+| Control | Does |
+|---|---|
+| **Free up space** | Drops the local frames of analyses that are already backed up. They become "Only in cloud" rows; nothing un-backed-up is touched |
+| **Clear cache** | Removes regenerable files — previews, exports waiting to be shared |
+| **Auto-free budget** | A slider, 0 (off) to 64 GB. Set it and the app reclaims space at start-up whenever usage is over the budget, oldest backed-up analyses first |
+
 **Background transfers survive leaving the screen and are honest about failure.**
 An upload or restore runs even if you navigate away, showing a system
-notification while it works. Success is quiet — the badge or list just updates —
-but a backup that *fails for good* (another device holds the account, the
-analysis is too large, or a render ran out of memory) raises a dialog on the Home
-badge explaining why, with **Try again**; a restore that fails (the backup was
-deleted, or is not this account's) raises a message in Settings. You are no
-longer left guessing.
+notification while it works, and — while you are on Home — a progress bar on the
+row itself, for downloads as well as uploads. Success is quiet: the badge or list
+just updates. A backup that *fails for good* (another device holds the account,
+the analysis is too large, or a render ran out of memory) raises a dialog on the
+Home badge explaining why, with **Try again**. A restore that fails (the backup
+was deleted, or is not this account's) says so on Home *and* in Settings. You are
+no longer left guessing.
+
+**Your data** holds the two exports and the account delete. **Export my data**
+builds a ZIP of everything on this phone; **Download my cloud account data** asks
+the server for its copy. Both show progress and finish at the same **Send to**
+sheet as any other export.
 
 **Deleting your account** (Settings → Your data) asks you to confirm your
 identity first, on the sign-in screen itself — whichever way you normally sign
@@ -465,7 +533,9 @@ Write above that block; leave it in place.
 | Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
 | Badge stuck on Pending | Offline, Wi-Fi-only, or backup off |
 | Badge shows Failed | Tap it — the dialog names why (device conflict, too large, ran out of memory) and offers **Try again** |
-| Restore never arrived | If it failed for good, Settings shows a message saying so; otherwise it retries on a flaky network |
+| Restore never arrived | If it failed for good, Home and Settings both show a message saying so; otherwise it retries on a flaky network |
+| Row says "Only in cloud" | Its local frames were freed (by you, or by the auto-free budget). Tap it to download them back |
+| Phone out of space | **Settings → Storage → Free up space**, and consider setting an auto-free budget |
 | Still pending approval | Tap **Check status** — it never polls |
 | Sign-in refused after signing up | Open the verification link in your email, then try again |
 | Nothing here matches | **Settings → Help & support** — ask the community at [semperdic.github.io/website](https://semperdic.github.io/website/support/), or **Email support** (the mail carries your account, device and build) |
@@ -479,7 +549,7 @@ Write above that block; leave it in place.
 - No spatial calibration — pixels only.
 - Coach marks show once and cannot be replayed.
 - Approval never polls.
-- No privacy policy, terms or licences screen.
+- No open-source licences screen (Privacy Policy and Terms are linked from About).
 - ROI shapes are rectangle and square only. -->
 
 ---
@@ -514,7 +584,7 @@ Write above that block; leave it in place.
 | SSSIG | Sum of squared subset intensity gradients — drives the subset recommendation |
 | ZNSSD | Correlation residual, one per point, in the CSV |
 | mε | Millistrain |
-| Sweep | One frame solved across a lattice of subset × VSG |
+| Parameter sweep | One frame solved across a lattice of subset × VSG |
 
 ## Appendix C — Administrators
 

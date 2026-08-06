@@ -29,12 +29,45 @@ the app at your deployment.
    - IAM Service Account Credentials API
    - Artifact Registry API
    - Cloud Build API
+   - Cloud Tasks API *(only if you do step 8a — async provisioning)*
 
 ## 3. Create the Firestore database
 1. ☰ → **Firestore**.
 2. **Create database** → **Native mode** → choose a location (e.g.
    `asia-south1`; remember it — Cloud Run should use the same region).
 3. **Create**.
+
+### 3a. Enable the TTL policy on auth challenges
+Every `/v1/challenge` writes a `challenges/{nonce}` document. Consumed nonces are
+deleted immediately; abandoned ones only disappear if Firestore is told to treat
+`expireAt` as a TTL field, so without this they accumulate forever.
+
+1. ☰ → **Firestore → Time-to-live (TTL)**.
+2. **Create policy** → collection group `challenges`, timestamp field
+   `expireAt` → **Create**.
+3. Wait until the policy shows **Active** (a few minutes).
+
+### 3b. Create the composite indexes
+Four composite indexes back the paginated session listing and the admin
+pending-user query. A missing one is not caught at deploy time — it fails at
+runtime with `FAILED_PRECONDITION`, so create them before the first real client.
+
+The reliable route is one command, even in a console-first setup:
+
+```bash
+firebase deploy --only firestore:indexes --project <project-id>
+```
+
+To do it by hand instead, ☰ → **Firestore → Indexes → Composite → Create index**,
+and reproduce each entry from
+[`backend/firestore.indexes.json`](../../backend/firestore.indexes.json):
+
+| Collection | Fields (all ascending) |
+|---|---|
+| `sessions` | `uid`, `localSessionId`, `status` |
+| `sessions` | `uid`, `__name__` |
+| `users` | `access_status`, `__name__` |
+| `files` | `sessionId`, `__name__` |
 
 ## 4. Create the runtime service account
 1. ☰ → **IAM & Admin → Service Accounts**.
@@ -101,6 +134,17 @@ Auth lives in the same project as this backend, you can skip the
      | `SUPPORT_EMAIL` | where "a new user is waiting for approval" mail goes — defaults to `support@indicvision.com` |
      | `NOTIFY_FROM` | verified Resend sender, e.g. `Semper <noreply@yourdomain.com>` — leave unset to disable notification mail |
 
+     Optional, all with working defaults — add only the ones you need:
+
+     | Name | Default | What it does |
+     |---|---|---|
+     | `MAX_SESSIONS_PER_USER` | `4` | Cloud analyses per user (overridable per user by an admin) |
+     | `MAX_FILES_PER_SESSION` | `600` | Files in one analysis |
+     | `MAX_FRAMES_PER_ANALYSIS` | `150` | Deformed-frame ceiling |
+     | `ROOT_FOLDER_ID` | the Shared Drive | A folder inside the drive to root everything under |
+     | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
+     | `REQUIRE_ATTESTED_UPLOADS` | off | Set to `1` in production once every client sends a device signature — see step 8b |
+
    - **Container → Variables & Secrets → + Reference a secret** for the API key
      (it must not be a plain variable): name `RESEND_API_KEY`, secret
      `resend-api-key`, version `latest`, exposed as an environment variable.
@@ -111,6 +155,45 @@ Auth lives in the same project as this backend, you can skip the
    - (Resources) CPU 1, Memory 512 MiB, Min instances 0, Max 10.
 7. **Create.** Wait for the build+deploy to finish; copy the service **URL**
    (looks like `https://indic-api-xxxx.a.run.app`).
+
+## 8a. Cloud Tasks queue for session provisioning (recommended)
+
+`POST /v1/sessions` has to open one Drive resumable session per file. At the
+600-file ceiling that is roughly 1200 sequential round-trips, which does not fit
+in a 60-second request — so provisioning runs as a background task and the
+request just reserves the session.
+
+Skip this and the service provisions **inline** instead. That is correct and is
+how local dev and the tests run, but a large analysis will time out.
+
+1. ☰ → **Cloud Tasks → Create queue**. Name `indic-provision`, region the same as
+   Cloud Run. Set **Max attempts** 5 and **Max concurrent dispatches** 20.
+2. ☰ → **Cloud Run → indic-api → Permissions → Add principal**: the
+   `indic-api@…` service account, role **Cloud Run Invoker**. Cloud Tasks calls
+   back in with an OIDC token for this identity.
+3. ☰ → **IAM & Admin → IAM → Grant access**: the same service account, role
+   **Cloud Tasks Enqueuer**.
+4. Back in Cloud Run → **Edit & deploy new revision → Variables & Secrets**, add:
+
+   | Name | Value |
+   |---|---|
+   | `TASKS_QUEUE` | `indic-provision` |
+   | `TASKS_LOCATION` | your region |
+   | `TASKS_TARGET_BASE_URL` | the **Cloud Run** service URL, not the gateway |
+   | `TASKS_INVOKER_SA` | `indic-api@<project-id>.iam.gserviceaccount.com` |
+
+`TASKS_TARGET_BASE_URL` must be the Cloud Run URL exactly: the callback is not
+part of the public API, and the same string is the OIDC audience the service
+checks the token against.
+
+## 8b. Require attested uploads (before real users)
+
+`GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While
+`REQUIRE_ATTESTED_UPLOADS` is unset, that route accepts a bare Firebase ID token
+as well as a full device signature, so older tester builds keep working; the
+service logs a startup warning while the window is open. Once every client in the
+field attests, add `REQUIRE_ATTESTED_UPLOADS` = `1` and redeploy. It never
+weakens a client that already signs.
 
 ## 9. Verify in the browser
 1. Visit `https://<your-url>/healthz` → you should see
@@ -136,13 +219,30 @@ Temporarily enable dev mode so you can call the API without a signed request:
      ]
    }
    ```
-   You should get **200** with a `sessionId` and an `uploadUrl`.
+   You get **200** with a `sessionId`.
+
+   **If you set up the Cloud Tasks queue (8a), `uploads` comes back empty** and
+   the status is `PROVISIONING` — that is correct, and is what the app sees. The
+   targets are opened by a background task a second or two later. Expand
+   **GET /v1/sessions/{sessionId}/uploads**, put your `sessionId` in and
+   **Execute**; repeat until it reports `UPLOADING` with one `uploadUrl` per
+   file. Without the queue, the `uploadUrl` is in the create response directly.
+
+   A session stuck on `PROVISIONING` means the task never arrived — check the
+   queue's backlog and that `TASKS_TARGET_BASE_URL` matches the Cloud Run URL
+   exactly. `PROVISION_FAILED` means the task ran and Drive rejected it; the
+   Cloud Run logs will say why.
 4. **Check Drive:** in `Semper-Research-Storage` a tree now exists —
    `Research Storage/user/dev-user/session/<sessionId>/` with `raw`, `processed`,
    `reports`, `metadata` subfolders. ✅ keyless Drive access works.
 5. **Check Firestore:** ☰ → **Firestore → Data** → collection `sessions` has your
    `<sessionId>` (status `UPLOADING`), and `files` has a matching doc. ✅ Firestore
    works.
+
+> Completing a file later needs its **`md5`** as well as the `driveFileId` and
+> `bytes`. Drive reports an `md5Checksum` for every blob we store, and omitting
+> the field is treated as `checksum_mismatch` — a `422`, with the file left
+> `PENDING`.
 
 > The actual file-bytes upload (resumable `PUT` straight to `uploadUrl`) can't be
 > driven from a plain browser — it needs the app (Part C) or an HTTP client like

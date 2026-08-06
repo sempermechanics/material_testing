@@ -45,7 +45,24 @@ here is needed for day-to-day contributions.
 
 ## CI-based release (workflow_dispatch)
 
-The [`release.yml`](../../.github/workflows/release.yml) workflow:
+The [`release.yml`](../../.github/workflows/release.yml) workflow runs three
+jobs: `verify` → `build-release` → `publish`.
+
+### `verify` — the gate
+
+Green CI used to be a checklist item in this file, which meant a red suite could
+still be signed and published. It is now a job the build depends on:
+
+- `python scripts/render_legal_pages.py --check` — the published Privacy Policy
+  and Terms still match `docs/legal/`.
+- `./gradlew :app:testDebugUnitTest` — the Android unit suite.
+- Backend `ruff check app/ tests/ scripts/ ../scripts/` and
+  `pytest tests/ -q --cov=app --cov-fail-under=75`.
+
+`build-release` declares `needs: verify`, so none of the signing steps run if any
+of the above fails.
+
+### `build-release` — sign and check
 
 1. Builds a **signed release APK** using repository secrets (keystore, alias,
    passwords) stored in the `release` environment. The `signingConfigs.release`
@@ -53,12 +70,37 @@ The [`release.yml`](../../.github/workflows/release.yml) workflow:
    sets; if the keystore is absent the variant stays **unsigned** rather than
    silently debug-signed.
 2. Requires environment variable **`INDIC_API_BASE_URL`** (HTTPS API Gateway or
-   Cloud Run URL) and builds with `-PrequireCloudApi=true`. Missing/empty URL
-   fails the job — cloud sync must not ship silently disabled.
+   Cloud Run URL) and builds with `-PrequireCloudApi=true`. A missing, empty or
+   non-HTTPS URL fails the job — cloud sync must not ship silently disabled, and
+   ID tokens must not go out in cleartext.
 3. Verifies the arm64-v8a `.so` is packaged.
 4. **Verifies the signature** with `apksigner verify` — the release fails here
    if the APK is not validly signed with the release key.
-5. Creates a **GitHub Release** with the APK attached.
+5. **Verifies `assetlinks.json` lists the release certificate.** It extracts the
+   SHA-256 digest from the signed APK, reformats it to the colon-separated
+   uppercase form Digital Asset Links uses, and greps
+   `firebase-hosting/public/.well-known/assetlinks.json` for it. If the
+   fingerprint is absent the release fails with instructions.
+
+   This check exists because the failure it prevents is invisible. App Links only
+   verify when the *release* signing certificate is in the hosted file; when it is
+   not, the email sign-in and password-reset links stop opening the app and fall
+   back to a browser disambiguation dialog — phishable, and indistinguishable from
+   an app bug. Rotating the signing key or moving to Play App Signing means adding
+   the new fingerprint here and redeploying Hosting.
+6. Uploads two artifacts: the APK, and **`release-mapping-<version>`**, the R8
+   mapping file (90-day retention, `if-no-files-found: error`).
+
+**The R8 mapping is not attached to the GitHub Release, deliberately.** It is the
+deobfuscation key — publishing it would undo the obfuscation for everyone — but
+without it a field stack trace from that build is unreadable, and it cannot be
+regenerated afterwards. Archive it somewhere durable before the 90-day artifact
+retention expires. This is a step you have to take by hand.
+
+### `publish`
+
+Creates the **GitHub Release** with the APK attached, gated on `release`
+environment approval.
 
 ### Required secrets (in the `release` environment)
 
@@ -78,9 +120,29 @@ The [`release.yml`](../../.github/workflows/release.yml) workflow:
 ### Backend staging / production
 
 Use [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml): choose
-`staging` or `production`, supply GCP project/region. Post-deploy smoke hits
-`/readyz`; failure auto-rolls traffic to the previous revision. See
+`staging` or `production`, supply GCP project/region. It deploys with no traffic,
+tags a candidate revision, smokes `/readyz` on the tagged URL with an ID token,
+then promotes — so a failed smoke never had traffic to roll back. See
 [CI.md](CI.md) § Backend deploy.
+
+#### Bumping backend dependencies
+
+The image installs from `backend/requirements.lock` with `--require-hashes`, so a
+version bump is two files, in this order:
+
+```bash
+cd backend
+# 1. Edit requirements.txt (the direct dependency you actually want to move).
+# 2. Regenerate the hashed lock from it.
+pip install pip-tools
+pip-compile --generate-hashes --output-file requirements.lock requirements.txt
+```
+
+CI tier 4 then proves the lock resolves under `--require-hashes` on Python 3.12
+*and* still covers every direct dependency, so a stale or hand-edited lock fails
+in CI rather than in the Cloud Build step of a deploy. Never edit
+`requirements.lock` by hand — the hashes will not match and the image will fail
+to build.
 
 ### Local gate before triggering release
 
@@ -89,12 +151,17 @@ Use [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml): choose
 ```
 
 This mirrors CI **tiers 1 and 5** locally (quality gates + unit tests + R8 +
-release assemble). It does **not** run the native (tier 2) or backend (tier 4)
-suites — run those separately. Emulator smoke also runs separately:
+release assemble). It does **not** run the backend suite, the emulator tier, or
+the two always-on gates. Run those separately:
 
 ```bash
-./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64
+python scripts/render_legal_pages.py --check                     # legal-pages
+cd backend && pytest tests/ -q --cov=app --cov-fail-under=75     # tier 4
+./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64     # tier 3
 ```
+
+Engine host and sanitizer suites are not part of this repo's gate — they run in
+`semperdic/semper-dic-engine` against the commit this repo pins.
 
 ## After the release
 

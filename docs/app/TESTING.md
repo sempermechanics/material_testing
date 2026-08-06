@@ -7,11 +7,12 @@ Each chunk owns one layer; no duplicate assertions across chunks.
 
 | Chunk | User journey | JVM tests (`app/src/test`) | Instrumented (`androidTest`) |
 |-------|--------------|---------------------------|------------------------------|
-| **auth** | Splash → Auth / Pending / Home, re-auth | `auth/AccessRouterTest`, `auth/ReauthFlowTest` | `auth/FirebaseAuthIntegrationTest` |
-| **analysis** | Import → ROI → batch/sweep | `analysis/VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `BitmapDecodeTest` | — |
+| **auth** | Splash → Auth / Pending / Home, re-auth, password rules | `auth/AccessRouterTest`, `ReauthFlowTest`, `PasswordPolicyTest` | `auth/FirebaseAuthIntegrationTest` |
+| **analysis** | Import → ROI → batch / parameter sweep | `analysis/VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `BitmapDecodeTest` | — |
+| **session** | Session store durability, disk footprint, failure provenance | `session/SessionStoreAtomicTest`, `LocalStorageFootprintTest`, `FailureProvenanceTest` | — |
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `GifEncoderTest`, `SummaryAnimationTest` | — |
 | **viewer** | Result viewer controls | `viewer/FrameNumberEntryTest` | — |
-| **cloud** | Upload, API, restore, account deletion | `cloud/ApiDtosContractTest`, `UploadResumableTest`, `AccountDeletionTest`, `SessionEverythingExporterTest` | — |
+| **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest` | — |
 | **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest` | — |
 | **e2e** | Wizard chrome smoke (Next + toolbar; Back / Compute / instruction GONE on step 1) | — | `AnalysisWizardSmokeTest` |
 | **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
@@ -46,6 +47,25 @@ handing their path in on the intent.
 than a decoder of ours: the encoder is written against the GIF89a spec by hand,
 so the only claim worth making is that a third-party decoder agrees.
 
+`session/LocalStorageFootprintTest` pins the rule that only cloud-backed
+analyses may have their local frames freed — it is the guard against a storage
+optimisation quietly deleting the one copy of someone's data.
+`cloud/RestoreAndImportSafetyTest` and `DicUploadWorkerOutcomesTest` cover the
+other half: a cancelled import and a terminally failed upload must both leave
+the session store in a state you can come back to.
+
+### Known coverage gaps
+
+Worth knowing before you assume something is protected:
+
+- The sweep lattice's newer interactions — pinch-zoom, the scrub slider,
+  double-tap-to-copy and the composed **Save graph** PNG — have **no automated
+  coverage**. They are exercised only by the manual pass in
+  [WORKFLOWS.md](WORKFLOWS.md) §7.
+- The Storage section and the diagnostics consent toggle have no UI test;
+  `settings/HelpSupportSectionTest` is the Robolectric pattern to copy if you add
+  one.
+
 Emulator (all instrumented):
 ```bash
 ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64
@@ -53,7 +73,9 @@ Emulator (all instrumented):
 
 ## What not to test here
 
-- Algorithm accuracy → host C++ suite ([docs/engine/TESTING.md](../engine/TESTING.md))
+- Algorithm accuracy → the engine's own suite, which lives in the `native/`
+  submodule and runs in the engine repo's CI, not here
+  ([docs/engine/TESTING.md](../engine/TESTING.md))
 - Backend API → backend pytest (`backend/tests/`)
 - Real Firebase Auth → `auth/FirebaseAuthIntegrationTest`. These self-skip
   (JUnit `assumeTrue`) unless `FIREBASE_TEST_EMAIL` / `FIREBASE_TEST_PASSWORD`

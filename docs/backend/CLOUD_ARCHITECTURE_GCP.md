@@ -197,8 +197,19 @@ device. Re-registering the *same* `deviceId` for its owner is idempotent — it 
 the stored public key and returns `201` with `healed: true` (see
 `register_device` in `main.py`). Registering a *different* second device for a
 `uid` that already has one returns `409 device_conflict`; moving to genuinely
-new hardware currently means an admin revokes the prior device first. (There is
-no `:rebind` endpoint — that was a design idea, not something implemented.)
+new hardware means an admin revokes the prior device first. (There is no
+`:rebind` endpoint — that was a design idea, not something implemented.)
+
+**Device records are settled, not orphaned.** Both transitions now write the old
+record rather than leaving it `ACTIVE` and unreachable:
+
+| Event | What happens to the device docs |
+|---|---|
+| Admin revokes or suspends a user | **Every** device of that uid moves to `REVOKED` with a `revokedAt`, and `users/{uid}.activeDeviceId` is cleared (`set_user_status` in `firestore_repo.py`) |
+| A new device is registered after that | The previous device moves to `SUPERSEDED` with a `revokedAt`, so history shows *why* it stopped being usable rather than just vanishing |
+
+Admin revoke itself requires a `verified_device` caller — an admin cannot revoke
+from an unattested session.
 
 **Latency note.** A per-request challenge round-trip doubles RTT. For hot paths
 you may fold it into a **signed-timestamp assertion** (client signs
@@ -211,23 +222,63 @@ admin actions.
 
 ## 4. Upload sequence (5 GB, resumable, keyless)
 
+### 4.1 Provisioning is asynchronous
+
+Opening one Drive resumable session per file used to happen **inline** inside
+`POST /v1/sessions`. At the 600-file ceiling that is roughly 1200 sequential
+round-trips inside a 60-second Cloud Run request budget, so a large analysis
+simply could not be uploaded. Provisioning now runs in a **Cloud Task** and the
+request only reserves the session.
+
+```mermaid
+sequenceDiagram
+    participant W as WorkManager Worker (OkHttp)
+    participant R as Cloud Run
+    participant T as Cloud Tasks
+    participant D as Google Drive (Shared Drive)
+    W->>R: POST /v1/sessions {specimen, files:[…]} (ID token + device sig)
+    R->>Firestore: sessions/{sid} = PROVISIONING, files/{fid} = PENDING
+    R->>T: create task provision-{sid} (OIDC, deterministic name)
+    R-->>W: 200 {sessionId, status:"PROVISIONING", uploads:[]}
+    T->>R: POST /v1/tasks/provision-session {sessionId} (OIDC token)
+    R->>D: create folder tree, then open resumable sessions (bounded fan-out)
+    R->>Firestore: store session URIs, sessions/{sid} = UPLOADING
+    loop until status is UPLOADING
+        W->>R: GET /v1/sessions/{sid}/uploads
+        R-->>W: 202 still PROVISIONING, or 200 {uploads:[{fileId, uploadUrl, chunkSize}]}
+    end
+```
+
+Three properties worth knowing before you change this path:
+
+- **The task name is deterministic** (`provision-{sid}`), so Cloud Tasks
+  de-duplicates. A retried `create_session` for the same session cannot
+  double-provision; an `AlreadyExists` on enqueue is treated as success.
+- **Enqueue failure is not request failure.** `enqueue_provision` returns `False`
+  when the queue is unconfigured or the call fails, and the caller provisions
+  **inline** instead. Leaving `TASKS_QUEUE` empty is therefore a supported
+  configuration — local dev and the test suite run that way, and the client
+  cannot tell the difference beyond latency.
+- **A failed provision is recorded, not silent.** The task marks the session
+  `PROVISION_FAILED` with an error code so Cloud Tasks can retry and a polling
+  client is told to stop waiting.
+
+`/v1/tasks/provision-session` is authenticated by `tasks.tasks_caller`, not by
+anything in `deps.py`: the caller is Google, so there is no uid, no device and no
+`access_status`. It verifies the OIDC token against the configured audience
+**and** requires the token's email to equal `TASKS_INVOKER_SA` — the audience
+check alone is not authentication, because any Google account can mint a token
+for a public audience.
+
+### 4.2 Transfer and completion
+
 ```mermaid
 sequenceDiagram
     participant W as WorkManager Worker (OkHttp)
     participant R as Cloud Run
     participant IAM as IAM Credentials
     participant D as Google Drive (Shared Drive)
-    Note over W: session already computed on-device (raw/processed/reports/metadata)
-    W->>R: POST /v1/sessions {specimen, files:[{name,role,bytes,sha256}]}\n(ID token + device sig)
-    R->>D: (keyless) create folder tree user/{uid}/session/{sid}/{raw,processed,reports,metadata}
     Note over R,IAM: token = generateAccessToken(SA, scope=drive) — NO json key
-    loop for each file
-        R->>D: POST resumable init (metadata: name, parent, driveId)
-        D-->>R: 200 Location: <resumable session URI>
-    end
-    R->>Firestore: sessions/{sid}=UPLOADING, files/{fid}=PENDING (+ session URIs)
-    R-->>W: 200 {sessionId, uploads:[{fileId, uploadUrl, chunkSize:32MiB}]}
-
     loop each file, 32 MiB chunks
         W->>D: PUT uploadUrl  Content-Range: bytes a-b/total  (direct, no backend)
         D-->>W: 308 Resume Incomplete (Range: bytes=0-b)
@@ -268,6 +319,33 @@ Drive object (or another user's) into its session record. This is why the upload
 init requests `fields=id,md5Checksum,size` and completion re-fetches
 `size,md5Checksum,parents` rather than believing the PUT response.
 
+**Upload targets require attestation — with one temporary exception.**
+`GET /v1/sessions/{sid}/uploads` hands out Drive upload capability URLs, so it is
+gated by `deps.device_or_legacy_reader` rather than a plain ID-token dependency.
+While `REQUIRE_ATTESTED_UPLOADS` is unset it accepts either a full device
+signature *or* an ID token alone, because testers hold builds that only send the
+latter; setting `REQUIRE_ATTESTED_UPLOADS=1` closes the window. Leaving it off
+never weakens a client that *does* attest, and the service logs a startup warning
+so the compatibility window cannot be forgotten. Every other write and mint path
+already requires a device signature.
+
+**A Drive outage must never erase session metadata.** `GET /v1/sessions?verify=true`
+probes whether each session's blobs still exist, and purges Firestore metadata
+for ones that are gone. The probe returns three states, not two:
+
+| Probe result | Meaning | What the backend does |
+|---|---|---|
+| `ALIVE` | Drive confirmed the object | Nothing |
+| `MISSING` | Drive confirmed it is gone | Purge the session metadata |
+| `UNKNOWN` | The probe raised — Drive 5xx, timeout, expired token | **Nothing.** Counted into an `indeterminate` tally |
+
+The response carries `{requested, purged, indeterminate}` so the client knows the
+verification was incomplete, and a non-zero `indeterminate` is logged at WARNING
+with `dependency="drive"`. Collapsing `UNKNOWN` into `MISSING` would turn a
+transient outage into permanent data loss for the user, which is exactly the bug
+this shape exists to prevent — see the `MISSING` / `UNKNOWN` constants in
+`drive.py`.
+
 **Resumable restore download.** Restore streams bytes back through Cloud Run
 (there is no anonymous signed download URL). Drive honors HTTP `Range` on
 `alt=media`, so `open_download` forwards a `Range` header and a truncated restore
@@ -296,11 +374,15 @@ users/{uid}                       (uid = Google 'sub')
   role: "user" | "admin"
   access_status: "PENDING" | "APPROVED" | "SUSPENDED"
   activeDeviceId: string | null
-  createdAt, lastSeenAt (Timestamp)
+  driveFolderId                   (…/user/{uid} folder)
+  maxSessions, maxFilesPerSession, maxFrames   (optional per-user quota overrides)
+  schemaVersion                   (stamped by backend/scripts/migrate_schema.py)
+  createdAt, updatedAt, lastSeenAt (Timestamp)
 
 devices/{deviceId}                (deviceId = client UUID)
   uid, publicKeyPem
-  status: "ACTIVE" | "REVOKED"
+  status: "ACTIVE" | "REVOKED" | "SUPERSEDED"
+  revokedAt                       (set on REVOKED and SUPERSEDED)
   model, osVersion, appVersion
   registeredAt, lastAssertionAt
 
@@ -310,7 +392,10 @@ challenges/{nonce}                (short-lived, TTL-deleted)
 sessions/{sessionId}
   uid, deviceId
   specimen: string
-  status: "PENDING" | "UPLOADING" | "COMPLETED" | "FAILED"
+  status: "PENDING" | "PROVISIONING" | "PROVISION_FAILED"
+        | "UPLOADING" | "COMPLETED" | "FAILED"
+        (PROVISIONING and UPLOADING are IN_FLIGHT_STATUSES — both still
+         expect more bytes and both count against the session quota)
   driveFolderId                   (…/session/{sid} folder)
   totalBytes, fileCount, completedCount
   metrics: { pointsConverged, avgIcgnIters, execMs }  // small, from device
@@ -336,16 +421,20 @@ audit_logs/{autoId}               (append-only)
 ```
 
 **Indexing.**
-- **No composite indexes are required today**, which is why
-  `backend/firestore.indexes.json` is empty. Every query the code issues is a
-  single-field equality (`.where(field, "==", value)`) with an optional
-  `.limit()`/`.count()` — see `firestore_repo.py` — and single-field auto-indexes
-  cover those. A composite index becomes necessary only if a query adds an
-  `order_by` or a second `where`; add it to that file then.
+- `backend/firestore.indexes.json` is the source of truth and defines **four
+  composite indexes**: `sessions(uid, localSessionId, status)`,
+  `sessions(uid, __name__)`, `users(access_status, __name__)` and
+  `files(sessionId, __name__)`. The paginated listing and the admin pending-user
+  query both need one. Deploy them with
+  `firebase deploy --only firestore:indexes` — a missing index shows up as a
+  `FAILED_PRECONDITION` at runtime, not at deploy time.
 - **Exempt** large/opaque fields from indexing (`publicKeyPem`, `uploadUrl`,
   `sha256`) to cut index cost and stay off the 40 KB/1500-field limits.
-- **TTL policy** on `challenges.expireAt` and optionally `audit_logs.ts` (e.g.
-  400-day retention) — planned, not yet configured in IaC.
+- **TTL policy** on `challenges.expireAt` is a *field* policy, not an index, so it
+  cannot live in that file. Enable it as part of operator setup — step A2a of
+  [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md). `consume_nonce` deletes a nonce on
+  use; TTL reclaims the ones that are never consumed. An optional retention TTL on
+  `audit_logs.ts` (e.g. 400 days) is still just a suggestion.
 
 Security: Firestore is **written only by the Cloud Run SA** (server-side). No
 Android SDK writes → Firestore Security Rules can be `allow read, write: if
@@ -382,15 +471,39 @@ the way it does.
 | Concern | File | Notes |
 |---|---|---|
 | FastAPI app, routes | [`backend/app/main.py`](../../backend/app/main.py) | All `/v1/*` endpoints |
-| Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check |
+| Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check, `device_or_legacy_reader` (§4) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
-| Drive folders, resumable init | [`backend/app/drive.py`](../../backend/app/drive.py) | Returns the opaque upload URI (§4) |
-| Firestore access | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | Schema in §5 |
+| Drive folders, resumable init, blob probe | [`backend/app/drive.py`](../../backend/app/drive.py) | Returns the opaque upload URI, and `ALIVE`/`MISSING`/`UNKNOWN` (§4) |
+| Async provisioning | [`backend/app/tasks.py`](../../backend/app/tasks.py) | Cloud Tasks enqueue + OIDC callback auth (§4.1) |
+| Firestore access | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | Schema in §5; contention retries; device settlement (§3) |
+| Input validation | [`backend/app/validation.py`](../../backend/app/validation.py) | Page cursors and document ids — see below |
+| Rate limiting | [`backend/app/rate_limit.py`](../../backend/app/rate_limit.py) | Per-uid token buckets (§12) |
+| Structured logging | [`backend/app/observability.py`](../../backend/app/observability.py) | JSON log records with request correlation (§17) |
+| Outbound mail | [`backend/app/notify.py`](../../backend/app/notify.py) | Resend, fire-and-forget |
 | Pydantic models | [`backend/app/models.py`](../../backend/app/models.py) | |
 | Audit trail | [`backend/app/audit.py`](../../backend/app/audit.py) | |
-| Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH` |
-| Container | [`backend/Dockerfile`](../../backend/Dockerfile) | Deployed with `gcloud run deploy --source backend` |
-| API Gateway spec | [`backend/gateway/openapi.yaml`](../../backend/gateway/openapi.yaml) | Covers all current routes |
+| Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `REQUIRE_ATTESTED_UPLOADS`, `TASKS_*` |
+| Schema migrations | [`backend/scripts/migrate_schema.py`](../../backend/scripts/migrate_schema.py) | Versioned steps in `backend/scripts/migrations/` — see [FIRESTORE_SCHEMA_RUNBOOK.md](FIRESTORE_SCHEMA_RUNBOOK.md) |
+| Container | [`backend/Dockerfile`](../../backend/Dockerfile) | Installs from `requirements.lock` with `--require-hashes` |
+| API Gateway spec | [`backend/gateway/openapi.yaml`](../../backend/gateway/openapi.yaml) | Covers all current routes; `__CLOUD_RUN_URL__` is substituted at deploy |
+
+**Cursor validation.** Every paginated listing takes a `pageToken`, which becomes
+a Firestore cursor. `validation.py` checks tokens and document ids before they
+reach the query, so a crafted token cannot smuggle a path separator into a
+collection reference and read across the collection tree. Treat any new
+client-supplied identifier that reaches Firestore as needing the same treatment.
+
+**Per-user quota overrides.** `resolve_user_config` merges the fleet defaults
+(`MAX_SESSIONS_PER_USER`, `MAX_FILES_PER_SESSION`, `MAX_FRAMES_PER_ANALYSIS`)
+with optional per-user values on `users/{uid}`, so one tester can be raised
+without redeploying. Admins set them via
+`PATCH /v1/admin/users/{uid}/config`, and the app reads the resolved numbers
+rather than hardcoding its own.
+
+**Firestore contention is retried, not returned.** Concurrent writes to the same
+session document used to surface as a `500`. `firestore_repo.py` now retries the
+contended transaction, so a burst of `:complete` calls for one session settles
+instead of failing the client.
 
 ---
 
@@ -503,8 +616,8 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
   *use* is decided by `access_status` (config.py spells this out). Domain only
   affects auto-approval via `AUTO_APPROVE_HD`, not admission.
 - **Device binding:** non-exportable Keystore key, challenge/nonce with replay
-  cache, admin-gated revoke. (Nonce TTL cleanup is not yet enforced by an IaC
-  TTL policy — see §5.)
+  cache, admin-gated revoke that settles every device record (§3). Nonce TTL is a
+  Firestore field policy the operator enables at setup — see §5.
 - **Least privilege IAM:** `datastore.user` + self-`tokenCreator` only; deployer
   SA separate.
 - **Firestore locked to the server:** client rules deny-all; all writes via API.
@@ -513,11 +626,19 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
 - **Capability-scoped uploads:** resumable URI authorizes one file only; expires.
 - **Transport:** TLS only; HSTS; reject non-HTTPS.
 - **Input validation:** pydantic models; cap `files[]` length and per-file bytes
-  (reject >5 GB); sanitize filenames before Drive.
-- **Rate limiting (planned, NOT implemented):** there is no rate limiting in the
-  service today. `/v1/challenge` in particular mints a nonce doc per call with no
-  per-uid throttle. Target is a per-uid token bucket (challenge + session create)
-  plus Cloud Armor when public.
+  (reject >5 GB); sanitize filenames before Drive; validate page cursors and
+  document ids in `validation.py` before they reach a Firestore query (§7).
+- **Rate limiting (implemented in-process; distributed layer still open):**
+  `rate_limit.py` applies per-uid token buckets to challenge, session create,
+  download, export, erase, admin, listing, health, file-complete and
+  session-verify. Because the buckets live in the process, they bound one Cloud
+  Run instance rather than the fleet — the cross-instance layer is API Gateway
+  quotas in `openapi.yaml`, with Cloud Armor still to come when the service is
+  public. [PRODUCTION_READINESS_GATE.md](../ops/PRODUCTION_READINESS_GATE.md)
+  tracks this as PARTIAL for that reason.
+- **Attested upload targets:** `/uploads` hands out capability URLs and is gated
+  by `device_or_legacy_reader`; flip `REQUIRE_ATTESTED_UPLOADS=1` once the fleet
+  has moved (§4).
 - **Audit everything security-relevant**, append-only, with retention.
 - **Privacy prerequisites for public launch:** privacy policy + account-deletion
   path (raw specimen images + email are personal data).
@@ -536,6 +657,10 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
 | Firestore write fails after Drive success | try/except around commit | idempotent `:complete` (deterministic fileId) → safe re-POST |
 | Drive `403 storageQuotaExceeded` | broker init error | means writing to SA's personal 15 GB, not the Shared Drive → config alarm |
 | Drive `429`/quota | broker/PUT 429 | exponential backoff + jitter; surface "try later" |
+| Provisioning task fails | task marks `PROVISION_FAILED` | Cloud Tasks retries the task; a polling client sees the status and stops waiting instead of hanging on `PROVISIONING` |
+| Cloud Tasks unavailable / unconfigured | `enqueue_provision` returns `False` | Provision inline in the request — slower, same result (§4.1) |
+| Drive unreachable during a verifying refresh | probe yields `UNKNOWN` | **Purge nothing.** Report an `indeterminate` count and log at WARNING (§4) |
+| Concurrent writes to one session doc | Firestore contention | Retried inside `firestore_repo.py` rather than returned as `500` |
 
 **Idempotency** is the backbone: deterministic `fileId` / `sessionId` mean every
 mutation is safely retryable.
@@ -595,13 +720,29 @@ cost of GB-month + egress billing (~$0.02/GB-mo storage, ~$0.12/GB egress).
 
 ## 16. CI/CD pipeline
 
-> **Status: built, gated on secrets.** `.github/workflows/deploy-backend.yml`
-> deploys the backend to Cloud Run; it runs ruff + pytest first and deploys only
-> if they pass. It is `workflow_dispatch` (manual) and stays inert until
-> `GCP_WIF_PROVIDER` and `GCP_DEPLOY_SA` are set, so the documented manual
-> `gcloud run deploy` in the runbook is still the path until then.
-> `.github/workflows/ci.yml` continues to build and test the app and engine
+> **Status: in use.** `.github/workflows/deploy-backend.yml` deploys the backend
+> to Cloud Run, running ruff + pytest first. It is `workflow_dispatch` (manual)
+> and still needs `GCP_WIF_PROVIDER` and `GCP_DEPLOY_SA` configured for the
+> target environment. `.github/workflows/ci.yml` builds and tests the app
 > ([CI.md](../ops/CI.md)).
+
+**Traffic is shifted only after the new revision answers.** The deploy does not
+replace the serving revision and hope:
+
+1. Deploy with `no_traffic: true`, tagging the revision
+   `cand-<run_id>-<run_attempt>`. The previous revision keeps serving.
+2. Smoke the **tagged candidate URL** at `/readyz`, using an ID token minted with
+   the *service URL* as its audience (production runs
+   `--no-allow-unauthenticated`, so an unauthenticated probe would only ever
+   prove that the gateway rejects it).
+3. Promote the candidate to 100% traffic only if the smoke passes.
+
+If the smoke fails there is nothing to roll back — the candidate never carried
+traffic. Rollback is only relevant if a later step fails after promotion.
+
+The revision suffix carries the **run attempt** as well as the run id, so
+re-running a failed job cannot collide with the revision name the first attempt
+already created.
 
 It authenticates with **Workload Identity Federation** rather than a stored key:
 a pool trusting GitHub's OIDC, mapped to a deployer service account and
@@ -656,11 +797,15 @@ free quota; sessions stuck `UPLOADING`.
 
 ## 18. Disaster recovery
 
-> **Status: mostly planned.** Offline-first (Identity row) is real today, and
-> partial IaC now exists — `backend/firestore.indexes.json` and the
-> `deploy-backend.yml` workflow. The scheduled Firestore export, PITR, nightly
-> Drive↔Firestore reconciliation, and full Terraform below are **not yet
-> implemented**; the RPO/RTO figures describe the target, not current cover.
+> **Status: partly implemented.** Offline-first (Identity row) is real, partial
+> IaC exists (`backend/firestore.indexes.json`, `deploy-backend.yml`), and the
+> **scheduled Firestore export now runs**: `.github/workflows/firestore-backup.yml`
+> exports daily at 02:17 UTC, and `.github/workflows/firestore-restore-drill.yml`
+> proves the export can actually be restored rather than assuming it. Both are
+> documented in [FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md).
+> Still outstanding: console proof that PITR and the bucket lifecycle are wired,
+> nightly Drive↔Firestore reconciliation, and full Terraform. The RPO/RTO figures
+> describe the target.
 
 | Asset | Risk | Mitigation |
 |---|---|---|

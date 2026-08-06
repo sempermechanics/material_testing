@@ -1,6 +1,6 @@
 # Semper — Digital Image Correlation on Android
 
-[![CI](https://github.com/shankar-indicvision/IndicVisionDIC/actions/workflows/ci.yml/badge.svg)](https://github.com/shankar-indicvision/IndicVisionDIC/actions/workflows/ci.yml)
+[![CI](https://github.com/semperdic/semperdic-app/actions/workflows/ci.yml/badge.svg)](https://github.com/semperdic/semperdic-app/actions/workflows/ci.yml)
 
 Semper measures **how objects deform** — from nothing but photographs.
 Paint a random speckle pattern on a specimen, photograph it before and during
@@ -32,17 +32,19 @@ cloud for authenticated testers.
 ## Quick start
 
 ```bash
-git clone https://github.com/shankar-indicvision/IndicVisionDIC
-cd IndicVisionDIC
-git submodule update --init      # Eigen + OpenCV sources (large, one-time)
+git clone https://github.com/semperdic/semperdic-app
+cd semperdic-app
+git submodule update --init --recursive   # engine + its Eigen/OpenCV sources (large, one-time)
 # Optional: drop unused OpenCV doc/samples/data/apps (keeps modules + hal for Carotene)
-./scripts/sparse-opencv.sh       # or: .\scripts\sparse-opencv.ps1 on Windows
+cd native && ./scripts/sparse-opencv.sh && cd ..   # Windows: .\scripts\sparse-opencv.ps1
 ```
 
 Open the folder in Android Studio and press Run. The first build compiles
 OpenCV from source — slow once, then cached. **No API keys or accounts are
 required**; without them, cloud sync simply stays off and everything else
-works.
+works. (Release builds are the exception: they require an HTTPS
+`INDIC_API_BASE_URL` and fail the build without one, so cloud sync cannot ship
+silently disabled.)
 
 Running on an **emulator**? Build for its ABI and sign-in is skipped
 automatically:
@@ -77,8 +79,8 @@ displacement field (U,V) ──▶ VSG least-squares ──▶ strain (Exx,Eyy,E
 Each tracked point is a small **subset** (window) of the reference image; the
 **ICGN** solver warps it with 6 degrees of freedom until it matches the
 deformed image, scored by **ZNSSD** (0 = perfect, ≤ 0.15 accepted — the score
-is immune to lighting changes). Full detail:
-[docs/engine/ARCHITECTURE.md](docs/engine/ARCHITECTURE.md).
+is immune to lighting changes). Full detail: `native/docs/ARCHITECTURE.md` in the
+engine submodule — see [docs/engine/](docs/engine/) for the app-facing contract.
 
 ### Analysis parameters
 
@@ -88,9 +90,9 @@ the value field next to it — the two stay in sync.
 
 | Parameter | Default | Range | Notes |
 |---|---|---|---|
-| Subset size | measured (41 px fallback) | 15–101, **odd only** | The tracked window. Bigger = more robust, less spatial detail. The starting value is measured from the reference speckle (SSSIG criterion, below) |
+| Subset size | measured (41 px fallback) | 15–121, **odd only** | The tracked window. Bigger = more robust, less spatial detail. The starting value is measured from the reference speckle (SSSIG criterion, below) |
 | Step size | 5 px | 1–30 | Grid spacing between tracked points. Smaller = denser field, slower |
-| Strain window | 15 px | 5–51, **odd only** | VSG gauge length for the displacement→strain fit |
+| Strain window | 15 px | 5–101, **odd only** | VSG gauge length for the displacement→strain fit |
 
 The two window sizes are odd because the engine indexes a subset as
 `[−dim/2, +dim/2]` around its center pixel; an even width would sit
@@ -110,48 +112,52 @@ Change the value and yours is kept — Reset returns to the suggestion.
 
 ## Repository map
 
+**The C++ engine is not in this repository.** It lives in
+[`semperdic/semper-dic-engine`](https://github.com/semperdic/semper-dic-engine)
+and is linked here as a pinned git submodule at `native/`, which is why the clone
+above needs `--recursive`. This repo pins an engine commit; the engine's own CI
+proves that commit.
+
 | Path | What lives there |
 |---|---|
-| `native/include/semper/` | Public C++ API (types, image, solver, strain, pipeline) |
-| `native/src/math/` | ICGN solver + subset/image math + SIMD kernels |
-| `native/src/strain/` | VSG strain |
-| `native/src/seeding/` | AKAZE + RANSAC seeding |
-| `native/src/pipeline/` | Full-field Path A/B/C orchestration |
-| `native/adapters/android/` | Thin JNI → `libsemper_core.so` |
-| `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI drawing |
+| `native/` | **Submodule** — the C++ engine (solver, strain, seeding, JNI, its own tests and docs) |
+| `app/src/main/cpp/` | The app's side of the JNI boundary |
+| `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI drawing, parameter-sweep lattice |
 | `app/src/main/java/.../ui/viewer/` | Heatmap viewer + exports |
 | `app/src/main/java/.../ui/auth/` | Sign-in and access gating |
+| `app/src/main/java/.../ui/settings/` | Settings, cloud and storage controls |
 | `app/src/main/java/.../report/` | PDF report generation |
-| `app/src/main/java/.../data/` | Cloud sync client, upload worker |
+| `app/src/main/java/.../data/` | Cloud sync client, upload/restore workers, storage budget |
+| `app/src/test/` · `app/src/androidTest/` | JVM and instrumented tests |
 | `backend/` | GCP backend (FastAPI on Cloud Run) |
-| `native/tests/` | Native test suite — runs on your PC, no device |
-| `docs/` | **[Documentation index](docs/README.md)** — engine, backend, ops |
+| `firebase-hosting/` | Auth continue-URL pages, asset links, generated legal pages |
+| `scripts/` | Repo-level tooling (legal-page renderer, Firestore export/restore) |
+| `docs/` | **[Documentation index](docs/README.md)** — app, engine contract, backend, ops |
 
 ## Testing
 
 ```bash
-# C++ engine tests: synthetic images with exact known deformations
-cmake -S native/tests -B build/native-tests -DCMAKE_BUILD_TYPE=Release
-cmake --build build/native-tests -j
-./build/native-tests/dic_tests
-
-# Kotlin unit tests + quality gates
 ./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug
 ```
 
-CI runs both on every push, plus AddressSanitizer/UndefinedBehaviorSanitizer
-and ThreadSanitizer builds of the engine suite, and an arm64-v8a native build
-that proves the shipped `.so` links. Details in [docs/ops/CI.md](docs/ops/CI.md);
-the test catalog is in [docs/engine/TESTING.md](docs/engine/TESTING.md).
+That is the app gate. The backend suite, the emulator tier and the engine's own
+tests each run separately — [CONTRIBUTING.md](CONTRIBUTING.md) has the full set of
+commands, and [docs/ops/CI.md](docs/ops/CI.md) explains which of them CI runs and
+when.
+
+One thing worth knowing up front: **engine host, DICe-comparison,
+AddressSanitizer/UndefinedBehaviorSanitizer and ThreadSanitizer suites run in the
+engine repository, not here.** This repo's CI proves the pinned engine still
+*links* — an arm64-v8a release build and an x86_64 emulator run.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Start with the
+See [CONTRIBUTING.md](CONTRIBUTING.md) — it is the single source of truth for
+build, test and quality-gate commands. Start with the
 [documentation index](docs/README.md) for the DIC primer and glossary, and
 [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md) for the Android UI map.
-You can contribute without knowing all of it: UI and docs work needs no C++,
-and the engine tests run on your PC with no Android at all. Issues tagged
-`good first issue` are scoped for newcomers.
+You can contribute without knowing all of it: UI and docs work needs no C++ at
+all. Issues tagged `good first issue` are scoped for newcomers.
 
 ## License
 

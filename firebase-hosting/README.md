@@ -15,6 +15,36 @@ Firebase Auth is configured to use **direct continue-URL handlers** (not the
 retired Dynamic Links), so the emailed link lands on `/finishSignIn` carrying
 the `oobCode`/`mode=signIn` params, and `AuthActivity` completes sign-in.
 
+## `public/privacy/` and `public/terms/` are generated — never hand-edit them
+
+Both directories are rendered from the canonical markdown in
+[`docs/legal/`](../docs/legal/) by
+[`scripts/render_legal_pages.py`](../scripts/render_legal_pages.py). The HTML is
+committed so Hosting can serve it, but it is **output**, not source.
+
+Editing the HTML directly is a build failure, not a style preference. CI runs
+`python scripts/render_legal_pages.py --check` in a job (`legal-pages`) that has
+no path filter and gates `ci-ok`, and the release workflow runs the same check
+before it will sign anything. A hand-edit shows up as drift on the next PR.
+
+The reason for the rule: the app links these pages as its real, user-facing
+policy. Before this was enforced, they were placeholders whose own body said
+"keep this in sync before launch" — which nobody did.
+
+To change a policy:
+
+```bash
+# 1. Edit the markdown
+#    docs/legal/PRIVACY_POLICY.md  /  docs/legal/TERMS_OF_SERVICE.md
+# 2. Regenerate
+python scripts/render_legal_pages.py
+# 3. Commit BOTH the markdown and the regenerated HTML
+# 4. Verify
+python scripts/render_legal_pages.py --check
+```
+
+Then deploy Hosting (below) so the live pages match what shipped.
+
 ## Digital Asset Links source of truth
 
 `firebase.json` sets `"appAssociation": "AUTO"`. That means **Firebase Hosting
@@ -62,6 +92,11 @@ adb shell pm verify-app-links --re-verify com.indicvision.semper
 adb shell pm get-app-links com.indicvision.semper   # expect: verified
 ```
 
-Until the file is live and verified, the email **link** flow falls back to a
-browser and can't complete; email **+ password** sign-in and password **reset**
-are unaffected (reset links are read in the browser by design).
+Until the file is live and verified, both App Links fall back to a browser:
+`/finishSignIn` cannot complete at all, and `/finishReset` drops through to
+Firebase's `/__/auth/action` handler instead of opening the app's in-app
+set-new-password screen. Email **+ password** sign-in is unaffected.
+
+The release workflow will not sign a build whose release certificate is missing
+from `public/.well-known/assetlinks.json` — see
+[RELEASING.md](../docs/ops/RELEASING.md).

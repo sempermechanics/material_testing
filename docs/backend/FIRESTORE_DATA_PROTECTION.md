@@ -39,10 +39,32 @@ rate limits are unrelated to these Admin API operations.
 
 ## Restore drill
 
-Automated: `.github/workflows/firestore-restore-drill.yml` runs monthly and on
-demand. It imports the latest export into the drill project, **waits** for the
-operation, verifies the result, and purges the drill database afterwards so a
-second full copy of production is not left sitting in a weaker project.
+Automated: `.github/workflows/firestore-restore-drill.yml` runs monthly (03:40
+UTC on the 1st) and on demand. It imports the latest export into the drill
+project, **waits** for the operation, verifies the result, and purges the drill
+database afterwards so a second full copy of production is not left sitting in a
+weaker project.
+
+### Configuring the `restore-drill` environment
+
+The workflow runs in a GitHub environment named **`restore-drill`**, separate
+from the backup workflow's. Keeping it separate is the point: the drill
+credentials can write to a throwaway project and must never be able to import
+over production, so they should not be reachable from any other workflow.
+
+Create it under **Settings → Environments → New environment**, name it
+`restore-drill`, and add these repository/environment **variables**:
+
+| Variable | What it is |
+|---|---|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | The WIF provider the drill authenticates through — no JSON key |
+| `FIRESTORE_RESTORE_DRILL_SERVICE_ACCOUNT` | The identity it assumes. Grant it Firestore import/export on the **drill** project only |
+| `FIRESTORE_RESTORE_DRILL_PROJECT` | The throwaway project the export is imported into |
+| `FIRESTORE_BACKUP_BUCKET` | Where `firestore-export.sh` writes; the drill reads the latest export from here |
+| `GCP_PROJECT` | The **production** project. Passed in so the script can refuse to target it |
+
+Adding required reviewers to the environment is worth doing: it makes an
+on-demand drill a deliberate act rather than a button anyone can hit.
 
 Verification is not a checklist — it is `scripts/firestore_verify.py`, which
 compares the restored database against `manifest.json`, written beside each

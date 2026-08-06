@@ -1,29 +1,56 @@
 # Contributing to Semper
 
 Thanks for helping. This repo is a single Android app (`:app`) with an optional
-FastAPI backend. The correlation engine is C++ (on-device); most UI work is
-Kotlin and needs no native toolchain.
+FastAPI backend. The correlation engine is C++ and runs on-device, but it lives
+in **its own repository** and is linked here as a pinned submodule — most UI work
+is Kotlin and needs no native toolchain at all.
+
+**This file is the source of truth for build, test and quality-gate commands.**
+The README links here rather than repeating them.
 
 ## Clone and native deps
 
+The `--recursive` matters: `native/` is a submodule
+([`semperdic/semper-dic-engine`](https://github.com/semperdic/semper-dic-engine)),
+and it has submodules of its own for Eigen and OpenCV. A non-recursive clone
+gives you an empty `native/` and a confusing CMake failure on first build.
+
 ```bash
 git clone <repo-url>
-cd IndicVisionDIC
+cd semperdic-app
 git submodule update --init --recursive
 ```
 
+Already cloned without it? `git submodule update --init --recursive` fixes it
+in place.
+
 OpenCV's full tree is large. After the first submodule init, apply a sparse
 checkout so unused `doc/`, `samples/`, `data/`, and `apps/` trees are dropped
-(~100+ MB):
+(~100+ MB). The script lives in the engine submodule and is run from there:
 
 ```bash
-# From repo root — safe to re-run
+cd native
 ./scripts/sparse-opencv.sh          # Git Bash / macOS / Linux
-# or on Windows PowerShell:
-.\scripts\sparse-opencv.ps1
+.\scripts\sparse-opencv.ps1         # Windows PowerShell
+cd ..
 ```
 
-Eigen stays a normal submodule (headers only, small).
+It is safe to re-run. Eigen stays a normal submodule (headers only, small).
+
+### Bumping the engine
+
+Changing the pinned engine commit is a normal PR in this repo:
+
+```bash
+cd native && git fetch && git checkout <commit-or-tag> && cd ..
+git add native && git commit -m "Bump engine to <tag>"
+```
+
+That gitlink change is what triggers CI tiers 3 and 5 here. The engine's own
+tests ran in its repository before that commit existed; this repo only proves the
+pinned version still links and behaves. If the bump changes numeric results,
+declare it against the tiers in
+[docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md).
 
 ### Local disk hygiene
 
@@ -51,30 +78,51 @@ rm -rf app/.cxx app/build
 # Individual steps
 ./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug
 
-# Per-chunk tests
+# Per-chunk tests — see docs/app/TESTING.md for what each chunk owns
 ./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.auth.*"
 ./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.session.*"
 ./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.analysis.*"
 ./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.results.*"
 ./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.cloud.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.settings.*"
+./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.viewer.*"
 
-# Native engine tests (PC, no device)
-cmake -S native/tests -B build/native-tests -DCMAKE_BUILD_TYPE=Release
-cmake --build build/native-tests -j
-./build/native-tests/dic_tests
-
-# Emulator smoke (needs x86_64 emulator running)
+# Emulator smoke (needs an x86_64 emulator running)
 ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64
 
 # Backend
 cd backend && pip install -r requirements-test.txt && pytest tests/ -v
+
+# Engine tests — these build the submodule; they run in the engine repo's CI,
+# not this one. See docs/engine/TESTING.md.
+cmake -S native/tests -B build/native-tests -DCMAKE_BUILD_TYPE=Release
+cmake --build build/native-tests -j
+./build/native-tests/dic_tests
 ```
 
 On Windows use `gradlew.bat` instead of `./gradlew`.
 
+### Two gates that run on every PR
+
+Neither is path-filtered, so a documentation-only change is still subject to
+both, and both block `ci-ok`:
+
+```bash
+python scripts/render_legal_pages.py --check   # legal pages match docs/legal/
+gitleaks detect --config .gitleaks.toml        # secrets, across full history
+```
+
+**Never hand-edit `firebase-hosting/public/privacy/` or `.../terms/`.** They are
+generated from `docs/legal/*.md` by `scripts/render_legal_pages.py`, and the app
+links them as its real user-facing policy. Edit the markdown, re-run the script
+without `--check`, and commit both. See
+[firebase-hosting/README.md](firebase-hosting/README.md).
+
 Cloud features need `INDIC_API_BASE_URL` in `local.properties` and Firebase
-setup — see [docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md). The engine
-and local analysis work without it.
+setup — see [docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md). Local
+analysis works fine without it. Note that a **release** build is stricter: it
+fails outright if that URL is missing or not HTTPS, so cloud sync cannot ship
+silently disabled.
 
 ## CI
 
@@ -90,11 +138,14 @@ parallel). Kotlin/docs-only PRs run ~10–15 min via path filters.
 | Area | Entry point |
 |---|---|
 | Android UI / sessions / viewer | [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md) |
+| Every user-facing screen and flow | [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) |
 | App tests (workflow chunks) | [docs/app/TESTING.md](docs/app/TESTING.md) |
-| C++ correlation engine | [docs/engine/ARCHITECTURE.md](docs/engine/ARCHITECTURE.md) |
+| C++ correlation engine | The `native/` submodule — the app-facing rules are in [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
 | Engine tests | [docs/engine/TESTING.md](docs/engine/TESTING.md) |
 | Sign-in / allow-list | [docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md) |
+| Backend behaviour | [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md) |
 | GCP backend deploy | [docs/backend/BACKEND_SETUP_GCP.md](docs/backend/BACKEND_SETUP_GCP.md) |
+| Legal pages / asset links | [firebase-hosting/README.md](firebase-hosting/README.md) |
 | CI / release | [docs/ops/CI.md](docs/ops/CI.md), [docs/ops/RELEASING.md](docs/ops/RELEASING.md) |
 
 Prefer extracting a `*Helper` / `*Runner` next to existing ones over growing a

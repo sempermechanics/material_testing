@@ -7,48 +7,71 @@ rules apply on pull requests and on pushes to `main` / `damodar`. There is
 **Actions → CI → Run workflow** (`workflow_dispatch`) for an on-demand full run.
 
 ```
-changes ──┬──> tier1-app-fast ─────────────┐
-          ├──> tier2-engine-host ──────────┤
-          ├──> tier2-sanitizers ───────────┤
-          ├──> tier3-emulator-e2e (*) ─────┤
-          ├──> tier4-backend ──────────────┤
-          └──> tier5-signed-release (*) ───┤
-                                           └──> ci-ok
+secret-scan ─────────────────────────────┐
+legal-pages ─────────────────────────────┤
+changes ──┬──> tier1-app-fast ───────────┤
+          ├──> tier3-emulator-e2e (*) ───┤
+          ├──> tier4-backend ────────────┤
+          └──> tier5-signed-release (*) ─┤
+                                         └──> ci-ok
 
 (*) Tier 3/5 need `changes` (+ optional Tier 1). They do **not** require Tier 1
     to have run — skipped Tier 1 no longer cascade-skips JNI/release jobs.
 ```
 
-| Tier | Job | Proves | Typical (warm / cold) |
-|------|-----|--------|-----------------------|
-| **1** | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin` | ~5–8 / ~10 min |
-| **2a** | `tier2-engine-host` | Host C++ + OpenCV fixtures + perf floor | ~2 / ~3 min |
-| **2b** | `tier2-sanitizers` | ASan+UBSan and TSan | ~5 / ~8 min each |
-| **3** | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + Espresso UI | ~20–40 / ~60–90 min |
-| **4** | `tier4-backend` | Backend pytest + ruff lint | ~2–5 min |
-| **5** | `tier5-signed-release` | R8 + signed `assembleRelease` arm64 + `.so` check | ~15–40 / up to ~90 min |
-| **6** | `ci-ok` | Single required status check — all tiers passed/skipped | seconds |
+| Job | Proves | Path-filtered? | Typical (warm / cold) |
+|-----|--------|---|-----------------------|
+| `secret-scan` | gitleaks over the **full history**, config `.gitleaks.toml` | No — always runs | ~1–2 min |
+| `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/` | No — always runs | seconds |
+| `changes` | Resolves the path filters below into tier flags | — | seconds |
+| `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, Kover coverage log | `app` | ~5–8 / ~10 min |
+| `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest` | `native_jni` | ~20–40 / ~60–90 min |
+| `tier4-backend` | ruff, shell-script parse, pip-audit, hashed-lock verification, pytest at `--cov-fail-under=75`, Firestore emulator suite | `backend` | ~5–10 min |
+| `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, R8 mapping artifact | `native_jni` | ~15–40 / up to ~90 min |
+| `ci-ok` | Single required status check — every job above passed or was skipped | — | seconds |
+
+**There is no tier 2 here any more.** Host C++ builds, the DICe comparisons and
+the ASan/UBSan and TSan suites moved to `semperdic/semper-dic-engine` along with
+the engine sources. This repo only proves the pinned submodule still *links*:
+arm64 in tier 5, x86_64 on the emulator in tier 3. `ci-ok` prints a reminder of
+where the engine suites live.
+
+`secret-scan` needs a `GITLEAKS_LICENSE` secret (gitleaks-action requires one for
+organisation repositories). Without it the job fails, and because it gates
+`ci-ok`, so does every PR.
 
 ## Path filters
 
-| Output | Paths (summary) | Tiers |
-|--------|-----------------|-------|
-| `app` | `app/**` except `app/src/main/cpp/**`, Gradle wrapper/catalog | 1 |
-| `native_core` | `native/src`, `include`, `tests`, `cmake`, top-level CMake | 2a + 2b |
-| `native_jni` | `native/adapters`, `app/src/main/cpp`, `SemperNativeLib.kt`, JNI headers (`io.hpp`, `pipeline.hpp`) | 2a + 2b + 3 + 5 |
-| `backend` | `backend/**` | 4 |
-| `full_ci` | `full-ci` label, `workflow_dispatch`, or `.github/workflows/ci.yml` edit | all |
+| Output | Paths | Jobs |
+|--------|-------|------|
+| `app` | `app/**` except `app/src/main/cpp/**`; `gradle/**`, `*.gradle.kts`, `gradlew`, `gradlew.bat`, `settings.gradle.kts` | tier 1 |
+| `native_core` | `native` (the gitlink itself) and `.gitmodules` | — see note |
+| `native_jni` | `native`, `.gitmodules`, `app/src/main/cpp/**`, `SemperNativeLib.kt` | tiers 3 + 5 |
+| `backend` | `backend/**` | tier 4 |
+| `full_ci` | `full-ci` label, `workflow_dispatch`, or an edit to `.github/workflows/ci.yml` | all |
 
-| Diff class | T1 | T2a | Sanitizers | T3 | T4 | T5 |
-|------------|----|-----|------------|----|----|-----|
-| native-core only | — | run | run | — | — | — |
-| native-jni (or core+jni) | — | run | run | run | — | run |
-| app only | run | — | — | —† | — | —† |
-| backend only | — | — | — | — | run | — |
-| app + native | run | run | run | run | — | run |
-| `full-ci` / CI workflow edit | run | run | run | run | run | run |
+Because the engine is a submodule, `native_core` and `native_jni` now match the
+**gitlink** `native` rather than a source tree — bumping the pinned engine
+commit is what triggers them. `native_core` no longer has a job of its own; it
+survives as an output because the engine repo's CI is what consumes core
+changes.
 
-† Also with `e2e` / `release` / `engine` labels, or when instrumented tests / packaging force a wider run via `full-ci`.
+Two further filters widen `app` rather than gating a job directly:
+`app/src/androidTest/**` and the packaging files (`app/build.gradle.kts`,
+`app/proguard-rules.pro`, `gradle/libs.versions.toml`).
+
+| Diff class | T1 | T3 | T4 | T5 |
+|------------|----|----|----|-----|
+| engine pin bump | — | run | — | run |
+| app only | run | —† | — | —† |
+| backend only | — | — | run | — |
+| app + engine pin | run | run | — | run |
+| `full-ci` / CI workflow edit | run | run | run | run |
+
+† Also with the `e2e`, `release` or `engine` label.
+
+`secret-scan` and `legal-pages` are absent from that table on purpose: they carry
+no path filter and run on every event.
 
 Skipped jobs count as success for `ci-ok`. Empty base SHA (force-push / first commit) fails open and runs the full matrix.
 
@@ -70,10 +93,17 @@ gates on all tiers and treats skipped jobs as passing.
 
 # Individual tiers
 ./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug   # tier 1
-cmake -S native/tests -B build/native-tests -DDIC_REQUIRE_OPENCV=ON && cmake --build build/native-tests -j && ./build/native-tests/dic_tests   # tier 2a
-cd backend && pip install -r requirements-test.txt && pytest tests/ -v   # tier 4
-./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64              # tier 3 (emulator)
+./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64                # tier 3 (emulator)
+cd backend && pip install -r requirements-test.txt && pytest tests/ -v      # tier 4
+
+# The two always-on gates
+python scripts/render_legal_pages.py --check                                # legal-pages
+gitleaks detect --config .gitleaks.toml                                     # secret-scan
 ```
+
+The engine's own suites are not reproducible from this repo — run them in
+`semperdic/semper-dic-engine`, or from the submodule as described in
+[docs/engine/TESTING.md](../engine/TESTING.md).
 
 ## Manual release
 
@@ -93,27 +123,58 @@ inspection builds.
 Environments. It:
 
 1. Runs backend ruff + pytest.
-2. Deploys from `backend/` (Dockerfile → immutable revision suffix = git SHA).
+2. Deploys from `backend/` with **`no_traffic: true`**, tagging the new revision
+   `cand-<run_id>-<run_attempt>`. The previous revision keeps serving.
 3. Records the revision image digest.
-4. Smokes `GET /readyz` (Firestore + Drive).
-5. On smoke failure, routes 100% traffic back to the previous revision.
+4. Smokes `GET /readyz` on the **tagged candidate URL**, authenticated with an ID
+   token whose audience is the service URL — production runs
+   `--no-allow-unauthenticated`, so an unauthenticated probe would only prove the
+   gateway rejects it.
+5. Promotes the candidate to 100% traffic once the smoke passes.
+
+Note the ordering: traffic never reaches an unproven revision, so a failed smoke
+needs no rollback. The revision suffix includes the **run attempt** as well as
+the run id, so re-running a failed job cannot collide with the revision name the
+first attempt created.
 
 Required per environment: secrets `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`; vars
 `FIREBASE_PROJECT_ID`, `SHARED_DRIVE_ID`, `SERVICE_ACCOUNT_EMAIL`,
-`AUTO_APPROVE_HD`, `ADMIN_EMAILS`, `SUPPORT_EMAIL`, `NOTIFY_FROM`. Until those
-exist in GitHub, treat deploy wiring as **UNKNOWN** (repo template only).
+`AUTO_APPROVE_HD`, `ADMIN_EMAILS`, `SUPPORT_EMAIL`, `NOTIFY_FROM`, and — for
+async provisioning — `TASKS_QUEUE`, `TASKS_LOCATION`, `TASKS_TARGET_BASE_URL`,
+`TASKS_INVOKER_SA`. Leave the `TASKS_*` set empty to provision inline; see
+[BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A6.
 
-API Gateway OpenAPI uses placeholder `__CLOUD_RUN_URL__` — substitute at config
-create time (see `backend/gateway/openapi.yaml`); never commit a live hostname.
+API Gateway OpenAPI uses the placeholders `__CLOUD_RUN_URL__` and
+`__FIREBASE_PROJECT_ID__` — substitute both at config-create time (see
+`backend/gateway/openapi.yaml`). The substituted output goes to
+`backend/gateway/openapi.generated.yaml`, which is **gitignored**: never commit a
+live hostname or project id.
+
+## Data-protection workflows
+
+Two more scheduled workflows guard Firestore, both documented in
+[FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md):
+
+| Workflow | When | What it does |
+|---|---|---|
+| [`firestore-backup.yml`](../../.github/workflows/firestore-backup.yml) | Daily, 02:17 UTC | Exports Firestore to a GCS bucket, writing a `manifest.json` beside it. Refuses to run unless PITR is on |
+| [`firestore-restore-drill.yml`](../../.github/workflows/firestore-restore-drill.yml) | Monthly, 03:40 UTC on the 1st, plus on demand | Imports the latest export into a throwaway project, verifies it against the manifest, then purges it. Runs in its own `restore-drill` GitHub environment |
+
+A backup nobody has restored is a hope, not a backup — that is why the drill is a
+scheduled workflow rather than a runbook step.
 
 ## Caching
 
 | Cache | Key pattern | Purpose |
 |-------|-------------|---------|
-| `app/.cxx` | `cxx-{arm64,x86_64}-<hash>` | ABI-specific CMake/ninja tree |
-| `ccache` | `ccache-{arm64,x86_64,host-tests,san-*}-<sha>` | Compiled object cache (per ABI/sanitizer) |
+| `app/.cxx` | `cxx-arm64-<hash>` (tier 5), `cxx-x86_64-<hash>` (tier 3) | ABI-specific CMake/ninja tree |
+| `ccache` | `ccache-arm64-<sha>`, `ccache-x86_64-<sha>` | Compiled object cache, per ABI |
 | `~/.gradle` | managed by `setup-gradle` | Dependency/build cache |
-| `~/apt-cache` | `apt-libopencv-dev-*` | libopencv-dev `.deb` archives |
+| pip | managed by `setup-python`, keyed on `backend/requirements-test.txt` | Backend test dependencies |
+
+The `host-tests` and `san-*` ccache prefixes are gone with the engine tiers, as
+is the `apt-libopencv-dev-*` cache — nothing in this repo installs
+`libopencv-dev` any more.
 
 ### Keeping under the 10 GB limit
 
@@ -124,7 +185,7 @@ use, which is how the Gradle home cache disappears and every tier goes cold.
 
 Two things keep that from happening:
 
-* **Each caching job prunes its own prefix.** The last step of tiers 2, 3 and 5
+* **Each caching job prunes its own prefix.** The last step of tiers 3 and 5
   (and of the release build) runs
   [`.github/actions/prune-cache`](../../.github/actions/prune-cache/action.yml),
   which deletes the older entries under its key prefix on that ref just before
@@ -151,9 +212,17 @@ gh cache list --limit 100 --sort size_in_bytes --order desc
 **Only arm64-v8a is shipped.** Every phone from 2022 on is 64-bit ARM. CI builds
 exactly what users get. Build for an emulator locally with `-PabiFilters=x86_64`.
 
-**Sanitizer jobs skip OpenCV.** Linking an uninstrumented third-party library
-produces leak/thread-pool noise. The synthetic suites cover the same engine paths.
-
 **Wrapper validation is off in NDK jobs only.** OpenCV's repo bundles ancient
-`gradle-wrapper.jar` files that fail checksum validation. Our wrapper is
-validated by tier 1 when Tier 1 runs.
+`gradle-wrapper.jar` files that fail checksum validation, and those jobs check
+out submodules recursively. Our own wrapper is validated by tier 1 when tier 1
+runs.
+
+**Two jobs run on every single event.** `secret-scan` and `legal-pages` carry no
+path filter, so a documentation-only PR still runs them — and can still be
+blocked by them, which is the point.
+
+**A green backend tier means more than pytest.** Tier 4 also audits dependencies
+with pip-audit, proves `requirements.lock` resolves under `--require-hashes` on
+Python 3.12 and still covers every direct dependency, and runs the concurrency
+tests against a real Firestore emulator. Those paths are structurally untestable
+against the in-memory fake.
