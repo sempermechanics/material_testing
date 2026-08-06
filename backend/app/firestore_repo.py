@@ -1,4 +1,5 @@
 """Server-side Firestore access. Clients never touch Firestore directly."""
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -9,6 +10,7 @@ from . import notify
 from .config import settings
 from .models import DeviceReg, FileComplete, FileSpec, SessionCreate
 
+log = logging.getLogger("indic.firestore")
 _DB = None
 
 # Every server-owned document carries this integer. Migrations must be
@@ -62,8 +64,11 @@ def ping() -> None:
 
     try:
         # A missing document is still a successful round-trip.
-        db().collection("users").document("__readyz__").get()
+        # Doc ids matching __.*__ are reserved by Firestore and raise locally
+        # (misreported as unreachable); use a plain probe id.
+        db().collection("users").document("readyz_ping").get()
     except Exception as e:  # noqa: BLE001
+        log.exception("firestore ping failed: %s", e)
         raise DependencyError("firestore_unreachable", "firestore") from e
 
 
