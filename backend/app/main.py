@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from . import audit, drive, firestore_repo as repo
 from . import observability as obs
 from .config import settings
-from .deps import admin_user, current_user, verified_device
+from .deps import admin_user, current_user, device_or_legacy_reader, verified_device
 from .models import DeviceReg, FileComplete, SessionCreate, UserConfigPatch
 from . import rate_limit
 from .validation import (
@@ -54,6 +54,16 @@ def _startup_checks():
                 "otherwise remove DEV_INSECURE_AUTH."
             )
         log.warning("=== DEV_INSECURE_AUTH=1 : auth is BYPASSED. Never use in production. ===")
+    if settings.ON_CLOUD_RUN and not settings.REQUIRE_ATTESTED_UPLOADS:
+        # Deliberately temporary, but must never be silent: while this is off,
+        # GET /v1/sessions/{sid}/uploads hands Drive capability URLs to any
+        # ID-token caller with no device signature (see deps.device_or_legacy_reader).
+        # Flip REQUIRE_ATTESTED_UPLOADS=1 once legacy_unattested_uploads is zero.
+        log.warning(
+            "=== REQUIRE_ATTESTED_UPLOADS unset: /uploads accepts unattested "
+            "legacy callers. Temporary migration window — set it to 1 once the "
+            "fleet has moved. ==="
+        )
 
 
 @asynccontextmanager
@@ -472,13 +482,25 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
 
 
 @app.get("/v1/sessions/{sid}/uploads")
-def session_uploads(sid: SessionId, user=Depends(current_user)):
+def session_uploads(sid: SessionId, ctx=Depends(device_or_legacy_reader)):
     """What still needs uploading for a session — the resume path.
 
     An interrupted upload re-reads this instead of calling POST /v1/sessions
     again, so it continues into the same session/Drive folder rather than
     creating a duplicate.
+
+    Device-signed, not merely token-authenticated: the response carries Drive
+    resumable upload URIs, which are bearer capabilities to write into the
+    user's Drive folder. Every other endpoint that mints or consumes those URIs
+    (POST /v1/sessions, POST /v1/files/{id}/complete) requires attestation, so a
+    stolen ID token alone must not be able to recover them here either.
+
+    Temporarily behind `device_or_legacy_reader`: testers on an older build still
+    read this with an ID token only, so an unattested read is accepted (and
+    logged as `legacy_unattested_uploads`) until REQUIRE_ATTESTED_UPLOADS is set.
+    A client that attests is always held to the strict path — see the wrapper.
     """
+    user = ctx["user"]
     if not rate_limit.listing_bucket.allow(user["uid"]):
         raise HTTPException(429, "rate_limited")
     session = repo.get_session(sid)

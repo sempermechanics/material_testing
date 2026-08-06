@@ -213,6 +213,11 @@ paths:
   /v1/sessions/{sid}/uploads:
     get:
       operationId: sessionUploads
+      description: >
+        Device-attested. Returns Drive resumable upload URIs, which are bearer
+        capabilities to write into the user's Drive folder — so this read is
+        gated as strongly as the writes that mint and consume them.
+        Requires attestation headers (X-Device-Id, X-Nonce, X-Signature).
       parameters:
         - name: sid
           in: path
@@ -220,6 +225,8 @@ paths:
           type: string
       responses:
         '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '429': { description: Rate limited }
   /v1/sessions/{sid}/files:
     get:
       operationId: listSessionFiles

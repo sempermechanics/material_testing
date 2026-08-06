@@ -210,12 +210,25 @@ class IndicApi private constructor(context: Context) {
      * The resume path: an interrupted upload continues into the same session
      * instead of POSTing a new one (which would duplicate the Drive folder and
      * consume another slot of the analysis quota).
+     *
+     * Device-signed, not just token-authenticated: the response carries Drive
+     * resumable upload URIs, which are bearer capabilities to write into the
+     * user's Drive folder. The backend requires attestation here for the same
+     * reason it does on createSession — a stolen ID token must not be able to
+     * recover them.
      */
     suspend fun sessionUploads(
         idToken: String,
         sessionId: String,
     ): SessionUploadsResponse = withContext(Dispatchers.IO) {
-        json.decodeFromString(authedGet(idToken, "$base/v1/sessions/$sessionId/uploads"))
+        val resp = signedRequest(idToken, "GET", "/v1/sessions/$sessionId/uploads", ByteArray(0))
+        resp.use {
+            if (it.code == HttpStatus.OK) {
+                json.decodeFromString(it.body.string())
+            } else {
+                failSigned(it.code, IndicApiHttp.bodyText(it))
+            }
+        }
     }
 
     /** POST /v1/files/{id}/complete (device-signed). */

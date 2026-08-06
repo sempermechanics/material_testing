@@ -86,6 +86,12 @@ class Settings:
     # 1 = new users are created APPROVED instead of PENDING (smooth pilot).
     AUTO_APPROVE = os.environ.get("AUTO_APPROVE", "") == "1"
 
+    # Temporary: /uploads returns Drive upload capability URLs and should require
+    # device attestation. Testers hold builds that call it with an ID token only,
+    # so accept both until the fleet has moved, then set this to 1. Leaving it off
+    # never weakens a client that *does* attest — see deps.device_or_legacy_reader.
+    REQUIRE_ATTESTED_UPLOADS = os.environ.get("REQUIRE_ATTESTED_UPLOADS", "") == "1"
+
     # Env vars the service cannot function without: GCP_PROJECT is the token
     # audience for ID-token verification, SERVICE_ACCOUNT_EMAIL mints Drive
     # tokens, SHARED_DRIVE_ID is where every file lives. A deployed service
