@@ -2,6 +2,7 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from google.api_core.exceptions import Aborted, NotFound
 from google.cloud import firestore
 
 from . import notify
@@ -14,12 +15,32 @@ _DB = None
 # idempotent and advance documents only after an export/restore checkpoint.
 SCHEMA_VERSION = 1
 
+# Transaction retries on the hot single-document paths (nonce consumption, file
+# completion). The client default is 5; contention there is expected rather than
+# exceptional, and every lost race costs a legitimate caller a round trip.
+_TX_ATTEMPTS = 10
+
 # Firestore caps a write batch at 500 operations.
 _BATCH_LIMIT = 400
 
 # Soft cap on ordinary response manifests. Erasure deliberately does not use
 # this cap; it loops in bounded batches until the relevant query is empty.
 _LIST_SOFT_LIMIT = 2000
+
+
+def _lost_to_contention(exc: BaseException) -> bool:
+    """True when a transaction failed only because it kept losing the race.
+
+    The client retries an ABORTED transaction five times and then raises
+    ValueError("Failed to commit transaction in 5 attempts") chained from the
+    last Aborted. Two callers hammering one hot document — the same nonce
+    replayed, the same file completed twice — is an expected condition on these
+    paths, not a server fault, so it must resolve to the normal deny/idempotent
+    answer instead of a 500.
+    """
+    if isinstance(exc, Aborted):
+        return True
+    return isinstance(exc, ValueError) and isinstance(exc.__cause__, Aborted)
 
 
 def db() -> firestore.Client:
@@ -261,7 +282,9 @@ def consume_nonce(nonce: str, uid: str, device_id: str) -> bool:
     not delete — otherwise a wrong-uid probe would burn a valid challenge.
     """
     ref = db().collection("challenges").document(nonce)
-    transaction = db().transaction()
+    # More than the default five attempts: this document is the hottest in the
+    # service and losing the race means denying a legitimate caller.
+    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _consume(tx):
@@ -277,7 +300,16 @@ def consume_nonce(nonce: str, uid: str, device_id: str) -> bool:
         tx.delete(ref)
         return True
 
-    return _consume(transaction)
+    try:
+        return _consume(transaction)
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        # Concurrent consumption of one nonce is by definition a replay, and we
+        # could not commit — so deny. Fail closed: claiming the nonce here would
+        # be the one outcome that breaks single-use. A legitimate client never
+        # races itself on a nonce; it just fetches a fresh challenge.
+        return False
 
 
 # ---------------- sessions / files ----------------
@@ -585,7 +617,7 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
     returns "already"). Without this, both could bump the session counter.
     """
     ref = db().collection("files").document(file_id)
-    transaction = db().transaction()
+    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _complete(tx):
@@ -609,34 +641,62 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
         )
         return "ok"
 
-    return _complete(transaction)
+    try:
+        return _complete(transaction)
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        # A concurrent completion of this same file won the race. That is the
+        # idempotent case the transaction exists to produce — re-read and answer
+        # it precisely rather than 500ing on the loser. "already" is important:
+        # it stops the caller bumping the session counter a second time.
+        snap = ref.get()
+        current = snap.to_dict() if snap.exists else None
+        if current and current.get("uid") == uid and current.get("status") == "COMPLETED":
+            return "already"
+        return ""
 
 
 def bump_session_progress(sid: str):
     """One file just completed: advance the session's counter by one.
 
-    O(1) — a transaction on the session doc alone. The previous version
-    re-streamed EVERY file doc in the session on every completion, which made
-    an N-file upload cost ~N² Firestore reads (a 150-frame analysis burned the
-    whole daily free-tier read quota several times over by itself).
+    O(1) — one atomic increment on the session doc. The version before that
+    re-streamed EVERY file doc in the session on every completion, which made an
+    N-file upload cost ~N² Firestore reads (a 150-frame analysis burned the whole
+    daily free-tier read quota several times over by itself).
+
+    Uses firestore.Increment rather than a read-modify-write transaction. A
+    transaction serialises every concurrent completion onto this one document,
+    and parallel uploads finish together by design — six concurrent bumps
+    exhausted the client's five retries and raised `Aborted: Transaction lock
+    timeout`, i.e. a 500 on the last files of an otherwise-successful upload.
+    (The fake store in tests applies transactions immediately with no isolation,
+    so this was invisible until the Firestore emulator tier was wired into CI.)
+    An increment needs no read, so concurrent completions no longer contend.
 
     Trusting the counter is safe because complete_file is idempotent: a retried
     completion returns "already" and never reaches this function.
     """
     ref = db().collection("sessions").document(sid)
-    transaction = db().transaction()
+    try:
+        ref.update({
+            "completedCount": firestore.Increment(1),
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+    except NotFound:
+        return  # session erased mid-upload; nothing to advance
 
-    @firestore.transactional
-    def _bump(tx):
-        snap = ref.get(transaction=tx)
-        if not snap.exists:
-            return
-        s = snap.to_dict()
-        done = int(s.get("completedCount", 0)) + 1
-        upd = {"completedCount": done, "updatedAt": firestore.SERVER_TIMESTAMP}
-        if done >= int(s.get("fileCount", 0)):
-            upd["status"] = "COMPLETED"
-            upd["completedAt"] = firestore.SERVER_TIMESTAMP
-        tx.update(ref, upd)
-
-    _bump(transaction)
+    # Re-read to decide the COMPLETED flip. Firestore reads are strongly
+    # consistent, so the caller whose increment reached fileCount is guaranteed
+    # to observe it here. The flip is monotone and idempotent: a caller that
+    # reads a lower count simply does nothing, and the one that completes the
+    # set finishes the job.
+    after = ref.get().to_dict() or {}
+    if (
+        int(after.get("completedCount", 0)) >= int(after.get("fileCount", 0))
+        and after.get("status") != "COMPLETED"
+    ):
+        ref.update({
+            "status": "COMPLETED",
+            "completedAt": firestore.SERVER_TIMESTAMP,
+        })
