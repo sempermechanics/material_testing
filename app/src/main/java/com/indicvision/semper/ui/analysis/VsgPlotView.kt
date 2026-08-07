@@ -121,6 +121,16 @@ class VsgPlotView @JvmOverloads constructor(
         strokeJoin = Paint.Join.ROUND
     }
     private val markerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+
+    /** Dot marking the scrub point on the selected curve. */
+    private val valueDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+
+    /** The y value drawn on the plot beside the scrub point. */
+    private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = axisLabelPx
+        color = ContextCompat.getColor(context, R.color.text_primary)
+        isFakeBoldText = true
+    }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(1f)
@@ -155,6 +165,12 @@ class VsgPlotView @JvmOverloads constructor(
 
     /** Called while scrubbing: x position and y values per visible series. */
     var onScrub: ((x: Float, samples: List<Sample>) -> Unit)? = null
+
+    /**
+     * Called with the scrub x as a 0..1 fraction of the current viewport, so an
+     * external slider can follow the finger (and vice-versa via [scrubToFraction]).
+     */
+    var onScrubMove: ((fraction: Float) -> Unit)? = null
 
     private var multiTouchActive = false
     private var lastPanFocusX = 0f
@@ -210,12 +226,24 @@ class VsgPlotView @JvmOverloads constructor(
         },
     )
 
-    fun setData(series: List<Series>, xLabel: String, yLabel: String, highlightX: Float? = null) {
+    /**
+     * @param preserveViewport keep the current pinch-zoom / pan viewport instead
+     *   of resetting to fit — used when the data changes but its scale does not
+     *   (switching solved node or Highlight/Isolate), so the zoom survives.
+     */
+    fun setData(
+        series: List<Series>,
+        xLabel: String,
+        yLabel: String,
+        highlightX: Float? = null,
+        preserveViewport: Boolean = false,
+    ) {
         this.series = series
         this.xLabel = xLabel
         this.yLabel = yLabel
         this.highlightX = highlightX
-        resetViewport()
+        scrubX = null
+        if (!preserveViewport) resetViewport()
         invalidate()
     }
 
@@ -413,6 +441,26 @@ class VsgPlotView @JvmOverloads constructor(
         }
         canvas.restore()
 
+        // The selected curve's y at the scrub line: a dot plus a value label on the plot.
+        scrubX?.let { scrub ->
+            val target = series.firstOrNull { !it.muted && it.points.isNotEmpty() }
+            val yVal = target?.let { interpolateY(it.points, scrub) }
+            if (target != null && yVal != null) {
+                val px = sx(scrub).coerceIn(left, right)
+                val py = sy(yVal).coerceIn(top, bottom)
+                valueDotPaint.color = target.color
+                canvas.drawCircle(px, py, dp(MARKER_RADIUS_DP), valueDotPaint)
+                val label = format(yVal)
+                valuePaint.textAlign = Paint.Align.LEFT
+                canvas.drawText(
+                    label,
+                    (px + dp(TICK_GAP_DP)).coerceAtMost(right - valuePaint.measureText(label)),
+                    (py - dp(TICK_GAP_DP)).coerceAtLeast(top + valuePaint.textSize),
+                    valuePaint,
+                )
+            }
+        }
+
         drawGridTicks(canvas, b, frame)
         drawAxisLabels(canvas, left, right, bottom)
     }
@@ -531,7 +579,19 @@ class VsgPlotView @JvmOverloads constructor(
     private fun updateScrub(xPx: Float, b: Bounds) {
         val clamped = xPx.coerceIn(frame.left, frame.right)
         val ratio = (clamped - frame.left) / (frame.right - frame.left)
-        val xData = b.xMin + ratio * (b.xMax - b.xMin)
+        emitScrub(b.xMin + ratio * (b.xMax - b.xMin), b)
+    }
+
+    /** Moves the scrub to [fraction] (0..1) of the current viewport — for a slider. */
+    fun scrubToFraction(fraction: Float) {
+        val full = dataBounds() ?: return
+        if (!hasFrame()) return
+        val vp = viewport(full)
+        emitScrub(vp.xMin + fraction.coerceIn(0f, 1f) * (vp.xMax - vp.xMin), vp)
+    }
+
+    /** Sets the scrub at data-x [xData] and reports it to [onScrub] / [onScrubMove]. */
+    private fun emitScrub(xData: Float, vp: Bounds) {
         scrubX = xData
         val values = series
             .filterNot { it.muted }
@@ -539,6 +599,8 @@ class VsgPlotView @JvmOverloads constructor(
                 interpolateY(entry.points, xData)?.let { y -> Sample(entry.label, y, entry.color) }
             }
         onScrub?.invoke(xData, values)
+        val span = vp.xMax - vp.xMin
+        onScrubMove?.invoke(if (span > 0f) ((xData - vp.xMin) / span).coerceIn(0f, 1f) else 0f)
         invalidate()
     }
 
