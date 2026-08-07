@@ -166,6 +166,26 @@ jobs:
           "$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
             | grep -iE "(Signer #1|V[0-9]+ Signer):? ?certificate SHA-256"
 
+      # google-services publishes default_web_client_id from oauth client_type 3.
+      # AuthActivity hides Google SSO when that string is missing. Resource
+      # shrinking strips getIdentifier-only lookups — catch a regression here.
+      - name: Verify Google SSO web client id survives resource shrinking
+        run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          if ! unzip -p "$APK" resources.arsc | grep -a -q 'default_web_client_id'; then
+            echo "::error::default_web_client_id missing from release APK resources."
+            echo "Resource shrinking likely stripped it. Keep a static R.string reference"
+            echo "or tools:keep=@string/default_web_client_id (see GoogleSignInHelper)."
+            exit 1
+          fi
+          WEB_ID=$(python3 -c "import json; c=json.load(open('app/google-services.json'))['client'][0]['oauth_client']; print(next(x['client_id'] for x in c if x['client_type']==3))")
+          if ! unzip -p "$APK" resources.arsc | grep -a -qF "$WEB_ID"; then
+            echo "::error::Web client id $WEB_ID not present in release resources.arsc"
+            exit 1
+          fi
+          echo "Google SSO default_web_client_id present in release APK."
+
       # App Links only verify if the RELEASE signing certificate is listed in the
       # hosted assetlinks.json. When it is not, email sign-in and reset links stop
       # opening the app and silently fall back to a browser disambiguation dialog

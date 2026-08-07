@@ -41,10 +41,30 @@ email so the screen can't be used to probe which addresses are registered.
      -alias androiddebugkey -storepass android -keypass android
    ```
 
+   For the **release** key (CI `KEYSTORE_BASE64` / `app/release.keystore`):
+
+   ```bash
+   keytool -list -v -keystore app/release.keystore -alias <release-alias>
+   # or from a signed APK:
+   apksigner verify --print-certs app-release.apk | grep -i 'SHA-1'
+   ```
+
+   The SHA-1 must appear under the Firebase Android app **before** Google SSO
+   works on a release install. Asset Links SHA-256 (App Links) is separate —
+   having the release cert in `assetlinks.json` does **not** register it for
+   Google Sign-In.
+
 4. Download **`google-services.json`** into `app/`. The
    `com.google.gms.google-services` Gradle plugin reads it and generates the
    `default_web_client_id` string resource that Credential Manager uses — this
    is why no OAuth client ID lives in `local.properties`.
+
+   Release builds enable `shrinkResources`. `AuthActivity` shows the Google
+   button only when that string is present in the APK, so the app must keep a
+   **static** `R.string.default_web_client_id` reference (see
+   [GoogleSignInHelper.kt](../../app/src/main/java/com/indicvision/semper/ui/auth/GoogleSignInHelper.kt)).
+   A `getIdentifier`-only lookup looks unused to the shrinker and silently
+   hides SSO on release builds.
 
 > Adding the SHA-1 in Firebase creates the matching Android OAuth client in the
 > underlying Google Cloud project automatically. You do not need to create

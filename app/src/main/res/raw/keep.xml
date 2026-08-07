@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Release builds enable shrinkResources. Resources only reached via
+  Resources.getIdentifier(...) look unused and get stripped — which hid the
+  Google SSO button because AuthActivity gates on default_web_client_id.
+  Keep it explicitly as a belt-and-suspenders alongside the static
+  R.string.default_web_client_id reference in GoogleSignInHelper.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/default_web_client_id" />
