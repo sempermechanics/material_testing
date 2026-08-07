@@ -19,11 +19,17 @@
         app:title="@string/vsg_lattice_title"
         app:titleTextColor="@color/text_primary" />
 
-    <!-- Fixed column: lattice + plot share one phone viewport without scrolling. -->
-    <LinearLayout
+    <!-- Scrolling column: lattice, controls, then plot; action bar stays pinned below. -->
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
@@ -112,6 +118,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:clipChildren="false"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -133,8 +140,9 @@
                 android:layout_marginStart="4dp"
                 android:layout_marginEnd="4dp"
                 android:layout_weight="1"
-                android:clickable="false"
-                android:focusable="false"
+                android:clickable="true"
+                android:contentDescription="@string/vsg_lattice_readout_copy_hint"
+                android:focusable="true"
                 android:gravity="center"
                 android:textAlignment="center"
                 android:textAppearance="?attr/textAppearanceBody2"
@@ -143,7 +151,7 @@
                 app:chipStrokeColor="@color/surface_outline"
                 app:chipStrokeWidth="1dp"
                 app:ensureMinTouchTargetSize="false"
-                tools:text="41 · 5 · 15" />
+                tools:text="ss:41 · st:5 · sw:15" />
 
             <ImageButton
                 android:id="@+id/btnNextNode"
@@ -157,13 +165,13 @@
                 app:tint="@color/sky_primary" />
         </LinearLayout>
 
-        <!-- Centre-line strain profiles; plot takes remaining height. -->
+        <!-- Centre-line strain profiles; plot has a fixed tall height in the scroll. -->
         <LinearLayout
             android:id="@+id/strainPlotSection"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:layout_weight="1"
+            android:clipChildren="false"
             android:orientation="vertical"
             android:visibility="gone"
             tools:visibility="visible">
@@ -180,10 +188,46 @@
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
                     android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
                     android:textColor="@color/text_primary"
                     android:textSize="14sp"
                     android:textStyle="bold"
                     tools:text="Strain along X" />
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/togglePlotMode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    app:checkedButton="@id/btnPlotHighlight"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPlotHighlight"
+                        style="@style/Widget.Semper.SegmentedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:minHeight="32dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:text="@string/vsg_lattice_curves_all"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPlotIsolate"
+                        style="@style/Widget.Semper.SegmentedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:minHeight="32dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:text="@string/vsg_lattice_curves_node"
+                        android:textSize="12sp" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
 
                 <Spinner
                     android:id="@+id/spinnerStrainComponent"
@@ -193,55 +237,38 @@
                     android:spinnerMode="dropdown" />
             </LinearLayout>
 
-            <com.google.android.material.button.MaterialButtonToggleGroup
-                android:id="@+id/togglePlotMode"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                app:checkedButton="@+id/btnPlotHighlight"
-                app:selectionRequired="true"
-                app:singleSelection="true">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnPlotHighlight"
-                    style="@style/Widget.Semper.SegmentedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:minHeight="36dp"
-                    android:text="@string/vsg_lattice_highlight"
-                    android:textSize="13sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnPlotIsolate"
-                    style="@style/Widget.Semper.SegmentedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:minHeight="36dp"
-                    android:text="@string/vsg_lattice_isolate"
-                    android:textSize="13sp" />
-            </com.google.android.material.button.MaterialButtonToggleGroup>
-
             <com.indicvision.semper.ui.analysis.VsgPlotView
                 android:id="@+id/plotLatticeStrain"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_marginTop="4dp"
-                android:layout_weight="1"
-                android:minHeight="120dp" />
+                android:layout_height="300dp"
+                android:layout_marginTop="4dp" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderScrub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:contentDescription="@string/vsg_lattice_scrub_slider"
+                android:stepSize="0"
+                android:value="0"
+                android:valueFrom="0"
+                android:valueTo="1" />
 
             <TextView
                 android:id="@+id/tvStrainPlotReadout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="2dp"
+                android:clickable="true"
+                android:contentDescription="@string/vsg_lattice_readout_copy_hint"
+                android:focusable="true"
                 android:minLines="1"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp"
-                tools:text="(24.0, 0.0031) 41 · 5 · 15" />
+                tools:text="x=24.0 · y=0.0031 · subset 41 · step 5 · strain 15" />
         </LinearLayout>
     </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -256,17 +283,29 @@
             android:id="@+id/btnSaveGraph"
             style="@style/Widget.Semper.Button.Outlined"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="52dp"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:textSize="15sp"
+            app:cornerRadius="12dp"
             android:text="@string/vsg_lattice_save_graph" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnCopyParams"
+            android:id="@+id/btnView"
             style="@style/Widget.Semper.Button.Cta"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="52dp"
             android:layout_weight="1"
-            android:text="@string/vsg_lattice_copy_params" />
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:textSize="15sp"
+            app:cornerRadius="12dp"
+            android:text="@string/vsg_lattice_view" />
     </LinearLayout>
 </LinearLayout>

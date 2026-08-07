@@ -444,16 +444,22 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="vsg_lattice_legend_skipped">Skipped</string>
     <string name="vsg_lattice_view_results">View results</string>
     <string name="vsg_lattice_open_analysis">Open analysis</string>
-    <string name="vsg_lattice_param_fmt">%1$d · %2$d · %3$d</string>
-    <string name="vsg_lattice_scrub_value_fmt">(%1$.1f, %2$.2f) %3$s</string>
-    <string name="vsg_lattice_highlight">Highlight</string>
-    <string name="vsg_lattice_isolate">Isolate</string>
-    <string name="vsg_lattice_copy_params">Copy params</string>
+    <string name="vsg_lattice_param_fmt">ss:%1$d · st:%2$d · sw:%3$d</string>
+    <string name="vsg_lattice_param_labeled_fmt">subset size %1$d · step size %2$d · strain window %3$d</string>
+    <string name="vsg_lattice_scrub_value_fmt">x=%1$.1f · y=%2$.2f · %3$s</string>
+    <string name="vsg_lattice_curves_all">All</string>
+    <string name="vsg_lattice_curves_node">Node</string>
+    <string name="vsg_lattice_view">View</string>
     <string name="vsg_lattice_save_graph">Save graph</string>
     <string name="vsg_lattice_params_copied">Parameters copied</string>
     <string name="vsg_lattice_prev">Previous solved node</string>
     <string name="vsg_lattice_next">Next solved node</string>
+    <string name="vsg_lattice_scrub_slider">Reading position</string>
+    <string name="vsg_lattice_readout_copy_hint">Double-tap to copy parameters</string>
     <string name="vsg_lattice_share_graph">Share strain graph</string>
+    <string name="vsg_export_title_fmt">%1$s · %2$s along %3$s</string>
+    <string name="vsg_export_images_fmt">Reference: %1$s · %2$d deformed images</string>
+    <string name="vsg_export_combos_fmt">%1$d parameter combinations</string>
     <string name="action_paste_params">Paste params</string>
 
     <string name="setting_vsg">Virtual strain gauge</string>
