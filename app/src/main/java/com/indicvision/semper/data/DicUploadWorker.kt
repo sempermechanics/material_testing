@@ -247,6 +247,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        // Expedited work can fall back to a normal request when the OS is out of
+        // expedited quota. Without an explicit foreground promotion the worker is
+        // then eligible to be stopped when the app backgrounds mid-prepare —
+        // which looked like "preparing finished → pending → preparing again".
+        setForeground(getForegroundInfo())
+
         val api = IndicApi.get(applicationContext)
         if (!api.enabled) {
             Timber.d("Cloud backend not configured — skipping upload")
@@ -282,9 +288,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         // completeFile size check would never reconcile. Generating once and
         // reusing also skips the expensive report/zip work on every retry.
         val stagingDir = File(sessionDir, "upload_staging")
-        if (record.cloudSessionId.isBlank()) {
-            // Fresh upload (first attempt, or a re-run reset the cloud id) —
-            // discard any files staged for a previous, now-superseded run.
+        // Only wipe incomplete staging. A blank cloudSessionId after Rebuild /
+        // provision failure must NOT destroy a finished Session.zip — that was
+        // forcing a full prepare loop on every WorkManager retry.
+        if (record.cloudSessionId.isBlank() && !stagingReusable(stagingDir)) {
             stagingDir.deleteRecursively()
         }
         stagingDir.mkdirs()
@@ -293,9 +300,14 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         // fed by the bundling frame count ("prepare") then the uploaded byte count
         // ("upload"). Decoupling the emit from the producers keeps WorkManager DB
         // writes cheap regardless of how fast frames/chunks complete.
-        val progPhase = java.util.concurrent.atomic.AtomicReference("prepare")
+        val reuseStaging = stagingReusable(stagingDir)
+        val progPhase = java.util.concurrent.atomic.AtomicReference(
+            if (reuseStaging) "upload" else "prepare",
+        )
         val progDone = java.util.concurrent.atomic.AtomicLong(0)
-        val progTotal = java.util.concurrent.atomic.AtomicLong(record.defNames.size.toLong())
+        val progTotal = java.util.concurrent.atomic.AtomicLong(
+            if (reuseStaging) 1L else record.defNames.size.toLong().coerceAtLeast(1L),
+        )
         val sampler = launch {
             while (isActive) {
                 val total = progTotal.get()
@@ -434,6 +446,13 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     Artifact("bundle", "Session.zip", bundleZip, bundleSha)
             }
 
+            // Bundling is done — leave the "preparing" badge before we wait on
+            // Cloud Tasks / Drive so a provision retry does not look like another
+            // full prepare cycle.
+            progPhase.set("upload")
+            progDone.set(0)
+            progTotal.set(1)
+
             // ── resume an interrupted session, or create a new one ──────────
             Timber.i(
                 "Uploading %s: %d files (%s)",
@@ -443,10 +462,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             )
 
             // Continue the session a prior run created, tracked by the stored
-            // pointer. Deliberately NOT looked up by localSessionId: the staging
-            // dir is cleared+regenerated whenever the pointer is blank, so
-            // resuming a session found any other way would upload freshly-sized
-            // files into a session that expects the old sizes → a size mismatch.
+            // pointer. Deliberately NOT looked up by localSessionId: incomplete
+            // staging is cleared when the pointer is blank, so resuming a session
+            // found any other way would upload freshly-sized files into a session
+            // that expects the old sizes → a size mismatch.
             val existingId = record.cloudSessionId.ifBlank { null }
             val plan: Plan = if (existingId == null) {
                 Timber.i("No resumable session for %s — creating a new one", localId)
@@ -475,14 +494,14 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         return@withContext Result.success()
                     }
                     Resume.Rebuild -> {
-                        // Unusable session — erase it (so it doesn't orphan/eat
-                        // quota), drop the pointer + staged files, and rebuild
-                        // fresh on the next run.
-                        Timber.w("Discarding unusable session %s — rebuilding fresh", existingId)
+                        // Unusable cloud session (provision failed / manifest
+                        // mismatch) — erase it so it doesn't orphan/eat quota and
+                        // drop the pointer. Keep finished staging: the next run
+                        // re-POSTs createSession with the same Session.zip bytes.
+                        Timber.w("Discarding unusable session %s — keeping staging for recreate", existingId)
                         runCatching { api.deleteSession(idToken, existingId) }
                             .onFailure { Timber.w(it, "Could not delete unusable session") }
                         SessionStore.setCloudSessionId(applicationContext, localId, "")
-                        stagingDir.deleteRecursively()
                         return@withContext Result.retry()
                     }
                     Resume.Wait -> {
@@ -576,17 +595,16 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 // the next run rebuilds a fresh session that matches.
                 e.code == HttpStatus.BAD_REQUEST -> {
                     Timber.e(
-                        "Upload 400 (%s) — discarding stale session %s, rebuilding",
+                        "Upload 400 (%s) — discarding stale session %s, keeping staging",
                         e.detail,
                         record.cloudSessionId,
                     )
                     // Erase the half-uploaded session so it doesn't orphan and
-                    // eat a quota slot, then rebuild fresh next run.
+                    // eat a quota slot. Keep Session.zip so recreate is cheap.
                     runCatching {
                         if (record.cloudSessionId.isNotBlank()) api.deleteSession(idToken, record.cloudSessionId)
                     }.onFailure { Timber.w(it, "Could not delete stale session") }
                     SessionStore.setCloudSessionId(applicationContext, localId, "")
-                    stagingDir.deleteRecursively()
                     UploadWorkOutcomes.fromHttpCode(e.code)
                 }
                 else -> {
@@ -685,12 +703,23 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         // Polling while the backend provisions upload targets in a Cloud Task.
         // Bounded on purpose: past this the job hands back to WorkManager rather
         // than holding a foreground worker (and its notification) open. The
-        // session pointer is already stored, so the retry resumes it.
-        const val PROVISION_POLL_ATTEMPTS = 6
+        // session pointer is already stored, so the retry resumes it. ~12 polls
+        // covers slow Drive/Tasks without immediately bouncing to pending.
+        const val PROVISION_POLL_ATTEMPTS = 12
         const val PROVISION_POLL_INITIAL_MS = 1_000L
         const val PROVISION_POLL_MAX_MS = 8_000L
 
         /** Extensions that are already compressed — stored, not re-deflated, in Session.zip. */
         val NO_RECOMPRESS = setOf("jpg", "jpeg", "png", "pdf", "webp", "zip")
+
+        /**
+         * Finished prepare output that must survive provision / Rebuild retries.
+         * Incomplete dirs (killed mid-prepare) must not be treated as done.
+         */
+        fun stagingReusable(stagingDir: File): Boolean {
+            val done = File(stagingDir, ".bundles_done")
+            val zip = File(stagingDir, "Session.zip")
+            return done.isFile && zip.isFile && zip.length() > 0L
+        }
     }
 }
