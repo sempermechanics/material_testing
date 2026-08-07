@@ -63,5 +63,23 @@
 -keep @androidx.room.Database class * { *; }
 -dontwarn androidx.room.paging.**
 
+# ============================================================
+# WORKMANAGER INPUT MERGERS (R8 full mode)
+# WorkManager instantiates InputMerger subclasses by class name
+# from the WorkSpec (reflective no-arg ctor). Newer R8 strips
+# unused no-arg constructors; release builds then fail uploads:
+#   NoSuchMethodException: OverwritingInputMerger.<init> []
+# Keep explicitly — work-runtime consumer rules vary by version.
+# ============================================================
+-keepnames class * extends androidx.work.InputMerger
+-keepclassmembers class * extends androidx.work.InputMerger {
+    public <init>();
+}
+-keep class androidx.work.OverwritingInputMerger { public <init>(); }
+-keep class androidx.work.ArrayCreatingInputMerger { public <init>(); }
+-keep class * extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context,androidx.work.WorkerParameters);
+}
+
 # Keep readable crash reports from the field
 -keepattributes SourceFile,LineNumberTable
