@@ -338,7 +338,19 @@ class AuthRepository(context: Context) {
             )
         } catch (e: IndicApi.ApiException) {
             if (e.code == HTTP_UNAUTHORIZED) {
-                Result.failure(Exception("Session expired. Please sign in again."))
+                // Gateway/backend rejected the Firebase ID token (wrong audience,
+                // expired, or malformed). Surface a short server hint when present
+                // so "Session expired" is not the only clue for a misconfigured
+                // FIREBASE_PROJECT_ID / API Gateway JWT audience.
+                val hint = e.detail.trim().lineSequence().firstOrNull().orEmpty()
+                    .take(120)
+                    .ifBlank { null }
+                val message = if (hint != null) {
+                    "Sign-in rejected by the API (401). $hint"
+                } else {
+                    "Session expired. Please sign in again."
+                }
+                Result.failure(Exception(message))
             } else {
                 Result.failure(Exception("Could not verify account (server error ${e.code})."))
             }
