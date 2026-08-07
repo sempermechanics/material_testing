@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any
@@ -15,7 +16,94 @@ _ALLOWED = frozenset({
     "requestId", "uid", "deviceId", "event", "outcome", "errorCode",
     "dependency", "latencyMs", "method", "path", "status", "attempt",
     "maxAttempts", "httpStatus", "count", "stage",
+    "opClass", "routeTemplate", "fileCount", "frameCount",
 })
+
+# Opaque path segments (session / file / user ids) collapse to {id} so log
+# groupings stay countable without retaining identifiers in routeTemplate.
+_ID_SEGMENT = re.compile(r"^[A-Za-z0-9_-]{8,}$")
+
+
+def normalize_route_template(path: str) -> str:
+    """Return path with opaque id segments replaced by `{id}`."""
+    if not path:
+        return "/"
+    parts = path.split("/")
+    out: list[str] = []
+    for part in parts:
+        if not part:
+            out.append(part)
+            continue
+        if part in {
+            "v1", "healthz", "readyz", "me", "config", "devices", "register",
+            "challenge", "sessions", "uploads", "files", "content", "complete",
+            "admin", "users", "export", "tasks", "provision-session",
+        }:
+            out.append(part)
+        elif _ID_SEGMENT.match(part):
+            out.append("{id}")
+        else:
+            out.append(part)
+    template = "/".join(out)
+    return template if template.startswith("/") else f"/{template}"
+
+
+def classify_route(method: str, path: str) -> tuple[str, str]:
+    """Map method+path to (opClass, routeTemplate) for usage metering.
+
+    `attest` is dedicated to POST /v1/challenge so shared challenge traffic is
+    not double-counted under login/backup/restore buckets.
+    """
+    method_u = (method or "GET").upper()
+    template = normalize_route_template(path or "/")
+    raw = path or "/"
+
+    if raw in {"/healthz", "/readyz"} or template in {"/healthz", "/readyz"}:
+        return "health", template
+    if template == "/v1/challenge" and method_u == "POST":
+        return "attest", template
+    if template == "/v1/me" and method_u == "DELETE":
+        return "account", template
+    if template == "/v1/me/export":
+        return "account", template
+    if template in {"/v1/me", "/v1/devices/register"}:
+        return "login", template
+    if template == "/v1/config":
+        return "config", template
+    if template.startswith("/v1/admin"):
+        return "admin", template
+    if template == "/v1/tasks/provision-session":
+        return "backup", template
+    if template == "/v1/sessions" and method_u == "POST":
+        return "backup", template
+    if template.endswith("/uploads") and "/sessions/" in template:
+        return "backup", template
+    if template.endswith("/complete") and "/files/" in template and method_u == "POST":
+        return "backup", template
+    if template == "/v1/sessions" and method_u == "GET":
+        return "sync", template
+    if template.startswith("/v1/sessions/") and method_u == "DELETE":
+        return "backup", template  # erase one cloud backup
+    if template.endswith("/files") and "/sessions/" in template and method_u == "GET":
+        return "restore", template
+    if template.endswith("/content") and "/files/" in template and method_u == "GET":
+        return "restore", template
+    return "other", template
+
+
+def metrics_counts(metrics: dict | None, *, file_count: int | None = None) -> dict[str, int]:
+    """Extract PII-safe integer counts for session-create metering."""
+    out: dict[str, int] = {}
+    if file_count is not None:
+        out["fileCount"] = int(file_count)
+    if not metrics:
+        return out
+    raw = metrics.get("frameCount")
+    if isinstance(raw, bool):
+        return out
+    if isinstance(raw, (int, float)):
+        out["frameCount"] = int(raw)
+    return out
 
 
 class DependencyError(RuntimeError):
