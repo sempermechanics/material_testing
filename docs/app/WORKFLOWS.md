@@ -440,7 +440,7 @@ Reached only when the file picked on Home was a video.
 | [ ] 5.2.12 | Drag **step size** | 1–30, field mirrors it |
 | [ ] 5.2.13 | Drag **strain window** | Odd values 5–101, field mirrors it |
 | [ ] 5.2.13a | Open step 2 having never copied params from a lattice | No **Paste params** chip — it only appears when the clipboard holds a set |
-| [ ] 5.2.13b | Copy params from a sweep lattice (§7.9), then return here | The chip appears beside **Reset**; tapping it fills subset, step and strain window and scrolls them into view |
+| [ ] 5.2.13b | Copy params from a sweep lattice (§7.3), then return here | The chip appears beside **Reset**; tapping it fills subset, step and strain window and scrolls them into view |
 | [ ] 5.2.14 | Tap each ⓘ | Subset, step and strain window each explain themselves |
 | [ ] 5.2.15 | Switch the interpolator to **Keys 6×6** | Selection sticks; the run uses it |
 | [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, strain window to 15, interpolator to Bicubic |

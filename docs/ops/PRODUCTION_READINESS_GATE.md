@@ -1,17 +1,20 @@
 # Production readiness — completion gate
 
-Re-score of the 33-check production readiness rubric after Phases 1–6 repo work
-on branch `damodar`. This is an **ops gate**, not a substitute for counsel or
-console verification. Do not treat PARTIAL/UNKNOWN as PASS.
+Re-score of the production readiness rubric after Phases 1–6 repo work and the
+Step 4 pilot rollout. Integration branch is **`main`**. This is an **ops gate**,
+not a substitute for counsel or console verification. Do not treat
+PARTIAL/UNKNOWN as PASS.
 
-## Score summary (post-remediation, repository evidence)
+Secrets / Environments reality: [ENVIRONMENTS.md](ENVIRONMENTS.md).
+
+## Score summary (post-remediation, repository + pilot evidence)
 
 | Band | Count (approx.) | Notes |
 |------|-----------------|-------|
-| PASS / improved to PASS | Security headers, deny-all rules (checked in), validation, erasure without silent 2k cap, readiness, structured logs, async notify, authz tests, pagination/export, deploy template, legal drafts | Repo-side |
-| PARTIAL | Distributed rate limit (gateway YAML + in-process), backups/PITR scripts, Crashlytics, WorkManager, etc. | Need console proof |
-| UNKNOWN | Firebase API-key restrictions, App Check, Auth abuse limits, API Gateway quotas live, Cloud Run IAM, GitHub environments/secrets/branch protection, vendor retention, public legal URL live, cookie inventory | External — see below |
-| FAIL remaining | None intended in security/data-integrity **repo** scope after Phases 1–4; any remaining FAIL must be console gaps marked UNKNOWN with risk acceptance | |
+| PASS / improved to PASS | Security headers, deny-all rules (checked in), validation, erasure without silent 2k cap, readiness, structured logs, async notify, authz tests, pagination/export, deploy template, legal drafts, candidate smoke deploy, attested uploads pin, live assetlinks + legal Hosting | Repo + pilot |
+| PARTIAL | Distributed rate limit (gateway YAML + in-process), backups/PITR, Crashlytics, WorkManager, GitHub Environment *reviewers* on Free plan | Need console / plan upgrade |
+| UNKNOWN | Firebase API-key restrictions, App Check, Auth abuse limits, vendor retention, cookie inventory, branch ruleset if plan blocks it | External — see below |
+| FAIL remaining | None intended in security/data-integrity **repo** scope; remaining gaps are console / process | |
 
 Strict binary PASS against all applicable external controls is **not** claimed.
 
@@ -22,20 +25,20 @@ Strict binary PASS against all applicable external controls is **not** claimed.
 - [ ] Deploy deny-all `firestore.rules` and confirm client SDK cannot read/write.
 - [ ] Confirm Firebase API key restrictions + App Check posture.
 - [ ] Confirm Auth abuse / enumeration protections in Firebase console.
-- [ ] Deploy API Gateway with `openapi.yaml` quotas (`__CLOUD_RUN_URL__` substituted).
+- [x] Deploy API Gateway with `openapi.yaml` quotas (`__CLOUD_RUN_URL__`
+      substituted) — pilot gateway is live; re-confirm quotas in console.
 - [ ] Confirm Cloud Run ingress, SA roles, Shared Drive Manager rights.
-- [ ] Run and record one **Firestore restore drill**. The drill is now automated
-      and self-verifying (`.github/workflows/firestore-restore-drill.yml`,
-      monthly + on demand): it imports, **waits**, and compares the restored
-      database against the manifest written beside each export, failing on any
-      mismatch. Remaining work is to run it once and record the measured RTO
+- [ ] Run and record one **Firestore restore drill**. The drill is automated
+      (`.github/workflows/firestore-restore-drill.yml`) but needs a
+      **`restore-drill` GitHub Environment** (separate from `production-backup`)
+      plus one recorded RTO
       ([FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md)).
 - [ ] Confirm PITR / scheduled export job actually scheduled in GCP. The export
       script already refuses to run without PITR, and now also fails if the
       `challenges.expireAt` TTL policy is not ACTIVE.
-- [ ] Create the Cloud Tasks queue and IAM for async session provisioning
-      ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) §A6). Without it
-      the service provisions inline — correct, but large analyses will time out.
+- [x] Cloud Tasks queue and IAM for async session provisioning
+      ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) §A6) — pilot
+      `indic-provision` + `TASKS_*` vars. Keep vars set on redeploy.
 
 ### Authorization / quality
 
@@ -55,28 +58,35 @@ Strict binary PASS against all applicable external controls is **not** claimed.
 
 ### Deployment
 
-- [ ] Create GitHub Environments `staging`, `production`, `release` with required
-      reviewers; populate WIF secrets and vars (today: **0 environments /
-      empty secrets** observed → UNKNOWN).
-- [ ] Branch protection with required `ci-ok` (today: 404 / unavailable → UNKNOWN).
-- [ ] One **staging rollback drill** (failed `/readyz` → traffic to previous revision).
-- [ ] Set `INDIC_API_BASE_URL` on `release` environment; ship a release build
-      with `-PrequireCloudApi=true`.
+- [x] GitHub Environments `staging`, `production`, `release`, `production-backup`
+      exist. On Free private orgs, **secrets/vars are often repo-level** (Environment
+      protection_rules may be empty). Still open: required reviewers when the plan
+      allows; create **`restore-drill`**. See [ENVIRONMENTS.md](ENVIRONMENTS.md).
+- [ ] Branch ruleset / protection with required `CI OK` (may be unavailable on
+      Free — enforce by process until then).
+- [x] Staging candidate smoke before traffic shift
+      (`deploy-backend.yml`: tagged revision + ID-token `/readyz`). Record a
+      deliberate rollback drill when convenient.
+- [x] `INDIC_API_BASE_URL` available to release builds; signed release shipped
+      with `-PrequireCloudApi=true` (e.g. `v0.1.0-beta.1`).
+- [x] Production `REQUIRE_ATTESTED_UPLOADS=1` pinned from the GitHub var on
+      deploy. Leaving the var empty on the next deploy **clears** the flag —
+      keep it set.
 
 ### Compliance
 
 - [x] [PRIVACY_POLICY.md](../legal/PRIVACY_POLICY.md) and
       [TERMS_OF_SERVICE.md](../legal/TERMS_OF_SERVICE.md) are **rendered** into
       `firebase-hosting/public/{privacy,terms}/` by
-      `scripts/render_legal_pages.py`; CI (`legal-pages`, a required check) fails
-      if the published pages drift from the Markdown. The in-app links already
-      point at those URLs. **Still needs a Hosting deploy to go live.**
+      `scripts/render_legal_pages.py`; CI (`legal-pages`) fails on drift. Hosting
+      has been deployed so public URLs are live.
 - [x] Crash reporting and analytics are **opt-in**: disabled in the manifest,
       a first-run notice, and a Settings toggle that also deletes queued reports
       on withdrawal.
 - [x] Cloud account export (`GET /v1/me/export`) is reachable from the app —
-      Settings → Your data → "Download my cloud account data". The policy
-      previously advertised a right with no way to exercise it.
+      Settings → Your data → "Download my cloud account data".
+- [x] Release signing cert listed in
+      `firebase-hosting/public/.well-known/assetlinks.json` (debug + release).
 - [ ] Counsel review of legal templates (governing law, bases).
 - [ ] Record cookie inventory per [COOKIE_CONSENT.md](../legal/COOKIE_CONSENT.md);
       no banner without non-essential cookies.
@@ -97,13 +107,12 @@ no isolation and no retries):
 
 ## External UNKNOWN register (do not invent PASS)
 
-| Control | Evidence at audit time |
-|---------|------------------------|
-| Firebase MCP / active project | Unauthenticated / no project |
-| `gcloud` CLI | Not installed on auditor machine |
-| GitHub Environments | 0 |
-| GitHub Actions secrets list | Empty |
-| Branch protection | 404 |
+| Control | Evidence |
+|---------|----------|
+| Firebase MCP / active project | Confirm in console |
+| GitHub Environments | Shells exist (`staging`, `production`, `release`, `production-backup`); `restore-drill` may still need creating; reviewers often empty on Free |
+| Secrets / vars | Prefer **repo-level** on Free private orgs; Environment names still select workflow targets |
+| Branch protection / ruleset | Confirm on `main`; 403 / unavailable → process-only until plan allows |
 
 ## Risk acceptance
 

@@ -1,7 +1,8 @@
 # Releasing Semper
 
-How a build goes from `main` to testers. Written for maintainers; nothing
-here is needed for day-to-day contributions.
+How a build goes from **`main`** to testers. Written for maintainers; nothing
+here is needed for day-to-day contributions. Secrets/vars layout:
+[ENVIRONMENTS.md](ENVIRONMENTS.md).
 
 ## Versioning
 
@@ -18,9 +19,10 @@ here is needed for day-to-day contributions.
 
 ## Release checklist
 
-1. **Green working tree** — all changes committed, branch merged to the
-   release branch through a reviewed PR.
-2. **Green CI** — `ci-ok` must be green on the commit you intend to release.
+1. **Green working tree** — all changes committed, branch merged to **`main`**
+   through a reviewed PR.
+2. **Green CI** — `CI OK` must be green on the `main` commit you intend to
+   release (full matrix on push to `main`).
 3. **Tag and push** the commit you intend to release:
 
    ```bash
@@ -29,12 +31,13 @@ here is needed for day-to-day contributions.
    ```
 
 4. **Run the Release workflow** — go to Actions → Release → Run workflow.
-   Provide the version tag, changelog, and channel (beta/stable); the version
-   drives `versionName`/`versionCode` automatically (see Versioning). The
-   workflow requires `release` environment approval before publishing.
-6. **Smoke the release build on a device** — clean install, sign in,
+   Select branch **`main`**. Provide the version tag, changelog, and channel
+   (beta/stable); the version drives `versionName`/`versionCode` automatically
+   (see Versioning). Jobs refuse to run on other refs. The workflow uses the
+   `release` environment (and repo-level secrets/vars on Free orgs).
+5. **Smoke the release build on a device** — clean install, sign in,
    run one analysis, confirm the session syncs and each share target works.
-7. **Distribute publicly (manual)** — this workflow only builds a signed APK and
+6. **Distribute publicly (manual)** — this workflow only builds a signed APK and
    a **private** GitHub Release. Customer distribution is separate:
    - Upload the APK (GitHub Release on
      [semperdic/website](https://github.com/semperdic/website) preferred) + update
@@ -46,7 +49,7 @@ here is needed for day-to-day contributions.
 ## CI-based release (workflow_dispatch)
 
 The [`release.yml`](../../.github/workflows/release.yml) workflow runs three
-jobs: `verify` → `build-release` → `publish`.
+jobs: `verify` → `build-release` → `publish`. Dispatch from **`main` only**.
 
 ### `verify` — the gate
 
@@ -65,17 +68,21 @@ of the above fails.
 ### `build-release` — sign and check
 
 1. Builds a **signed release APK** using repository secrets (keystore, alias,
-   passwords) stored in the `release` environment. The `signingConfigs.release`
-   block in `app/build.gradle.kts` reads the `SIGNING_*` env vars the workflow
-   sets; if the keystore is absent the variant stays **unsigned** rather than
-   silently debug-signed.
-2. Requires environment variable **`INDIC_API_BASE_URL`** (HTTPS API Gateway or
-   Cloud Run URL) and builds with `-PrequireCloudApi=true`. A missing, empty or
-   non-HTTPS URL fails the job — cloud sync must not ship silently disabled, and
-   ID tokens must not go out in cleartext.
+   passwords) — Environment-scoped when available, otherwise **repo-level**
+   secrets on Free private orgs. The `signingConfigs.release` block in
+   `app/build.gradle.kts` reads the `SIGNING_*` env vars the workflow sets; if
+   the keystore is absent the variant stays **unsigned** rather than silently
+   debug-signed.
+2. Requires variable **`INDIC_API_BASE_URL`** (HTTPS API Gateway or Cloud Run
+   URL) and builds with `-PrequireCloudApi=true`. A missing, empty or non-HTTPS
+   URL fails the job — cloud sync must not ship silently disabled, and ID tokens
+   must not go out in cleartext.
 3. Verifies the arm64-v8a `.so` is packaged.
 4. **Verifies the signature** with `apksigner verify` — the release fails here
-   if the APK is not validly signed with the release key.
+   if the APK is not validly signed with the release key. Newer Android
+   build-tools print `V2 Signer: certificate SHA-256 digest:` (and similar);
+   older ones used `Signer #1 certificate SHA-256 digest:`. The workflow accepts
+   both.
 5. **Verifies `assetlinks.json` lists the release certificate.** It extracts the
    SHA-256 digest from the signed APK, reformats it to the colon-separated
    uppercase form Digital Asset Links uses, and greps
@@ -99,10 +106,10 @@ retention expires. This is a step you have to take by hand.
 
 ### `publish`
 
-Creates the **GitHub Release** with the APK attached, gated on `release`
-environment approval.
+Creates the **GitHub Release** with the APK attached, gated on the `release`
+environment.
 
-### Required secrets (in the `release` environment)
+### Required secrets (repo or `release` environment)
 
 | Secret | Description |
 |--------|-------------|
@@ -111,7 +118,7 @@ environment approval.
 | `KEY_PASSWORD` | Key password |
 | `STORE_PASSWORD` | Keystore password |
 
-### Required variables (in the `release` environment)
+### Required variables (repo or `release` environment)
 
 | Variable | Description |
 |----------|-------------|
@@ -120,10 +127,10 @@ environment approval.
 ### Backend staging / production
 
 Use [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml): choose
-`staging` or `production`, supply GCP project/region. It deploys with no traffic,
-tags a candidate revision, smokes `/readyz` on the tagged URL with an ID token,
-then promotes — so a failed smoke never had traffic to roll back. See
-[CI.md](CI.md) § Backend deploy.
+`staging` or `production`, supply GCP project/region. Updates deploy with
+`no_traffic`, tag a candidate, smoke `/readyz` with an ID token, then promote.
+First-time Cloud Run creates omit `no_traffic` (Cloud Run rejects it on create).
+See [CI.md](CI.md) § Backend deploy and [ENVIRONMENTS.md](ENVIRONMENTS.md).
 
 #### Bumping backend dependencies
 
@@ -176,4 +183,5 @@ If git history is rewritten (for example to purge the old prebuilt OpenCV SDK
 under `app/src/main/cpp/opencv/` from every commit), collaborators must
 **re-clone** or hard-reset to the rewritten tip. Force-pushed branches invalidate
 existing local clones' merge bases. Coordinate with the team before rewriting;
-document the rewrite in the PR / release notes.
+document the rewrite in the PR / release notes. Do **not** force-push `main` for
+routine fixes — prefer `git revert`.

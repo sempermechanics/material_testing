@@ -8,6 +8,14 @@ is Kotlin and needs no native toolchain at all.
 **This file is the source of truth for build, test and quality-gate commands.**
 The README links here rather than repeating them.
 
+## Who should read what
+
+| You are… | Start here |
+|---|---|
+| **New developer** | [README](README.md) → [docs/README.md](docs/README.md) → clone with submodules (below) → [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md). Offline analysis works with no backend. |
+| **Contributor** | This file (build/test/PR) + [docs/ops/CI.md](docs/ops/CI.md) for why a check is red. Open PRs against **`main`**. |
+| **Maintainer** | [docs/ops/ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md), [CI.md](docs/ops/CI.md), [RELEASING.md](docs/ops/RELEASING.md), [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md). |
+
 ## Clone and native deps
 
 The `--recursive` matters: `native/` is a submodule
@@ -46,10 +54,11 @@ cd native && git fetch && git checkout <commit-or-tag> && cd ..
 git add native && git commit -m "Bump engine to <tag>"
 ```
 
-That gitlink change is what triggers CI tiers 3 and 5 here. The engine's own
-tests ran in its repository before that commit existed; this repo only proves the
-pinned version still links and behaves. If the bump changes numeric results,
-declare it against the tiers in
+That gitlink change is what triggers CI tiers 3 and 5 **on push to `main`** (or
+on a PR labeled `e2e` / `release` / `full-ci`). The engine's own tests ran in its
+repository before that commit existed; this repo only proves the pinned version
+still links and behaves. If the bump changes numeric results, declare it against
+the tiers in
 [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md).
 
 ### Local disk hygiene
@@ -109,8 +118,11 @@ both, and both block `ci-ok`:
 
 ```bash
 python scripts/render_legal_pages.py --check   # legal pages match docs/legal/
-gitleaks detect --config .gitleaks.toml        # secrets, across full history
+gitleaks detect --config .gitleaks.toml        # secrets (full history; human PRs)
 ```
+
+Dependabot PRs use a CLI scan of **only the PR commit range** (no org
+`GITLEAKS_LICENSE` on Dependabot). Details: [docs/ops/CI.md](docs/ops/CI.md).
 
 **Never hand-edit `firebase-hosting/public/privacy/` or `.../terms/`.** They are
 generated from `docs/legal/*.md` by `scripts/render_legal_pages.py`, and the app
@@ -128,7 +140,12 @@ silently disabled.
 
 CI is defined in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 See [docs/ops/CI.md](docs/ops/CI.md) for the tier map and required checks.
-The single required status check is `ci-ok`.
+The single required status check is `CI OK` (`ci-ok`).
+
+- PRs into **`main`**: gates + path-filtered Tier 1 / Tier 4. Add label `e2e`,
+  `release`, or `full-ci` for Tier 3 / Tier 5 on the PR.
+- Push to **`main`**: full matrix.
+- Dependabot: cheap path (actions = gates only; pip = Tier 4; gradle = Tier 1).
 
 Warm full-matrix wall clock is ~45–60 min (emulator and signed release run in
 parallel). Kotlin/docs-only PRs run ~10–15 min via path filters.
@@ -145,6 +162,7 @@ parallel). Kotlin/docs-only PRs run ~10–15 min via path filters.
 | Sign-in / allow-list | [docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md) |
 | Backend behaviour | [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md) |
 | GCP backend deploy | [docs/backend/BACKEND_SETUP_GCP.md](docs/backend/BACKEND_SETUP_GCP.md) |
+| Environments / secrets | [docs/ops/ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md) |
 | Legal pages / asset links | [firebase-hosting/README.md](firebase-hosting/README.md) |
 | CI / release | [docs/ops/CI.md](docs/ops/CI.md), [docs/ops/RELEASING.md](docs/ops/RELEASING.md) |
 
@@ -156,10 +174,14 @@ than sneaking it into an unrelated one.
 
 ## Pull requests
 
-- Keep PRs focused (one concern: dead-code cleanup, one helper extract, one feature)
-- Match existing naming and package layout
-- Run the relevant tests above before asking for review
-- Link issues when applicable; `good first issue` tags are scoped for newcomers
+- Target **`main`**. Keep PRs focused (one concern: dead-code cleanup, one helper
+  extract, one feature).
+- Match existing naming and package layout.
+- Run the relevant tests above before asking for review.
+- Link issues when applicable; `good first issue` tags are scoped for newcomers.
+- If you change auth, quotas, deploy env vars, or CI modes, update the matching
+  doc under `docs/` in the same PR.
+- Do not force-push `main`. Prefer revert of a bad merge over history rewrite.
 
 ## License
 
