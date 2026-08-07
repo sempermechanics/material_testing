@@ -112,6 +112,19 @@
         <item name="rippleColor">#33FFFFFF</item>
     </style>
 
+    <!-- Small outlined assist chip (Reset / Paste in advanced params) -->
+    <style name="Widget.Semper.Chip.Assist" parent="Widget.MaterialComponents.Chip.Action">
+        <item name="chipBackgroundColor">@color/surface</item>
+        <item name="chipStrokeColor">@color/sky_primary</item>
+        <item name="chipStrokeWidth">1dp</item>
+        <item name="android:textColor">@color/sky_primary</item>
+        <item name="chipIconTint">@color/sky_primary</item>
+        <item name="chipIconSize">16dp</item>
+        <item name="chipMinHeight">32dp</item>
+        <item name="ensureMinTouchTargetSize">false</item>
+        <item name="rippleColor">#220288D1</item>
+    </style>
+
     <!-- ============================================================= -->
     <!--  Typography                                                   -->
     <!-- ============================================================= -->

@@ -18,6 +18,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -1168,6 +1169,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etStepSize.value = snapToSlider(etStepSize, params.step).toFloat()
         etStrainWindow.value = snapToSlider(etStrainWindow, params.window).toFloat()
         if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
+        // Bring the advanced-params card into view so the pasted values are visible.
+        val card = findViewById<View>(R.id.advancedParamsCard)
+        card.post { card.requestRectangleOnScreen(Rect(0, 0, card.width, card.height), false) }
     }
 
     // ------------------------------------------------------------------

@@ -628,29 +628,23 @@
 
                             <com.google.android.material.chip.Chip
                                 android:id="@+id/btnPasteParams"
+                                style="@style/Widget.Semper.Chip.Assist"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginEnd="4dp"
                                 android:text="@string/action_paste_params"
-                                android:textColor="@color/sky_primary"
                                 android:visibility="gone"
-                                app:chipBackgroundColor="@color/sky_container"
-                                app:chipStrokeColor="@color/surface_outline"
-                                app:chipStrokeWidth="1dp"
-                                app:ensureMinTouchTargetSize="false"
+                                app:chipIcon="@drawable/ic_content_paste"
                                 tools:visibility="visible" />
 
                             <com.google.android.material.chip.Chip
                                 android:id="@+id/btnAdvancedReset"
+                                style="@style/Widget.Semper.Chip.Assist"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginEnd="4dp"
                                 android:text="@string/action_reset"
-                                android:textColor="@color/sky_primary"
-                                app:chipBackgroundColor="@color/sky_container"
-                                app:chipStrokeColor="@color/surface_outline"
-                                app:chipStrokeWidth="1dp"
-                                app:ensureMinTouchTargetSize="false" />
+                                app:chipIcon="@drawable/ic_reset" />
                         </LinearLayout>
 
                         <LinearLayout
