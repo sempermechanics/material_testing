@@ -901,7 +901,7 @@ Not part of the test pass. Recorded so nobody rediscovers them the hard way.
 
 | Path | Condition |
 |---|---|
-| **Google SSO** button and its divider | Hidden unless `default_web_client_id` exists — i.e. the build's SHA-1 is registered in Firebase |
+| **Google SSO** button and its divider | Hidden unless `default_web_client_id` is in the APK (from `google-services.json`). Release resource shrinking must not strip it — see [AUTH_SETUP.md](../backend/AUTH_SETUP.md). Separately, the build's signing SHA-1 must be registered in Firebase or the button shows but sign-in fails |
 | Settings → **Pending access requests** → Admin | Hidden unless the backend reports role `admin` |
 | Dev sign-in bypass (skips auth, disables cloud) | Debug build **and** the bypass flag **and** an emulator |
 | Splash → Home without auth | Debug build with no `INDIC_API_BASE_URL`. A *release* build with no base URL cannot get past sign-in at all |

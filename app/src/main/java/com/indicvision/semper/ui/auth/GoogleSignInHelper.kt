@@ -1,14 +1,13 @@
-@file:SuppressLint("DiscouragedApi")
-
 package com.indicvision.semper.ui.auth
 
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
+import android.content.res.Resources
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.indicvision.semper.R
 
 /**
  * Native "Sign in with Google" via AndroidX Credential Manager.
@@ -16,9 +15,16 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
  * Returns a Google **ID token** which the app then exchanges for a Firebase
  * credential (see [com.indicvision.semper.data.AuthRepository.signInWithGoogle]).
  * The server client id is the **Firebase project's** web client id, published by
- * the google-services plugin as the `default_web_client_id` string resource — it
- * only exists once the app's SHA-1 is registered on the Firebase Android app, so
- * it's resolved at runtime and Google sign-in is simply unavailable until then.
+ * the google-services plugin as the `default_web_client_id` string resource.
+ *
+ * Reference it via [R.string.default_web_client_id] (not `getIdentifier`) so
+ * release resource shrinking cannot drop it — a reflection-only lookup looks
+ * unused to the shrinker and hides the Google SSO button on signed release
+ * builds.
+ *
+ * Google Sign-In still requires the build's signing SHA-1 in the Firebase
+ * Android app settings; without it the button may show but credential exchange
+ * fails.
  */
 object GoogleSignInHelper {
 
@@ -28,10 +34,13 @@ object GoogleSignInHelper {
                 "and re-download google-services.json.",
         )
 
-    /** The Firebase web client id, or null if the SHA-1/OAuth client isn't set up yet. */
+    /** The Firebase web client id, or null if the google-services string is absent. */
     fun webClientId(context: Context): String? {
-        val id = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-        return if (id != 0) context.getString(id) else null
+        return try {
+            context.getString(R.string.default_web_client_id).ifBlank { null }
+        } catch (_: Resources.NotFoundException) {
+            null
+        }
     }
 
     fun isConfigured(context: Context): Boolean = !webClientId(context).isNullOrBlank()

@@ -343,7 +343,7 @@ class AuthRepository(context: Context) {
                 // so "Session expired" is not the only clue for a misconfigured
                 // FIREBASE_PROJECT_ID / API Gateway JWT audience.
                 val hint = e.detail.trim().lineSequence().firstOrNull().orEmpty()
-                    .take(120)
+                    .take(API_ERROR_HINT_MAX_CHARS)
                     .ifBlank { null }
                 val message = if (hint != null) {
                     "Sign-in rejected by the API (401). $hint"
@@ -377,6 +377,9 @@ class AuthRepository(context: Context) {
     private companion object {
         /** HTTP 401 from the backend: the session token is no longer valid. */
         const val HTTP_UNAUTHORIZED = 401
+
+        /** Cap server error detail length in user-facing 401 snackbars. */
+        const val API_ERROR_HINT_MAX_CHARS = 120
 
         const val K_PENDING_EMAIL = "pending_email"
 
