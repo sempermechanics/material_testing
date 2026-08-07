@@ -299,14 +299,19 @@ class VsgLatticeView @JvmOverloads constructor(
     private fun drawNodes(canvas: Canvas, columnX: Map<Int, Float>, yFor: (Int) -> Float) {
         val radius = dp(NODE_RADIUS_DP)
         val selectedRadius = radius + dp(SELECT_RING_DP)
-        val solved = ContextCompat.getColor(context, R.color.sky_primary)
         val skipped = ContextCompat.getColor(context, R.color.semantic_danger)
         nodes.forEach { node ->
             val x = columnX[node.subset] ?: return@forEach
             val y = yFor(node.window)
             placed.add(Placed(node, x, y))
             if (node.solved) {
-                fillPaint.color = solved
+                // On the result lattice, match each node to its strain-curve colour;
+                // planned-preview nodes (no frame yet) stay the plain solved colour.
+                fillPaint.color = if (node.frameIndex >= 0) {
+                    VsgPlotView.paletteColor(node.frameIndex)
+                } else {
+                    ContextCompat.getColor(context, R.color.sky_primary)
+                }
                 canvas.drawCircle(x, y, radius, fillPaint)
                 if (selectedFrameIndex >= 0 && node.frameIndex == selectedFrameIndex) {
                     strokePaint.color = ContextCompat.getColor(context, R.color.text_primary)

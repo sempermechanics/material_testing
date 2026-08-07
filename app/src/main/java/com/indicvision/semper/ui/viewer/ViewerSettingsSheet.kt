@@ -151,7 +151,7 @@ object ViewerSettingsSheet {
         val series = VsgStudy.STRAIN_COMPONENTS.mapIndexed { slot, component ->
             VsgPlotView.Series(
                 label = host.getString(labels[slot]),
-                color = plot.paletteColor(slot),
+                color = VsgPlotView.paletteColor(slot),
                 points = VsgStudy.profileAlong(data, component, line, tolerance),
                 markers = false,
             )
@@ -169,7 +169,6 @@ object ViewerSettingsSheet {
                 if (host.lineCutHorizontal) R.string.axis_x else R.string.axis_y,
             ),
             line.position,
-            plot,
         )
         plot.setData(
             series,
@@ -185,13 +184,12 @@ object ViewerSettingsSheet {
         host: ResultViewerActivity,
         axis: String,
         position: Float,
-        plot: VsgPlotView,
     ): CharSequence {
         val prefix = host.getString(R.string.line_cut_legend_prefix_fmt, axis, position)
         val parts = listOf(
-            host.getString(R.string.line_cut_legend_exx) to plot.paletteColor(0),
-            host.getString(R.string.line_cut_legend_eyy) to plot.paletteColor(1),
-            host.getString(R.string.line_cut_legend_exy) to plot.paletteColor(2),
+            host.getString(R.string.line_cut_legend_exx) to VsgPlotView.paletteColor(0),
+            host.getString(R.string.line_cut_legend_eyy) to VsgPlotView.paletteColor(1),
+            host.getString(R.string.line_cut_legend_exy) to VsgPlotView.paletteColor(2),
         )
         val spanned = SpannableStringBuilder(prefix).append(' ')
         parts.forEachIndexed { index, (label, color) ->

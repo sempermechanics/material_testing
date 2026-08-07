@@ -66,7 +66,11 @@ class VsgPlotView @JvmOverloads constructor(
      */
     data class Sample(val label: String, val value: Float, val color: Int)
 
-    private companion object {
+    companion object {
+        /** Colour for the n-th series of a multi-line plot; safe for any index
+         *  (a skipped lattice node has frameIndex -1). */
+        fun paletteColor(index: Int): Int = PALETTE[index.mod(PALETTE.size)]
+
         const val AXIS_LABEL_SP = 11f
         const val LINE_WIDTH_DP = 2f
         const val MARKER_RADIUS_DP = 3.5f
@@ -98,9 +102,6 @@ class VsgPlotView @JvmOverloads constructor(
             0xFF3949AB.toInt(),
         )
     }
-
-    /** Colour for the n-th series of a multi-line plot. */
-    fun paletteColor(index: Int): Int = PALETTE[index % PALETTE.size]
 
     private val density = resources.displayMetrics.density
 
