@@ -319,15 +319,14 @@ Drive object (or another user's) into its session record. This is why the upload
 init requests `fields=id,md5Checksum,size` and completion re-fetches
 `size,md5Checksum,parents` rather than believing the PUT response.
 
-**Upload targets require attestation — with one temporary exception.**
+**Upload targets require attestation.**
 `GET /v1/sessions/{sid}/uploads` hands out Drive upload capability URLs, so it is
 gated by `deps.device_or_legacy_reader` rather than a plain ID-token dependency.
 While `REQUIRE_ATTESTED_UPLOADS` is unset it accepts either a full device
-signature *or* an ID token alone, because testers hold builds that only send the
-latter; setting `REQUIRE_ATTESTED_UPLOADS=1` closes the window. Leaving it off
-never weakens a client that *does* attest, and the service logs a startup warning
-so the compatibility window cannot be forgotten. Every other write and mint path
-already requires a device signature.
+signature *or* an ID token alone (startup warning). **Production keeps
+`REQUIRE_ATTESTED_UPLOADS=1`**; `deploy-backend.yml` pins that from the GitHub
+var of the same name — an empty var clears the flag on redeploy. Every other
+write and mint path already requires a device signature.
 
 **A Drive outage must never erase session metadata.** `GET /v1/sessions?verify=true`
 probes whether each session's blobs still exist, and purges Firestore metadata
@@ -637,8 +636,8 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
   public. [PRODUCTION_READINESS_GATE.md](../ops/PRODUCTION_READINESS_GATE.md)
   tracks this as PARTIAL for that reason.
 - **Attested upload targets:** `/uploads` hands out capability URLs and is gated
-  by `device_or_legacy_reader`; flip `REQUIRE_ATTESTED_UPLOADS=1` once the fleet
-  has moved (§4).
+  by `device_or_legacy_reader`; production keeps `REQUIRE_ATTESTED_UPLOADS=1`
+  (§4).
 - **Audit everything security-relevant**, append-only, with retention.
 - **Privacy prerequisites for public launch:** privacy policy + account-deletion
   path (raw specimen images + email are personal data).
@@ -729,16 +728,20 @@ cost of GB-month + egress billing (~$0.02/GB-mo storage, ~$0.12/GB egress).
 **Traffic is shifted only after the new revision answers.** The deploy does not
 replace the serving revision and hope:
 
-1. Deploy with `no_traffic: true`, tagging the revision
-   `cand-<run_id>-<run_attempt>`. The previous revision keeps serving.
+1. Deploy tagging the revision `cand-<run_id>-<run_attempt>`. When the service
+   **already exists**, use `no_traffic: true` so the previous revision keeps
+   serving. **First create** must omit `no_traffic` (Cloud Run rejects it on
+   create).
 2. Smoke the **tagged candidate URL** at `/readyz`, using an ID token minted with
    the *service URL* as its audience (production runs
    `--no-allow-unauthenticated`, so an unauthenticated probe would only ever
    prove that the gateway rejects it).
-3. Promote the candidate to 100% traffic only if the smoke passes.
+3. Promote the candidate to 100% traffic only if the smoke passes (update path).
 
-If the smoke fails there is nothing to roll back — the candidate never carried
-traffic. Rollback is only relevant if a later step fails after promotion.
+On an update deploy, if the smoke fails there is nothing to roll back — the
+candidate never carried traffic. Rollback is only relevant if a later step fails
+after promotion. `REQUIRE_ATTESTED_UPLOADS` is passed from the GitHub var on
+every deploy — keep production at `1`.
 
 The revision suffix carries the **run attempt** as well as the run id, so
 re-running a failed job cannot collide with the revision name the first attempt

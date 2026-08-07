@@ -104,7 +104,19 @@ Auth lives in the same project as this backend, you can skip the
 `FIREBASE_PROJECT_ID` variable below entirely. Setup details:
 [AUTH_SETUP.md](AUTH_SETUP.md).
 
-## 8. Deploy to Cloud Run from GitHub
+## 8. Deploy to Cloud Run
+
+**Canonical path:** run
+[`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml) from Actions
+(`staging` or `production`) after WIF secrets and vars are set — see
+[ENVIRONMENTS.md](../ops/ENVIRONMENTS.md) and
+[BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md). That workflow builds from
+`backend/`, smokes a tagged candidate, then shifts traffic. Production should
+use `--no-allow-unauthenticated` at the Cloud Run layer (API Gateway in front).
+
+**Alternate (console / Cloud Build continuous deploy)** — useful for a first
+manual create or labs, not the pilot CD path:
+
 1. ☰ → **Cloud Run** → **Create service**.
 2. Select **Continuously deploy from a repository (source or function)** →
    **Set up with Cloud Build**.
@@ -117,8 +129,8 @@ Auth lives in the same project as this backend, you can skip the
    - **Save**.
 5. **Service settings:**
    - **Region:** the same as Firestore (e.g. `asia-south1`).
-   - **Authentication:** **Allow unauthenticated invocations** (auth is enforced
-     in-app by the ID token + device signature, not by the network layer).
+   - **Authentication:** for a console smoke test you may **Allow unauthenticated
+     invocations**; production pilot uses gateway + authenticated Cloud Run.
 6. Expand **Container(s), Volumes, Networking, Security**:
    - **Security tab → Service account:** select **indic-api**.
    - **Container → Variables & Secrets → + Add variable**, add each:
@@ -143,7 +155,7 @@ Auth lives in the same project as this backend, you can skip the
      | `MAX_FRAMES_PER_ANALYSIS` | `150` | Deformed-frame ceiling |
      | `ROOT_FOLDER_ID` | the Shared Drive | A folder inside the drive to root everything under |
      | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
-     | `REQUIRE_ATTESTED_UPLOADS` | off | Set to `1` in production once every client sends a device signature — see step 8b |
+     | `REQUIRE_ATTESTED_UPLOADS` | off locally / **`1` in production** | Production pilot is `1` — see step 8b |
 
    - **Container → Variables & Secrets → + Reference a secret** for the API key
      (it must not be a plain variable): name `RESEND_API_KEY`, secret
@@ -186,14 +198,14 @@ how local dev and the tests run, but a large analysis will time out.
 part of the public API, and the same string is the OIDC audience the service
 checks the token against.
 
-## 8b. Require attested uploads (before real users)
+## 8b. Require attested uploads (production)
 
 `GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While
 `REQUIRE_ATTESTED_UPLOADS` is unset, that route accepts a bare Firebase ID token
-as well as a full device signature, so older tester builds keep working; the
-service logs a startup warning while the window is open. Once every client in the
-field attests, add `REQUIRE_ATTESTED_UPLOADS` = `1` and redeploy. It never
-weakens a client that already signs.
+as well as a full device signature; the service logs a startup warning while the
+window is open. **Production keeps `REQUIRE_ATTESTED_UPLOADS=1`.** When using
+`deploy-backend.yml`, set the same GitHub var to `1` (repo-level is fine on Free
+orgs) — an empty var clears the Cloud Run flag on the next deploy.
 
 ## 9. Verify in the browser
 1. Visit `https://<your-url>/healthz` → you should see

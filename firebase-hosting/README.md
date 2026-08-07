@@ -57,19 +57,19 @@ is a **local reference / template** of the fingerprints we expect — useful whe
 adding a release key or debugging — not the deploy-time source of truth while
 `AUTO` is set. Keep the console fingerprints in sync with that file.
 
-## Before you ship: add the release fingerprint
+## Release fingerprint (already shipped)
 
-The template currently lists the **debug** signing key plus a
-`REPLACE_WITH_RELEASE_SHA256_BEFORE_SHIPPING` placeholder. Add that same
-SHA-256 on the Firebase Android app (or Play App Signing key from the Play
-Console → *Setup → App signing*), and update the template so local docs match.
-Get a keystore's SHA-256 with:
+The checked-in template lists **both** the debug signing key and the release
+signing certificate SHA-256 (no placeholder). Keep Firebase Console / Play App
+Signing fingerprints in sync with that file, and redeploy Hosting after any
+rotation. Get a keystore's SHA-256 with:
 
 ```bash
 keytool -list -v -keystore <path-to-release.keystore> -alias <alias>
 ```
 
-Both fingerprints (debug + release) can coexist in the array.
+Both fingerprints (debug + release) can coexist in the array. The release
+workflow greps this file for the APK's certificate before publishing.
 
 ## Deploy
 

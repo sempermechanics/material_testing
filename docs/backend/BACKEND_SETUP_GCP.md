@@ -174,8 +174,10 @@ gcloud projects add-iam-policy-binding $PROJECT \
   --member="serviceAccount:$API_SA" --role="roles/cloudtasks.enqueuer"
 ```
 
-Then set these on the service (GitHub Environment `vars` for the deploy
-workflow, or `--set-env-vars` by hand):
+Then set these on the service (GitHub Environment or **repo-level** `vars` for
+the deploy workflow — Free private orgs often use repo-level — or
+`--set-env-vars` by hand). Also set `REQUIRE_ATTESTED_UPLOADS=1` for production
+deploys (see table below):
 
 | Variable | Value |
 |---|---|
@@ -231,14 +233,16 @@ Everything above is required (or near enough). These are the rest of what
 | `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |
 | `TASKS_QUEUE` · `TASKS_LOCATION` · `TASKS_TARGET_BASE_URL` · `TASKS_INVOKER_SA` | unset / `asia-south1` / unset / `SERVICE_ACCOUNT_EMAIL` | Async provisioning — see A6. Leave `TASKS_QUEUE` empty to provision inline |
 | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
-| `REQUIRE_ATTESTED_UPLOADS` | off | Set to `1` in production once every client attests. See the hardening note below |
+| `REQUIRE_ATTESTED_UPLOADS` | off locally / **`1` in production** | Production pilot keeps this at `1`. See the hardening note below |
 
-**Production hardening: `REQUIRE_ATTESTED_UPLOADS=1`.**
+**Production hardening: `REQUIRE_ATTESTED_UPLOADS=1` (live on pilot).**
 `GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While this
 flag is off, the route accepts a bare Firebase ID token as well as a full device
-signature, because older tester builds only send the former. The service logs a
-startup warning while the window is open. Set the flag once the fleet has moved;
-it never weakens a client that already attests.
+signature. Production must keep the flag on. [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml)
+pins Cloud Run from the GitHub var `REQUIRE_ATTESTED_UPLOADS` — **leave that var
+empty and the next deploy clears the flag**, re-opening ID-token-only uploads.
+Repo-level vars are fine on Free private orgs; see
+[ENVIRONMENTS.md](../ops/ENVIRONMENTS.md).
 
 > `NOTIFY_FROM` / `RESEND_API_KEY` drive the "a new user is waiting for
 > approval" mail to `SUPPORT_EMAIL` (see B1a). Leave both unset and the backend

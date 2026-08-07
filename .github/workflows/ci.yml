@@ -2,14 +2,15 @@ name: CI
 
 on:
   push:
-    branches: [damodar, main]
+    branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       full_ci:
         description: 'Run every tier (ignore path filters)'
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -90,6 +91,7 @@ jobs:
       native_jni: ${{ steps.flags.outputs.native_jni }}
       backend: ${{ steps.flags.outputs.backend }}
       full_ci: ${{ steps.flags.outputs.full_ci }}
+      heavy_ci: ${{ steps.flags.outputs.heavy_ci }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -137,31 +139,55 @@ jobs:
           FILTER_NATIVE_CORE: ${{ steps.filter.outputs.native_core }}
           FILTER_NATIVE_JNI: ${{ steps.filter.outputs.native_jni }}
           FILTER_BACKEND: ${{ steps.filter.outputs.backend }}
-          FILTER_CI: ${{ steps.filter.outputs.ci_workflow }}
           FILTER_ANDROID_TEST: ${{ steps.filter.outputs.android_test }}
           FILTER_PACKAGING: ${{ steps.filter.outputs.packaging }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          HEAD_REF: ${{ github.head_ref }}
           FULL_DISPATCH: ${{ github.event_name == 'workflow_dispatch' && inputs.full_ci || false }}
           FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          E2E_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'e2e') }}
+          RELEASE_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'release') }}
         run: |
+          set -euo pipefail
           full=false
-          if [ "$FULL_DISPATCH" = "true" ] || [ "$FULL_LABEL" = "true" ] || [ "$FILTER_CI" = "true" ]; then
+          app=false; native_core=false; native_jni=false; backend=false
+          heavy=false  # Tier 3 / 5 on this event
+
+          # Push to main (or explicit full_ci) → full matrix.
+          if { [ "$EVENT_NAME" = "push" ] && [ "$REF" = "refs/heads/main" ]; } \
+             || [ "$FULL_DISPATCH" = "true" ] \
+             || [ "$FULL_LABEL" = "true" ]; then
             full=true
-          fi
-          # Fail open: if paths-filter produced no outputs (empty before SHA), run all.
-          if [ -z "$FILTER_APP$FILTER_NATIVE_CORE$FILTER_NATIVE_JNI$FILTER_BACKEND$FILTER_CI" ]; then
-            full=true
+            heavy=true
           fi
 
-          app=false; native_core=false; native_jni=false; backend=false
-          if [ "$full" = "true" ]; then
+          # Dependabot cheap path: never Tier 3/5; ecosystem picks one light tier.
+          if [ "$EVENT_NAME" = "pull_request" ] && [[ "${HEAD_REF:-}" == dependabot/* ]]; then
+            full=false
+            heavy=false
+            case "$HEAD_REF" in
+              dependabot/pip/*) backend=true ;;
+              dependabot/gradle/*) app=true ;;
+              dependabot/github_actions/*) ;; # gates only
+              *)
+                # Unknown Dependabot ecosystem: stay gates-only.
+                ;;
+            esac
+          elif [ "$full" = "true" ]; then
             app=true; native_core=true; native_jni=true; backend=true
           else
+            # PR path mode: Tier 1 / 4 from paths. Fail closed if filters empty
+            # (gates only) — do not force a full matrix.
             if [ "$FILTER_APP" = "true" ] || [ "$FILTER_ANDROID_TEST" = "true" ] || [ "$FILTER_PACKAGING" = "true" ]; then
               app=true
             fi
             if [ "$FILTER_NATIVE_CORE" = "true" ]; then native_core=true; fi
             if [ "$FILTER_NATIVE_JNI" = "true" ]; then native_jni=true; fi
             if [ "$FILTER_BACKEND" = "true" ]; then backend=true; fi
+            if [ "$E2E_LABEL" = "true" ] || [ "$RELEASE_LABEL" = "true" ]; then
+              heavy=true
+            fi
           fi
 
           {
@@ -170,8 +196,9 @@ jobs:
             echo "native_jni=$native_jni"
             echo "backend=$backend"
             echo "full_ci=$full"
+            echo "heavy_ci=$heavy"
           } >> "$GITHUB_OUTPUT"
-          echo "Resolved: app=$app native_core=$native_core native_jni=$native_jni backend=$backend full_ci=$full"
+          echo "Resolved: app=$app native_core=$native_core native_jni=$native_jni backend=$backend full_ci=$full heavy_ci=$heavy"
 
   # ===================================================================
   # Tier 1 — Kotlin compile + JVM unit tests + quality gates (no NDK)
@@ -194,7 +221,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Build, test and quality gates
         run: >
@@ -231,10 +258,8 @@ jobs:
       && needs.changes.result == 'success'
       && (needs.tier1-app-fast.result == 'success' || needs.tier1-app-fast.result == 'skipped')
       && (
-        needs.changes.outputs.native_jni == 'true'
+        needs.changes.outputs.heavy_ci == 'true'
         || needs.changes.outputs.full_ci == 'true'
-        || contains(github.event.pull_request.labels.*.name, 'e2e')
-        || contains(github.event.pull_request.labels.*.name, 'engine')
       )
     steps:
       - uses: actions/checkout@v7
@@ -249,7 +274,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
         with:
           validate-wrappers: false
-          cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Cache native build (.cxx) — x86_64
         uses: actions/cache@v6
@@ -442,10 +467,8 @@ jobs:
       && needs.changes.result == 'success'
       && (needs.tier1-app-fast.result == 'success' || needs.tier1-app-fast.result == 'skipped')
       && (
-        needs.changes.outputs.native_jni == 'true'
+        needs.changes.outputs.heavy_ci == 'true'
         || needs.changes.outputs.full_ci == 'true'
-        || contains(github.event.pull_request.labels.*.name, 'release')
-        || contains(github.event.pull_request.labels.*.name, 'engine')
       )
     steps:
       - uses: actions/checkout@v7
@@ -460,7 +483,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
         with:
           validate-wrappers: false
-          cache-read-only: ${{ github.ref != 'refs/heads/damodar' && github.ref != 'refs/heads/main' }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Cache native build (.cxx) — arm64
         uses: actions/cache@v6

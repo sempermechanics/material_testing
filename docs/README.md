@@ -17,8 +17,10 @@ build it. This page routes you to the rest.
 | Add or run app tests | [app/TESTING.md](app/TESTING.md) |
 | Add or run engine tests | [engine/TESTING.md](engine/TESTING.md) |
 | Build, test or bump the engine pin | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
-| Know why CI is red | [ops/CI.md](ops/CI.md) |
+| Know why CI is red / how tiers work | [ops/CI.md](ops/CI.md) |
 | Cut a release | [ops/RELEASING.md](ops/RELEASING.md) |
+| Map GitHub Environments / secrets / main hygiene | [ops/ENVIRONMENTS.md](ops/ENVIRONMENTS.md) |
+| Production launch checklist | [ops/PRODUCTION_READINESS_GATE.md](ops/PRODUCTION_READINESS_GATE.md) |
 | Tech-debt status / deferred gates | [ops/TECH_DEBT.md](ops/TECH_DEBT.md) |
 | Work on the cloud backend | [backend/CLOUD_ARCHITECTURE_GCP.md](backend/CLOUD_ARCHITECTURE_GCP.md) |
 | Deploy the backend myself | [backend/BACKEND_SETUP_GCP.md](backend/BACKEND_SETUP_GCP.md) (CLI) or [BACKEND_SETUP_CONSOLE.md](backend/BACKEND_SETUP_CONSOLE.md) (browser) |
@@ -35,7 +37,7 @@ docs/
   engine/    the app-facing engine contract, plus stubs into the submodule's own docs
   backend/   the optional GCP cloud side — architecture, setup, sign-in
   legal/     privacy policy and terms — the source the hosted pages are generated from
-  ops/       running the project — CI, releases, tech debt
+  ops/       running the project — CI, releases, environments, tech debt, readiness gate
 ```
 
 `docs/engine/` is mostly signposts: the engine lives in its own repository, and
