@@ -109,12 +109,20 @@ jobs:
             --project "$PROJECT" --region "$REGION" \
             --format='value(status.traffic[0].revisionName)' 2>/dev/null || true)
           echo "revision=${PREV}" >> "$GITHUB_OUTPUT"
+          # Cloud Run rejects --no-traffic on first create of a service.
+          if [ -n "$PREV" ]; then
+            echo "no_traffic=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no_traffic=false" >> "$GITHUB_OUTPUT"
+            echo "First deploy of $SERVICE: allowing traffic on create (no_traffic unsupported)."
+          fi
 
-      # Deploy the candidate WITHOUT shifting live traffic. A prior deploy with
-      # no_traffic=false still left 100% on the previous revision while smoke
-      # ran (new revision Ready+Retired with zero requests), so CI validated the
-      # old __readyz__ probe and rolled "back" to itself. Tag + no_traffic makes
-      # the smoke target unambiguous; promote only after /readyz passes.
+      # Deploy the candidate WITHOUT shifting live traffic when a prior revision
+      # exists. A prior deploy with no_traffic=false still left 100% on the
+      # previous revision while smoke ran (new revision Ready+Retired with zero
+      # requests), so CI validated the old __readyz__ probe and rolled "back" to
+      # itself. Tag + no_traffic makes the smoke target unambiguous; promote only
+      # after /readyz passes. First-time creates must omit no_traffic.
       - id: deploy
         uses: google-github-actions/deploy-cloudrun@251330ba9a8a34bfbc1622895f42e1d53fd14522 # v2
         with:
@@ -123,7 +131,7 @@ jobs:
           # Dockerfile in backend/ builds an immutable image per git SHA (Cloud
           # Build tags by digest). Never promote a mutable :latest reference.
           source: backend
-          no_traffic: true
+          no_traffic: ${{ steps.previous.outputs.no_traffic }}
           tag: cand-${{ github.run_id }}-${{ github.run_attempt }}
           env_vars: |-
             GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
