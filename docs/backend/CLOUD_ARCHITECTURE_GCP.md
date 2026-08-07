@@ -765,8 +765,11 @@ Signing.
   detail codes (`firestore_unreachable`, `drive_unhealthy`, …).
 - **Structured JSON access log** — UTC `timestamp`, `requestId`, `method`,
   `path`, `status`, `latencyMs`, `outcome`, `uid` / `deviceId` when resolved,
-  and `errorCode` on failures (`app/observability.py` + middleware). Never logs
-  tokens/signatures/URIs. Client 500 bodies stay opaque (`internal_error`) on
+  `opClass` / `routeTemplate` for usage rollups, optional `fileCount` /
+  `frameCount` on session create, and `errorCode` on failures
+  (`app/observability.py` + middleware). Never logs tokens/signatures/URIs.
+  Alpha metering queries: [ALPHA_USAGE_METERING.md](../ops/ALPHA_USAGE_METERING.md).
+  Client 500 bodies stay opaque (`internal_error`) on
   Cloud Run.
 - **Audit trail** in Firestore `audit_logs` — the compliance record (Cloud
   Logging is the operational one).

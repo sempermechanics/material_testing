@@ -157,6 +157,11 @@ async def access_log(request: Request, call_next):
         device_id = getattr(request.state, "device_id", None)
         obs.bind_uid(uid)
         obs.bind_device(device_id)
+        op_class, route_template = obs.classify_route(request.method, request.url.path)
+        extra: dict = {}
+        counts = getattr(request.state, "usage_counts", None)
+        if isinstance(counts, dict):
+            extra.update(counts)
         obs.log_event(
             _access_log, logging.INFO, "http_access",
             method=request.method,
@@ -165,6 +170,9 @@ async def access_log(request: Request, call_next):
             latencyMs=latency_ms,
             outcome=outcome,
             errorCode=None if status < 400 else f"http_{status}",
+            opClass=op_class,
+            routeTemplate=route_template,
+            **extra,
         )
         obs.reset_request(ctx_token)
 
@@ -691,7 +699,7 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
 
 
 @app.post("/v1/sessions")
-def create_session(body: SessionCreate, ctx=Depends(verified_device)):
+def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_device)):
     user, device = ctx["user"], ctx["device"]
     cfg = repo.resolve_user_config(user)
 
@@ -741,8 +749,16 @@ def create_session(body: SessionCreate, ctx=Depends(verified_device)):
         repo.delete_session(sid)
         raise
 
-    audit.record(user["uid"], device.get("deviceId"), action="SESSION_CREATE",
-                 target={"type": "session", "id": sid})
+    counts = obs.metrics_counts(body.metrics, file_count=len(body.files))
+    audit.record(
+        user["uid"],
+        device.get("deviceId"),
+        action="SESSION_CREATE",
+        target={"type": "session", "id": sid},
+        detail=counts,
+    )
+    # Access-log middleware reads this after the response returns.
+    request.state.usage_counts = counts
 
     # Opening a Drive resumable session per file is ~2 round-trips each; at the
     # 600-file ceiling that cannot fit in a 60s request. Hand it to Cloud Tasks

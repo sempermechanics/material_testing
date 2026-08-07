@@ -4,6 +4,23 @@ How a build goes from **`main`** to testers. Written for maintainers; nothing
 here is needed for day-to-day contributions. Secrets/vars layout:
 [ENVIRONMENTS.md](ENVIRONMENTS.md).
 
+## Alpha (private testers)
+
+Private alpha uses the same **`beta`** Release channel — there is no separate
+`alpha` input on [`release.yml`](../../.github/workflows/release.yml).
+
+1. Land metering/backend changes on **`main`** and deploy the API so access logs
+   include `opClass` (see [ALPHA_USAGE_METERING.md](ALPHA_USAGE_METERING.md)).
+2. Tag and run Release on **`main`** with channel **`beta`**
+   (e.g. `v1.0-beta.1`) → private GitHub Release + signed APK.
+3. Sideload onto tester devices (Pixel OK). Testers need access to this private
+   repo’s Releases (or you pass the APK out-of-band).
+4. Meter login / backup / sync / restore with the runbook above **after** the
+   tester confirms they are logged in on Home. Do not publish to Play or the
+   public website for this ring.
+
+Archive the R8 mapping artifact before 90-day expiry (same as any beta).
+
 ## Versioning
 
 - A CI release sets the version from the workflow inputs: `versionName` comes

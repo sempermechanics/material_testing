@@ -22,6 +22,8 @@ async def test_access_log_line_is_structured_json(client, caplog):
     assert entry["path"] == "/healthz"
     assert entry["status"] == 200
     assert entry["outcome"] == "ok"
+    assert entry["opClass"] == "health"
+    assert entry["routeTemplate"] == "/healthz"
     assert "latencyMs" in entry and "requestId" in entry
     assert "timestamp" in entry
     assert entry["timestamp"].endswith("Z")
