@@ -138,6 +138,7 @@ jobs:
             TASKS_LOCATION=${{ vars.TASKS_LOCATION }}
             TASKS_TARGET_BASE_URL=${{ vars.TASKS_TARGET_BASE_URL }}
             TASKS_INVOKER_SA=${{ vars.TASKS_INVOKER_SA }}
+            REQUIRE_ATTESTED_UPLOADS=${{ vars.REQUIRE_ATTESTED_UPLOADS }}
           secrets: |-
             RESEND_API_KEY=resend-api-key:latest
           flags: >-
