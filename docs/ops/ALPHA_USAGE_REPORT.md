@@ -28,3 +28,10 @@ Device: Pixel 3
 ## Raw query notes
 
 Paste `gcloud logging read` / `scripts/meter_alpha_usage.sh` snippets here.
+
+## Phase 1 status (automated)
+
+- PR: https://github.com/semperdic/semperdic-app/pull/20
+- Branch: `cursor/alpha-release-usage-metering-819b`
+- Device phase: **blocked** on (1) merge + backend deploy with `opClass`, (2) beta APK install, (3) explicit **logged in** message from tester.
+- Cloud agent has no ADB to the laptop Pixel 3; use human-driven checklist in ALPHA_USAGE_METERING.md.
