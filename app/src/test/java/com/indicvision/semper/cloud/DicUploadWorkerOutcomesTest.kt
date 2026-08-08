@@ -1,7 +1,6 @@
 package com.indicvision.semper.cloud
 
 import androidx.work.ListenableWorker
-import com.indicvision.semper.data.DicUploadWorker
 import com.indicvision.semper.data.UploadWorkOutcomes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -121,13 +120,13 @@ class DicUploadWorkerOutcomesTest {
     fun `staging is reusable only with bundles marker and non-empty zip`() {
         val dir = createTempDir(prefix = "upload-staging-")
         try {
-            assertFalse(DicUploadWorker.stagingReusable(dir))
+            assertFalse(UploadWorkOutcomes.stagingReusable(dir))
             File(dir, ".bundles_done").createNewFile()
-            assertFalse(DicUploadWorker.stagingReusable(dir))
+            assertFalse(UploadWorkOutcomes.stagingReusable(dir))
             File(dir, "Session.zip").writeText("zip-bytes")
-            assertTrue(DicUploadWorker.stagingReusable(dir))
+            assertTrue(UploadWorkOutcomes.stagingReusable(dir))
             File(dir, "Session.zip").writeText("")
-            assertFalse(DicUploadWorker.stagingReusable(dir))
+            assertFalse(UploadWorkOutcomes.stagingReusable(dir))
         } finally {
             dir.deleteRecursively()
         }

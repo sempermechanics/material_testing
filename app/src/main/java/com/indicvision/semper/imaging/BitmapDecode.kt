@@ -23,6 +23,61 @@ object BitmapDecode {
     const val PREVIEW_MAX_EDGE = 1000
 
     /**
+     * True when [header] looks like a format Android's BitmapFactory/ImageDecoder
+     * can handle (PNG/JPEG/GIF/WEBP/BMP). TIFF/RAW/DNG and other DIC source
+     * bytes must not be passed to BitmapFactory — that logs Skia's
+     * "Failed to create image decoder … invalid input" on every attempt.
+     */
+    fun looksLikePlatformRaster(header: ByteArray): Boolean {
+        if (header.size < 3) return false
+        // JPEG
+        if (header[0] == 0xFF.toByte() && header[1] == 0xD8.toByte() && header[2] == 0xFF.toByte()) {
+            return true
+        }
+        // PNG
+        if (header.size >= 8 &&
+            header[0] == 0x89.toByte() &&
+            header[1] == 0x50.toByte() &&
+            header[2] == 0x4E.toByte() &&
+            header[3] == 0x47.toByte()
+        ) {
+            return true
+        }
+        // GIF
+        if (header.size >= 6 &&
+            header[0] == 'G'.code.toByte() &&
+            header[1] == 'I'.code.toByte() &&
+            header[2] == 'F'.code.toByte()
+        ) {
+            return true
+        }
+        // BMP
+        if (header[0] == 'B'.code.toByte() && header[1] == 'M'.code.toByte()) return true
+        // WEBP: RIFF....WEBP
+        if (header.size >= 12 &&
+            header[0] == 'R'.code.toByte() &&
+            header[1] == 'I'.code.toByte() &&
+            header[2] == 'F'.code.toByte() &&
+            header[3] == 'F'.code.toByte() &&
+            header[8] == 'W'.code.toByte() &&
+            header[9] == 'E'.code.toByte() &&
+            header[10] == 'B'.code.toByte() &&
+            header[11] == 'P'.code.toByte()
+        ) {
+            return true
+        }
+        return false
+    }
+
+    /** Header sniff for [file]; false for missing/empty/non-platform rasters. */
+    fun looksLikePlatformRaster(file: File): Boolean {
+        if (!file.isFile || file.length() < 3L) return false
+        val header = ByteArray(16)
+        val n = file.inputStream().use { it.read(header) }
+        return n > 0 && looksLikePlatformRaster(header.copyOf(n))
+    }
+
+    /**
      * Power-of-two [BitmapFactory.Options.inSampleSize] that fits [width]×[height]
      * into [reqWidth]×[reqHeight], also capped by [maxLongEdge].
      */
@@ -54,6 +109,7 @@ object BitmapDecode {
         bytes: ByteArray,
         maxLongEdge: Int = VisualizationEngine.DISPLAY_MAX_EDGE,
     ): Bitmap? {
+        if (!looksLikePlatformRaster(bytes)) return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         val longEdge = maxOf(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
@@ -72,6 +128,8 @@ object BitmapDecode {
         reqHeight: Int,
         maxLongEdge: Int = VisualizationEngine.DISPLAY_MAX_EDGE,
     ): Bitmap? {
+        val file = File(path)
+        if (!looksLikePlatformRaster(file)) return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
         val sample = calculateInSampleSize(

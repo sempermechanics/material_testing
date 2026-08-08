@@ -291,7 +291,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         // Only wipe incomplete staging. A blank cloudSessionId after Rebuild /
         // provision failure must NOT destroy a finished Session.zip — that was
         // forcing a full prepare loop on every WorkManager retry.
-        if (record.cloudSessionId.isBlank() && !stagingReusable(stagingDir)) {
+        if (record.cloudSessionId.isBlank() && !UploadWorkOutcomes.stagingReusable(stagingDir)) {
             stagingDir.deleteRecursively()
         }
         stagingDir.mkdirs()
@@ -300,7 +300,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         // fed by the bundling frame count ("prepare") then the uploaded byte count
         // ("upload"). Decoupling the emit from the producers keeps WorkManager DB
         // writes cheap regardless of how fast frames/chunks complete.
-        val reuseStaging = stagingReusable(stagingDir)
+        val reuseStaging = UploadWorkOutcomes.stagingReusable(stagingDir)
         val progPhase = java.util.concurrent.atomic.AtomicReference(
             if (reuseStaging) "upload" else "prepare",
         )
@@ -711,15 +711,5 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
         /** Extensions that are already compressed — stored, not re-deflated, in Session.zip. */
         val NO_RECOMPRESS = setOf("jpg", "jpeg", "png", "pdf", "webp", "zip")
-
-        /**
-         * Finished prepare output that must survive provision / Rebuild retries.
-         * Incomplete dirs (killed mid-prepare) must not be treated as done.
-         */
-        fun stagingReusable(stagingDir: File): Boolean {
-            val done = File(stagingDir, ".bundles_done")
-            val zip = File(stagingDir, "Session.zip")
-            return done.isFile && zip.isFile && zip.length() > 0L
-        }
     }
 }

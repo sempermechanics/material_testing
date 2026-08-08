@@ -8,7 +8,6 @@ package com.indicvision.semper.ui.home
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import android.view.LayoutInflater
@@ -20,9 +19,11 @@ import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import com.indicvision.semper.R
 import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.ui.analysis.EngineFailure
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Collections
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -56,6 +57,9 @@ class SessionListAdapter(
                 return true
             }
         }
+
+    /** Paths that are not platform-decodable (e.g. TIFF bytes named `.png`). */
+    private val thumbMisses: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
 
     fun submit(newItems: List<SessionRecord>) {
         items = newItems
@@ -228,13 +232,19 @@ class SessionListAdapter(
             holder.thumb.setImageBitmap(cached)
             return
         }
+        if (r.refPath in thumbMisses) {
+            holder.thumb.tag = null
+            holder.thumb.setImageDrawable(null)
+            return
+        }
         // Decode off the main thread; tag avoids applying a stale bind.
         holder.thumb.setImageDrawable(null)
         holder.thumb.tag = r.refPath
         val path = r.refPath
         thumbExecutor.execute {
-            val opts = BitmapFactory.Options().apply { inSampleSize = 8 }
-            val bmp = BitmapFactory.decodeFile(path, opts)
+            // Sniff-first via BitmapDecode — never hand TIFF/RAW to BitmapFactory
+            // (Skia "invalid input" spam on every Home rebind).
+            val bmp = BitmapDecode.decodeFileForView(path, THUMB_EDGE, THUMB_EDGE, THUMB_EDGE)
             mainHandler.post {
                 if (holder.thumb.tag != path) {
                     bmp?.recycle()
@@ -243,6 +253,8 @@ class SessionListAdapter(
                 if (bmp != null) {
                     thumbCache[path] = bmp
                     holder.thumb.setImageBitmap(bmp)
+                } else {
+                    thumbMisses.add(path)
                 }
             }
         }
@@ -250,6 +262,7 @@ class SessionListAdapter(
 
     companion object {
         private const val THUMB_CACHE_MAX = 24
+        private const val THUMB_EDGE = 256
         private val thumbExecutor = Executors.newSingleThreadExecutor()
         private val mainHandler = Handler(Looper.getMainLooper())
     }
