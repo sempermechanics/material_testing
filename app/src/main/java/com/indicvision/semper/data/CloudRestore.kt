@@ -166,11 +166,15 @@ object CloudRestore {
      * Download an analysis and rebuild it locally. Returns the restored local
      * session id, or throws on failure.
      */
+    /**
+     * @param onProgress cumulative units completed vs total (bytes for bundled
+     * Session.zip restores; file counts for legacy per-file backups).
+     */
     suspend fun restore(
         context: Context,
         sessionId: String,
         targetLocalId: String,
-        onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> },
+        onProgress: suspend (done: Long, total: Long) -> Unit = { _, _ -> },
     ): String = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         val api = IndicApi.get(appContext)
@@ -209,9 +213,15 @@ object CloudRestore {
         var refPath = ""
         val bundleEntry = files.firstOrNull { it.role == "bundle" }
         if (bundleEntry != null) {
-            onProgress(0, 1)
-            refPath = downloadAndUnpackBundle(api, token, sessionId, bundleEntry, layout, appContext)
-            onProgress(1, 1)
+            refPath = downloadAndUnpackBundle(
+                api,
+                token,
+                sessionId,
+                bundleEntry,
+                layout,
+                appContext,
+                onProgress,
+            )
         } else {
             refPath = restoreLegacyFiles(api, token, files, layout, onProgress)
         }
@@ -246,6 +256,7 @@ object CloudRestore {
     /**
      * Download Session.zip with size checks, verify zip magic, unpack.
      * Deletes `.part` / `.full` sidecars so a corrupt transfer cannot stick.
+     * [onProgress] is byte-based: (bytesOnDisk, declaredSize).
      */
     @Suppress("LongParameterList")
     private suspend fun downloadAndUnpackBundle(
@@ -255,11 +266,23 @@ object CloudRestore {
         bundleEntry: CloudFileDto,
         layout: Layout,
         appContext: Context,
+        onProgress: suspend (done: Long, total: Long) -> Unit,
     ): String {
         val zipTmp = File(appContext.cacheDir, "restore_${sessionId}_bundle.zip")
         return try {
             val expected = bundleEntry.sizeBytes.takeIf { it > 0L } ?: -1L
-            api.downloadFile(token, bundleEntry.fileId, zipTmp, expectedBytes = expected)
+            val totalForUi = expected.takeIf { it > 0L } ?: 1L
+            onProgress(0L, totalForUi)
+            api.downloadFile(
+                token,
+                bundleEntry.fileId,
+                zipTmp,
+                expectedBytes = expected,
+                onBytes = { have ->
+                    val total = if (expected > 0L) expected else have.coerceAtLeast(1L)
+                    onProgress(have.coerceAtMost(total), total)
+                },
+            )
             require(expected <= 0L || zipTmp.length() == expected) {
                 "Downloaded Session.zip size ${zipTmp.length()} != declared $expected — corrupt transfer"
             }
@@ -291,6 +314,9 @@ object CloudRestore {
                     e,
                 )
             }
+            // Download bytes are done; hold 100% through unpack so the row
+            // doesn't look stuck again during inflate.
+            onProgress(totalForUi, totalForUi)
             unpackBundle(zipTmp, layout)
         } finally {
             zipTmp.delete()
@@ -305,12 +331,13 @@ object CloudRestore {
         token: String,
         files: List<CloudFileDto>,
         layout: Layout,
-        onProgress: suspend (done: Int, total: Int) -> Unit,
+        onProgress: suspend (done: Long, total: Long) -> Unit,
     ): String {
         val rest = files.filter { it.role != "metadata" }
         val done = AtomicInteger(0)
         val refPath = AtomicReference("")
-        onProgress(0, rest.size)
+        val total = rest.size.toLong().coerceAtLeast(1L)
+        onProgress(0L, total)
         // A few GETs in flight fill the link the way parallel Drive uploads do;
         // one failure cancels siblings via coroutineScope (same as before: abort).
         coroutineScope {
@@ -326,7 +353,7 @@ object CloudRestore {
                             expectedBytes = f.sizeBytes.takeIf { it > 0L } ?: -1L,
                         )
                         if (dest.name == "reference.png") refPath.set(dest.absolutePath)
-                        onProgress(done.incrementAndGet(), rest.size)
+                        onProgress(done.incrementAndGet().toLong(), total)
                     }
                 }
             }.awaitAll()

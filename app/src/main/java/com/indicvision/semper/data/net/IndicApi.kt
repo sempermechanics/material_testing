@@ -301,7 +301,14 @@ class IndicApi private constructor(context: Context) {
         fileId: String,
         dest: java.io.File,
         expectedBytes: Long = -1L,
-    ) = drive.downloadFile(fileId, dest, base, expectedBytes = expectedBytes) { path ->
+        onBytes: suspend (haveBytes: Long) -> Unit = {},
+    ) = drive.downloadFile(
+        fileId,
+        dest,
+        base,
+        expectedBytes = expectedBytes,
+        onBytes = onBytes,
+    ) { path ->
         val nonce = fetchChallenge(idToken)
         signedHeaders(idToken, "GET", path, ByteArray(0), nonce)
     }
