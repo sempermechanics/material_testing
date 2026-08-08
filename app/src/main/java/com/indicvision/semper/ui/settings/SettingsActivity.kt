@@ -285,13 +285,16 @@ class SettingsActivity : AppCompatActivity() {
             val sizes = withContext(Dispatchers.IO) {
                 Triple(
                     SessionStore.totalSize(this@SettingsActivity),
-                    CacheJanitor.sizeOf(cacheDir),
+                    // Show what Clear will free — not raw cacheDir size (which
+                    // includes a live import the button must not delete).
+                    CacheJanitor.clearableUserBytes(this@SettingsActivity),
                     StorageBudget.reclaimableBytes(this@SettingsActivity),
                 )
             }
             val (analyses, cache, reclaimable) = sizes
             findViewById<TextView>(R.id.tvStorageAnalysesSize).text = humanSize(analyses)
             findViewById<TextView>(R.id.tvStorageCacheSize).text = humanSize(cache)
+            findViewById<View>(R.id.btnStorageClearCache).isEnabled = cache > 0
 
             val freeUpSub = findViewById<TextView>(R.id.tvStorageFreeUpSub)
             findViewById<View>(R.id.btnStorageFreeUp).isEnabled = reclaimable > 0
@@ -339,7 +342,11 @@ class SettingsActivity : AppCompatActivity() {
             val freed = withContext(Dispatchers.IO) {
                 CacheJanitor.sweepUserRequested(this@SettingsActivity)
             }
-            toast(getString(R.string.storage_cache_cleared_fmt, humanSize(freed)))
+            if (freed > 0) {
+                toast(getString(R.string.storage_cache_cleared_fmt, humanSize(freed)))
+            } else {
+                toast(getString(R.string.storage_cache_cleared_none))
+            }
             refreshStorageTotals()
         }
     }

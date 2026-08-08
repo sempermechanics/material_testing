@@ -747,10 +747,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             // catch above and surface as an untracked WorkManager failure with no
             // reason — the badge would stay "pending" and a manual retry would just
             // re-OOM forever. Treat it as terminal with a clear reason instead.
+            // Distinct from HTTP 413 "too large": the session may fit the cloud
+            // quota but this device cannot pack it in RAM.
             Timber.e(e, "Upload ran out of memory bundling %s — failing terminally", localId)
             SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
             stagingDir.deleteRecursively()
-            failure(applicationContext.getString(R.string.cloud_backup_failed_too_large))
+            failure(applicationContext.getString(R.string.cloud_backup_failed_oom))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.e(e, "Upload failed for %s; will retry", localId)
             retryLater(

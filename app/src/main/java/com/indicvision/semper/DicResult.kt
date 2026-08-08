@@ -5,6 +5,8 @@
 
 package com.indicvision.semper
 
+import java.io.File
+import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.text.DecimalFormat
@@ -30,6 +32,9 @@ object DicResult {
     const val MAX_ZNSSD = 0.15f
     const val STRAIN_TO_MILLISTRAIN = 1000f
 
+    /** Read chunk for [decodeDatFile]: keeps a small scratch buffer, not a second full copy. */
+    private const val DECODE_CHUNK_BYTES = BYTES_PER_POINT * 1024
+
     fun isValidDatBytes(bytes: ByteArray): Boolean = bytes.isNotEmpty() && bytes.size % BYTES_PER_POINT == 0
 
     fun decodeDatBytes(bytes: ByteArray): FloatArray? {
@@ -37,6 +42,33 @@ object DicResult {
         return FloatArray(bytes.size / 4).also { out ->
             ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).asFloatBuffer().get(out)
         }
+    }
+
+    /**
+     * Decode a `.dat` from disk without holding a second full-size [ByteArray].
+     * Peak RAM is roughly the [FloatArray] plus a small read buffer — important
+     * for heavy PLC frames on a 512 MB heap where `readBytes()` + decode OOM'd.
+     */
+    fun decodeDatFile(file: File): FloatArray? {
+        val len = file.length()
+        if (len <= 0L || len > Int.MAX_VALUE.toLong() || len % BYTES_PER_POINT != 0L) return null
+        val floatCount = (len / 4L).toInt()
+        val out = FloatArray(floatCount)
+        FileInputStream(file).channel.use { channel ->
+            val buf = ByteBuffer.allocate(DECODE_CHUNK_BYTES).order(ByteOrder.nativeOrder())
+            var written = 0
+            while (written < floatCount) {
+                buf.clear()
+                val n = channel.read(buf)
+                if (n <= 0) return null
+                if (n % 4 != 0) return null
+                buf.flip()
+                val floats = n / 4
+                buf.asFloatBuffer().get(out, written, floats)
+                written += floats
+            }
+        }
+        return out
     }
 
     /**

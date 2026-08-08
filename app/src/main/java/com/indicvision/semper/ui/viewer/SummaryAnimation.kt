@@ -113,7 +113,7 @@ class SummaryAnimation(private val spec: Spec) {
         try {
             spec.batchFiles.forEachIndexed { index, file ->
                 currentCoroutineContext().ensureActive()
-                val data = DicResult.decodeDatBytes(file.readBytes())
+                val data = DicResult.decodeDatFile(file)
                 if (data == null) {
                     Timber.w("Frame %d unreadable, skipped in the %s animation", index + 1, label)
                 } else {
@@ -194,16 +194,15 @@ class SummaryAnimation(private val spec: Spec) {
         fun globalRanges(batchFiles: List<File>): Map<Int, Pair<Float, Float>> {
             val indices = FIELDS.map { it.second }.toIntArray()
             val spans = mutableMapOf<Int, Pair<Float, Float>>()
-            batchFiles
-                // A frame that will not read or decode is skipped, not fatal: a
-                // scale drawn from the rest still beats no animation at all.
-                .mapNotNull { file -> file.runCatching { readBytes() }.getOrNull() }
-                .mapNotNull { bytes -> DicResult.decodeDatBytes(bytes) }
-                .forEach { data ->
-                    VisualizationEngine.valueRanges(data, indices).forEach { (valIndex, range) ->
-                        if (range != null) spans[valIndex] = widen(spans[valIndex], range)
-                    }
+            // One frame at a time. The previous chain kept every ByteArray and
+            // FloatArray alive until the pass finished — a heavy PLC band OOM'd
+            // the 512 MB heap before the first GIF frame was built.
+            for (file in batchFiles) {
+                val data = runCatching { DicResult.decodeDatFile(file) }.getOrNull() ?: continue
+                VisualizationEngine.valueRanges(data, indices).forEach { (valIndex, range) ->
+                    if (range != null) spans[valIndex] = widen(spans[valIndex], range)
                 }
+            }
             return spans
         }
 
