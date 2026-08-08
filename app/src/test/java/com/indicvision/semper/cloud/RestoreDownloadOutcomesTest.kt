@@ -2,6 +2,7 @@ package com.indicvision.semper.cloud
 
 import com.indicvision.semper.data.RestoreDownloadOutcomes
 import com.indicvision.semper.data.net.HttpStatus
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -49,5 +50,20 @@ class RestoreDownloadOutcomesTest {
                 maxAttempts = 5,
             ),
         )
+    }
+
+    @Test
+    fun `parseContentRangeTotal reads the object size`() {
+        assertEquals(
+            84158403L,
+            RestoreDownloadOutcomes.parseContentRangeTotal("bytes 0-1048575/84158403"),
+        )
+        assertEquals(
+            100L,
+            RestoreDownloadOutcomes.parseContentRangeTotal("bytes 50-99/100"),
+        )
+        assertEquals(null, RestoreDownloadOutcomes.parseContentRangeTotal("bytes 0-10/*"))
+        assertEquals(null, RestoreDownloadOutcomes.parseContentRangeTotal(null))
+        assertEquals(null, RestoreDownloadOutcomes.parseContentRangeTotal(""))
     }
 }

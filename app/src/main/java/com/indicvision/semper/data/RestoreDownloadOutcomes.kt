@@ -24,4 +24,13 @@ object RestoreDownloadOutcomes {
     /** Whether [DriveTransfer.downloadFile] should Range-resume after this status. */
     fun shouldResumeAfterHttp(code: Int, attempt: Int, maxAttempts: Int): Boolean =
         isTransientProxyFailure(code) && attempt < maxAttempts
+
+    /** `Content-Range: bytes a-b/total` → total length, or null if absent/unparsed. */
+    fun parseContentRangeTotal(header: String?): Long? {
+        val total = header?.substringAfter('/', missingDelimiterValue = "")?.trim().orEmpty()
+        return when {
+            total.isEmpty() || total == "*" -> null
+            else -> total.toLongOrNull()?.takeIf { it >= 0L }
+        }
+    }
 }
