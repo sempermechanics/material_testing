@@ -20,6 +20,29 @@ jobs:
     environment: production-backup
     steps:
       - uses: actions/checkout@v7
+      # Fail before google-github-actions/auth's opaque "must specify exactly one
+      # of workload_identity_provider or credentials_json" when the Environment
+      # vars were never set (common on Free org → put them at repo Variables).
+      - name: Require production-backup environment variables
+        env:
+          WIF: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SA: ${{ vars.FIRESTORE_BACKUP_SERVICE_ACCOUNT }}
+          PROJECT: ${{ vars.GCP_PROJECT }}
+          BUCKET: ${{ vars.FIRESTORE_BACKUP_BUCKET }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${WIF}" ] || missing+=("GCP_WORKLOAD_IDENTITY_PROVIDER")
+          [ -n "${SA}" ] || missing+=("FIRESTORE_BACKUP_SERVICE_ACCOUNT")
+          [ -n "${PROJECT}" ] || missing+=("GCP_PROJECT")
+          [ -n "${BUCKET}" ] || missing+=("FIRESTORE_BACKUP_BUCKET")
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::GitHub Environment 'production-backup' is missing: ${missing[*]}"
+            echo "Settings → Environments → production-backup → Environment variables"
+            echo "(or repository Variables — see docs/ops/ENVIRONMENTS.md)."
+            echo "Setup: docs/backend/FIRESTORE_DATA_PROTECTION.md"
+            exit 1
+          fi
       - name: Authenticate with Workload Identity Federation
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
