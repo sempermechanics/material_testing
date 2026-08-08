@@ -37,7 +37,7 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
         try {
             clearPartialArtifacts(targetLocalId)
-            publishProgress(targetLocalId, done = 0, total = 0)
+            publishProgress(targetLocalId, done = 0L, total = 0L)
             val localId = CloudRestore.restore(
                 applicationContext,
                 cloudSessionId,
@@ -75,12 +75,17 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
         }
     }
 
-    private suspend fun publishProgress(localId: String, done: Int, total: Int) {
-        val percent = if (total > 0) (done * 100 / total).coerceIn(0, 100) else 0
+    private suspend fun publishProgress(localId: String, done: Long, total: Long) {
+        // Long arithmetic avoids overflow on multi-GB Session.zip sizes.
+        val percent = if (total > 0L) {
+            ((done.coerceAtLeast(0L) * 100L) / total).toInt().coerceIn(0, 100)
+        } else {
+            0
+        }
         setProgress(
             workDataOf(
-                KEY_DONE to done,
-                KEY_TOTAL to total,
+                KEY_DONE to done.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
+                KEY_TOTAL to total.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
                 DicKeys.SESSION_LOCAL_ID to localId,
                 DicKeys.UPLOAD_PHASE to PHASE_DOWNLOAD,
                 DicKeys.UPLOAD_PERCENT to percent,

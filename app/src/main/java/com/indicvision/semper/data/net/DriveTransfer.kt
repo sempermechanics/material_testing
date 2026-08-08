@@ -185,13 +185,18 @@ internal class DriveTransfer(
      * rename `.part` → [dest] until the on-disk length matches that size (or a
      * Content-Range total), so a truncated proxy body cannot become a
      * "successful" corrupt Session.zip (`ZipException: invalid distance…`).
+     *
+     * [onBytes] receives the cumulative bytes on disk after each successful
+     * chunk (and while streaming a full-body 200) so restore UI can show
+     * download percent instead of sitting at 0% for the whole Session.zip.
      */
-    @Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth")
+    @Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth", "LongParameterList")
     suspend fun downloadFile(
         fileId: String,
         dest: File,
         baseUrl: String,
         expectedBytes: Long = -1L,
+        onBytes: suspend (haveBytes: Long) -> Unit = {},
         signedGetHeaders: (path: String) -> Headers,
     ) = withContext(Dispatchers.IO) {
         dest.parentFile?.mkdirs()
@@ -204,6 +209,7 @@ internal class DriveTransfer(
         while (true) {
             attempt++
             val offset = if (part.exists()) part.length() else 0L
+            if (offset > 0L) onBytes(offset)
             if (
                 RestoreDownloadOutcomes.isComplete(
                     haveBytes = offset,
@@ -212,6 +218,7 @@ internal class DriveTransfer(
                 )
             ) {
                 finalizeDownload(part, dest)
+                onBytes(dest.length())
                 return@withContext
             }
             try {
@@ -237,7 +244,7 @@ internal class DriveTransfer(
                             scratch.delete()
                             java.io.FileOutputStream(scratch, false).use { out ->
                                 resp.body.byteStream().use { input ->
-                                    input.copyTo(out, DOWNLOAD_COPY_BUFFER)
+                                    copyWithProgress(input, out, onBytes)
                                 }
                             }
                             val got = scratch.length()
@@ -257,6 +264,7 @@ internal class DriveTransfer(
                                 scratch.delete()
                             }
                             finalizeDownload(part, dest)
+                            onBytes(dest.length())
                             return@withContext
                         }
                         HttpStatus.PARTIAL_CONTENT -> {
@@ -293,6 +301,7 @@ internal class DriveTransfer(
                                 )
                             }
                             attempt = 0
+                            onBytes(after)
                             if (
                                 RestoreDownloadOutcomes.isComplete(
                                     haveBytes = after,
@@ -301,6 +310,7 @@ internal class DriveTransfer(
                                 )
                             ) {
                                 finalizeDownload(part, dest)
+                                onBytes(dest.length())
                                 return@withContext
                             }
                         }
@@ -363,5 +373,27 @@ internal class DriveTransfer(
             part.copyTo(dest, overwrite = true)
             part.delete()
         }
+    }
+
+    /** Copy [input] → [out], reporting cumulative bytes via [onBytes] each buffer. */
+    private suspend fun copyWithProgress(
+        input: java.io.InputStream,
+        out: java.io.OutputStream,
+        onBytes: suspend (haveBytes: Long) -> Unit,
+    ) {
+        val buf = ByteArray(DOWNLOAD_COPY_BUFFER)
+        var have = 0L
+        var lastReport = 0L
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            out.write(buf, 0, n)
+            have += n
+            if (have - lastReport >= DOWNLOAD_COPY_BUFFER) {
+                lastReport = have
+                onBytes(have)
+            }
+        }
+        onBytes(have)
     }
 }
