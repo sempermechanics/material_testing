@@ -9,6 +9,7 @@
     "LongMethod",
     "LoopWithTooManyJumpStatements",
     "MagicNumber",
+    "LargeClass",
 )
 @file:SuppressLint("SetTextI18n")
 

@@ -54,21 +54,25 @@ object DicResult {
         if (len <= 0L || len > Int.MAX_VALUE.toLong() || len % BYTES_PER_POINT != 0L) return null
         val floatCount = (len / 4L).toInt()
         val out = FloatArray(floatCount)
-        FileInputStream(file).channel.use { channel ->
+        val complete = FileInputStream(file).channel.use { channel ->
             val buf = ByteBuffer.allocate(DECODE_CHUNK_BYTES).order(ByteOrder.nativeOrder())
             var written = 0
-            while (written < floatCount) {
+            var intact = true
+            while (written < floatCount && intact) {
                 buf.clear()
                 val n = channel.read(buf)
-                if (n <= 0) return null
-                if (n % 4 != 0) return null
-                buf.flip()
-                val floats = n / 4
-                buf.asFloatBuffer().get(out, written, floats)
-                written += floats
+                if (n <= 0 || n % 4 != 0) {
+                    intact = false
+                } else {
+                    buf.flip()
+                    val floats = n / 4
+                    buf.asFloatBuffer().get(out, written, floats)
+                    written += floats
+                }
             }
+            intact && written == floatCount
         }
-        return out
+        return if (complete) out else null
     }
 
     /**
