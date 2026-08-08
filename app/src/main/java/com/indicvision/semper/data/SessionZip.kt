@@ -25,11 +25,11 @@ import java.util.zip.ZipOutputStream
  * Do **not** toggle [ZipOutputStream.setLevel] between [Deflater.NO_COMPRESSION]
  * and [Deflater.DEFAULT_COMPRESSION] on Android: a Device Session.zip from Drive
  * had a valid central directory / sha256, but the first entry after each
- * level-0 → level-9 switch (`raw/*.tiff`, `processed/animations/Exx_*.gif`)
- * carried a 7685-byte junk prefix before a good deflate stream — inflate then
- * fails with `invalid stored block lengths` / `invalid code lengths set`.
+ * level-0 to level-9 switch (raw TIFF, then Exx animation GIF) carried a
+ * 7685-byte junk prefix before a good deflate stream — inflate then fails
+ * with "invalid stored block lengths" or "invalid code lengths set".
  * Desktop OpenJDK does not reproduce; Pixel-class Android Deflater does.
- * Textable payloads (csv/json/…) stay DEFLATED at a single level.
+ * Textable payloads (csv/json) stay DEFLATED at a single level.
  */
 @Suppress("TooManyFunctions") // build / verify / STORED+DEFLATED entry writers stay together
 internal object SessionZip {
