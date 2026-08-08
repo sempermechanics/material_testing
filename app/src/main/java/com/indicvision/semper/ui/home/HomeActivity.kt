@@ -14,7 +14,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
-import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -39,7 +38,6 @@ import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.common.CoachMarkController
-import com.indicvision.semper.ui.common.DeterminateProgressDialog
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.limit.SessionLimitActivity
@@ -521,70 +519,27 @@ class HomeActivity : AppCompatActivity() {
             .setTitle(R.string.download_analysis_title)
             .setMessage(R.string.download_analysis_body)
             .setPositiveButton(R.string.download_analysis_confirm) { _, _ ->
-                downloadThenOpen(record)
+                enqueueDownload(record)
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
-    private fun downloadThenOpen(record: SessionRecord) {
+    /**
+     * Queue a background restore and stay on Home. Row progress comes from
+     * [observeRestoreProgress] (same badge/bar as uploads) so the list stays
+     * interactive — no blocking "Downloading…" dialog.
+     */
+    private fun enqueueDownload(record: SessionRecord) {
+        selection.clearSelection()
         lifecycleScope.launch {
             val cloudId = CloudSync.resolveCloudIdFor(this@HomeActivity, record)
             if (cloudId.isNullOrBlank()) {
                 Toast.makeText(this@HomeActivity, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
                 return@launch
             }
-            val workName = CloudRestore.enqueueRestore(this@HomeActivity, cloudId, record.id)
-            val progress = DeterminateProgressDialog(
-                this@HomeActivity,
-                getString(R.string.download_analysis_working),
-            )
-            progress.show()
-            val liveData = WorkManager.getInstance(this@HomeActivity)
-                .getWorkInfosForUniqueWorkLiveData(workName)
-            val observer = object : Observer<List<WorkInfo>> {
-                override fun onChanged(value: List<WorkInfo>) {
-                    val info = value.firstOrNull() ?: return
-                    val done = info.progress.getInt(DicRestoreWorker.KEY_DONE, 0)
-                    val total = info.progress.getInt(DicRestoreWorker.KEY_TOTAL, 0)
-                    if (total > 0) {
-                        progress.update(
-                            percent = done * 100 / total,
-                            text = getString(R.string.download_analysis_working),
-                        )
-                    }
-                    when (info.state) {
-                        WorkInfo.State.SUCCEEDED -> {
-                            liveData.removeObserver(this)
-                            progress.dismiss()
-                            refresh()
-                            lifecycleScope.launch {
-                                val fresh = withContext(Dispatchers.IO) {
-                                    SessionStore.get(this@HomeActivity, record.id)
-                                }
-                                if (fresh != null && fresh.hasLocalData()) {
-                                    startActivity(SessionOpenHelper.intentFor(this@HomeActivity, fresh))
-                                } else {
-                                    Toast.makeText(
-                                        this@HomeActivity,
-                                        R.string.download_analysis_failed,
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                }
-                            }
-                        }
-                        WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                            liveData.removeObserver(this)
-                            progress.dismiss()
-                            val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR)
-                                ?: getString(R.string.download_analysis_failed)
-                            Toast.makeText(this@HomeActivity, reason, Toast.LENGTH_LONG).show()
-                        }
-                        else -> Unit
-                    }
-                }
-            }
-            liveData.observe(this@HomeActivity, observer)
+            CloudRestore.enqueueRestore(this@HomeActivity, cloudId, record.id)
+            Toast.makeText(this@HomeActivity, R.string.restore_background_note, Toast.LENGTH_SHORT).show()
         }
     }
 
