@@ -2,7 +2,11 @@ package com.indicvision.semper.data
 
 import androidx.work.ListenableWorker.Result
 import com.indicvision.semper.data.net.HttpStatus
+import com.indicvision.semper.util.Digests
 import java.io.File
+import java.io.IOException
+import java.util.zip.ZipException
+import java.util.zip.ZipFile
 
 /**
  * Pure decision helpers for [DicUploadWorker] HTTP / resume outcomes.
@@ -10,6 +14,9 @@ import java.io.File
  * without spinning WorkManager.
  */
 internal object UploadWorkOutcomes {
+
+    /** Hex length of a SHA-256 digest (Session.zip.sha256 sidecar). */
+    const val SHA256_HEX_LEN = 64
 
     /** Map a backend [IndicApi]-style HTTP status to a WorkManager result. */
     fun fromHttpCode(code: Int): Result = when (code) {
@@ -82,13 +89,41 @@ internal object UploadWorkOutcomes {
      * Finished prepare output that must survive provision / Rebuild retries.
      * Incomplete dirs (killed mid-prepare, or report bake that produced nothing)
      * must not be treated as done.
+     *
+     * Also requires a **verified** Session.zip: matching `.sha256` sidecar and a
+     * readable central directory. A kill mid-[DicUploadWorker.buildSessionBundle]
+     * leaves a truncated file that still starts with `PK` and has length > 0 —
+     * hashing that truncate and uploading it produced Drive objects that restore
+     * as `ZipException: invalid distance too far back` while size/sha256 "matched".
      */
     fun stagingReusable(stagingDir: File): Boolean {
         val done = File(stagingDir, ".bundles_done")
         val zip = File(stagingDir, "Session.zip")
+        val sidecar = File(stagingDir, "Session.zip.sha256")
         return done.isFile &&
+            bundleArtifactsReady(stagingDir) &&
+            verifiedBundleSha256(zip, sidecar) != null
+    }
+
+    /**
+     * Return the sidecar hex when [zip] matches it and [ZipFile] can open the
+     * archive; otherwise null (caller must rebuild).
+     */
+    fun verifiedBundleSha256(zip: File, sidecar: File): String? {
+        val expected = sidecar.takeIf { it.isFile }?.readText()?.trim()?.lowercase()
+            ?.takeIf { it.length == SHA256_HEX_LEN }
+        val hashOk = expected != null &&
             zip.isFile &&
             zip.length() > 0L &&
-            bundleArtifactsReady(stagingDir)
+            Digests.sha256Hex(zip) == expected
+        val readable = hashOk &&
+            try {
+                ZipFile(zip).use { it.size() > 0 }
+            } catch (_: ZipException) {
+                false
+            } catch (_: IOException) {
+                false
+            }
+        return expected.takeIf { readable }
     }
 }

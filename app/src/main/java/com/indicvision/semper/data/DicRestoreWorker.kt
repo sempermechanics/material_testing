@@ -63,9 +63,15 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 Result.retry()
             }
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            // Do not wipe *.part — DriveTransfer resumes from the last byte.
-            Timber.w(e, "Restore of %s failed; will retry", cloudSessionId)
-            Result.retry()
+            if (RestoreDownloadOutcomes.isTerminalCorruptFailure(e)) {
+                clearPartialArtifacts(targetLocalId)
+                Timber.e(e, "Restore of %s corrupt — giving up (re-upload needed)", cloudSessionId)
+                Result.failure(workDataOf(KEY_ERROR to (e.message ?: e.javaClass.simpleName)))
+            } else {
+                // Do not wipe *.part — DriveTransfer resumes from the last byte.
+                Timber.w(e, "Restore of %s failed; will retry", cloudSessionId)
+                Result.retry()
+            }
         }
     }
 
