@@ -20,7 +20,7 @@ on:
       project:
         description: >
           GCP project id (e.g. indicvision-dic-app). NOT the Cloud Run service
-          name — typing "indic-api" here fails the smoke URL lookup.
+          name.
         required: true
       region:
         description: Cloud Run region
