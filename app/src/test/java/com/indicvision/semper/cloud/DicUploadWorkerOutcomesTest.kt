@@ -116,16 +116,48 @@ class DicUploadWorkerOutcomesTest {
     }
 
     @Test
-    fun `staging is reusable only with bundles marker and non-empty zip`() {
+    fun `staging is reusable only with complete bundle artifacts and non-empty zip`() {
         val dir = createTempDir(prefix = "upload-staging-")
         try {
             assertFalse(UploadWorkOutcomes.stagingReusable(dir))
             File(dir, ".bundles_done").createNewFile()
             assertFalse(UploadWorkOutcomes.stagingReusable(dir))
             File(dir, "Session.zip").writeText("zip-bytes")
+            // Marker + zip alone used to count as done — that froze incomplete
+            // uploads that skipped reports/csv/processed.
+            assertFalse(UploadWorkOutcomes.stagingReusable(dir))
+            assertFalse(UploadWorkOutcomes.bundleArtifactsReady(dir))
+
+            File(dir, "analysis_data.csv").writeText("image,x,y\n")
+            File(dir, "reports").mkdirs()
+            File(dir, "reports/Master_Report_Frame_1.pdf").writeText("%PDF")
+            File(dir, "processed/Frame_1").mkdirs()
+            File(dir, "processed/Frame_1/exx.png").writeText("png")
+            assertTrue(UploadWorkOutcomes.bundleArtifactsReady(dir))
             assertTrue(UploadWorkOutcomes.stagingReusable(dir))
+
             File(dir, "Session.zip").writeText("")
             assertFalse(UploadWorkOutcomes.stagingReusable(dir))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `bundleArtifactsReady rejects missing csv reports or processed`() {
+        val dir = createTempDir(prefix = "upload-staging-")
+        try {
+            File(dir, "analysis_data.csv").writeText("image\n")
+            File(dir, "reports").mkdirs()
+            File(dir, "reports/Master_Report_Frame_1.pdf").writeText("%PDF")
+            assertFalse(UploadWorkOutcomes.bundleArtifactsReady(dir))
+
+            File(dir, "processed/Frame_1").mkdirs()
+            File(dir, "processed/Frame_1/exx.png").writeText("png")
+            assertTrue(UploadWorkOutcomes.bundleArtifactsReady(dir))
+
+            File(dir, "reports/Master_Report_Frame_1.pdf").delete()
+            assertFalse(UploadWorkOutcomes.bundleArtifactsReady(dir))
         } finally {
             dir.deleteRecursively()
         }

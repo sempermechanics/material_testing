@@ -412,11 +412,18 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val reportsDir = File(stagingDir, "reports")
             val processedDir = File(stagingDir, "processed")
             // Marker written only after a COMPLETE report generation pass — a
-            // dir half-filled by a killed run must not be mistaken for done.
+            // dir half-filled by a killed run, or a pass that skipped every
+            // PDF/heatmap, must not be mistaken for done.
             val bundlesDone = File(stagingDir, ".bundles_done")
-            val needCsv = !analysisCsv.exists()
-            val needBundles = record.defNames.isNotEmpty() && !bundlesDone.exists()
+            val needCsv = !analysisCsv.exists() || analysisCsv.length() == 0L
+            val needBundles = record.defNames.isNotEmpty() &&
+                !UploadWorkOutcomes.bundleArtifactsReady(stagingDir)
             if (needCsv || needBundles) {
+                // Restaging invalidates any prior Session.zip — it was built
+                // without the artifacts we are about to (re)generate.
+                File(stagingDir, "Session.zip").delete()
+                File(stagingDir, "Session.zip.sha256").delete()
+                if (needBundles) bundlesDone.delete()
                 SessionUploadBundler.stageCsvAndBundles(
                     applicationContext,
                     record,
@@ -431,12 +438,33 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         progTotal.set(t.toLong())
                     },
                 )
-                if (needBundles) bundlesDone.createNewFile()
+                if (record.defNames.isNotEmpty()) {
+                    if (UploadWorkOutcomes.bundleArtifactsReady(stagingDir)) {
+                        bundlesDone.createNewFile()
+                    } else if (needBundles) {
+                        // Do not upload a raw+dat-only zip as "synced". Sweeps
+                        // hit this when report bake skips (bad dims / undecodable
+                        // base image / every .dat missing) — retry so a later
+                        // pass can succeed, or WorkManager exhausts attempts.
+                        Timber.e(
+                            "Bundle staging incomplete for %s (csv=%dB, reports/processed missing) — retrying",
+                            localId,
+                            analysisCsv.length(),
+                        )
+                        return@withContext retryLater(
+                            localId,
+                            "bundle staging incomplete — reports/csv/processed not ready",
+                        )
+                    }
+                }
             }
             if (analysisCsv.length() > 0) artifacts += Artifact("csv", "analysis_data.csv", analysisCsv)
 
             if (record.defNames.isNotEmpty()) {
-                val pdfs = reportsDir.listFiles()?.sortedBy { it.name }.orEmpty()
+                val pdfs = reportsDir.listFiles()
+                    ?.filter { it.isFile }
+                    ?.sortedBy { it.name }
+                    .orEmpty()
                 pdfs.forEach { artifacts += Artifact("reports", it.name, it) }
                 // Heatmaps now sit in per-frame subfolders; walk them and keep the
                 // "<frame>/<field>.png" relative path as the artifact name, so the
@@ -469,16 +497,18 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             } else {
                 val bundleZip = File(stagingDir, "Session.zip")
                 val hashSidecar = File(stagingDir, "Session.zip.sha256")
-                val bundleSha = if (!bundleZip.exists() || bundleZip.length() == 0L) {
-                    val hex = buildSessionBundle(payload, bundleZip)
-                    hashSidecar.writeText(hex)
-                    hex
-                } else {
-                    // Reuse the hash teed during zip write; fall back to one
-                    // full read only when an older staging dir lacks the sidecar.
+                // Only reuse a zip from a fully reusable staging dir. A leftover
+                // Session.zip after re-staging would omit newly baked
+                // csv/reports/processed while still uploading as complete.
+                val bundleSha = if (reuseStaging && bundleZip.exists() && bundleZip.length() > 0L) {
                     hashSidecar.takeIf { it.isFile }?.readText()?.trim()
                         ?.takeIf { it.length == SHA256_HEX_LEN }
                         ?: sha256(bundleZip).also { hashSidecar.writeText(it) }
+                } else {
+                    bundleZip.delete()
+                    val hex = buildSessionBundle(payload, bundleZip)
+                    hashSidecar.writeText(hex)
+                    hex
                 }
                 artifacts.filter { it.role == "metadata" } +
                     Artifact("bundle", "Session.zip", bundleZip, bundleSha)
