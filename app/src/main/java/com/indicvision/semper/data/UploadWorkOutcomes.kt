@@ -43,7 +43,7 @@ internal object UploadWorkOutcomes {
      * upload list means "not ready yet", not "nothing to do". Treating it as
      * REBUILD would spin, creating a fresh session on every poll.
      */
-    enum class ResumeKind { CONTINUE, DONE, REBUILD, WAIT }
+    enum class ResumeKind { CONTINUE, DONE, REBUILD, WAIT, PROVISION_FAILED }
 
     fun classifyResume(
         sessionStatus: String,
@@ -51,8 +51,8 @@ internal object UploadWorkOutcomes {
         allPendingMatchArtifacts: Boolean,
     ): ResumeKind = when {
         sessionStatus == STATUS_COMPLETED -> ResumeKind.DONE
-        // Provisioning failed permanently — the session will never get targets.
-        sessionStatus == STATUS_PROVISION_FAILED -> ResumeKind.REBUILD
+        // Drive/Cloud Tasks failed to open upload targets — do not spin create/delete.
+        sessionStatus == STATUS_PROVISION_FAILED -> ResumeKind.PROVISION_FAILED
         // Still being provisioned: poll, do not rebuild.
         sessionStatus == STATUS_PROVISIONING -> ResumeKind.WAIT
         !allPendingMatchArtifacts -> ResumeKind.REBUILD
