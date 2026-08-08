@@ -134,6 +134,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="scale_max_fmt">Max: %1$s %2$s</string>
     <string name="scale_min_fmt">Min: %1$s %2$s</string>
     <string name="summary_building_fmt">Rendering %1$s… %2$d of %3$d</string>
+    <string name="summary_scanning_fmt">Reading frames… %1$d of %2$d</string>
     <string name="summary_failed">Could not build the animation.</string>
     <string name="summary_no_data">No correlated data to animate.</string>
     <string name="summary_needs_android_9">Showing the first frame — animation needs Android 9 or newer.</string>

@@ -76,6 +76,11 @@ object SessionUploadBundler {
             Timber.e("Bad image dimensions for %s — skipping reports", record.id)
         }
 
+        val frameTotal = record.defNames.size.coerceAtLeast(1)
+        // Surface 0% immediately — decoding the PLC reference can take minutes
+        // before the first frame callback, which looked like a hung prepare badge.
+        onFrame(0, frameTotal)
+
         // The reference is the SAME image in every frame's report — decode and
         // scale it once for the whole session, not once per frame. Falls back
         // to a deformed frame if the reference won't decode. Capped to
@@ -111,10 +116,16 @@ object SessionUploadBundler {
         val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep) }
         try {
             record.defNames.forEachIndexed { index, defName ->
-                onFrame(index + 1, record.defNames.size)
                 val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
-                if (!datFile.exists()) return@forEachIndexed
-                val data = DicResult.decodeDatBytes(datFile.readBytes()) ?: return@forEachIndexed
+                if (!datFile.exists()) {
+                    onFrame(index + 1, frameTotal)
+                    return@forEachIndexed
+                }
+                val data = DicResult.decodeDatFile(datFile)
+                if (data == null) {
+                    onFrame(index + 1, frameTotal)
+                    return@forEachIndexed
+                }
 
                 csvAppender?.append(
                     AnalysisCsvWriter.Frame(
@@ -130,7 +141,10 @@ object SessionUploadBundler {
                     ),
                 )
 
-                if (ctx == null) return@forEachIndexed
+                if (ctx == null) {
+                    onFrame(index + 1, frameTotal)
+                    return@forEachIndexed
+                }
 
                 val frameName = if (record.isSweep) {
                     record.sweepLabels.getOrElse(index) { "Combination_${index + 1}" }
@@ -155,10 +169,12 @@ object SessionUploadBundler {
                 }
                 if (!ok || scratch!!.length() == 0L) {
                     Timber.w("Report generation failed for %s", frameName)
+                    onFrame(index + 1, frameTotal)
                     return@forEachIndexed
                 }
                 scratch.copyTo(File(reportsDir, "Master_Report_$frameName.pdf"), overwrite = true)
                 reports++
+                onFrame(index + 1, frameTotal)
             }
         } finally {
             csvAppender?.close()

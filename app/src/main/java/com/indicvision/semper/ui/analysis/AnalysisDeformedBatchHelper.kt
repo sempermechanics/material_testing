@@ -60,9 +60,18 @@ object AnalysisDeformedBatchHelper {
                     )
                 }
 
-                val meta = FrameOrderHelper.loadMeta(activity, capped, displayName)
-                val uris = meta.map { it.uri }
-                val datesByIndex = meta.map { it.dateMs }
+                // Import starts in PICKER order — skip EXIF/MediaStore date probes
+                // here (they opened every URI before any copy and left the overlay
+                // stuck at 0% on large PLC picks). Dates resolve when the user
+                // sorts by date.
+                val uris = capped
+                val datesByIndex = List(uris.size) { Long.MAX_VALUE }
+                withContext(Dispatchers.Main) {
+                    overlayHelper.update(
+                        percent = 0,
+                        status = activity.getString(R.string.analysis_importing_fmt, 0, uris.size),
+                    )
+                }
 
                 val batch = FrameImportHelper.importDeformedUris(
                     context = activity,

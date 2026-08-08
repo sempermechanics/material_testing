@@ -50,15 +50,23 @@ internal object SessionZip {
     /**
      * Write [members] to [out] (via `*.tmp` + rename). Returns lowercase sha256
      * of the finished archive. Verifies every entry round-trips before promote.
+     *
+     * @param onBytes invoked with source bytes written into the archive (not
+     * the CRC pre-pass for STORED entries). Used for Home "preparing %" on
+     * large PLC bundles where zip dominates prepare time.
      */
-    fun build(members: List<Member>, out: File): String {
+    fun build(
+        members: List<Member>,
+        out: File,
+        onBytes: (Long) -> Unit = {},
+    ): String {
         require(members.isNotEmpty()) { "Session.zip payload is empty" }
         val tmp = File(out.parentFile, "${out.name}.tmp")
         tmp.delete()
         val digest = Digests.sha256()
         var promoted = false
         try {
-            writeArchive(tmp, members, digest)
+            writeArchive(tmp, members, digest, onBytes)
             verifyRoundTrip(tmp, members)
             val hex = Digests.toHex(digest.digest())
             promote(tmp, out)
@@ -85,10 +93,15 @@ internal object SessionZip {
         }
     }
 
-    private fun writeArchive(tmp: File, members: List<Member>, digest: java.security.MessageDigest) {
+    private fun writeArchive(
+        tmp: File,
+        members: List<Member>,
+        digest: java.security.MessageDigest,
+        onBytes: (Long) -> Unit,
+    ) {
         DigestOutputStream(BufferedOutputStream(tmp.outputStream()), digest).use { digOut ->
             ZipOutputStream(digOut).use { zip ->
-                members.forEach { putMember(zip, it) }
+                members.forEach { putMember(zip, it, onBytes) }
             }
         }
     }
@@ -123,16 +136,21 @@ internal object SessionZip {
         }
     }
 
-    private fun putMember(zip: ZipOutputStream, member: Member) {
+    private fun putMember(zip: ZipOutputStream, member: Member, onBytes: (Long) -> Unit) {
         val entryName = entryName(member.role, member.name)
         if (shouldStore(member.name)) {
-            putStored(zip, entryName, member.file)
+            putStored(zip, entryName, member.file, onBytes)
         } else {
-            putDeflated(zip, entryName, member.file)
+            putDeflated(zip, entryName, member.file, onBytes)
         }
     }
 
-    private fun putStored(zip: ZipOutputStream, entryName: String, file: File) {
+    private fun putStored(
+        zip: ZipOutputStream,
+        entryName: String,
+        file: File,
+        onBytes: (Long) -> Unit,
+    ) {
         val crc = CRC32()
         val buf = ByteArray(COPY_BUFFER)
         file.inputStream().use { input ->
@@ -149,16 +167,37 @@ internal object SessionZip {
             this.crc = crc.value
         }
         zip.putNextEntry(entry)
-        file.inputStream().use { it.copyTo(zip, COPY_BUFFER) }
+        copyReporting(file, zip, buf, onBytes)
         zip.closeEntry()
     }
 
-    private fun putDeflated(zip: ZipOutputStream, entryName: String, file: File) {
+    private fun putDeflated(
+        zip: ZipOutputStream,
+        entryName: String,
+        file: File,
+        onBytes: (Long) -> Unit,
+    ) {
         zip.setLevel(Deflater.DEFAULT_COMPRESSION)
         val entry = ZipEntry(entryName).apply { method = ZipEntry.DEFLATED }
         zip.putNextEntry(entry)
-        file.inputStream().use { it.copyTo(zip, COPY_BUFFER) }
+        copyReporting(file, zip, ByteArray(COPY_BUFFER), onBytes)
         zip.closeEntry()
+    }
+
+    private fun copyReporting(
+        file: File,
+        zip: ZipOutputStream,
+        buf: ByteArray,
+        onBytes: (Long) -> Unit,
+    ) {
+        file.inputStream().use { input ->
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                zip.write(buf, 0, n)
+                onBytes(n.toLong())
+            }
+        }
     }
 
     /** Ensure every member extracts byte-identical to its source before upload. */

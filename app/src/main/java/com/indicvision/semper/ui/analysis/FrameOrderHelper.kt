@@ -181,6 +181,23 @@ object FrameOrderHelper {
     ).mapNotNull { source -> source()?.takeIf { it > 0L } }
         .firstOrNull() ?: Long.MAX_VALUE
 
+    /**
+     * Date for an already-imported frame file. Used when sort-by-date is chosen
+     * after a fast import that skipped URI EXIF probes.
+     */
+    fun resolveDateMs(file: File): Long = runCatching {
+        val exif = ExifInterface(file.absolutePath)
+        val raw = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+            ?: exif.getAttribute(ExifInterface.TAG_DATETIME)
+            ?: return@runCatching null
+        val fmt = SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getDefault()
+        }
+        fmt.parse(raw)?.time
+    }.getOrNull()?.takeIf { it > 0L }
+        ?: file.lastModified().takeIf { it > 0L }
+        ?: Long.MAX_VALUE
+
     /** First column that carries a usable time, in descending order of trust. */
     private fun queryMediaDate(context: Context, uri: Uri): Long? {
         val columns = buildList {

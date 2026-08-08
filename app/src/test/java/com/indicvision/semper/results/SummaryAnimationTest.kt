@@ -2,6 +2,7 @@ package com.indicvision.semper.results
 
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.ui.viewer.SummaryAnimation
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -85,7 +86,7 @@ class SummaryAnimationTest {
             frame("c.dat", 0f, 9f),
         )
 
-        val exx = SummaryAnimation.globalRanges(files).getValue(DicResult.IDX_EXX)
+        val exx = runBlocking { SummaryAnimation.globalRanges(files) }.getValue(DicResult.IDX_EXX)
 
         assertTrue("low ${exx.first} should come from the second frame", exx.first < -4f)
         assertTrue("high ${exx.second} should come from the third frame", exx.second > 8f)
@@ -93,7 +94,7 @@ class SummaryAnimationTest {
 
     @Test
     fun `all five fields come back from one pass`() {
-        val ranges = SummaryAnimation.globalRanges(listOf(frame("a.dat", 0f, 1f)))
+        val ranges = runBlocking { SummaryAnimation.globalRanges(listOf(frame("a.dat", 0f, 1f))) }
 
         for ((label, index) in SummaryAnimation.FIELDS) {
             assertTrue("$label missing", ranges.containsKey(index))
@@ -105,13 +106,24 @@ class SummaryAnimationTest {
         val broken = temp.newFile("broken.dat").apply { writeBytes(ByteArray(7)) }
         val files = listOf(broken, frame("good.dat", 0f, 4f))
 
-        val exx = SummaryAnimation.globalRanges(files).getValue(DicResult.IDX_EXX)
+        val exx = runBlocking { SummaryAnimation.globalRanges(files) }.getValue(DicResult.IDX_EXX)
 
         assertTrue("high ${exx.second} should still reflect the good frame", exx.second > 3f)
     }
 
     @Test
     fun `no frames yields no ranges`() {
-        assertTrue(SummaryAnimation.globalRanges(emptyList()).isEmpty())
+        assertTrue(runBlocking { SummaryAnimation.globalRanges(emptyList()) }.isEmpty())
+    }
+
+    @Test
+    fun `globalRanges reports progress for every frame including unreadable`() = runBlocking {
+        val broken = temp.newFile("broken.dat").apply { writeBytes(ByteArray(7)) }
+        val files = listOf(broken, frame("good.dat", 0f, 4f))
+        val ticks = mutableListOf<Pair<Int, Int>>()
+
+        SummaryAnimation.globalRanges(files) { done, total -> ticks += done to total }
+
+        assertEquals(listOf(1 to 2, 2 to 2), ticks)
     }
 }

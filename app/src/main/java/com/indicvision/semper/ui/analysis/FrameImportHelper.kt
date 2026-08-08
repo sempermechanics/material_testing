@@ -50,6 +50,7 @@ object FrameImportHelper {
         val sizeByPath = mutableMapOf<String, Pair<Int, Int>>()
 
         try {
+            onProgress(0, uris.size)
             for ((index, uri) in uris.withIndex()) {
                 currentCoroutineContext().ensureActive()
                 val originalName = displayName(uri)

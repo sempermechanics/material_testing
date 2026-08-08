@@ -191,17 +191,29 @@ class SummaryAnimation(private val spec: Spec) {
          *
          * Fields with no correlated points anywhere are absent from the result.
          */
-        fun globalRanges(batchFiles: List<File>): Map<Int, Pair<Float, Float>> {
+        /**
+         * @param onProgress optional `(done, total)` after each frame is considered
+         * (including unreadable ones). Hop to Main inside the callback for UI.
+         */
+        suspend fun globalRanges(
+            batchFiles: List<File>,
+            onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+        ): Map<Int, Pair<Float, Float>> {
             val indices = FIELDS.map { it.second }.toIntArray()
             val spans = mutableMapOf<Int, Pair<Float, Float>>()
+            val total = batchFiles.size
             // One frame at a time. The previous chain kept every ByteArray and
             // FloatArray alive until the pass finished — a heavy PLC band OOM'd
             // the 512 MB heap before the first GIF frame was built.
-            for (file in batchFiles) {
-                val data = runCatching { DicResult.decodeDatFile(file) }.getOrNull() ?: continue
-                VisualizationEngine.valueRanges(data, indices).forEach { (valIndex, range) ->
-                    if (range != null) spans[valIndex] = widen(spans[valIndex], range)
+            batchFiles.forEachIndexed { index, file ->
+                currentCoroutineContext().ensureActive()
+                val data = runCatching { DicResult.decodeDatFile(file) }.getOrNull()
+                if (data != null) {
+                    VisualizationEngine.valueRanges(data, indices).forEach { (valIndex, range) ->
+                        if (range != null) spans[valIndex] = widen(spans[valIndex], range)
+                    }
                 }
+                onProgress(index + 1, total)
             }
             return spans
         }
