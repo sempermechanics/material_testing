@@ -20,10 +20,16 @@ import java.util.zip.ZipOutputStream
 /**
  * Session.zip build / verify helpers shared by upload.
  *
- * Large binaries (TIFF / DAT / PNG / …) are [ZipEntry.STORED] — re-deflating them
- * on low-RAM devices has produced archives whose central directory opens but
- * whose first deformed-image entry fails inflate (`invalid code lengths set`).
- * Textable payloads (csv/json/…) stay DEFLATED.
+ * Large binaries (TIFF / DAT / PNG / GIF / …) are [ZipEntry.STORED].
+ *
+ * Do **not** toggle [ZipOutputStream.setLevel] between [Deflater.NO_COMPRESSION]
+ * and [Deflater.DEFAULT_COMPRESSION] on Android: a Device Session.zip from Drive
+ * had a valid central directory / sha256, but the first entry after each
+ * level-0 → level-9 switch (`raw/*.tiff`, `processed/animations/Exx_*.gif`)
+ * carried a 7685-byte junk prefix before a good deflate stream — inflate then
+ * fails with `invalid stored block lengths` / `invalid code lengths set`.
+ * Desktop OpenJDK does not reproduce; Pixel-class Android Deflater does.
+ * Textable payloads (csv/json/…) stay DEFLATED at a single level.
  */
 @Suppress("TooManyFunctions") // build / verify / STORED+DEFLATED entry writers stay together
 internal object SessionZip {
