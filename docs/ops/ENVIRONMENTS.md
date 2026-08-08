@@ -77,7 +77,7 @@ daily export fails at auth with an empty `workload_identity_provider`:
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider resource name |
 | `FIRESTORE_BACKUP_SERVICE_ACCOUNT` | Backup export SA email |
 | `GCP_PROJECT` | Production GCP project id |
-| `FIRESTORE_BACKUP_BUCKET` | Destination bucket (no `gs://` prefix if the script expects bare names — match `firestore-export.sh`) |
+| `FIRESTORE_BACKUP_BUCKET` | Destination bucket name **without** `gs://` (`firestore-export.sh` adds the prefix) |
 
 ### Deploy Backend pitfall
 
