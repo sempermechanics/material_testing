@@ -38,7 +38,14 @@ class BitmapDecodeTest {
     @Test
     fun `platform raster sniff accepts PNG JPEG WEBP and rejects TIFF RAW`() {
         val png = byteArrayOf(
-            0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x89.toByte(),
+            0x50,
+            0x4E,
+            0x47,
+            0x0D,
+            0x0A,
+            0x1A,
+            0x0A,
         )
         val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())
         val webp = byteArrayOf(

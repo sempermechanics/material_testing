@@ -165,9 +165,15 @@ object BitmapDecode {
     private val GIF_SIG = byteArrayOf('G'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte())
     private val BMP_SIG = byteArrayOf('B'.code.toByte(), 'M'.code.toByte())
     private val RIFF_SIG = byteArrayOf(
-        'R'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte(), 'F'.code.toByte(),
+        'R'.code.toByte(),
+        'I'.code.toByte(),
+        'F'.code.toByte(),
+        'F'.code.toByte(),
     )
     private val WEBP_SIG = byteArrayOf(
-        'W'.code.toByte(), 'E'.code.toByte(), 'B'.code.toByte(), 'P'.code.toByte(),
+        'W'.code.toByte(),
+        'E'.code.toByte(),
+        'B'.code.toByte(),
+        'P'.code.toByte(),
     )
 }
