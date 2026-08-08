@@ -298,8 +298,17 @@ paths:
       description: >
         Device-attested download (same verified_device headers as writes).
         Signature covers GET + path + empty body; Range is an unsigned header.
+        Session.zip is proxied through Cloud Run, so this route needs a longer
+        deadline than the top-level 60s JSON budget.
       produces:
         - application/octet-stream
+      # Operation-level backend MUST restate address + APPEND_PATH_TO_ADDRESS —
+      # omitting path_translation defaults to CONSTANT_ADDRESS and breaks routing.
+      x-google-backend:
+        address: __CLOUD_RUN_URL__
+        jwt_audience: __CLOUD_RUN_URL__
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 300.0
       x-google-quota:
         metricCosts:
           download-requests: 1

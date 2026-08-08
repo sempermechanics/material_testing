@@ -51,17 +51,19 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
             clearPartialArtifacts(targetLocalId)
             throw e
         } catch (e: IndicApi.ApiException) {
-            clearPartialArtifacts(targetLocalId)
             // 404 = the backup is gone; 403 = not ours. Retrying can't fix either.
             if (e.code == 404 || e.code == 403) {
+                clearPartialArtifacts(targetLocalId)
                 Timber.e(e, "Restore of %s rejected — giving up", cloudSessionId)
                 Result.failure(workDataOf(KEY_ERROR to e.message))
             } else {
+                // Keep cacheDir *.part so the next attempt can Range-resume the
+                // Session.zip after a gateway/Cloud Run 5xx kill.
                 Timber.w(e, "Restore of %s failed; will retry", cloudSessionId)
                 Result.retry()
             }
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            clearPartialArtifacts(targetLocalId)
+            // Do not wipe *.part — DriveTransfer resumes from the last byte.
             Timber.w(e, "Restore of %s failed; will retry", cloudSessionId)
             Result.retry()
         }

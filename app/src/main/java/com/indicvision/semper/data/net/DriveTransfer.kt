@@ -1,5 +1,6 @@
 package com.indicvision.semper.data.net
 
+import com.indicvision.semper.data.RestoreDownloadOutcomes
 import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,6 +26,9 @@ private const val DOWNLOAD_MAX_ATTEMPTS = 5
 
 /** Copy buffer for proxied restore downloads. */
 private const val DOWNLOAD_COPY_BUFFER = 1 shl 16
+
+/** Log/exception preview length for non-success download bodies. */
+private const val DOWNLOAD_ERROR_BODY_PREVIEW = 120
 
 /**
  * Direct-to-Drive byte transfer: resumable upload / probe and attested download.
@@ -166,7 +170,7 @@ internal class DriveTransfer(
      * drops mid-stream, retries with `Range: bytes=N-` so already-received
      * bytes are kept (backend forwards Range to Drive and returns 206).
      */
-    @Suppress("CyclomaticComplexMethod") // one branch per HTTP status × resume/retry outcome
+    @Suppress("CyclomaticComplexMethod", "LongMethod") // status × resume branches
     suspend fun downloadFile(
         fileId: String,
         dest: File,
@@ -207,7 +211,25 @@ internal class DriveTransfer(
                             }
                             throw IndicApi.ApiException(resp.code, IndicApiHttp.bodyText(resp))
                         }
-                        else -> throw IndicApi.ApiException(resp.code, IndicApiHttp.bodyText(resp))
+                        else -> {
+                            val body = IndicApiHttp.bodyText(resp)
+                            // Gateway/Cloud Run deadline kills often return empty-body
+                            // 5xx. Treat like a truncated stream so Range resume can
+                            // continue from [part] instead of failing the whole restore.
+                            val resume = RestoreDownloadOutcomes.shouldResumeAfterHttp(
+                                code = resp.code,
+                                attempt = attempt,
+                                maxAttempts = DOWNLOAD_MAX_ATTEMPTS,
+                            )
+                            if (resume) {
+                                val preview = body.take(DOWNLOAD_ERROR_BODY_PREVIEW)
+                                throw IOException(
+                                    "transient HTTP ${resp.code} downloading $fileId" +
+                                        if (preview.isNotBlank()) ": $preview" else "",
+                                )
+                            }
+                            throw IndicApi.ApiException(resp.code, body)
+                        }
                     }
                 }
                 if (dest.exists() && !dest.delete()) {

@@ -583,8 +583,8 @@ The shape it deploys into, and why:
 |---|---|---|
 | Min instances | 0 | Scale to zero — $0 when idle |
 | Max instances | 10 | Pilot-sized ceiling |
-| CPU / memory | 1 / 512Mi | Bytes never transit Cloud Run; requests are tiny |
-| Timeout | 60 s | Must not exceed the API Gateway deadline (60 s, `gateway/openapi.yaml`), which bounds every Drive call inside it. Session provisioning — the one operation that could not fit — now runs as a Cloud Task. |
+| CPU / memory | 1 / 512Mi | Upload bytes bypass Cloud Run (device→Drive); restore still proxies Session.zip through `/content` |
+| Timeout | 300 s | Matches the `/v1/files/{id}/content` API Gateway deadline (300 s) so Session.zip restore can finish; other JSON routes keep a 60 s gateway deadline. Session provisioning still runs as a Cloud Task. |
 | Public endpoint | yes | Auth is enforced in the app layer (ID token + device signature), not the network layer |
 
 No mounted secrets. All identity comes from the attached SA + metadata server.

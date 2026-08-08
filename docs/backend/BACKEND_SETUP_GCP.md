@@ -208,7 +208,7 @@ gcloud run deploy indic-api \
   --service-account "$API_SA" \
   --allow-unauthenticated \
   --min-instances 0 --max-instances 10 \
-  --concurrency 40 --cpu 1 --memory 512Mi --timeout 60 \
+  --concurrency 40 --cpu 1 --memory 512Mi --timeout 300 \
   --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
   --set-env-vars "SUPPORT_EMAIL=support@indicvision.com,NOTIFY_FROM=Semper <noreply@yourdomain.com>" \
   --set-secrets "RESEND_API_KEY=resend-api-key:latest"

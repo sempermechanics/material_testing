@@ -23,13 +23,14 @@ UPLOAD = (
 )
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
-# The timeout ladder must decrease inward: gateway deadline (60s, gateway/
-# openapi.yaml) ≥ Cloud Run request timeout ≥ any single Drive call. A Drive
-# timeout longer than the outer budget is wasted work on a request the client
-# has already been told timed out. Quick metadata calls keep their own tighter
-# 30s; this is the ceiling for the slower ones (recursive delete, and the
-# time-to-first-byte of a streaming download — the body itself then streams
-# under the outer Cloud Run / gateway limits).
+# The timeout ladder must decrease inward: Cloud Run request timeout (300s,
+# deploy-backend.yml) ≥ content-route gateway deadline (300s, gateway/
+# openapi.yaml) ≥ any single Drive call. Other JSON routes keep a 60s gateway
+# deadline. A Drive timeout longer than the outer budget is wasted work on a
+# request the client has already been told timed out. Quick metadata calls keep
+# their own tighter 30s; this is the ceiling for the slower ones (recursive
+# delete, and the time-to-first-byte of a streaming download — the body itself
+# then streams under the outer Cloud Run / content-route gateway limits).
 _TIMEOUT_S = 45
 
 _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
