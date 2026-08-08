@@ -296,11 +296,15 @@ class IndicApi private constructor(context: Context) {
      * drops mid-stream, retries with `Range: bytes=N-` so already-received
      * bytes are kept (backend forwards Range to Drive and returns 206).
      */
-    suspend fun downloadFile(idToken: String, fileId: String, dest: java.io.File) =
-        drive.downloadFile(fileId, dest, base) { path ->
-            val nonce = fetchChallenge(idToken)
-            signedHeaders(idToken, "GET", path, ByteArray(0), nonce)
-        }
+    suspend fun downloadFile(
+        idToken: String,
+        fileId: String,
+        dest: java.io.File,
+        expectedBytes: Long = -1L,
+    ) = drive.downloadFile(fileId, dest, base, expectedBytes = expectedBytes) { path ->
+        val nonce = fetchChallenge(idToken)
+        signedHeaders(idToken, "GET", path, ByteArray(0), nonce)
+    }
 
     // ------------------------------------------------------------------- admin
 

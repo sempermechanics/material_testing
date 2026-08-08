@@ -180,23 +180,37 @@ internal class DriveTransfer(
      * not one open-ended stream — API Gateway's ~60s deadline otherwise kills
      * large Session.zip restores with an empty HTTP 500. A sibling `.part` file
      * accumulates chunks; mid-chunk failures resume from its length.
+     *
+     * [expectedBytes] is the Firestore-declared size (when known). We never
+     * rename `.part` → [dest] until the on-disk length matches that size (or a
+     * Content-Range total), so a truncated proxy body cannot become a
+     * "successful" corrupt Session.zip (`ZipException: invalid distance…`).
      */
-    @Suppress("CyclomaticComplexMethod", "LongMethod") // status × resume branches
+    @Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth")
     suspend fun downloadFile(
         fileId: String,
         dest: File,
         baseUrl: String,
+        expectedBytes: Long = -1L,
         signedGetHeaders: (path: String) -> Headers,
     ) = withContext(Dispatchers.IO) {
         dest.parentFile?.mkdirs()
         val part = File(dest.parentFile, "${dest.name}.part")
+        // Stale complete from a prior corrupt finalize — always rebuild.
+        if (dest.exists()) dest.delete()
         val path = "/v1/files/$fileId/content"
         var attempt = 0
-        var totalBytes = -1L
+        var reportedTotal = -1L
         while (true) {
             attempt++
             val offset = if (part.exists()) part.length() else 0L
-            if (totalBytes >= 0L && offset >= totalBytes) {
+            if (
+                RestoreDownloadOutcomes.isComplete(
+                    haveBytes = offset,
+                    expectedBytes = expectedBytes,
+                    reportedTotal = reportedTotal,
+                )
+            ) {
                 finalizeDownload(part, dest)
                 return@withContext
             }
@@ -207,22 +221,58 @@ internal class DriveTransfer(
                 val builder = Request.Builder()
                     .url("$baseUrl$path")
                     .headers(headers)
+                    // identity: OkHttp's default Accept-Encoding: gzip + Range
+                    // can corrupt binary zips (partial gzip windows inflate to
+                    // garbage → ZipException: invalid distance too far back).
+                    .header("Accept-Encoding", "identity")
                     .header("Range", "bytes=$offset-$end")
                     .get()
                 downloadClient.newCall(builder.build()).execute().use { resp ->
                     when (resp.code) {
                         HttpStatus.OK -> {
-                            // Proxy ignored Range — take the full body once.
-                            if (offset > 0L) part.delete()
-                            java.io.FileOutputStream(part, false).use { out ->
+                            // Proxy ignored Range and sent a full-body reply.
+                            // Write to a scratch file first — a truncated 200
+                            // must not wipe a good partial `.part`.
+                            val scratch = File(dest.parentFile, "${dest.name}.full")
+                            scratch.delete()
+                            java.io.FileOutputStream(scratch, false).use { out ->
                                 resp.body.byteStream().use { input ->
                                     input.copyTo(out, DOWNLOAD_COPY_BUFFER)
                                 }
+                            }
+                            val got = scratch.length()
+                            if (expectedBytes > 0L && got != expectedBytes) {
+                                scratch.delete()
+                                throw IOException(
+                                    "truncated full-body download for $fileId: got $got, expected $expectedBytes",
+                                )
+                            }
+                            if (got <= 0L) {
+                                scratch.delete()
+                                throw IOException("empty full-body download for $fileId")
+                            }
+                            part.delete()
+                            if (!scratch.renameTo(part)) {
+                                scratch.copyTo(part, overwrite = true)
+                                scratch.delete()
                             }
                             finalizeDownload(part, dest)
                             return@withContext
                         }
                         HttpStatus.PARTIAL_CONTENT -> {
+                            val range = RestoreDownloadOutcomes.parseContentRange(
+                                resp.header("Content-Range"),
+                            ) ?: throw IOException(
+                                "206 without Content-Range at offset $offset for $fileId",
+                            )
+                            // Appending a window that does not start at [offset]
+                            // would splice the wrong bytes into Session.zip.
+                            if (range.start != offset) {
+                                throw IOException(
+                                    "Content-Range start ${range.start} != offset $offset for $fileId",
+                                )
+                            }
+                            range.total?.let { reportedTotal = it }
                             val before = offset
                             java.io.FileOutputStream(part, true).use { out ->
                                 resp.body.byteStream().use { input ->
@@ -230,36 +280,50 @@ internal class DriveTransfer(
                                 }
                             }
                             val after = part.length()
-                            if (after <= before) {
+                            val wrote = after - before
+                            if (wrote <= 0L) {
                                 throw IOException("empty 206 body at offset $offset for $fileId")
                             }
-                            RestoreDownloadOutcomes.parseContentRangeTotal(
-                                resp.header("Content-Range"),
-                            )?.let { totalBytes = it }
-                            // Progress made — do not burn the consecutive-failure budget.
+                            val expectedWrote = range.end - range.start + 1
+                            if (wrote != expectedWrote) {
+                                // Truncated chunk — rewind to [before] and retry.
+                                RandomAccessFile(part, "rw").use { it.setLength(before) }
+                                throw IOException(
+                                    "short 206 for $fileId: wrote $wrote, Content-Range expected $expectedWrote",
+                                )
+                            }
                             attempt = 0
-                            if (totalBytes >= 0L && after >= totalBytes) {
+                            if (
+                                RestoreDownloadOutcomes.isComplete(
+                                    haveBytes = after,
+                                    expectedBytes = expectedBytes,
+                                    reportedTotal = reportedTotal,
+                                )
+                            ) {
                                 finalizeDownload(part, dest)
                                 return@withContext
                             }
                         }
                         HttpStatus.RANGE_NOT_SATISFIABLE -> {
-                            if (offset > 0L && totalBytes < 0L) {
-                                // Already have the whole object; Drive/proxy says so.
+                            if (
+                                RestoreDownloadOutcomes.isComplete(
+                                    haveBytes = offset,
+                                    expectedBytes = expectedBytes,
+                                    reportedTotal = reportedTotal,
+                                )
+                            ) {
                                 finalizeDownload(part, dest)
                                 return@withContext
                             }
                             if (offset > 0L && attempt < DOWNLOAD_MAX_ATTEMPTS) {
                                 part.delete()
-                                totalBytes = -1L
+                                reportedTotal = -1L
                                 throw IOException("range_not_satisfiable; restarting $fileId")
                             }
                             throw IndicApi.ApiException(resp.code, IndicApiHttp.bodyText(resp))
                         }
                         else -> {
                             val body = IndicApiHttp.bodyText(resp)
-                            // Gateway/Cloud Run deadline kills often return empty-body
-                            // 5xx. Retry the same chunk from [part]'s current length.
                             val resume = RestoreDownloadOutcomes.shouldResumeAfterHttp(
                                 code = resp.code,
                                 attempt = attempt,

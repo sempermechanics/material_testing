@@ -4,6 +4,7 @@ import com.indicvision.semper.data.RestoreDownloadOutcomes
 import com.indicvision.semper.data.net.HttpStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -53,17 +54,31 @@ class RestoreDownloadOutcomesTest {
     }
 
     @Test
-    fun `parseContentRangeTotal reads the object size`() {
+    fun `parseContentRange reads start end and total`() {
+        val range = RestoreDownloadOutcomes.parseContentRange("bytes 0-1048575/84158403")
+        assertEquals(0L, range!!.start)
+        assertEquals(1_048_575L, range.end)
+        assertEquals(84_158_403L, range.total)
         assertEquals(
-            84158403L,
+            84_158_403L,
             RestoreDownloadOutcomes.parseContentRangeTotal("bytes 0-1048575/84158403"),
         )
         assertEquals(
             100L,
-            RestoreDownloadOutcomes.parseContentRangeTotal("bytes 50-99/100"),
+            RestoreDownloadOutcomes.parseContentRange("bytes 50-99/100")!!.total,
         )
-        assertEquals(null, RestoreDownloadOutcomes.parseContentRangeTotal("bytes 0-10/*"))
-        assertEquals(null, RestoreDownloadOutcomes.parseContentRangeTotal(null))
-        assertEquals(null, RestoreDownloadOutcomes.parseContentRangeTotal(""))
+        assertNull(RestoreDownloadOutcomes.parseContentRange("bytes 0-10/*")!!.total)
+        assertNull(RestoreDownloadOutcomes.parseContentRange(null))
+        assertNull(RestoreDownloadOutcomes.parseContentRange(""))
+    }
+
+    @Test
+    fun `isComplete requires an exact size match`() {
+        assertTrue(RestoreDownloadOutcomes.isComplete(100, expectedBytes = 100, reportedTotal = -1))
+        assertFalse(RestoreDownloadOutcomes.isComplete(99, expectedBytes = 100, reportedTotal = -1))
+        assertTrue(RestoreDownloadOutcomes.isComplete(50, expectedBytes = -1, reportedTotal = 50))
+        assertFalse(RestoreDownloadOutcomes.isComplete(50, expectedBytes = -1, reportedTotal = -1))
+        // Declared size wins over a mismatched Content-Range total.
+        assertFalse(RestoreDownloadOutcomes.isComplete(50, expectedBytes = 100, reportedTotal = 50))
     }
 }
