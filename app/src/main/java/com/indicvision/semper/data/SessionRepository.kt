@@ -38,6 +38,14 @@ class SessionRepository {
                     bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, out)
                 }
             } else {
+                // Keep original bytes for restore/upload, but log when they are not
+                // a real PNG — Home thumbs sniff headers and skip BitmapFactory.
+                if (!BitmapDecode.looksLikePlatformRaster(refBytes)) {
+                    Timber.w(
+                        "Reference preview unavailable; storing non-PNG source bytes as %s",
+                        refPngFile.name,
+                    )
+                }
                 refPngFile.writeBytes(refBytes)
             }
         } catch (e: Exception) {

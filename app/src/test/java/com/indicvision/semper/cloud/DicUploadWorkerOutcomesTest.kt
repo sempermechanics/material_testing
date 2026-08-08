@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * Pins [DicUploadWorker] quota / fail / retry seams without WorkManager.
@@ -113,5 +114,21 @@ class DicUploadWorkerOutcomesTest {
                 allPendingMatchArtifacts = true,
             ),
         )
+    }
+
+    @Test
+    fun `staging is reusable only with bundles marker and non-empty zip`() {
+        val dir = createTempDir(prefix = "upload-staging-")
+        try {
+            assertFalse(UploadWorkOutcomes.stagingReusable(dir))
+            File(dir, ".bundles_done").createNewFile()
+            assertFalse(UploadWorkOutcomes.stagingReusable(dir))
+            File(dir, "Session.zip").writeText("zip-bytes")
+            assertTrue(UploadWorkOutcomes.stagingReusable(dir))
+            File(dir, "Session.zip").writeText("")
+            assertFalse(UploadWorkOutcomes.stagingReusable(dir))
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 }

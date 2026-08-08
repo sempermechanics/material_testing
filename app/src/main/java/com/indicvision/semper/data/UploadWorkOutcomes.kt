@@ -2,6 +2,7 @@ package com.indicvision.semper.data
 
 import androidx.work.ListenableWorker.Result
 import com.indicvision.semper.data.net.HttpStatus
+import java.io.File
 
 /**
  * Pure decision helpers for [DicUploadWorker] HTTP / resume outcomes.
@@ -57,5 +58,15 @@ internal object UploadWorkOutcomes {
         !allPendingMatchArtifacts -> ResumeKind.REBUILD
         pendingCount == 0 -> ResumeKind.REBUILD
         else -> ResumeKind.CONTINUE
+    }
+
+    /**
+     * Finished prepare output that must survive provision / Rebuild retries.
+     * Incomplete dirs (killed mid-prepare) must not be treated as done.
+     */
+    fun stagingReusable(stagingDir: File): Boolean {
+        val done = File(stagingDir, ".bundles_done")
+        val zip = File(stagingDir, "Session.zip")
+        return done.isFile && zip.isFile && zip.length() > 0L
     }
 }

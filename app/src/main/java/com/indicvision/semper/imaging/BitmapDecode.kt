@@ -23,6 +23,35 @@ object BitmapDecode {
     const val PREVIEW_MAX_EDGE = 1000
 
     /**
+     * True when [header] looks like a format Android's BitmapFactory/ImageDecoder
+     * can handle (PNG/JPEG/GIF/WEBP/BMP). TIFF/RAW/DNG and other DIC source
+     * bytes must not be passed to BitmapFactory — that logs Skia's
+     * "Failed to create image decoder … invalid input" on every attempt.
+     */
+    fun looksLikePlatformRaster(header: ByteArray): Boolean =
+        startsWith(header, JPEG_SIG) ||
+            startsWith(header, PNG_SIG) ||
+            startsWith(header, GIF_SIG) ||
+            startsWith(header, BMP_SIG) ||
+            isWebp(header)
+
+    /** Header sniff for [file]; false for missing/empty/non-platform rasters. */
+    fun looksLikePlatformRaster(file: File): Boolean {
+        if (!file.isFile || file.length() < 3L) return false
+        val header = ByteArray(16)
+        val n = file.inputStream().use { it.read(header) }
+        return n > 0 && looksLikePlatformRaster(header.copyOf(n))
+    }
+
+    private fun startsWith(header: ByteArray, sig: ByteArray): Boolean =
+        header.size >= sig.size && header.copyOfRange(0, sig.size).contentEquals(sig)
+
+    private fun isWebp(header: ByteArray): Boolean =
+        header.size >= 12 &&
+            startsWith(header, RIFF_SIG) &&
+            header.copyOfRange(8, 12).contentEquals(WEBP_SIG)
+
+    /**
      * Power-of-two [BitmapFactory.Options.inSampleSize] that fits [width]×[height]
      * into [reqWidth]×[reqHeight], also capped by [maxLongEdge].
      */
@@ -54,6 +83,7 @@ object BitmapDecode {
         bytes: ByteArray,
         maxLongEdge: Int = VisualizationEngine.DISPLAY_MAX_EDGE,
     ): Bitmap? {
+        if (!looksLikePlatformRaster(bytes)) return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         val longEdge = maxOf(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
@@ -72,6 +102,8 @@ object BitmapDecode {
         reqHeight: Int,
         maxLongEdge: Int = VisualizationEngine.DISPLAY_MAX_EDGE,
     ): Bitmap? {
+        val file = File(path)
+        if (!looksLikePlatformRaster(file)) return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
         val sample = calculateInSampleSize(
@@ -126,5 +158,22 @@ object BitmapDecode {
         val width: Int,
         val height: Int,
         val preview: Bitmap,
+    )
+
+    private val JPEG_SIG = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())
+    private val PNG_SIG = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
+    private val GIF_SIG = byteArrayOf('G'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte())
+    private val BMP_SIG = byteArrayOf('B'.code.toByte(), 'M'.code.toByte())
+    private val RIFF_SIG = byteArrayOf(
+        'R'.code.toByte(),
+        'I'.code.toByte(),
+        'F'.code.toByte(),
+        'F'.code.toByte(),
+    )
+    private val WEBP_SIG = byteArrayOf(
+        'W'.code.toByte(),
+        'E'.code.toByte(),
+        'B'.code.toByte(),
+        'P'.code.toByte(),
     )
 }
