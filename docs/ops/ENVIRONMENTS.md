@@ -69,6 +69,23 @@ See [FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md) for
 WIF + bucket + drill project variables (`GCP_WORKLOAD_IDENTITY_PROVIDER`,
 `FIRESTORE_BACKUP_BUCKET`, `FIRESTORE_RESTORE_DRILL_*`, etc.).
 
+**`production-backup` must define these Environment (or repo) variables** or the
+daily export fails at auth with an empty `workload_identity_provider`:
+
+| Variable | Purpose |
+|----------|---------|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider resource name |
+| `FIRESTORE_BACKUP_SERVICE_ACCOUNT` | Backup export SA email |
+| `GCP_PROJECT` | Production GCP project id |
+| `FIRESTORE_BACKUP_BUCKET` | Destination bucket (no `gs://` prefix if the script expects bare names — match `firestore-export.sh`) |
+
+### Deploy Backend pitfall
+
+The `project` workflow input is the **GCP project id**
+(e.g. `indicvision-dic-app`), not the Cloud Run service name (`indic-api` /
+`indic-api-staging`). A swapped value used to look like a “first deploy” and
+then fail on smoke URL lookup with `PERMISSION_DENIED` on project `indic-api`.
+
 ## Default branch and `main` hygiene
 
 - **Default branch:** `main` (integration + Dependabot target). Feature work

@@ -28,7 +28,11 @@ were not run while preparing this repository.
 5. Configure the `production-backup` GitHub environment variables used by
    `.github/workflows/firestore-backup.yml`: `GCP_PROJECT`,
    `FIRESTORE_BACKUP_BUCKET`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, and
-   `FIRESTORE_BACKUP_SERVICE_ACCOUNT`.
+   `FIRESTORE_BACKUP_SERVICE_ACCOUNT`. If any are empty, the workflow now fails
+   immediately with a named list (instead of google-github-actions/auth's
+   opaque "must specify exactly one of workload_identity_provider or
+   credentials_json"). On a Free private org, repository Variables work when
+   Environment-scoped vars cannot be set — see [ENVIRONMENTS.md](../ops/ENVIRONMENTS.md).
 
 ## Scheduled exports
 

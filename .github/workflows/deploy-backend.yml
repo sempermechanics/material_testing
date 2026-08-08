@@ -18,7 +18,9 @@ on:
           - production
         default: staging
       project:
-        description: GCP project id
+        description: >
+          GCP project id (e.g. indicvision-dic-app). NOT the Cloud Run service
+          name — typing "indic-api" here fails the smoke URL lookup.
         required: true
       region:
         description: Cloud Run region
@@ -97,6 +99,28 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
 
+      - name: Validate project input
+        env:
+          PROJECT: ${{ github.event.inputs.project }}
+          SERVICE: ${{ steps.meta.outputs.service }}
+        run: |
+          set -euo pipefail
+          AUTH_PROJECT=$(gcloud config get-value project 2>/dev/null || true)
+          if [ -z "$PROJECT" ]; then
+            echo "::error::workflow input 'project' is empty"
+            exit 1
+          fi
+          # Operators often paste the Cloud Run service name into "project".
+          if [ "$PROJECT" = "$SERVICE" ] || [[ "$PROJECT" == indic-api* ]]; then
+            echo "::error::project='$PROJECT' looks like a Cloud Run service name, not a GCP project id. Use the project id (e.g. indicvision-dic-app)."
+            exit 1
+          fi
+          if [ -n "$AUTH_PROJECT" ] && [ "$PROJECT" != "$AUTH_PROJECT" ]; then
+            echo "::error::project input '$PROJECT' does not match WIF-authenticated project '$AUTH_PROJECT'."
+            exit 1
+          fi
+          echo "Deploy target project=$PROJECT service=$SERVICE"
+
       - id: previous
         name: Capture previous serving revision
         env:
@@ -105,9 +129,23 @@ jobs:
           SERVICE: ${{ steps.meta.outputs.service }}
         run: |
           set -euo pipefail
+          # Distinguish "service does not exist yet" from a wrong project /
+          # permission error — the latter must not look like a first deploy.
+          set +e
           PREV=$(gcloud run services describe "$SERVICE" \
             --project "$PROJECT" --region "$REGION" \
-            --format='value(status.traffic[0].revisionName)' 2>/dev/null || true)
+            --format='value(status.traffic[0].revisionName)' 2>/tmp/describe.err)
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            if grep -Eiq 'NOT_FOUND|was not found|Cannot find|does not exist' /tmp/describe.err; then
+              PREV=""
+            else
+              cat /tmp/describe.err >&2
+              echo "::error::Could not describe $SERVICE in project=$PROJECT region=$REGION (rc=$rc). Check the project id input."
+              exit "$rc"
+            fi
+          fi
           echo "revision=${PREV}" >> "$GITHUB_OUTPUT"
           # Cloud Run rejects --no-traffic on first create of a service.
           if [ -n "$PREV" ]; then
@@ -126,6 +164,7 @@ jobs:
       - id: deploy
         uses: google-github-actions/deploy-cloudrun@251330ba9a8a34bfbc1622895f42e1d53fd14522 # v2
         with:
+          project_id: ${{ github.event.inputs.project }}
           service: ${{ steps.meta.outputs.service }}
           region: ${{ github.event.inputs.region }}
           # Dockerfile in backend/ builds an immutable image per git SHA (Cloud
