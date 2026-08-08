@@ -18,7 +18,6 @@ class DicResultDecodeTest {
     @get:Rule
     val temp = TemporaryFolder()
 
-
     private fun bytesForPoints(n: Int, fill: (FloatArray, Int) -> Unit = { _, _ -> }): ByteArray {
         val floats = FloatArray(n * DicResult.STRIDE)
         for (i in 0 until n) {
