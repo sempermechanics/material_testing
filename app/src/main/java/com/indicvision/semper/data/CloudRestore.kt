@@ -17,6 +17,7 @@ import com.indicvision.semper.data.net.CloudFileDto
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -261,6 +262,13 @@ object CloudRestore {
             api.downloadFile(token, bundleEntry.fileId, zipTmp, expectedBytes = expected)
             require(expected <= 0L || zipTmp.length() == expected) {
                 "Downloaded Session.zip size ${zipTmp.length()} != declared $expected — corrupt transfer"
+            }
+            val expectedSha = bundleEntry.sha256?.lowercase()?.takeIf { it.length == 64 }
+            if (expectedSha != null) {
+                val gotSha = Digests.sha256Hex(zipTmp)
+                require(gotSha == expectedSha) {
+                    "Session.zip sha256 mismatch (got $gotSha, expected $expectedSha) — corrupt transfer"
+                }
             }
             val magic = zipTmp.inputStream().use { stream ->
                 ByteArray(ZIP_MAGIC.size).also { buf ->

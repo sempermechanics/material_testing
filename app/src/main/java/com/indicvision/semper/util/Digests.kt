@@ -15,8 +15,12 @@ object Digests {
     fun md5(): MessageDigest = MessageDigest.getInstance(MD5)
 
     /** Lowercase hex MD5 of [file] contents (Drive `md5Checksum` format). */
-    fun md5Hex(file: File): String {
-        val md = md5()
+    fun md5Hex(file: File): String = hexOf(file, md5())
+
+    /** Lowercase hex SHA-256 of [file] contents (Firestore file attestation). */
+    fun sha256Hex(file: File): String = hexOf(file, sha256())
+
+    private fun hexOf(file: File, md: MessageDigest): String {
         file.inputStream().use { input ->
             val buf = ByteArray(DEFAULT_BUFFER_SIZE)
             while (true) {

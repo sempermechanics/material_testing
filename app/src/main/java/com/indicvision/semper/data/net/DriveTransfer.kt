@@ -221,6 +221,10 @@ internal class DriveTransfer(
                 val builder = Request.Builder()
                     .url("$baseUrl$path")
                     .headers(headers)
+                    // identity: OkHttp's default Accept-Encoding: gzip + Range
+                    // can corrupt binary zips (partial gzip windows inflate to
+                    // garbage → ZipException: invalid distance too far back).
+                    .header("Accept-Encoding", "identity")
                     .header("Range", "bytes=$offset-$end")
                     .get()
                 downloadClient.newCall(builder.build()).execute().use { resp ->
@@ -258,15 +262,17 @@ internal class DriveTransfer(
                         HttpStatus.PARTIAL_CONTENT -> {
                             val range = RestoreDownloadOutcomes.parseContentRange(
                                 resp.header("Content-Range"),
+                            ) ?: throw IOException(
+                                "206 without Content-Range at offset $offset for $fileId",
                             )
                             // Appending a window that does not start at [offset]
                             // would splice the wrong bytes into Session.zip.
-                            if (range != null && range.start != offset) {
+                            if (range.start != offset) {
                                 throw IOException(
                                     "Content-Range start ${range.start} != offset $offset for $fileId",
                                 )
                             }
-                            range?.total?.let { reportedTotal = it }
+                            range.total?.let { reportedTotal = it }
                             val before = offset
                             java.io.FileOutputStream(part, true).use { out ->
                                 resp.body.byteStream().use { input ->
@@ -278,15 +284,13 @@ internal class DriveTransfer(
                             if (wrote <= 0L) {
                                 throw IOException("empty 206 body at offset $offset for $fileId")
                             }
-                            if (range != null) {
-                                val expectedWrote = range.end - range.start + 1
-                                if (wrote != expectedWrote) {
-                                    // Truncated chunk — rewind to [before] and retry.
-                                    RandomAccessFile(part, "rw").use { it.setLength(before) }
-                                    throw IOException(
-                                        "short 206 for $fileId: wrote $wrote, Content-Range expected $expectedWrote",
-                                    )
-                                }
+                            val expectedWrote = range.end - range.start + 1
+                            if (wrote != expectedWrote) {
+                                // Truncated chunk — rewind to [before] and retry.
+                                RandomAccessFile(part, "rw").use { it.setLength(before) }
+                                throw IOException(
+                                    "short 206 for $fileId: wrote $wrote, Content-Range expected $expectedWrote",
+                                )
                             }
                             attempt = 0
                             if (
