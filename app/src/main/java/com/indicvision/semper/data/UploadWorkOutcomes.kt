@@ -61,12 +61,34 @@ internal object UploadWorkOutcomes {
     }
 
     /**
+     * CSV + at least one PDF report + at least one processed heatmap/GIF.
+     * A prepare pass that only logged "skipping reports" must not count as done —
+     * otherwise [stagingReusable] freezes an incomplete Session.zip forever.
+     */
+    fun bundleArtifactsReady(stagingDir: File): Boolean {
+        val csv = File(stagingDir, "analysis_data.csv")
+        val csvOk = csv.isFile && csv.length() > 0L
+        val reports = File(stagingDir, "reports")
+        val hasPdf = reports.listFiles()?.any {
+            it.isFile && it.name.endsWith(".pdf", ignoreCase = true)
+        } == true
+        val processed = File(stagingDir, "processed")
+        val hasProcessed = processed.isDirectory &&
+            processed.walkTopDown().any { it.isFile }
+        return csvOk && hasPdf && hasProcessed
+    }
+
+    /**
      * Finished prepare output that must survive provision / Rebuild retries.
-     * Incomplete dirs (killed mid-prepare) must not be treated as done.
+     * Incomplete dirs (killed mid-prepare, or report bake that produced nothing)
+     * must not be treated as done.
      */
     fun stagingReusable(stagingDir: File): Boolean {
         val done = File(stagingDir, ".bundles_done")
         val zip = File(stagingDir, "Session.zip")
-        return done.isFile && zip.isFile && zip.length() > 0L
+        return done.isFile &&
+            zip.isFile &&
+            zip.length() > 0L &&
+            bundleArtifactsReady(stagingDir)
     }
 }
