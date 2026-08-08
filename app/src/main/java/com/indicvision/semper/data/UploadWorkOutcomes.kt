@@ -67,15 +67,15 @@ internal object UploadWorkOutcomes {
      */
     fun bundleArtifactsReady(stagingDir: File): Boolean {
         val csv = File(stagingDir, "analysis_data.csv")
-        if (!csv.isFile || csv.length() == 0L) return false
+        val csvOk = csv.isFile && csv.length() > 0L
         val reports = File(stagingDir, "reports")
         val hasPdf = reports.listFiles()?.any {
             it.isFile && it.name.endsWith(".pdf", ignoreCase = true)
         } == true
-        if (!hasPdf) return false
         val processed = File(stagingDir, "processed")
-        if (!processed.isDirectory) return false
-        return processed.walkTopDown().any { it.isFile }
+        val hasProcessed = processed.isDirectory &&
+            processed.walkTopDown().any { it.isFile }
+        return csvOk && hasPdf && hasProcessed
     }
 
     /**
