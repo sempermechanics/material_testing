@@ -251,7 +251,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         artifacts: List<Artifact>,
     ): Plan? {
         val specs = artifacts.map {
-            FileSpecDto(it.name, it.role, it.file.length(), it.sha256Hex ?: sha256(it.file))
+            FileSpecDto(it.name, it.role, it.file.length(), it.sha256Hex ?: Digests.sha256Hex(it.file))
         }
         val metrics = mapOf(
             "pointsConverged" to record.pointsConverged.toFloat(),
@@ -422,6 +422,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 // Restaging invalidates any prior Session.zip — it was built
                 // without the artifacts we are about to (re)generate.
                 File(stagingDir, "Session.zip").delete()
+                File(stagingDir, "Session.zip.tmp").delete()
                 File(stagingDir, "Session.zip.sha256").delete()
                 if (needBundles) bundlesDone.delete()
                 SessionUploadBundler.stageCsvAndBundles(
@@ -497,19 +498,19 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             } else {
                 val bundleZip = File(stagingDir, "Session.zip")
                 val hashSidecar = File(stagingDir, "Session.zip.sha256")
-                // Only reuse a zip from a fully reusable staging dir. A leftover
-                // Session.zip after re-staging would omit newly baked
-                // csv/reports/processed while still uploading as complete.
-                val bundleSha = if (reuseStaging && bundleZip.exists() && bundleZip.length() > 0L) {
-                    hashSidecar.takeIf { it.isFile }?.readText()?.trim()
-                        ?.takeIf { it.length == SHA256_HEX_LEN }
-                        ?: sha256(bundleZip).also { hashSidecar.writeText(it) }
-                } else {
-                    bundleZip.delete()
-                    val hex = buildSessionBundle(payload, bundleZip)
-                    hashSidecar.writeText(hex)
-                    hex
-                }
+                // Reuse only a sidecar-verified archive (see stagingReusable).
+                // Never invent a sidecar from a leftover truncated Session.zip —
+                // that uploaded bit-identical corrupt Drive objects.
+                val bundleSha = UploadWorkOutcomes.verifiedBundleSha256(bundleZip, hashSidecar)
+                    ?.takeIf { reuseStaging }
+                    ?: run {
+                        bundleZip.delete()
+                        hashSidecar.delete()
+                        File(stagingDir, "Session.zip.tmp").delete()
+                        val hex = buildSessionBundle(payload, bundleZip)
+                        hashSidecar.writeText(hex)
+                        hex
+                    }
                 artifacts.filter { it.role == "metadata" } +
                     Artifact("bundle", "Session.zip", bundleZip, bundleSha)
             }
@@ -778,43 +779,49 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
      * not re-read the whole archive.
      */
     private fun buildSessionBundle(payload: List<Artifact>, out: File): String {
+        // Write to *.tmp then rename so a kill mid-zip never leaves a truncated
+        // Session.zip that stagingReusable / Drive upload could treat as final.
+        val tmp = File(out.parentFile, "${out.name}.tmp")
+        tmp.delete()
         val digest = Digests.sha256()
-        java.security.DigestOutputStream(BufferedOutputStream(out.outputStream()), digest).use { digOut ->
-            ZipOutputStream(digOut).use { zip ->
-                payload.forEach { art ->
-                    // JPEG/PNG/PDF are already compressed — deflating them again
-                    // burns CPU (they're ~90% of the payload bytes) for ~0% gain.
-                    // Level 0 stores them; .dat/.csv/.json/TIFF still compress.
-                    val precompressed = art.name.substringAfterLast('.').lowercase(Locale.US) in NO_RECOMPRESS
-                    zip.setLevel(
-                        if (precompressed) {
-                            java.util.zip.Deflater.NO_COMPRESSION
-                        } else {
-                            java.util.zip.Deflater.DEFAULT_COMPRESSION
-                        },
-                    )
-                    zip.putNextEntry(ZipEntry("${art.role}/${art.name}"))
-                    art.file.inputStream().use { it.copyTo(zip) }
-                    zip.closeEntry()
+        var promoted = false
+        try {
+            java.security.DigestOutputStream(BufferedOutputStream(tmp.outputStream()), digest).use { digOut ->
+                ZipOutputStream(digOut).use { zip ->
+                    payload.forEach { art ->
+                        // JPEG/PNG/PDF are already compressed — deflating them again
+                        // burns CPU (they're ~90% of the payload bytes) for ~0% gain.
+                        // Level 0 stores them; .dat/.csv/.json/TIFF still compress.
+                        val precompressed = art.name.substringAfterLast('.').lowercase(Locale.US) in NO_RECOMPRESS
+                        zip.setLevel(
+                            if (precompressed) {
+                                java.util.zip.Deflater.NO_COMPRESSION
+                            } else {
+                                java.util.zip.Deflater.DEFAULT_COMPRESSION
+                            },
+                        )
+                        zip.putNextEntry(ZipEntry("${art.role}/${art.name}"))
+                        art.file.inputStream().use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
                 }
             }
-        }
-        val hex = digest.digest().joinToString("") { "%02x".format(it) }
-        Timber.i("Bundled %d artifacts into %s (%d bytes)", payload.size, out.name, out.length())
-        return hex
-    }
-
-    private fun sha256(file: File): String {
-        val md = Digests.sha256()
-        file.inputStream().use { ins ->
-            val buf = ByteArray(1 shl 16)
-            while (true) {
-                val n = ins.read(buf)
-                if (n < 0) break
-                md.update(buf, 0, n)
+            // Central directory must be readable before we promote the file.
+            java.util.zip.ZipFile(tmp).use { zf ->
+                check(zf.size() > 0) { "Session.zip empty after bundling ${payload.size} artifacts" }
             }
+            val hex = Digests.toHex(digest.digest())
+            out.delete()
+            if (!tmp.renameTo(out)) {
+                tmp.copyTo(out, overwrite = true)
+                tmp.delete()
+            }
+            promoted = true
+            Timber.i("Bundled %d artifacts into %s (%d bytes)", payload.size, out.name, out.length())
+            return hex
+        } finally {
+            if (!promoted) tmp.delete()
         }
-        return md.digest().joinToString("") { "%02x".format(it) }
     }
 
     /**
@@ -840,9 +847,6 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val lowRam = am?.isLowRamDevice == true
             return if (lowRam) 1 else UPLOAD_CONCURRENCY
         }
-
-        /** Hex length of a SHA-256 digest. */
-        const val SHA256_HEX_LEN = 64
 
         // Polling while the backend provisions upload targets in a Cloud Task.
         // Bounded on purpose: past this the job hands back to WorkManager rather

@@ -264,21 +264,32 @@ object CloudRestore {
                 "Downloaded Session.zip size ${zipTmp.length()} != declared $expected — corrupt transfer"
             }
             val expectedSha = bundleEntry.sha256?.lowercase()?.takeIf { it.length == 64 }
-            if (expectedSha != null) {
-                val gotSha = Digests.sha256Hex(zipTmp)
-                require(gotSha == expectedSha) {
-                    "Session.zip sha256 mismatch (got $gotSha, expected $expectedSha) — corrupt transfer"
-                }
+                ?: error("Session.zip missing sha256 attestation — corrupt transfer")
+            val gotSha = Digests.sha256Hex(zipTmp)
+            require(gotSha == expectedSha) {
+                "Session.zip sha256 mismatch (got $gotSha, expected $expectedSha) — corrupt transfer"
             }
             val magic = zipTmp.inputStream().use { stream ->
                 ByteArray(ZIP_MAGIC.size).also { buf ->
                     require(stream.read(buf) >= ZIP_MAGIC.size) {
-                        "Session.zip too small (${zipTmp.length()} B)"
+                        "Session.zip too small (${zipTmp.length()} B) — corrupt transfer"
                     }
                 }
             }
             require(magic.contentEquals(ZIP_MAGIC)) {
                 "Session.zip is not a zip (magic=${magic.toList()}) — corrupt transfer"
+            }
+            // Central directory check before inflate — catches truncated archives
+            // that still start with local PK headers.
+            try {
+                java.util.zip.ZipFile(zipTmp).use { zf ->
+                    require(zf.size() > 0) { "Session.zip has no entries — corrupt transfer" }
+                }
+            } catch (e: java.util.zip.ZipException) {
+                throw IllegalArgumentException(
+                    "Session.zip central directory unreadable — corrupt transfer",
+                    e,
+                )
             }
             unpackBundle(zipTmp, layout)
         } finally {
@@ -340,11 +351,23 @@ object CloudRestore {
                         entry.name.substringAfter('/'),
                         layout,
                     )
-                    dest.outputStream().use { zin.copyTo(it) }
+                    copyZipEntry(zin, dest, entry.name)
                     if (dest.name == "reference.png") refPath = dest.absolutePath
                 }
         }
         return refPath
+    }
+
+    /** Copy one zip entry; map inflate failures to a terminal corrupt-transfer error. */
+    private fun copyZipEntry(zin: java.util.zip.ZipInputStream, dest: File, entryName: String) {
+        try {
+            dest.outputStream().use { zin.copyTo(it) }
+        } catch (e: java.util.zip.ZipException) {
+            throw IllegalArgumentException(
+                "Session.zip entry $entryName inflate failed — corrupt transfer",
+                e,
+            )
+        }
     }
 
     /**

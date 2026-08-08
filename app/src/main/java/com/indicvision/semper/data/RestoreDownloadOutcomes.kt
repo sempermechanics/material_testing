@@ -1,6 +1,7 @@
 package com.indicvision.semper.data
 
 import com.indicvision.semper.data.net.HttpStatus
+import java.util.zip.ZipException
 
 /**
  * Classify proxied restore download failures for Range-resume vs terminal fail.
@@ -64,5 +65,15 @@ object RestoreDownloadOutcomes {
             else -> return false
         }
         return haveBytes == target
+    }
+
+    /**
+     * Corrupt Session.zip / attestation failures must not WorkManager-retry:
+     * re-downloading the same Drive object will fail the same way forever.
+     */
+    fun isTerminalCorruptFailure(error: Throwable): Boolean {
+        if (error is ZipException) return true
+        val msg = error.message.orEmpty()
+        return msg.contains("corrupt transfer", ignoreCase = true)
     }
 }

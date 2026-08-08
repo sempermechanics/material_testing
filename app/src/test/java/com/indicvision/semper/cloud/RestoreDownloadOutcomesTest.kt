@@ -81,4 +81,23 @@ class RestoreDownloadOutcomesTest {
         // Declared size wins over a mismatched Content-Range total.
         assertFalse(RestoreDownloadOutcomes.isComplete(50, expectedBytes = 100, reportedTotal = 50))
     }
+
+    @Test
+    fun `ZipException and corrupt-transfer messages are terminal`() {
+        assertTrue(
+            RestoreDownloadOutcomes.isTerminalCorruptFailure(
+                java.util.zip.ZipException("invalid distance too far back"),
+            ),
+        )
+        assertTrue(
+            RestoreDownloadOutcomes.isTerminalCorruptFailure(
+                IllegalStateException("Session.zip sha256 mismatch — corrupt transfer"),
+            ),
+        )
+        assertFalse(
+            RestoreDownloadOutcomes.isTerminalCorruptFailure(
+                java.io.IOException("connection reset"),
+            ),
+        )
+    }
 }

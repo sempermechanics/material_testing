@@ -2,6 +2,7 @@ package com.indicvision.semper.cloud
 
 import androidx.work.ListenableWorker
 import com.indicvision.semper.data.UploadWorkOutcomes
+import com.indicvision.semper.util.Digests
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -116,7 +117,7 @@ class DicUploadWorkerOutcomesTest {
     }
 
     @Test
-    fun `staging is reusable only with complete bundle artifacts and non-empty zip`() {
+    fun `staging is reusable only with verified Session zip sidecar and artifacts`() {
         val dir = createTempDir(prefix = "upload-staging-")
         try {
             assertFalse(UploadWorkOutcomes.stagingReusable(dir))
@@ -134,9 +135,25 @@ class DicUploadWorkerOutcomesTest {
             File(dir, "processed/Frame_1").mkdirs()
             File(dir, "processed/Frame_1/exx.png").writeText("png")
             assertTrue(UploadWorkOutcomes.bundleArtifactsReady(dir))
+            // Artifacts ready is not enough — need a real zip + matching sidecar.
+            assertFalse(UploadWorkOutcomes.stagingReusable(dir))
+
+            val zip = File(dir, "Session.zip")
+            java.util.zip.ZipOutputStream(zip.outputStream()).use { zos ->
+                zos.putNextEntry(java.util.zip.ZipEntry("raw/reference.png"))
+                zos.write(byteArrayOf(1, 2, 3))
+                zos.closeEntry()
+            }
+            val hex = Digests.sha256Hex(zip)
+            File(dir, "Session.zip.sha256").writeText(hex)
             assertTrue(UploadWorkOutcomes.stagingReusable(dir))
+            assertEquals(hex, UploadWorkOutcomes.verifiedBundleSha256(zip, File(dir, "Session.zip.sha256")))
+
+            File(dir, "Session.zip.sha256").writeText("0".repeat(64))
+            assertFalse(UploadWorkOutcomes.stagingReusable(dir))
 
             File(dir, "Session.zip").writeText("")
+            File(dir, "Session.zip.sha256").writeText(hex)
             assertFalse(UploadWorkOutcomes.stagingReusable(dir))
         } finally {
             dir.deleteRecursively()
