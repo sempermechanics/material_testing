@@ -91,11 +91,10 @@ class DicUploadWorkerOutcomesTest {
     }
 
     @Test
-    fun `resume classifier — failed provisioning rebuilds`() {
-        // Terminal: this session will never get upload targets, so polling it
-        // forever would strand the analysis.
+    fun `resume classifier — failed provisioning is terminal kind`() {
+        // Must not collapse into REBUILD: that spun create→fail→delete→retry.
         assertEquals(
-            UploadWorkOutcomes.ResumeKind.REBUILD,
+            UploadWorkOutcomes.ResumeKind.PROVISION_FAILED,
             UploadWorkOutcomes.classifyResume(
                 "PROVISION_FAILED",
                 pendingCount = 0,

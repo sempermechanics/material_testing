@@ -313,6 +313,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_backup_failed_generic">This backup couldn\'t be completed. Tap Try again to retry.</string>
     <string name="cloud_backup_failed_device">This account is backing up from another device.</string>
     <string name="cloud_backup_failed_too_large">This analysis is too large to back up.</string>
+    <string name="cloud_backup_failed_provision">Cloud backup setup failed (Drive upload targets). Tap Try again, or check backend Cloud Tasks / Drive.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
     <string name="cloud_delete_backup_title">Delete from backup</string>
     <string name="cloud_delete_backup_body">Choose what to remove for this analysis.\n\nDeleting the cloud backup is permanent — the raw images, results and report are erased from the cloud and cannot be recovered.</string>
