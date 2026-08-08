@@ -222,39 +222,37 @@ class SessionListAdapter(
 
     private fun bindThumbnail(holder: Holder, r: SessionRecord) {
         val refFile = File(r.refPath)
-        if (!refFile.exists()) {
-            holder.thumb.tag = null
-            holder.thumb.setImageDrawable(null)
-            return
-        }
-        val cached = thumbCache[r.refPath]
-        if (cached != null && !cached.isRecycled) {
-            holder.thumb.setImageBitmap(cached)
-            return
-        }
-        if (r.refPath in thumbMisses) {
-            holder.thumb.tag = null
-            holder.thumb.setImageDrawable(null)
-            return
-        }
-        // Decode off the main thread; tag avoids applying a stale bind.
-        holder.thumb.setImageDrawable(null)
-        holder.thumb.tag = r.refPath
-        val path = r.refPath
-        thumbExecutor.execute {
-            // Sniff-first via BitmapDecode — never hand TIFF/RAW to BitmapFactory
-            // (Skia "invalid input" spam on every Home rebind).
-            val bmp = BitmapDecode.decodeFileForView(path, THUMB_EDGE, THUMB_EDGE, THUMB_EDGE)
-            mainHandler.post {
-                if (holder.thumb.tag != path) {
-                    bmp?.recycle()
-                    return@post
-                }
-                if (bmp != null) {
-                    thumbCache[path] = bmp
-                    holder.thumb.setImageBitmap(bmp)
-                } else {
-                    thumbMisses.add(path)
+        val cached = thumbCache[r.refPath]?.takeIf { !it.isRecycled }
+        when {
+            !refFile.exists() || r.refPath in thumbMisses -> {
+                holder.thumb.tag = null
+                holder.thumb.setImageDrawable(null)
+            }
+            cached != null -> holder.thumb.setImageBitmap(cached)
+            else -> {
+                // Decode off the main thread; tag avoids applying a stale bind.
+                holder.thumb.setImageDrawable(null)
+                holder.thumb.tag = r.refPath
+                val path = r.refPath
+                thumbExecutor.execute {
+                    // Sniff-first via BitmapDecode — never hand TIFF/RAW to
+                    // BitmapFactory (Skia "invalid input" spam on Home rebind).
+                    val bmp = BitmapDecode.decodeFileForView(
+                        path,
+                        THUMB_EDGE,
+                        THUMB_EDGE,
+                        THUMB_EDGE,
+                    )
+                    mainHandler.post {
+                        if (holder.thumb.tag != path) {
+                            bmp?.recycle()
+                        } else if (bmp != null) {
+                            thumbCache[path] = bmp
+                            holder.thumb.setImageBitmap(bmp)
+                        } else {
+                            thumbMisses.add(path)
+                        }
+                    }
                 }
             }
         }

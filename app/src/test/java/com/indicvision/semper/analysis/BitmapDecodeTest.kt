@@ -37,20 +37,23 @@ class BitmapDecodeTest {
 
     @Test
     fun `platform raster sniff accepts PNG JPEG WEBP and rejects TIFF RAW`() {
-        assertTrue(BitmapDecode.looksLikePlatformRaster(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)))
-        assertTrue(BitmapDecode.looksLikePlatformRaster(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())))
-        assertTrue(
-            BitmapDecode.looksLikePlatformRaster(
-                byteArrayOf(
-                    'R'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte(), 'F'.code.toByte(),
-                    0, 0, 0, 0,
-                    'W'.code.toByte(), 'E'.code.toByte(), 'B'.code.toByte(), 'P'.code.toByte(),
-                ),
-            ),
+        val png = byteArrayOf(
+            0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
         )
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())
+        val webp = byteArrayOf(
+            'R'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte(), 'F'.code.toByte(),
+            0, 0, 0, 0,
+            'W'.code.toByte(), 'E'.code.toByte(), 'B'.code.toByte(), 'P'.code.toByte(),
+        )
+        assertTrue(BitmapDecode.looksLikePlatformRaster(png))
+        assertTrue(BitmapDecode.looksLikePlatformRaster(jpeg))
+        assertTrue(BitmapDecode.looksLikePlatformRaster(webp))
         // TIFF little-endian / big-endian
-        assertFalse(BitmapDecode.looksLikePlatformRaster(byteArrayOf('I'.code.toByte(), 'I'.code.toByte(), 42, 0)))
-        assertFalse(BitmapDecode.looksLikePlatformRaster(byteArrayOf('M'.code.toByte(), 'M'.code.toByte(), 0, 42)))
+        val tiffLe = byteArrayOf('I'.code.toByte(), 'I'.code.toByte(), 42, 0)
+        val tiffBe = byteArrayOf('M'.code.toByte(), 'M'.code.toByte(), 0, 42)
+        assertFalse(BitmapDecode.looksLikePlatformRaster(tiffLe))
+        assertFalse(BitmapDecode.looksLikePlatformRaster(tiffBe))
         assertFalse(BitmapDecode.looksLikePlatformRaster(byteArrayOf(0x00, 0x00)))
     }
 

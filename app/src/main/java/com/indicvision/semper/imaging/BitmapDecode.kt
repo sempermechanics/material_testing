@@ -28,46 +28,12 @@ object BitmapDecode {
      * bytes must not be passed to BitmapFactory — that logs Skia's
      * "Failed to create image decoder … invalid input" on every attempt.
      */
-    fun looksLikePlatformRaster(header: ByteArray): Boolean {
-        if (header.size < 3) return false
-        // JPEG
-        if (header[0] == 0xFF.toByte() && header[1] == 0xD8.toByte() && header[2] == 0xFF.toByte()) {
-            return true
-        }
-        // PNG
-        if (header.size >= 8 &&
-            header[0] == 0x89.toByte() &&
-            header[1] == 0x50.toByte() &&
-            header[2] == 0x4E.toByte() &&
-            header[3] == 0x47.toByte()
-        ) {
-            return true
-        }
-        // GIF
-        if (header.size >= 6 &&
-            header[0] == 'G'.code.toByte() &&
-            header[1] == 'I'.code.toByte() &&
-            header[2] == 'F'.code.toByte()
-        ) {
-            return true
-        }
-        // BMP
-        if (header[0] == 'B'.code.toByte() && header[1] == 'M'.code.toByte()) return true
-        // WEBP: RIFF....WEBP
-        if (header.size >= 12 &&
-            header[0] == 'R'.code.toByte() &&
-            header[1] == 'I'.code.toByte() &&
-            header[2] == 'F'.code.toByte() &&
-            header[3] == 'F'.code.toByte() &&
-            header[8] == 'W'.code.toByte() &&
-            header[9] == 'E'.code.toByte() &&
-            header[10] == 'B'.code.toByte() &&
-            header[11] == 'P'.code.toByte()
-        ) {
-            return true
-        }
-        return false
-    }
+    fun looksLikePlatformRaster(header: ByteArray): Boolean =
+        startsWith(header, JPEG_SIG) ||
+            startsWith(header, PNG_SIG) ||
+            startsWith(header, GIF_SIG) ||
+            startsWith(header, BMP_SIG) ||
+            isWebp(header)
 
     /** Header sniff for [file]; false for missing/empty/non-platform rasters. */
     fun looksLikePlatformRaster(file: File): Boolean {
@@ -76,6 +42,14 @@ object BitmapDecode {
         val n = file.inputStream().use { it.read(header) }
         return n > 0 && looksLikePlatformRaster(header.copyOf(n))
     }
+
+    private fun startsWith(header: ByteArray, sig: ByteArray): Boolean =
+        header.size >= sig.size && header.copyOfRange(0, sig.size).contentEquals(sig)
+
+    private fun isWebp(header: ByteArray): Boolean =
+        header.size >= 12 &&
+            startsWith(header, RIFF_SIG) &&
+            header.copyOfRange(8, 12).contentEquals(WEBP_SIG)
 
     /**
      * Power-of-two [BitmapFactory.Options.inSampleSize] that fits [width]×[height]
@@ -184,5 +158,16 @@ object BitmapDecode {
         val width: Int,
         val height: Int,
         val preview: Bitmap,
+    )
+
+    private val JPEG_SIG = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())
+    private val PNG_SIG = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
+    private val GIF_SIG = byteArrayOf('G'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte())
+    private val BMP_SIG = byteArrayOf('B'.code.toByte(), 'M'.code.toByte())
+    private val RIFF_SIG = byteArrayOf(
+        'R'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte(), 'F'.code.toByte(),
+    )
+    private val WEBP_SIG = byteArrayOf(
+        'W'.code.toByte(), 'E'.code.toByte(), 'B'.code.toByte(), 'P'.code.toByte(),
     )
 }
