@@ -347,9 +347,12 @@ this shape exists to prevent — see the `MISSING` / `UNKNOWN` constants in
 
 **Resumable restore download.** Restore streams bytes back through Cloud Run
 (there is no anonymous signed download URL). Drive honors HTTP `Range` on
-`alt=media`, so `open_download` forwards a `Range` header and a truncated restore
-resumes from the last received byte (`206` + `Content-Range`) instead of
-restarting the whole transfer.
+`alt=media`, so `open_download` forwards a `Range` header. The Android client
+requests **bounded 1 MiB windows** (`bytes=N-M`) so each GET finishes inside the
+API Gateway deadline; a truncated chunk resumes from the `.part` file length
+(`206` + `Content-Range`) instead of restarting the whole Session.zip. After
+changing `gateway/openapi.yaml` deadlines, recreate the API Gateway **api-config**
+(Cloud Run deploy alone does not update the gateway).
 
 **One Session.zip per session (current), not per-file objects.** The product now
 uploads a single `bundle`-role `Session.zip` holding `raw/`, `dat/`, `csv/` and

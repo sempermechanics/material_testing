@@ -21,14 +21,24 @@ private const val MIN_CHUNK_BYTES = 256 * 1024
 /** Upper bound on the per-chunk buffer allocation, whatever the server says. */
 private const val MAX_CHUNK_BYTES = 32 * 1024 * 1024
 
-/** How many times a truncated download may resume from the last byte. */
-private const val DOWNLOAD_MAX_ATTEMPTS = 5
+/**
+ * Consecutive failures without byte progress before giving up. Reset whenever
+ * a chunk lands so a large Session.zip is not capped at five total requests.
+ */
+private const val DOWNLOAD_MAX_ATTEMPTS = 8
 
 /** Copy buffer for proxied restore downloads. */
 private const val DOWNLOAD_COPY_BUFFER = 1 shl 16
 
 /** Log/exception preview length for non-success download bodies. */
 private const val DOWNLOAD_ERROR_BODY_PREVIEW = 120
+
+/**
+ * Bounded Range window for each proxied GET. API Gateway still kills open-ended
+ * `/content` streams at ~60s unless its config is refreshed; 1 MiB chunks finish
+ * well inside that budget even on a slow phone link.
+ */
+private const val DOWNLOAD_RANGE_CHUNK_BYTES = 1 shl 20 // 1 MiB
 
 /**
  * Direct-to-Drive byte transfer: resumable upload / probe and attested download.
@@ -166,9 +176,10 @@ internal class DriveTransfer(
      * header (not part of the signed message) so resume offsets can change
      * without rehashing the body.
      *
-     * Writes to a sibling `.part` file and renames on success. If the transfer
-     * drops mid-stream, retries with `Range: bytes=N-` so already-received
-     * bytes are kept (backend forwards Range to Drive and returns 206).
+     * Downloads in bounded [DOWNLOAD_RANGE_CHUNK_BYTES] windows (`bytes=N-M`),
+     * not one open-ended stream — API Gateway's ~60s deadline otherwise kills
+     * large Session.zip restores with an empty HTTP 500. A sibling `.part` file
+     * accumulates chunks; mid-chunk failures resume from its length.
      */
     @Suppress("CyclomaticComplexMethod", "LongMethod") // status × resume branches
     suspend fun downloadFile(
@@ -181,32 +192,66 @@ internal class DriveTransfer(
         val part = File(dest.parentFile, "${dest.name}.part")
         val path = "/v1/files/$fileId/content"
         var attempt = 0
+        var totalBytes = -1L
         while (true) {
             attempt++
             val offset = if (part.exists()) part.length() else 0L
+            if (totalBytes >= 0L && offset >= totalBytes) {
+                finalizeDownload(part, dest)
+                return@withContext
+            }
             try {
-                // Fresh challenge per attempt so a resumed Range request never
-                // replays a consumed nonce.
+                // Fresh challenge per chunk so a resumed Range never replays a nonce.
                 val headers = signedGetHeaders(path)
+                val end = offset + DOWNLOAD_RANGE_CHUNK_BYTES - 1
                 val builder = Request.Builder()
                     .url("$baseUrl$path")
                     .headers(headers)
+                    .header("Range", "bytes=$offset-$end")
                     .get()
-                if (offset > 0L) builder.header("Range", "bytes=$offset-")
                 downloadClient.newCall(builder.build()).execute().use { resp ->
                     when (resp.code) {
-                        HttpStatus.OK, HttpStatus.PARTIAL_CONTENT -> {
-                            // 200 = full body (fresh start / proxy ignored Range) → overwrite;
-                            // 206 = partial → append to the bytes already on disk.
-                            val append = resp.code == HttpStatus.PARTIAL_CONTENT
-                            java.io.FileOutputStream(part, append).use { out ->
-                                resp.body.byteStream().use { input -> input.copyTo(out, DOWNLOAD_COPY_BUFFER) }
+                        HttpStatus.OK -> {
+                            // Proxy ignored Range — take the full body once.
+                            if (offset > 0L) part.delete()
+                            java.io.FileOutputStream(part, false).use { out ->
+                                resp.body.byteStream().use { input ->
+                                    input.copyTo(out, DOWNLOAD_COPY_BUFFER)
+                                }
+                            }
+                            finalizeDownload(part, dest)
+                            return@withContext
+                        }
+                        HttpStatus.PARTIAL_CONTENT -> {
+                            val before = offset
+                            java.io.FileOutputStream(part, true).use { out ->
+                                resp.body.byteStream().use { input ->
+                                    input.copyTo(out, DOWNLOAD_COPY_BUFFER)
+                                }
+                            }
+                            val after = part.length()
+                            if (after <= before) {
+                                throw IOException("empty 206 body at offset $offset for $fileId")
+                            }
+                            RestoreDownloadOutcomes.parseContentRangeTotal(
+                                resp.header("Content-Range"),
+                            )?.let { totalBytes = it }
+                            // Progress made — do not burn the consecutive-failure budget.
+                            attempt = 0
+                            if (totalBytes >= 0L && after >= totalBytes) {
+                                finalizeDownload(part, dest)
+                                return@withContext
                             }
                         }
                         HttpStatus.RANGE_NOT_SATISFIABLE -> {
-                            // Stale offset (partial longer than the object). Restart once.
+                            if (offset > 0L && totalBytes < 0L) {
+                                // Already have the whole object; Drive/proxy says so.
+                                finalizeDownload(part, dest)
+                                return@withContext
+                            }
                             if (offset > 0L && attempt < DOWNLOAD_MAX_ATTEMPTS) {
                                 part.delete()
+                                totalBytes = -1L
                                 throw IOException("range_not_satisfiable; restarting $fileId")
                             }
                             throw IndicApi.ApiException(resp.code, IndicApiHttp.bodyText(resp))
@@ -214,8 +259,7 @@ internal class DriveTransfer(
                         else -> {
                             val body = IndicApiHttp.bodyText(resp)
                             // Gateway/Cloud Run deadline kills often return empty-body
-                            // 5xx. Treat like a truncated stream so Range resume can
-                            // continue from [part] instead of failing the whole restore.
+                            // 5xx. Retry the same chunk from [part]'s current length.
                             val resume = RestoreDownloadOutcomes.shouldResumeAfterHttp(
                                 code = resp.code,
                                 attempt = attempt,
@@ -232,14 +276,6 @@ internal class DriveTransfer(
                         }
                     }
                 }
-                if (dest.exists() && !dest.delete()) {
-                    Timber.w("Could not replace existing download target %s", dest)
-                }
-                if (!part.renameTo(dest)) {
-                    part.copyTo(dest, overwrite = true)
-                    part.delete()
-                }
-                return@withContext
             } catch (e: IndicApi.ApiException) {
                 throw e
             } catch (e: IOException) {
@@ -252,6 +288,16 @@ internal class DriveTransfer(
                     attempt,
                 )
             }
+        }
+    }
+
+    private fun finalizeDownload(part: File, dest: File) {
+        if (dest.exists() && !dest.delete()) {
+            Timber.w("Could not replace existing download target %s", dest)
+        }
+        if (!part.renameTo(dest)) {
+            part.copyTo(dest, overwrite = true)
+            part.delete()
         }
     }
 }
