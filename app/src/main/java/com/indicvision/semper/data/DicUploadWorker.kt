@@ -194,6 +194,39 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 
     /**
+     * Turn a [Resume] from create/poll into a [Plan], or null / throw for the
+     * caller to retry or fail.
+     */
+    private suspend fun planFromResume(
+        api: IndicApi,
+        idToken: String,
+        localId: String,
+        cloudSessionId: String,
+        resumed: Resume,
+    ): Plan? = when (resumed) {
+        is Resume.Continue -> Plan(cloudSessionId, resumed.work)
+        Resume.Rebuild, Resume.Done -> {
+            Timber.w(
+                "Session %s create/poll ended %s — clear pointer for recreate",
+                cloudSessionId,
+                resumed,
+            )
+            SessionStore.setCloudSessionId(applicationContext, localId, "")
+            null
+        }
+        Resume.Wait -> {
+            Timber.w("Session %s still PROVISIONING after create poll budget", cloudSessionId)
+            null
+        }
+        Resume.ProvisionFailed -> {
+            Timber.e("Session %s provision failed — not retrying create loop", cloudSessionId)
+            runCatching { api.deleteSession(idToken, cloudSessionId) }
+            SessionStore.setCloudSessionId(applicationContext, localId, "")
+            throw ProvisionFailedException()
+        }
+    }
+
+    /**
      * Declare the whole analysis and obtain one resumable target per file.
      *
      * The backend opens those targets in a Cloud Task rather than inside the
@@ -202,6 +235,13 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
      * list. In that case we record the session id and poll the resume endpoint
      * until the targets exist. Returns null when provisioning has not finished
      * in time — the caller retries the whole job later.
+     *
+     * **Never** map `SessionCreateResponse.uploads` by list index. Those
+     * targets are listed in Firestore document-id order
+     * (`{sid}_{role}_{name}`), so `bundle/Session.zip` sorts *before*
+     * `metadata/metadata.json`. Index pairing PUT the ~2 KB JSON onto the
+     * ~84 MB zip resumable URI → Drive 400 Content-Range size mismatch.
+     * Always resolve via [resumeSession] / [awaitProvisioned] (role+name+size).
      */
     private suspend fun createSession(
         api: IndicApi,
@@ -229,43 +269,20 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         // the cloud but is not recorded here would be orphaned against quota.
         SessionStore.setCloudSessionId(applicationContext, localId, session.sessionId)
 
-        if (session.status == UploadWorkOutcomes.STATUS_PROVISIONING || session.uploads.isEmpty()) {
-            Timber.w("Session %s is provisioning — waiting for upload targets", session.sessionId)
-            return when (val r = awaitProvisioned(api, idToken, session.sessionId, artifacts)) {
-                is Resume.Continue -> Plan(session.sessionId, r.work)
-                // Manifest mismatch / gone: drop pointer so the next run recreates.
-                Resume.Rebuild, Resume.Done -> {
-                    Timber.w(
-                        "Session %s create poll ended %s — clear pointer for recreate",
-                        session.sessionId,
-                        r,
-                    )
-                    SessionStore.setCloudSessionId(applicationContext, localId, "")
-                    null
-                }
-                // Still opening targets after the in-process poll budget.
-                Resume.Wait -> {
-                    Timber.w("Session %s still PROVISIONING after create poll budget", session.sessionId)
-                    null
-                }
-                // Drive/Tasks failed: erase the dead session and signal terminal fail.
-                Resume.ProvisionFailed -> {
-                    Timber.e("Session %s provision failed — not retrying create loop", session.sessionId)
-                    runCatching { api.deleteSession(idToken, session.sessionId) }
-                    SessionStore.setCloudSessionId(applicationContext, localId, "")
-                    throw ProvisionFailedException()
-                }
+        return when (val first = resumeSession(api, idToken, session.sessionId, artifacts)) {
+            is Resume.Continue -> Plan(session.sessionId, first.work)
+            Resume.Wait -> {
+                Timber.w("Session %s is provisioning — waiting for upload targets", session.sessionId)
+                planFromResume(
+                    api,
+                    idToken,
+                    localId,
+                    session.sessionId,
+                    awaitProvisioned(api, idToken, session.sessionId, artifacts),
+                )
             }
+            else -> planFromResume(api, idToken, localId, session.sessionId, first)
         }
-
-        require(session.uploads.size == artifacts.size) {
-            "Backend returned ${session.uploads.size} targets for ${artifacts.size} files"
-        }
-        val work = artifacts.mapIndexed { i, art ->
-            val t = session.uploads[i]
-            UploadJob(t.fileId, t.uploadUrl, t.chunkSize, art.name, art.file)
-        }
-        return Plan(session.sessionId, work)
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -673,15 +690,20 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 // The session is unrecoverable: drop the pointer + staged files so
                 // the next run rebuilds a fresh session that matches.
                 e.code == HttpStatus.BAD_REQUEST -> {
+                    // [record] was snapshotted at doWork start — createSession may
+                    // have written cloudSessionId afterward. Re-read before delete.
+                    val cloudId = SessionStore.get(applicationContext, localId)
+                        ?.cloudSessionId.orEmpty()
+                        .ifBlank { record.cloudSessionId }
                     Timber.e(
                         "Upload 400 (%s) — discarding stale session %s, keeping staging",
                         e.detail,
-                        record.cloudSessionId,
+                        cloudId,
                     )
                     // Erase the half-uploaded session so it doesn't orphan and
                     // eat a quota slot. Keep Session.zip so recreate is cheap.
                     runCatching {
-                        if (record.cloudSessionId.isNotBlank()) api.deleteSession(idToken, record.cloudSessionId)
+                        if (cloudId.isNotBlank()) api.deleteSession(idToken, cloudId)
                     }.onFailure { Timber.w(it, "Could not delete stale session") }
                     SessionStore.setCloudSessionId(applicationContext, localId, "")
                     retryLater(localId, "HTTP 400 stale session — ${e.detail.take(120)}")
