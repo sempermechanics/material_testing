@@ -1,6 +1,7 @@
 package com.indicvision.semper.util
 
 import java.io.File
+import java.io.InputStream
 import java.security.MessageDigest
 
 /** Shared digest helpers (upload integrity, API request signing). */
@@ -15,16 +16,19 @@ object Digests {
     fun md5(): MessageDigest = MessageDigest.getInstance(MD5)
 
     /** Lowercase hex MD5 of [file] contents (Drive `md5Checksum` format). */
-    fun md5Hex(file: File): String = hexOf(file, md5())
+    fun md5Hex(file: File): String = hexOf(file.inputStream(), md5())
 
     /** Lowercase hex SHA-256 of [file] contents (Firestore file attestation). */
-    fun sha256Hex(file: File): String = hexOf(file, sha256())
+    fun sha256Hex(file: File): String = hexOf(file.inputStream(), sha256())
 
-    private fun hexOf(file: File, md: MessageDigest): String {
-        file.inputStream().use { input ->
+    /** Lowercase hex SHA-256 of an open [InputStream] (caller owns close). */
+    fun sha256HexStream(input: InputStream): String = hexOf(input, sha256())
+
+    private fun hexOf(input: InputStream, md: MessageDigest): String {
+        input.use { stream ->
             val buf = ByteArray(DEFAULT_BUFFER_SIZE)
             while (true) {
-                val n = input.read(buf)
+                val n = stream.read(buf)
                 if (n < 0) break
                 md.update(buf, 0, n)
             }

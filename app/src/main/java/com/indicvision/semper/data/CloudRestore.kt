@@ -342,32 +342,13 @@ object CloudRestore {
      */
     private fun unpackBundle(zip: File, layout: Layout): String {
         var refPath = ""
-        java.util.zip.ZipInputStream(zip.inputStream().buffered()).use { zin ->
-            generateSequence { zin.nextEntry }
-                .filterNot { it.isDirectory }
-                .forEach { entry ->
-                    val dest = destFor(
-                        entry.name.substringBefore('/', ""),
-                        entry.name.substringAfter('/'),
-                        layout,
-                    )
-                    copyZipEntry(zin, dest, entry.name)
-                    if (dest.name == "reference.png") refPath = dest.absolutePath
-                }
+        SessionZip.forEachEntry(zip) { role, name, input ->
+            val dest = destFor(role, name, layout)
+            dest.parentFile?.mkdirs()
+            dest.outputStream().use { input.copyTo(it) }
+            if (dest.name == "reference.png") refPath = dest.absolutePath
         }
         return refPath
-    }
-
-    /** Copy one zip entry; map inflate failures to a terminal corrupt-transfer error. */
-    private fun copyZipEntry(zin: java.util.zip.ZipInputStream, dest: File, entryName: String) {
-        try {
-            dest.outputStream().use { zin.copyTo(it) }
-        } catch (e: java.util.zip.ZipException) {
-            throw IllegalArgumentException(
-                "Session.zip entry $entryName inflate failed — corrupt transfer",
-                e,
-            )
-        }
     }
 
     /**
