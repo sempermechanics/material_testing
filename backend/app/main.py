@@ -646,6 +646,10 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     Clients may send `Range: bytes=N-` (unsigned header; signature covers
     method + path + empty body only); we forward Range to Drive and return
     206 + Content-Range so a truncated restore can resume into a partial file.
+
+    Budget: Cloud Run `--timeout=300` and the content route's API Gateway
+    `deadline: 300` (other JSON routes stay at 60s). Empty HTTP 500 from the
+    edge usually means that budget was exhausted mid-stream.
     """
     user = ctx["user"]
     # Check the bucket before the audit write: audit.record is a Firestore
