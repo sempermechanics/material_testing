@@ -29,6 +29,18 @@ object CacheJanitor {
     private const val SHARE_SUBDIR = "share"
 
     /**
+     * Regenerable top-level cache files that are safe to drop on an explicit
+     * clear (ROI mask, temp ROI ref, account export). They are not covered by
+     * the worker-scratch prefixes and used to inflate the Temporary files size
+     * while Clear left them untouched.
+     */
+    private val REGENERABLE_FILE_NAMES = setOf(
+        "roi_mask_cache.bin",
+        "temp_roi_ref.bin",
+        "semper-account-export.json",
+    )
+
+    /**
      * A worker can be running in a freshly started process, so its scratch file
      * is only stale once no plausible run could still own it. A slow upload of a
      * large session over a poor connection is the case this has to clear.
@@ -41,61 +53,102 @@ object CacheJanitor {
     private val SHARE_MAX_AGE_MS = TimeUnit.DAYS.toMillis(SHARE_MAX_AGE_DAYS)
 
     /**
+     * Grace for an explicit "Clear temporary files": keep only work that might
+     * still be mid-write. Everything older is reclaimable so the Settings size
+     * matches what Clear actually frees.
+     */
+    private const val USER_ACTIVE_GRACE_MINUTES = 2L
+    private val USER_ACTIVE_GRACE_MS = TimeUnit.MINUTES.toMillis(USER_ACTIVE_GRACE_MINUTES)
+
+    private enum class SweepMode {
+        /** App start: no UI holds import paths; committed import is reclaimable. */
+        STARTUP,
+
+        /** Explicit clear: leave a live import alone; be aggressive otherwise. */
+        USER,
+    }
+
+    /**
      * Full sweep for app start, where no import, analysis or share can be in
      * flight — the view model holding the staged image paths does not survive
      * process death, so a committed import found here is already orphaned.
      */
-    fun sweepOnStartup(context: Context): Long = sweep(context.cacheDir, includeStagedImport = true)
+    fun sweepOnStartup(context: Context): Long = sweep(context.cacheDir, SweepMode.STARTUP)
 
     /**
      * Sweep for an explicit "clear cache", which can run while another screen
      * holds a freshly imported batch — so the staged import is left alone.
      */
-    fun sweepUserRequested(context: Context): Long = sweep(context.cacheDir, includeStagedImport = false)
+    fun sweepUserRequested(context: Context): Long = sweep(context.cacheDir, SweepMode.USER)
 
-    private fun sweep(cacheDir: File, includeStagedImport: Boolean): Long {
+    /**
+     * Bytes [sweepUserRequested] would reclaim right now. Settings shows this
+     * rather than the raw cache size so Clear never looks like a no-op while a
+     * large number is still on screen (protected import / mid-write scratch).
+     */
+    fun clearableUserBytes(context: Context): Long = measure(context.cacheDir, SweepMode.USER)
+
+    private fun sweep(cacheDir: File, mode: SweepMode): Long {
         if (!cacheDir.isDirectory) return 0L
         val now = System.currentTimeMillis()
         var freed = 0L
 
         cacheDir.listFiles()?.forEach { entry ->
-            // The share directory is pruned by age from the inside, not removed.
             if (entry.name == SHARE_SUBDIR) {
-                freed += sweepShareDir(entry, now)
+                freed += visitShareDir(entry, now, mode, delete = true)
                 return@forEach
             }
-            val stale = when {
-                // Engine diagnostics. Release builds no longer write these at all,
-                // so this is also how a device upgrading from a build that did
-                // gets the space back.
-                entry.name == EngineDebug.DIR_NAME -> true
-
-                // A crashed import, or a commit swap interrupted midway.
-                entry.name.startsWith(FrameImportHelper.STAGING_DIR_PREFIX) -> true
-                entry.name == FrameImportHelper.PREVIOUS_DIR_NAME -> true
-
-                // A finished run moves its frames out, leaving this empty; a
-                // cancelled one leaves the frames it never reached.
-                entry.name == FrameImportHelper.COMMITTED_DIR_NAME -> includeStagedImport
-
-                WORKER_SCRATCH_PREFIXES.any { entry.name.startsWith(it) } ->
-                    now - entry.lastModified() > SCRATCH_MAX_AGE_MS
-
-                else -> false
-            }
-            if (stale) freed += deleteTree(entry)
+            if (isReclaimable(entry, now, mode)) freed += deleteTree(entry)
         }
 
-        if (freed > 0) Timber.d("CacheJanitor reclaimed %d bytes", freed)
+        if (freed > 0) Timber.d("CacheJanitor reclaimed %d bytes (%s)", freed, mode)
         return freed
     }
 
-    private fun sweepShareDir(shareDir: File, now: Long): Long {
-        var freed = 0L
-        shareDir.listFiles()?.forEach { entry ->
-            if (now - entry.lastModified() > SHARE_MAX_AGE_MS) freed += deleteTree(entry)
+    private fun measure(cacheDir: File, mode: SweepMode): Long {
+        if (!cacheDir.isDirectory) return 0L
+        val now = System.currentTimeMillis()
+        var total = 0L
+        cacheDir.listFiles()?.forEach { entry ->
+            if (entry.name == SHARE_SUBDIR) {
+                total += visitShareDir(entry, now, mode, delete = false)
+                return@forEach
+            }
+            if (isReclaimable(entry, now, mode)) total += sizeOf(entry)
         }
-        return freed
+        return total
+    }
+
+    private fun isReclaimable(entry: File, now: Long, mode: SweepMode): Boolean {
+        val age = now - entry.lastModified()
+        val scratchGrace = if (mode == SweepMode.USER) USER_ACTIVE_GRACE_MS else SCRATCH_MAX_AGE_MS
+        return when {
+            entry.name == EngineDebug.DIR_NAME -> true
+            entry.name.startsWith(FrameImportHelper.STAGING_DIR_PREFIX) -> true
+            entry.name == FrameImportHelper.PREVIOUS_DIR_NAME -> true
+            // A finished run moves its frames out, leaving this empty; a
+            // cancelled one leaves the frames it never reached. Only startup
+            // may assume no other screen still holds these paths.
+            entry.name == FrameImportHelper.COMMITTED_DIR_NAME -> mode == SweepMode.STARTUP
+            WORKER_SCRATCH_PREFIXES.any { entry.name.startsWith(it) } -> age > scratchGrace
+            entry.name in REGENERABLE_FILE_NAMES -> mode == SweepMode.USER || age > scratchGrace
+            else -> false
+        }
+    }
+
+    /**
+     * @param delete when true, remove matching entries and return freed bytes;
+     * when false, only sum their sizes (for the Settings meter).
+     */
+    private fun visitShareDir(shareDir: File, now: Long, mode: SweepMode, delete: Boolean): Long {
+        if (!shareDir.isDirectory) return 0L
+        val maxAge = if (mode == SweepMode.USER) USER_ACTIVE_GRACE_MS else SHARE_MAX_AGE_MS
+        var total = 0L
+        shareDir.listFiles()?.forEach { entry ->
+            if (now - entry.lastModified() <= maxAge) return@forEach
+            total += if (delete) deleteTree(entry) else sizeOf(entry)
+        }
+        return total
     }
 
     /** Size of [file] (recursively), or 0 if it could not be removed. */

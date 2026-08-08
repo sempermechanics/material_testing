@@ -9,6 +9,7 @@
     "LongMethod",
     "LoopWithTooManyJumpStatements",
     "MagicNumber",
+    "LargeClass",
 )
 @file:SuppressLint("SetTextI18n")
 
@@ -489,6 +490,13 @@ class ResultViewerActivity : AppCompatActivity() {
                 prefetchNeighborFrames(index)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e // never swallow coroutine cancellation
+            } catch (e: OutOfMemoryError) {
+                // Error, not Exception — must be caught explicitly or the process dies.
+                Timber.e(e, "OOM loading frame $index")
+                scrubCache.clear()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@ResultViewerActivity, R.string.viewer_frame_oom, Toast.LENGTH_LONG).show()
+                }
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "Failed to load frame $index")
             }
@@ -497,16 +505,23 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Warm N±1 into [scrubCache] without touching the UI. */
     private fun prefetchNeighborFrames(center: Int) {
+        // Prefetch doubles peak RAM (current + neighbor). Skip when the heap is
+        // already tight — heavy PLC frames are several MB of floats each.
+        if (!heapHasRoomForPrefetch()) return
         for (delta in intArrayOf(-1, 1)) {
             val neighbor = center + delta
             if (neighbor < 0 || neighbor >= batchFiles.size) continue
             if (scrubCache.getData(neighbor) != null) continue
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
+                    if (!heapHasRoomForPrefetch()) return@launch
                     val data = readFrameDat(neighbor) ?: return@launch
                     scrubCache.putData(neighbor, data)
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e // never swallow coroutine cancellation
+                } catch (e: OutOfMemoryError) {
+                    Timber.w(e, "Prefetch frame %d OOM — clearing scrub cache", neighbor)
+                    scrubCache.clear()
                 } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     Timber.w(e, "Prefetch frame %d failed", neighbor)
                 }
@@ -516,11 +531,19 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun readFrameDat(index: Int): FloatArray? {
         val file = batchFiles[index]
-        val data = DicResult.decodeDatBytes(file.readBytes())
+        val data = DicResult.decodeDatFile(file)
         if (data == null) {
             Timber.e("Invalid file size for frame $index")
         }
         return data
+    }
+
+    /** Rough guard: need headroom for another full-frame FloatArray (~file size). */
+    private fun heapHasRoomForPrefetch(): Boolean {
+        val rt = Runtime.getRuntime()
+        val free = rt.maxMemory() - (rt.totalMemory() - rt.freeMemory())
+        val largest = batchFiles.maxOfOrNull { it.length() } ?: return false
+        return free > largest * 3
     }
 
     private fun applyLoadedFrame(index: Int, data: FloatArray) {

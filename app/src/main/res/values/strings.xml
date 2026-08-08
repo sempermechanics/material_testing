@@ -84,6 +84,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="toggle_inspect">Inspect</string>
     <string name="toggle_max_min">Max/Min</string>
     <string name="no_batch_data">No valid batch data found.</string>
+    <string name="viewer_frame_oom">Not enough memory to open this frame. Try closing other apps, or view a smaller analysis.</string>
     <string name="coord_dialog_title">Go to pixel coordinate</string>
     <string name="coord_hint_x">X coordinate (0 to %1$d)</string>
     <string name="coord_hint_y">Y coordinate (0 to %1$d)</string>
@@ -296,8 +297,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="storage_freed_fmt">Freed %1$s from %2$d analyses.</string>
     <string name="storage_freed_none">There was nothing to free up.</string>
     <string name="storage_clear_cache">Clear temporary files</string>
-    <string name="storage_clear_cache_sub">Import leftovers and export bundles. Safe to remove.</string>
+    <string name="storage_clear_cache_sub">Import leftovers, transfer scratch, and export bundles. Safe to remove.</string>
     <string name="storage_cache_cleared_fmt">Cleared %1$s of temporary files.</string>
+    <string name="storage_cache_cleared_none">Nothing to clear. A live import or transfer still in progress is kept.</string>
     <string name="storage_auto_free">Auto-free space</string>
     <string name="storage_auto_free_off">Off — analyses stay on this phone until you remove them</string>
     <string name="storage_auto_free_on_fmt">Release backed-up analyses when this phone holds over %1$d GB</string>
@@ -313,6 +315,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_backup_failed_generic">This backup couldn\'t be completed. Tap Try again to retry.</string>
     <string name="cloud_backup_failed_device">This account is backing up from another device.</string>
     <string name="cloud_backup_failed_too_large">This analysis is too large to back up.</string>
+    <string name="cloud_backup_failed_oom">Not enough memory on this device to prepare the backup. Try again after closing other apps, or use a device with more RAM.</string>
     <string name="cloud_backup_failed_provision">Cloud backup setup failed (Drive upload targets). Tap Try again, or check backend Cloud Tasks / Drive.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
     <string name="cloud_delete_backup_title">Delete from backup</string>

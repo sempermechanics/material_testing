@@ -70,8 +70,13 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     fun start() {
         if (host.summaryBatchFiles().isEmpty()) return
         rangesJob = host.lifecycleScope.launch {
-            val computed = withContext(Dispatchers.Default) {
-                SummaryAnimation.globalRanges(host.summaryBatchFiles())
+            val computed = try {
+                withContext(Dispatchers.Default) {
+                    SummaryAnimation.globalRanges(host.summaryBatchFiles())
+                }
+            } catch (e: OutOfMemoryError) {
+                Timber.e(e, "OOM computing summary colour ranges")
+                emptyMap()
             }
             ranges = computed
             if (isShowing) render(host.currentDataIndex)

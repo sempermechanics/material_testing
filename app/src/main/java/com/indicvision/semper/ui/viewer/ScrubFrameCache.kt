@@ -78,7 +78,9 @@ class ScrubFrameCache(
     }
 
     companion object {
-        const val DEFAULT_MAX_FRAMES = 4
-        const val DEFAULT_MAX_HEATMAPS = 5
+        // Keep these small: a single heavy PLC `.dat` is several MB of floats, and
+        // the summary range pass + heatmaps share the same 512 MB heap.
+        const val DEFAULT_MAX_FRAMES = 2
+        const val DEFAULT_MAX_HEATMAPS = 3
     }
 }

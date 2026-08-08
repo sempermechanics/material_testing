@@ -157,6 +157,37 @@ class LocalStorageFootprintTest {
         assertTrue("a running worker's scratch file must not be pulled out from under it", scratch.exists())
     }
 
+    @Test
+    fun `user clear reclaims stale transfer scratch and regenerable files`() {
+        val scratch = File(ctx.cacheDir, "restore_abc_bundle.zip").apply { writeText("x".repeat(2048)) }
+        // Older than the 2-minute user grace window.
+        scratch.setLastModified(System.currentTimeMillis() - java.util.concurrent.TimeUnit.MINUTES.toMillis(5))
+        val mask = File(ctx.cacheDir, "roi_mask_cache.bin").apply { writeText("mask") }
+        val committed = File(ctx.cacheDir, FrameImportHelper.COMMITTED_DIR_NAME).apply { mkdirs() }
+        File(committed, "frame.png").writeText("keep-me")
+
+        val clearable = CacheJanitor.clearableUserBytes(ctx)
+        assertTrue("meter should count scratch + mask", clearable >= 2048)
+        val freed = CacheJanitor.sweepUserRequested(ctx)
+
+        assertFalse(scratch.exists())
+        assertFalse(mask.exists())
+        assertTrue(committed.exists())
+        assertTrue(freed >= 2048)
+        assertEquals(0L, CacheJanitor.clearableUserBytes(ctx))
+    }
+
+    @Test
+    fun `user clear leaves mid-write scratch alone`() {
+        val scratch = File(ctx.cacheDir, "upload_xyz_frame.pdf").apply { writeText("hot") }
+        scratch.setLastModified(System.currentTimeMillis())
+
+        assertEquals(0L, CacheJanitor.clearableUserBytes(ctx))
+        CacheJanitor.sweepUserRequested(ctx)
+
+        assertTrue(scratch.exists())
+    }
+
     // ── Auto-free budget ────────────────────────────────────────────────
 
     @Test

@@ -3,14 +3,20 @@
 package com.indicvision.semper.results
 
 import com.indicvision.semper.DicResult
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class DicResultDecodeTest {
+
+    @get:Rule
+    val temp = TemporaryFolder()
 
     private fun bytesForPoints(n: Int, fill: (FloatArray, Int) -> Unit = { _, _ -> }): ByteArray {
         val floats = FloatArray(n * DicResult.STRIDE)
@@ -43,6 +49,25 @@ class DicResultDecodeTest {
     @Test
     fun `empty bytes return null`() {
         assertNull(DicResult.decodeDatBytes(ByteArray(0)))
+    }
+
+    @Test
+    fun `decodeDatFile matches decodeDatBytes`() {
+        val bytes = bytesForPoints(4) { data, offset ->
+            data[offset + DicResult.IDX_X] = offset.toFloat()
+            data[offset + DicResult.IDX_ZNSSD] = 0.02f
+        }
+        val file = temp.newFile("frame.dat").apply { writeBytes(bytes) }
+        val fromFile = DicResult.decodeDatFile(file)
+        val fromBytes = DicResult.decodeDatBytes(bytes)
+        assertNotNull(fromFile)
+        assertArrayEquals(fromBytes, fromFile, 0f)
+    }
+
+    @Test
+    fun `decodeDatFile rejects bad length`() {
+        val file = temp.newFile("bad.dat").apply { writeBytes(ByteArray(31)) }
+        assertNull(DicResult.decodeDatFile(file))
     }
 
     @Test
