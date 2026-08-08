@@ -197,7 +197,10 @@ class SessionSelectionController(
                 if (newName.isNotEmpty()) {
                     activity.lifecycleScope.launch(Dispatchers.IO) {
                         SessionStore.rename(activity, record.id, newName)
-                        withContext(Dispatchers.Main) { onRefresh() }
+                        withContext(Dispatchers.Main) {
+                            clearSelection()
+                            onRefresh()
+                        }
                     }
                 }
             }
@@ -249,6 +252,7 @@ class SessionSelectionController(
         activity.lifecycleScope.launch {
             CloudSync.eraseLocalOnly(activity, record.id)
             onDeviceOnlyDeleted()
+            clearSelection()
             onRefresh()
         }
     }
@@ -261,6 +265,7 @@ class SessionSelectionController(
                 CloudSync.EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE ->
                     Toast.makeText(activity, R.string.delete_cloud_failed, Toast.LENGTH_LONG).show()
             }
+            clearSelection()
             onRefresh()
         }
     }
@@ -334,6 +339,7 @@ class SessionSelectionController(
                 CloudSync.EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE ->
                     Toast.makeText(activity, R.string.delete_cloud_failed, Toast.LENGTH_LONG).show()
             }
+            clearSelection()
             onRefresh()
         }
     }

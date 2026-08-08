@@ -170,17 +170,24 @@ class SessionListAdapter(
         val prog = progress[r.id]
         if (prog != null) {
             holder.progressBar.isVisible = true
-            holder.progressBar.setProgressCompat(prog.percent.coerceIn(0, 100), true)
+            // Bundle restore reports 0% for most of the Session.zip download —
+            // indeterminate reads as "working" instead of a stuck empty bar.
+            val indeterminate = prog.phase == "download" && prog.percent <= 0
+            holder.progressBar.isIndeterminate = indeterminate
+            if (!indeterminate) {
+                holder.progressBar.setProgressCompat(prog.percent.coerceIn(0, 100), true)
+            }
             holder.badge.text = ctx.getString(
                 when (prog.phase) {
                     "prepare" -> R.string.badge_preparing_fmt
                     "download" -> R.string.badge_downloading_fmt
                     else -> R.string.badge_uploading_fmt
                 },
-                prog.percent,
+                prog.percent.coerceAtLeast(0),
             )
             holder.badge.setTextColor(ctx.getColor(R.color.sky_on_container))
         } else {
+            holder.progressBar.isIndeterminate = false
             holder.progressBar.isVisible = false
             holder.badge.text = when {
                 r.id in cloudOnlyIds -> ctx.getString(R.string.badge_cloud_only)
