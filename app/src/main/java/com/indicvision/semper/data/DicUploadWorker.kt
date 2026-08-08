@@ -230,16 +230,24 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         SessionStore.setCloudSessionId(applicationContext, localId, session.sessionId)
 
         if (session.status == UploadWorkOutcomes.STATUS_PROVISIONING || session.uploads.isEmpty()) {
-            Timber.i("Session %s is provisioning — waiting for upload targets", session.sessionId)
+            Timber.w("Session %s is provisioning — waiting for upload targets", session.sessionId)
             return when (val r = awaitProvisioned(api, idToken, session.sessionId, artifacts)) {
                 is Resume.Continue -> Plan(session.sessionId, r.work)
                 // Manifest mismatch / gone: drop pointer so the next run recreates.
                 Resume.Rebuild, Resume.Done -> {
+                    Timber.w(
+                        "Session %s create poll ended %s — clear pointer for recreate",
+                        session.sessionId,
+                        r,
+                    )
                     SessionStore.setCloudSessionId(applicationContext, localId, "")
                     null
                 }
                 // Still opening targets after the in-process poll budget.
-                Resume.Wait -> null
+                Resume.Wait -> {
+                    Timber.w("Session %s still PROVISIONING after create poll budget", session.sessionId)
+                    null
+                }
                 // Drive/Tasks failed: erase the dead session and signal terminal fail.
                 Resume.ProvisionFailed -> {
                     Timber.e("Session %s provision failed — not retrying create loop", session.sessionId)
@@ -274,8 +282,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         }
         val idToken = TokenProvider.usableIdToken()
         if (idToken == null) {
-            Timber.w("No usable ID token yet — deferring upload")
-            return@withContext Result.retry()
+            return@withContext retryLater("(no-session)", "no usable Firebase ID token")
         }
 
         val localId = inputData.getString(DicKeys.SESSION_LOCAL_ID)
@@ -482,16 +489,19 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             // that expects the old sizes → a size mismatch.
             val existingId = record.cloudSessionId.ifBlank { null }
             val plan: Plan = if (existingId == null) {
-                Timber.i("No resumable session for %s — creating a new one", localId)
+                Timber.w("Upload %s — creating a new cloud session", localId)
                 createSession(api, idToken, localId, record, uploadSet)
                     // Still provisioning when we ran out of patience. The session
                     // id is already stored, so the next run resumes it rather
                     // than creating a second one.
-                    ?: return@withContext Result.retry()
+                    ?: return@withContext retryLater(
+                        localId,
+                        "createSession returned null (still provisioning or rebuild)",
+                    )
             } else {
                 when (val r = resumeSession(api, idToken, existingId, uploadSet)) {
                     is Resume.Continue -> {
-                        Timber.i(
+                        Timber.w(
                             "Resuming session %s — %d of %d files still to upload",
                             existingId,
                             r.work.size,
@@ -502,7 +512,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     Resume.Done -> {
                         // Everything already landed; a prior run died before it
                         // could record the sync locally.
-                        Timber.i("Session %s already complete in the cloud", existingId)
+                        Timber.w("Session %s already complete in the cloud", existingId)
                         SessionStore.markSynced(applicationContext, localId)
                         stagingDir.deleteRecursively()
                         return@withContext Result.success()
@@ -514,7 +524,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         runCatching { api.deleteSession(idToken, existingId) }
                             .onFailure { Timber.w(it, "Could not delete unusable session") }
                         SessionStore.setCloudSessionId(applicationContext, localId, "")
-                        return@withContext Result.retry()
+                        return@withContext retryLater(localId, "resume Rebuild — will recreate session")
                     }
                     Resume.ProvisionFailed -> {
                         Timber.e("Session %s provision failed — failing backup (no create loop)", existingId)
@@ -533,10 +543,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     Resume.Wait -> {
                         // Do NOT Result.retry() immediately — that burned WorkManager
                         // attempts in ~2s with no progress. Poll in-process first.
-                        Timber.i("Session %s still provisioning — polling for upload targets", existingId)
+                        Timber.w("Session %s still provisioning — polling for upload targets", existingId)
                         when (val polled = awaitProvisioned(api, idToken, existingId, uploadSet)) {
                             is Resume.Continue -> {
-                                Timber.i(
+                                Timber.w(
                                     "Session %s provisioned — %d files to upload",
                                     existingId,
                                     polled.work.size,
@@ -552,7 +562,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                                 Timber.w("Session %s became unusable while polling — recreate", existingId)
                                 runCatching { api.deleteSession(idToken, existingId) }
                                 SessionStore.setCloudSessionId(applicationContext, localId, "")
-                                return@withContext Result.retry()
+                                return@withContext retryLater(
+                                    localId,
+                                    "provision poll Rebuild — will recreate session",
+                                )
                             }
                             Resume.ProvisionFailed -> {
                                 Timber.e("Session %s provision failed while polling", existingId)
@@ -568,11 +581,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                                 )
                             }
                             Resume.Wait -> {
-                                Timber.i(
-                                    "Session %s still provisioning after poll — WM retry later",
-                                    existingId,
+                                return@withContext retryLater(
+                                    localId,
+                                    "still PROVISIONING after in-process poll budget",
                                 )
-                                return@withContext Result.retry()
                             }
                         }
                     }
@@ -626,12 +638,11 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             // The server has no ACTIVE device record for us (revoked/reset) while
             // our local "registered" flag said otherwise. Re-register and retry
             // instead of stalling forever. Keep staging for the retry.
-            Timber.w("Device not active server-side — re-registering and retrying")
             TokenStore.setDeviceRegistered(applicationContext, false)
             runCatching { api.registerDevice(idToken) }
                 .onSuccess { TokenStore.setDeviceRegistered(applicationContext, true) }
                 .onFailure { Timber.e(it, "Re-registration failed") }
-            Result.retry()
+            retryLater(localId, "device not active — re-registered, retry upload")
         } catch (e: IndicApi.DeviceConflictException) {
             Timber.e("This account is bound to a different device — cannot upload")
             SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
@@ -673,12 +684,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         if (record.cloudSessionId.isNotBlank()) api.deleteSession(idToken, record.cloudSessionId)
                     }.onFailure { Timber.w(it, "Could not delete stale session") }
                     SessionStore.setCloudSessionId(applicationContext, localId, "")
-                    UploadWorkOutcomes.fromHttpCode(e.code)
+                    retryLater(localId, "HTTP 400 stale session — ${e.detail.take(120)}")
                 }
                 else -> {
                     // Transient — keep the staged files so the retry resumes identically.
-                    Timber.e(e, "Upload failed for %s; will retry", localId)
-                    UploadWorkOutcomes.fromHttpCode(e.code)
+                    Timber.e(e, "Upload HTTP %d for %s — %s", e.code, localId, e.detail)
+                    retryLater(localId, "HTTP ${e.code}: ${e.detail.take(160)}")
                 }
             }
         } catch (e: OutOfMemoryError) {
@@ -692,7 +703,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             failure(applicationContext.getString(R.string.cloud_backup_failed_too_large))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.e(e, "Upload failed for %s; will retry", localId)
-            Result.retry()
+            retryLater(
+                localId,
+                "${e.javaClass.simpleName}: ${e.message?.take(160) ?: "(no message)"}",
+            )
         } finally {
             // Stop the progress sampler so this coroutine can complete (a live
             // child would otherwise keep the worker from returning).
@@ -749,6 +763,16 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             }
         }
         return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Every WorkManager RETRY must leave a WARN in logcat (release
+     * [CrashReportingTree] mirrors WARN+). Without this, alpha only saw
+     * `Worker result RETRY` with no Semper reason.
+     */
+    private fun retryLater(localId: String, reason: String): Result {
+        Timber.w("Upload RETRY localId=%s — %s", localId, reason)
+        return Result.retry()
     }
 
     private companion object {
