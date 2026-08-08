@@ -93,6 +93,9 @@ object CloudRestore {
     /** Concurrent GETs for legacy per-file restores (matches upload concurrency). */
     private const val LEGACY_DOWNLOAD_CONCURRENCY = 4
 
+    /** ZIP local-file / empty-archive signature prefix (`PK`). */
+    private val ZIP_MAGIC = byteArrayOf(0x50, 0x4B)
+
     /**
      * Why a restorable-list query failed or is empty — never collapse auth/config
      * failures into a blank "no backups" list.
@@ -181,7 +184,12 @@ object CloudRestore {
         val metaEntry = files.firstOrNull { it.role == "metadata" }
             ?: error("Backup is missing metadata.json")
         val metaTmp = File(appContext.cacheDir, "restore_${sessionId}_metadata.json")
-        api.downloadFile(token, metaEntry.fileId, metaTmp)
+        api.downloadFile(
+            token,
+            metaEntry.fileId,
+            metaTmp,
+            expectedBytes = metaEntry.sizeBytes.takeIf { it > 0L } ?: -1L,
+        )
         val meta = JSONObject(metaTmp.readText())
 
         // The enqueueing UI already created a row under this id. Never let
@@ -201,13 +209,7 @@ object CloudRestore {
         val bundleEntry = files.firstOrNull { it.role == "bundle" }
         if (bundleEntry != null) {
             onProgress(0, 1)
-            val zipTmp = File(appContext.cacheDir, "restore_${sessionId}_bundle.zip")
-            try {
-                api.downloadFile(token, bundleEntry.fileId, zipTmp)
-                refPath = unpackBundle(zipTmp, layout)
-            } finally {
-                zipTmp.delete()
-            }
+            refPath = downloadAndUnpackBundle(api, token, sessionId, bundleEntry, layout, appContext)
             onProgress(1, 1)
         } else {
             refPath = restoreLegacyFiles(api, token, files, layout, onProgress)
@@ -240,6 +242,44 @@ object CloudRestore {
     /** The on-disk shape of a restored session — where artifacts land. */
     private data class Layout(val sessionDir: File, val rawDeformedDir: File)
 
+    /**
+     * Download Session.zip with size checks, verify zip magic, unpack.
+     * Deletes `.part` / `.full` sidecars so a corrupt transfer cannot stick.
+     */
+    @Suppress("LongParameterList")
+    private suspend fun downloadAndUnpackBundle(
+        api: IndicApi,
+        token: String,
+        sessionId: String,
+        bundleEntry: CloudFileDto,
+        layout: Layout,
+        appContext: Context,
+    ): String {
+        val zipTmp = File(appContext.cacheDir, "restore_${sessionId}_bundle.zip")
+        return try {
+            val expected = bundleEntry.sizeBytes.takeIf { it > 0L } ?: -1L
+            api.downloadFile(token, bundleEntry.fileId, zipTmp, expectedBytes = expected)
+            require(expected <= 0L || zipTmp.length() == expected) {
+                "Downloaded Session.zip size ${zipTmp.length()} != declared $expected — corrupt transfer"
+            }
+            val magic = zipTmp.inputStream().use { stream ->
+                ByteArray(ZIP_MAGIC.size).also { buf ->
+                    require(stream.read(buf) >= ZIP_MAGIC.size) {
+                        "Session.zip too small (${zipTmp.length()} B)"
+                    }
+                }
+            }
+            require(magic.contentEquals(ZIP_MAGIC)) {
+                "Session.zip is not a zip (magic=${magic.toList()}) — corrupt transfer"
+            }
+            unpackBundle(zipTmp, layout)
+        } finally {
+            zipTmp.delete()
+            File(appContext.cacheDir, "restore_${sessionId}_bundle.zip.part").delete()
+            File(appContext.cacheDir, "restore_${sessionId}_bundle.zip.full").delete()
+        }
+    }
+
     /** Legacy per-file backups: download each artifact into place. Returns refPath. */
     private suspend fun restoreLegacyFiles(
         api: IndicApi,
@@ -260,7 +300,12 @@ object CloudRestore {
                 async {
                     gate.withPermit {
                         val dest = destFor(f.role, f.name, layout)
-                        api.downloadFile(token, f.fileId, dest)
+                        api.downloadFile(
+                            token,
+                            f.fileId,
+                            dest,
+                            expectedBytes = f.sizeBytes.takeIf { it > 0L } ?: -1L,
+                        )
                         if (dest.name == "reference.png") refPath.set(dest.absolutePath)
                         onProgress(done.incrementAndGet(), rest.size)
                     }
