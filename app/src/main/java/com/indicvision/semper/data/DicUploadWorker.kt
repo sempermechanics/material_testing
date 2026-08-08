@@ -38,11 +38,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.io.BufferedOutputStream
 import java.io.File
 import java.util.Locale
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 /**
  * Offline-first cloud sync against the Semper GCP backend — **one backend session
@@ -774,55 +771,14 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
      * reused byte-identically on retries — zip entry timestamps differ across
      * rebuilds, which would break the declared sha256/size of a resumed upload.
      *
-     * Returns the SHA-256 of the finished zip bytes (teed via
-     * [java.security.DigestOutputStream] while writing) so createSession need
-     * not re-read the whole archive.
+     * Returns the SHA-256 of the finished zip ([SessionZip] tees a digest while
+     * writing and round-trip-verifies every entry before promote).
      */
-    private fun buildSessionBundle(payload: List<Artifact>, out: File): String {
-        // Write to *.tmp then rename so a kill mid-zip never leaves a truncated
-        // Session.zip that stagingReusable / Drive upload could treat as final.
-        val tmp = File(out.parentFile, "${out.name}.tmp")
-        tmp.delete()
-        val digest = Digests.sha256()
-        var promoted = false
-        try {
-            java.security.DigestOutputStream(BufferedOutputStream(tmp.outputStream()), digest).use { digOut ->
-                ZipOutputStream(digOut).use { zip ->
-                    payload.forEach { art ->
-                        // JPEG/PNG/PDF are already compressed — deflating them again
-                        // burns CPU (they're ~90% of the payload bytes) for ~0% gain.
-                        // Level 0 stores them; .dat/.csv/.json/TIFF still compress.
-                        val precompressed = art.name.substringAfterLast('.').lowercase(Locale.US) in NO_RECOMPRESS
-                        zip.setLevel(
-                            if (precompressed) {
-                                java.util.zip.Deflater.NO_COMPRESSION
-                            } else {
-                                java.util.zip.Deflater.DEFAULT_COMPRESSION
-                            },
-                        )
-                        zip.putNextEntry(ZipEntry("${art.role}/${art.name}"))
-                        art.file.inputStream().use { it.copyTo(zip) }
-                        zip.closeEntry()
-                    }
-                }
-            }
-            // Central directory must be readable before we promote the file.
-            java.util.zip.ZipFile(tmp).use { zf ->
-                check(zf.size() > 0) { "Session.zip empty after bundling ${payload.size} artifacts" }
-            }
-            val hex = Digests.toHex(digest.digest())
-            out.delete()
-            if (!tmp.renameTo(out)) {
-                tmp.copyTo(out, overwrite = true)
-                tmp.delete()
-            }
-            promoted = true
-            Timber.i("Bundled %d artifacts into %s (%d bytes)", payload.size, out.name, out.length())
-            return hex
-        } finally {
-            if (!promoted) tmp.delete()
-        }
-    }
+    private fun buildSessionBundle(payload: List<Artifact>, out: File): String =
+        SessionZip.build(
+            payload.map { SessionZip.Member(it.role, it.name, it.file) },
+            out,
+        )
 
     /**
      * Every WorkManager RETRY must leave a WARN in logcat (release
@@ -856,9 +812,6 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         const val PROVISION_POLL_ATTEMPTS = 12
         const val PROVISION_POLL_INITIAL_MS = 1_000L
         const val PROVISION_POLL_MAX_MS = 8_000L
-
-        /** Extensions that are already compressed — stored, not re-deflated, in Session.zip. */
-        val NO_RECOMPRESS = setOf("jpg", "jpeg", "png", "pdf", "webp", "zip")
     }
 
     /** Drive/Cloud Tasks could not open resumable upload targets for this session. */
