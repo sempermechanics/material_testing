@@ -60,10 +60,9 @@ class AnalysisDataAdapter(
             state.text = stateLine(entry)
 
             val hasCloud = entry.cloud != null
-            val hasLocalData = entry.record?.hasLocalData() == true
-            // Restore is redundant when the phone already has the data; Delete
-            // still applies so dual-presence rows can drop the cloud copy.
-            restore.isVisible = hasCloud && !hasLocalData
+            // Download whenever a cloud copy exists — including phone+cloud rows
+            // (save a copy to Files; does not overwrite the on-phone analysis).
+            restore.isVisible = hasCloud
             delete.isVisible = hasCloud
             restore.setOnClickListener { onRestore(entry) }
             delete.setOnClickListener { onDelete(entry, itemView) }

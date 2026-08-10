@@ -771,7 +771,7 @@ Signing.
   `opClass` / `routeTemplate` for usage rollups, optional `fileCount` /
   `frameCount` on session create, and `errorCode` on failures
   (`app/observability.py` + middleware). Never logs tokens/signatures/URIs.
-  Alpha metering queries: [ALPHA_USAGE_METERING.md](../ops/ALPHA_USAGE_METERING.md).
+  Structured access logs include `opClass` / `routeTemplate` for ops dashboards.
   Client 500 bodies stay opaque (`internal_error`) on
   Cloud Run.
 - **Audit trail** in Firestore `audit_logs` — the compliance record (Cloud

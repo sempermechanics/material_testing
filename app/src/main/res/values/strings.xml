@@ -221,6 +221,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="delete_cloud_failed">Couldn\'t reach the cloud, so nothing was deleted. Check your connection and try again.</string>
     <string name="download_analysis_title">Download this analysis?</string>
     <string name="download_analysis_body">This analysis is only in the cloud on this phone. Download it to open the results.</string>
+    <string name="download_analysis_save_body">Save a copy to your files (Downloads, Drive, or another folder). The analysis already on this phone is left unchanged.</string>
     <string name="download_analysis_confirm">Download</string>
     <string name="download_analysis_working">Downloading…</string>
     <string name="download_analysis_failed">Couldn\'t download this analysis. Check your connection and try again.</string>

@@ -317,6 +317,16 @@
                     android:layout_marginTop="8dp"
                     android:textColor="@color/viewer_on_dark"
                     android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSummaryCancel"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/action_cancel"
+                    android:textColor="@color/viewer_on_dark"
+                    android:visibility="gone" />
             </LinearLayout>
         </FrameLayout>
     </RelativeLayout>

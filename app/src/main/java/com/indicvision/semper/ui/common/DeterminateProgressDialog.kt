@@ -10,16 +10,21 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.indicvision.semper.R
 
 /**
- * A small non-cancelable determinate progress dialog: a status line over a
- * horizontal bar. Replaces the old indeterminate "generating…" message dialog so
- * long export/share jobs show real "X of N" / percentage motion.
+ * A determinate progress dialog: a status line over a horizontal bar.
+ * Optional [onCancel] adds a Cancel button and cancels back-press; used so
+ * long PDF/share builds can be stopped without killing the activity.
  *
  * Build it on the main thread; [update] hops to the main thread itself, so
  * generators running on a background dispatcher can call it directly.
  */
-class DeterminateProgressDialog(private val activity: AppCompatActivity, title: CharSequence) {
+class DeterminateProgressDialog(
+    private val activity: AppCompatActivity,
+    title: CharSequence,
+    private val onCancel: (() -> Unit)? = null,
+) {
 
     private val label = TextView(activity).apply {
         text = title
@@ -48,7 +53,13 @@ class DeterminateProgressDialog(private val activity: AppCompatActivity, title: 
                 )
             },
         )
-        .setCancelable(false)
+        .setCancelable(onCancel != null)
+        .apply {
+            if (onCancel != null) {
+                setNegativeButton(R.string.action_cancel) { _, _ -> onCancel.invoke() }
+                setOnCancelListener { onCancel.invoke() }
+            }
+        }
         .create()
 
     fun show() {
@@ -58,6 +69,7 @@ class DeterminateProgressDialog(private val activity: AppCompatActivity, title: 
     /** Set determinate progress. Safe to call from any thread. */
     fun update(percent: Int, text: CharSequence? = null) {
         activity.runOnUiThread {
+            if (!dialog.isShowing) return@runOnUiThread
             bar.isIndeterminate = false
             bar.setProgressCompat(percent.coerceIn(0, 100), true)
             if (text != null) label.text = text
@@ -65,6 +77,6 @@ class DeterminateProgressDialog(private val activity: AppCompatActivity, title: 
     }
 
     fun dismiss() {
-        dialog.dismiss()
+        if (dialog.isShowing) dialog.dismiss()
     }
 }

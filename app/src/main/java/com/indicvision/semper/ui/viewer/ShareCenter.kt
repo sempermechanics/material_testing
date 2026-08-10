@@ -30,6 +30,7 @@ import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.DeterminateProgressDialog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -113,9 +114,16 @@ class ShareCenter(private val host: ResultViewerActivity) {
         progressText: Int,
         build: suspend (report: (Int, String) -> Unit) -> Pair<List<File>, String>,
     ) {
-        val progress = DeterminateProgressDialog(host, host.getString(progressText))
+        // Job is cancelled from the dialog Cancel button; keep a ref the builder
+        // can see once launch returns it.
+        var job: Job? = null
+        val progress = DeterminateProgressDialog(
+            host,
+            host.getString(progressText),
+            onCancel = { job?.cancel() },
+        )
         progress.show()
-        host.lifecycleScope.launch {
+        job = host.lifecycleScope.launch {
             try {
                 val report: (Int, String) -> Unit = { pct, label -> progress.update(pct, label) }
                 val (files, mime) = withContext(Dispatchers.Default) { build(report) }

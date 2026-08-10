@@ -1,7 +1,6 @@
 package com.indicvision.semper
 
 import android.app.Application
-import com.indicvision.semper.data.AlphaDeviceMeter
 import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.StorageBudget
@@ -39,7 +38,6 @@ class SemperApp : Application() {
         appScope.launch {
             CacheJanitor.sweepOnStartup(this@SemperApp)
             StorageBudget.enforce(this@SemperApp)
-            AlphaDeviceMeter.record(this@SemperApp, "cold_start")
         }
     }
 }
