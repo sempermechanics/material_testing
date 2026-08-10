@@ -8,18 +8,22 @@ import androidx.core.app.NotificationCompat
 import androidx.work.ForegroundInfo
 import com.indicvision.semper.R
 
-/** Foreground notification for expedited upload / restore workers. */
+/** Foreground notification for expedited upload / restore / download workers. */
 object TransferNotifications {
 
     private const val CHANNEL_ID = "semper_transfers"
     private const val UPLOAD_NOTIF_ID = 4101
     private const val RESTORE_NOTIF_ID = 4102
+    private const val DOWNLOAD_NOTIF_ID = 4103
 
     fun uploadForeground(context: Context): ForegroundInfo =
         foregroundInfo(context, UPLOAD_NOTIF_ID, R.string.transfer_upload_title)
 
     fun restoreForeground(context: Context): ForegroundInfo =
         foregroundInfo(context, RESTORE_NOTIF_ID, R.string.transfer_restore_title)
+
+    fun downloadForeground(context: Context): ForegroundInfo =
+        foregroundInfo(context, DOWNLOAD_NOTIF_ID, R.string.transfer_download_title)
 
     private fun foregroundInfo(context: Context, id: Int, titleRes: Int): ForegroundInfo {
         ensureChannel(context)

@@ -5,7 +5,7 @@
 // launchers and views would trade that locality for cross-class state plumbing,
 // so those rules are suppressed for this file rather than worked around.
 
-@file:Suppress("TooManyFunctions", "LargeClass", "LongMethod", "CyclomaticComplexMethod", "MagicNumber")
+@file:Suppress("TooManyFunctions", "LargeClass", "LongMethod", "CyclomaticComplexMethod", "MagicNumber", "ReturnCount")
 
 package com.indicvision.semper.ui.settings
 
@@ -43,6 +43,7 @@ import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DevAuth
 import com.indicvision.semper.data.DeviceKeyManager
+import com.indicvision.semper.data.DicBundleDownloadWorker
 import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionEverythingExporter
@@ -91,10 +92,7 @@ class SettingsActivity : AppCompatActivity() {
     /** Restore WorkInfo ids already surfaced, so one outcome isn't shown twice. */
     private val shownRestoreOutcomes = mutableSetOf<java.util.UUID>()
 
-    /** In-flight Save-to-Files downloads keyed by [AnalysisEntry.downloadKey]. */
-    private val filesDownloadJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
-
-    /** Restore / files-download keys currently busy — disables the Download icon. */
+    /** Restore / Save-to-Files download keys currently busy — disables row actions. */
     private val downloadingKeys = mutableSetOf<String>()
 
     private lateinit var transferBanner: TransferBannerController
@@ -134,6 +132,7 @@ class SettingsActivity : AppCompatActivity() {
         wireCollapsible(R.id.headerHelpSupport, R.id.bodyHelpSupport, R.id.ivHelpSupportChevron)
 
         observeRestoreOutcomes()
+        observeBundleDownloadOutcomes()
 
         wireAccountSection()
         wireCloudSection()
@@ -409,7 +408,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun confirmLocalDownload(entry: AnalysisEntry) {
         if (!entry.offersDownload()) return
         val key = entry.downloadKey()
-        if (key in downloadingKeys || filesDownloadJobs[key]?.isActive == true) {
+        if (key in downloadingKeys || isBundleDownloadRunning(key) || isRestoreWorkRunning(key)) {
             Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
         }
@@ -426,7 +425,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun confirmCloudRestore(entry: AnalysisEntry) {
         if (!entry.offersRestore()) return
         val key = entry.downloadKey()
-        if (key in downloadingKeys || filesDownloadJobs[key]?.isActive == true || isRestoreWorkRunning(key)) {
+        if (key in downloadingKeys || isBundleDownloadRunning(key) || isRestoreWorkRunning(key)) {
             markDownloading(key, true)
             Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
@@ -442,70 +441,40 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * Save Session.zip via Save / Share. Falls back to packing the on-device
-     * session if the cloud zip is unavailable. Never unpacks into the session dir.
+     * Save Session.zip via Save / Share. Enqueued on WorkManager so leaving
+     * Analyses data management does not cancel the transfer. Falls back to
+     * packing the on-device session inside the worker when the cloud zip is
+     * unavailable. Never unpacks into the session dir.
      */
     private fun saveBackupCopyToFiles(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
         val key = entry.downloadKey()
-        if (key in downloadingKeys || filesDownloadJobs[key]?.isActive == true) {
+        if (key in downloadingKeys || isBundleDownloadRunning(key)) {
             Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
         }
-        var job: kotlinx.coroutines.Job? = null
+        val enqueued = runCatching {
+            CloudRestore.enqueueBundleDownload(
+                this,
+                cloud.sessionId,
+                entry.name,
+                localSessionId = entry.record?.id.orEmpty(),
+            )
+        }.onFailure { Timber.e(it, "Could not enqueue bundle download %s", cloud.sessionId) }
+            .isSuccess
+        if (!enqueued) {
+            Toast.makeText(this, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
+            return
+        }
         markDownloading(key, true)
         transferBanner.upsert(
             TransferBannerController.Transfer(
                 id = key,
                 title = entry.name.ifBlank { getString(R.string.transfer_banner_download) },
-                onCancel = { job?.cancel() },
+                onCancel = { CloudRestore.cancelBundleDownload(this, cloud.sessionId) },
             ),
         )
-        job = lifecycleScope.launch {
-            try {
-                val file = withContext(Dispatchers.IO) {
-                    runCatching {
-                        CloudRestore.downloadBundleZip(
-                            this@SettingsActivity,
-                            cloud.sessionId,
-                            entry.name,
-                        ) { done, total ->
-                            val pct = if (total > 0L) {
-                                ((done * PERCENT_MAX) / total).toInt().coerceIn(0, PERCENT_MAX)
-                            } else {
-                                0
-                            }
-                            runOnUiThread {
-                                transferBanner.updateProgress(key, pct)
-                            }
-                        }
-                    }.onFailure { Timber.w(it, "Cloud Session.zip download for save failed") }
-                        .getOrNull()
-                        ?: entry.record?.takeIf { it.hasLocalData() }?.let { record ->
-                            SessionEverythingExporter.exportSessionZip(this@SettingsActivity, record)
-                        }
-                }
-                transferBanner.remove(key)
-                val ready = file?.takeIf { it.exists() && it.length() > 0L }
-                if (ready == null) {
-                    Toast.makeText(
-                        this@SettingsActivity,
-                        R.string.download_analysis_failed,
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    return@launch
-                }
-                SendToSheet.show(this@SettingsActivity, ready, ZIP_MIME)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                transferBanner.remove(key)
-                throw e
-            } finally {
-                filesDownloadJobs.remove(key)
-                markDownloading(key, false)
-                transferBanner.remove(key)
-            }
-        }
-        filesDownloadJobs[key] = job
+        Toast.makeText(this, R.string.download_background_note, Toast.LENGTH_SHORT).show()
     }
 
     private fun restoreBackup(entry: AnalysisEntry) {
@@ -550,16 +519,25 @@ class SettingsActivity : AppCompatActivity() {
             }.getOrDefault(false)
     }
 
+    private fun isBundleDownloadRunning(cloudSessionId: String): Boolean {
+        if (cloudSessionId.isBlank()) return false
+        val wm = runCatching { WorkManager.getInstance(this) }.getOrNull()
+        return wm != null &&
+            runCatching {
+                wm.getWorkInfosForUniqueWork(CloudRestore.bundleDownloadWorkName(cloudSessionId)).get()
+                    .any { !it.state.isFinished }
+            }.getOrDefault(false)
+    }
+
     private fun markDownloading(key: String, busy: Boolean) {
         if (busy) downloadingKeys.add(key) else downloadingKeys.remove(key)
         analysesAdapter.setDownloadingKeys(downloadingKeys.toSet())
     }
 
-    /** Drop finished restore keys; keep active Save-to-Files jobs. */
+    /** Drop finished restore / download keys. */
     private fun syncDownloadingKeys() {
         val next = mutableSetOf<String>()
-        filesDownloadJobs.filterValues { it.isActive }.keys.forEach { next += it }
-        downloadingKeys.filter { isRestoreWorkRunning(it) }.forEach { next += it }
+        downloadingKeys.filter { isRestoreWorkRunning(it) || isBundleDownloadRunning(it) }.forEach { next += it }
         downloadingKeys.clear()
         downloadingKeys.addAll(next)
         analysesAdapter.setDownloadingKeys(downloadingKeys.toSet())
@@ -693,6 +671,81 @@ class SettingsActivity : AppCompatActivity() {
                             syncDownloadingKeys()
                         }
                         else -> Unit
+                    }
+                }
+            }
+    }
+
+    /**
+     * Save-to-Files downloads run in [DicBundleDownloadWorker]. Observe the
+     * tag so progress survives leaving Analyses data management, and so a
+     * finished zip still opens [SendToSheet] when the user returns.
+     */
+    private fun observeBundleDownloadOutcomes() {
+        val workManager = runCatching { WorkManager.getInstance(this) }.getOrNull() ?: return
+        workManager
+            .getWorkInfosByTagLiveData(CloudRestore.TAG_BUNDLE_DOWNLOAD)
+            .observe(this) { infos ->
+                infos.orEmpty().forEach { info ->
+                    val cloudId = info.tags
+                        .firstOrNull { it.startsWith("${CloudRestore.TAG_BUNDLE_DOWNLOAD}-") }
+                        ?.removePrefix("${CloudRestore.TAG_BUNDLE_DOWNLOAD}-")
+                        ?: info.outputData.getString(CloudRestore.KEY_CLOUD_SESSION_ID)
+                    val key = cloudId.orEmpty()
+                    when (info.state) {
+                        WorkInfo.State.RUNNING, WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> {
+                            if (key.isNotBlank()) {
+                                val pct = info.progress.getInt(com.indicvision.semper.DicKeys.UPLOAD_PERCENT, 0)
+                                if (!transferBanner.contains(key)) {
+                                    transferBanner.upsert(
+                                        TransferBannerController.Transfer(
+                                            id = key,
+                                            title = getString(R.string.transfer_banner_download),
+                                            percent = pct,
+                                            onCancel = {
+                                                CloudRestore.cancelBundleDownload(this, key)
+                                            },
+                                        ),
+                                    )
+                                } else if (info.state == WorkInfo.State.RUNNING) {
+                                    transferBanner.updateProgress(key, pct)
+                                }
+                                markDownloading(key, true)
+                            }
+                        }
+                        WorkInfo.State.FAILED -> {
+                            if (key.isNotBlank()) transferBanner.remove(key)
+                            if (presentedBundleDownloads.add(info.id)) {
+                                syncDownloadingKeys()
+                                Toast.makeText(
+                                    this,
+                                    R.string.download_analysis_failed,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                        WorkInfo.State.SUCCEEDED -> {
+                            if (key.isNotBlank()) transferBanner.remove(key)
+                            if (presentedBundleDownloads.add(info.id)) {
+                                syncDownloadingKeys()
+                                val path = info.outputData.getString(DicBundleDownloadWorker.KEY_ZIP_PATH)
+                                val ready = path?.let { java.io.File(it) }
+                                    ?.takeIf { it.exists() && it.length() > 0L }
+                                if (ready == null) {
+                                    Toast.makeText(
+                                        this,
+                                        R.string.download_analysis_failed,
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                } else {
+                                    SendToSheet.show(this, ready, ZIP_MIME)
+                                }
+                            }
+                        }
+                        WorkInfo.State.CANCELLED -> {
+                            if (key.isNotBlank()) transferBanner.remove(key)
+                            syncDownloadingKeys()
+                        }
                     }
                 }
             }
@@ -1160,6 +1213,10 @@ class SettingsActivity : AppCompatActivity() {
     private fun frameCountText(value: Int): String = String.format(Locale.US, "%d", value)
 
     private companion object {
+        /** Work ids whose Save-to-Files outcome was already shown (process-wide). */
+        private val presentedBundleDownloads =
+            java.util.Collections.synchronizedSet(mutableSetOf<java.util.UUID>())
+
         const val CHEVRON_EXPANDED_DEG = 180f
         const val BYTES_PER_KB = 1024.0
         const val BYTES_PER_MB = 1_048_576L

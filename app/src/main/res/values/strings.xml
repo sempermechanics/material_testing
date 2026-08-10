@@ -180,6 +180,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="transfer_channel_name">Cloud transfers</string>
     <string name="transfer_upload_title">Uploading analysis…</string>
     <string name="transfer_restore_title">Restoring analysis…</string>
+    <string name="transfer_download_title">Downloading analysis…</string>
     <string name="badge_synced">synced</string>
     <string name="badge_pending">upload pending</string>
     <string name="badge_preparing_fmt">preparing %1$d%%</string>
@@ -597,6 +598,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_action">Restore</string>
     <string name="restore_load_error">Couldn\'t load backups: %1$s</string>
     <string name="restore_background_note">Restore continues even if you leave this screen.</string>
+    <string name="download_background_note">Download continues even if you leave this screen.</string>
     <string name="admin_pending_requests">Pending access requests</string>
     <string name="admin_title">Access requests</string>
     <string name="admin_approve">Approve</string>
