@@ -5,7 +5,7 @@
 // launchers and views would trade that locality for cross-class state plumbing,
 // so those rules are suppressed for this file rather than worked around.
 
-@file:Suppress("TooManyFunctions", "LargeClass")
+@file:Suppress("TooManyFunctions", "LargeClass", "LongMethod", "CyclomaticComplexMethod", "MagicNumber")
 
 package com.indicvision.semper.ui.settings
 

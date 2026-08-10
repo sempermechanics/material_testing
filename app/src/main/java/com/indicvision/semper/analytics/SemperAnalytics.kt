@@ -42,16 +42,16 @@ object SemperAnalytics {
     }
 
     fun durationBucket(ms: Long): String = when {
-        ms < 1_000L -> "lt_1s"
-        ms < 5_000L -> "1_5s"
-        ms < 30_000L -> "5_30s"
+        ms < MS_1S -> "lt_1s"
+        ms < MS_5S -> "1_5s"
+        ms < MS_30S -> "5_30s"
         else -> "gt_30s"
     }
 
     fun frameCountBucket(count: Int): String = when {
-        count <= 1 -> "1"
-        count <= 5 -> "2_5"
-        count <= 20 -> "6_20"
+        count <= FRAMES_1 -> "1"
+        count <= FRAMES_5 -> "2_5"
+        count <= FRAMES_20 -> "6_20"
         else -> "gt_20"
     }
 
@@ -76,4 +76,10 @@ object SemperAnalytics {
 
     private const val MAX_EVENT_LEN = 40
     private const val MAX_PARAM_LEN = 100
+    private const val MS_1S = 1_000L
+    private const val MS_5S = 5_000L
+    private const val MS_30S = 30_000L
+    private const val FRAMES_1 = 1
+    private const val FRAMES_5 = 5
+    private const val FRAMES_20 = 20
 }

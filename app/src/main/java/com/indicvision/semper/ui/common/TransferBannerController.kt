@@ -54,7 +54,7 @@ class TransferBannerController(
     fun updateProgress(id: String, percent: Int, status: String? = null) {
         val existing = transfers[id] ?: return
         transfers[id] = existing.copy(
-            percent = percent.coerceIn(0, 100),
+            percent = percent.coerceIn(0, PERCENT_MAX),
             status = status ?: existing.status,
         )
         render()
@@ -110,5 +110,9 @@ class TransferBannerController(
                 root.context.getString(R.string.transfer_banner_percent, item.percent)
             }
         }
+    }
+
+    private companion object {
+        const val PERCENT_MAX = 100
     }
 }

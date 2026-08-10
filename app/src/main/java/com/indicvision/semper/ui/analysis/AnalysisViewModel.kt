@@ -8,6 +8,9 @@
     "LoopWithTooManyJumpStatements",
     "MagicNumber",
     "TooGenericExceptionCaught",
+    "LargeClass",
+    "NestedBlockDepth",
+    "ReturnCount",
 )
 
 package com.indicvision.semper.ui.analysis

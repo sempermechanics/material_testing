@@ -241,7 +241,11 @@ class AuthRepository(context: Context) {
     // ------------------------------------------------------------------ internal
 
     /** Run a Firebase sign-in, cache identity, then resolve backend access status. */
-    private suspend fun firebaseThen(method: String, signIn: suspend () -> Any?): Result<String> = withContext(Dispatchers.IO) {
+    @Suppress("LongMethod") // method-tagged analytics on every early-exit keeps one linear flow
+    private suspend fun firebaseThen(
+        method: String,
+        signIn: suspend () -> Any?,
+    ): Result<String> = withContext(Dispatchers.IO) {
         if (!api.enabled) {
             SemperAnalytics.event(
                 appContext,
