@@ -620,25 +620,49 @@ class StaticAnalysisActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.frame_order_manual_hint, Toast.LENGTH_SHORT).show()
             return
         }
-        val ordered = FrameOrderHelper.reorder(
-            paths = viewModel.defFilePaths,
-            names = viewModel.defOriginalNames,
-            dates = viewModel.defFrameDates,
-            sizes = viewModel.defFrameSizes,
-            mode = mode,
-            direction = direction,
-        )
-        val (paths, sizes) = FrameOrderHelper.reprefixTempFiles(
-            ordered.paths,
-            ordered.names,
-            ordered.sizes,
-        )
-        viewModel.defFilePaths = paths
-        viewModel.defOriginalNames = ordered.names
-        viewModel.defFrameDates = ordered.dates
-        viewModel.defFrameSizes = sizes
-        refreshDefSlot()
-        validateFrameSizes()
+        // Import no longer probes URI dates (kept the overlay at 0% on PLC).
+        // Resolve from the cached files the first time the user sorts by date.
+        val pathsSnapshot = viewModel.defFilePaths.toList()
+        val namesSnapshot = viewModel.defOriginalNames.toList()
+        val datesSnapshot = viewModel.defFrameDates.toList()
+        val sizesSnapshot = viewModel.defFrameSizes.toMap()
+        lifecycleScope.launch {
+            val dates = withContext(Dispatchers.IO) {
+                if (mode == FrameOrderMode.DATE &&
+                    (
+                        datesSnapshot.size != pathsSnapshot.size ||
+                            datesSnapshot.all { it == Long.MAX_VALUE }
+                        )
+                ) {
+                    pathsSnapshot.map { FrameOrderHelper.resolveDateMs(File(it)) }
+                } else {
+                    datesSnapshot
+                }
+            }
+            val ordered = withContext(Dispatchers.Default) {
+                FrameOrderHelper.reorder(
+                    paths = pathsSnapshot,
+                    names = namesSnapshot,
+                    dates = dates,
+                    sizes = sizesSnapshot,
+                    mode = mode,
+                    direction = direction,
+                )
+            }
+            val (paths, sizes) = withContext(Dispatchers.IO) {
+                FrameOrderHelper.reprefixTempFiles(
+                    ordered.paths,
+                    ordered.names,
+                    ordered.sizes,
+                )
+            }
+            viewModel.defFilePaths = paths
+            viewModel.defOriginalNames = ordered.names
+            viewModel.defFrameDates = ordered.dates
+            viewModel.defFrameSizes = sizes
+            refreshDefSlot()
+            validateFrameSizes()
+        }
     }
 
     private fun applyManualFrameOrder(orderedPaths: List<String>) {

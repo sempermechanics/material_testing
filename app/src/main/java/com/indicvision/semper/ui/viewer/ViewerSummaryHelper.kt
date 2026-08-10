@@ -70,9 +70,16 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     fun start() {
         if (host.summaryBatchFiles().isEmpty()) return
         rangesJob = host.lifecycleScope.launch {
+            val files = host.summaryBatchFiles()
             val computed = try {
                 withContext(Dispatchers.Default) {
-                    SummaryAnimation.globalRanges(host.summaryBatchFiles())
+                    SummaryAnimation.globalRanges(files) { done, total ->
+                        host.lifecycleScope.launch(Dispatchers.Main.immediate) {
+                            if (!isShowing || rangesJob?.isActive != true) return@launch
+                            progress.progress = done * PERCENT / total.coerceAtLeast(1)
+                            showStatus(host.getString(R.string.summary_scanning_fmt, done, total))
+                        }
+                    }
                 }
             } catch (e: OutOfMemoryError) {
                 Timber.e(e, "OOM computing summary colour ranges")
@@ -135,8 +142,15 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
         val bounds = boundsFor(dataIndex)
         if (bounds == null) {
             // Either the range pass is still running or nothing correlated at all.
-            showStatus(if (rangesJob?.isActive == true) host.getString(R.string.share_generating) else null)
-            if (rangesJob?.isActive != true) showStatus(host.getString(R.string.summary_no_data))
+            // Do not steal the determinate "Reading frames…" status that [start]
+            // already pushes — a static "Preparing files…" looked hung on PLC.
+            if (rangesJob?.isActive == true) {
+                if (!statusPanel.isVisible) {
+                    showStatus(host.getString(R.string.summary_scanning_fmt, 0, host.summaryBatchFiles().size))
+                }
+            } else {
+                showStatus(host.getString(R.string.summary_no_data))
+            }
             return
         }
 

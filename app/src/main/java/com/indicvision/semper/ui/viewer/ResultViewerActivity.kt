@@ -41,6 +41,7 @@ import com.google.android.material.textfield.TextInputEditText
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.AlphaDeviceMeter
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
@@ -273,6 +274,9 @@ class ResultViewerActivity : AppCompatActivity() {
             summary.start()
             if (showingSummary) summary.show()
             updateNavButtons()
+            lifecycleScope.launch(Dispatchers.IO) {
+                AlphaDeviceMeter.record(this@ResultViewerActivity, "viewer_open_f${batchFiles.size}")
+            }
         } else {
             showingSummary = false
             com.google.android.material.snackbar.Snackbar.make(
@@ -397,6 +401,7 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        AlphaDeviceMeter.record(this, "viewer_close")
         super.onDestroy()
         loadFrameJob?.cancel()
         visualizationJob?.cancel()

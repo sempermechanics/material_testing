@@ -415,6 +415,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val needCsv = !analysisCsv.exists() || analysisCsv.length() == 0L
             val needBundles = record.defNames.isNotEmpty() &&
                 !UploadWorkOutcomes.bundleArtifactsReady(stagingDir)
+            AlphaDeviceMeter.record(applicationContext, "backup_prepare_start")
             if (needCsv || needBundles) {
                 // Restaging invalidates any prior Session.zip — it was built
                 // without the artifacts we are about to (re)generate.
@@ -504,7 +505,17 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         bundleZip.delete()
                         hashSidecar.delete()
                         File(stagingDir, "Session.zip.tmp").delete()
-                        val hex = buildSessionBundle(payload, bundleZip)
+                        // Zip dominates prepare on heavy PLC; drive the badge by
+                        // source bytes so it does not sit at 0%/last-frame forever.
+                        val zipTotal = payload.sumOf { it.file.length().coerceAtLeast(1L) }
+                        progPhase.set("prepare")
+                        progDone.set(0)
+                        progTotal.set(zipTotal.coerceAtLeast(1L))
+                        AlphaDeviceMeter.record(applicationContext, "backup_zip_start")
+                        val hex = buildSessionBundle(payload, bundleZip) { n ->
+                            progDone.addAndGet(n)
+                        }
+                        AlphaDeviceMeter.record(applicationContext, "backup_zip_done")
                         hashSidecar.writeText(hex)
                         hex
                     }
@@ -671,6 +682,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
             SessionStore.markSynced(applicationContext, localId)
             Timber.i("Upload complete for %s (%d files, session %s)", localId, total, plan.sessionId)
+            AlphaDeviceMeter.record(applicationContext, "backup_done")
             stagingDir.deleteRecursively() // done — staged files no longer needed
             // A session only becomes droppable once it is backed up, so this is
             // the moment an over-budget phone can actually get space back.
@@ -776,10 +788,15 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
      * Returns the SHA-256 of the finished zip ([SessionZip] tees a digest while
      * writing and round-trip-verifies every entry before promote).
      */
-    private fun buildSessionBundle(payload: List<Artifact>, out: File): String =
+    private fun buildSessionBundle(
+        payload: List<Artifact>,
+        out: File,
+        onBytes: (Long) -> Unit = {},
+    ): String =
         SessionZip.build(
             payload.map { SessionZip.Member(it.role, it.name, it.file) },
             out,
+            onBytes = onBytes,
         )
 
     /**
