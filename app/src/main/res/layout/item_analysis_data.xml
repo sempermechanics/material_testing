@@ -50,16 +50,31 @@
         android:textAllCaps="false"
         android:visibility="gone" />
 
+    <!-- Save a zip to Files / Share (does not change the on-phone session). -->
+    <ImageButton
+        android:id="@+id/btnAnalysisLocalDownload"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/download_local_action"
+        android:padding="8dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_download"
+        android:visibility="gone"
+        app:tint="@color/sky_primary" />
+
+    <!-- Restore from cloud into app storage (shown only when local frames are missing). -->
     <ImageButton
         android:id="@+id/btnAnalysisRestore"
         android:layout_width="40dp"
         android:layout_height="40dp"
         android:layout_marginStart="4dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="@string/download_analysis_confirm"
+        android:contentDescription="@string/restore_action"
         android:padding="8dp"
         android:scaleType="fitCenter"
-        android:src="@drawable/ic_download"
+        android:src="@drawable/ic_cloud_download"
         android:visibility="gone"
         app:tint="@color/sky_primary" />
 

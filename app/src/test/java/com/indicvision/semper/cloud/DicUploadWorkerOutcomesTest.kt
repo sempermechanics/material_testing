@@ -8,6 +8,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import kotlin.io.path.createTempDirectory
 
 /**
  * Pins [DicUploadWorker] quota / fail / retry seams without WorkManager.
@@ -118,7 +119,7 @@ class DicUploadWorkerOutcomesTest {
 
     @Test
     fun `staging is reusable only with verified Session zip sidecar and artifacts`() {
-        val dir = createTempDir(prefix = "upload-staging-")
+        val dir = createTempDirectory(prefix = "upload-staging-").toFile()
         try {
             assertFalse(UploadWorkOutcomes.stagingReusable(dir))
             File(dir, ".bundles_done").createNewFile()
@@ -162,7 +163,7 @@ class DicUploadWorkerOutcomesTest {
 
     @Test
     fun `bundleArtifactsReady rejects missing csv reports or processed`() {
-        val dir = createTempDir(prefix = "upload-staging-")
+        val dir = createTempDirectory(prefix = "upload-staging-").toFile()
         try {
             File(dir, "analysis_data.csv").writeText("image\n")
             File(dir, "reports").mkdirs()

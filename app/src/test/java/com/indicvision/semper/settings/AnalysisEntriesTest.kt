@@ -180,13 +180,28 @@ class AnalysisEntriesTest {
     }
 
     @Test
-    fun `Download is offered only for live cloud list matches`() {
-        val matched = AnalysisEntries.merge(
+    fun `Download when cloud listed Restore only when local frames missing`() {
+        val phoneAndCloud = AnalysisEntries.merge(
             records = listOf(record("local-match", name = "Steel")),
             cloud = listOf(CloudSessionDto(sessionId = "cloud-1", localSessionId = "local-match")),
         )
-        assertEquals(true, matched[0].offersDownload())
-        assertEquals(AnalysisLocation.PHONE_AND_CLOUD, matched[0].location)
+        assertEquals(true, phoneAndCloud[0].offersDownload())
+        assertEquals(false, phoneAndCloud[0].offersRestore())
+        assertEquals(true, phoneAndCloud[0].offersCloudActions())
+
+        val cloudOnly = AnalysisEntries.merge(
+            records = emptyList(),
+            cloud = listOf(CloudSessionDto(sessionId = "cloud-9", specimen = "Beam")),
+        )
+        assertEquals(true, cloudOnly[0].offersDownload())
+        assertEquals(true, cloudOnly[0].offersRestore())
+
+        val stubNoLocal = AnalysisEntries.merge(
+            records = listOf(record("local-stub", withLocalData = false)),
+            cloud = listOf(CloudSessionDto(sessionId = "cloud-2", localSessionId = "local-stub")),
+        )
+        assertEquals(true, stubNoLocal[0].offersDownload())
+        assertEquals(true, stubNoLocal[0].offersRestore())
 
         val offlineSynced = AnalysisEntries.merge(
             records = listOf(
@@ -199,11 +214,7 @@ class AnalysisEntriesTest {
             cloud = emptyList(),
         )
         assertEquals(false, offlineSynced[0].offersDownload())
-
-        val cloudOnly = AnalysisEntries.merge(
-            records = emptyList(),
-            cloud = listOf(CloudSessionDto(sessionId = "cloud-9", specimen = "Beam")),
-        )
-        assertEquals(true, cloudOnly[0].offersDownload())
+        assertEquals(false, offlineSynced[0].offersRestore())
+        assertEquals(false, offlineSynced[0].offersCloudActions())
     }
 }

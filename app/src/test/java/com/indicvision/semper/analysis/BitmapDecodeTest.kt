@@ -8,6 +8,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import kotlin.io.path.createTempDirectory
 
 class BitmapDecodeTest {
 
@@ -66,7 +67,7 @@ class BitmapDecodeTest {
 
     @Test
     fun `platform raster sniff on file matches header`() {
-        val dir = createTempDir(prefix = "raster-sniff-")
+        val dir = createTempDirectory(prefix = "raster-sniff-").toFile()
         try {
             val png = File(dir, "a.png")
             png.writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))

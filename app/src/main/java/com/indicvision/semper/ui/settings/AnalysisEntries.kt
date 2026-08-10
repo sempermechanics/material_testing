@@ -39,10 +39,19 @@ data class AnalysisEntry(
         }
 
     /**
-     * Settings Download when the live cloud list matched this row — cloud-only
-     * or phone+cloud (backed up on cloud, with or without local frame data).
+     * Live cloud list match — Delete (and related cloud actions) apply.
      */
+    fun offersCloudActions(): Boolean = cloud != null
+
+    /** Save-to-Files Download: only when a cloud backup is listed. */
     fun offersDownload(): Boolean = cloud != null
+
+    /**
+     * Cloud Restore into app storage: only when cloud is listed and this phone
+     * does not already have frame data.
+     */
+    fun offersRestore(): Boolean =
+        cloud != null && (record == null || !record.hasLocalData())
 
     /** Stable id for in-flight Download jobs and WorkManager restore names. */
     fun downloadKey(): String =

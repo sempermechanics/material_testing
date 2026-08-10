@@ -110,7 +110,8 @@ class SettingsActivity : AppCompatActivity() {
             backupLabel = ::backupLabel,
             onOpen = ::openOrDownloadAnalysis,
             onBackup = ::startBackup,
-            onRestore = ::downloadCloudBackup,
+            onLocalDownload = ::confirmLocalDownload,
+            onCloudRestore = ::confirmCloudRestore,
             onDelete = ::deleteBackup,
         )
         analysesList = findViewById<RecyclerView>(R.id.analysesDataList).apply {
@@ -383,8 +384,8 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * Open when the phone already has results; otherwise offer Download when a
-     * cloud backup is attached to this management row.
+     * Open when the phone already has results; otherwise offer cloud restore when a
+     * backup is attached to this management row.
      */
     private fun openOrDownloadAnalysis(entry: AnalysisEntry) {
         val record = entry.record
@@ -393,7 +394,7 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
         if (entry.cloud != null) {
-            confirmDownload(entry)
+            confirmCloudRestore(entry)
             return
         }
         if (record != null) {
@@ -401,47 +402,44 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun downloadCloudBackup(entry: AnalysisEntry) {
+    private fun confirmLocalDownload(entry: AnalysisEntry) {
         if (!entry.offersDownload()) return
         val key = entry.downloadKey()
         if (key in downloadingKeys || filesDownloadJobs[key]?.isActive == true) {
             Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
         }
-        if (isRestoreWorkRunning(key)) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.download_analysis_save_title)
+            .setMessage(R.string.download_analysis_save_body)
+            .setPositiveButton(R.string.download_local_action) { _, _ ->
+                saveBackupCopyToFiles(entry)
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun confirmCloudRestore(entry: AnalysisEntry) {
+        if (!entry.offersRestore()) return
+        val key = entry.downloadKey()
+        if (key in downloadingKeys || filesDownloadJobs[key]?.isActive == true || isRestoreWorkRunning(key)) {
             markDownloading(key, true)
             Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
         }
-        confirmDownload(entry)
-    }
-
-    private fun confirmDownload(entry: AnalysisEntry) {
-        val hasLocal = entry.record?.hasLocalData() == true
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.download_analysis_title)
-            .setMessage(
-                if (hasLocal) {
-                    getString(R.string.download_analysis_save_body)
-                } else {
-                    getString(R.string.download_analysis_body)
-                },
-            )
-            .setPositiveButton(R.string.download_analysis_confirm) { _, _ ->
-                if (hasLocal) {
-                    saveBackupCopyToFiles(entry)
-                } else {
-                    restoreBackup(entry)
-                }
+            .setMessage(R.string.download_analysis_body)
+            .setPositiveButton(R.string.restore_action) { _, _ ->
+                restoreBackup(entry)
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     /**
-     * Phone+cloud Download (live cloud list match): save Session.zip via Save /
-     * Share. Falls back to packing the on-device session if the cloud zip is
-     * unavailable. Never unpacks into the existing session dir.
+     * Save Session.zip via Save / Share. Falls back to packing the on-device
+     * session if the cloud zip is unavailable. Never unpacks into the session dir.
      */
     private fun saveBackupCopyToFiles(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
@@ -468,7 +466,7 @@ class SettingsActivity : AppCompatActivity() {
                             entry.name,
                         ) { done, total ->
                             val pct = if (total > 0L) {
-                                ((done * 100) / total).toInt().coerceIn(0, 100)
+                                ((done * PERCENT_MAX) / total).toInt().coerceIn(0, PERCENT_MAX)
                             } else {
                                 0
                             }
@@ -514,7 +512,9 @@ class SettingsActivity : AppCompatActivity() {
         // in-place rather than creating a second "restored-…" id.
         val targetLocalId = entry.record?.id ?: CloudRestore.targetLocalId(cloud)
         lifecycleScope.launch {
-            val started = withContext(Dispatchers.IO) { enqueueRestoreWithStub(entry, cloud, targetLocalId) }
+            val started = withContext(Dispatchers.IO) {
+                enqueueRestoreWithStub(entry, cloud, targetLocalId)
+            }
             if (!started) {
                 Toast.makeText(this@SettingsActivity, R.string.restore_failed_generic, Toast.LENGTH_LONG).show()
                 return@launch
@@ -527,8 +527,8 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun isRestoreWorkRunning(cloudSessionId: String): Boolean {
         if (cloudSessionId.isBlank()) return false
-        val wm = runCatching { WorkManager.getInstance(this) }.getOrNull() ?: return false
-        return runCatching {
+        val wm = runCatching { WorkManager.getInstance(this) }.getOrNull()
+        return wm != null && runCatching {
             wm.getWorkInfosForUniqueWork(CloudRestore.workName(cloudSessionId)).get()
                 .any { !it.state.isFinished }
         }.getOrDefault(false)
@@ -556,8 +556,7 @@ class SettingsActivity : AppCompatActivity() {
         targetLocalId: String,
     ): Boolean {
         val existing = SessionStore.get(this, targetLocalId)
-        // Never overwrite an analysis that still has frame data — phone+cloud
-        // Download saves a copy to Files instead.
+        // Restore is only offered when local frames are missing.
         if (existing?.hasLocalData() == true) return false
         val stub = restoreStub(entry, cloud, targetLocalId, existing)
         if (!SessionStore.upsert(this, stub, allowOverLimit = true)) return false
@@ -1048,6 +1047,7 @@ class SettingsActivity : AppCompatActivity() {
         const val BYTES_PER_GB = 1_073_741_824L
         const val ZIP_MIME = "application/zip"
         const val JSON_MIME = "application/json"
+        const val PERCENT_MAX = 100
 
         /** Snackbar shows for exactly as long as the delete stays cancellable. */
         val UNDO_WINDOW_MS = TimeUnit.SECONDS.toMillis(BackupDeleteWorker.UNDO_WINDOW_SECONDS).toInt()
