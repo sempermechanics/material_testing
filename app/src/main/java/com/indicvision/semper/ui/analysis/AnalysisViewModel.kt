@@ -19,7 +19,6 @@ import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.ProgressCallback
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
-import com.indicvision.semper.data.AlphaDeviceMeter
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionRecordSettings
@@ -489,7 +488,6 @@ class AnalysisViewModel : ViewModel() {
             headline = summary.headline,
         )
         sessions.saveSession(appContext, record, enqueueCloudIfSaved = cloudEnabled)
-        AlphaDeviceMeter.record(appContext, "analysis_saved_sweep_f${record.frameCount}")
     }
 
     /** The Home-list name, headline and per-frame labels of a finished sweep. */
@@ -951,9 +949,6 @@ class AnalysisViewModel : ViewModel() {
                 engineErrorCode = ERROR_SESSION_LIMIT
             } else if (!cloudEnabled) {
                 Timber.d("Save to cloud is off — session %s stays local only", localSessionId)
-            }
-            if (saved) {
-                AlphaDeviceMeter.record(appContext, "analysis_saved_single")
             }
         }
 

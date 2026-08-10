@@ -415,7 +415,6 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val needCsv = !analysisCsv.exists() || analysisCsv.length() == 0L
             val needBundles = record.defNames.isNotEmpty() &&
                 !UploadWorkOutcomes.bundleArtifactsReady(stagingDir)
-            AlphaDeviceMeter.record(applicationContext, "backup_prepare_start")
             if (needCsv || needBundles) {
                 // Restaging invalidates any prior Session.zip — it was built
                 // without the artifacts we are about to (re)generate.
@@ -511,11 +510,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         progPhase.set("prepare")
                         progDone.set(0)
                         progTotal.set(zipTotal.coerceAtLeast(1L))
-                        AlphaDeviceMeter.record(applicationContext, "backup_zip_start")
                         val hex = buildSessionBundle(payload, bundleZip) { n ->
                             progDone.addAndGet(n)
                         }
-                        AlphaDeviceMeter.record(applicationContext, "backup_zip_done")
                         hashSidecar.writeText(hex)
                         hex
                     }
@@ -682,7 +679,6 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
             SessionStore.markSynced(applicationContext, localId)
             Timber.i("Upload complete for %s (%d files, session %s)", localId, total, plan.sessionId)
-            AlphaDeviceMeter.record(applicationContext, "backup_done")
             stagingDir.deleteRecursively() // done — staged files no longer needed
             // A session only becomes droppable once it is backed up, so this is
             // the moment an over-budget phone can actually get space back.

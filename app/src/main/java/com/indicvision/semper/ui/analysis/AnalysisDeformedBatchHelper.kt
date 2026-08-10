@@ -8,7 +8,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
-import com.indicvision.semper.data.AlphaDeviceMeter
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.net.AppRemoteConfig
 import kotlinx.coroutines.CancellationException
@@ -85,10 +84,6 @@ object AnalysisDeformedBatchHelper {
                             status = activity.getString(R.string.analysis_importing_fmt, done, total),
                         )
                     },
-                )
-                AlphaDeviceMeter.record(
-                    activity,
-                    "import_done_n${batch?.filePaths?.size ?: 0}",
                 )
                 val frameDates = batch?.filePaths?.map { path ->
                     val name = File(path).name

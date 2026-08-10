@@ -3,9 +3,6 @@
 # Usage:
 #   PROJECT_ID=... USER_UID=... ./scripts/meter_alpha_usage.sh
 # Optional: FRESHNESS=2h LIMIT=500
-#
-# Device RAM/ROM (PSS + StorageStats CSV): see meter_alpha_device_memory.sh
-# and docs/ops/ALPHA_USAGE_METERING.md § Device RAM and ROM.
 set -euo pipefail
 : "${PROJECT_ID:?set PROJECT_ID}"
 : "${USER_UID:?set USER_UID}"

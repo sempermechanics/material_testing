@@ -35,7 +35,6 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.R
-import com.indicvision.semper.data.AlphaDeviceMeter
 import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.BackupDeleteWorker
 import com.indicvision.semper.data.CacheJanitor
@@ -348,7 +347,6 @@ class SettingsActivity : AppCompatActivity() {
             } else {
                 toast(getString(R.string.storage_cache_cleared_none))
             }
-            AlphaDeviceMeter.record(this@SettingsActivity, "cache_cleared")
             refreshStorageTotals()
         }
     }
