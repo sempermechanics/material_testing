@@ -3,8 +3,35 @@ title = "IndicVision secret scanning"
 [extend]
 useDefault = true
 
+# Path allowlists cover the working tree and history when the path matches.
+# Fingerprints cover one-off historical hits (deleted files / known client IDs)
+# so full-history scans on workflow_dispatch stay green without rewriting git.
+
 [[allowlists]]
 description = "Firebase Android client configuration is a public client identifier, not an Admin SDK credential"
 paths = [
   '''^app/google-services\.json$''',
+]
+fingerprints = [
+  '''9a3623ad444512d0f8033a3aa067e44bdf0e7347:app/google-services.json:gcp-api-key:31''',
+]
+
+[[allowlists]]
+description = "Historical client-side Supabase anon keys (removed from tree; not Admin secrets)"
+paths = [
+  '''^local\.properties$''',
+  '''(^|/)SupabaseManager\.kt$''',
+]
+fingerprints = [
+  '''46e50fd23512e481f4d1a4c3697eb3d6aec6d68f:local.properties:generic-api-key:10''',
+  '''b9e90658bda6fcb1f1a6a5daed5e109dc8c520c5:app/src/main/java/com/rafad/indicvisiondic/SupabaseManager.kt:generic-api-key:15''',
+]
+
+[[allowlists]]
+description = "Website-sync docs patch embeds historical client material already removed from the tree"
+paths = [
+  '''^docs/ops/website-sync/.*\.patch$''',
+]
+fingerprints = [
+  '''46dbc6056cab69da9a0d73560babe57afb139fd9:docs/ops/website-sync/0001-docs-copy-app-manual-sources-into-website-repo.patch:generic-api-key:41745''',
 ]
