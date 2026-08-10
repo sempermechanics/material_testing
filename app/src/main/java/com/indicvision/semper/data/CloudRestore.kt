@@ -185,10 +185,78 @@ object CloudRestore {
         }
 
     /**
+     * Download the cloud [Session.zip] into app cache for the user to save or
+     * share. Does **not** unpack into a session directory or touch existing
+     * local analysis files.
+     *
+     * Throws when the backup has no bundle role (legacy per-file backups) or
+     * the transfer fails attestation.
+     */
+    suspend fun downloadBundleZip(
+        context: Context,
+        sessionId: String,
+        displayName: String,
+        onProgress: suspend (done: Long, total: Long) -> Unit = { _, _ -> },
+    ): File = withContext(Dispatchers.IO) {
+        val appContext = context.applicationContext
+        val api = IndicApi.get(appContext)
+        val token = TokenProvider.usableIdToken()
+            ?: error("Not signed in")
+
+        val manifest = api.listSessionFiles(token, sessionId)
+        val files = manifest.files.filter { it.status == "COMPLETED" }
+        require(files.isNotEmpty()) { "This backup has no completed files" }
+        val bundleEntry = files.firstOrNull { it.role == "bundle" }
+            ?: error("This backup has no Session.zip")
+
+        val outDir = File(appContext.cacheDir, "share").apply { mkdirs() }
+        val safe = displayName.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_')
+            .ifBlank { "analysis" }.take(40)
+        val dest = File(outDir, "${safe}_Session.zip")
+        dest.delete()
+        File(outDir, "${dest.name}.part").delete()
+        File(outDir, "${dest.name}.full").delete()
+
+        val expected = bundleEntry.sizeBytes.takeIf { it > 0L } ?: -1L
+        val totalForUi = expected.takeIf { it > 0L } ?: 1L
+        onProgress(0L, totalForUi)
+        api.downloadFile(
+            token,
+            bundleEntry.fileId,
+            dest,
+            expectedBytes = expected,
+            onBytes = { have ->
+                val total = if (expected > 0L) expected else have.coerceAtLeast(1L)
+                onProgress(have.coerceAtMost(total), total)
+            },
+        )
+        require(expected <= 0L || dest.length() == expected) {
+            "Downloaded Session.zip size ${dest.length()} != declared $expected — corrupt transfer"
+        }
+        val expectedSha = bundleEntry.sha256?.lowercase()?.takeIf { it.length == 64 }
+            ?: error("Session.zip missing sha256 attestation — corrupt transfer")
+        val gotSha = Digests.sha256Hex(dest)
+        require(gotSha == expectedSha) {
+            "Session.zip sha256 mismatch (got $gotSha, expected $expectedSha) — corrupt transfer"
+        }
+        val magic = dest.inputStream().use { stream ->
+            ByteArray(ZIP_MAGIC.size).also { buf ->
+                require(stream.read(buf) >= ZIP_MAGIC.size) {
+                    "Session.zip too small (${dest.length()} B) — corrupt transfer"
+                }
+            }
+        }
+        require(magic.contentEquals(ZIP_MAGIC)) {
+            "Session.zip is not a zip (magic=${magic.toList()}) — corrupt transfer"
+        }
+        onProgress(totalForUi, totalForUi)
+        dest
+    }
+
+    /**
      * Download an analysis and rebuild it locally. Returns the restored local
      * session id, or throws on failure.
-     */
-    /**
+     *
      * @param onProgress cumulative units completed vs total (bytes for bundled
      * Session.zip restores; file counts for legacy per-file backups).
      */

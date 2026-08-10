@@ -61,7 +61,7 @@ class AnalysisDataAdapter(
 
             val hasCloud = entry.cloud != null
             // Download whenever a cloud copy exists — including phone+cloud rows
-            // so the user can replace local files from the backup.
+            // (save a copy to Files; does not overwrite the on-phone analysis).
             restore.isVisible = hasCloud
             delete.isVisible = hasCloud
             restore.setOnClickListener { onRestore(entry) }

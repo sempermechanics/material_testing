@@ -406,16 +406,69 @@ class SettingsActivity : AppCompatActivity() {
             .setTitle(R.string.download_analysis_title)
             .setMessage(
                 if (hasLocal) {
-                    getString(R.string.download_analysis_replace_body)
+                    getString(R.string.download_analysis_save_body)
                 } else {
                     getString(R.string.download_analysis_body)
                 },
             )
             .setPositiveButton(R.string.download_analysis_confirm) { _, _ ->
-                restoreBackup(entry)
+                if (hasLocal) {
+                    saveBackupCopyToFiles(entry)
+                } else {
+                    restoreBackup(entry)
+                }
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
+    }
+
+    /**
+     * Phone+cloud Download: pull Session.zip (or pack the on-device session) and
+     * hand it to Save / Share. Never unpacks into the existing session dir.
+     */
+    private fun saveBackupCopyToFiles(entry: AnalysisEntry) {
+        val cloud = entry.cloud ?: return
+        var job: kotlinx.coroutines.Job? = null
+        val progress = DeterminateProgressDialog(
+            this,
+            getString(R.string.download_analysis_working),
+            onCancel = { job?.cancel() },
+        )
+        progress.show()
+        job = lifecycleScope.launch {
+            try {
+                val file = withContext(Dispatchers.IO) {
+                    runCatching {
+                        CloudRestore.downloadBundleZip(
+                            this@SettingsActivity,
+                            cloud.sessionId,
+                            entry.name,
+                        ) { done, total ->
+                            val pct = if (total > 0L) ((done * 100) / total).toInt().coerceIn(0, 100) else 0
+                            progress.update(percent = pct)
+                        }
+                    }.onFailure { Timber.w(it, "Cloud Session.zip download for save failed") }
+                        .getOrNull()
+                        ?: entry.record?.takeIf { it.hasLocalData() }?.let { record ->
+                            SessionEverythingExporter.exportSessionZip(this@SettingsActivity, record)
+                        }
+                }
+                progress.dismiss()
+                val ready = file?.takeIf { it.exists() && it.length() > 0L }
+                if (ready == null) {
+                    Toast.makeText(
+                        this@SettingsActivity,
+                        R.string.download_analysis_failed,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    return@launch
+                }
+                SendToSheet.show(this@SettingsActivity, ready, ZIP_MIME)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                progress.dismiss()
+                throw e
+            }
+        }
     }
 
     private fun restoreBackup(entry: AnalysisEntry) {
@@ -441,8 +494,9 @@ class SettingsActivity : AppCompatActivity() {
         targetLocalId: String,
     ): Boolean {
         val existing = SessionStore.get(this, targetLocalId)
-        // Re-download is allowed when local data already exists: DicRestoreWorker
-        // clears the session dir before unpacking the cloud backup.
+        // Never overwrite an analysis that still has frame data — phone+cloud
+        // Download saves a copy to Files instead.
+        if (existing?.hasLocalData() == true) return false
         val stub = restoreStub(entry, cloud, targetLocalId, existing)
         if (!SessionStore.upsert(this, stub, allowOverLimit = true)) return false
         return try {

@@ -72,6 +72,35 @@ object SessionEverythingExporter {
     }
 
     /**
+     * Packages one on-device session into a shareable ZIP without changing the
+     * session directory. Used when Settings Download should save to Files and
+     * the cloud backup has no Session.zip (legacy per-file uploads).
+     */
+    suspend fun exportSessionZip(
+        context: Context,
+        record: SessionRecord,
+    ): File? = withContext(Dispatchers.IO) {
+        val app = context.applicationContext
+        val outDir = File(app.cacheDir, "share").apply { mkdirs() }
+        val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val stagingRoot = File(outDir, "export_one_$ts").apply { mkdirs() }
+        try {
+            buildSessionEverythingZip(app, record, stagingRoot, 0, ts)?.also { built ->
+                val named = File(outDir, sanitizeZipName(record.name, record.id) + ".zip")
+                named.delete()
+                if (!built.renameTo(named)) {
+                    built.copyTo(named, overwrite = true)
+                    built.delete()
+                }
+                return@withContext named.takeIf { it.exists() && it.length() > 0L }
+            }
+            null
+        } finally {
+            stagingRoot.deleteRecursively()
+        }
+    }
+
+    /**
      * One session archive: raw photos, analysis CSV, per-frame reports / field
      * maps (via [SessionUploadBundler]), plus metadata.
      */
