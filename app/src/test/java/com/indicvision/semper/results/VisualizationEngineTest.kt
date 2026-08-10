@@ -70,6 +70,44 @@ class VisualizationEngineTest {
         assertTrue("the ramp should cover most of the frame, covered=$covered", covered > bitmap.width)
     }
 
+    /** The original boxed sigma-clamp, kept as the parity oracle for the de-boxed path. */
+    private fun boxedSigmaClamp(data: FloatArray, valIndex: Int): Pair<Float, Float> {
+        val valid = mutableListOf<Float>()
+        var i = 0
+        while (i < data.size) {
+            if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) valid.add(data[i + valIndex])
+            i += DicResult.STRIDE
+        }
+        valid.sort()
+        var mn = valid[(valid.size * 0.02).toInt().coerceIn(0, valid.size - 1)]
+        var mx = valid[(valid.size * 0.98).toInt().coerceIn(0, valid.size - 1)]
+        val minSpan = if (valIndex > 3) 0.0001f else 0.01f
+        if ((mx - mn) < minSpan) {
+            val mid = (mx + mn) / 2f
+            mn = mid - minSpan / 2f
+            mx = mid + minSpan / 2f
+        }
+        return mn to mx
+    }
+
+    @Test
+    fun `de-boxed sigma-clamp min max is identical to the boxed oracle`() {
+        val step = 4
+        val data = rampField(cols = 25, rows = 17, step = step)
+        for (valIndex in listOf(DicResult.IDX_EXX, DicResult.IDX_X)) {
+            val plane = VisualizationEngine.generateHeatmapIndices(
+                data,
+                25 * step,
+                17 * step,
+                valIndex,
+                step,
+            )
+            val (mn, mx) = boxedSigmaClamp(data, valIndex)
+            assertEquals("min field=$valIndex", mn, plane.min, 0f)
+            assertEquals("max field=$valIndex", mx, plane.max, 0f)
+        }
+    }
+
     @Test
     fun `a field with no correlated points is entirely the transparent index`() {
         // Every point rejected: the native engine's invalid sentinel.

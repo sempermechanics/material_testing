@@ -9,6 +9,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.channels.FileChannel
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.text.FieldPosition
@@ -54,6 +55,22 @@ object DicResult {
         if (len <= 0L || len > Int.MAX_VALUE.toLong() || len % BYTES_PER_POINT != 0L) return null
         val floatCount = (len / 4L).toInt()
         val out = FloatArray(floatCount)
+        val mapped = runCatching {
+            FileInputStream(file).channel.use { channel ->
+                val map = channel.map(FileChannel.MapMode.READ_ONLY, 0, len)
+                map.order(ByteOrder.nativeOrder()).asFloatBuffer().get(out)
+            }
+            true
+        }.getOrDefault(false)
+        if (mapped) return out
+        return decodeDatChunked(file, floatCount, out)
+    }
+
+    /**
+     * Chunked-read fallback for [decodeDatFile]: reads the file through a small heap
+     * buffer into [out]. Kept for filesystems/sizes that cannot be memory-mapped.
+     */
+    private fun decodeDatChunked(file: File, floatCount: Int, out: FloatArray): FloatArray? {
         val complete = FileInputStream(file).channel.use { channel ->
             val buf = ByteBuffer.allocate(DECODE_CHUNK_BYTES).order(ByteOrder.nativeOrder())
             var written = 0

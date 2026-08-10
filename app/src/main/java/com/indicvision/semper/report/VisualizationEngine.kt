@@ -91,6 +91,28 @@ object VisualizationEngine {
         val p02 = values[(values.size * 0.02).toInt().coerceIn(0, values.size - 1)]
         val p98 = values[(values.size * 0.98).toInt().coerceIn(0, values.size - 1)]
 
+        return clampSpan(p02, p98, valIndex)
+    }
+
+    /**
+     * Primitive-buffer variant used by [generateHeatmapIndices]: sorts and clamps the
+     * first [count] entries of [values] in place. `FloatArray.sort` uses the same total
+     * order as `List<Float>.sort()`, so the p02/p98 picks are identical to the boxed
+     * path.
+     */
+    private fun computeSigmaClampedRange(values: FloatArray, count: Int, valIndex: Int): Pair<Float, Float> {
+        if (count == 0) return Pair(0f, 1f)
+
+        values.sort(0, count)
+
+        val p02 = values[(count * 0.02).toInt().coerceIn(0, count - 1)]
+        val p98 = values[(count * 0.98).toInt().coerceIn(0, count - 1)]
+
+        return clampSpan(p02, p98, valIndex)
+    }
+
+    /** Shared min-span floor for both [computeSigmaClampedRange] variants. */
+    private fun clampSpan(p02: Float, p98: Float, valIndex: Int): Pair<Float, Float> {
         var finalMin = p02
         var finalMax = p98
 
@@ -185,7 +207,10 @@ object VisualizationEngine {
         var maxX = Int.MIN_VALUE
         var maxY = Int.MIN_VALUE
 
-        val validValues = mutableListOf<Float>()
+        // Primitive collector (same values, same order as the previous List<Float>) so
+        // the sort + percentile pick in computeSigmaClampedRange is bit-identical.
+        val validValues = FloatArray(data.size / DicResult.STRIDE)
+        var validCount = 0
 
         for (i in data.indices step DicResult.STRIDE) {
             val corr = data[i + DicResult.IDX_ZNSSD]
@@ -194,7 +219,7 @@ object VisualizationEngine {
                 val y = data[i + 1].toInt()
                 val v = data[i + valIndex]
 
-                validValues.add(v)
+                validValues[validCount++] = v
                 if (x < minX) minX = x
                 if (x > maxX) maxX = x
                 if (y < minY) minY = y
@@ -202,7 +227,7 @@ object VisualizationEngine {
             }
         }
 
-        if (validValues.isEmpty()) {
+        if (validCount == 0) {
             return IndexPlane(ByteArray(outW * outH) { TRANSPARENT_INDEX.toByte() }, outW, outH, 0f, 0f)
         }
 
@@ -213,7 +238,7 @@ object VisualizationEngine {
             minV = customMin
             maxV = customMax
         } else {
-            val bounds = computeSigmaClampedRange(validValues, valIndex)
+            val bounds = computeSigmaClampedRange(validValues, validCount, valIndex)
             minV = bounds.first
             maxV = bounds.second
         }

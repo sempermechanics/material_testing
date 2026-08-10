@@ -556,7 +556,10 @@ class ResultViewerActivity : AppCompatActivity() {
         rawData = data
         // A sweep's frames each have their own grid pitch.
         step = sweepSteps?.getOrNull(index) ?: baseStep
-        inspect.rebuildSpatialIndex(data, step)
+        // Invalidate rather than rebuild: the O(n) bucket map is only needed for
+        // inspect-mode nearest-point taps, and findNearestDataPoint builds it lazily
+        // for the new frame. Scrubbing large frames no longer pays for an unused index.
+        inspect.clearSpatialIndex()
         val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
         if (!showingSummary) {
             tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"

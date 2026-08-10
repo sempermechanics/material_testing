@@ -49,17 +49,31 @@ class PointSpatialIndex private constructor(
     companion object {
         fun build(data: FloatArray, step: Int): PointSpatialIndex {
             val cellSize = step.coerceAtLeast(1).toFloat()
-            val scratch = HashMap<Long, MutableList<Int>>()
+
+            // Two-pass count-then-fill straight into primitive IntArrays, avoiding the
+            // boxed ArrayList<Int> per cell (~one point per step-sized cell, so those
+            // boxed lists dominated build allocation). Points are filled in ascending
+            // data order — identical intra-bucket order to the old ArrayList.add path,
+            // so nearest()'s tie-breaking is unchanged.
+            val counts = HashMap<Long, Int>()
             for (i in data.indices step DicResult.STRIDE) {
                 val corr = data[i + DicResult.IDX_ZNSSD]
                 if (!DicResult.isAcceptedPoint(corr)) continue
-                val cx = floor(data[i] / cellSize).toInt()
-                val cy = floor(data[i + 1] / cellSize).toInt()
-                scratch.getOrPut(pack(cx, cy)) { ArrayList(4) }.add(i)
+                val key = pack(floor(data[i] / cellSize).toInt(), floor(data[i + 1] / cellSize).toInt())
+                counts[key] = (counts[key] ?: 0) + 1
             }
-            val buckets = HashMap<Long, IntArray>(scratch.size)
-            for ((k, list) in scratch) {
-                buckets[k] = list.toIntArray()
+
+            val buckets = HashMap<Long, IntArray>(counts.size)
+            for ((k, c) in counts) buckets[k] = IntArray(c)
+
+            val cursors = HashMap<Long, Int>(counts.size)
+            for (i in data.indices step DicResult.STRIDE) {
+                val corr = data[i + DicResult.IDX_ZNSSD]
+                if (!DicResult.isAcceptedPoint(corr)) continue
+                val key = pack(floor(data[i] / cellSize).toInt(), floor(data[i + 1] / cellSize).toInt())
+                val pos = cursors[key] ?: 0
+                buckets.getValue(key)[pos] = i
+                cursors[key] = pos + 1
             }
             return PointSpatialIndex(data, cellSize, buckets)
         }

@@ -61,4 +61,98 @@ class ReportBuilderTest {
         val formatted = ReportBuilder.formatMetric(1e-5f)
         assertTrue("expected scientific notation, got $formatted", formatted.contains("e", ignoreCase = true))
     }
+
+    /** A field with signed displacements, signed strains, and a few rejected points. */
+    private fun variedField(n: Int): FloatArray {
+        val data = FloatArray(n * DicResult.STRIDE)
+        for (i in 0 until n) {
+            val o = i * DicResult.STRIDE
+            data[o + DicResult.IDX_X] = i.toFloat()
+            data[o + DicResult.IDX_Y] = (i % 7).toFloat()
+            data[o + DicResult.IDX_U] = (i - n / 2) * 0.037f // spans negative and positive
+            data[o + DicResult.IDX_V] = (n / 2 - i) * 0.019f
+            data[o + DicResult.IDX_EXX] = (i - n / 3) * 0.0004f
+            data[o + DicResult.IDX_EYY] = (i % 5 - 2) * 0.0007f
+            data[o + DicResult.IDX_EXY] = (i % 3 - 1) * 0.0002f
+            data[o + DicResult.IDX_ZNSSD] = if (i % 11 == 0) -1f else 0.01f // some rejected
+        }
+        return data
+    }
+
+    /** The original boxed-List implementation, kept here as the parity oracle. */
+    private fun boxedExtrema(data: FloatArray, dataIndex: Int, absoluteStrainValues: Boolean): ReportBuilder.FieldExtrema {
+        val isStrain = DicResult.isStrainFieldIndex(dataIndex)
+        val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
+        fun fv(raw: Float) = if (isStrain && absoluteStrainValues) kotlin.math.abs(raw) else raw
+        val valid = mutableListOf<Float>()
+        var i = 0
+        while (i < data.size) {
+            if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD], isCorrelation)) {
+                valid.add(fv(data[i + dataIndex]))
+            }
+            i += DicResult.STRIDE
+        }
+        if (valid.isEmpty()) return ReportBuilder.FieldExtrema(-1, -1)
+        valid.sort()
+        val p02 = valid[(valid.size * 0.02).toInt().coerceIn(0, valid.size - 1)]
+        val p98 = valid[(valid.size * 0.98).toInt().coerceIn(0, valid.size - 1)]
+        var maxV = -Float.MAX_VALUE
+        var minV = Float.MAX_VALUE
+        var maxIdx = -1
+        var minIdx = -1
+        i = 0
+        while (i < data.size) {
+            if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD], isCorrelation)) {
+                val v = fv(data[i + dataIndex])
+                if (v in p02..p98) {
+                    if (v > maxV) { maxV = v; maxIdx = i }
+                    if (v < minV) { minV = v; minIdx = i }
+                }
+            }
+            i += DicResult.STRIDE
+        }
+        if (maxIdx == -1 || minIdx == -1) {
+            i = 0
+            while (i < data.size) {
+                if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD], isCorrelation)) {
+                    val v = fv(data[i + dataIndex])
+                    if (v > maxV) { maxV = v; maxIdx = i }
+                    if (v < minV) { minV = v; minIdx = i }
+                }
+                i += DicResult.STRIDE
+            }
+        }
+        return ReportBuilder.FieldExtrema(maxIdx, minIdx)
+    }
+
+    @Test
+    fun `de-boxed computeFieldExtrema is identical to the boxed oracle for every field`() {
+        val data = variedField(257)
+        val fields = listOf(
+            DicResult.IDX_U, DicResult.IDX_V,
+            DicResult.IDX_EXX, DicResult.IDX_EYY, DicResult.IDX_EXY,
+            DicResult.IDX_ZNSSD,
+        )
+        for (idx in fields) {
+            for (abs in listOf(true, false)) {
+                assertEquals(
+                    "field=$idx abs=$abs",
+                    boxedExtrema(data, idx, abs),
+                    ReportBuilder.computeFieldExtrema(data, idx, abs),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `the scratch overload matches the allocating wrapper`() {
+        val data = variedField(129)
+        val scratch = FloatArray(data.size / DicResult.STRIDE)
+        for (idx in listOf(DicResult.IDX_U, DicResult.IDX_EXX)) {
+            assertEquals(
+                ReportBuilder.computeFieldExtrema(data, idx, absoluteStrainValues = false),
+                ReportBuilder.computeFieldExtrema(data, idx, absoluteStrainValues = false, scratch),
+            )
+        }
+    }
 }

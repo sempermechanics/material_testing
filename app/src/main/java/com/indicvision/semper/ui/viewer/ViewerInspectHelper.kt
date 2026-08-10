@@ -40,12 +40,12 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
     var lastMaxIdx = -1
     var lastMinIdx = -1
 
-    /** Spatial buckets for the current frame's accepted points; rebuilt on frame load. */
+    /**
+     * Spatial buckets for the current frame's accepted points. Cleared on frame load
+     * and built lazily on the first inspect-mode tap ([findNearestDataPoint]), so
+     * scrubbing frames that are never inspected pays nothing for it.
+     */
     private var spatialIndex: PointSpatialIndex? = null
-
-    fun rebuildSpatialIndex(data: FloatArray, step: Int) {
-        spatialIndex = PointSpatialIndex.build(data, step)
-    }
 
     fun clearSpatialIndex() {
         spatialIndex = null
