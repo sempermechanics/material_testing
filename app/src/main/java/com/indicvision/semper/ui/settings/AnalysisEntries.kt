@@ -39,10 +39,10 @@ data class AnalysisEntry(
         }
 
     /**
-     * Settings Download when the live cloud list matched this row — cloud-only
-     * or phone+cloud (backed up on cloud, with or without local frame data).
+     * Settings Download / Restore / Delete when the live cloud list matched this
+     * row — cloud-only or phone+cloud.
      */
-    fun offersDownload(): Boolean = cloud != null
+    fun offersCloudActions(): Boolean = cloud != null
 
     /** Stable id for in-flight Download jobs and WorkManager restore names. */
     fun downloadKey(): String =

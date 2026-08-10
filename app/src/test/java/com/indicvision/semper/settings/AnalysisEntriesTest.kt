@@ -180,12 +180,12 @@ class AnalysisEntriesTest {
     }
 
     @Test
-    fun `Download is offered only for live cloud list matches`() {
+    fun `cloud actions are offered only for live cloud list matches`() {
         val matched = AnalysisEntries.merge(
             records = listOf(record("local-match", name = "Steel")),
             cloud = listOf(CloudSessionDto(sessionId = "cloud-1", localSessionId = "local-match")),
         )
-        assertEquals(true, matched[0].offersDownload())
+        assertEquals(true, matched[0].offersCloudActions())
         assertEquals(AnalysisLocation.PHONE_AND_CLOUD, matched[0].location)
 
         val offlineSynced = AnalysisEntries.merge(
@@ -198,12 +198,12 @@ class AnalysisEntriesTest {
             ),
             cloud = emptyList(),
         )
-        assertEquals(false, offlineSynced[0].offersDownload())
+        assertEquals(false, offlineSynced[0].offersCloudActions())
 
         val cloudOnly = AnalysisEntries.merge(
             records = emptyList(),
             cloud = listOf(CloudSessionDto(sessionId = "cloud-9", specimen = "Beam")),
         )
-        assertEquals(true, cloudOnly[0].offersDownload())
+        assertEquals(true, cloudOnly[0].offersCloudActions())
     }
 }

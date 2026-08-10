@@ -20,7 +20,8 @@ class AnalysisDataAdapter(
     private val backupLabel: (AnalysisEntry) -> Int?,
     private val onOpen: (AnalysisEntry) -> Unit,
     private val onBackup: (AnalysisEntry) -> Unit,
-    private val onRestore: (AnalysisEntry) -> Unit,
+    private val onLocalDownload: (AnalysisEntry) -> Unit,
+    private val onCloudRestore: (AnalysisEntry) -> Unit,
     private val onDelete: (AnalysisEntry, View) -> Unit,
 ) : RecyclerView.Adapter<AnalysisDataAdapter.Row>() {
 
@@ -34,7 +35,7 @@ class AnalysisDataAdapter(
         notifyDataSetChanged()
     }
 
-    /** Keys from [AnalysisEntry.downloadKey] with an in-flight Download. */
+    /** Keys from [AnalysisEntry.downloadKey] with an in-flight Download / restore. */
     fun setDownloadingKeys(keys: Set<String>) {
         if (keys == downloadingKeys) return
         downloadingKeys = keys
@@ -61,6 +62,7 @@ class AnalysisDataAdapter(
         private val name: TextView = view.findViewById(R.id.tvAnalysisName)
         private val state: TextView = view.findViewById(R.id.tvAnalysisState)
         private val backup: MaterialButton = view.findViewById(R.id.btnAnalysisBackup)
+        private val localDownload: ImageButton = view.findViewById(R.id.btnAnalysisLocalDownload)
         private val restore: ImageButton = view.findViewById(R.id.btnAnalysisRestore)
         private val delete: ImageButton = view.findViewById(R.id.btnAnalysisDelete)
 
@@ -73,16 +75,22 @@ class AnalysisDataAdapter(
                 stateLine(entry)
             }
 
-            val hasCloud = entry.cloud != null
-            // Download for any live cloud list match: cloud-only (restore into
-            // the app) or phone+cloud (save a copy to Files).
-            restore.isVisible = entry.offersDownload()
-            restore.isEnabled = !busy
-            restore.alpha = if (busy) 0.4f else 1f
+            val hasCloud = entry.offersCloudActions()
+            // Live cloud list match: local Download, cloud Restore, and Delete.
+            localDownload.isVisible = hasCloud
+            restore.isVisible = hasCloud
             delete.isVisible = hasCloud
+            localDownload.isEnabled = !busy
+            restore.isEnabled = !busy
+            localDownload.alpha = if (busy) 0.4f else 1f
+            restore.alpha = if (busy) 0.4f else 1f
+            localDownload.setOnClickListener {
+                if (entry.downloadKey() in downloadingKeys) return@setOnClickListener
+                onLocalDownload(entry)
+            }
             restore.setOnClickListener {
                 if (entry.downloadKey() in downloadingKeys) return@setOnClickListener
-                onRestore(entry)
+                onCloudRestore(entry)
             }
             delete.setOnClickListener { onDelete(entry, itemView) }
 
