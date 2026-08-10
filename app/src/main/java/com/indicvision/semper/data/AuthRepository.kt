@@ -11,6 +11,7 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
@@ -45,12 +46,12 @@ class AuthRepository(context: Context) {
     val cloudConfigured: Boolean get() = api.enabled
 
     /** Google sign-in: exchange the Google ID token for a Firebase credential. */
-    suspend fun signInWithGoogle(googleIdToken: String): Result<String> = firebaseThen {
+    suspend fun signInWithGoogle(googleIdToken: String): Result<String> = firebaseThen("google") {
         auth.signInWithCredential(GoogleAuthProvider.getCredential(googleIdToken, null)).await()
     }
 
     /** Existing account: email + password. */
-    suspend fun signInWithPassword(email: String, password: String): Result<String> = firebaseThen {
+    suspend fun signInWithPassword(email: String, password: String): Result<String> = firebaseThen("password") {
         auth.signInWithEmailAndPassword(email.trim(), password).await()
     }
 
@@ -60,7 +61,7 @@ class AuthRepository(context: Context) {
      * account never reaches the backend before its owner has proved the mailbox
      * is theirs.
      */
-    suspend fun signUpWithPassword(email: String, password: String): Result<String> = firebaseThen {
+    suspend fun signUpWithPassword(email: String, password: String): Result<String> = firebaseThen("password_signup") {
         val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
         runCatching { result.user?.sendEmailVerification()?.await() }
             .onFailure { Timber.w(it, "Could not send verification email") }
@@ -213,7 +214,7 @@ class AuthRepository(context: Context) {
 
     /** Finish a passwordless email-link sign-in from the tapped link. */
     suspend fun completeEmailLink(email: String, link: String): Result<String> {
-        val result = firebaseThen { auth.signInWithEmailLink(email.trim(), link).await() }
+        val result = firebaseThen("email_link") { auth.signInWithEmailLink(email.trim(), link).await() }
         if (result.isSuccess) linkPrefs().edit { remove(K_PENDING_EMAIL) }
         return result
     }
@@ -240,8 +241,13 @@ class AuthRepository(context: Context) {
     // ------------------------------------------------------------------ internal
 
     /** Run a Firebase sign-in, cache identity, then resolve backend access status. */
-    private suspend fun firebaseThen(signIn: suspend () -> Any?): Result<String> = withContext(Dispatchers.IO) {
+    private suspend fun firebaseThen(method: String, signIn: suspend () -> Any?): Result<String> = withContext(Dispatchers.IO) {
         if (!api.enabled) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.SIGN_IN_FAILED,
+                mapOf("method" to method, "reason" to "api_off"),
+            )
             return@withContext Result.failure(
                 Exception("Cloud backend is not configured (INDIC_API_BASE_URL)."),
             )
@@ -249,24 +255,73 @@ class AuthRepository(context: Context) {
         try {
             signIn()
         } catch (e: FirebaseAuthWeakPasswordException) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.SIGN_IN_FAILED,
+                mapOf("method" to method, "reason" to "weak_password"),
+            )
             return@withContext Result.failure(Exception("Password is too weak (min 6 characters).", e))
         } catch (e: FirebaseAuthUserCollisionException) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.SIGN_IN_FAILED,
+                mapOf("method" to method, "reason" to "collision"),
+            )
             return@withContext Result.failure(
                 Exception("An account already exists for this email. Sign in instead.", e),
             )
         } catch (e: FirebaseAuthInvalidUserException) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.SIGN_IN_FAILED,
+                mapOf("method" to method, "reason" to "unknown_user"),
+            )
             return@withContext Result.failure(Exception("No account for this email.", e))
         } catch (e: FirebaseAuthInvalidCredentialsException) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.SIGN_IN_FAILED,
+                mapOf("method" to method, "reason" to "bad_credentials"),
+            )
             return@withContext Result.failure(Exception("Incorrect email or password.", e))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.w(e, "Firebase sign-in failed")
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.SIGN_IN_FAILED,
+                mapOf("method" to method, "reason" to "other"),
+            )
             return@withContext Result.failure(Exception(e.message ?: "Sign-in failed."))
         }
         val user = auth.currentUser
-            ?: return@withContext Result.failure(Exception("Sign-in did not complete."))
-        unverifiedEmailError(user)?.let { return@withContext Result.failure(it) }
+            ?: run {
+                SemperAnalytics.event(
+                    appContext,
+                    SemperAnalytics.SIGN_IN_FAILED,
+                    mapOf("method" to method, "reason" to "incomplete"),
+                )
+                return@withContext Result.failure(Exception("Sign-in did not complete."))
+            }
+        unverifiedEmailError(user)?.let {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.SIGN_IN_FAILED,
+                mapOf("method" to method, "reason" to "unverified_email"),
+            )
+            return@withContext Result.failure(it)
+        }
         TokenStore.saveIdentity(appContext, user.uid, user.email)
-        resolveStatus()
+        val status = resolveStatus()
+        if (status.isSuccess) {
+            SemperAnalytics.event(appContext, SemperAnalytics.SIGN_IN, mapOf("method" to method))
+        } else {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.SIGN_IN_FAILED,
+                mapOf("method" to method, "reason" to "access"),
+            )
+        }
+        status
     }
 
     /**

@@ -13,6 +13,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
+import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.CloudFileDto
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
@@ -77,9 +78,11 @@ object CloudRestore {
                     .build(),
             )
             .addTag("restore")
+            .addTag("restore-$cloudSessionId")
             .build()
         WorkManager.getInstance(context.applicationContext)
             .enqueueUniqueWork(name, ExistingWorkPolicy.KEEP, work)
+        SemperAnalytics.event(context, SemperAnalytics.CLOUD_RESTORE_ENQUEUED)
         return name
     }
 

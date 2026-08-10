@@ -50,7 +50,11 @@ No large-language-model or generative-AI provider is integrated.
   Declining, or switching it off later, also deletes any report still queued on
   the device.
 - When enabled: crash reports and non-fatal diagnostics from the Android app,
-  including device/app version metadata as provided by the Crashlytics SDK. R8
+  including device/app version metadata as provided by the Crashlytics SDK, plus
+  coarse product usage events (for example sign-in outcome, analysis started /
+  completed with duration and frame-count buckets, cloud upload/restore
+  outcomes, export, feedback opened). Event parameters are enums and buckets
+  only — not emails, session ids, specimen names, or file contents. R8
   mapping files are retained by operators for deobfuscation and are not
   published.
 - Diagnostics never include your images, measurement results, specimen names, or

@@ -187,9 +187,19 @@ Engine host and sanitizer suites are not part of this repo's gate — they run i
 ## After the release
 
 - Verify a fresh install from the distributed artifact (not a dev build).
+- **Upgrade smoke (manual):** install the previous Release APK → create a local
+  analysis (and optionally enqueue upload/restore) → install the new APK
+  *without uninstalling* → open Home, reopen the session, confirm queued
+  WorkManager unique work still resolves. Prefs migrate via `DicSettings.migrate`
+  on cold start.
 - Watch Firestore (sessions collection) and Cloud Logging for the first synced sessions.
+- Paste the GitHub Release changelog into Play / website **What’s new** when
+  publishing that channel.
 - Open a milestone for the next version and triage incoming beta feedback
-  against it.
+  (Discussions on `semperdic/website`, support mail, in-app Send feedback)
+  into issues against it.
+- **Follow up:** when a reported item ships, reply on the thread or mail and
+  close/check the milestone item so reporters know it landed.
 
 ## History rewrite / re-clone
 

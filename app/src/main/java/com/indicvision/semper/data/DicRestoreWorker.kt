@@ -9,6 +9,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.IndicApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +47,7 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 publishProgress(targetLocalId, done, total)
             }
             Timber.i("Restored %s from cloud session %s", localId, cloudSessionId)
+            SemperAnalytics.event(applicationContext, SemperAnalytics.CLOUD_RESTORE_SUCCEEDED)
             Result.success(workDataOf(KEY_LOCAL_ID to localId))
         } catch (e: CancellationException) {
             clearPartialArtifacts(targetLocalId)
@@ -55,6 +57,11 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
             if (e.code == 404 || e.code == 403) {
                 clearPartialArtifacts(targetLocalId)
                 Timber.e(e, "Restore of %s rejected — giving up", cloudSessionId)
+                SemperAnalytics.event(
+                    applicationContext,
+                    SemperAnalytics.CLOUD_RESTORE_FAILED,
+                    mapOf("reason" to "rejected"),
+                )
                 Result.failure(workDataOf(KEY_ERROR to e.message))
             } else {
                 // Keep cacheDir *.part so the next attempt can Range-resume the
@@ -66,6 +73,11 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
             if (RestoreDownloadOutcomes.isTerminalCorruptFailure(e)) {
                 clearPartialArtifacts(targetLocalId)
                 Timber.e(e, "Restore of %s corrupt — giving up (re-upload needed)", cloudSessionId)
+                SemperAnalytics.event(
+                    applicationContext,
+                    SemperAnalytics.CLOUD_RESTORE_FAILED,
+                    mapOf("reason" to "corrupt"),
+                )
                 Result.failure(workDataOf(KEY_ERROR to (e.message ?: e.javaClass.simpleName)))
             } else {
                 // Do not wipe *.part — DriveTransfer resumes from the last byte.

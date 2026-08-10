@@ -11,6 +11,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
@@ -393,6 +394,7 @@ object CloudSync {
             ExistingWorkPolicy.KEEP,
             work,
         )
+        SemperAnalytics.event(context, SemperAnalytics.CLOUD_UPLOAD_ENQUEUED)
     }
 
     private const val BACKOFF_SECONDS = 30L

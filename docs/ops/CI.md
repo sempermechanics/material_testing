@@ -6,6 +6,8 @@ Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 to `main` run the full matrix. Feature-branch PRs run always-on gates plus
 path-filtered Tier 1 / Tier 4; expensive Tier 3 / Tier 5 run on push to `main`
 or when a PR carries an `e2e` / `release` / `full-ci` label.
+Macrobenchmarks run only with the `benchmark` label or
+`workflow_dispatch` → `run_benchmark`.
 
 There is **no weekly/scheduled full matrix** — use those labels or
 **Actions → CI → Run workflow** (`workflow_dispatch`, `full_ci` defaults to
@@ -37,6 +39,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest` | main push / labels | ~20–40 / ~60–90 min |
 | `tier4-backend` | ruff, shell-script parse, pip-audit, hashed-lock verification, pytest at `--cov-fail-under=75`, Firestore emulator suite | `backend` (PR); always on `main` push | ~5–10 min |
 | `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, R8 mapping artifact | main push / labels | ~15–40 / up to ~90 min |
+| `tier-benchmark` | Macrobenchmark cold/warm startup (`:benchmark`) | `benchmark` label / `run_benchmark` dispatch only | ~20–40 min |
 | `ci-ok` | Single required status check — every job above passed or was skipped | — | seconds |
 
 **There is no tier 2 here any more.** Host C++ builds, the DICe comparisons and
