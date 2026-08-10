@@ -401,9 +401,16 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun confirmDownload(entry: AnalysisEntry) {
+        val hasLocal = entry.record?.hasLocalData() == true
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.download_analysis_title)
-            .setMessage(R.string.download_analysis_body)
+            .setMessage(
+                if (hasLocal) {
+                    getString(R.string.download_analysis_replace_body)
+                } else {
+                    getString(R.string.download_analysis_body)
+                },
+            )
             .setPositiveButton(R.string.download_analysis_confirm) { _, _ ->
                 restoreBackup(entry)
             }
@@ -413,8 +420,8 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun restoreBackup(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
-        // Prefer the existing phone row id so a freed stub is filled in-place
-        // rather than creating a second "restored-…" id.
+        // Prefer the existing phone row id so a freed stub / re-download fills
+        // in-place rather than creating a second "restored-…" id.
         val targetLocalId = entry.record?.id ?: CloudRestore.targetLocalId(cloud)
         lifecycleScope.launch {
             val started = withContext(Dispatchers.IO) { enqueueRestoreWithStub(entry, cloud, targetLocalId) }
@@ -434,7 +441,8 @@ class SettingsActivity : AppCompatActivity() {
         targetLocalId: String,
     ): Boolean {
         val existing = SessionStore.get(this, targetLocalId)
-        if (existing?.hasLocalData() == true) return false
+        // Re-download is allowed when local data already exists: DicRestoreWorker
+        // clears the session dir before unpacking the cloud backup.
         val stub = restoreStub(entry, cloud, targetLocalId, existing)
         if (!SessionStore.upsert(this, stub, allowOverLimit = true)) return false
         return try {
