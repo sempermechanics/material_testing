@@ -40,7 +40,7 @@ data class AnalysisEntry(
 
     /**
      * Settings Download when the live cloud list matched this row — cloud-only
-     * (restore into the app) or phone+cloud (save a copy to Files).
+     * or phone+cloud (backed up on cloud, with or without local frame data).
      */
     fun offersDownload(): Boolean = cloud != null
 

@@ -74,8 +74,8 @@ class AnalysisDataAdapter(
             }
 
             val hasCloud = entry.cloud != null
-            // Download only when the live cloud list matched this row
-            // (cloud-only restore, or phone+cloud save-to-Files).
+            // Download for any live cloud list match: cloud-only (restore into
+            // the app) or phone+cloud (save a copy to Files).
             restore.isVisible = entry.offersDownload()
             restore.isEnabled = !busy
             restore.alpha = if (busy) 0.4f else 1f
