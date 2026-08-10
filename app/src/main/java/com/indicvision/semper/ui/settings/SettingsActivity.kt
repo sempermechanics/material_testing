@@ -11,6 +11,7 @@ package com.indicvision.semper.ui.settings
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -84,6 +85,22 @@ class SettingsActivity : AppCompatActivity() {
         if (it.resultCode == RESULT_OK) deleteAccount()
     }
 
+    /**
+     * Analyses Download: pick the destination document first, then enqueue the
+     * background write. [CreateDocument] is the location confirmation.
+     */
+    private val createDownloadDocument = registerForActivityResult(
+        ActivityResultContracts.CreateDocument(ZIP_MIME),
+    ) { uri ->
+        val pending = pendingDownload
+        pendingDownload = null
+        if (uri == null || pending == null) return@registerForActivityResult
+        startBundleDownloadToUri(pending, uri)
+    }
+
+    /** Stashed while the SAF save-as picker is open. */
+    private var pendingDownload: PendingBundleDownload? = null
+
     private lateinit var analysesList: RecyclerView
     private lateinit var analysesAdapter: AnalysisDataAdapter
     private lateinit var analysesProgress: ProgressBar
@@ -99,6 +116,7 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingDownload = PendingBundleDownload.fromBundle(savedInstanceState)
         setContentView(R.layout.activity_settings)
         // Edge-to-edge: without this the status bar swallows taps on the back arrow.
         Insets.padTop(findViewById(R.id.settingsTopBar))
@@ -142,6 +160,11 @@ class SettingsActivity : AppCompatActivity() {
         wirePreferencesSection()
         wireHelpSupportSection()
         wireFooter()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingDownload?.writeTo(outState)
     }
 
     private fun wireCollapsible(headerId: Int, bodyId: Int, chevronId: Int, startExpanded: Boolean = false) {
@@ -412,14 +435,70 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
         }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.download_analysis_save_title)
-            .setMessage(R.string.download_analysis_save_body)
-            .setPositiveButton(R.string.download_local_action) { _, _ ->
-                saveBackupCopyToFiles(entry)
+        // Location picker is the confirmation — download starts only after the
+        // user chooses where the Session.zip should be saved.
+        pendingDownload = PendingBundleDownload(
+            cloudSessionId = entry.cloud?.sessionId.orEmpty(),
+            displayName = entry.name,
+            localSessionId = entry.record?.id.orEmpty(),
+        )
+        createDownloadDocument.launch(CloudRestore.suggestedBundleFileName(entry.name))
+    }
+
+    /**
+     * Enqueue a background download that writes into [destUri]. Called only
+     * after SAF CreateDocument returns a destination.
+     */
+    private fun startBundleDownloadToUri(pending: PendingBundleDownload, destUri: Uri) {
+        if (pending.cloudSessionId.isBlank()) {
+            Toast.makeText(this, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+        val key = pending.cloudSessionId
+        if (key in downloadingKeys || isBundleDownloadRunning(key)) {
+            Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val granted = runCatching {
+            contentResolver.takePersistableUriPermission(
+                destUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+        }.onFailure { Timber.e(it, "Could not persist write grant for %s", destUri) }
+            .isSuccess
+        if (!granted) {
+            Toast.makeText(this, R.string.save_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+        val enqueued = runCatching {
+            CloudRestore.enqueueBundleDownload(
+                this,
+                pending.cloudSessionId,
+                pending.displayName,
+                destUri = destUri.toString(),
+                localSessionId = pending.localSessionId,
+            )
+        }.onFailure { Timber.e(it, "Could not enqueue bundle download %s", pending.cloudSessionId) }
+            .isSuccess
+        if (!enqueued) {
+            runCatching {
+                contentResolver.releasePersistableUriPermission(
+                    destUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
             }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
+            Toast.makeText(this, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+        markDownloading(key, true)
+        transferBanner.upsert(
+            TransferBannerController.Transfer(
+                id = key,
+                title = pending.displayName.ifBlank { getString(R.string.transfer_banner_download) },
+                onCancel = { CloudRestore.cancelBundleDownload(this, pending.cloudSessionId) },
+            ),
+        )
+        Toast.makeText(this, R.string.download_background_note, Toast.LENGTH_SHORT).show()
     }
 
     private fun confirmCloudRestore(entry: AnalysisEntry) {
@@ -438,43 +517,6 @@ class SettingsActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
-    }
-
-    /**
-     * Save Session.zip via Save / Share. Enqueued on WorkManager so leaving
-     * Analyses data management does not cancel the transfer. Falls back to
-     * packing the on-device session inside the worker when the cloud zip is
-     * unavailable. Never unpacks into the session dir.
-     */
-    private fun saveBackupCopyToFiles(entry: AnalysisEntry) {
-        val cloud = entry.cloud ?: return
-        val key = entry.downloadKey()
-        if (key in downloadingKeys || isBundleDownloadRunning(key)) {
-            Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
-            return
-        }
-        val enqueued = runCatching {
-            CloudRestore.enqueueBundleDownload(
-                this,
-                cloud.sessionId,
-                entry.name,
-                localSessionId = entry.record?.id.orEmpty(),
-            )
-        }.onFailure { Timber.e(it, "Could not enqueue bundle download %s", cloud.sessionId) }
-            .isSuccess
-        if (!enqueued) {
-            Toast.makeText(this, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
-            return
-        }
-        markDownloading(key, true)
-        transferBanner.upsert(
-            TransferBannerController.Transfer(
-                id = key,
-                title = entry.name.ifBlank { getString(R.string.transfer_banner_download) },
-                onCancel = { CloudRestore.cancelBundleDownload(this, cloud.sessionId) },
-            ),
-        )
-        Toast.makeText(this, R.string.download_background_note, Toast.LENGTH_SHORT).show()
     }
 
     private fun restoreBackup(entry: AnalysisEntry) {
@@ -679,7 +721,7 @@ class SettingsActivity : AppCompatActivity() {
     /**
      * Save-to-Files downloads run in [DicBundleDownloadWorker]. Observe the
      * tag so progress survives leaving Analyses data management, and so a
-     * finished zip still opens [SendToSheet] when the user returns.
+     * finished write still toasts success when the user returns.
      */
     private fun observeBundleDownloadOutcomes() {
         val workManager = runCatching { WorkManager.getInstance(this) }.getOrNull() ?: return
@@ -728,18 +770,7 @@ class SettingsActivity : AppCompatActivity() {
                             if (key.isNotBlank()) transferBanner.remove(key)
                             if (presentedBundleDownloads.add(info.id)) {
                                 syncDownloadingKeys()
-                                val path = info.outputData.getString(DicBundleDownloadWorker.KEY_ZIP_PATH)
-                                val ready = path?.let { java.io.File(it) }
-                                    ?.takeIf { it.exists() && it.length() > 0L }
-                                if (ready == null) {
-                                    Toast.makeText(
-                                        this,
-                                        R.string.download_analysis_failed,
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                } else {
-                                    SendToSheet.show(this, ready, ZIP_MIME)
-                                }
+                                Toast.makeText(this, R.string.save_success, Toast.LENGTH_LONG).show()
                             }
                         }
                         WorkInfo.State.CANCELLED -> {
@@ -1212,7 +1243,34 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun frameCountText(value: Int): String = String.format(Locale.US, "%d", value)
 
+    private data class PendingBundleDownload(
+        val cloudSessionId: String,
+        val displayName: String,
+        val localSessionId: String,
+    ) {
+        fun writeTo(out: Bundle) {
+            out.putString(STATE_DL_CLOUD, cloudSessionId)
+            out.putString(STATE_DL_NAME, displayName)
+            out.putString(STATE_DL_LOCAL, localSessionId)
+        }
+
+        companion object {
+            fun fromBundle(state: Bundle?): PendingBundleDownload? {
+                val cloud = state?.getString(STATE_DL_CLOUD)?.takeIf { it.isNotBlank() } ?: return null
+                return PendingBundleDownload(
+                    cloudSessionId = cloud,
+                    displayName = state.getString(STATE_DL_NAME).orEmpty(),
+                    localSessionId = state.getString(STATE_DL_LOCAL).orEmpty(),
+                )
+            }
+        }
+    }
+
     private companion object {
+        private const val STATE_DL_CLOUD = "pending_dl_cloud"
+        private const val STATE_DL_NAME = "pending_dl_name"
+        private const val STATE_DL_LOCAL = "pending_dl_local"
+
         /** Work ids whose Save-to-Files outcome was already shown (process-wide). */
         private val presentedBundleDownloads =
             java.util.Collections.synchronizedSet(mutableSetOf<java.util.UUID>())

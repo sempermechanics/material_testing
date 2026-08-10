@@ -90,11 +90,15 @@ object CloudRestore {
      * Queue a Save-to-Files Session.zip download. Same WorkManager rationale as
      * [enqueueRestore]: Analyses data management must not cancel the transfer
      * when the user leaves Settings.
+     *
+     * [destUri] is a document URI from [android.content.Intent.ACTION_CREATE_DOCUMENT]
+     * (persistable write grant taken by the caller before enqueue).
      */
     fun enqueueBundleDownload(
         context: Context,
         cloudSessionId: String,
         displayName: String,
+        destUri: String,
         localSessionId: String = "",
     ): String {
         val name = bundleDownloadWorkName(cloudSessionId)
@@ -109,6 +113,7 @@ object CloudRestore {
                     .putString(KEY_CLOUD_SESSION_ID, cloudSessionId)
                     .putString(DicBundleDownloadWorker.KEY_DISPLAY_NAME, displayName)
                     .putString(DicBundleDownloadWorker.KEY_LOCAL_SESSION_ID, localSessionId)
+                    .putString(DicBundleDownloadWorker.KEY_DEST_URI, destUri)
                     .build(),
             )
             .addTag(TAG_BUNDLE_DOWNLOAD)
@@ -129,6 +134,13 @@ object CloudRestore {
 
     /** Unique work name for a Save-to-Files download. */
     fun bundleDownloadWorkName(cloudSessionId: String): String = "download-bundle-$cloudSessionId"
+
+    /** Suggested SAF filename for an analysis Session.zip. */
+    fun suggestedBundleFileName(displayName: String): String {
+        val safe = displayName.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_')
+            .ifBlank { "analysis" }.take(40)
+        return "${safe}_Session.zip"
+    }
 
     const val TAG_BUNDLE_DOWNLOAD = "download-bundle"
 

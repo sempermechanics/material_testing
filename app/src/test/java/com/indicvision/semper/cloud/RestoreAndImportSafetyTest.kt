@@ -38,6 +38,12 @@ class RestoreAndImportSafetyTest {
     }
 
     @Test
+    fun `suggested bundle file name is sanitized`() {
+        assertEquals("My_Sample_Session.zip", CloudRestore.suggestedBundleFileName("My Sample"))
+        assertEquals("analysis_Session.zip", CloudRestore.suggestedBundleFileName("!!!"))
+    }
+
+    @Test
     fun `staged import replaces committed batch only at commit`() {
         val cache = tmp.newFolder("cache")
         val committed = File(cache, "temp_deformed").apply { mkdirs() }
