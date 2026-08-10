@@ -224,6 +224,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="download_analysis_save_body">Save a copy to your files (Downloads, Drive, or another folder). The analysis already on this phone is left unchanged.</string>
     <string name="download_analysis_confirm">Download</string>
     <string name="download_analysis_working">Downloading…</string>
+    <string name="download_analysis_already">This analysis is already downloading.</string>
     <string name="download_analysis_failed">Couldn\'t download this analysis. Check your connection and try again.</string>
     <string name="viewer_settings_used_desc">Show the settings used for this analysis</string>
     <string name="settings_used_title">Settings used</string>

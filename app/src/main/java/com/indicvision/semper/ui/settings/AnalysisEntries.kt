@@ -37,6 +37,18 @@ data class AnalysisEntry(
             record?.syncState == SessionRecord.SyncState.LOCAL_ONLY -> AnalysisLocation.PHONE_ONLY
             else -> AnalysisLocation.PHONE_SYNC_STATE
         }
+
+    /**
+     * Settings Download when the live cloud list matched this row — cloud-only
+     * or phone+cloud (backed up on cloud, with or without local frame data).
+     */
+    fun offersDownload(): Boolean = cloud != null
+
+    /** Stable id for in-flight Download jobs and WorkManager restore names. */
+    fun downloadKey(): String =
+        cloud?.sessionId?.takeIf { it.isNotBlank() }
+            ?: record?.id
+            ?: name
 }
 
 /**
