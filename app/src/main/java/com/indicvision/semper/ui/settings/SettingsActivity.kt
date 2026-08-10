@@ -102,9 +102,9 @@ class SettingsActivity : AppCompatActivity() {
         analysesAdapter = AnalysisDataAdapter(
             stateLine = ::stateLine,
             backupLabel = ::backupLabel,
-            onOpen = { entry -> entry.record?.let { SessionOpenHelper.openOrExplain(this, it) } },
+            onOpen = ::openOrDownloadAnalysis,
             onBackup = ::startBackup,
-            onRestore = ::restoreBackup,
+            onRestore = ::downloadCloudBackup,
             onDelete = ::deleteBackup,
         )
         analysesList = findViewById<RecyclerView>(R.id.analysesDataList).apply {
@@ -213,7 +213,9 @@ class SettingsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val records = withContext(Dispatchers.IO) { SessionStore.list(this@SettingsActivity) }
-            val result = CloudRestore.listRestorable(this@SettingsActivity)
+            // Full COMPLETED list (not listRestorable): stubs without local .dat
+            // still need a Download action when the cloud copy exists.
+            val result = CloudRestore.listCompleted(this@SettingsActivity)
             analysesProgress.isVisible = false
 
             cloudStateMessage(result)?.let {
@@ -374,9 +376,46 @@ class SettingsActivity : AppCompatActivity() {
         is CloudRestore.ListResult.Failed -> getString(R.string.restore_load_error, result.reason)
     }
 
+    /**
+     * Open when the phone already has results; otherwise offer Download when a
+     * cloud backup is attached to this management row.
+     */
+    private fun openOrDownloadAnalysis(entry: AnalysisEntry) {
+        val record = entry.record
+        if (record?.hasLocalData() == true) {
+            SessionOpenHelper.openOrExplain(this, record)
+            return
+        }
+        if (entry.cloud != null) {
+            confirmDownload(entry)
+            return
+        }
+        if (record != null) {
+            SessionOpenHelper.openOrExplain(this, record)
+        }
+    }
+
+    private fun downloadCloudBackup(entry: AnalysisEntry) {
+        if (entry.cloud == null) return
+        confirmDownload(entry)
+    }
+
+    private fun confirmDownload(entry: AnalysisEntry) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.download_analysis_title)
+            .setMessage(R.string.download_analysis_body)
+            .setPositiveButton(R.string.download_analysis_confirm) { _, _ ->
+                restoreBackup(entry)
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
     private fun restoreBackup(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
-        val targetLocalId = CloudRestore.targetLocalId(cloud)
+        // Prefer the existing phone row id so a freed stub is filled in-place
+        // rather than creating a second "restored-…" id.
+        val targetLocalId = entry.record?.id ?: CloudRestore.targetLocalId(cloud)
         lifecycleScope.launch {
             val started = withContext(Dispatchers.IO) { enqueueRestoreWithStub(entry, cloud, targetLocalId) }
             if (!started) {
@@ -617,47 +656,67 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.export_cloud_data_offline, Toast.LENGTH_LONG).show()
             return
         }
-        val progress = DeterminateProgressDialog(this, getString(R.string.export_cloud_data_working))
+        var job: kotlinx.coroutines.Job? = null
+        val progress = DeterminateProgressDialog(
+            this,
+            getString(R.string.export_cloud_data_working),
+            onCancel = { job?.cancel() },
+        )
         progress.show()
-        lifecycleScope.launch {
-            val dest = java.io.File(cacheDir, "semper-account-export.json")
-            val ok = runCatching {
-                val idToken = TokenProvider.usableIdToken() ?: error("not signed in")
-                api.exportAccount(idToken, dest)
-            }.onFailure { Timber.w(it, "Cloud account export failed") }.isSuccess
-            progress.dismiss()
-            if (!ok || !dest.exists() || dest.length() == 0L) {
-                Toast.makeText(
-                    this@SettingsActivity,
-                    R.string.export_cloud_data_failed,
-                    Toast.LENGTH_LONG,
-                ).show()
-                return@launch
+        job = lifecycleScope.launch {
+            try {
+                val dest = java.io.File(cacheDir, "semper-account-export.json")
+                val ok = runCatching {
+                    val idToken = TokenProvider.usableIdToken() ?: error("not signed in")
+                    api.exportAccount(idToken, dest)
+                }.onFailure { Timber.w(it, "Cloud account export failed") }.isSuccess
+                progress.dismiss()
+                if (!ok || !dest.exists() || dest.length() == 0L) {
+                    Toast.makeText(
+                        this@SettingsActivity,
+                        R.string.export_cloud_data_failed,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    return@launch
+                }
+                SendToSheet.show(this@SettingsActivity, dest, JSON_MIME)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                progress.dismiss()
+                throw e
             }
-            SendToSheet.show(this@SettingsActivity, dest, JSON_MIME)
         }
     }
 
     private fun exportMyData() {
-        val progress = DeterminateProgressDialog(this, getString(R.string.export_data_working))
+        var job: kotlinx.coroutines.Job? = null
+        val progress = DeterminateProgressDialog(
+            this,
+            getString(R.string.export_data_working),
+            onCancel = { job?.cancel() },
+        )
         progress.show()
-        lifecycleScope.launch {
-            val export = SessionEverythingExporter.exportMasterZip(this@SettingsActivity) { done, total ->
-                progress.update(
-                    percent = if (total > 0) done * 100 / total else 0,
-                    text = getString(R.string.export_progress_fmt, done, total),
-                )
+        job = lifecycleScope.launch {
+            try {
+                val export = SessionEverythingExporter.exportMasterZip(this@SettingsActivity) { done, total ->
+                    progress.update(
+                        percent = if (total > 0) done * 100 / total else 0,
+                        text = getString(R.string.export_progress_fmt, done, total),
+                    )
+                }
+                progress.dismiss()
+                // Safety: only share a file that actually exists and has content.
+                val file = export?.file?.takeIf { it.exists() && it.length() > 0L }
+                if (file == null) {
+                    Toast.makeText(this@SettingsActivity, R.string.export_data_failed, Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+                // Save to Files (folder icon) + Share, via our own sheet — the system
+                // chooser can't show a custom icon on its initial intents (Android 12+).
+                SendToSheet.show(this@SettingsActivity, file, ZIP_MIME)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                progress.dismiss()
+                throw e
             }
-            progress.dismiss()
-            // Safety: only share a file that actually exists and has content.
-            val file = export?.file?.takeIf { it.exists() && it.length() > 0L }
-            if (file == null) {
-                Toast.makeText(this@SettingsActivity, R.string.export_data_failed, Toast.LENGTH_LONG).show()
-                return@launch
-            }
-            // Save to Files (folder icon) + Share, via our own sheet — the system
-            // chooser can't show a custom icon on its initial intents (Android 12+).
-            SendToSheet.show(this@SettingsActivity, file, ZIP_MIME)
         }
     }
 

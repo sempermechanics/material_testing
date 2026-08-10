@@ -9,15 +9,12 @@ here is needed for day-to-day contributions. Secrets/vars layout:
 Private alpha uses the same **`beta`** Release channel — there is no separate
 `alpha` input on [`release.yml`](../../.github/workflows/release.yml).
 
-1. Land metering/backend changes on **`main`** and deploy the API so access logs
-   include `opClass` (see [ALPHA_USAGE_METERING.md](ALPHA_USAGE_METERING.md)).
-2. Tag and run Release on **`main`** with channel **`beta`**
+1. Tag and run Release on **`main`** with channel **`beta`**
    (e.g. `v1.0-beta.1`) → private GitHub Release + signed APK.
-3. Sideload onto tester devices (Pixel OK). Testers need access to this private
+2. Sideload onto tester devices (Pixel OK). Testers need access to this private
    repo’s Releases (or you pass the APK out-of-band).
-4. Meter login / backup / sync / restore with the runbook above **after** the
-   tester confirms they are logged in on Home. Do not publish to Play or the
-   public website for this ring.
+3. Smoke sign-in, one analysis, backup/sync, and open results. Do not publish to
+   Play or the public website for this ring.
 
 Archive the R8 mapping artifact before 90-day expiry (same as any beta).
 

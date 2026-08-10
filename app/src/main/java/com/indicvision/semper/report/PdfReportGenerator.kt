@@ -7,6 +7,8 @@ package com.indicvision.semper.report
 
 import android.graphics.pdf.PdfDocument
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -63,6 +65,7 @@ object PdfReportGenerator {
             var telemetrySource: ReportData? = null
 
             for (index in 0 until frameCount) {
+                currentCoroutineContext().ensureActive()
                 val percent = FRAMES_PROGRESS_START + (index * FRAMES_PROGRESS_SPAN / frameCount)
                 emit(Progress.Status("Frame ${index + 1} of $frameCount…", percent))
                 val data = dataAt(index) ?: continue
@@ -95,12 +98,15 @@ object PdfReportGenerator {
         val layout = PdfLayoutEngine(pdfDocument)
 
         try {
+            currentCoroutineContext().ensureActive()
             emit(Progress.Status("Building Cover Page...", 10))
             drawCoverPage(layout, data, "Master DIC Analysis Report", frameCount = null)
 
+            currentCoroutineContext().ensureActive()
             emit(Progress.Status("Rendering Visualization Maps...", 30))
             drawFieldPages(layout, data)
 
+            currentCoroutineContext().ensureActive()
             emit(Progress.Status("Compiling Engine Telemetry...", 90))
             drawTelemetryPage(layout, data)
 

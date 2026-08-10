@@ -15,6 +15,7 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.report.ReportBuilder
@@ -40,6 +41,7 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     private val statusPanel: View = host.findViewById(R.id.summaryStatus)
     private val progress: ProgressBar = host.findViewById(R.id.progressSummary)
     private val status: TextView = host.findViewById(R.id.tvSummaryStatus)
+    private val cancelButton: MaterialButton = host.findViewById(R.id.btnSummaryCancel)
 
     /** Value range per field over the whole sequence; empty until the pass finishes. */
     private var ranges: Map<Int, Pair<Float, Float>> = emptyMap()
@@ -64,6 +66,10 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
                 backgroundColor = ContextCompat.getColor(host, R.color.viewer_canvas),
             ),
         )
+    }
+
+    init {
+        cancelButton.setOnClickListener { cancel() }
     }
 
     /** Kicks off the one decode pass that fixes every field's colour scale. */
@@ -224,10 +230,12 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     private fun showStatus(message: String?) {
         statusPanel.isVisible = message != null
         status.text = message.orEmpty()
-        progress.isVisible = message != null &&
+        val building = message != null &&
             message != host.getString(R.string.summary_failed) &&
             message != host.getString(R.string.summary_no_data) &&
             message != host.getString(R.string.summary_needs_android_9)
+        progress.isVisible = building
+        cancelButton.isVisible = building && (rangesJob?.isActive == true || buildJob?.isActive == true)
     }
 
     private companion object {

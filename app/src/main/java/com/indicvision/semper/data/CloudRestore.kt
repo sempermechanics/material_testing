@@ -119,6 +119,28 @@ object CloudRestore {
      * [invalidateRestorableCache]; failures are never cached, so a retry after
      * signing in or coming back online goes straight to the backend.
      */
+    /**
+     * Every COMPLETED cloud backup for this account (no local-presence filter).
+     * Settings management uses this so rows that still have a phone stub without
+     * `.dat`s can still offer Download when a cloud copy exists.
+     *
+     * [listRestorable] stays for Home's "restore something missing" lists.
+     */
+    suspend fun listCompleted(context: Context): ListResult = withContext(Dispatchers.IO) {
+        val appContext = context.applicationContext
+        val api = IndicApi.get(appContext)
+        if (!api.enabled) return@withContext ListResult.ApiOff
+        val token = TokenProvider.usableIdToken() ?: return@withContext ListResult.NeedSignIn
+        try {
+            val sessions = api.listSessions(token).sessions
+                .filter { it.status == "COMPLETED" }
+            if (sessions.isEmpty()) ListResult.Empty else ListResult.Ready(sessions)
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.e(e, "listCompleted failed")
+            ListResult.Failed(e.message ?: e.toString())
+        }
+    }
+
     suspend fun listRestorable(context: Context): ListResult = withContext(Dispatchers.IO) {
         cachedList?.takeIf { System.currentTimeMillis() - cachedAt < LIST_CACHE_MS }
             ?.let { return@withContext it }
