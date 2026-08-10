@@ -82,7 +82,11 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       has been deployed so public URLs are live.
 - [x] Crash reporting and analytics are **opt-in**: disabled in the manifest,
       a first-run notice, and a Settings toggle that also deletes queued reports
-      on withdrawal.
+      on withdrawal. Named funnel events (sign-in, analysis, cloud transfer,
+      export, feedback) fire only when diagnostics are enabled.
+- [x] In-app **Send feedback** (Settings → Help & support) plus release
+      follow-up process in [RELEASING.md](RELEASING.md) (milestone triage + reply
+      when fixed).
 - [x] Cloud account export (`GET /v1/me/export`) is reachable from the app —
       Settings → Your data → "Download my cloud account data".
 - [x] Release signing cert listed in

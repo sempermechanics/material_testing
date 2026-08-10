@@ -21,6 +21,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.os.Bundle
+import android.os.Trace
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -530,12 +531,17 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     private fun readFrameDat(index: Int): FloatArray? {
-        val file = batchFiles[index]
-        val data = DicResult.decodeDatFile(file)
-        if (data == null) {
-            Timber.e("Invalid file size for frame $index")
+        Trace.beginSection("Semper.viewer.decodeDat")
+        try {
+            val file = batchFiles[index]
+            val data = DicResult.decodeDatFile(file)
+            if (data == null) {
+                Timber.e("Invalid file size for frame $index")
+            }
+            return data
+        } finally {
+            Trace.endSection()
         }
-        return data
     }
 
     /** Rough guard: need headroom for another full-frame FloatArray (~file size). */

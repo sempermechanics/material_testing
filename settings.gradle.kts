@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Semper"
 include(":app")
+include(":benchmark")

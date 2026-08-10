@@ -18,6 +18,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
+import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
 import com.indicvision.semper.data.net.HttpStatus
@@ -683,9 +684,15 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             // A session only becomes droppable once it is backed up, so this is
             // the moment an over-budget phone can actually get space back.
             StorageBudget.enforce(applicationContext)
+            SemperAnalytics.event(applicationContext, SemperAnalytics.CLOUD_UPLOAD_SUCCEEDED)
             Result.success()
         } catch (_: ProvisionFailedException) {
             SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
+            SemperAnalytics.event(
+                applicationContext,
+                SemperAnalytics.CLOUD_UPLOAD_FAILED,
+                mapOf("reason" to "provision"),
+            )
             failure(applicationContext.getString(R.string.cloud_backup_failed_provision))
         } catch (e: IndicApi.DeviceNotActiveException) {
             // The server has no ACTIVE device record for us (revoked/reset) while
@@ -700,6 +707,11 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             Timber.e("This account is bound to a different device — cannot upload")
             SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
             stagingDir.deleteRecursively()
+            SemperAnalytics.event(
+                applicationContext,
+                SemperAnalytics.CLOUD_UPLOAD_FAILED,
+                mapOf("reason" to "device_conflict"),
+            )
             failure(applicationContext.getString(R.string.cloud_backup_failed_device))
         } catch (e: IndicApi.ApiException) {
             when {
@@ -710,6 +722,17 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     // persistent limit gate so the user is told to email support.
                     SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
                     stagingDir.deleteRecursively()
+                    SemperAnalytics.event(
+                        applicationContext,
+                        SemperAnalytics.CLOUD_UPLOAD_FAILED,
+                        mapOf(
+                            "reason" to if (UploadWorkOutcomes.isQuotaExhausted(e.code)) {
+                                "quota"
+                            } else {
+                                "payload"
+                            },
+                        ),
+                    )
                     if (UploadWorkOutcomes.isQuotaExhausted(e.code)) {
                         // Quota full has its own persistent "email support" screen —
                         // surface it there, not via a transient Home snackbar.

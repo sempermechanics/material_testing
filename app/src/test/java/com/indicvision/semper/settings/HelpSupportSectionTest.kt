@@ -112,6 +112,23 @@ class HelpSupportSectionTest {
     }
 
     @Test
+    fun `send feedback opens mail with versioned subject`() {
+        val activity = settings()
+
+        activity.findViewById<View>(R.id.btnSendFeedback).performClick()
+
+        val started = shadowOf(activity).nextStartedActivity
+        assertNotNull("no intent was started", started)
+        assertEquals(Intent.ACTION_SENDTO, started.action)
+        assertEquals(supportEmail, started.getStringArrayExtra(Intent.EXTRA_EMAIL)?.single())
+        val subject = started.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()
+        assertTrue("subject should include version: $subject", subject.contains("feedback"))
+        val body = started.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+        assertTrue("body should include App line:\n$body", body.contains("App:"))
+        assertTrue("body should include Device line:\n$body", body.contains("Device:"))
+    }
+
+    @Test
     fun `email support opens a mail intent addressed to support`() {
         val activity = settings()
 

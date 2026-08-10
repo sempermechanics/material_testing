@@ -13,9 +13,12 @@ Each chunk owns one layer; no duplicate assertions across chunks.
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `GifEncoderTest`, `SummaryAnimationTest` | — |
 | **viewer** | Result viewer controls | `viewer/FrameNumberEntryTest` | — |
 | **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest` | — |
-| **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest` | — |
+| **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `DicSettingsMigrateTest` | — |
+| **analytics** | Consent-gated Firebase Analytics events | `analytics/SemperAnalyticsTest` | — |
+| **upgrade** | Prefs / session index forward compatibility | (covered in settings + session) | `upgrade/PrefsUpgradeSmokeTest` |
 | **e2e** | Wizard chrome smoke (Next + toolbar; Back / Compute / instruction GONE on step 1) | — | `AnalysisWizardSmokeTest` |
 | **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
+| **benchmark** | Startup Macrobenchmark / Baseline Profile | — | `:benchmark` module (label `benchmark` / workflow_dispatch) |
 
 ## Overlap rules
 
@@ -70,6 +73,14 @@ Emulator (all instrumented):
 ```bash
 ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64
 ```
+
+Macrobenchmark / Baseline Profile (`:benchmark` module — not part of default CI):
+```bash
+./gradlew :benchmark:connectedBenchmarkAndroidTest
+```
+CI runs this only with the `benchmark` PR label or workflow_dispatch
+`run_benchmark`. Ship `app/src/main/baseline-prof.txt` + `profileinstaller`;
+regenerate the profile from Macrobenchmark output when tightening startup.
 
 ## What not to test here
 

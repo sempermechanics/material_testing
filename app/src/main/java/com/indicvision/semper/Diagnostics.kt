@@ -3,6 +3,7 @@ package com.indicvision.semper
 import android.content.Context
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.DicSettings
 import timber.log.Timber
 
@@ -36,7 +37,15 @@ object Diagnostics {
 
     /** Record the user's choice and apply it immediately. */
     fun setEnabled(context: Context, enabled: Boolean) {
-        DicSettings.setDiagnosticsEnabled(context, enabled)
-        apply(context)
+        if (enabled) {
+            DicSettings.setDiagnosticsEnabled(context, true)
+            apply(context)
+            SemperAnalytics.event(context, SemperAnalytics.DIAGNOSTICS_OPT_IN)
+        } else {
+            // Prefer was on; emit while the pref is still true, then disable.
+            SemperAnalytics.event(context, SemperAnalytics.DIAGNOSTICS_OPT_OUT)
+            DicSettings.setDiagnosticsEnabled(context, false)
+            apply(context)
+        }
     }
 }

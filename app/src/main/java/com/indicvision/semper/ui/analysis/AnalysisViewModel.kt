@@ -8,10 +8,14 @@
     "LoopWithTooManyJumpStatements",
     "MagicNumber",
     "TooGenericExceptionCaught",
+    "LargeClass",
+    "NestedBlockDepth",
+    "ReturnCount",
 )
 
 package com.indicvision.semper.ui.analysis
 import android.content.Context
+import android.os.Trace
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.indicvision.semper.DicResult
@@ -19,6 +23,7 @@ import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.ProgressCallback
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
+import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionRecordSettings
@@ -29,6 +34,7 @@ import com.indicvision.semper.report.EngineStats
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -195,6 +201,14 @@ class AnalysisViewModel : ViewModel() {
         if (batchJob?.isActive == true) return
         batchJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
             _progress.tryEmit(null)
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.ANALYSIS_STARTED,
+                mapOf(
+                    "mode" to "batch",
+                    "frames" to SemperAnalytics.frameCountBucket(defFilePaths.size),
+                ),
+            )
             try {
                 val outcome = runBatchAnalysis(appContext, params) { update ->
                     if (isActive) _progress.tryEmit(update)
@@ -204,6 +218,11 @@ class AnalysisViewModel : ViewModel() {
                 throw e
             } catch (e: Exception) {
                 Timber.e(e, "Batch processing failed")
+                SemperAnalytics.event(
+                    appContext,
+                    SemperAnalytics.ANALYSIS_FAILED,
+                    mapOf("mode" to "batch", "reason" to "exception"),
+                )
                 _batchOutcome.emit(Result.failure(e))
             } finally {
                 _progress.tryEmit(null)
@@ -332,6 +351,27 @@ class AnalysisViewModel : ViewModel() {
         request: SweepRequest,
         onProgress: (VsgStudyRunner.Progress) -> Unit,
     ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
+        Trace.beginSection("Semper.analysis.sweep")
+        try {
+            runVsgSweepBody(appContext, request, onProgress)
+        } finally {
+            Trace.endSection()
+        }
+    }
+
+    private suspend fun runVsgSweepBody(
+        appContext: Context,
+        request: SweepRequest,
+        onProgress: (VsgStudyRunner.Progress) -> Unit,
+    ): BatchAnalysisOutcome {
+        SemperAnalytics.event(
+            appContext,
+            SemperAnalytics.ANALYSIS_STARTED,
+            mapOf(
+                "mode" to "sweep",
+                "frames" to SemperAnalytics.frameCountBucket(request.plan.size),
+            ),
+        )
         val plan = request.plan
         val roi = request.roi
         val use6x6 = request.use6x6
@@ -340,7 +380,14 @@ class AnalysisViewModel : ViewModel() {
         val startedAt = System.currentTimeMillis()
 
         val limited = sessionLimitOutcome(appContext, plan.size)
-        if (limited != null) return@withContext limited
+        if (limited != null) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.ANALYSIS_FAILED,
+                mapOf("mode" to "sweep", "reason" to "session_limit"),
+            )
+            return limited
+        }
 
         val localSessionId = resolveLocalSessionId()
         val batchDir = SessionStore.dirFor(appContext, localSessionId)
@@ -374,7 +421,16 @@ class AnalysisViewModel : ViewModel() {
         val executionTimeMs = (System.currentTimeMillis() - startedAt).toInt()
 
         if (result.runs.isEmpty()) {
-            return@withContext BatchAnalysisOutcome(
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.ANALYSIS_FAILED,
+                mapOf(
+                    "mode" to "sweep",
+                    "reason" to "no_runs",
+                    "duration" to SemperAnalytics.durationBucket(executionTimeMs.toLong()),
+                ),
+            )
+            return BatchAnalysisOutcome(
                 engineErrorCode = result.engineErrorCode,
                 firstFrameValidPoints = 0,
                 totalFrames = 0,
@@ -385,7 +441,16 @@ class AnalysisViewModel : ViewModel() {
 
         persistSweepSession(appContext, localSessionId, batchDir, bytes, result, request, executionTimeMs)
 
-        BatchAnalysisOutcome(
+        SemperAnalytics.event(
+            appContext,
+            SemperAnalytics.ANALYSIS_COMPLETED,
+            mapOf(
+                "mode" to "sweep",
+                "frames" to SemperAnalytics.frameCountBucket(result.runs.size),
+                "duration" to SemperAnalytics.durationBucket(executionTimeMs.toLong()),
+            ),
+        )
+        return BatchAnalysisOutcome(
             engineErrorCode = result.engineErrorCode,
             firstFrameValidPoints = result.runs.first().pointsSolved,
             totalFrames = result.runs.size,
@@ -671,8 +736,28 @@ class AnalysisViewModel : ViewModel() {
         params: BatchAnalysisParams,
         onProgress: (BatchProgressUpdate) -> Unit,
     ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
+        Trace.beginSection("Semper.analysis.batch")
+        try {
+            runBatchAnalysisBody(appContext, params, onProgress)
+        } finally {
+            Trace.endSection()
+        }
+    }
+
+    private suspend fun runBatchAnalysisBody(
+        appContext: Context,
+        params: BatchAnalysisParams,
+        onProgress: (BatchProgressUpdate) -> Unit,
+    ): BatchAnalysisOutcome {
         val limited = sessionLimitOutcome(appContext, defFilePaths.size)
-        if (limited != null) return@withContext limited
+        if (limited != null) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.ANALYSIS_FAILED,
+                mapOf("mode" to "batch", "reason" to "session_limit"),
+            )
+            return limited
+        }
 
         // Results live in app-private persistent storage (NOT cacheDir, which
         // the OS may evict): one directory per Home-list session.
@@ -733,7 +818,7 @@ class AnalysisViewModel : ViewModel() {
         val resolvedDefPaths = defFilePaths.toMutableList()
 
         for ((frameIndex, defPath) in defFilePaths.withIndex()) {
-            ensureActive()
+            currentCoroutineContext().ensureActive()
             if (cancelRequested) {
                 engineErrorCode = ERROR_CANCELLED
                 break
@@ -952,7 +1037,7 @@ class AnalysisViewModel : ViewModel() {
             }
         }
 
-        BatchAnalysisOutcome(
+        val outcome = BatchAnalysisOutcome(
             engineErrorCode = engineErrorCode,
             firstFrameValidPoints = firstFrameValidPoints,
             totalFrames = solvedFrames,
@@ -963,6 +1048,34 @@ class AnalysisViewModel : ViewModel() {
                 .takeIf { it >= 0 }
                 ?.let { defFilePaths.getOrNull(it)?.substringAfterLast('/') },
         )
+        if (firstFrameValidPoints > 0 && engineErrorCode != ERROR_CANCELLED &&
+            engineErrorCode != ERROR_SESSION_LIMIT
+        ) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.ANALYSIS_COMPLETED,
+                mapOf(
+                    "mode" to "batch",
+                    "frames" to SemperAnalytics.frameCountBucket(solvedFrames),
+                    "duration" to SemperAnalytics.durationBucket(executionTimeMs.toLong()),
+                ),
+            )
+        } else if (engineErrorCode != ERROR_CANCELLED) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.ANALYSIS_FAILED,
+                mapOf(
+                    "mode" to "batch",
+                    "reason" to when (engineErrorCode) {
+                        ERROR_SESSION_LIMIT -> "session_limit"
+                        0 -> "no_points"
+                        else -> "engine"
+                    },
+                    "duration" to SemperAnalytics.durationBucket(executionTimeMs.toLong()),
+                ),
+            )
+        }
+        return outcome
     }
 }
 

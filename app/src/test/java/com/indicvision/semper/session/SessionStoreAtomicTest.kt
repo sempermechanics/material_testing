@@ -113,4 +113,44 @@ class SessionStoreAtomicTest {
         assertTrue(bakFile().exists())
         assertEquals(afterFirst, bakFile().readText())
     }
+
+    @Test
+    fun `older index JSON missing newer fields still loads`() {
+        // Pre-sweep / pre-sync fields: only the original required keys.
+        indexFile().parentFile?.mkdirs()
+        indexFile().writeText(
+            """
+            [{
+              "id":"legacy-1",
+              "name":"Legacy",
+              "createdAt":10,
+              "updatedAt":10,
+              "frameCount":2,
+              "subset":41,
+              "step":5,
+              "strainWindow":15,
+              "imgW":100,
+              "imgH":100,
+              "roiX":0,
+              "roiY":0,
+              "roiW":100,
+              "roiH":100,
+              "refPath":"ref.png",
+              "refName":"ref.png",
+              "sessionDir":"/dir/legacy-1"
+            }]
+            """.trimIndent(),
+        )
+
+        val listed = SessionStore.list(ctx)
+        assertEquals(1, listed.size)
+        assertEquals("legacy-1", listed[0].id)
+        assertEquals(emptyList<Int>(), listed[0].sweepSubsets)
+        assertEquals("", listed[0].cloudSessionId)
+        assertEquals(SessionRecord.SyncState.LOCAL_ONLY, listed[0].syncState)
+
+        // Rewrite must preserve required identity after an upgrade touch.
+        assertTrue(SessionStore.upsert(ctx, listed[0].copy(name = "Legacy renamed")))
+        assertEquals("Legacy renamed", SessionStore.get(ctx, "legacy-1")?.name)
+    }
 }

@@ -319,6 +319,8 @@ dependencies {
     implementation(libs.timber)
     implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.recyclerview)
+    // Baseline Profile / Macrobenchmark companion — installs profiles at first run.
+    implementation(libs.androidx.profileinstaller)
 }
 
 // Static analysis gate: `./gradlew :app:detekt` (CI). New findings fail the

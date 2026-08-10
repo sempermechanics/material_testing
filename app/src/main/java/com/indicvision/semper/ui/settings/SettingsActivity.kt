@@ -5,7 +5,7 @@
 // launchers and views would trade that locality for cross-class state plumbing,
 // so those rules are suppressed for this file rather than worked around.
 
-@file:Suppress("TooManyFunctions", "LargeClass")
+@file:Suppress("TooManyFunctions", "LargeClass", "LongMethod", "CyclomaticComplexMethod", "MagicNumber")
 
 package com.indicvision.semper.ui.settings
 
@@ -35,6 +35,7 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.R
+import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.BackupDeleteWorker
 import com.indicvision.semper.data.CacheJanitor
@@ -56,8 +57,8 @@ import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.admin.AdminActivity
 import com.indicvision.semper.ui.auth.AuthActivity
 import com.indicvision.semper.ui.common.AuthRoute
-import com.indicvision.semper.ui.common.DeterminateProgressDialog
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.common.TransferBannerController
 import com.indicvision.semper.ui.home.SessionOpenHelper
 import com.indicvision.semper.ui.viewer.SendToSheet
 import kotlinx.coroutines.Dispatchers
@@ -96,12 +97,15 @@ class SettingsActivity : AppCompatActivity() {
     /** Restore / files-download keys currently busy — disables the Download icon. */
     private val downloadingKeys = mutableSetOf<String>()
 
+    private lateinit var transferBanner: TransferBannerController
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
         // Edge-to-edge: without this the status bar swallows taps on the back arrow.
         Insets.padTop(findViewById(R.id.settingsTopBar))
         Insets.padBottom(findViewById(R.id.settingsScroll))
+        transferBanner = TransferBannerController(findViewById(R.id.transferBannerRoot))
 
         findViewById<ImageButton>(R.id.btnSettingsBack).setOnClickListener { finish() }
 
@@ -449,13 +453,14 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
         var job: kotlinx.coroutines.Job? = null
-        val progress = DeterminateProgressDialog(
-            this,
-            getString(R.string.download_analysis_working),
-            onCancel = { job?.cancel() },
-        )
-        progress.show()
         markDownloading(key, true)
+        transferBanner.upsert(
+            TransferBannerController.Transfer(
+                id = key,
+                title = entry.name.ifBlank { getString(R.string.transfer_banner_download) },
+                onCancel = { job?.cancel() },
+            ),
+        )
         job = lifecycleScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) {
@@ -470,7 +475,9 @@ class SettingsActivity : AppCompatActivity() {
                             } else {
                                 0
                             }
-                            progress.update(percent = pct)
+                            runOnUiThread {
+                                transferBanner.updateProgress(key, pct)
+                            }
                         }
                     }.onFailure { Timber.w(it, "Cloud Session.zip download for save failed") }
                         .getOrNull()
@@ -478,7 +485,7 @@ class SettingsActivity : AppCompatActivity() {
                             SessionEverythingExporter.exportSessionZip(this@SettingsActivity, record)
                         }
                 }
-                progress.dismiss()
+                transferBanner.remove(key)
                 val ready = file?.takeIf { it.exists() && it.length() > 0L }
                 if (ready == null) {
                     Toast.makeText(
@@ -490,11 +497,12 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 SendToSheet.show(this@SettingsActivity, ready, ZIP_MIME)
             } catch (e: kotlinx.coroutines.CancellationException) {
-                progress.dismiss()
+                transferBanner.remove(key)
                 throw e
             } finally {
                 filesDownloadJobs.remove(key)
                 markDownloading(key, false)
+                transferBanner.remove(key)
             }
         }
         filesDownloadJobs[key] = job
@@ -520,6 +528,13 @@ class SettingsActivity : AppCompatActivity() {
                 return@launch
             }
             markDownloading(key, true)
+            transferBanner.upsert(
+                TransferBannerController.Transfer(
+                    id = key,
+                    title = entry.name.ifBlank { getString(R.string.transfer_banner_restore) },
+                    cancellable = false,
+                ),
+            )
             Toast.makeText(this@SettingsActivity, R.string.restore_background_note, Toast.LENGTH_SHORT).show()
             wireAnalysesDataSection()
         }
@@ -528,10 +543,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun isRestoreWorkRunning(cloudSessionId: String): Boolean {
         if (cloudSessionId.isBlank()) return false
         val wm = runCatching { WorkManager.getInstance(this) }.getOrNull()
-        return wm != null && runCatching {
-            wm.getWorkInfosForUniqueWork(CloudRestore.workName(cloudSessionId)).get()
-                .any { !it.state.isFinished }
-        }.getOrDefault(false)
+        return wm != null &&
+            runCatching {
+                wm.getWorkInfosForUniqueWork(CloudRestore.workName(cloudSessionId)).get()
+                    .any { !it.state.isFinished }
+            }.getOrDefault(false)
     }
 
     private fun markDownloading(key: String, busy: Boolean) {
@@ -626,8 +642,31 @@ class SettingsActivity : AppCompatActivity() {
             .getWorkInfosByTagLiveData("restore")
             .observe(this) { infos ->
                 infos.orEmpty().forEach { info ->
+                    val cloudId = info.tags.firstOrNull { it.startsWith("restore-") }
+                        ?.removePrefix("restore-")
+                        ?: info.outputData.getString(CloudRestore.KEY_CLOUD_SESSION_ID)
+                        ?: info.progress.getString(CloudRestore.KEY_CLOUD_SESSION_ID)
+                    val key = cloudId.orEmpty()
                     when (info.state) {
+                        WorkInfo.State.RUNNING -> {
+                            if (key.isNotBlank()) {
+                                val pct = info.progress.getInt(com.indicvision.semper.DicKeys.UPLOAD_PERCENT, 0)
+                                if (!transferBanner.contains(key)) {
+                                    transferBanner.upsert(
+                                        TransferBannerController.Transfer(
+                                            id = key,
+                                            title = getString(R.string.transfer_banner_restore),
+                                            cancellable = false,
+                                            percent = pct,
+                                        ),
+                                    )
+                                } else {
+                                    transferBanner.updateProgress(key, pct)
+                                }
+                            }
+                        }
                         WorkInfo.State.FAILED -> {
+                            if (key.isNotBlank()) transferBanner.remove(key)
                             if (shownRestoreOutcomes.add(info.id)) {
                                 syncDownloadingKeys()
                                 val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR)
@@ -640,6 +679,7 @@ class SettingsActivity : AppCompatActivity() {
                             }
                         }
                         WorkInfo.State.SUCCEEDED -> {
+                            if (key.isNotBlank()) transferBanner.remove(key)
                             // Silent on purpose (uploads don't toast success either): just
                             // refresh so the restored session appears. Deduped so a retained
                             // old success doesn't reload on every screen open.
@@ -648,7 +688,10 @@ class SettingsActivity : AppCompatActivity() {
                                 wireAnalysesDataSection()
                             }
                         }
-                        WorkInfo.State.CANCELLED -> syncDownloadingKeys()
+                        WorkInfo.State.CANCELLED -> {
+                            if (key.isNotBlank()) transferBanner.remove(key)
+                            syncDownloadingKeys()
+                        }
                         else -> Unit
                     }
                 }
@@ -784,13 +827,20 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.export_cloud_data_offline, Toast.LENGTH_LONG).show()
             return
         }
+        val key = "export_cloud"
+        if (transferBanner.contains(key)) {
+            Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
+            return
+        }
         var job: kotlinx.coroutines.Job? = null
-        val progress = DeterminateProgressDialog(
-            this,
-            getString(R.string.export_cloud_data_working),
-            onCancel = { job?.cancel() },
+        SemperAnalytics.event(this, SemperAnalytics.EXPORT_STARTED, mapOf("kind" to "cloud"))
+        transferBanner.upsert(
+            TransferBannerController.Transfer(
+                id = key,
+                title = getString(R.string.transfer_banner_export_cloud),
+                onCancel = { job?.cancel() },
+            ),
         )
-        progress.show()
         job = lifecycleScope.launch {
             try {
                 val dest = java.io.File(cacheDir, "semper-account-export.json")
@@ -798,8 +848,13 @@ class SettingsActivity : AppCompatActivity() {
                     val idToken = TokenProvider.usableIdToken() ?: error("not signed in")
                     api.exportAccount(idToken, dest)
                 }.onFailure { Timber.w(it, "Cloud account export failed") }.isSuccess
-                progress.dismiss()
+                transferBanner.remove(key)
                 if (!ok || !dest.exists() || dest.length() == 0L) {
+                    SemperAnalytics.event(
+                        this@SettingsActivity,
+                        SemperAnalytics.EXPORT_FAILED,
+                        mapOf("kind" to "cloud"),
+                    )
                     Toast.makeText(
                         this@SettingsActivity,
                         R.string.export_cloud_data_failed,
@@ -807,43 +862,73 @@ class SettingsActivity : AppCompatActivity() {
                     ).show()
                     return@launch
                 }
+                SemperAnalytics.event(
+                    this@SettingsActivity,
+                    SemperAnalytics.EXPORT_COMPLETED,
+                    mapOf("kind" to "cloud"),
+                )
                 SendToSheet.show(this@SettingsActivity, dest, JSON_MIME)
             } catch (e: kotlinx.coroutines.CancellationException) {
-                progress.dismiss()
+                transferBanner.remove(key)
                 throw e
+            } finally {
+                transferBanner.remove(key)
             }
         }
     }
 
     private fun exportMyData() {
+        val key = "export_local"
+        if (transferBanner.contains(key)) {
+            Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
+            return
+        }
         var job: kotlinx.coroutines.Job? = null
-        val progress = DeterminateProgressDialog(
-            this,
-            getString(R.string.export_data_working),
-            onCancel = { job?.cancel() },
+        SemperAnalytics.event(this, SemperAnalytics.EXPORT_STARTED, mapOf("kind" to "local"))
+        transferBanner.upsert(
+            TransferBannerController.Transfer(
+                id = key,
+                title = getString(R.string.transfer_banner_export_local),
+                onCancel = { job?.cancel() },
+            ),
         )
-        progress.show()
         job = lifecycleScope.launch {
             try {
                 val export = SessionEverythingExporter.exportMasterZip(this@SettingsActivity) { done, total ->
-                    progress.update(
-                        percent = if (total > 0) done * 100 / total else 0,
-                        text = getString(R.string.export_progress_fmt, done, total),
-                    )
+                    val pct = if (total > 0) done * 100 / total else 0
+                    runOnUiThread {
+                        transferBanner.updateProgress(
+                            key,
+                            pct,
+                            getString(R.string.export_progress_fmt, done, total),
+                        )
+                    }
                 }
-                progress.dismiss()
+                transferBanner.remove(key)
                 // Safety: only share a file that actually exists and has content.
                 val file = export?.file?.takeIf { it.exists() && it.length() > 0L }
                 if (file == null) {
+                    SemperAnalytics.event(
+                        this@SettingsActivity,
+                        SemperAnalytics.EXPORT_FAILED,
+                        mapOf("kind" to "local"),
+                    )
                     Toast.makeText(this@SettingsActivity, R.string.export_data_failed, Toast.LENGTH_LONG).show()
                     return@launch
                 }
+                SemperAnalytics.event(
+                    this@SettingsActivity,
+                    SemperAnalytics.EXPORT_COMPLETED,
+                    mapOf("kind" to "local"),
+                )
                 // Save to Files (folder icon) + Share, via our own sheet — the system
                 // chooser can't show a custom icon on its initial intents (Android 12+).
                 SendToSheet.show(this@SettingsActivity, file, ZIP_MIME)
             } catch (e: kotlinx.coroutines.CancellationException) {
-                progress.dismiss()
+                transferBanner.remove(key)
                 throw e
+            } finally {
+                transferBanner.remove(key)
             }
         }
     }
@@ -943,6 +1028,7 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnRequestFeature).setOnClickListener {
             openExternalUrl(getString(R.string.url_request_feature))
         }
+        findViewById<View>(R.id.btnSendFeedback).setOnClickListener { sendFeedback() }
         findViewById<View>(R.id.btnEmailSupport).setOnClickListener { emailSupport() }
     }
 
@@ -954,6 +1040,39 @@ class SettingsActivity : AppCompatActivity() {
         } catch (e: ActivityNotFoundException) {
             Timber.w(e, "No browser to open %s", url)
             Toast.makeText(this, url, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Product feedback mail with version / device context (no account PII required). */
+    private fun sendFeedback() {
+        SemperAnalytics.event(this, SemperAnalytics.FEEDBACK_OPENED)
+        val body = getString(
+            R.string.help_support_feedback_body,
+            BuildConfig.VERSION_NAME,
+            BuildConfig.VERSION_CODE,
+            "${Build.MANUFACTURER} ${Build.MODEL}",
+            Build.VERSION.SDK_INT,
+            if (BuildConfig.DEBUG) "debug" else "release",
+        )
+        val support = getString(R.string.support_email)
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = "mailto:".toUri()
+            putExtra(Intent.EXTRA_EMAIL, arrayOf(support))
+            putExtra(
+                Intent.EXTRA_SUBJECT,
+                getString(
+                    R.string.help_support_feedback_subject,
+                    BuildConfig.VERSION_NAME,
+                    BuildConfig.VERSION_CODE,
+                ),
+            )
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+        try {
+            startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            Timber.w(e, "No email app for feedback")
+            Toast.makeText(this, getString(R.string.request_access_none, support), Toast.LENGTH_LONG).show()
         }
     }
 

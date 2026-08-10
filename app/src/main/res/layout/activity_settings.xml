@@ -38,6 +38,11 @@
             android:textStyle="bold" />
     </LinearLayout>
 
+    <include
+        layout="@layout/view_transfer_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
     <androidx.core.widget.NestedScrollView
         android:id="@+id/settingsScroll"
         android:layout_width="match_parent"
@@ -770,6 +775,14 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:text="@string/help_support_feature_action" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSendFeedback"
+                    style="@style/Widget.Semper.Button.Outlined"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/help_support_feedback_action" />
 
                 <!-- Selectable so the address stays copyable with no mail app installed. -->
                 <TextView

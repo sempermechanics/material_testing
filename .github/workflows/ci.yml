@@ -11,6 +11,10 @@ on:
         description: 'Run every tier (ignore path filters)'
         type: boolean
         default: false
+      run_benchmark:
+        description: 'Run Macrobenchmark startup suite on an emulator'
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -92,6 +96,7 @@ jobs:
       backend: ${{ steps.flags.outputs.backend }}
       full_ci: ${{ steps.flags.outputs.full_ci }}
       heavy_ci: ${{ steps.flags.outputs.heavy_ci }}
+      benchmark_ci: ${{ steps.flags.outputs.benchmark_ci }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -148,11 +153,14 @@ jobs:
           FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
           E2E_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'e2e') }}
           RELEASE_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'release') }}
+          BENCHMARK_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'benchmark') }}
+          BENCHMARK_DISPATCH: ${{ github.event_name == 'workflow_dispatch' && inputs.run_benchmark || false }}
         run: |
           set -euo pipefail
           full=false
           app=false; native_core=false; native_jni=false; backend=false
           heavy=false  # Tier 3 / 5 on this event
+          benchmark=false
 
           # Push to main (or explicit full_ci) → full matrix.
           if { [ "$EVENT_NAME" = "push" ] && [ "$REF" = "refs/heads/main" ]; } \
@@ -160,6 +168,10 @@ jobs:
              || [ "$FULL_LABEL" = "true" ]; then
             full=true
             heavy=true
+          fi
+
+          if [ "$BENCHMARK_LABEL" = "true" ] || [ "$BENCHMARK_DISPATCH" = "true" ]; then
+            benchmark=true
           fi
 
           # Dependabot cheap path: never Tier 3/5; ecosystem picks one light tier.
@@ -197,8 +209,9 @@ jobs:
             echo "backend=$backend"
             echo "full_ci=$full"
             echo "heavy_ci=$heavy"
+            echo "benchmark_ci=$benchmark"
           } >> "$GITHUB_OUTPUT"
-          echo "Resolved: app=$app native_core=$native_core native_jni=$native_jni backend=$backend full_ci=$full heavy_ci=$heavy"
+          echo "Resolved: app=$app native_core=$native_core native_jni=$native_jni backend=$backend full_ci=$full heavy_ci=$heavy benchmark_ci=$benchmark"
 
   # ===================================================================
   # Tier 1 — Kotlin compile + JVM unit tests + quality gates (no NDK)
@@ -581,6 +594,46 @@ jobs:
           except-key: ccache-arm64-${{ github.sha }}
 
   # ===================================================================
+  # Macrobenchmark — opt-in only (label `benchmark` or dispatch run_benchmark)
+  # ===================================================================
+  tier-benchmark:
+    name: Macrobenchmark startup
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: [changes, tier1-app-fast]
+    permissions:
+      contents: read
+    if: >-
+      always()
+      && needs.changes.result == 'success'
+      && needs.changes.outputs.benchmark_ci == 'true'
+      && (needs.tier1-app-fast.result == 'success' || needs.tier1-app-fast.result == 'skipped')
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run startup Macrobenchmarks
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          script: ./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark
+
+  # ===================================================================
   # ci-ok — single required status check
   # ===================================================================
   ci-ok:
@@ -595,6 +648,7 @@ jobs:
       - tier3-emulator-e2e
       - tier4-backend
       - tier5-signed-release
+      - tier-benchmark
     steps:
       - name: Check all tiers
         run: |
@@ -605,7 +659,8 @@ jobs:
             "${{ needs.tier1-app-fast.result }}" \
             "${{ needs.tier3-emulator-e2e.result }}" \
             "${{ needs.tier4-backend.result }}" \
-            "${{ needs.tier5-signed-release.result }}"; do
+            "${{ needs.tier5-signed-release.result }}" \
+            "${{ needs.tier-benchmark.result }}"; do
             case "$result" in
               success|skipped) ;;
               *) echo "FAILED: $result"; exit 1 ;;

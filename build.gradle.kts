@@ -1,6 +1,7 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
     alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.test) apply false
     alias(libs.plugins.kotlin.serialization) apply false
     id("com.diffplug.spotless") version "8.9.0"
     id("com.google.gms.google-services") version "4.5.0" apply false
@@ -26,7 +27,7 @@ tasks.register("ciReleaseGate") {
 // Kotlin only — the C++ engine under native/ is deliberately excluded.
 spotless {
     kotlin {
-        target("app/src/**/*.kt")
+        target("app/src/**/*.kt", "benchmark/src/**/*.kt")
         targetExclude("**/build/**", "app/src/main/cpp/**", "native/**")
         ktlint("1.5.0").editorConfigOverride(
             mapOf(
