@@ -15,6 +15,7 @@ import com.indicvision.semper.R
  * decided by [AnalysisEntry]; what they do is the host's business, so every
  * action is a callback.
  */
+@Suppress("LongParameterList") // one adapter, one callback per row action
 class AnalysisDataAdapter(
     private val stateLine: (AnalysisEntry) -> String,
     private val backupLabel: (AnalysisEntry) -> Int?,
@@ -76,14 +77,16 @@ class AnalysisDataAdapter(
             }
 
             val hasCloud = entry.offersCloudActions()
-            // Live cloud list match: local Download, cloud Restore, and Delete.
-            localDownload.isVisible = hasCloud
-            restore.isVisible = hasCloud
+            val showDownload = entry.offersDownload()
+            val showRestore = entry.offersRestore()
+            // Download when cloud is listed; Restore only when local frames are missing.
+            localDownload.isVisible = showDownload
+            restore.isVisible = showRestore
             delete.isVisible = hasCloud
             localDownload.isEnabled = !busy
             restore.isEnabled = !busy
-            localDownload.alpha = if (busy) 0.4f else 1f
-            restore.alpha = if (busy) 0.4f else 1f
+            localDownload.alpha = if (busy) BUSY_ICON_ALPHA else 1f
+            restore.alpha = if (busy) BUSY_ICON_ALPHA else 1f
             localDownload.setOnClickListener {
                 if (entry.downloadKey() in downloadingKeys) return@setOnClickListener
                 onLocalDownload(entry)
@@ -105,5 +108,10 @@ class AnalysisDataAdapter(
             itemView.isClickable = entry.record != null
             itemView.setOnClickListener(if (entry.record != null) View.OnClickListener { onOpen(entry) } else null)
         }
+    }
+
+    private companion object {
+        /** Dim action icons while a transfer for this row is running. */
+        const val BUSY_ICON_ALPHA = 0.4f
     }
 }

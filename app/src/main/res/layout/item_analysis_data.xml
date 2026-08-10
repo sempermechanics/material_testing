@@ -64,7 +64,7 @@
         android:visibility="gone"
         app:tint="@color/sky_primary" />
 
-    <!-- Restore from cloud into app storage (may replace local frames). -->
+    <!-- Restore from cloud into app storage (shown only when local frames are missing). -->
     <ImageButton
         android:id="@+id/btnAnalysisRestore"
         android:layout_width="40dp"

@@ -92,7 +92,8 @@ val releaseKeystore =
 
 android {
     namespace = "com.indicvision.semper"
-    compileSdk = 36
+    // core-ktx 1.19+ (gradle-deps) requires compileSdk 37+ (AAR metadata).
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.indicvision.semper"
