@@ -222,6 +222,19 @@ android {
                 mappingFileUploadEnabled = false
             }
         }
+        // Non-debuggable, debug-signed release-like variant for Macrobenchmark.
+        // CI runs on an x86_64 AVD, so carry that ABI the same way debug does.
+        create("benchmark") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("debug")
+            if (project.findProperty("abiFilters") == null) {
+                ndk { abiFilters.add("x86_64") }
+            }
+        }
     }
 
     // No ABI splits: the app targets a single ABI (arm64-v8a, see abiFilters
