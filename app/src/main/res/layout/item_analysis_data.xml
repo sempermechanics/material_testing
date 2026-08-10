@@ -59,7 +59,7 @@
         android:contentDescription="@string/download_analysis_confirm"
         android:padding="8dp"
         android:scaleType="fitCenter"
-        android:src="@drawable/ic_cloud_download"
+        android:src="@drawable/ic_download"
         android:visibility="gone"
         app:tint="@color/sky_primary" />
 

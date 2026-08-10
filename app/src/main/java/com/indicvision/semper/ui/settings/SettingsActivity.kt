@@ -90,6 +90,12 @@ class SettingsActivity : AppCompatActivity() {
     /** Restore WorkInfo ids already surfaced, so one outcome isn't shown twice. */
     private val shownRestoreOutcomes = mutableSetOf<java.util.UUID>()
 
+    /** In-flight Save-to-Files downloads keyed by [AnalysisEntry.downloadKey]. */
+    private val filesDownloadJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
+
+    /** Restore / files-download keys currently busy — disables the Download icon. */
+    private val downloadingKeys = mutableSetOf<String>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
@@ -396,7 +402,17 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun downloadCloudBackup(entry: AnalysisEntry) {
-        if (entry.cloud == null) return
+        if (!entry.offersDownload()) return
+        val key = entry.downloadKey()
+        if (key in downloadingKeys || filesDownloadJobs[key]?.isActive == true) {
+            Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (isRestoreWorkRunning(key)) {
+            markDownloading(key, true)
+            Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
+            return
+        }
         confirmDownload(entry)
     }
 
@@ -423,11 +439,17 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * Phone+cloud Download: pull Session.zip (or pack the on-device session) and
-     * hand it to Save / Share. Never unpacks into the existing session dir.
+     * Phone+cloud Download (live cloud list match): save Session.zip via Save /
+     * Share. Falls back to packing the on-device session if the cloud zip is
+     * unavailable. Never unpacks into the existing session dir.
      */
     private fun saveBackupCopyToFiles(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
+        val key = entry.downloadKey()
+        if (key in downloadingKeys || filesDownloadJobs[key]?.isActive == true) {
+            Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
+            return
+        }
         var job: kotlinx.coroutines.Job? = null
         val progress = DeterminateProgressDialog(
             this,
@@ -435,6 +457,7 @@ class SettingsActivity : AppCompatActivity() {
             onCancel = { job?.cancel() },
         )
         progress.show()
+        markDownloading(key, true)
         job = lifecycleScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) {
@@ -444,7 +467,11 @@ class SettingsActivity : AppCompatActivity() {
                             cloud.sessionId,
                             entry.name,
                         ) { done, total ->
-                            val pct = if (total > 0L) ((done * 100) / total).toInt().coerceIn(0, 100) else 0
+                            val pct = if (total > 0L) {
+                                ((done * 100) / total).toInt().coerceIn(0, 100)
+                            } else {
+                                0
+                            }
                             progress.update(percent = pct)
                         }
                     }.onFailure { Timber.w(it, "Cloud Session.zip download for save failed") }
@@ -467,12 +494,22 @@ class SettingsActivity : AppCompatActivity() {
             } catch (e: kotlinx.coroutines.CancellationException) {
                 progress.dismiss()
                 throw e
+            } finally {
+                filesDownloadJobs.remove(key)
+                markDownloading(key, false)
             }
         }
+        filesDownloadJobs[key] = job
     }
 
     private fun restoreBackup(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
+        val key = entry.downloadKey()
+        if (isRestoreWorkRunning(cloud.sessionId) || key in downloadingKeys) {
+            markDownloading(key, true)
+            Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
+            return
+        }
         // Prefer the existing phone row id so a freed stub / re-download fills
         // in-place rather than creating a second "restored-…" id.
         val targetLocalId = entry.record?.id ?: CloudRestore.targetLocalId(cloud)
@@ -482,9 +519,34 @@ class SettingsActivity : AppCompatActivity() {
                 Toast.makeText(this@SettingsActivity, R.string.restore_failed_generic, Toast.LENGTH_LONG).show()
                 return@launch
             }
+            markDownloading(key, true)
             Toast.makeText(this@SettingsActivity, R.string.restore_background_note, Toast.LENGTH_SHORT).show()
             wireAnalysesDataSection()
         }
+    }
+
+    private fun isRestoreWorkRunning(cloudSessionId: String): Boolean {
+        if (cloudSessionId.isBlank()) return false
+        val wm = runCatching { WorkManager.getInstance(this) }.getOrNull() ?: return false
+        return runCatching {
+            wm.getWorkInfosForUniqueWork(CloudRestore.workName(cloudSessionId)).get()
+                .any { !it.state.isFinished }
+        }.getOrDefault(false)
+    }
+
+    private fun markDownloading(key: String, busy: Boolean) {
+        if (busy) downloadingKeys.add(key) else downloadingKeys.remove(key)
+        analysesAdapter.setDownloadingKeys(downloadingKeys.toSet())
+    }
+
+    /** Drop finished restore keys; keep active Save-to-Files jobs. */
+    private fun syncDownloadingKeys() {
+        val next = mutableSetOf<String>()
+        filesDownloadJobs.filterValues { it.isActive }.keys.forEach { next += it }
+        downloadingKeys.filter { isRestoreWorkRunning(it) }.forEach { next += it }
+        downloadingKeys.clear()
+        downloadingKeys.addAll(next)
+        analysesAdapter.setDownloadingKeys(downloadingKeys.toSet())
     }
 
     @Suppress("ReturnCount")
@@ -568,6 +630,7 @@ class SettingsActivity : AppCompatActivity() {
                     when (info.state) {
                         WorkInfo.State.FAILED -> {
                             if (shownRestoreOutcomes.add(info.id)) {
+                                syncDownloadingKeys()
                                 val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR)
                                     ?: getString(R.string.restore_failed_generic)
                                 Snackbar.make(
@@ -581,8 +644,12 @@ class SettingsActivity : AppCompatActivity() {
                             // Silent on purpose (uploads don't toast success either): just
                             // refresh so the restored session appears. Deduped so a retained
                             // old success doesn't reload on every screen open.
-                            if (shownRestoreOutcomes.add(info.id)) wireAnalysesDataSection()
+                            if (shownRestoreOutcomes.add(info.id)) {
+                                syncDownloadingKeys()
+                                wireAnalysesDataSection()
+                            }
                         }
+                        WorkInfo.State.CANCELLED -> syncDownloadingKeys()
                         else -> Unit
                     }
                 }

@@ -12,8 +12,8 @@ import com.indicvision.semper.R
 
 /**
  * Rows for the settings page's per-analysis list. Which buttons a row shows is
- * decided by [AnalysisEntry.location]; what they do is the host's business, so
- * every action is a callback.
+ * decided by [AnalysisEntry]; what they do is the host's business, so every
+ * action is a callback.
  */
 class AnalysisDataAdapter(
     private val stateLine: (AnalysisEntry) -> String,
@@ -25,11 +25,20 @@ class AnalysisDataAdapter(
 ) : RecyclerView.Adapter<AnalysisDataAdapter.Row>() {
 
     private val entries = mutableListOf<AnalysisEntry>()
+    private var downloadingKeys: Set<String> = emptySet()
 
     fun submit(items: List<AnalysisEntry>) {
         entries.clear()
         entries.addAll(items)
         @Suppress("NotifyDataSetChanged") // whole-list refresh after a cloud round-trip
+        notifyDataSetChanged()
+    }
+
+    /** Keys from [AnalysisEntry.downloadKey] with an in-flight Download. */
+    fun setDownloadingKeys(keys: Set<String>) {
+        if (keys == downloadingKeys) return
+        downloadingKeys = keys
+        @Suppress("NotifyDataSetChanged")
         notifyDataSetChanged()
     }
 
@@ -57,19 +66,29 @@ class AnalysisDataAdapter(
 
         fun bind(entry: AnalysisEntry) {
             name.text = entry.name
-            state.text = stateLine(entry)
+            val busy = entry.downloadKey() in downloadingKeys
+            state.text = if (busy) {
+                itemView.context.getString(R.string.download_analysis_working)
+            } else {
+                stateLine(entry)
+            }
 
             val hasCloud = entry.cloud != null
-            // Download whenever a cloud copy exists — including phone+cloud rows
-            // (save a copy to Files; does not overwrite the on-phone analysis).
-            restore.isVisible = hasCloud
+            // Download only when the live cloud list matched this row
+            // (cloud-only restore, or phone+cloud save-to-Files).
+            restore.isVisible = entry.offersDownload()
+            restore.isEnabled = !busy
+            restore.alpha = if (busy) 0.4f else 1f
             delete.isVisible = hasCloud
-            restore.setOnClickListener { onRestore(entry) }
+            restore.setOnClickListener {
+                if (entry.downloadKey() in downloadingKeys) return@setOnClickListener
+                onRestore(entry)
+            }
             delete.setOnClickListener { onDelete(entry, itemView) }
 
             // A backup action only applies to a row with no cloud copy listed.
             val label = if (hasCloud) null else backupLabel(entry)
-            backup.isVisible = label != null
+            backup.isVisible = label != null && !busy
             label?.let {
                 backup.setText(it)
                 backup.setOnClickListener { onBackup(entry) }
