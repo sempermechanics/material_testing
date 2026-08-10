@@ -32,6 +32,18 @@ class RestoreAndImportSafetyTest {
     }
 
     @Test
+    fun `bundle download work name is stable per cloud session`() {
+        assertEquals("download-bundle-cloud-123", CloudRestore.bundleDownloadWorkName("cloud-123"))
+        assertEquals("download-bundle", CloudRestore.TAG_BUNDLE_DOWNLOAD)
+    }
+
+    @Test
+    fun `suggested bundle file name is sanitized`() {
+        assertEquals("My_Sample_Session.zip", CloudRestore.suggestedBundleFileName("My Sample"))
+        assertEquals("analysis_Session.zip", CloudRestore.suggestedBundleFileName("!!!"))
+    }
+
+    @Test
     fun `staged import replaces committed batch only at commit`() {
         val cache = tmp.newFolder("cache")
         val committed = File(cache, "temp_deformed").apply { mkdirs() }
