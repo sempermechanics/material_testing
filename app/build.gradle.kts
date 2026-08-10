@@ -8,7 +8,7 @@ plugins {
     id("com.google.firebase.crashlytics")
     // Coverage measurement only (report-only, no gate). Generate with
     // `./gradlew :app:koverHtmlReport` → app/build/reports/kover/.
-    id("org.jetbrains.kotlinx.kover") version "0.9.1"
+    id("org.jetbrains.kotlinx.kover") version "0.9.9"
 }
 
 // Read local.properties directly rather than via java.util.Properties, so the

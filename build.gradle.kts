@@ -2,7 +2,7 @@
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.serialization) apply false
-    id("com.diffplug.spotless") version "8.0.0"
+    id("com.diffplug.spotless") version "8.9.0"
     id("com.google.gms.google-services") version "4.5.0" apply false
     // Required by the Crashlytics SDK: injects the build-ID resource the SDK reads
     // at startup. Without it the SDK throws at Firebase init and crashes the app.
