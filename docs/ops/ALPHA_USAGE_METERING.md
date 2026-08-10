@@ -73,21 +73,62 @@ Hard gate: **do not start** until the tester confirms they are logged in on Home
 
 | # | Scenario | App actions | Meter |
 |---|---|---|---|
-| 1 | Warm Home sync | Pull-to-sync | `sync`, `config`, `attest` |
-| 2 | Single (small) | Few frames → Compute → wait upload badge clear | `backup` + counts |
-| 3 | Sweep (small) | Small ranges → lattice → View → upload | `backup` + metrics |
-| 4 | Restore | Restore one cloud-only / freed session | `restore` (+ egress) |
-| 5 | Delete | Delete one cloud-backed row | `DELETE` session |
-| 6 | Heavy | `AAA5083_H111 - PLC band` full import → single analysis → upload | `backup`, frames/files, Drive size |
+| 1 | Warm Home sync | Pull-to-sync | `sync`, `config`, `attest` + RAM/ROM baseline |
+| 2 | Single (small) | Few frames → Compute → wait upload badge clear | `backup` + counts + peak PSS / ROM Δ |
+| 3 | Sweep (small) | Small ranges → lattice → View → upload | `backup` + metrics + peak PSS / ROM Δ |
+| 4 | Restore | Restore one cloud-only / freed session | `restore` (+ egress) + ROM Δ after download |
+| 5 | Delete | Delete one cloud-backed row | `DELETE` session + ROM Δ |
+| 6 | Heavy | `AAA5083_H111 - PLC band` full import → single analysis → upload | `backup`, frames/files, Drive size, **peak PSS**, **ROM peak/Δ** |
 
 Keep light sets small so the heavy PLC run dominates image-related cost.
+
+## Device RAM and ROM (on-phone)
+
+Cloud Logging does not see phone memory. During each matrix scenario also capture:
+
+| Signal | Meaning | How |
+|---|---|---|
+| **PSS** (`pss_kb`) | Process RAM (shared pages proportionally) | App `AlphaMeter` samples + `adb dumpsys meminfo` |
+| **Java / native heap** | Runtime + native allocations | `AlphaMeter` CSV |
+| **ROM** (`rom_bytes`) | App code + private data + cache (`StorageStats`) | `AlphaMeter` CSV |
+| **sessions_bytes** | Local analysis tree under app files | `AlphaMeter` CSV |
+| **cache_dir_bytes** | Clearable temp cache | `AlphaMeter` CSV |
+
+The app appends rows to:
+
+`/sdcard/Android/data/com.indicvision.semper/files/alpha_meter/samples.csv`
+
+and prints the same snapshot to logcat tag **`AlphaMeter`** (works on release betas).
+
+Labels include: `cold_start`, `import_done_nN`, `analysis_saved_*`, `viewer_open_fN`,
+`viewer_close`, `backup_prepare_start`, `backup_zip_*`, `backup_done`,
+`restore_done`, `cache_cleared`.
+
+### WSL / laptop commands (USB debugging)
+
+```bash
+# While a scenario runs — PSS every 5s
+./scripts/meter_alpha_device_memory.sh watch
+
+# After done:N — pull app CSV + summarize peaks
+./scripts/meter_alpha_device_memory.sh pull
+./scripts/meter_alpha_device_memory.sh summarize
+
+# Optional: live AlphaMeter lines
+adb logcat -s AlphaMeter:I
+```
+
+Fill the report’s **Peak PSS** / **ROM Δ** columns from `summarize` (or the CSV).
+For scenario deltas, note ROM at `start:` vs `done:` (or `cold_start` vs
+`backup_done` / `viewer_open_*`).
 
 ## How to meter one scenario
 
 1. Note **UTC start**, tester **uid**, scenario name.
-2. Run the scenario; wait until UI settles (upload complete / restore done).
-3. Note **UTC end**.
-4. Query Cloud Logging (project that hosts Cloud Run), e.g.:
+2. Start `./scripts/meter_alpha_device_memory.sh watch` (optional but preferred for peak PSS).
+3. Run the scenario; wait until UI settles (upload complete / restore done).
+4. Note **UTC end**; stop watch; `pull` + `summarize`.
+5. Query Cloud Logging (project that hosts Cloud Run), e.g.:
 
 ```text
 resource.type="cloud_run_revision"
@@ -102,18 +143,14 @@ Group / count by `jsonPayload.opClass` and `jsonPayload.routeTemplate`.
 gcloud example:
 
 ```bash
-gcloud logging read \
-  'resource.type="cloud_run_revision" AND jsonPayload.event="http_access" AND jsonPayload.uid="USER_UID"' \
-  --project=PROJECT_ID \
-  --format='csv(timestamp,jsonPayload.opClass,jsonPayload.routeTemplate,jsonPayload.status,jsonPayload.fileCount,jsonPayload.frameCount)' \
-  --freshness=2h \
-  --limit=500
+PROJECT_ID=... USER_UID=... FRESHNESS=2h ./scripts/meter_alpha_usage.sh
 ```
 
-5. Cross-check Firestore `audit_logs` for the same window (`SESSION_CREATE`,
+6. Cross-check Firestore `audit_logs` for the same window (`SESSION_CREATE`,
    `UPLOAD_COMPLETE` / complete actions, `FILE_DOWNLOAD`, session delete).
-6. Separate **Drive upload bytes** (Drive admin / API metrics; device→Drive) from
+7. Separate **Drive upload bytes** (Drive admin / API metrics; device→Drive) from
    **Cloud Run restore egress** (`GET …/content`).
+8. Record **peak PSS** and **ROM Δ** from the device meter summarize step.
 
 ## Interpreting results
 
@@ -130,6 +167,8 @@ When the Pixel is attached only to a laptop:
 1. Install the private GitHub Release **beta** APK.
 2. Copy `AAA5083_H111 - PLC band` onto the phone (or ensure Files picker sees it).
 3. Sign in; message the agent **“logged in”**.
-4. For each matrix row: message **“start: \<scenario\>”**, perform actions, then
-   **“done: \<scenario\>”** with approximate local time or UTC.
-5. Agent runs Logging / audit queries and fills the usage report table.
+4. For each matrix row: message **“start: \<scenario\>”**, start
+   `meter_alpha_device_memory.sh watch`, perform actions, then **“done: \<scenario\>”**
+   with approximate local time or UTC; `pull` + `summarize` device CSV.
+5. Agent runs Logging / audit queries and fills the usage report table
+   (including Peak PSS / ROM Δ when CSV is pasted).

@@ -46,6 +46,7 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 publishProgress(targetLocalId, done, total)
             }
             Timber.i("Restored %s from cloud session %s", localId, cloudSessionId)
+            AlphaDeviceMeter.record(applicationContext, "restore_done")
             Result.success(workDataOf(KEY_LOCAL_ID to localId))
         } catch (e: CancellationException) {
             clearPartialArtifacts(targetLocalId)
