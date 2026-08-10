@@ -17,10 +17,29 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    buildTypes {
+        // Self-instrumenting Macrobenchmark APK; targets :app's benchmark type.
+        create("benchmark") {
+            isDebuggable = true
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
+    }
+
     targetProjectPath = ":app"
 
-    // Macrobenchmarks need a non-debuggable target; use the release variant.
+    // Macrobenchmarks need a non-debuggable target; use the release-like
+    // :app benchmark variant (see app/build.gradle.kts).
     experimentalProperties["android.experimental.self-instrumenting"] = true
+}
+
+androidComponents {
+    beforeVariants(selector().all()) {
+        // Only the Macrobenchmark variant — skip the default debug test APK.
+        // AGP 9 binds this lambda as Action<TestVariantBuilder>, so the
+        // builder is `it` (not a receiver).
+        it.enable = it.buildType == "benchmark"
+    }
 }
 
 dependencies {
