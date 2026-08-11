@@ -1,4 +1,7 @@
+import com.android.build.api.artifact.SingleArtifact
 import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+import org.w3c.dom.Element
+import javax.xml.parsers.DocumentBuilderFactory
 
 plugins {
     alias(libs.plugins.android.application)
@@ -372,6 +375,89 @@ kover {
             rule {
                 minBound(15)
             }
+        }
+    }
+}
+
+/**
+ * Fails the build when a foreground service reaches the *merged* manifest
+ * without the service type it needs.
+ *
+ * Android 14+ refuses to start a typeless foreground service
+ * (`InvalidForegroundServiceTypeException: Starting FGS with type none … has
+ * been prohibited`). The declaration at fault usually comes from a library
+ * manifest — WorkManager ships SystemForegroundService with no type — so it is
+ * invisible in app sources and cannot be seen by a JVM unit test either. This
+ * reads the merged XML, which is the artifact that actually ships.
+ */
+abstract class VerifyForegroundServiceTypes : DefaultTask() {
+
+    @get:InputFile
+    abstract val mergedManifest: RegularFileProperty
+
+    /** Fully-qualified service name → a type its declaration must include. */
+    @get:Input
+    abstract val required: MapProperty<String, String>
+
+    @TaskAction
+    fun verify() {
+        val androidNs = "http://schemas.android.com/apk/res/android"
+        val document = DocumentBuilderFactory.newInstance()
+            .apply { isNamespaceAware = true }
+            .newDocumentBuilder()
+            .parse(mergedManifest.get().asFile)
+
+        val nodes = document.getElementsByTagName("service")
+        val declared = (0 until nodes.length)
+            .map { nodes.item(it) as Element }
+            .associate {
+                it.getAttributeNS(androidNs, "name") to
+                    it.getAttributeNS(androidNs, "foregroundServiceType")
+            }
+
+        val problems = required.get().toSortedMap().mapNotNull { (service, type) ->
+            val actual = declared[service]
+            when {
+                actual == null -> "$service is missing from the merged manifest"
+                type !in actual.split('|') ->
+                    "$service declares foregroundServiceType=\"$actual\", " +
+                        "which does not include \"$type\""
+                else -> null
+            }
+        }
+
+        if (problems.isNotEmpty()) {
+            throw GradleException(
+                problems.joinToString(
+                    prefix = "Foreground service type check failed:\n  - ",
+                    separator = "\n  - ",
+                    postfix = "\nAndroid 14+ kills a foreground service started with type none.",
+                ),
+            )
+        }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val suffix = variant.name.replaceFirstChar { it.uppercase() }
+        val verifyTask = tasks.register<VerifyForegroundServiceTypes>(
+            "verify${suffix}ForegroundServiceTypes",
+        ) {
+            group = "verification"
+            description = "Checks merged-manifest foreground service types ($suffix)."
+            mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+            required.set(
+                mapOf(
+                    // The app manifest merges dataSync onto this; the type passed
+                    // to ForegroundInfo in TransferNotifications must be a subset.
+                    "androidx.work.impl.foreground.SystemForegroundService" to "dataSync",
+                ),
+            )
+        }
+        // Runs inside CI Tier 1, which is the only tier that always executes.
+        tasks.matching { it.name == "test${suffix}UnitTest" }.configureEach {
+            dependsOn(verifyTask)
         }
     }
 }
