@@ -322,6 +322,9 @@ dependencies {
     // calls the hidden InputManager.getInstance, removed in Android 17).
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.test.rules)
+    // Microbenchmark: median timeNs + allocationCount for the round-2 hot paths
+    // (HotPathMicroBenchmark). Same version as the macro library.
+    androidTestImplementation(libs.androidx.benchmark.junit4)
 
     // Google SSO via Credential Manager (native one-tap) → Google ID token
     implementation(libs.androidx.credentials)
