@@ -15,7 +15,11 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class VisualizationEngineTest {
 
-    /** A correlated grid: `step`-spaced points whose value rises left to right. */
+    /**
+     * A correlated grid: `step`-spaced points whose value rises left to right. Every
+     * field carries a distinct pattern (signed, and spanning different magnitudes) so
+     * the multi-field parity checks below are not all reading the same numbers.
+     */
     private fun rampField(cols: Int, rows: Int, step: Int): FloatArray {
         val out = FloatArray(cols * rows * DicResult.STRIDE)
         var p = 0
@@ -23,7 +27,11 @@ class VisualizationEngineTest {
             for (c in 0 until cols) {
                 out[p + DicResult.IDX_X] = (c * step).toFloat()
                 out[p + DicResult.IDX_Y] = (r * step).toFloat()
+                out[p + DicResult.IDX_U] = (c - cols / 2) * 0.037f
+                out[p + DicResult.IDX_V] = (rows / 2 - r) * 0.019f
                 out[p + DicResult.IDX_EXX] = c.toFloat() / cols
+                out[p + DicResult.IDX_EYY] = (r % 5 - 2) * 0.0007f
+                out[p + DicResult.IDX_EXY] = (c % 3 - 1) * 0.0002f
                 out[p + DicResult.IDX_ZNSSD] = 0.01f
                 p += DicResult.STRIDE
             }
@@ -106,6 +114,39 @@ class VisualizationEngineTest {
             assertEquals("min field=$valIndex", mn, plane.min, 0f)
             assertEquals("max field=$valIndex", mx, plane.max, 0f)
         }
+    }
+
+    @Test
+    fun `de-boxed valueRanges is identical to the boxed oracle for every field`() {
+        val data = rampField(cols = 25, rows = 17, step = 4)
+        val fields = intArrayOf(
+            DicResult.IDX_U,
+            DicResult.IDX_V,
+            DicResult.IDX_EXX,
+            DicResult.IDX_EYY,
+            DicResult.IDX_EXY,
+        )
+
+        val ranges = VisualizationEngine.valueRanges(data, fields)
+
+        assertEquals(fields.size, ranges.size)
+        for (valIndex in fields) {
+            val actual = requireNotNull(ranges[valIndex]) { "field=$valIndex missing" }
+            val (mn, mx) = boxedSigmaClamp(data, valIndex)
+            assertEquals("min field=$valIndex", mn, actual.first, 0f)
+            assertEquals("max field=$valIndex", mx, actual.second, 0f)
+        }
+    }
+
+    @Test
+    fun `valueRanges is null per field when nothing correlates`() {
+        val data = FloatArray(4 * DicResult.STRIDE) { -1f }
+        val fields = intArrayOf(DicResult.IDX_U, DicResult.IDX_EXX)
+
+        val ranges = VisualizationEngine.valueRanges(data, fields)
+
+        assertEquals(fields.size, ranges.size)
+        for (valIndex in fields) assertEquals("field=$valIndex", null, ranges[valIndex])
     }
 
     @Test

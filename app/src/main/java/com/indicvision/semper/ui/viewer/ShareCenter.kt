@@ -300,7 +300,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 subset = s.subsetPerFrame?.getOrNull(index) ?: 0,
                 step = s.stepPerFrame?.getOrNull(index) ?: 0,
                 strainWindow = s.strainWindowPerFrame?.getOrNull(index) ?: 0,
-                data = { DicResult.decodeDatBytes(file.readBytes()) },
+                data = { DicResult.decodeDatFile(file) },
             )
         }
         val f = File(shareDir(), "${s.baseName}_data.csv")
@@ -342,7 +342,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
      */
     private fun frameReport(index: Int): com.indicvision.semper.report.ReportData? {
         val s = requireSnapshot()
-        val data = DicResult.decodeDatBytes(s.batchFiles[index].readBytes()) ?: return null
+        val data = DicResult.decodeDatFile(s.batchFiles[index]) ?: return null
         return s.buildReportAt(index, data)
     }
 
@@ -438,7 +438,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
     ) {
         for ((index, file) in s.batchFiles.withIndex()) {
             onProgress(index + 1, s.batchFiles.size)
-            val data = DicResult.decodeDatBytes(file.readBytes()) ?: continue
+            val data = DicResult.decodeDatFile(file) ?: continue
             val prefix = (index + 1).toString().padStart(3, '0')
             val frameName = s.defNames.getOrNull(index)?.substringBeforeLast('.') ?: "Frame_${index + 1}"
             val folder = "photos_$ts/results/${prefix}_$frameName"
