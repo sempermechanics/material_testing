@@ -5,13 +5,14 @@
 package com.indicvision.semper.ui.viewer
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.core.graphics.scale
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
 import com.indicvision.semper.report.RoiData
+import com.indicvision.semper.report.VisualizationEngine
 
 /**
  * Builds [ReportData] for the current (or a given) frame. Frame-varying fields
@@ -25,11 +26,17 @@ object ViewerReportFactory {
         frameIndex: Int,
         data: FloatArray,
     ): ReportData? {
+        // buildReport downscales every cover to 600 px, so a full-resolution decode of
+        // a 26 MP reference (~104 MB, and once per frame in an all-frames report) is
+        // pure waste. Decode no larger than REPORT_MAX_EDGE — the report's own render
+        // cap — via inSampleSize, so peak stays a few MB.
+        val cap = VisualizationEngine.REPORT_MAX_EDGE
+        val (capW, capH) = VisualizationEngine.cappedDims(host.imgW, host.imgH, cap)
         val refPath = host.intent.getStringExtra(DicKeys.REF_PATH)
-        val decodedFull = refPath?.let { BitmapFactory.decodeFile(it) }
+        val decodedCapped = refPath?.let { BitmapDecode.decodeFileForView(it, capW, capH, cap) }
         val cached = host.cachedBaseImage
         val baseImg = when {
-            decodedFull != null -> decodedFull
+            decodedCapped != null -> decodedCapped
             cached != null && cached.width == host.imgW && cached.height == host.imgH -> cached
             cached != null -> cached.scale(host.imgW, host.imgH)
             else -> return null
@@ -49,7 +56,7 @@ object ViewerReportFactory {
             EngineStats(0, 0, 0, 0, 0, 0, 0, 0, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
         }
 
-        val realDefImg = host.currentDefPath?.let { BitmapFactory.decodeFile(it) } ?: baseImg
+        val realDefImg = host.currentDefPath?.let { BitmapDecode.decodeFileForView(it, capW, capH, cap) } ?: baseImg
 
         // buildReport keeps only a downscaled copy of the cover images, so the
         // full-size decode above is ours to free — and an all-frames report

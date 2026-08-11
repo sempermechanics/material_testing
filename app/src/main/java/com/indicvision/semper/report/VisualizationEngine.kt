@@ -38,6 +38,23 @@ object VisualizationEngine {
     const val REPORT_MAX_EDGE = 1280
 
     /**
+     * Scale factor that shrinks [imgW]×[imgH] so its longest edge is ≤ [maxEdge]
+     * (1f when already within). This is the identical formula
+     * [generateHeatmapIndices] uses for its own downscale, so a caller that composes
+     * at `imgW*scale × imgH*scale` lines up pixel-for-pixel with the capped heatmap.
+     */
+    fun cappedRenderScale(imgW: Int, imgH: Int, maxEdge: Int): Float {
+        val longest = max(imgW, imgH).coerceAtLeast(1)
+        return if (longest > maxEdge) maxEdge.toFloat() / longest else 1f
+    }
+
+    /** [w]×[h] shrunk so its longest edge is ≤ [maxEdge]; unchanged if already within. */
+    fun cappedDims(w: Int, h: Int, maxEdge: Int): Pair<Int, Int> {
+        val scale = cappedRenderScale(w, h, maxEdge)
+        return (w * scale).toInt().coerceAtLeast(1) to (h * scale).toInt().coerceAtLeast(1)
+    }
+
+    /**
      * Palette slot for "no correlated data here" — transparent on screen, the
      * animation's background colour in a GIF. It costs the colour ramp its top
      * entry (values map to 0..[LAST_COLOR]), which is one 255th of the scale and

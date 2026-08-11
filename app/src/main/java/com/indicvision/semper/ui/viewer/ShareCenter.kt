@@ -9,7 +9,6 @@ package com.indicvision.semper.ui.viewer
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
@@ -22,6 +21,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.PdfReportGenerator
@@ -196,7 +196,13 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     // ── Generators ───────────────────────────────────────────────────────
 
-    /** Annotated PNG of one field for one frame's data. Full-res heatmap + base. */
+    /**
+     * Annotated PNG of one field for one frame's data. Composited at the
+     * [VisualizationEngine.REPORT_MAX_EDGE]-capped size rather than full sensor
+     * resolution: a 26 MP reference otherwise held four ~100 MB ARGB bitmaps at once
+     * (heatmap + base + out + decode) per field. Marker coordinates are scaled by the
+     * same factor, mirroring [ReportBuilder.buildReport].
+     */
     private fun renderAnnotated(
         data: FloatArray,
         dataIndex: Int,
@@ -204,6 +210,10 @@ class ShareCenter(private val host: ResultViewerActivity) {
         frameIndex: Int,
     ): Bitmap {
         val s = requireSnapshot()
+        val renderScale = VisualizationEngine.cappedRenderScale(s.imgW, s.imgH, VisualizationEngine.REPORT_MAX_EDGE)
+        val renderW = (s.imgW * renderScale).toInt().coerceAtLeast(1)
+        val renderH = (s.imgH * renderScale).toInt().coerceAtLeast(1)
+
         val (heatmap, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
             data,
             s.imgW,
@@ -212,32 +222,38 @@ class ShareCenter(private val host: ResultViewerActivity) {
             s.stepAt(frameIndex),
             null,
             null,
-            maxLongEdge = null,
+            maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
         )
-        val base = loadFullResBase(s)
-        val out = createBitmap(s.imgW, s.imgH, Bitmap.Config.ARGB_8888)
+        val base = loadCappedBase(s, renderW, renderH)
+        val out = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
-        canvas.drawBitmap(base, null, Rect(0, 0, s.imgW, s.imgH), null)
+        canvas.drawBitmap(base, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
         canvas.drawBitmap(heatmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
         val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex)
         val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
         ReportBuilder.bakeAnnotationsToCanvas(
-            canvas, s.imgW, s.imgH, actualMin, actualMax,
+            canvas, renderW, renderH, actualMin, actualMax,
             typeString, unit, extrema.maxIdx, extrema.minIdx, data,
+            coordScale = renderScale,
         )
         heatmap.recycle()
         if (base !== s.baseImage) base.recycle()
         return out
     }
 
-    /** Prefer the on-disk reference so export stays full-res when the viewer holds a display bitmap. */
-    private fun loadFullResBase(s: Snapshot): Bitmap {
+    /**
+     * Reference image for compositing, decoded no larger than the capped composite it
+     * draws into — prefer the on-disk reference (inSampleSize-decoded) over the
+     * viewer's display bitmap so export quality doesn't depend on viewer scale.
+     */
+    private fun loadCappedBase(s: Snapshot, renderW: Int, renderH: Int): Bitmap {
         s.refImagePath?.let { path ->
-            BitmapFactory.decodeFile(path)?.let { return it }
+            BitmapDecode.decodeFileForView(path, renderW, renderH, VisualizationEngine.REPORT_MAX_EDGE)
+                ?.let { return it }
         }
         val display = s.baseImage ?: error("No reference image for export")
-        if (display.width == s.imgW && display.height == s.imgH) return display
-        return display.scale(s.imgW, s.imgH)
+        if (display.width == renderW && display.height == renderH) return display
+        return display.scale(renderW, renderH)
     }
 
     private fun writePng(bmp: Bitmap, name: String): File {
@@ -411,11 +427,14 @@ class ShareCenter(private val host: ResultViewerActivity) {
         } else {
             // No persisted reference file (shouldn't happen) — fall back to the
             // in-memory base image so the folder is never empty.
-            zip.putNextEntry(ZipEntry("$dir/reference.png"))
-            val base = s.baseImage ?: loadFullResBase(s)
-            base.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, zip)
-            if (base !== s.baseImage) base.recycle()
-            zip.closeEntry()
+            // No persisted reference path here, so the display base is the only image
+            // available — write it as-is (this is the raw-photos folder, not a capped
+            // composite).
+            s.baseImage?.let { base ->
+                zip.putNextEntry(ZipEntry("$dir/reference.png"))
+                base.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, zip)
+                zip.closeEntry()
+            }
         }
 
         // Deformed originals persisted in the session dir; names already carry a
