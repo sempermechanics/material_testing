@@ -391,7 +391,6 @@ kover {
  * reads the merged XML, which is the artifact that actually ships.
  */
 abstract class VerifyForegroundServiceTypes : DefaultTask() {
-
     @get:InputFile
     abstract val mergedManifest: RegularFileProperty
 
@@ -402,29 +401,33 @@ abstract class VerifyForegroundServiceTypes : DefaultTask() {
     @TaskAction
     fun verify() {
         val androidNs = "http://schemas.android.com/apk/res/android"
-        val document = DocumentBuilderFactory.newInstance()
-            .apply { isNamespaceAware = true }
-            .newDocumentBuilder()
-            .parse(mergedManifest.get().asFile)
+        val document =
+            DocumentBuilderFactory
+                .newInstance()
+                .apply { isNamespaceAware = true }
+                .newDocumentBuilder()
+                .parse(mergedManifest.get().asFile)
 
         val nodes = document.getElementsByTagName("service")
-        val declared = (0 until nodes.length)
-            .map { nodes.item(it) as Element }
-            .associate {
-                it.getAttributeNS(androidNs, "name") to
-                    it.getAttributeNS(androidNs, "foregroundServiceType")
-            }
+        val declared =
+            (0 until nodes.length)
+                .map { nodes.item(it) as Element }
+                .associate {
+                    it.getAttributeNS(androidNs, "name") to
+                        it.getAttributeNS(androidNs, "foregroundServiceType")
+                }
 
-        val problems = required.get().toSortedMap().mapNotNull { (service, type) ->
-            val actual = declared[service]
-            when {
-                actual == null -> "$service is missing from the merged manifest"
-                type !in actual.split('|') ->
-                    "$service declares foregroundServiceType=\"$actual\", " +
-                        "which does not include \"$type\""
-                else -> null
+        val problems =
+            required.get().toSortedMap().mapNotNull { (service, type) ->
+                val actual = declared[service]
+                when {
+                    actual == null -> "$service is missing from the merged manifest"
+                    type !in actual.split('|') ->
+                        "$service declares foregroundServiceType=\"$actual\", " +
+                            "which does not include \"$type\""
+                    else -> null
+                }
             }
-        }
 
         if (problems.isNotEmpty()) {
             throw GradleException(
@@ -441,20 +444,21 @@ abstract class VerifyForegroundServiceTypes : DefaultTask() {
 androidComponents {
     onVariants { variant ->
         val suffix = variant.name.replaceFirstChar { it.uppercase() }
-        val verifyTask = tasks.register<VerifyForegroundServiceTypes>(
-            "verify${suffix}ForegroundServiceTypes",
-        ) {
-            group = "verification"
-            description = "Checks merged-manifest foreground service types ($suffix)."
-            mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
-            required.set(
-                mapOf(
-                    // The app manifest merges dataSync onto this; the type passed
-                    // to ForegroundInfo in TransferNotifications must be a subset.
-                    "androidx.work.impl.foreground.SystemForegroundService" to "dataSync",
-                ),
-            )
-        }
+        val verifyTask =
+            tasks.register<VerifyForegroundServiceTypes>(
+                "verify${suffix}ForegroundServiceTypes",
+            ) {
+                group = "verification"
+                description = "Checks merged-manifest foreground service types ($suffix)."
+                mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                required.set(
+                    mapOf(
+                        // The app manifest merges dataSync onto this; the type passed
+                        // to ForegroundInfo in TransferNotifications must be a subset.
+                        "androidx.work.impl.foreground.SystemForegroundService" to "dataSync",
+                    ),
+                )
+            }
         // Runs inside CI Tier 1, which is the only tier that always executes.
         tasks.matching { it.name == "test${suffix}UnitTest" }.configureEach {
             dependsOn(verifyTask)
