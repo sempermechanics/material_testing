@@ -128,5 +128,17 @@
             android:name=".ui.analysis.VsgLatticeActivity"
             android:exported="false" />
 
+        <!--
+            WorkManager declares SystemForegroundService without a
+            foregroundServiceType, which Android 14+ rejects outright
+            ("Starting FGS with type none … has been prohibited"). Merge the
+            dataSync type onto its declaration; the type passed to
+            ForegroundInfo in TransferNotifications must stay a subset of this.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
     </application>
 </manifest>

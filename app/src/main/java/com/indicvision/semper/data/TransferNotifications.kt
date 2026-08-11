@@ -3,6 +3,7 @@ package com.indicvision.semper.data
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.ForegroundInfo
@@ -33,7 +34,17 @@ object TransferNotifications {
             .setOngoing(true)
             .setSilent(true)
             .build()
-        return ForegroundInfo(id, notification)
+        // A typeless foreground service is fatal from Android 14 on
+        // (InvalidForegroundServiceTypeException: "Starting FGS with type none
+        // … has been prohibited"). These workers move session bytes to and from
+        // the backend, so dataSync is the matching type. The manifest merges the
+        // same type onto WorkManager's SystemForegroundService — both halves are
+        // required; the type declared here must be a subset of the manifest's.
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(id, notification)
+        }
     }
 
     @Suppress("ReturnCount") // SDK / missing service / already-created early outs
