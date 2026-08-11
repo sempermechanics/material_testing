@@ -243,6 +243,7 @@ class VsgPlotView @JvmOverloads constructor(
         this.yLabel = yLabel
         this.highlightX = highlightX
         scrubX = null
+        dataBounds = null // series changed → recompute extent lazily on next access
         if (!preserveViewport) resetViewport()
         invalidate()
     }
@@ -292,18 +293,37 @@ class VsgPlotView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Full data extent, cached in [dataBounds]. onDraw and every touch/scale/pan
+     * handler asks for this; recomputing it (flattening the series into three boxed
+     * lists) on each call allocated at touch frequency. Bounds depend only on the
+     * series, so they are computed once per [setData] and reused until it changes.
+     */
     private fun dataBounds(): Bounds? {
-        val all = series.flatMap { it.points }
-        if (all.isEmpty()) return null
-        val xs = all.map { it.first }
-        val ys = all.map { it.second }
-        var yMin = ys.min()
-        var yMax = ys.max()
+        dataBounds?.let { return it }
+        return computeDataBounds()?.also { dataBounds = it }
+    }
+
+    /** Single primitive pass over every series' points — no intermediate lists. */
+    private fun computeDataBounds(): Bounds? {
+        var xMin = Float.POSITIVE_INFINITY
+        var xMax = Float.NEGATIVE_INFINITY
+        var yMin = Float.POSITIVE_INFINITY
+        var yMax = Float.NEGATIVE_INFINITY
+        var any = false
+        for (s in series) {
+            for (p in s.points) {
+                any = true
+                if (p.first < xMin) xMin = p.first
+                if (p.first > xMax) xMax = p.first
+                if (p.second < yMin) yMin = p.second
+                if (p.second > yMax) yMax = p.second
+            }
+        }
+        if (!any) return null
         val span = max(yMax - yMin, abs(yMax) * Y_MARGIN_FRACTION).takeIf { it > 0f } ?: 1f
         yMin -= span * Y_MARGIN_FRACTION
         yMax += span * Y_MARGIN_FRACTION
-        val xMin = xs.min()
-        val xMax = xs.max()
         return Bounds(xMin, if (xMax > xMin) xMax else xMin + 1f, yMin, yMax)
     }
 
@@ -400,7 +420,6 @@ class VsgPlotView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val full = dataBounds() ?: return
-        dataBounds = full
         val b = viewport(full)
 
         val left = dp(PAD_LEFT_DP)

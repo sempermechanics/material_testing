@@ -262,6 +262,45 @@ object VsgStudy {
         return out.sortedBy { it.first }
     }
 
+    /**
+     * Profiles several strain [components] along [line] in a single pass, instead of
+     * one full array walk per component. The accept test and the along/across geometry
+     * are computed once per point and shared, so this is N× less work for N components.
+     * Each returned list is identical (same points, same ascending-distance order) to
+     * the single-component [profileAlong] for that component.
+     */
+    fun profileAlong(
+        data: FloatArray,
+        components: IntArray,
+        line: StudyLine,
+        tolerance: Float,
+    ): Map<Int, List<Pair<Float, Float>>> {
+        val out = LinkedHashMap<Int, ArrayList<Pair<Float, Float>>>(components.size)
+        for (c in components) out[c] = ArrayList()
+        var i = 0
+        while (i < data.size) {
+            val along = alongIfOnLine(data, i, line, tolerance)
+            if (along != null) {
+                for (c in components) {
+                    out.getValue(c).add(along to data[i + c] * DicResult.STRAIN_TO_MILLISTRAIN)
+                }
+            }
+            i += DicResult.STRIDE
+        }
+        return out.mapValues { (_, points) -> points.sortedBy { it.first } }
+    }
+
+    /** Distance along [line] for accepted point [i], or null when it's off the line. */
+    @Suppress("ReturnCount")
+    private fun alongIfOnLine(data: FloatArray, i: Int, line: StudyLine, tolerance: Float): Float? {
+        if (!isAccepted(data, i)) return null
+        val x = data[i + DicResult.IDX_X]
+        val y = data[i + DicResult.IDX_Y]
+        val across = if (line.horizontal) y else x
+        if (abs(across - line.position) > tolerance) return null
+        return if (line.horizontal) x else y
+    }
+
     /** The (position, millistrain) pair at point [i], or null when off the line. */
     @Suppress("ReturnCount")
     private fun pointOnLine(

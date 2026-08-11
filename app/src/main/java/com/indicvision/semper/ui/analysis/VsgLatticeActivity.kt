@@ -381,6 +381,7 @@ class VsgLatticeActivity : AppCompatActivity() {
 
         val line = centreLine()
         val baseStep = intent.getIntExtra(DicKeys.STEP, 1).coerceAtLeast(1)
+        val componentsArray = VsgStudy.STRAIN_COMPONENTS.toIntArray()
 
         lifecycleScope.launch {
             val loaded = withContext(Dispatchers.IO) {
@@ -399,9 +400,7 @@ class VsgLatticeActivity : AppCompatActivity() {
                             null
                         } else {
                             val step = steps.getOrNull(index)?.coerceAtLeast(1) ?: baseStep
-                            VsgStudy.STRAIN_COMPONENTS.associateWith { component ->
-                                VsgStudy.profileAlong(data, component, line, step / 2f)
-                            }
+                            VsgStudy.profileAlong(data, componentsArray, line, step / 2f)
                         }
                     } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                         Timber.w(e, "Failed to read %s", file.name)

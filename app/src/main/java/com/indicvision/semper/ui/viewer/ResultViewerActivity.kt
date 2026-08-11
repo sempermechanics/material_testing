@@ -128,6 +128,13 @@ class ResultViewerActivity : AppCompatActivity() {
     private var isGeneratingHeatmap = false
 
     private var batchFiles: List<File> = emptyList()
+
+    /**
+     * Largest `.dat` size, computed once when [batchFiles] is set. The prefetch
+     * heap guard used to `stat()` every file on every frame load (3F syscalls per
+     * scrub step); the file set never changes after onCreate, so one scan suffices.
+     */
+    private var maxDatBytes: Long = 0L
     internal var originalDefNames: List<String> = emptyList()
 
     private var refImagePath: String? = null
@@ -261,6 +268,7 @@ class ResultViewerActivity : AppCompatActivity() {
             val dir = File(batchDirPath)
             if (dir.exists() && dir.isDirectory) {
                 batchFiles = dir.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name } ?: emptyList()
+                maxDatBytes = batchFiles.maxOfOrNull { it.length() } ?: 0L
             }
         }
 
@@ -327,11 +335,11 @@ class ResultViewerActivity : AppCompatActivity() {
                 val (label, index) = fieldByButton[checkedId] ?: return@addOnButtonCheckedListener
                 currentTypeString = label
                 currentDataIndex = index
+                // Stats strip + Max/Min are refreshed by updateVisualization once the
+                // new field's metrics are computed off the main thread.
                 updateVisualization(currentDataIndex)
                 summary.onFieldChanged()
                 if (showingSummary) tvFrameCounter.text = summary.counterText()
-                updateStatsStrip()
-                if (inspect.isMaxMinActive) inspect.calculateMaxMin()
                 inspect.refreshCrosshairs()
             }
 
@@ -548,8 +556,8 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun heapHasRoomForPrefetch(): Boolean {
         val rt = Runtime.getRuntime()
         val free = rt.maxMemory() - (rt.totalMemory() - rt.freeMemory())
-        val largest = batchFiles.maxOfOrNull { it.length() } ?: return false
-        return free > largest * 3
+        if (maxDatBytes <= 0L) return false
+        return free > maxDatBytes * 3
     }
 
     private fun applyLoadedFrame(index: Int, data: FloatArray) {
@@ -565,9 +573,10 @@ class ResultViewerActivity : AppCompatActivity() {
             tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
         }
         syncFrameNumber()
+        // updateVisualization warms this frame's stats + Max/Min off the main thread
+        // and pushes them to the strip/crosshairs when the render completes, so the
+        // scrub settle no longer runs an O(n)+sort here.
         updateVisualization(currentDataIndex)
-        updateStatsStrip()
-        if (inspect.isMaxMinActive) inspect.calculateMaxMin()
         if (inspect.isInspectModeActive && inspect.lastClosestIdx != -1) {
             inspect.refreshCrosshairs()
         }
@@ -643,15 +652,22 @@ class ResultViewerActivity : AppCompatActivity() {
             customMax = forceMax,
         )
 
+        val frameAtStart = currentFrameIndex
+
         scrubCache.getHeat(heatKey)?.let { hit ->
             visualizationJob?.cancel()
             showHeatmap(hit.bitmap, hit.minV, hit.maxV, index)
+            // A heatmap hit means this (frame,field) was visited before, so its
+            // metrics are already cached — this read is O(1) on the main thread.
+            applyFieldMetrics(fieldMetricsFor(frameAtStart, index, data), index)
             return
         }
 
         visualizationJob?.cancel()
-        val frameAtStart = currentFrameIndex
         visualizationJob = lifecycleScope.launch(Dispatchers.Default) {
+            // Warm the stats/extrema off the main thread, next to the heatmap render,
+            // so the scrub settle never pays the O(n)+sort on the UI thread.
+            val metrics = fieldMetricsFor(frameAtStart, index, data)
             val result = VisualizationEngine.generateHeatmap(
                 data,
                 imgW,
@@ -674,6 +690,7 @@ class ResultViewerActivity : AppCompatActivity() {
             withContext(Dispatchers.Main) {
                 if (currentDataIndex != index || currentFrameIndex != frameAtStart) return@withContext
                 showHeatmap(heatmap, actualMin, actualMax, index)
+                applyFieldMetrics(metrics, index)
             }
         }
     }
@@ -752,17 +769,15 @@ class ResultViewerActivity : AppCompatActivity() {
         ShareCenter(this).show()
     }
 
-    /** Permanent max/min/mean tiles for the current field + frame. */
-    private fun updateStatsStrip() {
-        val data = rawData ?: return
-        val stats = DicResult.fieldStats(data, currentDataIndex)
+    /** Permanent max/min/mean tiles for [index], from pre-computed [stats]. */
+    private fun updateStatsStripFrom(stats: FloatArray?, index: Int) {
         if (stats == null) {
             findViewById<TextView>(R.id.tvStatMax).text = getString(R.string.stat_empty)
             findViewById<TextView>(R.id.tvStatMin).text = getString(R.string.stat_empty)
             findViewById<TextView>(R.id.tvStatMean).text = getString(R.string.stat_empty)
             return
         }
-        val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) " m\u03b5" else " px"
+        val unit = if (DicResult.isStrainFieldIndex(index)) " m\u03b5" else " px"
         findViewById<TextView>(R.id.tvStatMax).text = ReportBuilder.formatMetric(stats[0]) + unit
         findViewById<TextView>(R.id.tvStatMin).text = ReportBuilder.formatMetric(stats[1]) + unit
         findViewById<TextView>(R.id.tvStatMean).text = ReportBuilder.formatMetric(stats[2]) + unit
@@ -843,7 +858,52 @@ class ResultViewerActivity : AppCompatActivity() {
         if (etFrameNumber.text?.toString() != shown) etFrameNumber.setText(shown)
     }
 
+    // ── Field metrics cache (stats strip + Max/Min extrema) ──────────────────
+
+    /** Immutable per-(frame,field) result: `[max,min,mean]` stats and extrema indices. */
+    internal class FieldMetrics(val stats: FloatArray?, val maxIdx: Int, val minIdx: Int)
+
+    /**
+     * Memoised [FieldMetrics] keyed by (frameIndex, dataIndex). A decoded frame is
+     * immutable, so these never need invalidation — only an LRU size bound. Computing
+     * them is O(n) + an O(n log n) percentile sort; caching means a field toggle or a
+     * revisited frame costs nothing, and [updateVisualization] warms the entry on its
+     * background thread so a scrub settle never does the work on the main thread.
+     * Guarded by its own monitor (read on Main, written on Dispatchers.Default).
+     */
+    private val fieldMetricsCache = LinkedHashMap<Long, FieldMetrics>()
+
+    internal fun fieldMetricsFor(frameIndex: Int, dataIndex: Int, data: FloatArray): FieldMetrics {
+        val key = (frameIndex.toLong() shl Int.SIZE_BITS) or (dataIndex.toLong() and 0xFFFF_FFFFL)
+        synchronized(fieldMetricsCache) { fieldMetricsCache[key]?.let { return it } }
+        val stats = DicResult.fieldStats(data, dataIndex)
+        val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex, absoluteStrainValues = false)
+        val metrics = FieldMetrics(stats, extrema.maxIdx, extrema.minIdx)
+        synchronized(fieldMetricsCache) {
+            fieldMetricsCache[key] = metrics
+            if (fieldMetricsCache.size > FIELD_METRICS_CACHE_MAX) {
+                val eldest = fieldMetricsCache.keys.iterator()
+                eldest.next()
+                eldest.remove()
+            }
+        }
+        return metrics
+    }
+
+    /** Push cached stats + Max/Min extrema to their views. Main thread only. */
+    private fun applyFieldMetrics(metrics: FieldMetrics, index: Int) {
+        updateStatsStripFrom(metrics.stats, index)
+        if (inspect.isMaxMinActive) {
+            inspect.lastMaxIdx = metrics.maxIdx
+            inspect.lastMinIdx = metrics.minIdx
+            inspect.refreshCrosshairs()
+        }
+    }
+
     private companion object {
         const val SCRUB_DEBOUNCE_MS = 70L
+
+        /** Field metrics are tiny (5 floats + 2 ints); keep plenty across frames/fields. */
+        const val FIELD_METRICS_CACHE_MAX = 64
     }
 }

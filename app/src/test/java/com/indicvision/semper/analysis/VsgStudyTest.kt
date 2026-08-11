@@ -354,6 +354,38 @@ class VsgStudyTest {
     }
 
     @Test
+    fun `multi-component profile equals the single-component profile for every component`() {
+        val step = 5
+        val size = 9
+        // Distinct per-component patterns so a mix-up between them would show.
+        val data = FloatArray(size * size * DicResult.STRIDE)
+        var i = 0
+        for (row in 0 until size) {
+            for (col in 0 until size) {
+                val x = (col * step).toFloat()
+                val y = (row * step).toFloat()
+                data[i + DicResult.IDX_X] = x
+                data[i + DicResult.IDX_Y] = y
+                data[i + DicResult.IDX_EXX] = (x - 20f) * 1e-4f
+                data[i + DicResult.IDX_EYY] = (30f - y) * 7e-5f
+                data[i + DicResult.IDX_EXY] = ((col % 3) - 1) * 2e-4f
+                data[i + DicResult.IDX_ZNSSD] = if ((row + col) % 11 == 0) -1f else 0.01f
+                i += DicResult.STRIDE
+            }
+        }
+        val components = intArrayOf(DicResult.IDX_EXX, DicResult.IDX_EYY, DicResult.IDX_EXY)
+        val line = VsgStudy.StudyLine(horizontal = true, position = 15f)
+        val tol = step / 2f
+
+        val fused = VsgStudy.profileAlong(data, components, line, tol)
+
+        assertEquals(components.size, fused.size)
+        for (c in components) {
+            assertEquals("component=$c", VsgStudy.profileAlong(data, c, line, tol), fused[c])
+        }
+    }
+
+    @Test
     fun `the cut lands on the same physical line whatever the step size`() {
         // What makes the sweep comparable: a centre cut of the same ROI picks
         // out the same y for every combination, however the grid is spaced.
