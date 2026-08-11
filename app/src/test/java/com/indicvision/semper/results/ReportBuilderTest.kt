@@ -79,58 +79,86 @@ class ReportBuilderTest {
         return data
     }
 
-    /** The original boxed-List implementation, kept here as the parity oracle. */
-    private fun boxedExtrema(data: FloatArray, dataIndex: Int, absoluteStrainValues: Boolean): ReportBuilder.FieldExtrema {
-        val isStrain = DicResult.isStrainFieldIndex(dataIndex)
-        val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
-        fun fv(raw: Float) = if (isStrain && absoluteStrainValues) kotlin.math.abs(raw) else raw
-        val valid = mutableListOf<Float>()
-        var i = 0
-        while (i < data.size) {
-            if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD], isCorrelation)) {
-                valid.add(fv(data[i + dataIndex]))
-            }
-            i += DicResult.STRIDE
-        }
-        if (valid.isEmpty()) return ReportBuilder.FieldExtrema(-1, -1)
-        valid.sort()
-        val p02 = valid[(valid.size * 0.02).toInt().coerceIn(0, valid.size - 1)]
-        val p98 = valid[(valid.size * 0.98).toInt().coerceIn(0, valid.size - 1)]
+    /**
+     * Running max/min for the oracle. Deliberately mutable and shared between the two
+     * passes: the original carried maxV/minV over into the fallback pass rather than
+     * resetting them, which affects tie-breaking, so the oracle must do the same.
+     */
+    private class ExtremaAcc {
         var maxV = -Float.MAX_VALUE
         var minV = Float.MAX_VALUE
         var maxIdx = -1
         var minIdx = -1
-        i = 0
-        while (i < data.size) {
-            if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD], isCorrelation)) {
-                val v = fv(data[i + dataIndex])
-                if (v in p02..p98) {
-                    if (v > maxV) { maxV = v; maxIdx = i }
-                    if (v < minV) { minV = v; minIdx = i }
-                }
+
+        fun offer(v: Float, i: Int) {
+            if (v > maxV) {
+                maxV = v
+                maxIdx = i
             }
-            i += DicResult.STRIDE
-        }
-        if (maxIdx == -1 || minIdx == -1) {
-            i = 0
-            while (i < data.size) {
-                if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD], isCorrelation)) {
-                    val v = fv(data[i + dataIndex])
-                    if (v > maxV) { maxV = v; maxIdx = i }
-                    if (v < minV) { minV = v; minIdx = i }
-                }
-                i += DicResult.STRIDE
+            if (v < minV) {
+                minV = v
+                minIdx = i
             }
         }
-        return ReportBuilder.FieldExtrema(maxIdx, minIdx)
+    }
+
+    /** The field value as the oracle sees it (abs only for strain fields when asked). */
+    private fun oracleValue(data: FloatArray, i: Int, dataIndex: Int, absoluteStrainValues: Boolean): Float {
+        val raw = data[i + dataIndex]
+        return if (DicResult.isStrainFieldIndex(dataIndex) && absoluteStrainValues) kotlin.math.abs(raw) else raw
+    }
+
+    /** One max/min pass over accepted points, optionally restricted to [window]. */
+    private fun boxedScan(
+        data: FloatArray,
+        dataIndex: Int,
+        absoluteStrainValues: Boolean,
+        window: ClosedFloatingPointRange<Float>?,
+        acc: ExtremaAcc,
+    ) {
+        val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
+        for (i in data.indices step DicResult.STRIDE) {
+            if (!DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD], isCorrelation)) continue
+            val v = oracleValue(data, i, dataIndex, absoluteStrainValues)
+            if (window == null || v in window) acc.offer(v, i)
+        }
+    }
+
+    /** The original boxed-List implementation, kept here as the parity oracle. */
+    private fun boxedExtrema(
+        data: FloatArray,
+        dataIndex: Int,
+        absoluteStrainValues: Boolean,
+    ): ReportBuilder.FieldExtrema {
+        val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
+        val valid = mutableListOf<Float>()
+        for (i in data.indices step DicResult.STRIDE) {
+            if (!DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD], isCorrelation)) continue
+            valid.add(oracleValue(data, i, dataIndex, absoluteStrainValues))
+        }
+        if (valid.isEmpty()) return ReportBuilder.FieldExtrema(-1, -1)
+
+        valid.sort()
+        val p02 = valid[(valid.size * 0.02).toInt().coerceIn(0, valid.size - 1)]
+        val p98 = valid[(valid.size * 0.98).toInt().coerceIn(0, valid.size - 1)]
+
+        val acc = ExtremaAcc()
+        boxedScan(data, dataIndex, absoluteStrainValues, p02..p98, acc)
+        if (acc.maxIdx == -1 || acc.minIdx == -1) {
+            boxedScan(data, dataIndex, absoluteStrainValues, null, acc)
+        }
+        return ReportBuilder.FieldExtrema(acc.maxIdx, acc.minIdx)
     }
 
     @Test
     fun `de-boxed computeFieldExtrema is identical to the boxed oracle for every field`() {
         val data = variedField(257)
         val fields = listOf(
-            DicResult.IDX_U, DicResult.IDX_V,
-            DicResult.IDX_EXX, DicResult.IDX_EYY, DicResult.IDX_EXY,
+            DicResult.IDX_U,
+            DicResult.IDX_V,
+            DicResult.IDX_EXX,
+            DicResult.IDX_EYY,
+            DicResult.IDX_EXY,
             DicResult.IDX_ZNSSD,
         )
         for (idx in fields) {

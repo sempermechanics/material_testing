@@ -62,8 +62,7 @@ object DicResult {
             }
             true
         }.getOrDefault(false)
-        if (mapped) return out
-        return decodeDatChunked(file, floatCount, out)
+        return if (mapped) out else decodeDatChunked(file, floatCount, out)
     }
 
     /**
