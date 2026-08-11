@@ -346,16 +346,29 @@ detekt {
     baseline = file("detekt-baseline.xml")
 }
 
-// Coverage: exclude UI; verify a modest line floor on remaining first-party code.
+// Coverage: exclude view classes only — ViewModels and the pure helpers that
+// live alongside them (AnalysisViewModel, FrameOrderHelper, …) are the app's
+// highest-churn logic and were invisible while the whole `ui` package was
+// excluded. Android view/entry-point classes stay out: they need an emulator,
+// not JVM unit tests, so counting them would only depress the floor.
 kover {
     reports {
         filters {
             excludes {
-                packages("com.indicvision.semper.ui")
+                // Trailing `*` also swallows nested/synthetic classes
+                // (SettingsActivity$Companion, lambdas) without needing a `$`
+                // literal in a Kotlin string.
+                classes(
+                    "com.indicvision.semper.ui.*Activity*",
+                    "com.indicvision.semper.ui.*Adapter*",
+                    "com.indicvision.semper.ui.*Fragment*",
+                    "com.indicvision.semper.ui.*Dialog*",
+                )
             }
         }
         verify {
-            // Modest floor after excluding UI; raise deliberately when measured higher.
+            // Modest floor after excluding view classes; raise deliberately once
+            // the measured number from `:app:koverLog` settles higher.
             rule {
                 minBound(15)
             }
