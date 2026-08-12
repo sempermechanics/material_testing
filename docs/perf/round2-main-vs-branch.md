@@ -45,6 +45,55 @@ Head-to-head measurement of the pre-change baseline against this branch, run on 
   `PointSpatialIndex.build` two-pass rewrite, which measured **+48% time / +46% allocs** —
   was reverted (`ae9192b`); the row above now matches `main` allocation-for-allocation.
 
+## Macrobenchmark — end-to-end viewer scrub (space + time)
+
+`ViewerScrubBenchmark` on the release-like `benchmark` variant: seeds a synthetic
+session, then steps 12 frames with the Next button, ×5 iterations. Same emulator, same
+synthetic data, both builds. **Each configuration was run twice per build** so the
+numbers below carry their own reproducibility evidence.
+
+### Time — `Semper.viewer.decodeDat` (the per-frame `.dat` decode)
+
+| workload | main (run 1 / run 2) | branch (run 1 / run 2) | Δ |
+|---|--:|--:|--:|
+| 150 frames | 144.24 / 140.99 ms | 12.48 / 12.80 ms | **−91%** |
+| 10 frames | 116.38 / 119.03 ms | 9.28 / 9.30 ms | **−92%** |
+
+`decodeDatCount` is **identical** on both sides (22 at 150 frames, 16 at 10) — the same
+number of decodes, ~11× faster. Run-to-run spread is ≈2–5%, far below the effect. This is
+round 1's memory-mapped `decodeDatFile` measured end-to-end in the real app, and it is the
+single strongest confirmation in this whole exercise.
+
+`frameCount` over the scrub is essentially unchanged (main 41/30, branch 38/28).
+
+### Space — `memoryHeapSizeMaxKb` (max Java heap): **inconclusive, reported as measured**
+
+| workload | main (run 1 / run 2) | branch (run 1 / run 2 / run 3) | Δ |
+|---|--:|--:|--:|
+| 10 frames | 84,482 / 83,397 KB | 35,810 / 35,874 / 35,874 KB | **−57%** |
+| 150 frames | 35,797 / 39,237 KB | 165,109 / 165,154 / 165,090 KB | **+340%** |
+
+These are **reproducible** (branch spread 0.04%, main 1–9%), so they are not sampling
+noise — but they point in **opposite directions on the two workloads**, so they cannot be
+read as a memory win *or* a memory regression. Two things are worth stating plainly:
+
+- **The metric is not cleanly attributable to the code under test.** Note that `main` uses
+  *more* heap at 10 frames than at 150 — the opposite of what workload size predicts. Max
+  heap here is dominated by whether the one-time session fabrication ran in-process and by
+  when ART chose to expand the heap, not by steady-state viewer usage. (Making the seeder
+  reuse one scratch buffer instead of ~1.2 MB per frame left the numbers unchanged —
+  165,090 vs 165,109 KB — ruling that out as the cause but not identifying it.)
+- **The most plausible explanation for the 150-frame figure is a consequence of the speed
+  win, not a leak.** With decode ~11× faster, the branch completes far more neighbour
+  *prefetch* and heatmap rendering inside the same scrub window; `ScrubFrameCache` is
+  bounded (2 frames + 3 heatmaps) and `heapHasRoomForPrefetch()` still gates it, so this is
+  more work in flight rather than unbounded growth. **This is a hypothesis, not a measured
+  conclusion** — it should be confirmed with a heap dump before anyone relies on it.
+
+**Do not cite the macrobenchmark for the memory story.** The controlled space evidence is
+the micro-benchmark `allocationCount` above, where the workload is fixed and the deltas
+(−99.6% to −100%) are unambiguous. The open question at 150 frames is worth a follow-up.
+
 ## Device (process heap under the seeded viewer)
 
 Point-in-time `dumpsys meminfo` after opening the synthetic session (single sample,
@@ -67,14 +116,13 @@ corroborating only where they agree (150 frames).
 - **Transient peak heap is not sampled directly.** `allocationCount` (rock-solid here) plus
   the 150-frame PSS are the proxies; the derived footprints in the PR give the byte-level
   peak model.
-- **UI-driven Macrobenchmark did not run.** The viewer-scrub `FrameTimingMetric` /
-  `MemoryUsageMetric` path (and even the repo's pre-existing `StartupBenchmark`) fails on
-  this emulator at `startActivityAndWait()` — an adb/UTP + launch-routing limitation of the
-  setup, not of the change. The reliable `am start` seeder path was used instead to confirm
-  the viewer opens on a 150-frame synthetic session and to sample process heap. The
-  `HotPathMicroBenchmark` carries the quantitative diff; `ViewerScrubBenchmark` +
-  `BenchmarkSeedActivity` are committed for a CI/physical-device run where the macro pipeline
-  is stable.
+- **`StartupTimingMetric` is unavailable on this emulator.** Anything built on
+  `startActivityAndWait` — the repo's `StartupBenchmark` and `ScreenBenchmark` — fails with
+  "Unable to confirm activity launch completion []": that API confirms a launch by parsing
+  `dumpsys gfxinfo <pkg> framestats`, which comes back empty on this API 37 image for *every*
+  activity (exported or not, trampoline or not). `ViewerScrubBenchmark` was rewritten to avoid
+  that API and does run; startup timing therefore isn't part of this diff and would need a
+  physical device or an older API image.
 
 ## Reproduce
 ```bash

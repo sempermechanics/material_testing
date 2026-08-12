@@ -50,20 +50,32 @@ class BenchmarkSeedActivity : Activity() {
         finish()
     }
 
-    /** Writes `frame_%04d.dat` for [frameCount] frames into a cached session dir. */
+    /**
+     * Writes `frame_%04d.dat` for [frameCount] frames into a cached session dir.
+     *
+     * The scratch `FloatArray`/`ByteBuffer` are allocated **once** and refilled per
+     * frame. Allocating them per frame (~1.2 MB each) grew the Java heap by well over
+     * 100 MB while seeding 150 frames, and since that happens inside the app process it
+     * landed in `MemoryUsageMetric` — i.e. the harness would have been measuring its own
+     * fabrication cost instead of the viewer's.
+     */
     private fun seedSession(frameCount: Int): File {
         val dir = File(File(filesDir, "sessions"), "bench_${frameCount}_${COLS}x$ROWS")
         dir.mkdirs()
         val expected = File(dir, String.format("frame_%04d.dat", frameCount - 1))
         if (expected.exists()) return dir // already seeded
+        val floats = FloatArray(COLS * ROWS * DicResult.STRIDE)
+        val buf = ByteBuffer.allocate(floats.size * 4).order(ByteOrder.nativeOrder())
         for (i in 0 until frameCount) {
-            File(dir, String.format("frame_%04d.dat", i)).writeBytes(frameBytes(i))
+            fillFrame(floats, seed = i)
+            buf.clear()
+            buf.asFloatBuffer().put(floats)
+            File(dir, String.format("frame_%04d.dat", i)).writeBytes(buf.array())
         }
         return dir
     }
 
-    private fun frameBytes(seed: Int): ByteArray {
-        val floats = FloatArray(COLS * ROWS * DicResult.STRIDE)
+    private fun fillFrame(floats: FloatArray, seed: Int) {
         var p = 0
         var k = 0
         for (r in 0 until ROWS) {
@@ -80,9 +92,6 @@ class BenchmarkSeedActivity : Activity() {
                 k++
             }
         }
-        val buf = ByteBuffer.allocate(floats.size * 4).order(ByteOrder.nativeOrder())
-        buf.asFloatBuffer().put(floats)
-        return buf.array()
     }
 
     private companion object {
