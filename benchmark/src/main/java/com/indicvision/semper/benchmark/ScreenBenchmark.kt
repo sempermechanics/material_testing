@@ -26,10 +26,24 @@ import org.junit.runner.RunWith
  * **Why these two screens and not Home / the result viewer:** the `benchmark`
  * build type is `initWith(release)`, so `BuildConfig.DEBUG` and `DEV_AUTH_BYPASS`
  * are both false and `DevAuth.active` is off. A launch therefore routes
- * `SplashActivity → AuthActivity`, and the Home session list / result viewer are
- * unreachable without real credentials plus seeded DIC results. The two screens
- * below are launched directly by component instead — Macrobenchmark starts
- * activities through shell, which can reach non-exported components.
+ * `SplashActivity → AuthActivity`, and the Home session list is unreachable
+ * without real credentials. The two screens below are launched directly by
+ * component instead. (The result viewer *is* covered — by [ViewerScrubBenchmark],
+ * which seeds a synthetic session.)
+ *
+ * Both screens are `android:exported="false"` in every shipped variant, and since
+ * API 34 the shell (uid 2000) cannot start a non-exported component — `am start`
+ * fails with "SecurityException: Permission Denial ... not exported". They are
+ * therefore exported for the `benchmark` variant only, via the overlay at
+ * `app/src/benchmark/AndroidManifest.xml`.
+ *
+ * **Known environment limitation:** on an API 37 emulator these still fail with
+ * "Unable to confirm activity launch completion []" — `startActivityAndWait`
+ * confirms a launch by parsing `dumpsys gfxinfo <pkg> framestats`, which comes back
+ * empty there for *every* activity (exported or not, trampoline or not). Anything
+ * built on `startActivityAndWait`/`StartupTimingMetric` is therefore unrunnable on
+ * that emulator; run these on a physical device or an older API image.
+ * [ViewerScrubBenchmark] deliberately avoids that API and does run.
  *
  * Run: `./gradlew :benchmark:connectedBenchmarkAndroidTest`
  *
