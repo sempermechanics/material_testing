@@ -5,6 +5,7 @@
 
 package com.indicvision.semper
 
+import androidx.annotation.VisibleForTesting
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -17,8 +18,8 @@ import java.util.Locale
 
 /** Binary layout constants for native full-field `.dat` output (8 floats × 4 bytes per point). */
 object DicResult {
+    /** Floats per point — mirrors `SEMPER_FLOATS_PER_POINT` in the engine's C header. */
     const val STRIDE = 8
-    const val FLOATS_PER_POINT = 8
     const val BYTES_PER_POINT = 32
 
     const val IDX_X = 0
@@ -38,6 +39,13 @@ object DicResult {
 
     fun isValidDatBytes(bytes: ByteArray): Boolean = bytes.isNotEmpty() && bytes.size % BYTES_PER_POINT == 0
 
+    /**
+     * In-memory decode. Production code reads `.dat` from disk with [decodeDatFile],
+     * which memory-maps instead of holding a second full-size `ByteArray`; this
+     * straightforward version is retained as the reference the decode parity tests
+     * check that faster path against.
+     */
+    @VisibleForTesting
     fun decodeDatBytes(bytes: ByteArray): FloatArray? {
         if (!isValidDatBytes(bytes)) return null
         return FloatArray(bytes.size / 4).also { out ->

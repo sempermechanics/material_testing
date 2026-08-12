@@ -99,6 +99,9 @@ rm -rf app/.cxx app/build
 # Emulator smoke (needs an x86_64 emulator running)
 ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64
 
+# Performance benchmarks — not part of the push gate; they need a device and are
+# label-gated in CI. See docs/app/TESTING.md#performance-benchmarks before running.
+
 # Backend
 cd backend && pip install -r requirements-test.txt && pytest tests/ -v
 
