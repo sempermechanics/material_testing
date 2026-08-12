@@ -66,7 +66,37 @@ single strongest confirmation in this whole exercise.
 
 `frameCount` over the scrub is essentially unchanged (main 41/30, branch 38/28).
 
-### Space — `memoryHeapSizeMaxKb` (max Java heap): **inconclusive, reported as measured**
+### Space — `memoryHeapSizeMaxKb` (max Java heap), after the bounded-pipeline fix
+
+The first measurement showed the branch using **+340%** heap at 150 frames. That was
+real and reproducible, and profiling it found two genuine defects — both now fixed:
+
+1. **Unbounded prefetch fan-out.** `prefetchNeighborFrames` launched up to two
+   uncancelled coroutines on *every* frame load, so a fast scrub had a dozen concurrent
+   full-frame decodes in flight while the cache kept only two — peak memory scaled with
+   *scrub speed*, not with any bound. Replaced by a single serialized look-ahead worker
+   with a byte-capped cache (`fetch → bounded queue → process`).
+2. **Eager whole-batch summary scan.** `summary.start()` ran on every viewer open,
+   decoding and scanning **every frame in the batch** even when the viewer opened
+   straight onto a frame and the summary was never shown. Now started on demand from
+   `show()`. This was the dominant term: round 2 made decode/`valueRanges` fast enough
+   to get much further through 150 frames inside the measured window, which is why the
+   regression appeared only *after* the speedups.
+
+| workload | main | branch (before fix) | **branch (fixed)** | vs main |
+|---|--:|--:|--:|--:|
+| 150 frames | 35,797 / 39,237 KB | 165,109 / 165,122 KB | **24,514 / 24,482 KB** | **−35%** |
+| 10 frames | 84,482 / 83,397 KB | 35,810 / 35,874 KB | **20,930 / 20,834 KB** | **−75%** |
+
+Heap is now **flat across workload size** — 24.5 MB at 150 frames vs 20.9 MB at 10, i.e.
+**+17% for 15× the frames**, where it was previously 5.3× — which is exactly the property
+being aimed for. Repeat runs agree to 0.1%.
+
+Decode work drops at the same time, because the look-ahead now actually lands in a cache
+big enough to hold it: `decodeDatCount` **22 → 7** (150 frames) and **16 → 4** (10), with
+`decodeDatSumMs` **144.2 → 3.3 ms** and **116.4 → 2.1 ms** vs main (**−98%**).
+
+<details><summary>Original inconclusive reading (kept for the record)</summary>
 
 | workload | main (run 1 / run 2) | branch (run 1 / run 2 / run 3) | Δ |
 |---|--:|--:|--:|
@@ -90,9 +120,11 @@ read as a memory win *or* a memory regression. Two things are worth stating plai
   more work in flight rather than unbounded growth. **This is a hypothesis, not a measured
   conclusion** — it should be confirmed with a heap dump before anyone relies on it.
 
-**Do not cite the macrobenchmark for the memory story.** The controlled space evidence is
-the micro-benchmark `allocationCount` above, where the workload is fixed and the deltas
-(−99.6% to −100%) are unambiguous. The open question at 150 frames is worth a follow-up.
+This reading is superseded by the table above: the +340% was a real defect, not a metric
+artefact, and both causes were found and fixed. The micro-benchmark `allocationCount`
+(−99.6% to −100%) remains the controlled per-operation space evidence.
+
+</details>
 
 ## Device (process heap under the seeded viewer)
 

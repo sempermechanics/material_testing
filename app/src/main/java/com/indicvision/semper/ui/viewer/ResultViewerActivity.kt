@@ -52,6 +52,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import timber.log.Timber
 import java.io.File
 
@@ -145,6 +146,12 @@ class ResultViewerActivity : AppCompatActivity() {
             viewerVm.currentFrameIndex = value
         }
     private var loadFrameJob: Job? = null
+
+    /** The single in-flight look-ahead worker; see [prefetchAround]. */
+    private var prefetchJob: Job? = null
+
+    /** Previous look-ahead centre, used to infer scrub direction. */
+    private var lastPrefetchCenter = 0
     private var visualizationJob: Job? = null
     private var scrubDebounceJob: Job? = null
     private var refDecodeJob: Job? = null
@@ -279,7 +286,9 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
             tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
             loadFrameData(currentFrameIndex)
-            summary.start()
+            // summary.show() starts the whole-batch colour-scale scan itself, so a
+            // viewer opened straight onto a frame no longer pays for an N-frame decode
+            // pass it may never use.
             if (showingSummary) summary.show()
             updateNavButtons()
         } else {
@@ -482,7 +491,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         scrubCache.getData(index)?.let { cached ->
             applyLoadedFrame(index, cached)
-            prefetchNeighborFrames(index)
+            prefetchAround(index)
             return
         }
 
@@ -496,7 +505,7 @@ class ResultViewerActivity : AppCompatActivity() {
                     if (currentFrameIndex != index) return@withContext
                     applyLoadedFrame(index, data)
                 }
-                prefetchNeighborFrames(index)
+                prefetchAround(index)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e // never swallow coroutine cancellation
             } catch (e: OutOfMemoryError) {
@@ -512,30 +521,62 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    /** Warm N±1 into [scrubCache] without touching the UI. */
-    private fun prefetchNeighborFrames(center: Int) {
-        // Prefetch doubles peak RAM (current + neighbor). Skip when the heap is
-        // already tight — heavy PLC frames are several MB of floats each.
-        if (!heapHasRoomForPrefetch()) return
-        for (delta in intArrayOf(-1, 1)) {
-            val neighbor = center + delta
-            if (neighbor < 0 || neighbor >= batchFiles.size) continue
-            if (scrubCache.getData(neighbor) != null) continue
-            lifecycleScope.launch(Dispatchers.IO) {
-                try {
+    /**
+     * Fills [scrubCache] with a bounded look-ahead window around [center], so a scrub
+     * step is usually a cache hit without letting memory grow with scrub speed.
+     *
+     * One serialized worker, not a job per neighbour: the previous version launched up
+     * to two uncancelled coroutines on *every* frame load, so a fast scrub could have a
+     * dozen concurrent decodes in flight — each holding a full frame — while the cache
+     * only ever kept the last two, so most of that work became garbage on arrival. Peak
+     * memory then scaled with how fast the user scrubbed rather than with any bound.
+     *
+     * Here exactly one decode runs at a time, the window is cancelled and restarted when
+     * the user moves on, and each frame is admitted only if the cache still has room
+     * (count *and* bytes) and the heap guard passes — so the queue stays warm while peak
+     * stays flat.
+     */
+    private fun prefetchAround(center: Int) {
+        prefetchJob?.cancel()
+        val direction = if (center >= lastPrefetchCenter) 1 else -1
+        lastPrefetchCenter = center
+
+        prefetchJob = lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                for (offset in lookAheadOffsets(direction)) {
+                    val index = center + offset
+                    if (index < 0 || index >= batchFiles.size) continue
+                    if (scrubCache.getData(index) != null) continue
+                    // Re-checked per frame: both the cache budget and the heap can be
+                    // consumed by the foreground frame while this window is filling.
+                    if (scrubCache.freeSlots(maxDatBytes) <= 0) return@launch
                     if (!heapHasRoomForPrefetch()) return@launch
-                    val data = readFrameDat(neighbor) ?: return@launch
-                    scrubCache.putData(neighbor, data)
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e // never swallow coroutine cancellation
-                } catch (e: OutOfMemoryError) {
-                    Timber.w(e, "Prefetch frame %d OOM — clearing scrub cache", neighbor)
-                    scrubCache.clear()
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                    Timber.w(e, "Prefetch frame %d failed", neighbor)
+                    val data = readFrameDat(index) ?: continue
+                    scrubCache.putData(index, data)
+                    yield() // stay promptly cancellable between frames
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e // never swallow coroutine cancellation
+            } catch (e: OutOfMemoryError) {
+                Timber.w(e, "Prefetch around frame %d OOM — clearing scrub cache", center)
+                scrubCache.clear()
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Timber.w(e, "Prefetch around frame %d failed", center)
             }
         }
+    }
+
+    /**
+     * Frames to warm, nearest first and biased to the scrub [direction], with one frame
+     * behind so reversing is still a hit. Length is capped by the cache, so this never
+     * queues more than can be held.
+     */
+    private fun lookAheadOffsets(direction: Int): IntArray {
+        val ahead = ScrubFrameCache.DEFAULT_MAX_FRAMES - 1
+        val offsets = IntArray(ahead + 1)
+        for (i in 0 until ahead) offsets[i] = direction * (i + 1)
+        offsets[ahead] = -direction
+        return offsets
     }
 
     private fun readFrameDat(index: Int): FloatArray? {
