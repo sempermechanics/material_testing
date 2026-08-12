@@ -36,6 +36,22 @@ internal object SessionZip {
 
     data class Member(val role: String, val name: String, val file: File)
 
+    /**
+     * Artifact roles a restore needs to rebuild a working session: the images
+     * (`raw`) and the engine results (`dat`).
+     *
+     * Everything else a backup carries — `csv`, `reports`, `processed` — is derived
+     * and regenerated on device by `SessionEverythingExporter`, so nothing reads it
+     * back after a restore. Upload uses this to decide what goes in `Session.zip`
+     * rather than `Extras.zip`, and restore uses [RESTORE_ENTRY_PREFIXES] to decide
+     * which entries of a legacy single-archive backup are worth downloading. Keep
+     * the two in step — they are the same decision seen from either end.
+     */
+    val RESTORE_ROLES: Set<String> = setOf("raw", "dat")
+
+    /** [RESTORE_ROLES] as zip entry-name prefixes (entries are named `role/name`). */
+    val RESTORE_ENTRY_PREFIXES: Set<String> = RESTORE_ROLES.mapTo(HashSet()) { "$it/" }
+
     /** Already-compressed or large binary payloads — store, do not deflate. */
     val STORE_EXTENSIONS: Set<String> = setOf(
         "jpg", "jpeg", "png", "pdf", "webp", "zip", "gif", "bmp",
@@ -104,6 +120,62 @@ internal object SessionZip {
                 members.forEach { putMember(zip, it, onBytes) }
             }
         }
+    }
+
+    /**
+     * Concatenate [sources] into one archive at [out], first source winning on a
+     * duplicate entry name.
+     *
+     * Used by "Save to Files", which must still hand over a single complete archive
+     * now that upload splits the payload across `Session.zip` and `Extras.zip`.
+     * Each entry keeps its original compression method, so `STORED` payloads are
+     * copied rather than re-compressed. Note this deliberately never calls
+     * [ZipOutputStream.setLevel] — see the class comment on the Android Deflater
+     * corruption caused by toggling levels mid-archive.
+     */
+    fun merge(sources: List<File>, out: File) {
+        require(sources.isNotEmpty()) { "merge needs at least one source" }
+        val tmp = File(out.parentFile, "${out.name}.merge")
+        tmp.delete()
+        var promoted = false
+        try {
+            ZipOutputStream(BufferedOutputStream(tmp.outputStream())).use { zos ->
+                val seen = HashSet<String>()
+                for (source in sources) {
+                    copyEntriesInto(source, zos, seen)
+                }
+            }
+            promote(tmp, out)
+            promoted = true
+        } finally {
+            if (!promoted) tmp.delete()
+        }
+    }
+
+    /** Copy every not-yet-[seen] entry of [source] into [zos], preserving its method. */
+    private fun copyEntriesInto(source: File, zos: ZipOutputStream, seen: MutableSet<String>) {
+        ZipFile(source).use { zf ->
+            zf.entries().asSequence()
+                .filterNot { it.isDirectory }
+                .filter { seen.add(it.name) }
+                .forEach { entry -> copyEntry(zf, entry, zos) }
+        }
+    }
+
+    /** Copy one entry verbatim, keeping its compression method and STORED sizes. */
+    private fun copyEntry(from: ZipFile, entry: ZipEntry, zos: ZipOutputStream) {
+        val copy = ZipEntry(entry.name).apply {
+            method = entry.method
+            if (entry.method == ZipEntry.STORED) {
+                size = entry.size
+                compressedSize = entry.compressedSize
+                crc = entry.crc
+            }
+            if (entry.time >= 0L) time = entry.time
+        }
+        zos.putNextEntry(copy)
+        from.getInputStream(entry).use { it.copyTo(zos) }
+        zos.closeEntry()
     }
 
     private fun promote(tmp: File, out: File) {

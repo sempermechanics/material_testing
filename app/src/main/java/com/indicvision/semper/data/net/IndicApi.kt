@@ -296,6 +296,29 @@ class IndicApi private constructor(context: Context) {
      * drops mid-stream, retries with `Range: bytes=N-` so already-received
      * bytes are kept (backend forwards Range to Drive and returns 206).
      */
+    /**
+     * Fetch only `[rangeStart, rangeStart + length)` of an object.
+     *
+     * Restore uses this to read a legacy backup's central directory and then just the
+     * prefix of entries it needs, instead of the whole archive.
+     */
+    suspend fun downloadRange(
+        idToken: String,
+        fileId: String,
+        dest: java.io.File,
+        rangeStart: Long,
+        length: Long,
+    ) = drive.downloadFile(
+        fileId,
+        dest,
+        base,
+        expectedBytes = length,
+        rangeStart = rangeStart,
+    ) { path ->
+        val nonce = fetchChallenge(idToken)
+        signedHeaders(idToken, "GET", path, ByteArray(0), nonce)
+    }
+
     suspend fun downloadFile(
         idToken: String,
         fileId: String,

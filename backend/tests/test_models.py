@@ -77,6 +77,16 @@ class TestFileSpec:
         fs = FileSpec(name="Session.zip", role="bundle", bytes=42, sha256=_SHA)
         assert fs.role == "bundle"
 
+    def test_extras_role_accepted(self):
+        # Extras.zip carries the derived deliverables a restore does not need.
+        # Rejecting it here would 422 every upload from a current client.
+        fs = FileSpec(name="Extras.zip", role="extras", bytes=42, sha256=_SHA)
+        assert fs.role == "extras"
+
+    def test_unknown_role_rejected(self):
+        with pytest.raises(ValidationError):
+            FileSpec(name="f", role="not-a-role", bytes=1, sha256=_SHA)
+
     def test_empty_name_rejected(self):
         with pytest.raises(ValidationError):
             FileSpec(name="", role="bundle", bytes=42, sha256=_SHA)

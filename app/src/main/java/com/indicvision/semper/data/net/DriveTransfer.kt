@@ -191,14 +191,26 @@ internal class DriveTransfer(
      * download percent instead of sitting at 0% for the whole Session.zip.
      */
     @Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth", "LongParameterList")
+    /**
+     * @param rangeStart absolute offset in the remote object that [dest] should begin
+     *   at. Non-zero fetches a **window** rather than the whole object — used by
+     *   restore to pull a legacy backup's central directory and then only the prefix
+     *   of entries it actually needs. [expectedBytes] is then the window's *length*
+     *   and is required, since the object's own total no longer describes the target.
+     */
     suspend fun downloadFile(
         fileId: String,
         dest: File,
         baseUrl: String,
         expectedBytes: Long = -1L,
+        rangeStart: Long = 0L,
         onBytes: suspend (haveBytes: Long) -> Unit = {},
         signedGetHeaders: (path: String) -> Headers,
     ) = withContext(Dispatchers.IO) {
+        require(rangeStart >= 0L) { "rangeStart must not be negative" }
+        require(rangeStart == 0L || expectedBytes > 0L) {
+            "a windowed download must declare its length"
+        }
         dest.parentFile?.mkdirs()
         val part = File(dest.parentFile, "${dest.name}.part")
         // Stale complete from a prior corrupt finalize — always rebuild.
@@ -224,7 +236,12 @@ internal class DriveTransfer(
             try {
                 // Fresh challenge per chunk so a resumed Range never replays a nonce.
                 val headers = signedGetHeaders(path)
-                val end = offset + DOWNLOAD_RANGE_CHUNK_BYTES - 1
+                // Local `offset` is a position within the window; the wire Range is
+                // absolute. Clamp the window's last byte so a fetch never overshoots
+                // into bytes the caller deliberately excluded.
+                val remoteOffset = rangeStart + offset
+                val windowEnd = if (expectedBytes > 0L) rangeStart + expectedBytes - 1 else Long.MAX_VALUE
+                val end = minOf(remoteOffset + DOWNLOAD_RANGE_CHUNK_BYTES - 1, windowEnd)
                 val builder = Request.Builder()
                     .url("$baseUrl$path")
                     .headers(headers)
@@ -248,13 +265,27 @@ internal class DriveTransfer(
                                 }
                             }
                             val got = scratch.length()
-                            if (expectedBytes > 0L && got != expectedBytes) {
+                            // A proxy that ignores Range hands back the whole object.
+                            // For a windowed fetch that is still usable — slice out the
+                            // window instead of failing and retrying forever.
+                            if (rangeStart > 0L || (expectedBytes in 1 until got)) {
+                                if (got < rangeStart + expectedBytes) {
+                                    scratch.delete()
+                                    throw IOException(
+                                        "full-body download for $fileId is $got B, " +
+                                            "too short for window $rangeStart+$expectedBytes",
+                                    )
+                                }
+                                sliceInPlace(scratch, rangeStart, expectedBytes)
+                            }
+                            val sliced = scratch.length()
+                            if (expectedBytes > 0L && sliced != expectedBytes) {
                                 scratch.delete()
                                 throw IOException(
-                                    "truncated full-body download for $fileId: got $got, expected $expectedBytes",
+                                    "truncated full-body download for $fileId: got $sliced, expected $expectedBytes",
                                 )
                             }
-                            if (got <= 0L) {
+                            if (sliced <= 0L) {
                                 scratch.delete()
                                 throw IOException("empty full-body download for $fileId")
                             }
@@ -273,14 +304,16 @@ internal class DriveTransfer(
                             ) ?: throw IOException(
                                 "206 without Content-Range at offset $offset for $fileId",
                             )
-                            // Appending a window that does not start at [offset]
-                            // would splice the wrong bytes into Session.zip.
-                            if (range.start != offset) {
+                            // Appending a window that does not start where we asked
+                            // would splice the wrong bytes into the destination.
+                            if (range.start != remoteOffset) {
                                 throw IOException(
-                                    "Content-Range start ${range.start} != offset $offset for $fileId",
+                                    "Content-Range start ${range.start} != offset $remoteOffset for $fileId",
                                 )
                             }
-                            range.total?.let { reportedTotal = it }
+                            // For a windowed fetch the object's total says nothing
+                            // about the target length; expectedBytes is authoritative.
+                            if (rangeStart == 0L) range.total?.let { reportedTotal = it }
                             val before = offset
                             java.io.FileOutputStream(part, true).use { out ->
                                 resp.body.byteStream().use { input ->
@@ -362,6 +395,30 @@ internal class DriveTransfer(
                     attempt,
                 )
             }
+        }
+    }
+
+    /**
+     * Reduce [file] in place to the [length] bytes starting at [start] — the window a
+     * Range-ignoring proxy forced us to download in full.
+     */
+    private fun sliceInPlace(file: File, start: Long, length: Long) {
+        RandomAccessFile(file, "rw").use { raf ->
+            val buffer = ByteArray(DOWNLOAD_COPY_BUFFER)
+            var read = start
+            var write = 0L
+            var remaining = length
+            while (remaining > 0L) {
+                raf.seek(read)
+                val n = raf.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                if (n <= 0) break
+                raf.seek(write)
+                raf.write(buffer, 0, n)
+                read += n
+                write += n
+                remaining -= n
+            }
+            raf.setLength(write)
         }
     }
 

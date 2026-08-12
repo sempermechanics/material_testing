@@ -55,16 +55,20 @@ import java.util.Locale
  *     bytes never pass through the backend,
  *  3. POSTs /v1/files/{id}/complete to record each Drive pointer.
  *
- * Layout per analysis (2 files — everything except the metadata blueprint is
- * bundled into one archive to keep Firestore's per-file costs flat):
+ * Layout per analysis (3 files — artifacts are bundled rather than uploaded
+ * individually to keep Firestore's per-file costs flat):
  * ```
  * session/<sid>/metadata.json   device, time, engine params, frame list
  *               Session.zip     raw/… (reference + deformed images),
- *                               dat/frame_%04d.dat  ← enables full restore,
- *                               csv/analysis_data.csv  (one combined file),
+ *                               dat/frame_%04d.dat  ← enables full restore
+ *               Extras.zip      csv/analysis_data.csv  (one combined file),
  *                               reports/Master_Report_<frame>.pdf,
  *                               processed/<frame>/<field>.png
  * ```
+ * The split is what keeps a restore cheap: `Session.zip` is everything needed to
+ * rebuild a working session, while `Extras.zip` holds the derived deliverables that
+ * nothing reads back (they are regenerated on export). A restore fetches only the
+ * former; "Save to Files" fetches both and merges them. See [SessionZip.RESTORE_ROLES].
  */
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -484,41 +488,50 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 return@withContext Result.success()
             }
 
-            // ── bundle: everything except metadata.json into ONE Session.zip ──
+            // ── bundles: split by what a restore actually needs ────────────────
             // Firestore prices the whole flow per file (a doc, a signed complete
             // call, a challenge/nonce cycle each), so 3F+4 files per analysis was
-            // burning the daily read quota in a single upload. One zip + the
-            // metadata blueprint = 2 files, and Drive resumable uploads resume a
-            // single large file mid-byte, so interruption recovery still works.
+            // burning the daily read quota in a single upload. Two zips + the
+            // metadata blueprint keeps that at 3 files, and Drive resumable uploads
+            // resume a single large file mid-byte, so recovery still works.
+            //
+            // The split is what makes restore cheap: Session.zip holds only raw/ and
+            // dat/ — everything needed to rebuild a working session — while the
+            // derived deliverables (csv/, reports/, processed/) go to Extras.zip.
+            // Nothing reads those back after a restore; they are regenerated on
+            // export, so a restore can skip them entirely.
             val payload = artifacts.filter { it.role != "metadata" }
             val uploadSet = if (payload.isEmpty()) {
                 artifacts.toList()
             } else {
-                val bundleZip = File(stagingDir, "Session.zip")
-                val hashSidecar = File(stagingDir, "Session.zip.sha256")
-                // Reuse only a sidecar-verified archive (see stagingReusable).
-                // Never invent a sidecar from a leftover truncated Session.zip —
-                // that uploaded bit-identical corrupt Drive objects.
-                val bundleSha = UploadWorkOutcomes.verifiedBundleSha256(bundleZip, hashSidecar)
-                    ?.takeIf { reuseStaging }
-                    ?: run {
-                        bundleZip.delete()
-                        hashSidecar.delete()
-                        File(stagingDir, "Session.zip.tmp").delete()
-                        // Zip dominates prepare on heavy PLC; drive the badge by
-                        // source bytes so it does not sit at 0%/last-frame forever.
-                        val zipTotal = payload.sumOf { it.file.length().coerceAtLeast(1L) }
-                        progPhase.set("prepare")
-                        progDone.set(0)
-                        progTotal.set(zipTotal.coerceAtLeast(1L))
-                        val hex = buildSessionBundle(payload, bundleZip) { n ->
-                            progDone.addAndGet(n)
-                        }
-                        hashSidecar.writeText(hex)
-                        hex
-                    }
+                // Zip dominates prepare on heavy PLC; drive the badge by source
+                // bytes across BOTH archives so it does not restart at 0%.
+                val zipTotal = payload.sumOf { it.file.length().coerceAtLeast(1L) }
+                progPhase.set("prepare")
+                progDone.set(0)
+                progTotal.set(zipTotal.coerceAtLeast(1L))
+                val onZipBytes: (Long) -> Unit = { n -> progDone.addAndGet(n) }
+
+                val restoreZip = stageArchive(
+                    stagingDir,
+                    BUNDLE_NAME,
+                    payload.filter { it.role in SessionZip.RESTORE_ROLES },
+                    reuseStaging,
+                    onZipBytes,
+                )
+                val extrasZip = stageArchive(
+                    stagingDir,
+                    EXTRAS_NAME,
+                    payload.filterNot { it.role in SessionZip.RESTORE_ROLES },
+                    reuseStaging,
+                    onZipBytes,
+                )
+
                 artifacts.filter { it.role == "metadata" } +
-                    Artifact("bundle", "Session.zip", bundleZip, bundleSha)
+                    listOfNotNull(
+                        restoreZip?.let { Artifact("bundle", BUNDLE_NAME, it.file, it.sha256) },
+                        extrasZip?.let { Artifact("extras", EXTRAS_NAME, it.file, it.sha256) },
+                    )
             }
 
             // Bundling is done — leave the "preparing" badge before we wait on
@@ -818,6 +831,44 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             onBytes = onBytes,
         )
 
+    /** A staged archive and the sha256 declared for it. */
+    private data class StagedArchive(val file: File, val sha256: String)
+
+    /**
+     * Build (or reuse) one archive named [zipName] from [members] in [stagingDir].
+     *
+     * Returns null when [members] is empty — a session with no derived artifacts
+     * must not declare an empty Extras.zip, both because [SessionZip.build] rejects
+     * an empty payload and because an empty object would cost a Firestore doc and a
+     * signed upload for nothing.
+     *
+     * Reuses only a sidecar-verified archive (see `UploadWorkOutcomes.stagingReusable`).
+     * A sidecar is never invented from a leftover truncated zip — doing so uploaded
+     * bit-identical corrupt Drive objects.
+     */
+    private fun stageArchive(
+        stagingDir: File,
+        zipName: String,
+        members: List<Artifact>,
+        reuseStaging: Boolean,
+        onBytes: (Long) -> Unit,
+    ): StagedArchive? {
+        if (members.isEmpty()) return null
+        val zip = File(stagingDir, zipName)
+        val sidecar = File(stagingDir, "$zipName.sha256")
+        val sha = UploadWorkOutcomes.verifiedBundleSha256(zip, sidecar)
+            ?.takeIf { reuseStaging }
+            ?: run {
+                zip.delete()
+                sidecar.delete()
+                File(stagingDir, "$zipName.tmp").delete()
+                val hex = buildSessionBundle(members, zip, onBytes)
+                sidecar.writeText(hex)
+                hex
+            }
+        return StagedArchive(zip, sha)
+    }
+
     /**
      * Every WorkManager RETRY must leave a WARN in logcat (release
      * [CrashReportingTree] mirrors WARN+). Without this, alpha only saw
@@ -829,6 +880,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 
     private companion object {
+        /** Restore-essential archive: everything needed to rebuild a working session. */
+        const val BUNDLE_NAME = "Session.zip"
+
+        /** Derived deliverables a restore never reads; fetched only on demand. */
+        const val EXTRAS_NAME = "Extras.zip"
+
         /** How often the progress sampler pushes phase+percent to WorkManager. */
         const val PROGRESS_SAMPLE_MS = 700L
 

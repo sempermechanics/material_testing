@@ -54,3 +54,7 @@ firebase-hosting/.firebase/
 
 # === Generated API Gateway spec (contains the live Cloud Run hostname) ===
 backend/gateway/openapi.generated.yaml
+# === Local profiling artifacts (large traces / scratch reports; never committed) ===
+perf-runs/
+scripts/perf/
+backend/scripts/perf_usage_report.py

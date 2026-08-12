@@ -6,9 +6,17 @@ from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from .validation import DeviceId, DocumentId, SessionId
 
-# "bundle" = one Session.zip holding raw/, dat/, csv/ and the report archives —
-# uploaded as a single file so a session costs ~2 Firestore file docs, not 3F+4.
-Role = Literal["raw", "processed", "reports", "metadata", "csv", "dat", "bundle"]
+# "bundle" = Session.zip, holding only what a restore needs to rebuild a working
+# session: raw/ (reference + deformed originals) and dat/ (engine results).
+# "extras" = Extras.zip, holding the derived deliverables — csv/, reports/,
+# processed/. Nothing in the app reads those back after a restore (they are
+# regenerated on export), so keeping them out of the bundle is what lets a restore
+# download only the bytes it actually needs.
+#
+# Both live at the session root, so a session still costs ~3 Firestore file docs
+# rather than 3F+4. Older clients look for exactly one "bundle" and therefore keep
+# restoring correctly against a split backup — they simply never see the extras.
+Role = Literal["raw", "processed", "reports", "metadata", "csv", "dat", "bundle", "extras"]
 
 _HEX = frozenset("0123456789abcdefABCDEF")
 DisplayString = Annotated[str, StringConstraints(max_length=128)]
