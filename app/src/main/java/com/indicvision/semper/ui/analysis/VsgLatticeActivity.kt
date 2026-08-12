@@ -92,14 +92,20 @@ class VsgLatticeActivity : AppCompatActivity() {
         const val COPY_FLASH_ALPHA = 120
     }
 
-    /** Decoded `.dat` payloads for each solved combination, in frame order. */
-    private var frameData: List<FloatArray> = emptyList()
-
-    /** Grid pitch per solved frame (from the sweep plan). */
-    private var frameSteps: IntArray = IntArray(0)
+    /**
+     * Line-cut profiles per solved combination, in frame order — one entry per strain
+     * component. The raw `.dat` payload is never retained: at ~1M points a frame is
+     * 32 MB, so holding every frame of a sweep was O(F·n) and could exhaust the heap
+     * on its own. A profile is a single grid row/column (~√n points), so this is
+     * O(F·√n) resident and the decode stays O(n) transient.
+     */
+    private var frameProfiles: List<Map<Int, List<Pair<Float, Float>>>> = emptyList()
 
     /** Solved nodes in lattice order (ascending subset, then window). */
     private var solvedNodes: List<VsgLatticeView.Node> = emptyList()
+
+    /** [solvedNodes] keyed by frame index — see the loop in [buildFrameSeries]. */
+    private var nodeByFrame: Map<Int, VsgLatticeView.Node> = emptyMap()
 
     /** The solved frame currently selected; always a solved index when any exist. */
     private var focusedFrameIndex: Int = -1
@@ -163,6 +169,8 @@ class VsgLatticeActivity : AppCompatActivity() {
         )
         val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.window }))
         solvedNodes = nodes.filter { it.solved }
+        // Frame-index lookup, so per-frame loops don't scan solvedNodes (was O(F²)).
+        nodeByFrame = solvedNodes.associateBy { it.frameIndex }
 
         latticeView = findViewById(R.id.latticeView)
         latticeView.apply {
@@ -371,6 +379,10 @@ class VsgLatticeActivity : AppCompatActivity() {
         val steps = intent.getIntArrayExtra(DicKeys.SWEEP_STEPS) ?: return
         if (steps.isEmpty()) return
 
+        val line = centreLine()
+        val baseStep = intent.getIntExtra(DicKeys.STEP, 1).coerceAtLeast(1)
+        val componentsArray = VsgStudy.STRAIN_COMPONENTS.toIntArray()
+
         lifecycleScope.launch {
             val loaded = withContext(Dispatchers.IO) {
                 val dir = File(batchDirPath)
@@ -378,9 +390,18 @@ class VsgLatticeActivity : AppCompatActivity() {
                 val files = dir.listFiles { file -> file.extension == "dat" }
                     ?.sortedBy { it.name }
                     ?: return@withContext emptyList()
-                files.mapNotNull { file ->
+                files.mapIndexedNotNull { index, file ->
                     try {
-                        DicResult.decodeDatBytes(file.readBytes())
+                        // Decode → profile → discard, one frame at a time. Only the
+                        // profiles survive the loop, so peak is one frame, not all of them.
+                        val data = DicResult.decodeDatFile(file)
+                        if (data == null) {
+                            Timber.w("Invalid .dat size for %s", file.name)
+                            null
+                        } else {
+                            val step = steps.getOrNull(index)?.coerceAtLeast(1) ?: baseStep
+                            VsgStudy.profileAlong(data, componentsArray, line, step / 2f)
+                        }
                     } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                         Timber.w(e, "Failed to read %s", file.name)
                         null
@@ -388,35 +409,35 @@ class VsgLatticeActivity : AppCompatActivity() {
                 }
             }
             if (loaded.isEmpty()) return@launch
-            frameData = loaded
-            frameSteps = steps
+            frameProfiles = loaded
             redrawStrainPlot()
         }
     }
 
+    /** The ROI centre line every profile is cut along — fixed for the activity's lifetime. */
+    private fun centreLine(): VsgStudy.StudyLine = VsgStudy.centreLine(
+        intent.getIntExtra(DicKeys.ROI_X, 0),
+        intent.getIntExtra(DicKeys.ROI_Y, 0),
+        intent.getIntExtra(DicKeys.ROI_W, 0),
+        intent.getIntExtra(DicKeys.ROI_H, 0),
+        intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true),
+    )
+
     /** Rebuilds the line-cut plot for Highlight or Isolate mode. */
     @Suppress("ReturnCount")
     private fun redrawStrainPlot() {
-        if (frameData.isEmpty()) {
+        if (frameProfiles.isEmpty()) {
             strainPlotSection.visibility = View.GONE
             return
         }
         val component = selectedStrainComponent()
         val horizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
-        val line = VsgStudy.centreLine(
-            intent.getIntExtra(DicKeys.ROI_X, 0),
-            intent.getIntExtra(DicKeys.ROI_Y, 0),
-            intent.getIntExtra(DicKeys.ROI_W, 0),
-            intent.getIntExtra(DicKeys.ROI_H, 0),
-            horizontal,
-        )
-        val baseStep = intent.getIntExtra(DicKeys.STEP, 1).coerceAtLeast(1)
         val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
         // Keep the zoom across node / mode switches; reset it when the component changes.
         val preserveViewport = component == lastStrainComponent
         lastStrainComponent = component
 
-        val seriesByFrame = buildFrameSeries(component, line, baseStep)
+        val seriesByFrame = buildFrameSeries(component)
         if (seriesByFrame.isEmpty()) {
             strainPlotSection.visibility = View.GONE
             return
@@ -453,16 +474,14 @@ class VsgLatticeActivity : AppCompatActivity() {
         syncingSlider = false
     }
 
-    /** One plot series per solved frame along [line], muted except the focused one. */
-    private fun buildFrameSeries(
-        component: Int,
-        line: VsgStudy.StudyLine,
-        baseStep: Int,
-    ): List<FrameSeries> =
-        frameData.mapIndexedNotNull { index, data ->
-            val node = solvedNodes.find { it.frameIndex == index }
-            val step = frameSteps.getOrNull(index)?.coerceAtLeast(1) ?: baseStep
-            val points = VsgStudy.profileAlong(data, component, line, step / 2f)
+    /**
+     * One plot series per solved frame along the centre line, muted except the focused
+     * one. Reads the profiles computed once at load; no frame is re-scanned per tap.
+     */
+    private fun buildFrameSeries(component: Int): List<FrameSeries> =
+        frameProfiles.mapIndexedNotNull { index, profiles ->
+            val node = nodeByFrame[index]
+            val points = profiles[component].orEmpty()
             if (points.isEmpty()) return@mapIndexedNotNull null
             val label = if (node != null) {
                 getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, node.window)

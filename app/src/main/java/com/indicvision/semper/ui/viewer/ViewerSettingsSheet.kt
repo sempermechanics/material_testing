@@ -148,11 +148,12 @@ object ViewerSettingsSheet {
         val tolerance = host.step / 2f
 
         val labels = listOf(R.string.field_exx, R.string.field_eyy, R.string.field_exy)
+        val profiles = VsgStudy.profileAlong(data, VsgStudy.STRAIN_COMPONENTS.toIntArray(), line, tolerance)
         val series = VsgStudy.STRAIN_COMPONENTS.mapIndexed { slot, component ->
             VsgPlotView.Series(
                 label = host.getString(labels[slot]),
                 color = VsgPlotView.paletteColor(slot),
-                points = VsgStudy.profileAlong(data, component, line, tolerance),
+                points = profiles[component].orEmpty(),
                 markers = false,
             )
         }

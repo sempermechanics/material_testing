@@ -38,6 +38,23 @@ object VisualizationEngine {
     const val REPORT_MAX_EDGE = 1280
 
     /**
+     * Scale factor that shrinks [imgW]×[imgH] so its longest edge is ≤ [maxEdge]
+     * (1f when already within). This is the identical formula
+     * [generateHeatmapIndices] uses for its own downscale, so a caller that composes
+     * at `imgW*scale × imgH*scale` lines up pixel-for-pixel with the capped heatmap.
+     */
+    fun cappedRenderScale(imgW: Int, imgH: Int, maxEdge: Int): Float {
+        val longest = max(imgW, imgH).coerceAtLeast(1)
+        return if (longest > maxEdge) maxEdge.toFloat() / longest else 1f
+    }
+
+    /** [w]×[h] shrunk so its longest edge is ≤ [maxEdge]; unchanged if already within. */
+    fun cappedDims(w: Int, h: Int, maxEdge: Int): Pair<Int, Int> {
+        val scale = cappedRenderScale(w, h, maxEdge)
+        return (w * scale).toInt().coerceAtLeast(1) to (h * scale).toInt().coerceAtLeast(1)
+    }
+
+    /**
      * Palette slot for "no correlated data here" — transparent on screen, the
      * animation's background colour in a GIF. It costs the colour ramp its top
      * entry (values map to 0..[LAST_COLOR]), which is one 255th of the scale and
@@ -79,18 +96,25 @@ object VisualizationEngine {
 
     private fun clamp(v: Float) = v.coerceIn(0f, 1f)
 
-    // Robust Percentile Clamping (Aligns perfectly with the Max/Min Button)
-    private fun computeSigmaClampedRange(values: MutableList<Float>, valIndex: Int): Pair<Float, Float> {
-        if (values.isEmpty()) return Pair(0f, 1f)
+    /**
+     * Robust percentile clamping, aligned with the Max/Min button: sorts and clamps
+     * the first [count] entries of [values] in place. `FloatArray.sort` uses the same
+     * total order as `List<Float>.sort()`, so the p02/p98 picks are identical to the
+     * boxed collector this replaced.
+     */
+    private fun computeSigmaClampedRange(values: FloatArray, count: Int, valIndex: Int): Pair<Float, Float> {
+        if (count == 0) return Pair(0f, 1f)
 
-        // 1. Sort the array to find the true data distribution
-        values.sort()
+        values.sort(0, count)
 
-        // 2. Extract the exact 2% and 98% bounds used by your Max/Min UI Button!
-        // This ignores wild single-pixel outliers that stretch the color scale.
-        val p02 = values[(values.size * 0.02).toInt().coerceIn(0, values.size - 1)]
-        val p98 = values[(values.size * 0.98).toInt().coerceIn(0, values.size - 1)]
+        val p02 = values[(count * 0.02).toInt().coerceIn(0, count - 1)]
+        val p98 = values[(count * 0.98).toInt().coerceIn(0, count - 1)]
 
+        return clampSpan(p02, p98, valIndex)
+    }
+
+    /** Shared min-span floor for [computeSigmaClampedRange]. */
+    private fun clampSpan(p02: Float, p98: Float, valIndex: Int): Pair<Float, Float> {
         var finalMin = p02
         var finalMax = p98
 
@@ -115,16 +139,27 @@ object VisualizationEngine {
      * ranges together keeps that pre-pass to a single walk of the data.
      */
     fun valueRanges(data: FloatArray, valIndices: IntArray): Map<Int, Pair<Float, Float>?> {
-        val collected = valIndices.associateWith { mutableListOf<Float>() }
+        // One primitive column per field, holding the same values in the same order as
+        // the boxed MutableList<Float> collectors this replaced — so the sort and the
+        // p02/p98 pick below are bit-identical. Five boxed columns cost ~20 B/value
+        // (~100 MB at n=1M); these cost 4 B/value and allocate nothing per point.
+        val pointCount = data.size / DicResult.STRIDE
+        val columns = Array(valIndices.size) { FloatArray(pointCount) }
+        var count = 0
         for (i in data.indices step DicResult.STRIDE) {
             if (!DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) continue
-            for (valIndex in valIndices) {
-                collected.getValue(valIndex).add(data[i + valIndex])
+            for (c in valIndices.indices) {
+                columns[c][count] = data[i + valIndices[c]]
             }
+            count++
         }
-        return collected.mapValues { (valIndex, values) ->
-            if (values.isEmpty()) null else computeSigmaClampedRange(values, valIndex)
+        // Every column has the same accepted-point count, so one emptiness test covers all.
+        val ranges = LinkedHashMap<Int, Pair<Float, Float>?>(valIndices.size)
+        for (c in valIndices.indices) {
+            val valIndex = valIndices[c]
+            ranges[valIndex] = if (count == 0) null else computeSigmaClampedRange(columns[c], count, valIndex)
         }
+        return ranges
     }
 
     /**
@@ -143,12 +178,19 @@ object VisualizationEngine {
         maxLongEdge: Int? = null,
     ): Triple<Bitmap, Float, Float> {
         val plane = generateHeatmapIndices(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
-        val pixels = IntArray(plane.indices.size) { i ->
-            val index = plane.indices[i].toInt() and 0xFF
-            if (index == TRANSPARENT_INDEX) 0 else JET_LUT[index]
-        }
         val bitmap = createBitmap(plane.width, plane.height, Bitmap.Config.ARGB_8888)
-        bitmap.setPixels(pixels, 0, plane.width, 0, 0, plane.width, plane.height)
+        // Expand one row at a time into a reused buffer instead of materialising a
+        // full-image IntArray next to the bitmap: peak goes from 8 bytes/px to
+        // 4 bytes/px + one row. Same pixels, written in the same order.
+        val row = IntArray(plane.width)
+        for (y in 0 until plane.height) {
+            val rowStart = y * plane.width
+            for (x in 0 until plane.width) {
+                val index = plane.indices[rowStart + x].toInt() and 0xFF
+                row[x] = if (index == TRANSPARENT_INDEX) 0 else JET_LUT[index]
+            }
+            bitmap.setPixels(row, 0, plane.width, 0, y, plane.width, 1)
+        }
         return Triple(bitmap, plane.min, plane.max)
     }
 
@@ -185,7 +227,10 @@ object VisualizationEngine {
         var maxX = Int.MIN_VALUE
         var maxY = Int.MIN_VALUE
 
-        val validValues = mutableListOf<Float>()
+        // Primitive collector (same values, same order as the previous List<Float>) so
+        // the sort + percentile pick in computeSigmaClampedRange is bit-identical.
+        val validValues = FloatArray(data.size / DicResult.STRIDE)
+        var validCount = 0
 
         for (i in data.indices step DicResult.STRIDE) {
             val corr = data[i + DicResult.IDX_ZNSSD]
@@ -194,7 +239,7 @@ object VisualizationEngine {
                 val y = data[i + 1].toInt()
                 val v = data[i + valIndex]
 
-                validValues.add(v)
+                validValues[validCount++] = v
                 if (x < minX) minX = x
                 if (x > maxX) maxX = x
                 if (y < minY) minY = y
@@ -202,7 +247,7 @@ object VisualizationEngine {
             }
         }
 
-        if (validValues.isEmpty()) {
+        if (validCount == 0) {
             return IndexPlane(ByteArray(outW * outH) { TRANSPARENT_INDEX.toByte() }, outW, outH, 0f, 0f)
         }
 
@@ -213,7 +258,7 @@ object VisualizationEngine {
             minV = customMin
             maxV = customMax
         } else {
-            val bounds = computeSigmaClampedRange(validValues, valIndex)
+            val bounds = computeSigmaClampedRange(validValues, validCount, valIndex)
             minV = bounds.first
             maxV = bounds.second
         }

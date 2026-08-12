@@ -72,9 +72,18 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
         cancelButton.setOnClickListener { cancel() }
     }
 
-    /** Kicks off the one decode pass that fixes every field's colour scale. */
+    /**
+     * Kicks off the one decode pass that fixes every field's colour scale.
+     *
+     * This walks **every frame in the batch**, so on a 150-frame session it is a full
+     * N-frame decode + range scan. It used to run on every viewer open, even when the
+     * viewer opened straight onto a frame and the summary was never looked at — the
+     * dominant driver of peak heap on large batches. It is now started on demand from
+     * [show] (and is idempotent, so repeated shows do not re-scan).
+     */
     fun start() {
         if (host.summaryBatchFiles().isEmpty()) return
+        if (rangesJob?.isActive == true || ranges.isNotEmpty()) return
         rangesJob = host.lifecycleScope.launch {
             val files = host.summaryBatchFiles()
             val computed = try {
@@ -99,6 +108,8 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     fun show() {
         isShowing = true
         layer.isVisible = true
+        // The colour-scale scan is only needed once the summary is actually on screen.
+        start()
         render(host.currentDataIndex)
     }
 

@@ -49,6 +49,12 @@ class PointSpatialIndex private constructor(
     companion object {
         fun build(data: FloatArray, step: Int): PointSpatialIndex {
             val cellSize = step.coerceAtLeast(1).toFloat()
+            // Single pass into one bucket map, then freeze each cell to an IntArray.
+            // A round-2 rewrite tried a two-pass count-then-fill into primitive
+            // IntArrays to drop the boxed ArrayList<Int>, but at ~one point per
+            // step-sized cell the two extra HashMap<Long,Int> (counts + cursors) box
+            // more Long keys / Int values than they save — the micro-benchmark measured
+            // it ~48% slower and allocating ~46% more, so this reverts to the original.
             val scratch = HashMap<Long, MutableList<Int>>()
             for (i in data.indices step DicResult.STRIDE) {
                 val corr = data[i + DicResult.IDX_ZNSSD]

@@ -98,30 +98,63 @@ object ReportBuilder {
         data: FloatArray,
         dataIndex: Int,
         absoluteStrainValues: Boolean = true,
+    ): FieldExtrema =
+        computeFieldExtrema(data, dataIndex, absoluteStrainValues, FloatArray(data.size / DicResult.STRIDE))
+
+    /**
+     * As [computeFieldExtrema], but collects accepted values into the caller-supplied
+     * [scratch] (must hold at least the accepted-point count) instead of a boxed
+     * `List<Float>`, so a report build can reuse a single primitive buffer across
+     * fields. Sorting a primitive `FloatArray` uses the same total order as
+     * `List<Float>.sort()` (`-0.0 < 0.0`, NaN greatest), so the p02/p98 picks — and
+     * therefore the returned indices — are identical to the boxed path.
+     */
+    fun computeFieldExtrema(
+        data: FloatArray,
+        dataIndex: Int,
+        absoluteStrainValues: Boolean,
+        scratch: FloatArray,
     ): FieldExtrema {
         val isStrain = DicResult.isStrainFieldIndex(dataIndex)
         val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
+
+        var count = 0
+        for (i in data.indices step DicResult.STRIDE) {
+            val corr = data[i + DicResult.IDX_ZNSSD]
+            if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
+                val rawVal = data[i + dataIndex]
+                scratch[count++] = if (isStrain && absoluteStrainValues) abs(rawVal) else rawVal
+            }
+        }
+        return extremaFromScratch(data, dataIndex, absoluteStrainValues, scratch, count)
+    }
+
+    /**
+     * The sort + percentile + index passes of [computeFieldExtrema], given a [scratch]
+     * already filled with the first [count] accepted field values (in the same
+     * `absoluteStrainValues` convention). Split out so [buildReport] can fill the buffer
+     * once — for both mean/std and extrema — instead of walking `data` twice per field.
+     */
+    private fun extremaFromScratch(
+        data: FloatArray,
+        dataIndex: Int,
+        absoluteStrainValues: Boolean,
+        scratch: FloatArray,
+        count: Int,
+    ): FieldExtrema {
+        if (count == 0) return FieldExtrema(-1, -1)
+        val isStrain = DicResult.isStrainFieldIndex(dataIndex)
+        val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
+        fun fieldValue(rawVal: Float): Float = if (isStrain && absoluteStrainValues) abs(rawVal) else rawVal
+
+        scratch.sort(0, count)
+        val p02 = scratch[(count * 0.02).toInt().coerceIn(0, count - 1)]
+        val p98 = scratch[(count * 0.98).toInt().coerceIn(0, count - 1)]
 
         var maxV = -Float.MAX_VALUE
         var minV = Float.MAX_VALUE
         var maxIdx = -1
         var minIdx = -1
-        val validValues = mutableListOf<Float>()
-
-        fun fieldValue(rawVal: Float): Float = if (isStrain && absoluteStrainValues) abs(rawVal) else rawVal
-
-        for (i in data.indices step DicResult.STRIDE) {
-            val corr = data[i + DicResult.IDX_ZNSSD]
-            if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
-                validValues.add(fieldValue(data[i + dataIndex]))
-            }
-        }
-        if (validValues.isEmpty()) return FieldExtrema(-1, -1)
-
-        validValues.sort()
-        val p02 = validValues[(validValues.size * 0.02).toInt().coerceIn(0, validValues.size - 1)]
-        val p98 = validValues[(validValues.size * 0.98).toInt().coerceIn(0, validValues.size - 1)]
-
         for (i in data.indices step DicResult.STRIDE) {
             val corr = data[i + DicResult.IDX_ZNSSD]
             if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
@@ -178,6 +211,12 @@ object ReportBuilder {
         val fieldResults = mutableListOf<FieldResult>()
         var correlationHeatmap: Bitmap? = null
 
+        // One primitive buffer reused across all fields: filled once per field with
+        // this field's signed accepted values (for both mean/std and the extrema sort),
+        // so the build walks `data` once per field to collect, not twice. Sized to the
+        // point count, it is the only per-point allocation alive during the build.
+        val scratch = FloatArray(data.size / DicResult.STRIDE)
+
         for (fieldIndex in FIELD_NAMES.indices) {
             val dataIndex = fieldIndex + DicResult.IDX_U
             val isStrain = DicResult.isStrainFieldIndex(dataIndex)
@@ -190,19 +229,35 @@ object ReportBuilder {
             }
             val meanTypeString = if (isStrain) "Mean Absolute" else "Simple Mean"
 
-            val validValues = mutableListOf<Float>()
+            // One collect pass: store signed values (what computeFieldExtrema's
+            // absoluteStrainValues=false path needs) and accumulate the abs-mean sum in
+            // the same walk. mean/std keep the exact same Double accumulation and
+            // iteration order — abs is applied to the accumulator, not the stored value,
+            // so the numbers match the previous two-pass code bit-for-bit.
+            var count = 0
+            var sum = 0.0
             for (i in data.indices step DicResult.STRIDE) {
                 val corr = data[i + DicResult.IDX_ZNSSD]
                 if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
                     val rawVal = data[i + dataIndex]
-                    validValues.add(if (isStrain) abs(rawVal) else rawVal)
+                    scratch[count++] = rawVal
+                    sum += if (isStrain) abs(rawVal) else rawVal
                 }
             }
-            if (validValues.isEmpty()) continue
+            if (count == 0) continue
 
-            val extrema = computeFieldExtrema(data, dataIndex, absoluteStrainValues = false)
-            val mean = validValues.average().toFloat()
-            val stdDev = sqrt(validValues.map { (it - mean) * (it - mean) }.average()).toFloat()
+            val mean = (sum / count).toFloat()
+            var sumSq = 0.0
+            for (j in 0 until count) {
+                val v = if (isStrain) abs(scratch[j]) else scratch[j]
+                val d = v - mean
+                sumSq += d * d
+            }
+            val stdDev = sqrt(sumSq / count).toFloat()
+
+            // scratch already holds this field's signed accepted values in order, so the
+            // extrema step sorts them in place — no second collect walk of `data`.
+            val extrema = extremaFromScratch(data, dataIndex, absoluteStrainValues = false, scratch, count)
 
             // Bound the intermediate render to REPORT_MAX_EDGE. Every output here is
             // downscaled to 600 px by compressForPdf(), so this is invisible — but it

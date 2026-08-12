@@ -5,10 +5,12 @@
 
 package com.indicvision.semper
 
+import androidx.annotation.VisibleForTesting
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.channels.FileChannel
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.text.FieldPosition
@@ -16,8 +18,8 @@ import java.util.Locale
 
 /** Binary layout constants for native full-field `.dat` output (8 floats × 4 bytes per point). */
 object DicResult {
+    /** Floats per point — mirrors `SEMPER_FLOATS_PER_POINT` in the engine's C header. */
     const val STRIDE = 8
-    const val FLOATS_PER_POINT = 8
     const val BYTES_PER_POINT = 32
 
     const val IDX_X = 0
@@ -37,6 +39,13 @@ object DicResult {
 
     fun isValidDatBytes(bytes: ByteArray): Boolean = bytes.isNotEmpty() && bytes.size % BYTES_PER_POINT == 0
 
+    /**
+     * In-memory decode. Production code reads `.dat` from disk with [decodeDatFile],
+     * which memory-maps instead of holding a second full-size `ByteArray`; this
+     * straightforward version is retained as the reference the decode parity tests
+     * check that faster path against.
+     */
+    @VisibleForTesting
     fun decodeDatBytes(bytes: ByteArray): FloatArray? {
         if (!isValidDatBytes(bytes)) return null
         return FloatArray(bytes.size / 4).also { out ->
@@ -54,6 +63,21 @@ object DicResult {
         if (len <= 0L || len > Int.MAX_VALUE.toLong() || len % BYTES_PER_POINT != 0L) return null
         val floatCount = (len / 4L).toInt()
         val out = FloatArray(floatCount)
+        val mapped = runCatching {
+            FileInputStream(file).channel.use { channel ->
+                val map = channel.map(FileChannel.MapMode.READ_ONLY, 0, len)
+                map.order(ByteOrder.nativeOrder()).asFloatBuffer().get(out)
+            }
+            true
+        }.getOrDefault(false)
+        return if (mapped) out else decodeDatChunked(file, floatCount, out)
+    }
+
+    /**
+     * Chunked-read fallback for [decodeDatFile]: reads the file through a small heap
+     * buffer into [out]. Kept for filesystems/sizes that cannot be memory-mapped.
+     */
+    private fun decodeDatChunked(file: File, floatCount: Int, out: FloatArray): FloatArray? {
         val complete = FileInputStream(file).channel.use { channel ->
             val buf = ByteBuffer.allocate(DECODE_CHUNK_BYTES).order(ByteOrder.nativeOrder())
             var written = 0

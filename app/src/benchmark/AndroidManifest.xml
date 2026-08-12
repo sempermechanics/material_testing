@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Benchmark-variant-only overlay. Merges ONLY into the release-like `benchmark` app
+  variant, so nothing here reaches debug or the shipped release.
+
+  Two things live here:
+   1. The synthetic-session launcher used by ViewerScrubBenchmark.
+   2. Export overrides for the screens ScreenBenchmark drives. Macrobenchmark starts
+      activities from the shell (uid 2000), and since API 34 the shell cannot start a
+      non-exported component — `am start` fails with
+      "SecurityException: Permission Denial ... not exported from uid <app>".
+      These activities stay android:exported="false" in every shipped variant.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <activity
+            android:name="com.indicvision.semper.benchmark.BenchmarkSeedActivity"
+            android:exported="true" />
+
+        <activity
+            android:name="com.indicvision.semper.ui.settings.SettingsActivity"
+            android:exported="true"
+            tools:node="merge"
+            tools:replace="android:exported" />
+
+        <activity
+            android:name="com.indicvision.semper.ui.analysis.StaticAnalysisActivity"
+            android:exported="true"
+            tools:node="merge"
+            tools:replace="android:exported" />
+    </application>
+</manifest>

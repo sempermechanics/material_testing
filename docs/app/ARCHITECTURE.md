@@ -122,6 +122,20 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
   (1280 px).** The PDF/cloud heatmaps downscale to 600 px anyway; the cap only
   stops intermediate full-res `ARGB_8888` bitmaps from OOMing on large (e.g. 26 MP)
   references. On-screen scrub uses the separate `DISPLAY_MAX_EDGE` (1080).
+- **The viewer's frame look-ahead is bounded by bytes, not just by count.**
+  `ScrubFrameCache` caps decoded frames on both a frame count and a byte ceiling
+  (`maxDataBytes`, heap/8 by default), so a heavy PLC frame simply holds fewer slots
+  instead of the window growing with frame size. `ResultViewerActivity.prefetchAround`
+  fills that window with **one serialized worker**, cancelled and restarted as the user
+  scrubs, admitting a frame only while the cache has room and the heap guard passes.
+  It must stay serialized: an earlier version launched a coroutine per neighbour on
+  every frame load, so peak memory scaled with *how fast the user scrubbed* rather than
+  with any bound.
+- **Whole-batch passes are started on demand, never on open.** The summary's colour-scale
+  scan (`ViewerSummaryHelper.start`) decodes **every frame in the batch**, so it runs from
+  `show()` rather than from viewer startup — opening straight onto a frame must not pay
+  for an N-frame decode the user may never look at. The inspect-mode spatial index
+  follows the same rule (built lazily on first tap, invalidated on frame load).
 - **Batch progress is a buffered `SharedFlow`** (`replay=1`, `extraBufferCapacity`,
   `DROP_OLDEST`), not a `StateFlow` — a conflating flow dropped intra-frame ticks
   when the native solve emitted faster than the UI collected, stalling the bar.

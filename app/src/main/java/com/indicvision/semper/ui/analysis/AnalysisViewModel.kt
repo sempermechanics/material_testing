@@ -1048,7 +1048,8 @@ class AnalysisViewModel : ViewModel() {
                 .takeIf { it >= 0 }
                 ?.let { defFilePaths.getOrNull(it)?.substringAfterLast('/') },
         )
-        if (firstFrameValidPoints > 0 && engineErrorCode != ERROR_CANCELLED &&
+        if (firstFrameValidPoints > 0 &&
+            engineErrorCode != ERROR_CANCELLED &&
             engineErrorCode != ERROR_SESSION_LIMIT
         ) {
             SemperAnalytics.event(

@@ -86,7 +86,8 @@ object SessionUploadBundler {
         // to a deformed frame if the reference won't decode. Capped to
         // REPORT_MAX_EDGE: the report only ever downscales it (to 600 px), so a
         // full-res resident base is pure memory pressure.
-        val (baseW, baseH) = cappedDims(record.imgW, record.imgH, VisualizationEngine.REPORT_MAX_EDGE)
+        val (baseW, baseH) =
+            VisualizationEngine.cappedDims(record.imgW, record.imgH, VisualizationEngine.REPORT_MAX_EDGE)
         val baseImg: Bitmap? = if (canReport) {
             val originalBaseImg = decodeBaseImage(refFile, rawDeformedDir, record.defNames.firstOrNull())
             if (originalBaseImg == null) {
@@ -267,7 +268,8 @@ object SessionUploadBundler {
         // The deformed original is only the cover image (downscaled to 600 px in
         // the report); decode + scale it capped, and fall back to the reference
         // rather than losing the whole report over it.
-        val (coverW, coverH) = cappedDims(record.imgW, record.imgH, VisualizationEngine.REPORT_MAX_EDGE)
+        val (coverW, coverH) =
+            VisualizationEngine.cappedDims(record.imgW, record.imgH, VisualizationEngine.REPORT_MAX_EDGE)
         val originalDefImg = BitmapDecode.decodeFileForView(
             defFile.absolutePath,
             coverW,
@@ -337,14 +339,6 @@ object SessionUploadBundler {
             ?: defName?.let {
                 BitmapDecode.decodeFileForView(File(rawDeformedDir, it).absolutePath, edge, edge, edge)
             }
-    }
-
-    /** [w]×[h] shrunk so its longest edge is ≤ [maxEdge]; unchanged if already within. */
-    private fun cappedDims(w: Int, h: Int, maxEdge: Int): Pair<Int, Int> {
-        val longest = maxOf(w, h).coerceAtLeast(1)
-        if (longest <= maxEdge) return w to h
-        val s = maxEdge.toFloat() / longest
-        return (w * s).toInt().coerceAtLeast(1) to (h * s).toInt().coerceAtLeast(1)
     }
 
     private const val ENGINE_STATS_SIZE = 16

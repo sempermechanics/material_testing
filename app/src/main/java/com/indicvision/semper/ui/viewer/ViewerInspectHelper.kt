@@ -40,12 +40,12 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
     var lastMaxIdx = -1
     var lastMinIdx = -1
 
-    /** Spatial buckets for the current frame's accepted points; rebuilt on frame load. */
+    /**
+     * Spatial buckets for the current frame's accepted points. Cleared on frame load
+     * and built lazily on the first inspect-mode tap ([findNearestDataPoint]), so
+     * scrubbing frames that are never inspected pays nothing for it.
+     */
     private var spatialIndex: PointSpatialIndex? = null
-
-    fun rebuildSpatialIndex(data: FloatArray, step: Int) {
-        spatialIndex = PointSpatialIndex.build(data, step)
-    }
 
     fun clearSpatialIndex() {
         spatialIndex = null
@@ -90,12 +90,10 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
 
     fun computeMaxMinIndices(): Pair<Int, Int> {
         val data = host.rawData ?: return -1 to -1
-        val extrema = ReportBuilder.computeFieldExtrema(
-            data,
-            host.currentDataIndex,
-            absoluteStrainValues = false,
-        )
-        return extrema.maxIdx to extrema.minIdx
+        // Shares the host's per-(frame,field) memo, so a Max/Min toggle reuses the
+        // extrema already computed for the stats strip instead of re-sorting.
+        val metrics = host.fieldMetricsFor(host.currentFrameIndex, host.currentDataIndex, data)
+        return metrics.maxIdx to metrics.minIdx
     }
 
     fun findNearestDataPoint(physX: Float, physY: Float) {

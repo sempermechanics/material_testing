@@ -65,6 +65,24 @@ class DicResultDecodeTest {
     }
 
     @Test
+    fun `decodeDatFile matches decodeDatBytes for a large multi-chunk file`() {
+        // 5000 points = 160 KB, well over DECODE_CHUNK_BYTES (32 KB), so this exercises
+        // the memory-mapped fast path on a file that the old chunked loop would have
+        // read in several passes. Bytes must decode identically.
+        val bytes = bytesForPoints(5000) { data, offset ->
+            data[offset + DicResult.IDX_X] = offset.toFloat()
+            data[offset + DicResult.IDX_U] = (offset % 97) * 0.013f
+            data[offset + DicResult.IDX_EXX] = (offset % 13 - 6) * 0.0004f
+            data[offset + DicResult.IDX_ZNSSD] = 0.02f
+        }
+        val file = temp.newFile("big.dat").apply { writeBytes(bytes) }
+        val fromFile = DicResult.decodeDatFile(file)
+        val fromBytes = DicResult.decodeDatBytes(bytes)
+        assertNotNull(fromFile)
+        assertArrayEquals(fromBytes, fromFile, 0f)
+    }
+
+    @Test
     fun `decodeDatFile rejects bad length`() {
         val file = temp.newFile("bad.dat").apply { writeBytes(ByteArray(31)) }
         assertNull(DicResult.decodeDatFile(file))

@@ -1,6 +1,7 @@
 package com.indicvision.semper.results
 
 import com.indicvision.semper.report.GifEncoder
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -140,6 +141,39 @@ class GifEncoderTest {
                 random[i].toInt() and 0xFF,
                 decoded.getRGB(i % w, i / w) and 0xFF,
             )
+        }
+    }
+
+    @Test
+    fun `encoding is deterministic byte for byte`() {
+        // Guards the reused LZW table: a stale or half-cleared table would leak into
+        // the code stream and diverge between two runs of the same input.
+        val w = 40
+        val h = 30
+        val frames = listOf(
+            ByteArray(w * h) { ((it * 31 + it / 5) % 256).toByte() },
+            ByteArray(w * h) { ((255 - it * 17) % 256).toByte() },
+            ByteArray(w * h) { 7 },
+        )
+        assertArrayEquals(encode(w, h, frames), encode(w, h, frames))
+    }
+
+    @Test
+    fun `a frame's bytes do not depend on the frame before it`() {
+        // The shared LZW table is reset per frame, so encoding [A, B] then reading B
+        // back must match encoding B alone — proving no state leaks across frames.
+        val w = 24
+        val h = 24
+        val a = ByteArray(w * h) { ((it * 13) % 256).toByte() }
+        val b = ByteArray(w * h) { ((200 - it * 7) % 256).toByte() }
+
+        val second = readFrames(encode(w, h, listOf(a, b)))[1]
+        val alone = readFrames(encode(w, h, listOf(b)))[0]
+
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                assertEquals("($x,$y)", alone.getRGB(x, y), second.getRGB(x, y))
+            }
         }
     }
 

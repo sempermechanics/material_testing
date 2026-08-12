@@ -34,6 +34,14 @@ class GifEncoder(
     private var started = false
     private var closed = false
 
+    /**
+     * LZW string table, allocated once and reused across every frame instead of a
+     * per-frame HashMap. The key `(prefix shl 8) or suffix` is a dense 20-bit value
+     * (prefix < 4096, suffix < 256), so a flat IntArray indexes it directly — no
+     * boxed Integer per pixel, no hashing, no per-frame 4 MB allocation.
+     */
+    private val lzwTable = IntArray(1 shl LZW_KEY_BITS)
+
     init {
         require(width in 1..MAX_EDGE && height in 1..MAX_EDGE) {
             "GIF dimensions out of range: ${width}x$height"
@@ -68,7 +76,7 @@ class GifEncoder(
         }
         writeGraphicControl(delayCentis)
         writeImageDescriptor()
-        LzwCompressor(out, MIN_CODE_SIZE).compress(indices)
+        LzwCompressor(out, MIN_CODE_SIZE, lzwTable).compress(indices)
     }
 
     /** Writes the trailer. The underlying stream is left to the caller. */
@@ -134,6 +142,9 @@ class GifEncoder(
         const val TABLE_ENTRIES = 256
         const val MAX_EDGE = 0xFFFF
         const val MIN_CODE_SIZE = 8
+
+        /** Key width for [lzwTable]: 12-bit prefix + 8-bit suffix packed together. */
+        const val LZW_KEY_BITS = 20
         const val EXTENSION_INTRODUCER = 0x21
         const val IMAGE_SEPARATOR = 0x2C
         const val BLOCK_TERMINATOR = 0x00
@@ -146,7 +157,16 @@ class GifEncoder(
  * codes packed least-significant-bit first, output split into sub-blocks of at
  * most 255 bytes.
  */
-private class LzwCompressor(private val out: OutputStream, private val minCodeSize: Int) {
+/**
+ * @param table a scratch string table of at least `1 shl 20` ints, owned by the
+ *   caller and reused across frames. Filled with [ABSENT] on each [compress]; its
+ *   incoming contents are irrelevant.
+ */
+private class LzwCompressor(
+    private val out: OutputStream,
+    private val minCodeSize: Int,
+    private val table: IntArray,
+) {
 
     private val clearCode = 1 shl minCodeSize
     private val endCode = clearCode + 1
@@ -158,8 +178,7 @@ private class LzwCompressor(private val out: OutputStream, private val minCodeSi
     private var codeSize = minCodeSize + 1
     private var pendingClear = false
 
-    /** Prefix-code and suffix-byte packed into one key, so the table is a flat map. */
-    private val table = HashMap<Int, Int>()
+    /** Prefix-code and suffix-byte packed into one key, so the table is a flat array. */
     private var nextCode = 0
 
     fun compress(indices: ByteArray) {
@@ -178,7 +197,7 @@ private class LzwCompressor(private val out: OutputStream, private val minCodeSi
             val suffix = indices[i].toInt() and 0xFF
             val key = (prefix shl 8) or suffix
             val known = table[key]
-            if (known != null) {
+            if (known != ABSENT) {
                 prefix = known
                 continue
             }
@@ -201,7 +220,7 @@ private class LzwCompressor(private val out: OutputStream, private val minCodeSi
     }
 
     private fun resetTable() {
-        table.clear()
+        java.util.Arrays.fill(table, ABSENT)
         nextCode = endCode + 1
         pendingClear = true
     }
@@ -252,5 +271,8 @@ private class LzwCompressor(private val out: OutputStream, private val minCodeSi
         const val MAX_BLOCK = 255
         const val MAX_CODE_SIZE = 12
         const val MAX_CODES = 1 shl MAX_CODE_SIZE
+
+        /** Empty-slot marker; stored codes start at endCode+1 (≥ 258), never negative. */
+        const val ABSENT = -1
     }
 }

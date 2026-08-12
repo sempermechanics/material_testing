@@ -120,7 +120,7 @@ class EnginePipelineSmokeTest {
         )
         assertTrue("Engine returned error code $validPoints", validPoints > 0)
 
-        val data = FloatArray(validPoints * DicResult.FLOATS_PER_POINT)
+        val data = FloatArray(validPoints * DicResult.STRIDE)
         buffer.position(0)
         buffer.asFloatBuffer().get(data)
         return SolveResult(data, metrics, validPoints, maxPoints)
