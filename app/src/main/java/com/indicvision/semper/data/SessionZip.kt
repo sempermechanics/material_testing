@@ -36,21 +36,34 @@ internal object SessionZip {
 
     data class Member(val role: String, val name: String, val file: File)
 
-    /**
-     * Artifact roles a restore needs to rebuild a working session: the images
-     * (`raw`) and the engine results (`dat`).
-     *
-     * Everything else a backup carries — `csv`, `reports`, `processed` — is derived
-     * and regenerated on device by `SessionEverythingExporter`, so nothing reads it
-     * back after a restore. Upload uses this to decide what goes in `Session.zip`
-     * rather than `Extras.zip`, and restore uses [RESTORE_ENTRY_PREFIXES] to decide
-     * which entries of a legacy single-archive backup are worth downloading. Keep
-     * the two in step — they are the same decision seen from either end.
-     */
-    val RESTORE_ROLES: Set<String> = setOf("raw", "dat")
+    /** Fixed name of the reference image artifact (role `raw`). */
+    const val REFERENCE_NAME = "Reference.png"
 
-    /** [RESTORE_ROLES] as zip entry-name prefixes (entries are named `role/name`). */
-    val RESTORE_ENTRY_PREFIXES: Set<String> = RESTORE_ROLES.mapTo(HashSet()) { "$it/" }
+    /**
+     * Whether an artifact is needed to **view** a restored session — i.e. to render
+     * heatmaps. That is the reference image (`raw/Reference.png`) plus the engine
+     * results (`dat/`), and nothing else:
+     *
+     * - The **deformed originals** (also role `raw`) are never displayed — the viewer
+     *   draws heatmaps over the reference only — so they are deferred to `Extras.zip`
+     *   and a restore skips them. They remain in the backup for "Save to Files" and
+     *   are only missing from a restored session's *on-device* re-export.
+     * - `csv`, `reports`, `processed` are derived and regenerated on export.
+     *
+     * Upload uses this to decide what goes in `Session.zip` vs `Extras.zip`.
+     */
+    fun isRestoreEssential(role: String, name: String): Boolean =
+        role == "dat" || (role == "raw" && name == REFERENCE_NAME)
+
+    /**
+     * Entry-name prefixes a **legacy** single-archive restore fetches. Old backups
+     * interleave the deformed originals with the reference under `raw/`, so they
+     * cannot be separated by a ranged read — the best a legacy restore can do is pull
+     * the whole `raw/` + `dat/` prefix (still skipping csv/reports/processed). New
+     * backups do better by construction: their `Session.zip` already excludes the
+     * deformed images (see [isRestoreEssential]).
+     */
+    val RESTORE_ENTRY_PREFIXES: Set<String> = setOf("raw/", "dat/")
 
     /** Already-compressed or large binary payloads — store, do not deflate. */
     val STORE_EXTENSIONS: Set<String> = setOf(

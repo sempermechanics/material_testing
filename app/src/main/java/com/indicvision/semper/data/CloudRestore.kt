@@ -46,12 +46,17 @@ import java.util.zip.ZipInputStream
  * frame list (image ↔ dat ↔ csv), so we can reconstruct the [SessionRecord]
  * and the on-disk layout exactly as a local run would have produced it.
  *
- * Files land back in the same shape [DicUploadWorker] uploaded them from:
+ * A restore fetches only what viewing needs, so a restored session holds:
  * ```
- * <sessionDir>/reference.png
- * <sessionDir>/frame_%04d.dat
- * <sessionDir>/raw_deformed/<original image name>
+ * <sessionDir>/reference.png              the heatmap backdrop
+ * <sessionDir>/frame_%04d.dat             the engine results
  * ```
+ * The deformed originals (`raw_deformed/`) are deliberately **not** restored — the
+ * viewer never displays them — so they stay in the cloud backup (fetched by "Save to
+ * Files") rather than downloaded here. A restored session's on-device re-export
+ * therefore omits the original photos and its report covers fall back to the
+ * reference; everything the viewer shows is intact. (Legacy pre-split backups still
+ * bring `raw_deformed/` down, since their archive cannot separate it.)
  */
 @Suppress("TooManyFunctions", "LargeClass") // one cohesive restore pipeline: fetch, parse, write, index
 object CloudRestore {
@@ -408,18 +413,18 @@ object CloudRestore {
         //                safely possible.
         //  - pre-bundle: every artifact listed as its own file.
         val layout = Layout(sessionDir, rawDeformedDir)
-        var refPath = ""
         val bundleEntry = files.firstOrNull { it.role == "bundle" }
-        if (bundleEntry != null) {
+        val outcome = if (bundleEntry != null) {
             val fetch = BundleFetch(api, token, sessionId, appContext, bundleEntry, layout)
-            refPath = if (isSplitLayout(meta.optString("schema"))) {
+            if (isSplitLayout(meta.optString("schema"))) {
                 downloadAndUnpackBundle(fetch, onProgress)
             } else {
                 restoreLegacyBundle(fetch, onProgress)
             }
         } else {
-            refPath = restoreLegacyFiles(api, token, files, layout, onProgress)
+            BundleOutcome(restoreLegacyFiles(api, token, files, layout, onProgress), "legacy-per-file")
         }
+        val refPath = outcome.refPath
 
         // 3. Rebuild the index row from the blueprint.
         check(
@@ -432,10 +437,35 @@ object CloudRestore {
                 allowOverLimit = true, // already counted in the cloud quota
             ),
         ) { "Could not update the restored session index" }
-        Timber.i("Restored analysis %s from cloud session %s (%d files)", localId, sessionId, files.size)
+        logRestoreSaving(localId, sessionId, outcome, metaEntry.sizeBytes, files)
         // The listing excludes backups already on this device, so it changed.
         invalidateRestorableCache()
         localId
+    }
+
+    /**
+     * Log bytes actually pulled vs the whole backup — the difference is the deformed
+     * originals + deliverables a restore no longer downloads. Reads straight out of
+     * logcat, so a live restore confirms the saving without extra instrumentation.
+     */
+    private fun logRestoreSaving(
+        localId: String,
+        sessionId: String,
+        outcome: BundleOutcome,
+        metaBytes: Long,
+        files: List<CloudFileDto>,
+    ) {
+        val downloaded = metaBytes.coerceAtLeast(0L) + outcome.bytesDownloaded
+        val backupTotal = files.sumOf { it.sizeBytes.coerceAtLeast(0L) }
+        Timber.i(
+            "Restored analysis %s from cloud session %s (%s): downloaded %d of %d backup bytes (%d files)",
+            localId,
+            sessionId,
+            outcome.mode,
+            downloaded,
+            backupTotal,
+            files.size,
+        )
     }
 
     /** Remove an interrupted restore's files while retaining its cloud-only index row. */
@@ -481,7 +511,7 @@ object CloudRestore {
     private suspend fun restoreLegacyBundle(
         fetch: BundleFetch,
         onProgress: suspend (done: Long, total: Long) -> Unit,
-    ): String {
+    ): BundleOutcome {
         val size = fetch.entry.sizeBytes
         val plan = if (size > 0L) {
             runCatching { planPrefixFetch(fetch) }
@@ -493,6 +523,8 @@ object CloudRestore {
         if (plan == null) return downloadAndUnpackBundle(fetch, onProgress)
 
         val prefixTmp = File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_prefix.zip")
+        // The central-directory tail counts toward what the ranged restore pulled.
+        val tailBytes = minOf(size, CENTRAL_DIRECTORY_TAIL_BYTES)
         return try {
             Timber.i(
                 "Legacy bundle %s: fetching %d of %d bytes (%d%%)",
@@ -507,7 +539,8 @@ object CloudRestore {
                 "Prefix download is ${prefixTmp.length()} B, expected ${plan.cut} — corrupt transfer"
             }
             onProgress(plan.cut, plan.cut)
-            unpackPrefix(prefixTmp, fetch.layout, plan.crcByName)
+            val ref = unpackPrefix(prefixTmp, fetch.layout, plan.crcByName)
+            BundleOutcome(ref, "legacy-ranged-prefix", plan.cut + tailBytes)
         } catch (e: IllegalArgumentException) {
             // A bad prefix is not a corrupt backup — fall back to the whole archive
             // rather than failing a restore that would otherwise succeed.
@@ -529,6 +562,16 @@ object CloudRestore {
         val appContext: Context,
         val entry: CloudFileDto,
         val layout: Layout,
+    )
+
+    /**
+     * Result of restoring the file payload: the reference image path, the bytes
+     * actually pulled off the network, and which strategy did it (for telemetry).
+     */
+    private data class BundleOutcome(
+        val refPath: String,
+        val mode: String,
+        val bytesDownloaded: Long = 0L,
     )
 
     /** Where the restore payload ends, plus the CRC of every entry inside it. */
@@ -636,7 +679,7 @@ object CloudRestore {
     private suspend fun downloadAndUnpackBundle(
         fetch: BundleFetch,
         onProgress: suspend (done: Long, total: Long) -> Unit,
-    ): String {
+    ): BundleOutcome {
         val api = fetch.api
         val token = fetch.token
         val sessionId = fetch.sessionId
@@ -692,7 +735,7 @@ object CloudRestore {
             // Download bytes are done; hold 100% through unpack so the row
             // doesn't look stuck again during inflate.
             onProgress(totalForUi, totalForUi)
-            unpackBundle(zipTmp, layout)
+            BundleOutcome(unpackBundle(zipTmp, layout), "whole-bundle", zipTmp.length())
         } finally {
             zipTmp.delete()
             File(appContext.cacheDir, "restore_${sessionId}_bundle.zip.part").delete()

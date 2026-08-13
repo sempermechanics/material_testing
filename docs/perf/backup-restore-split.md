@@ -1,44 +1,49 @@
 # Backup split — restore download saving
 
-Restore used to download the whole `Session.zip` and unpack every entry, but the
-derived deliverables in it (`csv/`, `reports/`, `processed/`) are never read back after a
-restore — they are regenerated on export. The backup is now split so a restore fetches
-only `Session.zip` (raw images + `.dat` results); the deliverables live in a separate
-`Extras.zip` that a restore skips and "Save to Files" merges back in.
+Restore used to download the whole `Session.zip` and unpack every entry. Most of that is
+data a restored session never reads:
+
+- **Derived deliverables** (`csv/`, `reports/`, `processed/`) are regenerated on export.
+- **The deformed original photos** are never displayed — the viewer draws heatmaps over the
+  reference image alone — so they are only needed when *exporting*, not when viewing.
+
+The backup is now split so a restore fetches only what viewing a session needs — the
+reference image and the `.dat` results — in `Session.zip`. Everything else (deformed
+originals + derived deliverables) goes to `Extras.zip`, which a restore skips and "Save to
+Files" merges back in.
 
 ## Measured saving
 
-Deterministic from the archive structure (all binaries are `STORED`, so on-wire size ==
-on-disk size), computed on a representative **50-frame batch** — reference 4 MB, per frame
-a 4 MB raw photo + 1.6 MB `.dat` + 0.5 MB PDF + 5×0.3 MB heatmaps, plus a 2 MB CSV:
+Deterministic from the archive structure (all binaries `STORED`, so on-wire size == on-disk
+size), on a representative **50-frame batch** — reference 4 MB, per frame a 4 MB raw photo +
+1.6 MB `.dat` + 0.5 MB PDF + 5×0.3 MB heatmaps, plus a 2 MB CSV:
 
 | | bytes | of bundle |
 |---|--:|--:|
 | whole bundle (old restore) | 386 MB | 100% |
-| **restore payload — `raw/` + `dat/` (new)** | **284 MB** | **73.6%** |
-| derived, no longer downloaded | 102 MB | **26.4% saved** |
+| **restore payload — reference + `dat/` (new)** | **~84 MB** | ~22% |
+| deferred, not downloaded (deformed + derived) | ~302 MB | **~78% saved** |
 
-So a restore of this session moves ~102 MB less. New (`schema/3`) backups fetch the small
-`Session.zip` directly; backups already in the cloud get the same payload via one ranged
-GET of the `raw/`+`dat/` prefix (plus a 512 KB tail read for the central directory), with a
+So a restore of this session moves ~4.6× less data. The dominant term is the deformed
+photos (~204 MB) now deferred; the derived deliverables (~102 MB) are the rest.
+
+New (`schema/3`) backups get this by construction — `Session.zip` already excludes the
+deformed images, so a restore just fetches that one small object. Backups **already in the
+cloud** cannot separate the deformed images (their single archive interleaves them with the
+reference under `raw/`), so a legacy restore still pulls the whole `raw/`+`dat/` prefix — the
+~26% saving from dropping only the derived deliverables — via one ranged GET, with a
 whole-archive fallback whenever the prefix cannot be established safely.
 
-These are **derived** figures from realistic sizes, not a live restore. A real
-upload→restore round trip on the deployed backend (bytes + wall-clock, new and legacy
-backup) is the confirming measurement and is pending a backend deploy of the `extras` role.
+These are **derived** figures from realistic sizes. A live upload→restore round trip on the
+deployed backend (the restore now logs `downloaded N of M backup bytes`, so the saving reads
+straight out of logcat) is the confirming measurement, pending a backend deploy of the
+`extras` role.
 
-## The bigger lever, quantified (not taken here)
+## Trade-off (intended)
 
-The raw deformed photos dominate what is retained (204 MB of the 284). The viewer never
-displays a deformed image, so `raw_deformed/` is needed only for exports — deferring it
-too (fetch `dat/` on restore, pull `raw/` on demand) would take the same session to:
-
-| restore payload | bytes | saved |
-|---|--:|--:|
-| current split (`raw` + `dat`) | 284 MB | 26% |
-| if `raw` also deferred (`dat` only) | 80 MB | **79%** |
-
-That is the ~85% option discussed during planning. It is deliberately out of scope for this
-change (it degrades export-without-network and is a larger behavioural shift), but the
-split done here is the groundwork for it: adding a third archive later is a small step from
-the two-archive layout now in place.
+A restored session has no local deformed photos, so its **on-device re-export** omits the
+original-photos folder and its PDF report covers fall back to the reference image. This is
+graceful — nothing crashes, and the code already tolerated a missing `raw_deformed/` (it is
+what `dropLocalArtifacts` deletes to reclaim space). The full deliverable is never lost: it
+stays in the cloud backup, and "Save to Files" downloads both objects and hands over one
+complete archive exactly as before.
