@@ -1,16 +1,14 @@
 # Backup split — restore download saving
 
-Restore used to download the whole `Session.zip` and unpack every entry. Most of that is
-data a restored session never reads:
+Restore used to download the whole `Session.zip` and unpack every entry, including data a
+restored session never reads: the **derived deliverables** — `csv/`, `reports/` (1 PDF/
+frame), `processed/` (5 heatmap PNGs/frame) — which are regenerated on export
+(`SessionEverythingExporter`), never read back after a restore.
 
-- **Derived deliverables** (`csv/`, `reports/`, `processed/`) are regenerated on export.
-- **The deformed original photos** are never displayed — the viewer draws heatmaps over the
-  reference image alone — so they are only needed when *exporting*, not when viewing.
-
-The backup is now split so a restore fetches only what viewing a session needs — the
-reference image and the `.dat` results — in `Session.zip`. Everything else (deformed
-originals + derived deliverables) goes to `Extras.zip`, which a restore skips and "Save to
-Files" merges back in.
+The backup is now split so a restore fetches only what's needed to fully rebuild a working
+session — **every original image (reference + deformed) and the `.dat` results** — in
+`Session.zip`. Only the derived deliverables go to `Extras.zip`, which a restore skips and
+"Save to Files" merges back in, so the full downloadable archive is unchanged.
 
 ## Measured saving
 
@@ -21,29 +19,32 @@ size), on a representative **50-frame batch** — reference 4 MB, per frame a 4 
 | | bytes | of bundle |
 |---|--:|--:|
 | whole bundle (old restore) | 386 MB | 100% |
-| **restore payload — reference + `dat/` (new)** | **~84 MB** | ~22% |
-| deferred, not downloaded (deformed + derived) | ~302 MB | **~78% saved** |
-
-So a restore of this session moves ~4.6× less data. The dominant term is the deformed
-photos (~204 MB) now deferred; the derived deliverables (~102 MB) are the rest.
+| **restore payload — every `raw/` + `dat/` (new)** | **~284 MB** | ~74% |
+| derived, not downloaded (`csv`/`reports`/`processed`) | ~102 MB | **~26% saved** |
 
 New (`schema/3`) backups get this by construction — `Session.zip` already excludes the
-deformed images, so a restore just fetches that one small object. Backups **already in the
-cloud** cannot separate the deformed images (their single archive interleaves them with the
-reference under `raw/`), so a legacy restore still pulls the whole `raw/`+`dat/` prefix — the
-~26% saving from dropping only the derived deliverables — via one ranged GET, with a
-whole-archive fallback whenever the prefix cannot be established safely.
+derived block, so a restore just fetches that one object. Backups **already in the cloud**
+cannot separate `raw/` from `dat/` and the derived roles inside their single legacy archive
+by anything finer than a byte range, so a legacy restore range-reads the same `raw/`+`dat/`
+prefix — the identical ~26% saving — via one ranged GET, with a whole-archive fallback
+whenever the prefix cannot be established safely.
 
 These are **derived** figures from realistic sizes. A live upload→restore round trip on the
-deployed backend (the restore now logs `downloaded N of M backup bytes`, so the saving reads
-straight out of logcat) is the confirming measurement, pending a backend deploy of the
-`extras` role.
+deployed backend (the restore logs `downloaded N of M backup bytes`, so the saving reads
+straight out of logcat) is the confirming measurement.
 
-## Trade-off (intended)
+## Design note: deformed originals are restore-essential, not deferred
 
-A restored session has no local deformed photos, so its **on-device re-export** omits the
-original-photos folder and its PDF report covers fall back to the reference image. This is
-graceful — nothing crashes, and the code already tolerated a missing `raw_deformed/` (it is
-what `dropLocalArtifacts` deletes to reclaim space). The full deliverable is never lost: it
-stays in the cloud backup, and "Save to Files" downloads both objects and hands over one
-complete archive exactly as before.
+An earlier iteration additionally deferred the deformed original photos out of the restore
+payload — they are never displayed (the viewer draws heatmaps over the reference alone), so
+restoring only `reference.png` + `dat/` reached ~78% saved instead of ~26%. That version
+shipped and was then **reverted**: a restored session's on-device re-export needs the
+original photos to be complete (report covers, the raw-photos export folder), and losing
+that fidelity on every restore was not an acceptable trade for the extra bandwidth. The
+current design restores everything a local analysis run would have produced; only the
+regenerable deliverables are deferred.
+
+The reverted, more aggressive split remains a documented option if bandwidth ever becomes
+the binding constraint again — see the `isRestoreEssential` history in
+`SessionZip.kt` — but it needs an explicit product decision to re-enable, since it changes
+what a restore actually gives the user.

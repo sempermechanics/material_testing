@@ -40,28 +40,29 @@ internal object SessionZip {
     const val REFERENCE_NAME = "Reference.png"
 
     /**
-     * Whether an artifact is needed to **view** a restored session — i.e. to render
-     * heatmaps. That is the reference image (`raw/Reference.png`) plus the engine
-     * results (`dat/`), and nothing else:
+     * Whether a [role] belongs in the restore-essential bundle: every original
+     * image (`raw/` — the reference **and** the deformed originals) plus the engine
+     * results (`dat/`). Restoring a session brings back everything a local analysis
+     * run would have produced, so on-device re-export and the report covers work
+     * without a second fetch.
      *
-     * - The **deformed originals** (also role `raw`) are never displayed — the viewer
-     *   draws heatmaps over the reference only — so they are deferred to `Extras.zip`
-     *   and a restore skips them. They remain in the backup for "Save to Files" and
-     *   are only missing from a restored session's *on-device* re-export.
-     * - `csv`, `reports`, `processed` are derived and regenerated on export.
+     * `csv`, `reports`, `processed` are excluded: they are derived and regenerated
+     * on export (`SessionEverythingExporter`), so nothing reads them back after a
+     * restore — those alone go to `Extras.zip`.
      *
-     * Upload uses this to decide what goes in `Session.zip` vs `Extras.zip`.
+     * Upload uses this to decide what goes in `Session.zip` vs `Extras.zip`. The
+     * decision is role-level (not per-artifact) now that every `raw/` entry is
+     * restore-essential; kept as a named predicate rather than an inline role-set
+     * check because restore's ranged-prefix reader ([RESTORE_ENTRY_PREFIXES]) needs
+     * to stay in step with it.
      */
-    fun isRestoreEssential(role: String, name: String): Boolean =
-        role == "dat" || (role == "raw" && name == REFERENCE_NAME)
+    fun isRestoreEssential(role: String): Boolean = role == "dat" || role == "raw"
 
     /**
-     * Entry-name prefixes a **legacy** single-archive restore fetches. Old backups
-     * interleave the deformed originals with the reference under `raw/`, so they
-     * cannot be separated by a ranged read — the best a legacy restore can do is pull
-     * the whole `raw/` + `dat/` prefix (still skipping csv/reports/processed). New
-     * backups do better by construction: their `Session.zip` already excludes the
-     * deformed images (see [isRestoreEssential]).
+     * Entry-name prefixes a restore fetches from a **legacy** single-archive backup.
+     * Same set as [isRestoreEssential] admits by role, expressed as zip-entry
+     * prefixes for the ranged-prefix reader, which works on entry names rather than
+     * artifact records.
      */
     val RESTORE_ENTRY_PREFIXES: Set<String> = setOf("raw/", "dat/")
 

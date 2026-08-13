@@ -59,20 +59,18 @@ import java.util.Locale
  * individually to keep Firestore's per-file costs flat):
  * ```
  * session/<sid>/metadata.json   device, time, engine params, frame list
- *               Session.zip     raw/Reference.png  (the heatmap backdrop),
- *                               dat/frame_%04d.dat ← enables heatmap viewing
- *               Extras.zip      raw/<deformed images>  (export only),
- *                               csv/analysis_data.csv  (one combined file),
+ *               Session.zip     raw/…  (reference + every deformed original),
+ *                               dat/frame_%04d.dat ← enables full restore
+ *               Extras.zip      csv/analysis_data.csv  (one combined file),
  *                               reports/Master_Report_<frame>.pdf,
  *                               processed/<frame>/<field>.png
  * ```
- * The split is what keeps a restore cheap: `Session.zip` holds only what viewing a
- * restored session needs — the reference image and the engine results — so a restore
- * fetches just that. Everything a restore does not read goes to `Extras.zip`: the
- * derived deliverables (regenerated on export) **and the deformed originals**, which
- * are never displayed (the viewer draws heatmaps over the reference alone) and are
- * only needed when exporting. "Save to Files" fetches both and merges them, so the
- * full archive is still one download. See [SessionZip.isRestoreEssential].
+ * The split is what keeps a restore cheap without losing anything a local run would
+ * have produced: `Session.zip` holds every original image plus the engine results, so
+ * a restored session is fully usable — including on-device re-export — with one
+ * download. `Extras.zip` holds only the **derived** deliverables (regenerated on
+ * export, so a restore never needs them). "Save to Files" fetches both and merges
+ * them into one archive. See [SessionZip.isRestoreEssential].
  */
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -519,14 +517,14 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 val restoreZip = stageArchive(
                     stagingDir,
                     BUNDLE_NAME,
-                    payload.filter { SessionZip.isRestoreEssential(it.role, it.name) },
+                    payload.filter { SessionZip.isRestoreEssential(it.role) },
                     reuseStaging,
                     onZipBytes,
                 )
                 val extrasZip = stageArchive(
                     stagingDir,
                     EXTRAS_NAME,
-                    payload.filterNot { SessionZip.isRestoreEssential(it.role, it.name) },
+                    payload.filterNot { SessionZip.isRestoreEssential(it.role) },
                     reuseStaging,
                     onZipBytes,
                 )

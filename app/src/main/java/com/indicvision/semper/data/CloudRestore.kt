@@ -46,17 +46,16 @@ import java.util.zip.ZipInputStream
  * frame list (image ↔ dat ↔ csv), so we can reconstruct the [SessionRecord]
  * and the on-disk layout exactly as a local run would have produced it.
  *
- * A restore fetches only what viewing needs, so a restored session holds:
+ * A restore fetches `Session.zip` (see [SessionZip.isRestoreEssential]) and rebuilds
+ * the full local layout — nothing a local run would have produced is missing:
  * ```
  * <sessionDir>/reference.png              the heatmap backdrop
  * <sessionDir>/frame_%04d.dat             the engine results
+ * <sessionDir>/raw_deformed/<name>        every deformed original
  * ```
- * The deformed originals (`raw_deformed/`) are deliberately **not** restored — the
- * viewer never displays them — so they stay in the cloud backup (fetched by "Save to
- * Files") rather than downloaded here. A restored session's on-device re-export
- * therefore omits the original photos and its report covers fall back to the
- * reference; everything the viewer shows is intact. (Legacy pre-split backups still
- * bring `raw_deformed/` down, since their archive cannot separate it.)
+ * The derived deliverables (`csv`, `reports`, `processed`) are the only thing left in
+ * the cloud (`Extras.zip`) — they are regenerated on export, so a restore never reads
+ * them back.
  */
 @Suppress("TooManyFunctions", "LargeClass") // one cohesive restore pipeline: fetch, parse, write, index
 object CloudRestore {

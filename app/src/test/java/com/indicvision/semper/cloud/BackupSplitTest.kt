@@ -26,32 +26,29 @@ class BackupSplitTest {
     @get:Rule
     val temp = TemporaryFolder()
 
-    // ── which artifacts a restore needs to VIEW heatmaps ─────────────────────
+    // ── which artifacts a restore needs to fully rebuild a session ───────────
 
     @Test
-    fun `the reference image and engine results are restore-essential`() {
-        assertTrue(SessionZip.isRestoreEssential("raw", SessionZip.REFERENCE_NAME))
-        assertTrue(SessionZip.isRestoreEssential("dat", "frame_0000.dat"))
-    }
-
-    @Test
-    fun `deformed originals are NOT restore-essential`() {
-        // They are role "raw" like the reference, but they are never displayed —
-        // the viewer draws heatmaps over the reference alone.
-        assertFalse(SessionZip.isRestoreEssential("raw", "specimen_load_0.tif"))
-        assertFalse(SessionZip.isRestoreEssential("raw", "deformed_0003.png"))
+    fun `raw images and engine results are restore-essential`() {
+        // Role "raw" covers the reference AND the deformed originals (the decision is
+        // role-level, not per-artifact) — a restore brings back everything a local
+        // analysis run would have produced.
+        assertTrue(SessionZip.isRestoreEssential("raw"))
+        assertTrue(SessionZip.isRestoreEssential("dat"))
     }
 
     @Test
     fun `derived deliverables are excluded so a restore never downloads them`() {
+        // Regenerated on export (SessionEverythingExporter), so nothing reads them
+        // back after a restore.
         listOf("csv", "reports", "processed").forEach { role ->
-            assertFalse("$role must not be restore-essential", SessionZip.isRestoreEssential(role, "x"))
+            assertFalse("$role must not be restore-essential", SessionZip.isRestoreEssential(role))
         }
     }
 
-    /** The partition upload applies: reference + dat to the bundle, the rest to extras. */
+    /** The partition upload applies: every raw/ + dat/ to the bundle, the rest to extras. */
     @Test
-    fun `a realistic artifact set splits into heatmap payload and everything else`() {
+    fun `a realistic artifact set splits into originals-plus-results and derived-only`() {
         val artifacts = listOf(
             "raw" to SessionZip.REFERENCE_NAME,
             "raw" to "def_0.tif",
@@ -63,18 +60,18 @@ class BackupSplitTest {
             "processed" to "0/Exx.png",
         )
 
-        val (bundle, extras) = artifacts.partition { SessionZip.isRestoreEssential(it.first, it.second) }
+        val (bundle, extras) = artifacts.partition { SessionZip.isRestoreEssential(it.first) }
 
         val expectedBundle = listOf(
             "raw" to SessionZip.REFERENCE_NAME,
+            "raw" to "def_0.tif",
+            "raw" to "def_1.tif",
             "dat" to "frame_0000.dat",
             "dat" to "frame_0001.dat",
         )
         assertEquals(expectedBundle, bundle)
         assertEquals(
             listOf(
-                "raw" to "def_0.tif",
-                "raw" to "def_1.tif",
                 "csv" to "analysis_data.csv",
                 "reports" to "Master_Report_1.pdf",
                 "processed" to "0/Exx.png",
