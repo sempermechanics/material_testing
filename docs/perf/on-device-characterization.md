@@ -168,6 +168,18 @@ published (verify current values at gcp-quota-review time — these change):
 Cloud Run ~2M requests/mo + ~1 GiB egress/mo (NA egress only), Firestore 50K reads /
 20K writes / 20K deletes per day + 1 GiB stored, Drive 15 GB/account.
 
+**⚠️ Region caveat found while implementing Phase 1: the free egress figure above may
+not apply at all.** GCP's always-free Cloud Run egress tier is **North America only**.
+`docs/backend/BACKEND_SETUP_GCP.md` and `config.py`'s `TASKS_LOCATION` default both
+point to **`asia-south1`** — not NA — while `.github/workflows/deploy-backend.yml`'s
+deploy input previously defaulted to `us-central1` (now corrected to `asia-south1` to
+match the documented setup, but the workflow's `region` is a manual per-deploy input,
+so it does not prove where the service actually runs today). **Whoever confirms the
+live Cloud Run region should re-verify the egress-quota math in this section against
+that region's actual terms** — if it is `asia-south1`, the restore-egress-bound
+conclusion below may need to shift to a paid-tier cost figure instead of a free-tier
+exhaustion count.
+
 ### Backup
 
 Uploads go **device → Drive directly** (bytes bypass Cloud Run):

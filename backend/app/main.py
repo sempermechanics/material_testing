@@ -636,6 +636,16 @@ def list_session_files(
     }
 
 
+def _is_first_byte_request(byte_range: str | None) -> bool:
+    """True for a whole-file GET (no Range) or a Range window starting at byte 0 —
+    used to log exactly one FILE_DOWNLOAD audit entry per file, not one per
+    adaptive download window."""
+    if not byte_range:
+        return True
+    match = re.match(r"bytes=(\d+)-", byte_range.strip())
+    return bool(match) and match.group(1) == "0"
+
+
 @app.get("/v1/files/{file_id}/content")
 def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_device)):
     """Stream one file back from Drive (restore).
@@ -664,8 +674,15 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     if not drive_file_id:
         raise HTTPException(409, "file_not_uploaded")
     token = drive.access_token()
-    audit.record(user["uid"], action="FILE_DOWNLOAD", target={"type": "file", "id": file_id})
     byte_range = request.headers.get("range")
+    # A restore fetches one file in many adaptive-size Range windows (see
+    # DriveTransfer.nextWindowBytes on the client), each hitting this route —
+    # logging on every one would be one FILE_DOWNLOAD audit write per window
+    # instead of one per file. Log only the window that starts at byte 0 (a
+    # resumed download after a dropped connection restarts there too, so a
+    # resume can log a second entry — rarer, and still far fewer than per-window).
+    if _is_first_byte_request(byte_range):
+        audit.record(user["uid"], action="FILE_DOWNLOAD", target={"type": "file", "id": file_id})
     try:
         dl = drive.open_download(token, drive_file_id, byte_range=byte_range)
     except requests.RequestException as e:
@@ -745,10 +762,10 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
 
     # Write the file docs (cheap, no Drive I/O) so the manifest is durable before
     # any upload target exists. Provisioning then only has to fill in uploadUrl,
-    # which is what makes the task idempotent and resumable.
+    # which is what makes the task idempotent and resumable. Batched — a
+    # 3-object split-bundle session was 3 round trips here for no reason.
     try:
-        for f in body.files:
-            repo.create_file(sid, user["uid"], f"{sid}_{f.role}_{f.name}", f, None)
+        repo.create_files_batch(sid, user["uid"], [(f"{sid}_{f.role}_{f.name}", f) for f in body.files])
     except Exception:
         repo.delete_session(sid)
         raise
