@@ -78,6 +78,15 @@ internal object SessionZip {
         fileName.substringAfterLast('.').lowercase(Locale.US) in STORE_EXTENSIONS
 
     /**
+     * `.dat` gets its own path (not just [shouldStore]'s STORED-vs-DEFLATED choice):
+     * [DatCodec] transforms it before it ever reaches the archive, so it needs
+     * dedicated encode-on-write / decode-on-read handling at every entry point that
+     * touches archive bytes — [putMember], [checkMember], [readEntry], [copyEntry].
+     */
+    private fun isDatEntry(fileName: String): Boolean =
+        fileName.substringAfterLast('.').equals("dat", ignoreCase = true)
+
+    /**
      * Write [members] to [out] (via `*.tmp` + rename). Returns lowercase sha256
      * of the finished archive. Verifies every entry round-trips before promote.
      *
@@ -178,6 +187,15 @@ internal object SessionZip {
 
     /** Copy one entry verbatim, keeping its compression method and STORED sizes. */
     private fun copyEntry(from: ZipFile, entry: ZipEntry, zos: ZipOutputStream) {
+        val fileName = entry.name.substringAfterLast('/')
+        if (isDatEntry(fileName)) {
+            // Save to Files hands the user a real, directly-usable session archive —
+            // a DatCodec-encoded .dat inside it would not be a valid .dat to anything
+            // outside this app, so decode it back to the real layout on the way out.
+            val decoded = DatCodec.decodeIfEncoded(from.getInputStream(entry).use { it.readBytes() })
+            putStoredBytes(zos, entry.name, decoded) {}
+            return
+        }
         val copy = ZipEntry(entry.name).apply {
             method = entry.method
             if (entry.method == ZipEntry.STORED) {
@@ -208,7 +226,14 @@ internal object SessionZip {
         val role = entry.name.substringBefore('/', missingDelimiterValue = "")
         val name = entry.name.substringAfter('/', missingDelimiterValue = entry.name)
         try {
-            zf.getInputStream(entry).use { input -> onEntry(role, name, input) }
+            if (isDatEntry(name)) {
+                // .dat is small enough to buffer whole (a few MB even at LARGE scale)
+                // — everything else keeps streaming straight through, unbuffered.
+                val decoded = decodeDatEntryOrThrow(zf, entry)
+                onEntry(role, name, decoded.inputStream())
+            } else {
+                zf.getInputStream(entry).use { input -> onEntry(role, name, input) }
+            }
         } catch (e: ZipException) {
             throw IllegalArgumentException(
                 "Session.zip entry ${entry.name} inflate failed — corrupt transfer",
@@ -222,13 +247,53 @@ internal object SessionZip {
         }
     }
 
+    /**
+     * [DatCodec.decodeIfEncoded], with decode failures folded into the same "corrupt
+     * transfer" story. [DatCodec.decode] signals a malformed archive via
+     * `require`/`check` — [IllegalArgumentException] / [IllegalStateException] — not
+     * an [IOException], so those are what a corrupt `.dat` payload actually raises.
+     */
+    private fun decodeDatEntryOrThrow(zf: ZipFile, entry: ZipEntry): ByteArray = try {
+        DatCodec.decodeIfEncoded(zf.getInputStream(entry).use { it.readBytes() })
+    } catch (e: IllegalArgumentException) {
+        throw IllegalArgumentException(
+            "Session.zip entry ${entry.name} DatCodec decode failed — corrupt transfer",
+            e,
+        )
+    } catch (e: IllegalStateException) {
+        throw IllegalArgumentException(
+            "Session.zip entry ${entry.name} DatCodec decode failed — corrupt transfer",
+            e,
+        )
+    }
+
     private fun putMember(zip: ZipOutputStream, member: Member, onBytes: (Long) -> Unit) {
         val entryName = entryName(member.role, member.name)
-        if (shouldStore(member.name)) {
-            putStored(zip, entryName, member.file, onBytes)
-        } else {
-            putDeflated(zip, entryName, member.file, onBytes)
+        when {
+            isDatEntry(member.name) ->
+                putStoredBytes(zip, entryName, DatCodec.encode(member.file.readBytes()), onBytes)
+            shouldStore(member.name) -> putStored(zip, entryName, member.file, onBytes)
+            else -> putDeflated(zip, entryName, member.file, onBytes)
         }
+    }
+
+    /**
+     * Store already-in-memory bytes (a [DatCodec]-encoded `.dat`, or a decoded one on
+     * the [merge] path) as a `STORED` entry. Does not itself compress — the bytes are
+     * whatever the caller already produced.
+     */
+    private fun putStoredBytes(zip: ZipOutputStream, entryName: String, bytes: ByteArray, onBytes: (Long) -> Unit) {
+        val crc = CRC32().apply { update(bytes) }
+        val entry = ZipEntry(entryName).apply {
+            method = ZipEntry.STORED
+            size = bytes.size.toLong()
+            compressedSize = bytes.size.toLong()
+            this.crc = crc.value
+        }
+        zip.putNextEntry(entry)
+        zip.write(bytes)
+        zip.closeEntry()
+        onBytes(bytes.size.toLong())
     }
 
     private fun putStored(
@@ -300,6 +365,17 @@ internal object SessionZip {
         val name = entryName(member.role, member.name)
         val entry = zf.getEntry(name)
             ?: error("Session.zip missing entry $name after bundling")
+        if (isDatEntry(member.name)) {
+            // The entry holds DatCodec.encode's output, not member.file's bytes — a
+            // hash-of-archive-bytes-vs-hash-of-source check would always mismatch.
+            // Decoding and comparing exercises the exact reverse the restore path
+            // takes, so this is a stronger check than the source-only hash below.
+            val decoded = DatCodec.decode(zf.getInputStream(entry).use { it.readBytes() })
+            check(decoded.contentEquals(member.file.readBytes())) {
+                "Session.zip entry $name round-trip mismatch after DatCodec encode/decode"
+            }
+            return
+        }
         val got = Digests.sha256HexStream(zf.getInputStream(entry))
         val expect = Digests.sha256Hex(member.file)
         check(got == expect) {

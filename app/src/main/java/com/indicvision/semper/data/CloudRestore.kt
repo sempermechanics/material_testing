@@ -624,6 +624,14 @@ object CloudRestore {
      * uses random-access [java.util.zip.ZipFile], which needs the central directory
      * this deliberately did not fetch. Each entry is checked against its
      * central-directory CRC before it counts as restored.
+     *
+     * Deliberately does **not** go through [SessionZip]'s `DatCodec` decode: this path
+     * only runs for `schema < 3` archives (see [isSplitLayout]), which predate the
+     * split-bundle feature entirely — and therefore predate `DatCodec` too. Every
+     * `.dat` entry a legacy archive can hold is guaranteed raw. A schema this old
+     * never gets `DatCodec`-encoded going forward either, since a *new* upload always
+     * writes the current schema and goes through [SessionZip.build] /
+     * [SessionZip.forEachEntry] instead of this path.
      */
     private fun unpackPrefix(zip: File, layout: Layout, crcByName: Map<String, Long>): String {
         var refPath = ""
