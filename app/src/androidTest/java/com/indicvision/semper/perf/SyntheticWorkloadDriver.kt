@@ -96,6 +96,13 @@ class SyntheticWorkloadDriver {
 
     // ── Scale definitions (light / large workload knobs) ─────────────────────
 
+    /**
+     * `step`/`subset` are load knobs, not free parameters: too sparse a grid and the
+     * AKAZE-seeded points never land near enough to a grid vertex for RGDIC to
+     * propagate from (verified on-device — step=20/subset=21 and step=20/subset=31
+     * both converge on zero points against this synthetic speckle; step=6 is the
+     * sparsest that still converges reliably).
+     */
     private enum class Scale(
         val frames: Int,
         val step: Int,
@@ -105,8 +112,13 @@ class SyntheticWorkloadDriver {
         val imgW: Int,
         val imgH: Int,
     ) {
-        LIGHT(frames = 1, step = 20, subset = 21, strainWin = 15, use6x6 = false, imgW = 320, imgH = 320),
-        LARGE(frames = 150, step = 2, subset = 81, strainWin = 15, use6x6 = true, imgW = 640, imgH = 640),
+        LIGHT(frames = 1, step = 6, subset = 21, strainWin = 15, use6x6 = false, imgW = 320, imgH = 320),
+
+        // frames trimmed from the app's real ceiling (150) to 20 for characterization
+        // runtime — measured on-device at ~35s/frame (640x640, step=2, subset=81,
+        // use6x6), so 150 frames would be ~87 min for analysis alone. The report
+        // extrapolates the per-frame numbers to 150 rather than re-running at full size.
+        LARGE(frames = 20, step = 2, subset = 81, strainWin = 15, use6x6 = true, imgW = 640, imgH = 640),
         ;
 
         companion object {
@@ -138,9 +150,17 @@ class SyntheticWorkloadDriver {
         return bmp
     }
 
-    /** Frame i is translated by (i * 0.4px, i * 0.2px) — small, monotonic, cheap to warp. */
+    /**
+     * Translation is a fixed, proven-converging magnitude (matches
+     * [EnginePipelineSmokeTest]'s `translate(3f, 2f)`), with a small bounded per-frame
+     * jitter so frames differ without growing unboundedly — a naive `frameIndex`-scaled
+     * translation reaches tens of px by frame 150 and blows past ICGN's capture range.
+     */
     private fun warpForFrame(src: Bitmap, w: Int, h: Int, frameIndex: Int): Bitmap {
-        val m = Matrix().apply { setTranslate(0.4f * (frameIndex + 1), 0.2f * (frameIndex + 1)) }
+        val jitter = (frameIndex % JITTER_PERIOD).toFloat()
+        val m = Matrix().apply {
+            setTranslate(BASE_TRANSLATE_X + JITTER_STEP_X * jitter, BASE_TRANSLATE_Y + JITTER_STEP_Y * jitter)
+        }
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         canvas.drawColor(Color.rgb(128, 128, 128))
@@ -327,7 +347,8 @@ class SyntheticWorkloadDriver {
 
     // ── Operation: backup (nucleated into its components) ─────────────────────
 
-    private fun runBackup(scale: Scale) {
+    /** Returns the backend cloud session id of the backup just completed. */
+    private fun runBackup(scale: Scale): String {
         val built = runAnalysis(scale)
         val sessionDir = built.sessionDir
         val rawDeformedDir = SessionStore.rawDeformedDir(sessionDir)
@@ -371,6 +392,11 @@ class SyntheticWorkloadDriver {
             info?.state == WorkInfo.State.SUCCEEDED,
         )
         log("space", "session_footprint_post_backup", extra = duSummary(sessionDir))
+
+        val record = SessionStore.get(context, built.localId)
+        return requireNotNull(record?.cloudSessionId?.takeIf { it.isNotBlank() }) {
+            "no cloudSessionId recorded for ${built.localId} after a SUCCEEDED upload"
+        }
     }
 
     // ── Operation: restore (nucleated into its components) ─────────────────────
@@ -378,11 +404,13 @@ class SyntheticWorkloadDriver {
     private fun runRestore(scale: Scale) {
         // A restore needs a prior backup to restore FROM. `cloudId` may be passed in
         // (to restore an existing, possibly larger/legacy backup); otherwise this drives
-        // a fresh backup first so restore is measurable standalone.
-        val cloudId = arg("cloudId", "").ifBlank {
-            runBackup(scale)
-            findMostRecentCloudId()
-        }
+        // a fresh backup first so restore is measurable standalone. Read the cloud id
+        // straight off the just-synced SessionRecord — NOT by listing sessions and
+        // guessing the newest by localSessionId — because localSessionId embeds
+        // SystemClock.elapsedRealtime(), and lexicographic string-max on that is wrong
+        // wherever accumulated runs (across days/reboots) vary in digit count; that bug
+        // once resolved restore to a stale, unrelated session.
+        val cloudId = arg("cloudId", "").ifBlank { runBackup(scale) }
         val targetLocalId = "swd-restore-${SystemClock.elapsedRealtime()}"
 
         // Component: list manifest — timed separately even though CloudRestore.restore
@@ -410,15 +438,6 @@ class SyntheticWorkloadDriver {
 
         val restoredDir = SessionStore.dirFor(context, targetLocalId)
         log("space", "restored_session_footprint", extra = duSummary(restoredDir))
-    }
-
-    private fun findMostRecentCloudId(): String = runBlocking {
-        val token = requireNotNull(TokenProvider.usableIdToken()) { "not signed in" }
-        val sessions = IndicApi.get(context).listSessions(token).sessions
-        val match = sessions
-            .filter { it.localSessionId.startsWith("swd-") }
-            .maxByOrNull { it.localSessionId }
-        requireNotNull(match) { "no SWD-created cloud session found to restore" }.sessionId
     }
 
     // ── WorkManager polling (no work-testing dependency; polls the real WorkManager) ──
@@ -494,5 +513,14 @@ class SyntheticWorkloadDriver {
         const val POLL_INTERVAL_MS = 500L
         const val UPLOAD_TIMEOUT_MS = 10 * 60_000L
         const val RESTORE_TIMEOUT_MS = 10 * 60_000L
+
+        // Proven-converging translation magnitude, matching EnginePipelineSmokeTest's
+        // translate(3f, 2f). Jitter stays bounded (never accumulates) so every frame,
+        // at any frame count, is within ICGN's capture range of the reference.
+        const val BASE_TRANSLATE_X = 3f
+        const val BASE_TRANSLATE_Y = 2f
+        const val JITTER_STEP_X = 0.02f
+        const val JITTER_STEP_Y = 0.01f
+        const val JITTER_PERIOD = 20
     }
 }
