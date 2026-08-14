@@ -168,17 +168,18 @@ published (verify current values at gcp-quota-review time — these change):
 Cloud Run ~2M requests/mo + ~1 GiB egress/mo (NA egress only), Firestore 50K reads /
 20K writes / 20K deletes per day + 1 GiB stored, Drive 15 GB/account.
 
-**⚠️ Region caveat found while implementing Phase 1: the free egress figure above may
-not apply at all.** GCP's always-free Cloud Run egress tier is **North America only**.
-`docs/backend/BACKEND_SETUP_GCP.md` and `config.py`'s `TASKS_LOCATION` default both
-point to **`asia-south1`** — not NA — while `.github/workflows/deploy-backend.yml`'s
-deploy input previously defaulted to `us-central1` (now corrected to `asia-south1` to
-match the documented setup, but the workflow's `region` is a manual per-deploy input,
-so it does not prove where the service actually runs today). **Whoever confirms the
-live Cloud Run region should re-verify the egress-quota math in this section against
-that region's actual terms** — if it is `asia-south1`, the restore-egress-bound
-conclusion below may need to shift to a paid-tier cost figure instead of a free-tier
-exhaustion count.
+**⚠️ Confirmed via `gcloud run services list`: production (`indic-api`) runs in
+`asia-south1`.** GCP's always-free Cloud Run egress tier is **North America only** — so
+the "~1 GiB/mo free egress" figure above **does not apply to this deployment at all**.
+Every byte this section counts against that free allowance is actually **billed
+egress** (Cloud Run's `asia-south1` egress-to-internet rate, ~$0.12/GiB at the time of
+writing — verify current pricing). The "#restores/mo before exhaustion" framing below
+is retained because it still correctly identifies the *binding resource* (egress, by a
+wide margin over every other quota), but every occurrence should be read as "before
+this much billed cost accrues," not "before a free allotment runs out." This changes
+the restore-egress finding from a capacity ceiling to a **recurring cost driver** — the
+backup/restore split's 75-82% saving is a proportional cost reduction, not just a
+capacity extension.
 
 ### Backup
 
@@ -207,28 +208,59 @@ usage and implies ~1,950 frames / ~13 typical 150-frame sessions per account.)
 Downloads **proxy through Cloud Run** (`GET /v1/files/{id}/content` → streamed) — so
 restore spends **Cloud Run egress**, the scarcest quota:
 
-| Resource | per restore | LIGHT (1 frame) | LARGE (20 frames) |
-|---|---|--:|--:|
-| Cloud Run requests | ~2 (list manifest + bundle content GET) | — | — |
-| Cloud Run egress | bytes downloaded (post-split) | 231,660 B | 49,202,702 B (~46.9 MB, ~2.46 MB/frame) |
-| Firestore reads | ~4-6 (session + per-file docs on list, file doc on content GET) | — | — |
+**Measured directly from production Cloud Run access logs** (`gcloud logging read`,
+filtered by session id and by request URL/method — not estimated from source), for one
+LIGHT and one LARGE restore, each isolated to its exact time window:
 
-At the measured ~2.46 MB/frame (LARGE, post-split), Cloud Run's ~1 GiB/mo free egress
-supports **~426 frames/mo** worth of restores — for 150-frame sessions at this
-workload's density, **~2.8 full restores/mo** before egress exhausts. The existing
-50-frame/386MB reference point's restore payload (~284MB post-split, ~5.7 MB/frame) is
-a lower-density comparison and gives a similar order of magnitude: ~180 frames/mo, or
-~1.2 full 150-frame restores/mo. **Either way, Cloud Run egress is the binding
-constraint for restore, by a wide margin** — it exhausts one to two orders of magnitude
-sooner than Firestore reads or Cloud Run request count at the same session sizes. This
-is exactly the quota the backup/restore split targets: every byte it avoids downloading
-is egress quota saved 1:1, and the measured 75-82% saving (this workload) directly
-multiplies restores-per-month by ~4-5x versus downloading the whole backup every time.
+| Resource | LIGHT (1 frame) | LARGE (20 frames) | Source |
+|---|--:|--:|---|
+| `GET /v1/sessions/{sid}/files` (list manifest) | 2 | 2 | access log, per restore |
+| `POST /v1/challenge` (one per download window) | 2 | ~48 | access log, per window |
+| `GET /v1/files/{id}/content` (download) | 2 | ~48 | access log, per window |
+| **Total Cloud Run requests** | **6** | **~98** | sum of the above |
+| Cloud Run egress (response bytes, `/content` only) | 231,660 B | 49,227,140 B (~46.9 MB) | access log `responseSize`, summed |
 
-**Binding constraint overall: Cloud Run egress on restore**, for any session past a
-couple dozen frames — Drive storage (backup) and Firestore ops (both directions) are
-all one to two orders of magnitude further from their free-tier ceiling at the same
-session sizes.
+The LARGE figure is the average of two independent real restores of the same session
+(96 total `/content` requests logged for that session id across both, 98,454,280 bytes
+— divided by 2), and matches the driver's own logged "downloaded 49,202,702 bytes"
+almost exactly, cross-validating both measurement paths. **This confirms the original
+"~2 requests" estimate in this report was wrong by more than an order of magnitude for
+LARGE restores** — the driving cause is the 1 MiB fixed download window (finding 1
+below): each window costs its own attestation challenge, so a 47 MB restore is not 2
+requests, it's essentially `⌈payload / 1 MiB⌉ × 2 + 2`.
+
+At 20 frames → ~98 requests, a 150-frame restore extrapolates to roughly **~706
+requests** (⌈150-frame Session.zip / 1 MiB⌉ × 2 + 2, using this workload's measured
+**~2.46 MB/frame Session.zip density** — the restore-only payload, not the ~9.75
+MB/frame *total backup* density quoted in the Backup section above, which includes the
+never-downloaded Extras.zip). Cloud Run's ~2M req/mo free tier still comfortably
+absorbs that volume — request *count* was never the binding resource. **Firestore is
+the one this finding newly implicates**: each challenge is a nonce write + delete
+(`issue_nonce`/`consume_nonce`), so ~48 windows is ~96 Firestore writes for a single
+LARGE restore, on top of ~48 unconditional `lastSeenAt` updates on the *production*
+backend measured here (Phase 1.4's throttle is written but **not yet deployed** — see
+below) — **on the order of 150 Firestore writes for one 20-frame restore**, before
+counting reads. At Firestore's 20K writes/day free tier, that is a **materially
+tighter** ceiling than request count ever suggested, and scales the same way egress
+does: linearly with `⌈payload / window size⌉`.
+
+**Cloud Run egress is billed, not free** (see the region note above) — at ~46.9 MB per
+20-frame restore, a 150-frame restore costs roughly ~352 MB egress (linear
+extrapolation at this workload's density), and the same fixed-window inefficiency that
+inflates Firestore writes does **not** inflate egress further — egress is the payload
+size regardless of window count. So the split's 75-82% saving is a direct, proportional
+cut to a real per-restore cost, while the request/Firestore-write finding is a
+*separate* problem the split does not address: Phase 1.1's adaptive window (already
+committed, not yet deployed to the device fleet) is what fixes *that* — it converges
+toward 16 MiB windows on a fast link, which would cut the ~48-window LARGE case to ~3-4
+windows, i.e. **~8-10 requests instead of ~98**, and a proportional ~16-20x cut to the
+Firestore-write count above.
+
+**Binding constraints, from this measurement:** Cloud Run egress is the dominant
+*billed cost* for restore at any session size (region confirmed non-free); Firestore
+writes from the per-window challenge pattern are the dominant *quota-exhaustion risk*
+until Phase 1.1 ships to devices. Both point at the same fix — download in fewer,
+larger windows — which is already implemented and gated behind a device rebuild.
 
 ## Summary: where the cost lives, by operation
 
@@ -265,9 +297,15 @@ seeding note above).
 - GCP always-free quota figures are as commonly published at the time of this report
   (2026-08-14) — verify current values before using them for capacity planning, as
   Google revises free-tier terms periodically.
-- Cloud Run request / Firestore op counts per operation are derived from reading the
-  backend endpoint structure (`backend/app/main.py`, `firestore_repo.py`), not
-  live-measured per call — order-of-magnitude, not exact.
+- Cloud Run request counts for **restore** are now live-measured from production
+  access logs (`gcloud logging read`), exact for the two sessions checked. **Backup**
+  request/Firestore-write counts are still derived from reading the backend endpoint
+  structure (`backend/app/main.py`, `firestore_repo.py`), not live-measured —
+  order-of-magnitude, not exact.
+- The restore measurement reflects the **currently deployed production backend**
+  (`indic-api`, last deployed 2026-08-12), which predates every change from this
+  report's Phase 1/1.4 work — none of it is live yet. The numbers here are a genuine
+  "before" baseline, not a mix of old and new behavior.
 - This workload's synthetic imagery (640×640 LARGE / 320×320 LIGHT, dense seeded
   speckle) produces derived deliverables (PDF reports, heatmap PNGs) that are larger
   relative to raw+dat than a typical real session — the 75-82% restore-saving figures
