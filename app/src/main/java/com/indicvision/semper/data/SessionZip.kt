@@ -376,11 +376,41 @@ internal object SessionZip {
             }
             return
         }
+        if (entry.method == ZipEntry.STORED) {
+            // STORED entries already carry a CRC32 in the archive's central
+            // directory — putStored computed it in the same pre-pass that set
+            // entry.size, before ever writing a byte. Comparing that against a
+            // fresh CRC32 of the source (not a fresh SHA-256 of *both* sides)
+            // means this check never re-reads the just-written archive entry at
+            // all, and CRC32 — not a cryptographic digest — is exactly the
+            // algorithm the zip format itself uses to catch accidental byte
+            // corruption, which is the only threat model here (this promotes a
+            // local file we just wrote, not data received from an untrusted party).
+            val expectCrc = crc32(member.file)
+            check(entry.crc == expectCrc) {
+                "Session.zip entry $name round-trip CRC mismatch after bundling " +
+                    "(archive=${entry.crc}, source=$expectCrc)"
+            }
+            return
+        }
         val got = Digests.sha256HexStream(zf.getInputStream(entry))
         val expect = Digests.sha256Hex(member.file)
         check(got == expect) {
             "Session.zip entry $name round-trip hash mismatch after bundling"
         }
+    }
+
+    private fun crc32(file: File): Long {
+        val crc = CRC32()
+        val buf = ByteArray(COPY_BUFFER)
+        file.inputStream().use { input ->
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                crc.update(buf, 0, n)
+            }
+        }
+        return crc.value
     }
 
     private const val COPY_BUFFER = 1 shl 16

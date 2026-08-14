@@ -163,6 +163,115 @@ class VisualizationEngineTest {
         assertEquals(0f, plane.max, 0f)
     }
 
+    /**
+     * computeSigmaClampedRange is private — reached only through generateHeatmapIndices
+     * / valueRanges above, which already parity-check it against the sort-based oracle
+     * on ramp data. quickSelect (its new internal implementation) is notorious for
+     * subtly misbehaving on shapes a smooth ramp never exercises — heavy duplicates,
+     * reverse order, a single point — so these drive it through the same public API
+     * with data specifically shaped to hit those cases.
+     */
+    private fun singleFieldData(values: FloatArray): FloatArray {
+        val out = FloatArray(values.size * DicResult.STRIDE)
+        for (i in values.indices) {
+            val p = i * DicResult.STRIDE
+            out[p + DicResult.IDX_X] = i.toFloat()
+            out[p + DicResult.IDX_Y] = 0f
+            out[p + DicResult.IDX_EXX] = values[i]
+            out[p + DicResult.IDX_ZNSSD] = 0.01f
+        }
+        return out
+    }
+
+    @Test
+    fun `quickSelect-backed range matches the sort oracle on heavy duplicates`() {
+        // Mostly one repeated value with a few outliers — a classic quickselect
+        // pathological case (Lomuto partition against a value that appears
+        // hundreds of times).
+        val values = FloatArray(500) { 5f }.also {
+            it[0] = -100f
+            it[1] = 200f
+            it[250] = 5.5f
+        }
+        val data = singleFieldData(values)
+        val plane = VisualizationEngine.generateHeatmapIndices(data, values.size, 1, DicResult.IDX_EXX, 1)
+        val (mn, mx) = boxedSigmaClamp(data, DicResult.IDX_EXX)
+        assertEquals(mn, plane.min, 0f)
+        assertEquals(mx, plane.max, 0f)
+    }
+
+    @Test
+    fun `quickSelect-backed range matches the sort oracle on a single point`() {
+        val data = singleFieldData(floatArrayOf(42f))
+        val plane = VisualizationEngine.generateHeatmapIndices(data, 1, 1, DicResult.IDX_EXX, 1)
+        val (mn, mx) = boxedSigmaClamp(data, DicResult.IDX_EXX)
+        assertEquals(mn, plane.min, 0f)
+        assertEquals(mx, plane.max, 0f)
+    }
+
+    @Test
+    fun `quickSelect-backed range matches the sort oracle when every value is identical`() {
+        val data = singleFieldData(FloatArray(200) { 3.5f })
+        val plane = VisualizationEngine.generateHeatmapIndices(data, 200, 1, DicResult.IDX_EXX, 1)
+        val (mn, mx) = boxedSigmaClamp(data, DicResult.IDX_EXX)
+        assertEquals(mn, plane.min, 0f)
+        assertEquals(mx, plane.max, 0f)
+    }
+
+    @Test
+    fun `quickSelect-backed range matches the sort oracle on reverse-sorted input`() {
+        val values = FloatArray(300) { (300 - it).toFloat() }
+        val data = singleFieldData(values)
+        val plane = VisualizationEngine.generateHeatmapIndices(data, values.size, 1, DicResult.IDX_EXX, 1)
+        val (mn, mx) = boxedSigmaClamp(data, DicResult.IDX_EXX)
+        assertEquals(mn, plane.min, 0f)
+        assertEquals(mx, plane.max, 0f)
+    }
+
+    @Test
+    fun `quickSelect uses Float total order, not IEEE less-than, so -0f and 0f sort like Arrays sort`() {
+        // IEEE `<` treats -0.0 and 0.0 as equal; Float.compareTo (what Arrays.sort
+        // uses) puts -0.0 strictly before 0.0. A naive `<`-based quickSelect would
+        // silently diverge from the sort oracle here — this pins the fix by testing
+        // quickSelect directly, since going through the public heatmap API would let
+        // clampSpan's min-span floor overwrite the exact bit pattern this checks.
+        val rng = kotlin.random.Random(11)
+        repeat(20) { trial ->
+            val values = FloatArray(80) {
+                when {
+                    it == 0 -> -0f
+                    it == 1 -> 0f
+                    else -> (rng.nextFloat() - 0.5f) * 1000f
+                }
+            }
+            for (k in values.indices) {
+                val actual = values.copyOf()
+                val expected = values.copyOf().also { it.sort() }
+                val got = VisualizationEngine.quickSelect(actual, k, 0, actual.size)
+                assertEquals(
+                    "trial=$trial k=$k expected=${expected[k]} (bits=${expected[k].toRawBits()}) " +
+                        "got=$got (bits=${got.toRawBits()})",
+                    expected[k].toRawBits(),
+                    got.toRawBits(),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `quickSelect-backed range matches the sort oracle on many random seeds`() {
+        val rng = kotlin.random.Random(7)
+        repeat(30) { trial ->
+            val n = rng.nextInt(2, 400)
+            val values = FloatArray(n) { (rng.nextFloat() - 0.5f) * rng.nextInt(1, 10_000) }
+            val data = singleFieldData(values)
+            val plane = VisualizationEngine.generateHeatmapIndices(data, n, 1, DicResult.IDX_EXX, 1)
+            val (mn, mx) = boxedSigmaClamp(data, DicResult.IDX_EXX)
+            assertEquals("trial=$trial n=$n min", mn, plane.min, 0f)
+            assertEquals("trial=$trial n=$n max", mx, plane.max, 0f)
+        }
+    }
+
     @Test
     fun `fixed bounds put the ramp ends at the ends of the colour ramp`() {
         val step = 4

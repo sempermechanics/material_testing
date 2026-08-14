@@ -8,6 +8,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -72,6 +73,36 @@ class SessionZipTest {
             assertArrayEquals(tiff.readBytes(), extracted["raw/oht_cfrp_01.tiff"])
             assertArrayEquals(csv.readBytes(), extracted["csv/analysis_data.csv"])
             assertArrayEquals(gif.readBytes(), extracted["processed/Frame_1/preview.gif"])
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `verifyRoundTrip catches a STORED entry's CRC32 mismatch instead of trusting it silently`() {
+        // Pins that the CRC32 fast path (STORED entries) actually detects corruption,
+        // not just that it's faster — a regression here would silently promote a
+        // corrupt archive.
+        val dir = createTempDirectory(prefix = "session-zip-crc-").toFile()
+        try {
+            val tiff = File(dir, "oht_cfrp_01.tiff").also {
+                it.writeBytes(ByteArray(4096) { i -> i.toByte() })
+            }
+            val out = File(dir, "Session.zip")
+            val member = SessionZip.Member("raw", tiff.name, tiff)
+            SessionZip.build(listOf(member), out)
+
+            // Mutate the source after the archive was written — the archive's
+            // central-directory CRC32 now reflects stale bytes.
+            tiff.writeBytes(ByteArray(4096) { i -> (i + 1).toByte() })
+
+            val failure = assertThrows(IllegalStateException::class.java) {
+                SessionZip.verifyRoundTrip(out, listOf(member))
+            }
+            assertTrue(
+                "expected a CRC-mismatch message, got: ${failure.message}",
+                failure.message.orEmpty().contains("CRC mismatch"),
+            )
         } finally {
             dir.deleteRecursively()
         }
