@@ -78,10 +78,12 @@ internal object SessionZip {
         fileName.substringAfterLast('.').lowercase(Locale.US) in STORE_EXTENSIONS
 
     /**
-     * `.dat` gets its own path (not just [shouldStore]'s STORED-vs-DEFLATED choice):
-     * [DatCodec] transforms it before it ever reaches the archive, so it needs
-     * dedicated encode-on-write / decode-on-read handling at every entry point that
-     * touches archive bytes — [putMember], [checkMember], [readEntry], [copyEntry].
+     * `.dat` gets its own path on *read* — [DatCodec.decodeIfEncoded] is applied in
+     * [readEntry] and [copyEntry] so this archive already transparently understands
+     * a codec-encoded entry if one ever arrives (self-describing by magic header;
+     * a raw, non-encoded entry passes through unchanged). [putMember] does **not**
+     * call [DatCodec.encode] — see that function's doc for why: installed clients
+     * with no [DatCodec] awareness at all cannot decode an entry we'd produce today.
      */
     private fun isDatEntry(fileName: String): Boolean =
         fileName.substringAfterLast('.').equals("dat", ignoreCase = true)
@@ -267,13 +269,26 @@ internal object SessionZip {
         )
     }
 
+    /**
+     * NOT wired to [DatCodec.encode] — see the class doc's rollout note. Every
+     * already-installed build (release and any earlier debug/internal build) has no
+     * concept of [DatCodec] at all: its [forEachEntry]/restore path writes a `.dat`
+     * archive entry straight to disk with zero decode step. Uploading a
+     * codec-encoded `.dat` today would silently corrupt every restore performed by
+     * a user who has not yet updated — this repo has real installs in the field, so
+     * that is not a hypothetical. [DatCodec] stays fully implemented and tested
+     * (see [DatCodecTest]) and this file's *read* side already decodes it
+     * transparently ([decodeDatEntryOrThrow], [copyEntry]) — encoding turns on the
+     * moment a minimum-supported-version gate (or equivalent) makes "no client
+     * without decode support can still receive an encoded upload" true, with no
+     * further code change needed here.
+     */
     private fun putMember(zip: ZipOutputStream, member: Member, onBytes: (Long) -> Unit) {
         val entryName = entryName(member.role, member.name)
-        when {
-            isDatEntry(member.name) ->
-                putStoredBytes(zip, entryName, DatCodec.encode(member.file.readBytes()), onBytes)
-            shouldStore(member.name) -> putStored(zip, entryName, member.file, onBytes)
-            else -> putDeflated(zip, entryName, member.file, onBytes)
+        if (shouldStore(member.name)) {
+            putStored(zip, entryName, member.file, onBytes)
+        } else {
+            putDeflated(zip, entryName, member.file, onBytes)
         }
     }
 
@@ -365,17 +380,6 @@ internal object SessionZip {
         val name = entryName(member.role, member.name)
         val entry = zf.getEntry(name)
             ?: error("Session.zip missing entry $name after bundling")
-        if (isDatEntry(member.name)) {
-            // The entry holds DatCodec.encode's output, not member.file's bytes — a
-            // hash-of-archive-bytes-vs-hash-of-source check would always mismatch.
-            // Decoding and comparing exercises the exact reverse the restore path
-            // takes, so this is a stronger check than the source-only hash below.
-            val decoded = DatCodec.decode(zf.getInputStream(entry).use { it.readBytes() })
-            check(decoded.contentEquals(member.file.readBytes())) {
-                "Session.zip entry $name round-trip mismatch after DatCodec encode/decode"
-            }
-            return
-        }
         if (entry.method == ZipEntry.STORED) {
             // STORED entries already carry a CRC32 in the archive's central
             // directory — putStored computed it in the same pre-pass that set

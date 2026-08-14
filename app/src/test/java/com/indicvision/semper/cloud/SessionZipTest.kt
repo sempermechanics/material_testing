@@ -7,7 +7,6 @@ import com.indicvision.semper.util.Digests
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -122,7 +121,13 @@ class SessionZipTest {
     }
 
     @Test
-    fun `dat entries are DatCodec-encoded on build and decoded back on read`() {
+    fun `dat entries are stored raw on build, not DatCodec-encoded — see the rollout note`() {
+        // putMember deliberately does NOT call DatCodec.encode (SessionZip.kt's doc on
+        // putMember explains why: an already-installed client with no DatCodec
+        // awareness would silently corrupt a codec-encoded restore). This pins that
+        // the archive holds the exact source bytes today, and that forEachEntry's
+        // decode-on-read step is a correct no-op passthrough for that raw data —
+        // both must keep holding once encoding is turned on for real.
         val dir = createTempDirectory(prefix = "session-zip-dat-").toFile()
         try {
             val datBytes = sampleDatBytes()
@@ -132,16 +137,12 @@ class SessionZipTest {
 
             ZipFile(out).use { zf ->
                 val entry = zf.getEntry("dat/frame_0000.dat")!!
-                assertEquals(
-                    "dat entries stay STORED — the codec, not the zip, compresses them",
-                    ZipEntry.STORED,
-                    entry.method,
-                )
+                assertEquals(ZipEntry.STORED, entry.method)
                 val archiveBytes = zf.getInputStream(entry).use { it.readBytes() }
-                assertNotEquals(
-                    "the archive must hold the codec's encoded form, not the raw .dat bytes",
-                    datBytes.toList(),
-                    archiveBytes.toList(),
+                assertArrayEquals(
+                    "an already-installed client must be able to read this entry directly",
+                    datBytes,
+                    archiveBytes,
                 )
             }
 
@@ -149,18 +150,14 @@ class SessionZipTest {
             SessionZip.forEachEntry(out) { role, name, input ->
                 if (role == "dat" && name == "frame_0000.dat") decoded = input.readBytes()
             }
-            assertArrayEquals(
-                "forEachEntry must hand callers the real .dat bytes, transparently decoded",
-                datBytes,
-                decoded,
-            )
+            assertArrayEquals(datBytes, decoded)
         } finally {
             dir.deleteRecursively()
         }
     }
 
     @Test
-    fun `merge decodes a dat entry back to its real layout, not the codec form`() {
+    fun `merge preserves a dat entry's bytes exactly`() {
         val dir = createTempDirectory(prefix = "session-zip-merge-dat-").toFile()
         try {
             val datBytes = sampleDatBytes()
@@ -175,7 +172,7 @@ class SessionZipTest {
                 val entry = zf.getEntry("dat/frame_0000.dat")!!
                 val mergedBytes = zf.getInputStream(entry).use { it.readBytes() }
                 assertArrayEquals(
-                    "Save to Files must hand over a directly-usable .dat, not the internal codec form",
+                    "Save to Files must hand over a directly-usable .dat",
                     datBytes,
                     mergedBytes,
                 )
@@ -225,24 +222,24 @@ class SessionZipTest {
     }
 
     @Test
-    fun `DatCodec round-trip is exercised by SessionZip build's own verifyRoundTrip`() {
-        // build() calls verifyRoundTrip internally — this pins that a corrupted dat
-        // payload would be caught there (checkMember's decode-then-compare path),
-        // by confirming a clean build succeeds and the archive is exactly decodable.
-        val dir = createTempDirectory(prefix = "session-zip-verify-dat-").toFile()
+    fun `a DatCodec-encoded dat entry (future upload) is still decoded correctly on read`() {
+        // Simulates what a client WILL upload once encoding is turned on: hand-build
+        // an archive with a DatCodec-encoded .dat entry (bypassing SessionZip.build,
+        // which does not encode today) and confirm forEachEntry already decodes it
+        // transparently — this is the forward-compatibility half DatCodec.encode's
+        // eventual rollout depends on, and it must already be true.
+        val dir = createTempDirectory(prefix = "session-zip-future-dat-").toFile()
         try {
             val datBytes = sampleDatBytes()
-            val dat = File(dir, "frame_0000.dat").also { it.writeBytes(datBytes) }
-            val out = File(dir, "Session.zip")
-            // Throws (via checkMember) if the round-trip doesn't match — build()
-            // succeeding at all is the assertion.
-            SessionZip.build(listOf(SessionZip.Member("dat", dat.name, dat)), out)
+            val encoded = DatCodec.encode(datBytes)
+            val futureZip = File(dir, "Future.zip")
+            writeRawStoredEntry(futureZip, "dat/frame_0000.dat", encoded)
 
-            ZipFile(out).use { zf ->
-                val entry = zf.getEntry("dat/frame_0000.dat")!!
-                val decoded = DatCodec.decode(zf.getInputStream(entry).use { it.readBytes() })
-                assertArrayEquals(datBytes, decoded)
+            var decoded: ByteArray? = null
+            SessionZip.forEachEntry(futureZip) { role, name, input ->
+                if (role == "dat" && name == "frame_0000.dat") decoded = input.readBytes()
             }
+            assertArrayEquals(datBytes, decoded)
         } finally {
             dir.deleteRecursively()
         }
