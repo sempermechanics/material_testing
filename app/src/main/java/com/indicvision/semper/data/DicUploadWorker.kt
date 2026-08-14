@@ -23,6 +23,8 @@ import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
 import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.net.MAX_CHUNK_BYTES
+import com.indicvision.semper.data.net.MIN_CHUNK_BYTES
 import com.indicvision.semper.data.net.SessionCreateRequest
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
@@ -72,6 +74,52 @@ import java.util.Locale
  * export, so a restore never needs them). "Save to Files" fetches both and merges
  * them into one archive. See [SessionZip.isRestoreEssential].
  */
+
+/**
+ * Fraction of *currently available* memory the whole upload pipeline (all
+ * concurrent chunk buffers together) may hold live at once.
+ */
+private const val CHUNK_MEMORY_BUDGET_FRACTION = 0.10
+
+/**
+ * The server declares [serverChunkSize] (currently a flat 32 MiB —
+ * `firestore_repo.py:489`) without knowing what device will receive it.
+ * `isLowRamDevice` alone is a blunt signal: it is a fixed, device-class boolean,
+ * unaware of what else is resident right now (a memory-heavy DIC batch still in
+ * the session directory, another foreground app) — where [concurrency] may
+ * already be reduced to 1 but each of those single chunks could still be the
+ * full 32 MiB the server offered.
+ *
+ * Reading live `ActivityManager.MemoryInfo.availMem` instead budgets against
+ * *actual* headroom at upload time: [concurrency] chunk buffers must together
+ * stay within [CHUNK_MEMORY_BUDGET_FRACTION] of what's available right now.
+ * Drive's resumable PUT declares its own Content-Range per request, so nothing
+ * about the protocol requires a fixed chunk size across a transfer — shrinking
+ * it here is always safe, and
+ * [com.indicvision.semper.data.net.DriveTransfer.uploadResumable] re-clamps to
+ * [MIN_CHUNK_BYTES]/[MAX_CHUNK_BYTES] regardless, so a missing/zero `availMem`
+ * reading (some OEM ROMs) falls back to exactly the old behavior — the server's
+ * own value, clamped.
+ *
+ * Top-level (not a private companion member, like [DicUploadWorker]'s other
+ * helpers) so it is directly unit-testable — mirrors
+ * [com.indicvision.semper.data.net.nextWindowBytes] in `DriveTransfer.kt`.
+ */
+internal fun uploadChunkBytes(context: Context, serverChunkSize: Int, concurrency: Int): Int {
+    val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        ?: return serverChunkSize.coerceIn(MIN_CHUNK_BYTES, MAX_CHUNK_BYTES)
+    val info = android.app.ActivityManager.MemoryInfo()
+    am.getMemoryInfo(info)
+    if (info.availMem <= 0L) return serverChunkSize.coerceIn(MIN_CHUNK_BYTES, MAX_CHUNK_BYTES)
+
+    val perChunkBudget = (info.availMem * CHUNK_MEMORY_BUDGET_FRACTION / concurrency.coerceAtLeast(1)).toLong()
+    // Round down to a 256 KiB multiple — Drive requires it for every non-final chunk.
+    val rounded = (perChunkBudget / MIN_CHUNK_BYTES) * MIN_CHUNK_BYTES
+    return rounded
+        .coerceIn(MIN_CHUNK_BYTES.toLong(), minOf(serverChunkSize.toLong(), MAX_CHUNK_BYTES.toLong()))
+        .toInt()
+}
+
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun getForegroundInfo(): ForegroundInfo =
@@ -671,15 +719,17 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             progTotal.set(plan.work.sumOf { it.file.length() })
             val total = plan.work.size
             coroutineScope {
-                val gate = Semaphore(uploadConcurrency(applicationContext))
+                val concurrency = uploadConcurrency(applicationContext)
+                val gate = Semaphore(concurrency)
                 plan.work.map { job ->
                     async {
                         gate.withPermit {
+                            val chunkBytes = uploadChunkBytes(applicationContext, job.chunkSize, concurrency)
                             Timber.d("Uploading %s (%d bytes)…", job.name, job.file.length())
                             val (driveId, md5) = api.uploadResumable(
                                 job.uploadUrl,
                                 job.file,
-                                job.chunkSize,
+                                chunkBytes,
                             ) { n -> progDone.addAndGet(n) }
                             // Re-read the token: a long upload can outlive it.
                             val tk = TokenProvider.usableIdToken() ?: idToken

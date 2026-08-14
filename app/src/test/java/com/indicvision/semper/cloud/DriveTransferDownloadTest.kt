@@ -239,6 +239,78 @@ class DriveTransferDownloadTest {
     }
 
     @Test
+    fun `a windowed fetch sends the absolute remote offset, not a window-relative one`() {
+        // rangeStart greater than 0 is the legacy ranged-prefix / central-directory-tail
+        // path (CloudRestore.planPrefixFetch). The window itself always starts its
+        // local `part` file at 0, but the wire Range header must be the *absolute*
+        // position in the remote object — sending the window-relative offset here was
+        // a real bug: it always requested `bytes=0-…` instead of the intended window.
+        server.enqueue(
+            MockResponse(
+                code = HttpStatus.PARTIAL_CONTENT,
+                headers = contentRange(9000, 9499, "10000"),
+                body = payload(500),
+            ),
+        )
+
+        runBlocking {
+            drive.downloadFile(
+                fileId = fileId,
+                dest = dest,
+                baseUrl = server.url("/").toString().trimEnd('/'),
+                expectedBytes = 500L,
+                rangeStart = 9000L,
+                signedGetHeaders = { Headers.headersOf("Authorization", "Bearer test-token") },
+            )
+        }
+
+        val req = server.takeRequest()
+        assertTrue(
+            "a windowed fetch must request the absolute remote offset 9000, not 0",
+            req.headers["Range"].orEmpty().startsWith("bytes=9000-"),
+        )
+        assertEquals(payload(500), dest.readText())
+    }
+
+    @Test
+    fun `resuming within a window uses the absolute offset, not the window-local one`() {
+        val whole = payload(1000)
+        server.enqueue(
+            MockResponse(
+                code = HttpStatus.PARTIAL_CONTENT,
+                headers = contentRange(5000, 5399, "20000"),
+                body = whole.substring(0, 400),
+            ),
+        )
+        server.enqueue(
+            MockResponse(
+                code = HttpStatus.PARTIAL_CONTENT,
+                headers = contentRange(5400, 5999, "20000"),
+                body = whole.substring(400),
+            ),
+        )
+
+        runBlocking {
+            drive.downloadFile(
+                fileId = fileId,
+                dest = dest,
+                baseUrl = server.url("/").toString().trimEnd('/'),
+                expectedBytes = 1000L,
+                rangeStart = 5000L,
+                signedGetHeaders = { Headers.headersOf("Authorization", "Bearer test-token") },
+            )
+        }
+
+        assertEquals(whole, dest.readText())
+        server.takeRequest() // first window: bytes=5000-...
+        val resumed = server.takeRequest()
+        assertTrue(
+            "resume within a window must request absolute offset 5400 (5000+400), not window-local 400",
+            resumed.headers["Range"].orEmpty().startsWith("bytes=5400-"),
+        )
+    }
+
+    @Test
     fun `progress callbacks never move backwards and end at the full size`() {
         val whole = payload(1000)
         server.enqueue(
