@@ -325,7 +325,7 @@ class ResultViewerActivity : AppCompatActivity() {
             bumpChrome()
         }
 
-        // Five equal-width field pills (still one tap per field).
+        // Floating glass field pills (separate rounded chips — not a segmented bar).
         val fieldByButton = mapOf(
             R.id.rbFieldU to ("U" to DicResult.IDX_U),
             R.id.rbFieldV to ("V" to DicResult.IDX_V),
@@ -333,11 +333,17 @@ class ResultViewerActivity : AppCompatActivity() {
             R.id.rbFieldEyy to ("Eyy" to DicResult.IDX_EYY),
             R.id.rbFieldExy to ("Exy" to DicResult.IDX_EXY),
         )
-        findViewById<com.google.android.material.button.MaterialButtonToggleGroup>(R.id.fieldToggle)
-            .addOnButtonCheckedListener { _, checkedId, isChecked ->
-                if (!isChecked) return@addOnButtonCheckedListener
+        val fieldButtons = fieldByButton.keys.map { id ->
+            findViewById<com.google.android.material.button.MaterialButton>(id)
+        }
+        fieldButtons.forEach { button ->
+            // Material defaults to 88dp minWidth — collapse so pills hug their label.
+            button.minWidth = 0
+            button.minimumWidth = 0
+            button.setOnClickListener {
+                fieldButtons.forEach { it.isChecked = it === button }
                 bumpChrome()
-                val (label, index) = fieldByButton[checkedId] ?: return@addOnButtonCheckedListener
+                val (label, index) = fieldByButton[button.id] ?: return@setOnClickListener
                 currentTypeString = label
                 currentDataIndex = index
                 // Caption + probe value are refreshed by updateVisualization once the
@@ -347,6 +353,7 @@ class ResultViewerActivity : AppCompatActivity() {
                 if (showingSummary) tvFrameCounter.text = summary.counterText()
                 inspect.refreshCrosshairs()
             }
+        }
 
         findViewById<View>(R.id.btnViewerBack).setOnClickListener { finish() }
         findViewById<View>(R.id.btnViewerShare).setOnClickListener { showShareSheet() }

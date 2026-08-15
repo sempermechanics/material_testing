@@ -36,6 +36,18 @@
     <color name="viewer_chip_off">#FFFFFF</color>
     <color name="viewer_on_dark">#152430</color> <!-- now "on viewer panel"; light theme -->
 
+    <!-- Immersive viewer chrome (Photos-style frosted glass on #0B1220) -->
+    <color name="viewer_immersive_canvas">#0B1220</color>
+    <color name="viewer_glass_fill">#52FFFFFF</color>       <!-- ~32% white frost -->
+    <color name="viewer_glass_stroke">#73FFFFFF</color>
+    <color name="viewer_glass_pill">#38FFFFFF</color>       <!-- ~22% white field pills -->
+    <color name="viewer_peek_scrim">#F2121212</color>       <!-- dark glass peek sheet -->
+    <color name="viewer_peek_divider">#33FFFFFF</color>
+    <color name="viewer_peek_handle">#66FFFFFF</color>
+    <color name="viewer_peek_text">#FFFFFFFF</color>
+    <color name="viewer_peek_muted">#B3B3B3</color>
+    <color name="viewer_peek_accent">#FF7DD3FC</color>      <!-- soft sky on dark -->
+
     <!-- Dark mode is force-dark (render-time inversion of this palette), which
          never touches window/system-bar colors — these two aliases carry the
          night variant instead (see values-night/colors.xml). -->

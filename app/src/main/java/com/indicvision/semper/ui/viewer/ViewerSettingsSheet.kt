@@ -23,7 +23,7 @@ import com.indicvision.semper.ui.analysis.VsgStudy
 object ViewerSettingsSheet {
 
     private const val SETTINGS_ROW_SP = 13f
-    private const val SETTINGS_DIVIDER_MARGIN = 10
+    private const val SETTINGS_ROW_PAD_V = 11
 
     /**
      * Why the run stopped and how far it got, or nothing when it finished.
@@ -110,9 +110,13 @@ object ViewerSettingsSheet {
     }
 
     fun show(host: ResultViewerActivity) {
-        val sheet = BottomSheetDialog(host)
+        val sheet = BottomSheetDialog(host, R.style.ThemeOverlay_Semper_ViewerPeekSheet)
         val view = host.layoutInflater.inflate(R.layout.sheet_settings_used, null)
         sheet.setContentView(view)
+        sheet.setOnShowListener {
+            sheet.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+                ?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        }
 
         view.findViewById<TextView>(R.id.tvSettingsUsedSpecimen).text =
             host.intent.getStringExtra(DicKeys.REF_NAME).orEmpty()
@@ -221,12 +225,15 @@ object ViewerSettingsSheet {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-            )
+            ).apply {
+                topMargin = SETTINGS_ROW_PAD_V
+                bottomMargin = SETTINGS_ROW_PAD_V
+            }
         }
         row.addView(
             TextView(host).apply {
                 text = label
-                setTextColor(host.getColor(R.color.text_secondary))
+                setTextColor(host.getColor(R.color.viewer_peek_muted))
                 textSize = SETTINGS_ROW_SP
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             },
@@ -234,7 +241,7 @@ object ViewerSettingsSheet {
         row.addView(
             TextView(host).apply {
                 text = value
-                setTextColor(host.getColor(R.color.text_primary))
+                setTextColor(host.getColor(R.color.viewer_peek_text))
                 textSize = SETTINGS_ROW_SP
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
             },
@@ -246,10 +253,7 @@ object ViewerSettingsSheet {
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             1,
-        ).apply {
-            topMargin = SETTINGS_DIVIDER_MARGIN
-            bottomMargin = SETTINGS_DIVIDER_MARGIN
-        }
-        setBackgroundColor(host.getColor(R.color.surface_outline))
+        )
+        setBackgroundColor(host.getColor(R.color.viewer_peek_divider))
     }
 }

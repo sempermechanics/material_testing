@@ -6,7 +6,9 @@
     android:id="@+id/viewerRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0B1220">
+    android:background="@color/viewer_immersive_canvas"
+    android:forceDarkAllowed="false"
+    tools:targetApi="29">
 
     <!-- Figure fills the screen. forceDarkAllowed=false keeps jet uninverted. -->
     <RelativeLayout
@@ -98,7 +100,9 @@
         android:id="@+id/chromeOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:forceDarkAllowed="false"
+        android:orientation="vertical"
+        tools:targetApi="29">
 
         <LinearLayout
             android:id="@+id/topBarHost"
@@ -221,62 +225,66 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <com.google.android.material.button.MaterialButtonToggleGroup
+        <LinearLayout
             android:id="@+id/fieldToggle"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="10dp"
-            android:layout_marginTop="6dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
             android:gravity="center"
-            app:checkedButton="@+id/rbFieldU"
-            app:selectionRequired="true"
-            app:singleSelection="true">
+            android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldU"
                 style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="2dp"
-                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:checkable="true"
+                android:checked="true"
+                android:minWidth="0dp"
                 android:text="@string/field_u" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldV"
                 style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="2dp"
-                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:checkable="true"
+                android:minWidth="0dp"
                 android:text="@string/field_v" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldExx"
                 style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="2dp"
-                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:checkable="true"
+                android:minWidth="0dp"
                 android:text="@string/field_exx" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldEyy"
                 style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="2dp"
-                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:checkable="true"
+                android:minWidth="0dp"
                 android:text="@string/field_eyy" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldExy"
                 style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="2dp"
-                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:checkable="true"
+                android:minWidth="0dp"
                 android:text="@string/field_exy" />
-        </com.google.android.material.button.MaterialButtonToggleGroup>
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/layoutScrubber"
@@ -377,11 +385,13 @@
         android:layout_marginBottom="148dp"
         android:background="@drawable/bg_probe_chip"
         android:fontFamily="monospace"
+        android:forceDarkAllowed="false"
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
         android:textColor="#FFFFFF"
         android:textSize="12sp"
-        android:visibility="gone" />
+        android:visibility="gone"
+        tools:targetApi="29" />
 
     <!-- Populated for the peek sheet; not shown on the canvas. -->
     <TextView
