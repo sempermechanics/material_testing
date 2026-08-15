@@ -17,7 +17,7 @@ import com.indicvision.semper.ui.analysis.VsgPlotView
 import com.indicvision.semper.ui.analysis.VsgStudy
 
 /**
- * Peek sheet for a result: the variable finding + stats for the frame on
+ * Peek sheet for a result: max / min (with coordinates) / mean for the frame on
  * screen, then the parameter rows that produced it (and the sweep line-cut).
  */
 object ViewerSettingsSheet {
@@ -121,7 +121,6 @@ object ViewerSettingsSheet {
         view.findViewById<TextView>(R.id.tvSettingsUsedSpecimen).text =
             host.intent.getStringExtra(DicKeys.REF_NAME).orEmpty()
 
-        view.findViewById<TextView>(R.id.tvSheetFinding).text = host.detailFindingText()
         view.findViewById<TextView>(R.id.tvSheetStats).text = host.detailStatsText()
 
         val rows = view.findViewById<LinearLayout>(R.id.settingsUsedRows)

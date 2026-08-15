@@ -79,8 +79,7 @@ class ResultViewerActivity : AppCompatActivity() {
     internal lateinit var tvProbeReadout: TextView
     internal lateinit var glassShield: InspectOverlayView
 
-    /** Full finding / stats for the info peek sheet (not shown on the canvas). */
-    private var detailFinding: String = ""
+    /** Max / min (with coordinates) / mean for the info peek sheet. */
     private var detailStats: String = ""
 
     private val hideChromeRunnable = Runnable { fadeChrome(visible = false) }
@@ -382,10 +381,7 @@ class ResultViewerActivity : AppCompatActivity() {
         finish()
     }
 
-    /** Full finding sentence for the info peek sheet. */
-    internal fun detailFindingText(): String = detailFinding.ifBlank { currentTypeString }
-
-    /** Max / min / mean sentence for the info peek sheet. */
+    /** Max / min (with coordinates) / mean for the info peek sheet. */
     internal fun detailStatsText(): String = detailStats.ifBlank { getString(R.string.stat_empty) }
 
     /** Bring edge chrome back, then schedule auto-hide (Photos pattern). */
@@ -849,7 +845,7 @@ class ResultViewerActivity : AppCompatActivity() {
         ShareCenter(this).show()
     }
 
-    /** Edge title + peek-sheet finding/stats for [index], from pre-computed [metrics]. */
+    /** Edge title + peek-sheet stats for [index], from pre-computed [metrics]. */
     private fun updateCaptionsFrom(metrics: FieldMetrics, index: Int) {
         val unit = if (DicResult.isStrainFieldIndex(index)) "m\u03b5" else "px"
         val frameBit = if (showingSummary) {
@@ -861,7 +857,6 @@ class ResultViewerActivity : AppCompatActivity() {
 
         val stats = metrics.stats
         if (stats == null) {
-            detailFinding = currentTypeString
             detailStats = getString(R.string.stat_empty)
             tvStatsCaption.text = detailStats
             return
@@ -869,17 +864,27 @@ class ResultViewerActivity : AppCompatActivity() {
         val maxText = ReportBuilder.formatMetric(stats[0])
         val minText = ReportBuilder.formatMetric(stats[1])
         val meanText = ReportBuilder.formatMetric(stats[2])
-        detailStats = getString(R.string.viewer_stats_fmt, maxText, minText, meanText, unit)
-        tvStatsCaption.text = detailStats
-
         val data = rawData
-        detailFinding = if (data != null && metrics.maxIdx in data.indices) {
-            val x = data[metrics.maxIdx].toInt()
-            val y = data[metrics.maxIdx + 1].toInt()
-            getString(R.string.viewer_finding_fmt, currentTypeString, maxText, unit, x, y)
+        detailStats = if (
+            data != null &&
+            metrics.maxIdx in data.indices &&
+            metrics.minIdx in data.indices
+        ) {
+            getString(
+                R.string.viewer_stats_fmt,
+                maxText,
+                data[metrics.maxIdx].toInt(),
+                data[metrics.maxIdx + 1].toInt(),
+                minText,
+                data[metrics.minIdx].toInt(),
+                data[metrics.minIdx + 1].toInt(),
+                meanText,
+                unit,
+            )
         } else {
-            getString(R.string.viewer_finding_plain_fmt, currentTypeString, maxText, unit)
+            getString(R.string.viewer_stats_plain_fmt, maxText, minText, meanText, unit)
         }
+        tvStatsCaption.text = detailStats
     }
 
     private fun updateNavButtons() {

@@ -701,7 +701,7 @@ the Lattice for a sweep.
    │   └── Auto scale (drops custom; returns to frame min / max)
    ├── edge chrome (auto-hides; pan / scrub / field tap brings it back)
    │   ├── short title: field · frame
-   │   ├── ⓘ peek sheet: finding + stats + settings used (+ line-cut on sweep)
+   │   ├── ⓘ peek sheet: max/min (with coords) + mean + settings used (+ line-cut on sweep)
    │   └── share icon (top right)
    ├── field pills: U / V / Exx / Eyy / Exy
    ├── frame scrubbing: prev / next + "name (i / N)"
@@ -739,7 +739,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.9 | Enter valid bounds and apply | The heatmap and the scale labels both change |
 | [ ] 8.1.10 | Switch field, then switch back | The custom bounds are remembered *per field* |
 | [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped; the scale returns to this frame's min / max |
-| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the finding, max / min / mean, and settings used |
+| [ ] 8.1.12 | Open ⓘ | Peek sheet shows max / min with coordinates, mean, and settings used |
 | [ ] 8.1.13 | Scrub frames without a custom scale | Scale labels match each frame's own min / max |
 
 ### 8.2 Frames
@@ -788,14 +788,14 @@ drag and pinch keep pan and zoom.
 | [ ] 8.3.4 | Pinch while a probe is up | Zoom works; the crosshair stays glued to the image point |
 | [ ] 8.3.5 | Switch field or frame with a probe up | The value updates for the same image location (or "No data") |
 | [ ] 8.3.6 | Tap the same point again, or the readout | The probe dismisses |
-| [ ] 8.3.7 | Open ⓘ | Finding names the peak and coordinates; stats line is there too — no Max/Min toggle |
+| [ ] 8.3.7 | Open ⓘ | Stats list max and min with coordinates, plus mean — no Max/Min toggle |
 | [ ] 8.3.8 | Rotate with a probe up | Frame, field and probe survive |
 
 ### 8.4 Details (ⓘ peek sheet)
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.4.1 | Tap the info button | Peek sheet with variable finding + stats, then subset, step, strain window, strain method, ROI and image size |
+| [ ] 8.4.1 | Tap the info button | Peek sheet with max / min (coordinates) / mean, then subset, step, strain window, strain method, ROI and image size |
 | [ ] 8.4.2 | Compare against what you entered in the wizard | They match |
 | [ ] 8.4.3 | Open it on a sweep | A **virtual strain gauge** row appears, and the values match the frame on screen |
 | [ ] 8.4.4 | Scrub to another combination and reopen | The values follow the new frame, not the run's first |

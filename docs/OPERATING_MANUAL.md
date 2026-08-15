@@ -358,8 +358,8 @@ Look for the VSG where the curves stop separating.
 Tabs switch field. Pinch to zoom (~10×), drag to pan; both survive a field
 change. Double-tap zooms or resets. A horizontal fling while fit-to-screen steps
 frames. Edge chrome (title, field pills, hairline scale, scrub) auto-hides after
-a short idle; pan or scrub brings it back. The ⓘ peek sheet holds the finding,
-max / min / mean, and the settings used for this analysis.
+a short idle; pan or scrub brings it back. The ⓘ peek sheet holds max / min
+(with coordinates), mean, and the settings used for this analysis.
 
 **Colour scale.** Default is **this frame's min / max** — the hairline labels
 match the colouring. Tap the bar to set fixed min/max (remembered per field).
