@@ -1,6 +1,8 @@
 package com.indicvision.semper.results
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.report.FieldRangesStore
+import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.viewer.SummaryAnimation
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -123,6 +125,80 @@ class SummaryAnimationTest {
         val ticks = mutableListOf<Pair<Int, Int>>()
 
         SummaryAnimation.globalRanges(files) { done, total -> ticks += done to total }
+
+        assertEquals(listOf(1 to 2, 2 to 2), ticks)
+    }
+
+    // ── globalRanges: cached (FieldRangesStore) vs decoded must agree exactly ──
+
+    private val summaryFieldIndices = intArrayOf(
+        DicResult.IDX_U,
+        DicResult.IDX_V,
+        DicResult.IDX_EXX,
+        DicResult.IDX_EYY,
+        DicResult.IDX_EXY,
+    )
+
+    /** [FieldRangesStore.write]'s input, computed the same way AnalysisViewModel does. */
+    private fun rangesFileFor(files: List<File>): File {
+        val perFrame = files.map { f ->
+            DicResult.decodeDatFile(f)?.let { VisualizationEngine.valueRanges(it, summaryFieldIndices) }
+                ?: emptyMap()
+        }
+        val out = temp.newFile("field_ranges_${files.hashCode()}.bin")
+        FieldRangesStore.write(out, summaryFieldIndices, perFrame)
+        return out
+    }
+
+    @Test
+    fun `a valid cache produces exactly the same ranges as decoding every frame`() = runBlocking {
+        val files = listOf(
+            frame("a.dat", 0f, 1f),
+            frame("b.dat", -5f, 0.5f),
+            frame("c.dat", 0f, 9f),
+        )
+        val rangesFile = rangesFileFor(files)
+
+        val decoded = SummaryAnimation.globalRanges(files)
+        val cached = SummaryAnimation.globalRanges(files, rangesFile)
+
+        assertEquals(decoded, cached)
+    }
+
+    @Test
+    fun `a missing cache file falls back to decoding, same result`() = runBlocking {
+        val files = listOf(frame("a.dat", 0f, 1f), frame("b.dat", -5f, 0.5f))
+        val missingCache = temp.root.resolve("does_not_exist.bin")
+
+        val decoded = SummaryAnimation.globalRanges(files)
+        val fallback = SummaryAnimation.globalRanges(files, missingCache)
+
+        assertEquals(decoded, fallback)
+    }
+
+    @Test
+    fun `a cache whose frame count no longer matches the batch falls back to decoding`() = runBlocking {
+        // Simulates a batch edited after the cache was written (e.g. a re-run that
+        // added a frame) — the stale cache must never be trusted over the real files.
+        val originalFiles = listOf(frame("a.dat", 0f, 1f), frame("b.dat", -5f, 0.5f))
+        val staleCache = rangesFileFor(originalFiles)
+        val grownFiles = originalFiles + frame("c.dat", 0f, 9f)
+
+        val decoded = SummaryAnimation.globalRanges(grownFiles)
+        val withStaleCache = SummaryAnimation.globalRanges(grownFiles, staleCache)
+
+        assertEquals(decoded, withStaleCache)
+        // Not the vacuous case — the stale cache really did omit the third frame's range.
+        assertTrue(decoded.getValue(DicResult.IDX_EXX).second > 8f)
+    }
+
+    @Test
+    fun `cached progress reporting still covers every frame`() = runBlocking {
+        val files = listOf(frame("a.dat", 0f, 1f), frame("b.dat", -5f, 0.5f))
+        val rangesFile = rangesFileFor(files)
+        val ticks = mutableListOf<Pair<Int, Int>>()
+
+        SummaryAnimation.globalRanges(files, rangesFile) { done, total -> ticks += done to total }
 
         assertEquals(listOf(1 to 2, 2 to 2), ticks)
     }
