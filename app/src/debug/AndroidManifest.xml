@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only: exported seed so adb can open the result viewer on an emulator. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="com.indicvision.semper.debug.DebugViewerSeedActivity"
+            android:exported="true" />
+    </application>
+</manifest>
