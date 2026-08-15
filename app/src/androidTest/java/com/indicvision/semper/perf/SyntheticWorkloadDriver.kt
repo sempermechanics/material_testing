@@ -481,7 +481,8 @@ class SyntheticWorkloadDriver {
             extra = "wallTimeMs=${stats.wallTimeMs} akazeRansacMs=${stats.akazeRansacMs} " +
                 "hessianPrepassMs=${stats.hessianPrepassMs} delaunayMs=${stats.delaunayMs} " +
                 "strainMs=${stats.strainMs} avgIcgnIterations=${stats.avgIcgnIterations} " +
-                "avgThroughputPtsPerMs=${stats.avgThroughputPtsPerMs} convergencePercent=${stats.convergencePercent}",
+                "avgThroughputPtsPerMs=${stats.avgThroughputPtsPerMs} convergencePercent=${stats.convergencePercent} " +
+                "icgnMs=${stats.icgnMs} simplexMs=${stats.simplexMs} simplexCalls=${stats.simplexCalls}",
         )
     }
 

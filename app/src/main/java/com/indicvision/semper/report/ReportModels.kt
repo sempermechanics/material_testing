@@ -80,6 +80,16 @@ data class EngineStats(
 
     /** 2 = full AKAZE mesh, 1 = sparse mesh, 0 = Path C fallback (RGDIC-only), -1 = unknown */
     val meshSeedingQuality: Int = MESH_SEEDING_UNKNOWN,
+
+    /**
+     * Total wall time (ms) spent in the simplex rescue path across every point
+     * that needed one, and in the main ICGN solve, for the whole frame. Answers
+     * the "is the simplex rescue plausibly comparable to the main solve" question
+     * from the perf plan — 0f on data from an app build older than this field
+     * (see [SLOT_SIMPLEX_MS]'s doc).
+     */
+    val simplexMs: Float = 0f,
+    val icgnMs: Float = 0f,
 ) {
     fun meshSeedingLabel(): String = when (meshSeedingQuality) {
         2 -> "Full AKAZE Mesh"
@@ -108,8 +118,19 @@ data class EngineStats(
         /** Mesh-seeding quality; optional, so a 16-slot array omits it. */
         const val SLOT_MESH_SEEDING = 16
 
-        /** Full slot count including the optional mesh-seeding slot. */
-        const val SLOT_COUNT = 17
+        /**
+         * Total simplex-rescue time (ms) for the frame — optional, only present
+         * from the engine commit that added it; a native .so built before that
+         * (or a 16/17-slot legacy array) simply leaves this and [SLOT_ICGN_MS]
+         * unwritten, read below as 0f rather than out-of-bounds.
+         */
+        const val SLOT_SIMPLEX_MS = 17
+
+        /** Total main-ICGN-solve time (ms) for the frame — same optionality as above. */
+        const val SLOT_ICGN_MS = 18
+
+        /** Full slot count including the optional mesh-seeding and simplex/ICGN-time slots. */
+        const val SLOT_COUNT = 19
 
         /** Matches the float[] written by SemperJNI.cpp (16 slots + optional slot 16) */
         fun fromArray(a: FloatArray): EngineStats = if (a.size >= CORE_SLOT_COUNT) {
@@ -130,7 +151,13 @@ data class EngineStats(
                 strainMs = a[13],
                 avgThroughputPtsPerMs = a[14],
                 convergencePercent = a[SLOT_CONVERGENCE],
-                meshSeedingQuality = if (a.size >= SLOT_COUNT) a[SLOT_MESH_SEEDING].toInt() else MESH_SEEDING_UNKNOWN,
+                meshSeedingQuality = if (a.size > SLOT_MESH_SEEDING) {
+                    a[SLOT_MESH_SEEDING].toInt()
+                } else {
+                    MESH_SEEDING_UNKNOWN
+                },
+                simplexMs = if (a.size > SLOT_SIMPLEX_MS) a[SLOT_SIMPLEX_MS] else 0f,
+                icgnMs = if (a.size > SLOT_ICGN_MS) a[SLOT_ICGN_MS] else 0f,
             )
         } else {
             EngineStats(0, 0, 0, 0, 0, 0, 0, 0, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
