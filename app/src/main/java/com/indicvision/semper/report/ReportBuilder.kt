@@ -147,9 +147,13 @@ object ReportBuilder {
         val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
         fun fieldValue(rawVal: Float): Float = if (isStrain && absoluteStrainValues) abs(rawVal) else rawVal
 
-        scratch.sort(0, count)
-        val p02 = scratch[(count * 0.02).toInt().coerceIn(0, count - 1)]
-        val p98 = scratch[(count * 0.98).toInt().coerceIn(0, count - 1)]
+        // Only two order statistics are needed out of scratch — quickSelect finds
+        // each in expected O(n) instead of paying O(n log n) to fully sort it (same
+        // change, same reasoning, as VisualizationEngine.computeSigmaClampedRange).
+        val p02Index = (count * 0.02).toInt().coerceIn(0, count - 1)
+        val p98Index = (count * 0.98).toInt().coerceIn(0, count - 1)
+        val p02 = VisualizationEngine.quickSelect(scratch, p02Index, 0, count)
+        val p98 = VisualizationEngine.quickSelect(scratch, p98Index, p02Index, count)
 
         var maxV = -Float.MAX_VALUE
         var minV = Float.MAX_VALUE

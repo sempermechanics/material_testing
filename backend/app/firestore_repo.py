@@ -29,6 +29,12 @@ _BATCH_LIMIT = 400
 # this cap; it loops in bounded batches until the relevant query is empty.
 _LIST_SOFT_LIMIT = 2000
 
+# get_or_create_user's "last seen" write is throttled to this granularity — a
+# proxied restore makes dozens of authenticated requests (one per download
+# window) in quick succession, so an unconditional write here was dozens of
+# Firestore writes to record a timestamp nobody reads at finer resolution.
+_LAST_SEEN_THROTTLE = timedelta(hours=1)
+
 
 def _lost_to_contention(exc: BaseException) -> bool:
     """True when a transaction failed only because it kept losing the race.
@@ -111,20 +117,35 @@ def get_or_create_user(claims: dict) -> dict:
     provider = (claims.get("firebase") or {}).get("sign_in_provider")
     if snap.exists:
         cur = snap.to_dict()
-        patch = {
-            "lastSeenAt": firestore.SERVER_TIMESTAMP,
-            "emailVerified": verified,
-            "schemaVersion": SCHEMA_VERSION,
-        }
-        if provider:
-            patch["signInProvider"] = provider
+        # Only the fields that actually changed — a write with nothing new to say
+        # is exactly what the throttle below is trying to avoid.
+        changed: dict = {}
+        if provider and cur.get("signInProvider") != provider:
+            changed["signInProvider"] = provider
+        if cur.get("emailVerified") != verified:
+            changed["emailVerified"] = verified
+        if cur.get("schemaVersion") != SCHEMA_VERSION:
+            changed["schemaVersion"] = SCHEMA_VERSION
         # Keep admin role in sync with ADMIN_EMAILS for pre-existing users.
         if _is_admin_email(claims) and cur.get("role") != "admin":
-            patch["role"] = "admin"
+            changed["role"] = "admin"
         # A previously-PENDING user who has since verified a domain email (or been
         # made admin) is auto-approved on this sign-in.
         if cur.get("access_status") == "PENDING" and _auto_approved(claims):
-            patch["access_status"] = "APPROVED"
+            changed["access_status"] = "APPROVED"
+
+        last_seen = cur.get("lastSeenAt")
+        stale = last_seen is None or (datetime.now(timezone.utc) - last_seen) >= _LAST_SEEN_THROTTLE
+        # This used to write lastSeenAt on every authenticated request — but a
+        # single restore is now dozens of requests (one challenge+content pair
+        # per adaptive download window, see DriveTransfer.nextWindowBytes), so
+        # that was dozens of writes to say the same thing. "Last seen" only
+        # needs hour granularity; skip the write when nothing else changed and
+        # the timestamp is still fresh.
+        if not changed and not stale:
+            return {**cur, "uid": uid}
+
+        patch = {**changed, "lastSeenAt": firestore.SERVER_TIMESTAMP}
         ref.update(patch)
         return {**cur, **patch, "uid": uid}
     data = {
@@ -216,12 +237,21 @@ def _positive_int_override(user: dict, key: str):
     return n if n > 0 else None
 
 
+def _bool_override(user: dict, key: str):
+    """Optional bool on the user doc; anything else (missing/wrong type) → None
+    (inherit the fleet default). Mirrors [_positive_int_override]'s "invalid
+    input inherits rather than errors" contract."""
+    raw = user.get(key)
+    return raw if isinstance(raw, bool) else None
+
+
 def resolve_user_config(user: dict) -> dict:
     """Product limits for this account: per-user override, else fleet env default.
 
     Missing fields are not written at user creation so changing the env default
     updates everyone who has not been individually overridden.
     """
+    dat_codec_override = _bool_override(user, "datCodecEncodingEnabled")
     return {
         "maxSessions": (
             _positive_int_override(user, "maxSessions") or settings.MAX_SESSIONS_PER_USER
@@ -233,7 +263,24 @@ def resolve_user_config(user: dict) -> dict:
         "maxFrames": (
             _positive_int_override(user, "maxFrames") or settings.MAX_FRAMES_PER_ANALYSIS
         ),
+        "datCodecEncodingEnabled": (
+            dat_codec_override
+            if dat_codec_override is not None
+            else settings.DAT_CODEC_ENCODING_ENABLED
+        ),
     }
+
+
+#: Per-user config override fields and how to cast an incoming patch value for
+#: each — int(True) == 1 would silently turn a bool override into an int, so a
+#: single int() cast for every field (as before datCodecEncodingEnabled) is
+#: wrong here; each field casts to its own resolve_user_config type.
+_CONFIG_CASTERS = {
+    "maxSessions": int,
+    "maxFilesPerSession": int,
+    "maxFrames": int,
+    "datCodecEncodingEnabled": bool,
+}
 
 
 def set_user_config(uid: str, patch: dict) -> dict | None:
@@ -242,8 +289,10 @@ def set_user_config(uid: str, patch: dict) -> dict | None:
     snap = ref.get()
     if not snap.exists:
         return None
-    allowed = ("maxSessions", "maxFilesPerSession", "maxFrames")
-    update = {k: int(patch[k]) for k in allowed if k in patch and patch[k] is not None}
+    allowed = tuple(_CONFIG_CASTERS)
+    update = {
+        k: _CONFIG_CASTERS[k](patch[k]) for k in allowed if k in patch and patch[k] is not None
+    }
     # Explicit null clears an override so the user re-inherits the fleet default.
     deletes = {k: firestore.DELETE_FIELD for k in allowed if k in patch and patch[k] is None}
     if update or deletes:
@@ -724,26 +773,43 @@ def set_session_folder(sid: str, folder_id: str):
     )
 
 
+def _file_doc(sid: str, uid: str, f: FileSpec, upload_url: str | None) -> dict:
+    return {
+        "sessionId": sid,
+        "uid": uid,
+        "role": f.role,
+        "name": f.name,
+        "sizeBytes": f.bytes,
+        "sha256": f.sha256,
+        "status": "PENDING",
+        "uploadUrl": upload_url,
+        "driveFileId": None,
+        "driveMd5": None,
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+        "schemaVersion": SCHEMA_VERSION,
+    }
+
+
 def create_file(sid: str, uid: str, file_id: str, f: FileSpec, upload_url: str | None):
     """Write the file doc. `upload_url` is None until provisioning opens the
     Drive resumable session for it (see iter_unprovisioned_files)."""
-    db().collection("files").document(file_id).set(
-        {
-            "sessionId": sid,
-            "uid": uid,
-            "role": f.role,
-            "name": f.name,
-            "sizeBytes": f.bytes,
-            "sha256": f.sha256,
-            "status": "PENDING",
-            "uploadUrl": upload_url,
-            "driveFileId": None,
-            "driveMd5": None,
-            "createdAt": firestore.SERVER_TIMESTAMP,
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-            "schemaVersion": SCHEMA_VERSION,
-        }
-    )
+    db().collection("files").document(file_id).set(_file_doc(sid, uid, f, upload_url))
+
+
+def create_files_batch(sid: str, uid: str, files: list[tuple[str, FileSpec]]) -> None:
+    """[create_file] for every (file_id, spec) pair, batched — a plain Python
+    loop of individual `.set()` calls was one Firestore round trip per file (a
+    3-object split-bundle session is 3 already; a legacy per-file-per-frame
+    session could be far more). `upload_url` is always None here: provisioning
+    fills it in once Drive resumable sessions exist, same as the single-file
+    path. Chunked to Firestore's per-batch write cap, same pattern as
+    [_delete_refs]."""
+    for start in range(0, len(files), _BATCH_LIMIT):
+        batch = db().batch()
+        for file_id, f in files[start:start + _BATCH_LIMIT]:
+            batch.set(db().collection("files").document(file_id), _file_doc(sid, uid, f, None))
+        batch.commit()
 
 
 def complete_file(file_id: str, uid: str, body: FileComplete) -> str:

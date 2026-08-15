@@ -108,6 +108,56 @@ def test_pending_user_promoted_on_qualifying_signin(monkeypatch, store):
     assert u["access_status"] == "APPROVED"
 
 
+# ---------------- lastSeenAt throttle ----------------
+# A proxied restore is dozens of authenticated requests (one challenge+content
+# pair per adaptive download window) in quick succession — an unconditional
+# lastSeenAt write on every one of them was that many Firestore writes to
+# record a timestamp nobody reads at finer-than-hour resolution.
+def test_last_seen_write_is_throttled_when_nothing_else_changed(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    claims = _claims(sub="u3", email="x@nowhere.com")
+    repo.get_or_create_user(claims)  # creates the doc
+
+    fresh = datetime.now(timezone.utc) - timedelta(minutes=5)
+    store._data["users"]["u3"]["lastSeenAt"] = fresh
+
+    u = repo.get_or_create_user(claims)  # identical claims — nothing new to say
+
+    assert u["lastSeenAt"] == fresh, "a fresh, unchanged sign-in must not write"
+    assert store._data["users"]["u3"]["lastSeenAt"] == fresh
+
+
+def test_last_seen_write_happens_once_stale(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    claims = _claims(sub="u4", email="x@nowhere.com")
+    repo.get_or_create_user(claims)
+
+    stale = datetime.now(timezone.utc) - timedelta(hours=2)
+    store._data["users"]["u4"]["lastSeenAt"] = stale
+
+    u = repo.get_or_create_user(claims)
+
+    assert u["lastSeenAt"] != stale, "a stale timestamp must still refresh"
+    assert store._data["users"]["u4"]["lastSeenAt"] != stale
+
+
+def test_last_seen_write_happens_when_another_field_changed(monkeypatch, store):
+    # A real field change (role, access_status, provider, schema) must not be
+    # swallowed by the throttle just because lastSeenAt itself is fresh.
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    repo.get_or_create_user(_claims(sub="u5", email="x@corp.com", provider="google.com"))
+
+    u = repo.get_or_create_user(_claims(sub="u5", email="x@corp.com", provider="apple.com"))
+
+    assert u["signInProvider"] == "apple.com"
+
+
 # ---------------- complete_file idempotency ----------------
 def _seed_pending_file(store, file_id="f1", uid="u1", size=100):
     store._data.setdefault("files", {})[file_id] = {

@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.ReportBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -88,7 +89,10 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
             val files = host.summaryBatchFiles()
             val computed = try {
                 withContext(Dispatchers.Default) {
-                    SummaryAnimation.globalRanges(files) { done, total ->
+                    val rangesFile = files.firstOrNull()?.parentFile?.let {
+                        File(it, FieldRangesStore.FILE_NAME)
+                    }
+                    SummaryAnimation.globalRanges(files, rangesFile) { done, total ->
                         host.lifecycleScope.launch(Dispatchers.Main.immediate) {
                             if (!isShowing || rangesJob?.isActive != true) return@launch
                             progress.progress = done * PERCENT / total.coerceAtLeast(1)

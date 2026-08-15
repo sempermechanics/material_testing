@@ -6,6 +6,7 @@
 package com.indicvision.semper.ui.viewer
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.GifEncoder
 import com.indicvision.semper.report.VisualizationEngine
 import kotlinx.coroutines.currentCoroutineContext
@@ -190,18 +191,40 @@ class SummaryAnimation(private val spec: Spec) {
          * scale so far that the whole animation renders as a single colour.
          *
          * Fields with no correlated points anywhere are absent from the result.
-         */
-        /**
+         *
+         * @param rangesFile optional sidecar written by [FieldRangesStore.write] at
+         *   analysis time (see [com.indicvision.semper.ui.analysis.AnalysisViewModel]).
+         *   Used only when present and its frame count matches [batchFiles] exactly —
+         *   anything else (missing, corrupt, a resumed/edited batch whose frame count
+         *   has since changed) falls back to decoding every frame, unchanged from
+         *   before this cache existed. Either path returns bit-identical values: the
+         *   cache holds the exact same [VisualizationEngine.valueRanges] output the
+         *   fallback would (re)compute, just computed once instead of on every call.
          * @param onProgress optional `(done, total)` after each frame is considered
          * (including unreadable ones). Hop to Main inside the callback for UI.
          */
         suspend fun globalRanges(
             batchFiles: List<File>,
+            rangesFile: File? = null,
             onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
         ): Map<Int, Pair<Float, Float>> {
             val indices = FIELDS.map { it.second }.toIntArray()
-            val spans = mutableMapOf<Int, Pair<Float, Float>>()
             val total = batchFiles.size
+
+            val cached = rangesFile?.let { FieldRangesStore.read(it, indices) }
+            if (cached != null && cached.size == total) {
+                val spans = mutableMapOf<Int, Pair<Float, Float>>()
+                cached.forEachIndexed { index, frameRanges ->
+                    currentCoroutineContext().ensureActive()
+                    frameRanges.forEach { (valIndex, range) ->
+                        if (range != null) spans[valIndex] = widen(spans[valIndex], range)
+                    }
+                    onProgress(index + 1, total)
+                }
+                return spans
+            }
+
+            val spans = mutableMapOf<Int, Pair<Float, Float>>()
             // One frame at a time. The previous chain kept every ByteArray and
             // FloatArray alive until the pass finished — a heavy PLC band OOM'd
             // the 512 MB heap before the first GIF frame was built.

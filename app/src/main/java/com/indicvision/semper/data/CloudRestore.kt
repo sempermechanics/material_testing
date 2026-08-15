@@ -33,6 +33,8 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.zip.CRC32
+import java.util.zip.ZipInputStream
 
 /**
  * Rebuilds an analysis on this device from its cloud backup.
@@ -44,14 +46,18 @@ import java.util.concurrent.atomic.AtomicReference
  * frame list (image ↔ dat ↔ csv), so we can reconstruct the [SessionRecord]
  * and the on-disk layout exactly as a local run would have produced it.
  *
- * Files land back in the same shape [DicUploadWorker] uploaded them from:
+ * A restore fetches `Session.zip` (see [SessionZip.isRestoreEssential]) and rebuilds
+ * the full local layout — nothing a local run would have produced is missing:
  * ```
- * <sessionDir>/reference.png
- * <sessionDir>/frame_%04d.dat
- * <sessionDir>/raw_deformed/<original image name>
+ * <sessionDir>/reference.png              the heatmap backdrop
+ * <sessionDir>/frame_%04d.dat             the engine results
+ * <sessionDir>/raw_deformed/<name>        every deformed original
  * ```
+ * The derived deliverables (`csv`, `reports`, `processed`) are the only thing left in
+ * the cloud (`Extras.zip`) — they are regenerated on export, so a restore never reads
+ * them back.
  */
-@Suppress("TooManyFunctions") // one cohesive restore pipeline: fetch, parse, write, index
+@Suppress("TooManyFunctions", "LargeClass") // one cohesive restore pipeline: fetch, parse, write, index
 object CloudRestore {
 
     /** Input key for [DicRestoreWorker]: which cloud session to pull down. */
@@ -154,6 +160,18 @@ object CloudRestore {
 
     /** ZIP local-file / empty-archive signature prefix (`PK`). */
     private val ZIP_MAGIC = byteArrayOf(0x50, 0x4B)
+
+    /**
+     * Tail fetched to read a legacy bundle's central directory. Large enough for a
+     * few thousand entries; if the directory does not fit, the parse returns null and
+     * the whole archive is downloaded as before.
+     */
+    private const val CENTRAL_DIRECTORY_TAIL_BYTES = 512L * 1024L
+
+    /** Skip the extra round trip unless the prefix saves at least this fraction. */
+    private const val PREFIX_MIN_SAVING_DIVISOR = 20L // 5%
+
+    private const val UNPACK_BUFFER_BYTES = 64 * 1024
 
     /**
      * Why a restorable-list query failed or is empty — never collapse auth/config
@@ -307,8 +325,39 @@ object CloudRestore {
         require(magic.contentEquals(ZIP_MAGIC)) {
             "Session.zip is not a zip (magic=${magic.toList()}) — corrupt transfer"
         }
+
+        // Since the payload was split, Session.zip alone is no longer the whole
+        // analysis. "Save to Files" is the deliverables use case, so pull Extras.zip
+        // too and hand over one merged archive — the same single file as before.
+        files.firstOrNull { it.role == "extras" }?.let { mergeExtrasInto(api, token, it, dest, outDir) }
         onProgress(totalForUi, totalForUi)
         dest
+    }
+
+    /** Fold Extras.zip into [dest] so Save-to-Files still yields one complete archive. */
+    private suspend fun mergeExtrasInto(
+        api: IndicApi,
+        token: String,
+        extrasEntry: CloudFileDto,
+        dest: File,
+        outDir: File,
+    ) {
+        val extrasTmp = File(outDir, "${dest.name}.extras")
+        try {
+            val expected = extrasEntry.sizeBytes.takeIf { it > 0L } ?: -1L
+            api.downloadFile(token, extrasEntry.fileId, extrasTmp, expectedBytes = expected)
+            val expectedSha = extrasEntry.sha256?.lowercase()?.takeIf { it.length == 64 }
+                ?: error("Extras.zip missing sha256 attestation — corrupt transfer")
+            val gotSha = Digests.sha256Hex(extrasTmp)
+            require(gotSha == expectedSha) {
+                "Extras.zip sha256 mismatch (got $gotSha, expected $expectedSha) — corrupt transfer"
+            }
+            SessionZip.merge(listOf(dest, extrasTmp), dest)
+        } finally {
+            extrasTmp.delete()
+            File(outDir, "${extrasTmp.name}.part").delete()
+            File(outDir, "${extrasTmp.name}.full").delete()
+        }
     }
 
     /**
@@ -355,24 +404,26 @@ object CloudRestore {
         metaTmp.delete()
 
         // 2. Everything else, into the layout a local run would have produced.
-        // New backups hold ONE Session.zip; older ones list every file. Both
-        // rebuild the identical on-disk layout.
+        // Three eras, one destination layout (see destFor):
+        //  - schema/3+ : Session.zip holds ONLY raw/ + dat/. Fetch it whole; the
+        //                Extras.zip alongside it is never downloaded.
+        //  - schema<3  : one Session.zip holds everything. Fetch just the raw/+dat/
+        //                prefix, falling back to the whole archive if that is not
+        //                safely possible.
+        //  - pre-bundle: every artifact listed as its own file.
         val layout = Layout(sessionDir, rawDeformedDir)
-        var refPath = ""
         val bundleEntry = files.firstOrNull { it.role == "bundle" }
-        if (bundleEntry != null) {
-            refPath = downloadAndUnpackBundle(
-                api,
-                token,
-                sessionId,
-                bundleEntry,
-                layout,
-                appContext,
-                onProgress,
-            )
+        val outcome = if (bundleEntry != null) {
+            val fetch = BundleFetch(api, token, sessionId, appContext, bundleEntry, layout)
+            if (isSplitLayout(meta.optString("schema"))) {
+                downloadAndUnpackBundle(fetch, onProgress)
+            } else {
+                restoreLegacyBundle(fetch, onProgress)
+            }
         } else {
-            refPath = restoreLegacyFiles(api, token, files, layout, onProgress)
+            BundleOutcome(restoreLegacyFiles(api, token, files, layout, onProgress), "legacy-per-file")
         }
+        val refPath = outcome.refPath
 
         // 3. Rebuild the index row from the blueprint.
         check(
@@ -385,10 +436,35 @@ object CloudRestore {
                 allowOverLimit = true, // already counted in the cloud quota
             ),
         ) { "Could not update the restored session index" }
-        Timber.i("Restored analysis %s from cloud session %s (%d files)", localId, sessionId, files.size)
+        logRestoreSaving(localId, sessionId, outcome, metaEntry.sizeBytes, files)
         // The listing excludes backups already on this device, so it changed.
         invalidateRestorableCache()
         localId
+    }
+
+    /**
+     * Log bytes actually pulled vs the whole backup — the difference is the deformed
+     * originals + deliverables a restore no longer downloads. Reads straight out of
+     * logcat, so a live restore confirms the saving without extra instrumentation.
+     */
+    private fun logRestoreSaving(
+        localId: String,
+        sessionId: String,
+        outcome: BundleOutcome,
+        metaBytes: Long,
+        files: List<CloudFileDto>,
+    ) {
+        val downloaded = metaBytes.coerceAtLeast(0L) + outcome.bytesDownloaded
+        val backupTotal = files.sumOf { it.sizeBytes.coerceAtLeast(0L) }
+        Timber.i(
+            "Restored analysis %s from cloud session %s (%s): downloaded %d of %d backup bytes (%d files)",
+            localId,
+            sessionId,
+            outcome.mode,
+            downloaded,
+            backupTotal,
+            files.size,
+        )
     }
 
     /** Remove an interrupted restore's files while retaining its cloud-only index row. */
@@ -407,15 +483,216 @@ object CloudRestore {
      * [onProgress] is byte-based: (bytesOnDisk, declaredSize).
      */
     @Suppress("LongParameterList")
-    private suspend fun downloadAndUnpackBundle(
-        api: IndicApi,
-        token: String,
-        sessionId: String,
-        bundleEntry: CloudFileDto,
-        layout: Layout,
-        appContext: Context,
+    /**
+     * Whether this backup's `Session.zip` holds only the restore payload.
+     *
+     * `schema` has been written since the first cloud backups but never read until
+     * now, so the parse must be forgiving: anything unrecognised or missing is an
+     * older, everything-in-one-zip backup. Being wrong in that direction costs
+     * bandwidth; being wrong the other way would skip frames.
+     */
+    internal fun isSplitLayout(schema: String): Boolean {
+        val version = schema.substringAfterLast('/', "").toIntOrNull() ?: return false
+        return version >= SessionUploadMetadata.SCHEMA_SPLIT_BUNDLE
+    }
+
+    /**
+     * Legacy backup: one `Session.zip` holding raw/, dat/, csv/, reports/ and
+     * processed/. Only raw/ + dat/ are needed, and the uploader wrote them first, so
+     * they are a contiguous prefix — read the central directory, then fetch just that
+     * prefix instead of the whole archive.
+     *
+     * Whole-file sha256 cannot apply to a partial fetch, so entries are verified by
+     * their central-directory CRC32 instead. Anything unexpected — an unreadable
+     * directory, an interleaved layout, a CRC mismatch — falls back to downloading
+     * the entire archive, which is exactly today's behaviour.
+     */
+    private suspend fun restoreLegacyBundle(
+        fetch: BundleFetch,
         onProgress: suspend (done: Long, total: Long) -> Unit,
-    ): String {
+    ): BundleOutcome {
+        val size = fetch.entry.sizeBytes
+        val plan = if (size > 0L) {
+            runCatching { planPrefixFetch(fetch) }
+                .onFailure { Timber.w(it, "Prefix planning failed for %s; downloading whole bundle", fetch.sessionId) }
+                .getOrNull()
+        } else {
+            null
+        }
+        if (plan == null) return downloadAndUnpackBundle(fetch, onProgress)
+
+        val prefixTmp = File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_prefix.zip")
+        // The central-directory tail counts toward what the ranged restore pulled.
+        val tailBytes = minOf(size, CENTRAL_DIRECTORY_TAIL_BYTES)
+        return try {
+            Timber.i(
+                "Legacy bundle %s: fetching %d of %d bytes (%d%%)",
+                fetch.sessionId,
+                plan.cut,
+                size,
+                plan.cut * 100 / size.coerceAtLeast(1L),
+            )
+            onProgress(0L, plan.cut)
+            fetch.api.downloadRange(fetch.token, fetch.entry.fileId, prefixTmp, rangeStart = 0L, length = plan.cut)
+            require(prefixTmp.length() == plan.cut) {
+                "Prefix download is ${prefixTmp.length()} B, expected ${plan.cut} — corrupt transfer"
+            }
+            onProgress(plan.cut, plan.cut)
+            val ref = unpackPrefix(prefixTmp, fetch.layout, plan.crcByName)
+            BundleOutcome(ref, "legacy-ranged-prefix", plan.cut + tailBytes)
+        } catch (e: IllegalArgumentException) {
+            // A bad prefix is not a corrupt backup — fall back to the whole archive
+            // rather than failing a restore that would otherwise succeed.
+            Timber.w(e, "Prefix restore failed for %s; downloading whole bundle", fetch.sessionId)
+            prefixTmp.delete()
+            downloadAndUnpackBundle(fetch, onProgress)
+        } finally {
+            prefixTmp.delete()
+            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_prefix.zip.part").delete()
+            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_prefix.zip.full").delete()
+        }
+    }
+
+    /** Everything one bundle fetch needs; these always travel together. */
+    private data class BundleFetch(
+        val api: IndicApi,
+        val token: String,
+        val sessionId: String,
+        val appContext: Context,
+        val entry: CloudFileDto,
+        val layout: Layout,
+    )
+
+    /**
+     * Result of restoring the file payload: the reference image path, the bytes
+     * actually pulled off the network, and which strategy did it (for telemetry).
+     */
+    private data class BundleOutcome(
+        val refPath: String,
+        val mode: String,
+        val bytesDownloaded: Long = 0L,
+    )
+
+    /** Where the restore payload ends, plus the CRC of every entry inside it. */
+    internal data class PrefixPlan(val cut: Long, val crcByName: Map<String, Long>)
+
+    /**
+     * Read the archive's central directory over a tail range and work out how much of
+     * it is worth downloading. Returns null when a prefix fetch is not clearly safe.
+     */
+    private suspend fun planPrefixFetch(fetch: BundleFetch): PrefixPlan? {
+        val size = fetch.entry.sizeBytes
+        val tailLen = minOf(size, CENTRAL_DIRECTORY_TAIL_BYTES)
+        val tailTmp = File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_tail.bin")
+        try {
+            fetch.api.downloadRange(
+                fetch.token,
+                fetch.entry.fileId,
+                tailTmp,
+                rangeStart = size - tailLen,
+                length = tailLen,
+            )
+            return planFromTail(tailTmp.readBytes(), size - tailLen, size)
+        } finally {
+            tailTmp.delete()
+            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_tail.bin.part").delete()
+            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_tail.bin.full").delete()
+        }
+    }
+
+    /**
+     * Pure half of [planPrefixFetch]: what the fetched tail says about the archive.
+     *
+     * Every guard exits to null — "just download the whole archive" — so the return
+     * count is the safety property here, not a smell to refactor away.
+     */
+    @Suppress("ReturnCount")
+    internal fun planFromTail(tail: ByteArray, tailStart: Long, size: Long): PrefixPlan? {
+        val entries = ZipDirectory.parse(tail, tailStart, size) ?: return null
+        val cdOffset = ZipDirectory.centralDirectoryOffset(tail) ?: return null
+        val cut = ZipDirectory.prefixCut(entries, SessionZip.RESTORE_ENTRY_PREFIXES, cdOffset) ?: return null
+        // Only worth the extra round trip if it saves a meaningful amount.
+        if (cut >= size - (size / PREFIX_MIN_SAVING_DIVISOR)) return null
+        val crcByName = entries
+            .filter { entry -> SessionZip.RESTORE_ENTRY_PREFIXES.any { entry.name.startsWith(it) } }
+            .associate { it.name to it.crc32 }
+        return PrefixPlan(cut, crcByName)
+    }
+
+    /**
+     * Stream a downloaded prefix with [ZipInputStream] — [SessionZip.forEachEntry]
+     * uses random-access [java.util.zip.ZipFile], which needs the central directory
+     * this deliberately did not fetch. Each entry is checked against its
+     * central-directory CRC before it counts as restored.
+     *
+     * Deliberately does **not** go through [SessionZip]'s `DatCodec` decode: this path
+     * only runs for `schema < 3` archives (see [isSplitLayout]), which predate the
+     * split-bundle feature entirely — and therefore predate `DatCodec` too. Every
+     * `.dat` entry a legacy archive can hold is guaranteed raw. A schema this old
+     * never gets `DatCodec`-encoded going forward either, since a *new* upload always
+     * writes the current schema and goes through [SessionZip.build] /
+     * [SessionZip.forEachEntry] instead of this path.
+     */
+    private fun unpackPrefix(zip: File, layout: Layout, crcByName: Map<String, Long>): String {
+        var refPath = ""
+        var restored = 0
+        ZipInputStream(zip.inputStream().buffered()).use { input ->
+            generateSequence { input.nextEntry }
+                .filterNot { it.isDirectory }
+                .forEach { entry ->
+                    val dest = writePrefixEntry(input, entry.name, layout, crcByName[entry.name])
+                    if (dest.name == "reference.png") refPath = dest.absolutePath
+                    restored++
+                }
+        }
+        requirePrefixComplete(restored, crcByName.size)
+        return refPath
+    }
+
+    /** Copy one prefix entry into place, verifying it against its declared CRC. */
+    private fun writePrefixEntry(
+        input: ZipInputStream,
+        entryName: String,
+        layout: Layout,
+        expectedCrc: Long?,
+    ): File {
+        val role = entryName.substringBefore('/', missingDelimiterValue = "")
+        val name = entryName.substringAfter('/', missingDelimiterValue = "")
+        require(role.isNotEmpty() && name.isNotEmpty()) { "Unexpected entry $entryName — corrupt transfer" }
+        val dest = destFor(role, name, layout)
+        dest.parentFile?.mkdirs()
+        val crc = CRC32()
+        dest.outputStream().buffered().use { out ->
+            val buffer = ByteArray(UNPACK_BUFFER_BYTES)
+            var n = input.read(buffer)
+            while (n > 0) {
+                crc.update(buffer, 0, n)
+                out.write(buffer, 0, n)
+                n = input.read(buffer)
+            }
+        }
+        require(expectedCrc == null || crc.value == expectedCrc) {
+            "CRC mismatch for $entryName — corrupt transfer"
+        }
+        return dest
+    }
+
+    private fun requirePrefixComplete(restored: Int, expected: Int) {
+        require(restored == expected) {
+            "Prefix held $restored entries, expected $expected — corrupt transfer"
+        }
+    }
+
+    private suspend fun downloadAndUnpackBundle(
+        fetch: BundleFetch,
+        onProgress: suspend (done: Long, total: Long) -> Unit,
+    ): BundleOutcome {
+        val api = fetch.api
+        val token = fetch.token
+        val sessionId = fetch.sessionId
+        val bundleEntry = fetch.entry
+        val layout = fetch.layout
+        val appContext = fetch.appContext
         val zipTmp = File(appContext.cacheDir, "restore_${sessionId}_bundle.zip")
         return try {
             val expected = bundleEntry.sizeBytes.takeIf { it > 0L } ?: -1L
@@ -465,7 +742,7 @@ object CloudRestore {
             // Download bytes are done; hold 100% through unpack so the row
             // doesn't look stuck again during inflate.
             onProgress(totalForUi, totalForUi)
-            unpackBundle(zipTmp, layout)
+            BundleOutcome(unpackBundle(zipTmp, layout), "whole-bundle", zipTmp.length())
         } finally {
             zipTmp.delete()
             File(appContext.cacheDir, "restore_${sessionId}_bundle.zip.part").delete()

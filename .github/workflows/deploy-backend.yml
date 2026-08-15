@@ -23,9 +23,15 @@ on:
           name.
         required: true
       region:
-        description: Cloud Run region
+        description: >
+          Cloud Run region. Default matches docs/backend/BACKEND_SETUP_GCP.md and
+          config.py's TASKS_LOCATION default — Cloud Tasks location should match
+          Cloud Run's region. NOTE: asia-south1 is outside GCP's "always free"
+          egress region set (that tier is NA-only) — verify current free-tier
+          terms for whatever region a deploy actually targets before relying on
+          them for capacity planning.
         required: true
-        default: us-central1
+        default: asia-south1
       service:
         description: Cloud Run service name (empty = indic-api / indic-api-staging)
         required: false

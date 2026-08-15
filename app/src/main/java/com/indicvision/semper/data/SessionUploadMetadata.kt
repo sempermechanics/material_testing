@@ -17,6 +17,24 @@ import java.util.TimeZone
  */
 object SessionUploadMetadata {
 
+    /**
+     * Backup layout version, and the one field a restore is allowed to branch on.
+     *
+     * - `/2` and earlier: a single `Session.zip` holding raw/, dat/, csv/, reports/
+     *   and processed/ together.
+     * - `/3`: the payload is split — `Session.zip` carries only raw/ + dat/, and the
+     *   derived deliverables live in a separate `Extras.zip` that a restore skips.
+     *
+     * Restore reads this to know whether the bundle it is about to fetch is the small
+     * split one or a legacy everything-archive (see `CloudRestore.isSplitLayout`).
+     * Bump it only when that distinction changes, and keep the parse tolerant:
+     * pre-`/3` backups predate the field being read at all.
+     */
+    const val SCHEMA = "indic.session.metadata/3"
+
+    /** Layout version at which the restore payload was split out of the bundle. */
+    const val SCHEMA_SPLIT_BUNDLE = 3
+
     /** One JSON object per frame: its label, files, and (for a sweep) its settings. */
     fun framesJson(record: SessionRecord): JSONArray {
         val frames = JSONArray()
@@ -64,7 +82,7 @@ object SessionUploadMetadata {
                 .put("sweepSkipped", record.sweepSkipCount)
         }
         return JSONObject()
-            .put("schema", "indic.session.metadata/2")
+            .put("schema", SCHEMA)
             .put("localSessionId", record.id)
             .put("name", record.name)
             .put("specimen", record.refName)

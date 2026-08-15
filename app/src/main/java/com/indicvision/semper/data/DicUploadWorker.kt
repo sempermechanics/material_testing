@@ -19,10 +19,13 @@ import androidx.work.workDataOf
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.analytics.SemperAnalytics
+import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
 import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.net.MAX_CHUNK_BYTES
+import com.indicvision.semper.data.net.MIN_CHUNK_BYTES
 import com.indicvision.semper.data.net.SessionCreateRequest
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
@@ -55,17 +58,69 @@ import java.util.Locale
  *     bytes never pass through the backend,
  *  3. POSTs /v1/files/{id}/complete to record each Drive pointer.
  *
- * Layout per analysis (2 files — everything except the metadata blueprint is
- * bundled into one archive to keep Firestore's per-file costs flat):
+ * Layout per analysis (3 files — artifacts are bundled rather than uploaded
+ * individually to keep Firestore's per-file costs flat):
  * ```
  * session/<sid>/metadata.json   device, time, engine params, frame list
- *               Session.zip     raw/… (reference + deformed images),
- *                               dat/frame_%04d.dat  ← enables full restore,
- *                               csv/analysis_data.csv  (one combined file),
+ *               Session.zip     raw/…  (reference + every deformed original),
+ *                               dat/frame_%04d.dat ← enables full restore
+ *               Extras.zip      csv/analysis_data.csv  (one combined file),
  *                               reports/Master_Report_<frame>.pdf,
  *                               processed/<frame>/<field>.png
  * ```
+ * The split is what keeps a restore cheap without losing anything a local run would
+ * have produced: `Session.zip` holds every original image plus the engine results, so
+ * a restored session is fully usable — including on-device re-export — with one
+ * download. `Extras.zip` holds only the **derived** deliverables (regenerated on
+ * export, so a restore never needs them). "Save to Files" fetches both and merges
+ * them into one archive. See [SessionZip.isRestoreEssential].
  */
+
+/**
+ * Fraction of *currently available* memory the whole upload pipeline (all
+ * concurrent chunk buffers together) may hold live at once.
+ */
+private const val CHUNK_MEMORY_BUDGET_FRACTION = 0.10
+
+/**
+ * The server declares [serverChunkSize] (currently a flat 32 MiB —
+ * `firestore_repo.py:489`) without knowing what device will receive it.
+ * `isLowRamDevice` alone is a blunt signal: it is a fixed, device-class boolean,
+ * unaware of what else is resident right now (a memory-heavy DIC batch still in
+ * the session directory, another foreground app) — where [concurrency] may
+ * already be reduced to 1 but each of those single chunks could still be the
+ * full 32 MiB the server offered.
+ *
+ * Reading live `ActivityManager.MemoryInfo.availMem` instead budgets against
+ * *actual* headroom at upload time: [concurrency] chunk buffers must together
+ * stay within [CHUNK_MEMORY_BUDGET_FRACTION] of what's available right now.
+ * Drive's resumable PUT declares its own Content-Range per request, so nothing
+ * about the protocol requires a fixed chunk size across a transfer — shrinking
+ * it here is always safe, and
+ * [com.indicvision.semper.data.net.DriveTransfer.uploadResumable] re-clamps to
+ * [MIN_CHUNK_BYTES]/[MAX_CHUNK_BYTES] regardless, so a missing/zero `availMem`
+ * reading (some OEM ROMs) falls back to exactly the old behavior — the server's
+ * own value, clamped.
+ *
+ * Top-level (not a private companion member, like [DicUploadWorker]'s other
+ * helpers) so it is directly unit-testable — mirrors
+ * [com.indicvision.semper.data.net.nextWindowBytes] in `DriveTransfer.kt`.
+ */
+internal fun uploadChunkBytes(context: Context, serverChunkSize: Int, concurrency: Int): Int {
+    val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        ?: return serverChunkSize.coerceIn(MIN_CHUNK_BYTES, MAX_CHUNK_BYTES)
+    val info = android.app.ActivityManager.MemoryInfo()
+    am.getMemoryInfo(info)
+    if (info.availMem <= 0L) return serverChunkSize.coerceIn(MIN_CHUNK_BYTES, MAX_CHUNK_BYTES)
+
+    val perChunkBudget = (info.availMem * CHUNK_MEMORY_BUDGET_FRACTION / concurrency.coerceAtLeast(1)).toLong()
+    // Round down to a 256 KiB multiple — Drive requires it for every non-final chunk.
+    val rounded = (perChunkBudget / MIN_CHUNK_BYTES) * MIN_CHUNK_BYTES
+    return rounded
+        .coerceIn(MIN_CHUNK_BYTES.toLong(), minOf(serverChunkSize.toLong(), MAX_CHUNK_BYTES.toLong()))
+        .toInt()
+}
+
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun getForegroundInfo(): ForegroundInfo =
@@ -372,7 +427,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             // ── reference image (already stable on disk) ────────────────────
             val refFile = File(record.refPath)
             if (refFile.exists() && refFile.length() > 0) {
-                artifacts += Artifact("raw", "Reference.png", refFile)
+                artifacts += Artifact("raw", SessionZip.REFERENCE_NAME, refFile)
             }
 
             // ── per frame: original image, .dat, csv ────────────────────────
@@ -484,41 +539,50 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 return@withContext Result.success()
             }
 
-            // ── bundle: everything except metadata.json into ONE Session.zip ──
+            // ── bundles: split by what a restore actually needs ────────────────
             // Firestore prices the whole flow per file (a doc, a signed complete
             // call, a challenge/nonce cycle each), so 3F+4 files per analysis was
-            // burning the daily read quota in a single upload. One zip + the
-            // metadata blueprint = 2 files, and Drive resumable uploads resume a
-            // single large file mid-byte, so interruption recovery still works.
+            // burning the daily read quota in a single upload. Two zips + the
+            // metadata blueprint keeps that at 3 files, and Drive resumable uploads
+            // resume a single large file mid-byte, so recovery still works.
+            //
+            // The split is what makes restore cheap: Session.zip holds only raw/ and
+            // dat/ — everything needed to rebuild a working session — while the
+            // derived deliverables (csv/, reports/, processed/) go to Extras.zip.
+            // Nothing reads those back after a restore; they are regenerated on
+            // export, so a restore can skip them entirely.
             val payload = artifacts.filter { it.role != "metadata" }
             val uploadSet = if (payload.isEmpty()) {
                 artifacts.toList()
             } else {
-                val bundleZip = File(stagingDir, "Session.zip")
-                val hashSidecar = File(stagingDir, "Session.zip.sha256")
-                // Reuse only a sidecar-verified archive (see stagingReusable).
-                // Never invent a sidecar from a leftover truncated Session.zip —
-                // that uploaded bit-identical corrupt Drive objects.
-                val bundleSha = UploadWorkOutcomes.verifiedBundleSha256(bundleZip, hashSidecar)
-                    ?.takeIf { reuseStaging }
-                    ?: run {
-                        bundleZip.delete()
-                        hashSidecar.delete()
-                        File(stagingDir, "Session.zip.tmp").delete()
-                        // Zip dominates prepare on heavy PLC; drive the badge by
-                        // source bytes so it does not sit at 0%/last-frame forever.
-                        val zipTotal = payload.sumOf { it.file.length().coerceAtLeast(1L) }
-                        progPhase.set("prepare")
-                        progDone.set(0)
-                        progTotal.set(zipTotal.coerceAtLeast(1L))
-                        val hex = buildSessionBundle(payload, bundleZip) { n ->
-                            progDone.addAndGet(n)
-                        }
-                        hashSidecar.writeText(hex)
-                        hex
-                    }
+                // Zip dominates prepare on heavy PLC; drive the badge by source
+                // bytes across BOTH archives so it does not restart at 0%.
+                val zipTotal = payload.sumOf { it.file.length().coerceAtLeast(1L) }
+                progPhase.set("prepare")
+                progDone.set(0)
+                progTotal.set(zipTotal.coerceAtLeast(1L))
+                val onZipBytes: (Long) -> Unit = { n -> progDone.addAndGet(n) }
+
+                val restoreZip = stageArchive(
+                    stagingDir,
+                    BUNDLE_NAME,
+                    payload.filter { SessionZip.isRestoreEssential(it.role) },
+                    reuseStaging,
+                    onZipBytes,
+                )
+                val extrasZip = stageArchive(
+                    stagingDir,
+                    EXTRAS_NAME,
+                    payload.filterNot { SessionZip.isRestoreEssential(it.role) },
+                    reuseStaging,
+                    onZipBytes,
+                )
+
                 artifacts.filter { it.role == "metadata" } +
-                    Artifact("bundle", "Session.zip", bundleZip, bundleSha)
+                    listOfNotNull(
+                        restoreZip?.let { Artifact("bundle", BUNDLE_NAME, it.file, it.sha256) },
+                        extrasZip?.let { Artifact("extras", EXTRAS_NAME, it.file, it.sha256) },
+                    )
             }
 
             // Bundling is done — leave the "preparing" badge before we wait on
@@ -656,15 +720,17 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             progTotal.set(plan.work.sumOf { it.file.length() })
             val total = plan.work.size
             coroutineScope {
-                val gate = Semaphore(uploadConcurrency(applicationContext))
+                val concurrency = uploadConcurrency(applicationContext)
+                val gate = Semaphore(concurrency)
                 plan.work.map { job ->
                     async {
                         gate.withPermit {
+                            val chunkBytes = uploadChunkBytes(applicationContext, job.chunkSize, concurrency)
                             Timber.d("Uploading %s (%d bytes)…", job.name, job.file.length())
                             val (driveId, md5) = api.uploadResumable(
                                 job.uploadUrl,
                                 job.file,
-                                job.chunkSize,
+                                chunkBytes,
                             ) { n -> progDone.addAndGet(n) }
                             // Re-read the token: a long upload can outlive it.
                             val tk = TokenProvider.usableIdToken() ?: idToken
@@ -816,7 +882,49 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             payload.map { SessionZip.Member(it.role, it.name, it.file) },
             out,
             onBytes = onBytes,
+            // Cloud-controlled version gate (Phase 1.3's .dat codec) — see
+            // AppRemoteConfig.datCodecEncodingEnabled's doc and SessionZip's
+            // isDatEntry doc for why this cannot just default to on.
+            encodeDatEntries = AppRemoteConfig.datCodecEncodingEnabled(applicationContext),
         )
+
+    /** A staged archive and the sha256 declared for it. */
+    private data class StagedArchive(val file: File, val sha256: String)
+
+    /**
+     * Build (or reuse) one archive named [zipName] from [members] in [stagingDir].
+     *
+     * Returns null when [members] is empty — a session with no derived artifacts
+     * must not declare an empty Extras.zip, both because [SessionZip.build] rejects
+     * an empty payload and because an empty object would cost a Firestore doc and a
+     * signed upload for nothing.
+     *
+     * Reuses only a sidecar-verified archive (see `UploadWorkOutcomes.stagingReusable`).
+     * A sidecar is never invented from a leftover truncated zip — doing so uploaded
+     * bit-identical corrupt Drive objects.
+     */
+    private fun stageArchive(
+        stagingDir: File,
+        zipName: String,
+        members: List<Artifact>,
+        reuseStaging: Boolean,
+        onBytes: (Long) -> Unit,
+    ): StagedArchive? {
+        if (members.isEmpty()) return null
+        val zip = File(stagingDir, zipName)
+        val sidecar = File(stagingDir, "$zipName.sha256")
+        val sha = UploadWorkOutcomes.verifiedBundleSha256(zip, sidecar)
+            ?.takeIf { reuseStaging }
+            ?: run {
+                zip.delete()
+                sidecar.delete()
+                File(stagingDir, "$zipName.tmp").delete()
+                val hex = buildSessionBundle(members, zip, onBytes)
+                sidecar.writeText(hex)
+                hex
+            }
+        return StagedArchive(zip, sha)
+    }
 
     /**
      * Every WorkManager RETRY must leave a WARN in logcat (release
@@ -829,6 +937,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 
     private companion object {
+        /** Restore-essential archive: everything needed to rebuild a working session. */
+        const val BUNDLE_NAME = "Session.zip"
+
+        /** Derived deliverables a restore never reads; fetched only on demand. */
+        const val EXTRAS_NAME = "Extras.zip"
+
         /** How often the progress sampler pushes phase+percent to WorkManager. */
         const val PROGRESS_SAMPLE_MS = 700L
 

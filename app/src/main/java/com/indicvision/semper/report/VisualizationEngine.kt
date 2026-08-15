@@ -8,6 +8,7 @@
     "CyclomaticComplexMethod",
     "LongParameterList",
     "NestedBlockDepth",
+    "TooManyFunctions", // quickSelect + its partition/pivot/swap helpers stay next to their one caller
 )
 
 package com.indicvision.semper.report
@@ -105,12 +106,76 @@ object VisualizationEngine {
     private fun computeSigmaClampedRange(values: FloatArray, count: Int, valIndex: Int): Pair<Float, Float> {
         if (count == 0) return Pair(0f, 1f)
 
-        values.sort(0, count)
+        val p02Index = (count * 0.02).toInt().coerceIn(0, count - 1)
+        val p98Index = (count * 0.98).toInt().coerceIn(0, count - 1)
 
-        val p02 = values[(count * 0.02).toInt().coerceIn(0, count - 1)]
-        val p98 = values[(count * 0.98).toInt().coerceIn(0, count - 1)]
+        // Only two order statistics are needed out of this scratch array — quickSelect
+        // finds each in expected O(n) instead of paying O(n log n) to fully sort it.
+        // p98's search range starts at p02Index: quickSelect's postcondition (every
+        // element before the found index is <= it, every element after is >=) means
+        // everything from p02Index onward already excludes values known to be below
+        // the p02 cut, without narrowing away the true p98 value.
+        val p02 = quickSelect(values, p02Index, 0, count)
+        val p98 = quickSelect(values, p98Index, p02Index, count)
 
         return clampSpan(p02, p98, valIndex)
+    }
+
+    /**
+     * The k-th smallest value of `values[fromIndex, toIndex)` — the same value
+     * `values.sort(fromIndex, toIndex); values[k]` would produce, using `Float`'s
+     * total order ([Float.compareTo] — `-0.0 < 0.0`, NaN greatest, same as
+     * `Arrays.sort(float[])`) rather than IEEE `<`, so a percentile landing exactly
+     * on `-0.0`/`0.0` picks the identical element a full sort would have. Partially
+     * reorders that range as a side effect (same contract a full sort would have —
+     * every caller here treats the array as scratch, consumed after the call).
+     *
+     * Package-visible (not just private to this file) — [ReportBuilder] reuses it
+     * for the same p02/p98 pick.
+     */
+    internal fun quickSelect(values: FloatArray, k: Int, fromIndex: Int, toIndex: Int): Float {
+        var lo = fromIndex
+        var hi = toIndex - 1
+        while (lo < hi) {
+            val pivotIndex = medianOfThreePivotIndex(values, lo, hi)
+            val pivotFinal = partition(values, lo, hi, pivotIndex)
+            when {
+                k < pivotFinal -> hi = pivotFinal - 1
+                k > pivotFinal -> lo = pivotFinal + 1
+                else -> return values[k]
+            }
+        }
+        return values[lo]
+    }
+
+    /** Median-of-three pivot choice — keeps quickSelect off its O(n^2) worst case on already-sorted-ish data. */
+    private fun medianOfThreePivotIndex(values: FloatArray, lo: Int, hi: Int): Int {
+        val mid = lo + (hi - lo) / 2
+        if (values[mid].compareTo(values[lo]) < 0) values.swapInPlace(mid, lo)
+        if (values[hi].compareTo(values[lo]) < 0) values.swapInPlace(hi, lo)
+        if (values[hi].compareTo(values[mid]) < 0) values.swapInPlace(hi, mid)
+        return mid
+    }
+
+    /** Lomuto partition around `values[pivotIndex]`; returns the pivot's final sorted position. */
+    private fun partition(values: FloatArray, lo: Int, hi: Int, pivotIndex: Int): Int {
+        val pivotValue = values[pivotIndex]
+        values.swapInPlace(pivotIndex, hi)
+        var storeIndex = lo
+        for (i in lo until hi) {
+            if (values[i].compareTo(pivotValue) < 0) {
+                values.swapInPlace(i, storeIndex)
+                storeIndex++
+            }
+        }
+        values.swapInPlace(storeIndex, hi)
+        return storeIndex
+    }
+
+    private fun FloatArray.swapInPlace(i: Int, j: Int) {
+        val tmp = this[i]
+        this[i] = this[j]
+        this[j] = tmp
     }
 
     /** Shared min-span floor for [computeSigmaClampedRange]. */

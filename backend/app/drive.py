@@ -231,8 +231,8 @@ def find_user_folder(token: str, uid: str):
 
 def ensure_session_folders(token: str, uid: str, sid: str, roles=None) -> dict:
     """Build Research Storage/user/{uid}/session/{sid}/ plus the role subfolders
-    the manifest actually uses. "bundle" (Session.zip) and "metadata" live at the
-    session root — no subfolder, no extra Drive round-trips.
+    the manifest actually uses. "bundle" (Session.zip), "extras" (Extras.zip) and
+    "metadata" live at the session root — no subfolder, no extra Drive round-trips.
 
     Partial failure mid-walk may leave an empty orphan folder under session/;
     that is monitored / accepted rather than rolled back.
@@ -246,7 +246,7 @@ def ensure_session_folders(token: str, uid: str, sid: str, roles=None) -> dict:
     # userFolderId is returned so it can be persisted on the user doc: account
     # deletion then erases Drive via a stored id instead of re-walking names.
     folders = {"sessionFolderId": sid_dir, "userFolderId": uid_dir,
-               "bundle": sid_dir, "metadata": sid_dir}
+               "bundle": sid_dir, "extras": sid_dir, "metadata": sid_dir}
     wanted = roles if roles is not None else ("raw", "processed", "reports", "csv", "dat")
     for role in wanted:
         if role not in folders:

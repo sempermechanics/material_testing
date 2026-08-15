@@ -15,6 +15,7 @@ import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.EngineStats
+import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.FieldResult
 import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
@@ -223,7 +224,8 @@ object SessionUploadBundler {
                 backgroundColor = ContextCompat.getColor(context, R.color.viewer_canvas),
             ),
         )
-        val ranges = SummaryAnimation.globalRanges(batchFiles)
+        val rangesFile = File(sessionDir, FieldRangesStore.FILE_NAME)
+        val ranges = SummaryAnimation.globalRanges(batchFiles, rangesFile)
         var gifs = 0
         for ((label, dataIndex) in SummaryAnimation.FIELDS) {
             val bounds = ranges[dataIndex] ?: continue
