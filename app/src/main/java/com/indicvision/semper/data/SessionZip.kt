@@ -78,12 +78,18 @@ internal object SessionZip {
         fileName.substringAfterLast('.').lowercase(Locale.US) in STORE_EXTENSIONS
 
     /**
-     * `.dat` gets its own path on *read* — [DatCodec.decodeIfEncoded] is applied in
-     * [readEntry] and [copyEntry] so this archive already transparently understands
-     * a codec-encoded entry if one ever arrives (self-describing by magic header;
-     * a raw, non-encoded entry passes through unchanged). [putMember] does **not**
-     * call [DatCodec.encode] — see that function's doc for why: installed clients
-     * with no [DatCodec] awareness at all cannot decode an entry we'd produce today.
+     * `.dat` gets its own path on both read and write. *Read* — [DatCodec.decodeIfEncoded]
+     * is applied in [readEntry] and [copyEntry], so this archive transparently
+     * understands a codec-encoded entry (self-describing by magic header; a raw,
+     * legacy entry passes through unchanged) regardless of which side of the
+     * version gate produced it. *Write* — [putMember] calls [DatCodec.encode] only
+     * when the caller's [build] passes `encodeDatEntries = true`, which [build]'s
+     * own callers gate on [com.indicvision.semper.data.net.AppRemoteConfig]'s
+     * `datCodecEncodingEnabled` (backend-controlled rollout — see that function's
+     * doc and `backend/app/config.py`'s `DAT_CODEC_ENCODING_ENABLED` for why this
+     * cannot just default to on: an already-installed client with no [DatCodec]
+     * awareness at all writes a restored `.dat` straight to disk with no decode
+     * step, so an encoded entry reaching it would silently corrupt that restore).
      */
     private fun isDatEntry(fileName: String): Boolean =
         fileName.substringAfterLast('.').equals("dat", ignoreCase = true)
@@ -95,11 +101,16 @@ internal object SessionZip {
      * @param onBytes invoked with source bytes written into the archive (not
      * the CRC pre-pass for STORED entries). Used for Home "preparing %" on
      * large PLC bundles where zip dominates prepare time.
+     * @param encodeDatEntries version-gated — see [isDatEntry]'s doc. `false`
+     * (today's raw-STORED behaviour) unless the caller has confirmed via
+     * [com.indicvision.semper.data.net.AppRemoteConfig] that the account may
+     * upload the codec-encoded format.
      */
     fun build(
         members: List<Member>,
         out: File,
         onBytes: (Long) -> Unit = {},
+        encodeDatEntries: Boolean = false,
     ): String {
         require(members.isNotEmpty()) { "Session.zip payload is empty" }
         val tmp = File(out.parentFile, "${out.name}.tmp")
@@ -107,8 +118,8 @@ internal object SessionZip {
         val digest = Digests.sha256()
         var promoted = false
         try {
-            writeArchive(tmp, members, digest, onBytes)
-            verifyRoundTrip(tmp, members)
+            writeArchive(tmp, members, digest, onBytes, encodeDatEntries)
+            verifyRoundTrip(tmp, members, encodeDatEntries)
             val hex = Digests.toHex(digest.digest())
             promote(tmp, out)
             promoted = true
@@ -139,10 +150,11 @@ internal object SessionZip {
         members: List<Member>,
         digest: java.security.MessageDigest,
         onBytes: (Long) -> Unit,
+        encodeDatEntries: Boolean,
     ) {
         DigestOutputStream(BufferedOutputStream(tmp.outputStream()), digest).use { digOut ->
             ZipOutputStream(digOut).use { zip ->
-                members.forEach { putMember(zip, it, onBytes) }
+                members.forEach { putMember(zip, it, onBytes, encodeDatEntries) }
             }
         }
     }
@@ -270,22 +282,16 @@ internal object SessionZip {
     }
 
     /**
-     * NOT wired to [DatCodec.encode] — see the class doc's rollout note. Every
-     * already-installed build (release and any earlier debug/internal build) has no
-     * concept of [DatCodec] at all: its [forEachEntry]/restore path writes a `.dat`
-     * archive entry straight to disk with zero decode step. Uploading a
-     * codec-encoded `.dat` today would silently corrupt every restore performed by
-     * a user who has not yet updated — this repo has real installs in the field, so
-     * that is not a hypothetical. [DatCodec] stays fully implemented and tested
-     * (see [DatCodecTest]) and this file's *read* side already decodes it
-     * transparently ([decodeDatEntryOrThrow], [copyEntry]) — encoding turns on the
-     * moment a minimum-supported-version gate (or equivalent) makes "no client
-     * without decode support can still receive an encoded upload" true, with no
-     * further code change needed here.
+     * [DatCodec.encode] is applied to a `.dat` member only when [encodeDatEntries]
+     * is true — see [isDatEntry]'s class-doc note on why this is version-gated
+     * rather than unconditional. Every other member is unaffected either way.
      */
-    private fun putMember(zip: ZipOutputStream, member: Member, onBytes: (Long) -> Unit) {
+    private fun putMember(zip: ZipOutputStream, member: Member, onBytes: (Long) -> Unit, encodeDatEntries: Boolean) {
         val entryName = entryName(member.role, member.name)
-        if (shouldStore(member.name)) {
+        if (encodeDatEntries && isDatEntry(member.name)) {
+            val encoded = DatCodec.encode(member.file.readBytes())
+            putStoredBytes(zip, entryName, encoded, onBytes)
+        } else if (shouldStore(member.name)) {
             putStored(zip, entryName, member.file, onBytes)
         } else {
             putDeflated(zip, entryName, member.file, onBytes)
@@ -367,19 +373,35 @@ internal object SessionZip {
     }
 
     /** Ensure every member extracts byte-identical to its source before upload. */
-    fun verifyRoundTrip(zip: File, members: List<Member>) {
+    fun verifyRoundTrip(zip: File, members: List<Member>, encodeDatEntries: Boolean = false) {
         ZipFile(zip).use { zf ->
             check(zf.size() == members.size) {
                 "Session.zip entry count ${zf.size()} != payload ${members.size}"
             }
-            members.forEach { member -> checkMember(zf, member) }
+            members.forEach { member -> checkMember(zf, member, encodeDatEntries) }
         }
     }
 
-    private fun checkMember(zf: ZipFile, member: Member) {
+    private fun checkMember(zf: ZipFile, member: Member, encodeDatEntries: Boolean) {
         val name = entryName(member.role, member.name)
         val entry = zf.getEntry(name)
             ?: error("Session.zip missing entry $name after bundling")
+        if (encodeDatEntries && isDatEntry(member.name)) {
+            // A DatCodec-encoded entry's bytes never equal the source file's own
+            // bytes (that's the point), so neither the CRC32 nor the SHA-256 path
+            // below applies — decode the entry back and compare THAT against the
+            // source. This exercises the decoder on every single upload, which is
+            // a strictly stronger guarantee than comparing raw bytes: a codec bug
+            // that corrupts data would be caught right here, before promote, not
+            // discovered later on someone's restore.
+            val decoded = DatCodec.decode(zf.getInputStream(entry).use { it.readBytes() })
+            val got = Digests.toHex(Digests.sha256(decoded))
+            val expect = Digests.sha256Hex(member.file)
+            check(got == expect) {
+                "Session.zip entry $name round-trip hash mismatch after DatCodec encode+decode"
+            }
+            return
+        }
         if (entry.method == ZipEntry.STORED) {
             // STORED entries already carry a CRC32 in the archive's central
             // directory — putStored computed it in the same pre-pass that set

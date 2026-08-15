@@ -19,6 +19,7 @@ import androidx.work.workDataOf
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.analytics.SemperAnalytics
+import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
 import com.indicvision.semper.data.net.HttpStatus
@@ -881,6 +882,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             payload.map { SessionZip.Member(it.role, it.name, it.file) },
             out,
             onBytes = onBytes,
+            // Cloud-controlled version gate (Phase 1.3's .dat codec) — see
+            // AppRemoteConfig.datCodecEncodingEnabled's doc and SessionZip's
+            // isDatEntry doc for why this cannot just default to on.
+            encodeDatEntries = AppRemoteConfig.datCodecEncodingEnabled(applicationContext),
         )
 
     /** A staged archive and the sha256 declared for it. */

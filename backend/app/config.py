@@ -34,6 +34,22 @@ class Settings:
     MAX_FILES_PER_SESSION = _env_int("MAX_FILES_PER_SESSION", "600")
     MAX_FRAMES_PER_ANALYSIS = _env_int("MAX_FRAMES_PER_ANALYSIS", "150")
 
+    # Version gate for the .dat archive codec (Phase 1.3 of the perf plan):
+    # SessionZip's *read* side has understood a DatCodec-encoded .dat entry
+    # since it shipped (self-describing by magic header, decode is a no-op
+    # passthrough for a raw legacy entry) — but the *write* side must not
+    # start producing encoded entries until every client that could ever
+    # restore one has that read support. An already-installed app with zero
+    # DatCodec awareness writes a restored .dat straight to disk with no
+    # decode step; an encoded entry would silently corrupt that restore.
+    # Default off (fleet-wide) until adoption of the DatCodec-aware app
+    # version is confirmed high enough — flip via this env var, or canary a
+    # single account first via the per-user override (PATCH /v1/admin/users/
+    # {uid}/config, same mechanism as the numeric limits above).
+    DAT_CODEC_ENCODING_ENABLED = os.environ.get(
+        "DAT_CODEC_ENCODING_ENABLED", "false",
+    ).strip().lower() == "true"
+
     # Comma-separated emails that are treated as admins (role=admin, always
     # approved) — they can call the /v1/admin/* endpoints. e.g.
     # "support@indicvision.com,damodar@indicvision.com".

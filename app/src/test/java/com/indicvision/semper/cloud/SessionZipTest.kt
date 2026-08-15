@@ -121,13 +121,10 @@ class SessionZipTest {
     }
 
     @Test
-    fun `dat entries are stored raw on build, not DatCodec-encoded — see the rollout note`() {
-        // putMember deliberately does NOT call DatCodec.encode (SessionZip.kt's doc on
-        // putMember explains why: an already-installed client with no DatCodec
-        // awareness would silently corrupt a codec-encoded restore). This pins that
-        // the archive holds the exact source bytes today, and that forEachEntry's
-        // decode-on-read step is a correct no-op passthrough for that raw data —
-        // both must keep holding once encoding is turned on for real.
+    fun `dat entries are stored raw by default (encodeDatEntries=false)`() {
+        // The default matches every existing caller that doesn't pass
+        // encodeDatEntries explicitly — an already-installed client with no
+        // DatCodec awareness must still be able to read what it uploads today.
         val dir = createTempDirectory(prefix = "session-zip-dat-").toFile()
         try {
             val datBytes = sampleDatBytes()
@@ -157,26 +154,106 @@ class SessionZipTest {
     }
 
     @Test
-    fun `merge preserves a dat entry's bytes exactly`() {
-        val dir = createTempDirectory(prefix = "session-zip-merge-dat-").toFile()
+    fun `dat entries are DatCodec-encoded when encodeDatEntries=true, and read back exactly`() {
+        val dir = createTempDirectory(prefix = "session-zip-dat-encoded-").toFile()
         try {
             val datBytes = sampleDatBytes()
             val dat = File(dir, "frame_0000.dat").also { it.writeBytes(datBytes) }
-            val bundle = File(dir, "Session.zip")
-            SessionZip.build(listOf(SessionZip.Member("dat", dat.name, dat)), bundle)
+            val out = File(dir, "Session.zip")
+            SessionZip.build(
+                listOf(SessionZip.Member("dat", dat.name, dat)),
+                out,
+                encodeDatEntries = true,
+            )
 
-            val merged = File(dir, "merged.zip")
-            SessionZip.merge(listOf(bundle), merged)
-
-            ZipFile(merged).use { zf ->
+            ZipFile(out).use { zf ->
                 val entry = zf.getEntry("dat/frame_0000.dat")!!
-                val mergedBytes = zf.getInputStream(entry).use { it.readBytes() }
+                val archiveBytes = zf.getInputStream(entry).use { it.readBytes() }
+                assertTrue(
+                    "the archive entry should be the encoded form, not the raw source bytes",
+                    !archiveBytes.contentEquals(datBytes),
+                )
                 assertArrayEquals(
-                    "Save to Files must hand over a directly-usable .dat",
+                    "encode() then decode() must round-trip exactly",
                     datBytes,
-                    mergedBytes,
+                    DatCodec.decode(archiveBytes),
                 )
             }
+
+            var decoded: ByteArray? = null
+            SessionZip.forEachEntry(out) { role, name, input ->
+                if (role == "dat" && name == "frame_0000.dat") decoded = input.readBytes()
+            }
+            assertArrayEquals(
+                "forEachEntry must transparently decode on read",
+                datBytes,
+                decoded,
+            )
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `verifyRoundTrip decodes an encoded dat entry back and compares against the source`() {
+        // The CRC32/SHA-256 paths in checkMember compare archive bytes against
+        // source bytes directly — deliberately wrong for an encoded entry, whose
+        // archive bytes never equal the source. This pins the decode-then-compare
+        // path that must run instead, and that it actually catches a real corruption
+        // rather than trivially passing because it stopped comparing anything.
+        val dir = createTempDirectory(prefix = "session-zip-dat-verify-").toFile()
+        try {
+            val datBytes = sampleDatBytes()
+            val dat = File(dir, "frame_0000.dat").also { it.writeBytes(datBytes) }
+            val member = SessionZip.Member("dat", dat.name, dat)
+            val out = File(dir, "Session.zip")
+
+            // build() already calls verifyRoundTrip internally — reaching this
+            // line without an exception is itself proof the happy path works.
+            SessionZip.build(listOf(member), out, encodeDatEntries = true)
+
+            // Mutate the source after the archive was written, then re-verify
+            // explicitly — the archive's encoded entry now decodes to stale bytes.
+            dat.writeBytes(datBytes.copyOf().also { it[0] = (it[0] + 1).toByte() })
+            val failure = assertThrows(IllegalStateException::class.java) {
+                SessionZip.verifyRoundTrip(out, listOf(member), encodeDatEntries = true)
+            }
+            assertTrue(
+                "expected a round-trip hash mismatch, got: ${failure.message}",
+                failure.message.orEmpty().contains("round-trip hash mismatch"),
+            )
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    /** One [encode] case of `merge preserves a dat entry's bytes exactly regardless of source encoding`. */
+    private fun assertMergePreservesDatBytes(dir: File, datBytes: ByteArray, encode: Boolean) {
+        val dat = File(dir, "frame_0000.dat").also { it.writeBytes(datBytes) }
+        val bundle = File(dir, "bundle_$encode.zip")
+        SessionZip.build(listOf(SessionZip.Member("dat", dat.name, dat)), bundle, encodeDatEntries = encode)
+
+        val merged = File(dir, "merged_$encode.zip")
+        SessionZip.merge(listOf(bundle), merged)
+
+        val mergedBytes = ZipFile(merged).use { zf ->
+            val e = zf.getEntry("dat/frame_0000.dat")!!
+            zf.getInputStream(e).use { it.readBytes() }
+        }
+        assertArrayEquals(
+            "Save to Files must hand over a directly-usable .dat (encodeDatEntries=$encode)",
+            datBytes,
+            mergedBytes,
+        )
+    }
+
+    @Test
+    fun `merge preserves a dat entry's bytes exactly regardless of source encoding`() {
+        val dir = createTempDirectory(prefix = "session-zip-merge-dat-").toFile()
+        try {
+            val datBytes = sampleDatBytes()
+            assertMergePreservesDatBytes(dir, datBytes, encode = false)
+            assertMergePreservesDatBytes(dir, datBytes, encode = true)
         } finally {
             dir.deleteRecursively()
         }
