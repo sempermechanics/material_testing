@@ -34,12 +34,15 @@
                 app:tint="@color/viewer_on_dark" />
 
             <TextView
+                android:id="@+id/tvFinding"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="2"
                 android:text="@string/results_title"
                 android:textColor="@color/viewer_on_dark"
-                android:textSize="16sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
             <!-- Reveals the engine settings this result was produced with. -->
@@ -85,7 +88,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldU"
-                style="@style/Widget.Semper.SegmentedButton"
+                style="@style/Widget.Semper.SegmentedButton.Viewer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -93,7 +96,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldV"
-                style="@style/Widget.Semper.SegmentedButton"
+                style="@style/Widget.Semper.SegmentedButton.Viewer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -101,7 +104,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldExx"
-                style="@style/Widget.Semper.SegmentedButton"
+                style="@style/Widget.Semper.SegmentedButton.Viewer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -109,7 +112,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldEyy"
-                style="@style/Widget.Semper.SegmentedButton"
+                style="@style/Widget.Semper.SegmentedButton.Viewer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -117,79 +120,12 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldExy"
-                style="@style/Widget.Semper.SegmentedButton"
+                style="@style/Widget.Semper.SegmentedButton.Viewer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="@string/field_exy" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
-
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/topScroll"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_marginTop="8dp"
-            android:layout_marginEnd="10dp"
-            android:background="@drawable/bg_viewer_panel"
-            android:paddingHorizontal="6dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="8dp">
-
-            <ToggleButton
-                android:id="@+id/toggleInspect"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:background="@drawable/bg_chip_toggle"
-                android:minWidth="0dp"
-                android:paddingHorizontal="16dp"
-                android:textAllCaps="false"
-                android:textColor="@color/viewer_on_dark"
-                android:textOff="@string/toggle_inspect"
-                android:textOn="@string/toggle_inspect"
-                android:textStyle="bold"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@id/btnInputCoords"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnInputCoords"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:minWidth="0dp"
-                android:outlineProvider="background"
-                android:paddingHorizontal="18dp"
-                android:text="@string/x_y"
-                android:textAllCaps="false"
-                android:textColor="@color/viewer_on_dark"
-                android:textStyle="bold"
-                app:backgroundTint="@color/ic_semper_launcher_background"
-                app:cornerRadius="22dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@id/toggleMaxMin"
-                app:layout_constraintStart_toEndOf="@id/toggleInspect"
-                app:layout_constraintTop_toTopOf="parent" />
-
-            <ToggleButton
-                android:id="@+id/toggleMaxMin"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:background="@drawable/bg_chip_toggle"
-                android:minWidth="0dp"
-                android:paddingHorizontal="16dp"
-                android:textAllCaps="false"
-                android:textColor="@color/viewer_on_dark"
-                android:textOff="@string/toggle_max_min"
-                android:textOn="@string/toggle_max_min"
-                android:textStyle="bold"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@id/btnInputCoords"
-                app:layout_constraintTop_toTopOf="parent" />
-        </androidx.constraintlayout.widget.ConstraintLayout>
     </LinearLayout>
 
     <!-- Fixed color-scale legend band: sits between the top controls and the
@@ -242,7 +178,7 @@
 
     <!-- Image area: fills the space between the legend band and the scrubber. -->
     <!-- forceDarkAllowed=false: measurement colors (heatmap, legend,
-         inspect crosshair) must never be inverted by dark mode. -->
+         probe crosshair) must never be inverted by dark mode. -->
     <RelativeLayout
         android:id="@+id/zoomContainer"
         android:layout_width="match_parent"
@@ -271,12 +207,12 @@
             android:id="@+id/glassShield"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:clickable="true"
-            android:focusable="true"
+            android:clickable="false"
+            android:focusable="false"
             android:visibility="gone" />
 
         <!-- Summary animation. Covers the frame views while it is showing, so the
-             zoom/inspect machinery underneath needs no special case. -->
+             zoom/probe machinery underneath needs no special case. -->
         <FrameLayout
             android:id="@+id/summaryLayer"
             android:layout_width="match_parent"
@@ -344,94 +280,19 @@
         android:paddingTop="8dp"
         android:paddingBottom="12dp">
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/tvStatsCaption"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="6dp"
-            android:baselineAligned="false"
-            android:orientation="horizontal">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="4dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_viewer_panel"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="8dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/stat_max"
-                    android:textColor="@color/viewer_on_dark"
-                    android:textSize="11sp" />
-
-                <TextView
-                    android:id="@+id/tvStatMax"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:textColor="@color/sky_primary"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="4dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_viewer_panel"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="8dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/stat_min"
-                    android:textColor="@color/viewer_on_dark"
-                    android:textSize="11sp" />
-
-                <TextView
-                    android:id="@+id/tvStatMin"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:textColor="@color/sky_primary"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_viewer_panel"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="8dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/stat_mean"
-                    android:textColor="@color/viewer_on_dark"
-                    android:textSize="11sp" />
-
-                <TextView
-                    android:id="@+id/tvStatMean"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:textColor="@color/sky_primary"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-        </LinearLayout>
+            android:background="@drawable/bg_viewer_panel"
+            android:fontFamily="monospace"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="8dp"
+            android:text="@string/stat_empty"
+            android:textColor="@color/viewer_on_dark"
+            android:textSize="12sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -521,54 +382,20 @@
         </LinearLayout>
     </LinearLayout>
 
-    <androidx.cardview.widget.CardView
-        android:id="@+id/cardInspectorHud"
+    <TextView
+        android:id="@+id/tvProbeReadout"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_above="@id/layoutScrubber"
         android:layout_alignParentStart="true"
         android:layout_marginStart="16dp"
         android:layout_marginBottom="8dp"
-        android:visibility="gone"
-        app:cardBackgroundColor="@color/viewer_glass"
-        app:cardCornerRadius="14dp"
-        app:cardElevation="6dp">
-
-        <TextView
-            android:id="@+id/tvInspectorData"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:padding="12dp"
-            android:text="@string/tap_image_to_inspect"
-            android:textColor="@color/sky_primary"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-    </androidx.cardview.widget.CardView>
-
-    <androidx.cardview.widget.CardView
-        android:id="@+id/cardMaxMinHud"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_above="@id/cardInspectorHud"
-        android:layout_alignParentStart="true"
-        android:layout_marginStart="16dp"
-        android:layout_marginBottom="2dp"
-        android:visibility="gone"
-        app:cardBackgroundColor="@color/viewer_glass"
-        app:cardCornerRadius="14dp"
-        app:cardElevation="6dp">
-
-        <TextView
-            android:id="@+id/tvMaxMinData"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:padding="12dp"
-            android:text="@string/max_nmin"
-            android:textColor="@color/text_primary"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-    </androidx.cardview.widget.CardView>
+        android:background="@drawable/bg_viewer_panel"
+        android:fontFamily="monospace"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:textColor="@color/sky_primary"
+        android:textSize="13sp"
+        android:visibility="gone" />
 
 </RelativeLayout>

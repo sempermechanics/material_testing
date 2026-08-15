@@ -692,17 +692,19 @@ the Lattice for a sweep.
    ├── field switching: U / V / Exx / Eyy / Exy
    ├── image viewer
    │   ├── pinch zoom (to 10×) and pan
+   │   ├── double-tap zoom / reset
+   │   ├── horizontal fling (fit-to-screen) steps frames
    │   └── jet heatmap over the reference (fixed 0.7 alpha)
    ├── colour scale bar
+   │   ├── default: whole-sequence scale when N > 1
    │   ├── tap → custom min / max
-   │   └── Auto scale
-   ├── stats strip: max / min / mean
+   │   └── Auto scale (drops custom; returns to sequence scale when N > 1)
+   ├── finding caption + max / min / mean sentence
    ├── frame scrubbing: prev / next + "name (i / N)"
    │   └── type a frame number to jump straight there
-   ├── Inspect — point probe
-   │   ├── tap / drag readout (location + value)
-   │   └── X,Y coordinate entry dialog
-   ├── Max/Min markers
+   ├── tap-to-probe
+   │   ├── short tap → nearest point reading (location + value)
+   │   └── tap same point or readout to dismiss
    ├── Info — settings used
    │   ├── subset / step / strain window / VSG / method / ROI / image size
    │   └── line-cut plot                         [sweep]
@@ -726,7 +728,7 @@ node. **Exit:** Home, or back to the Lattice.
 | # | Action | Expected |
 |---|---|---|
 | [ ] 8.1.1 | Open a result | The U field is shown as a jet heatmap over the reference |
-| [ ] 8.1.2 | Tap through U, V, Exx, Eyy, Exy | Heatmap, colour scale, stats and any markers all follow |
+| [ ] 8.1.2 | Tap through U, V, Exx, Eyy, Exy | Heatmap, colour scale, finding caption and stats caption all follow |
 | [ ] 8.1.3 | Check the scale units | `px` for U and V, `[mε]` for the strain fields |
 | [ ] 8.1.4 | Pinch to zoom | Zooms smoothly up to about 10×; panning is clamped to the image |
 | [ ] 8.1.5 | Zoom in and pan | The heatmap stays registered to the reference — no drift |
@@ -735,8 +737,9 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.8 | Enter min ≥ max and apply | Rejected with a validation message |
 | [ ] 8.1.9 | Enter valid bounds and apply | The heatmap and the scale labels both change |
 | [ ] 8.1.10 | Switch field, then switch back | The custom bounds are remembered *per field* |
-| [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped and auto ranging returns |
-| [ ] 8.1.12 | Read the stats strip | Max, min and mean for the field and frame on screen, with units |
+| [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped; with N > 1 the sequence-wide scale returns |
+| [ ] 8.1.12 | Read the finding caption and stats line | Peak location plus max / min / mean for the field and frame on screen, with units |
+| [ ] 8.1.13 | Scrub a multi-frame analysis without a custom scale | Early and late frames share one colour scale (same as the summary) |
 
 ### 8.2 Frames
 
@@ -752,6 +755,8 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2.8 | Type a frame number and press Go | Jumps straight there; the field has no underline under it |
 | [ ] 8.2.9 | Type `0`, a number past the end, or letters | Nothing moves and the current number comes back |
 | [ ] 8.2.10 | Step with Next/Prev | The number follows immediately, not after the frame decodes |
+| [ ] 8.2.11 | Double-tap the image | Zooms about 2× on the tap; double-tap again resets to fit |
+| [ ] 8.2.12 | Horizontal fling while fit-to-screen | Steps one frame (same as Next/Prev) |
 
 ### 8.2a Summary animation
 
@@ -769,20 +774,21 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2a.10 | Open a sweep node from the Lattice | Lands on that node, not on the summary |
 | [ ] 8.2a.11 | Run on Android 8 | The first frame with a note that animation needs Android 9; sharing still works |
 
-### 8.3 Measurement tools
+### 8.3 Tap to probe
+
+No Inspect / X,Y / Max-Min tools. A short tap on the heatmap is the reading;
+drag and pinch keep pan and zoom.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.3.1 | Enable **Inspect** and tap the heatmap | HUD shows "Loc: (x, y)" and the field value with units |
-| [ ] 8.3.2 | Drag with Inspect on | The readout follows continuously |
-| [ ] 8.3.3 | Tap outside the correlated area | "Out of bounds" / "No data" rather than a wrong number |
-| [ ] 8.3.4 | Turn Inspect off and drag | Pan and zoom work again |
-| [ ] 8.3.5 | Tap the **x, y** button | Coordinate dialog with the image bounds shown as hints |
-| [ ] 8.3.6 | Enter coordinates outside the image | Rejected with an out-of-bounds message |
-| [ ] 8.3.7 | Enter valid coordinates and tap Find | Inspect switches on automatically and the probe jumps there |
-| [ ] 8.3.8 | Enable **Max/Min** | Red and blue markers appear with a HUD card giving both values and positions |
-| [ ] 8.3.9 | Switch field with Max/Min on | The markers move to the new field's extrema |
-| [ ] 8.3.10 | Rotate with Inspect and Max/Min on | Both survive |
+| [ ] 8.3.1 | Short-tap the heatmap | Plain-text readout shows the nearest correlated point: field value with units and `(x, y)` |
+| [ ] 8.3.2 | Drag past the touch slop | The image pans (when zoomed) or a horizontal fling steps frames (when fit); no probe is placed mid-drag |
+| [ ] 8.3.3 | Tap outside the correlated area | Readout says "No data" rather than a wrong number |
+| [ ] 8.3.4 | Pinch while a probe is up | Zoom works; the crosshair stays glued to the image point |
+| [ ] 8.3.5 | Switch field or frame with a probe up | The value updates for the same image location (or "No data") |
+| [ ] 8.3.6 | Tap the same point again, or the readout | The probe dismisses |
+| [ ] 8.3.7 | Read the finding caption | It names the peak value and its coordinates — no Max/Min toggle |
+| [ ] 8.3.8 | Rotate with a probe up | Frame, field and probe survive |
 
 ### 8.4 Settings used
 

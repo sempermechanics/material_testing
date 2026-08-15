@@ -563,6 +563,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="stat_min">MIN</string>
     <string name="stat_mean">MEAN</string>
     <string name="stat_empty">--</string>
+    <string name="viewer_finding_fmt">%1$s peaked %2$s %3$s at (%4$d, %5$d)</string>
+    <string name="viewer_finding_plain_fmt">%1$s · max %2$s %3$s</string>
+    <string name="viewer_stats_fmt">max %1$s · min %2$s · mean %3$s %4$s</string>
+    <string name="probe_reading_fmt">%1$s: %2$s %3$s\n(%4$d, %5$d)</string>
+    <string name="probe_no_data">No data</string>
     
     <string name="share_photo">Result photo</string>
     <string name="share_photo_sub_fmt">%1$s field, %2$s</string>

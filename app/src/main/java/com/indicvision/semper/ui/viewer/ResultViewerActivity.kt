@@ -1,4 +1,4 @@
-// Result viewer Activity: frame scrubbing, overlays, inspect mode and export
+// Result viewer Activity: frame scrubbing, overlays, tap-to-probe and export
 // live on one screen. Size and branching are inherent; suppress rather than
 // baseline so new findings elsewhere still fail CI.
 
@@ -25,17 +25,14 @@ import android.os.Trace
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import android.widget.ToggleButton
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.cardview.widget.CardView
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
@@ -58,9 +55,8 @@ import java.io.File
 
 /**
  * Results browser: renders displacement/strain heatmaps over the reference
- * image, with frame scrubbing (batch runs), point inspection, min/max
- * markers, custom color scales, and all exports (PDF/CSV/PNG/ZIP via
- * [ShareCenter]).
+ * image, with frame scrubbing, tap-to-probe readings, custom color scales,
+ * and all exports (PDF/CSV/PNG/ZIP via [ShareCenter]).
  */
 class ResultViewerActivity : AppCompatActivity() {
 
@@ -72,19 +68,14 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var btnPrevFrame: ImageButton
     private lateinit var btnNextFrame: ImageButton
     private lateinit var tvFrameCounter: TextView
+    private lateinit var tvFinding: TextView
+    private lateinit var tvStatsCaption: TextView
 
     private lateinit var layoutColorScale: LinearLayout
     private lateinit var tvScaleMax: TextView
     private lateinit var tvScaleMin: TextView
 
-    private lateinit var btnInputCoords: Button
-    private lateinit var toggleMaxMin: ToggleButton
-
-    internal lateinit var toggleInspect: ToggleButton
-    internal lateinit var cardInspectorHud: CardView
-    internal lateinit var tvInspectorData: TextView
-    internal lateinit var cardMaxMinHud: CardView
-    internal lateinit var tvMaxMinData: TextView
+    internal lateinit var tvProbeReadout: TextView
     internal lateinit var glassShield: InspectOverlayView
 
     private lateinit var inspect: ViewerInspectHelper
@@ -187,6 +178,23 @@ class ResultViewerActivity : AppCompatActivity() {
 
     internal fun customBoundsFor(dataIndex: Int): Pair<Float, Float>? = customBoundsMap[dataIndex]
 
+    /**
+     * Colour-scale bounds for the heatmap: custom override, else the whole-sequence
+     * range when there is more than one frame, else null (per-frame auto).
+     */
+    private fun scaleBoundsFor(dataIndex: Int): Pair<Float, Float>? {
+        customBoundsMap[dataIndex]?.let { return it }
+        if (batchFiles.size > 1) return summary.sequenceRange(dataIndex)
+        return null
+    }
+
+    /** Called when [ViewerSummaryHelper] finishes the whole-sequence range pass. */
+    internal fun onSequenceRangesReady() {
+        if (showingSummary || batchFiles.size <= 1) return
+        if (customBoundsMap.containsKey(currentDataIndex)) return
+        updateVisualization(currentDataIndex)
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -198,6 +206,8 @@ class ResultViewerActivity : AppCompatActivity() {
         btnPrevFrame = findViewById(R.id.btnPrevFrame)
         btnNextFrame = findViewById(R.id.btnNextFrame)
         tvFrameCounter = findViewById(R.id.tvFrameCounter)
+        tvFinding = findViewById(R.id.tvFinding)
+        tvStatsCaption = findViewById(R.id.tvStatsCaption)
         etFrameNumber = findViewById(R.id.etFrameNumber)
         tvFrameTotal = findViewById(R.id.tvFrameTotal)
 
@@ -208,23 +218,14 @@ class ResultViewerActivity : AppCompatActivity() {
         Insets.padTop(findViewById(R.id.topBarHost))
         Insets.padBottom(findViewById(R.id.layoutScrubber))
 
-        toggleInspect = findViewById(R.id.toggleInspect)
-        btnInputCoords = findViewById(R.id.btnInputCoords)
-        toggleMaxMin = findViewById(R.id.toggleMaxMin)
-
-        cardInspectorHud = findViewById(R.id.cardInspectorHud)
-        tvInspectorData = findViewById(R.id.tvInspectorData)
-        cardMaxMinHud = findViewById(R.id.cardMaxMinHud)
-        tvMaxMinData = findViewById(R.id.tvMaxMinData)
+        tvProbeReadout = findViewById(R.id.tvProbeReadout)
         glassShield = findViewById(R.id.glassShield)
 
         inspect = ViewerInspectHelper(this)
 
         if (savedInstanceState != null) {
-            inspect.lastClosestIdx = savedInstanceState.getInt("LAST_CLOSEST_IDX", -1)
-            inspect.lastMaxIdx = savedInstanceState.getInt("LAST_MAX_IDX", -1)
-            inspect.lastMinIdx = savedInstanceState.getInt("LAST_MIN_IDX", -1)
-            inspect.isMaxMinActive = savedInstanceState.getBoolean("MAX_MIN_ACTIVE", false)
+            val savedProbe = savedInstanceState.getInt("LAST_CLOSEST_IDX", -1)
+            inspect.restoreProbe(savedProbe)
             currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
             showingSummary = savedInstanceState.getBoolean("SHOWING_SUMMARY", false)
         } else {
@@ -251,7 +252,7 @@ class ResultViewerActivity : AppCompatActivity() {
         roiH = intent.getIntExtra(DicKeys.ROI_H, imgH)
 
         val refPath = intent.getStringExtra(DicKeys.REF_PATH)
-        // True sensor dims stay on the intent for math / inspect / export; the
+        // True sensor dims stay on the intent for math / probe / export; the
         // on-screen bitmap is decoded off-main at ImageView scale.
         imgMain.setTrueImageDimensions(imgW, imgH)
         if (refPath != null) {
@@ -286,9 +287,9 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
             tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
             loadFrameData(currentFrameIndex)
-            // summary.show() starts the whole-batch colour-scale scan itself, so a
-            // viewer opened straight onto a frame no longer pays for an N-frame decode
-            // pass it may never use.
+            // Whole-sequence colour scale is the default when N > 1, so kick off the
+            // range scan even when the summary is not on screen (sweep / START_FRAME).
+            if (batchFiles.size > 1) summary.start()
             if (showingSummary) summary.show()
             updateNavButtons()
         } else {
@@ -300,27 +301,8 @@ class ResultViewerActivity : AppCompatActivity() {
             ).show()
         }
 
-        btnPrevFrame.setOnClickListener {
-            when {
-                showingSummary -> Unit
-                currentFrameIndex == 0 -> enterSummary()
-                else -> {
-                    currentFrameIndex--
-                    updateNavButtons()
-                    requestFrameLoad(debounced = true)
-                }
-            }
-        }
-
-        btnNextFrame.setOnClickListener {
-            if (showingSummary) {
-                leaveSummary()
-            } else if (currentFrameIndex < batchFiles.size - 1) {
-                currentFrameIndex++
-                updateNavButtons()
-                requestFrameLoad(debounced = true)
-            }
-        }
+        btnPrevFrame.setOnClickListener { stepFrame(-1) }
+        btnNextFrame.setOnClickListener { stepFrame(1) }
 
         wireFrameJump()
 
@@ -344,7 +326,7 @@ class ResultViewerActivity : AppCompatActivity() {
                 val (label, index) = fieldByButton[checkedId] ?: return@addOnButtonCheckedListener
                 currentTypeString = label
                 currentDataIndex = index
-                // Stats strip + Max/Min are refreshed by updateVisualization once the
+                // Caption + probe value are refreshed by updateVisualization once the
                 // new field's metrics are computed off the main thread.
                 updateVisualization(currentDataIndex)
                 summary.onFieldChanged()
@@ -365,30 +347,34 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         layoutColorScale.setOnClickListener { showCustomScaleDialog() }
-
-        toggleInspect.setOnCheckedChangeListener { _, isChecked ->
-            inspect.isInspectModeActive = isChecked
-            inspect.manageGlassShieldState()
-            inspect.refreshCrosshairs()
-        }
-
-        toggleMaxMin.isChecked = inspect.isMaxMinActive
-        toggleMaxMin.setOnCheckedChangeListener { _, isChecked ->
-            inspect.isMaxMinActive = isChecked
-            if (isChecked) inspect.calculateMaxMin()
-            inspect.manageGlassShieldState()
-            inspect.refreshCrosshairs()
-        }
-
-        btnInputCoords.setOnClickListener { inspect.showCoordinateInputDialog() }
-        inspect.wireGlassShieldTouch()
+        inspect.wireTapHandling()
 
         imgMain.post {
             inspect.refreshCrosshairs()
             updateStickyScaleBar()
-            if (inspect.isMaxMinActive && inspect.lastMaxIdx == -1) {
-                inspect.calculateMaxMin()
-                inspect.refreshCrosshairs()
+        }
+    }
+
+    /** Advance or retreat one frame (or leave/enter the summary). Used by buttons and fling. */
+    internal fun stepFrame(delta: Int) {
+        if (delta == 0) return
+        if (delta > 0) {
+            if (showingSummary) {
+                leaveSummary()
+            } else if (currentFrameIndex < batchFiles.size - 1) {
+                currentFrameIndex++
+                updateNavButtons()
+                requestFrameLoad(debounced = true)
+            }
+            return
+        }
+        when {
+            showingSummary -> Unit
+            currentFrameIndex == 0 -> enterSummary()
+            else -> {
+                currentFrameIndex--
+                updateNavButtons()
+                requestFrameLoad(debounced = true)
             }
         }
     }
@@ -479,9 +465,6 @@ class ResultViewerActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt("LAST_CLOSEST_IDX", inspect.lastClosestIdx)
-        outState.putInt("LAST_MAX_IDX", inspect.lastMaxIdx)
-        outState.putInt("LAST_MIN_IDX", inspect.lastMinIdx)
-        outState.putBoolean("MAX_MIN_ACTIVE", inspect.isMaxMinActive)
         outState.putInt("CURRENT_FRAME", currentFrameIndex)
         outState.putBoolean("SHOWING_SUMMARY", showingSummary)
     }
@@ -606,7 +589,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // A sweep's frames each have their own grid pitch.
         step = sweepSteps?.getOrNull(index) ?: baseStep
         // Invalidate rather than rebuild: the O(n) bucket map is only needed for
-        // inspect-mode nearest-point taps, and findNearestDataPoint builds it lazily
+        // probe nearest-point taps, and findNearestDataPoint builds it lazily
         // for the new frame. Scrubbing large frames no longer pays for an unused index.
         inspect.clearSpatialIndex()
         val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
@@ -614,11 +597,10 @@ class ResultViewerActivity : AppCompatActivity() {
             tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
         }
         syncFrameNumber()
-        // updateVisualization warms this frame's stats + Max/Min off the main thread
-        // and pushes them to the strip/crosshairs when the render completes, so the
-        // scrub settle no longer runs an O(n)+sort here.
+        // updateVisualization warms this frame's stats off the main thread
+        // and pushes them to the caption when the render completes.
         updateVisualization(currentDataIndex)
-        if (inspect.isInspectModeActive && inspect.lastClosestIdx != -1) {
+        if (inspect.lastClosestIdx != -1) {
             inspect.refreshCrosshairs()
         }
     }
@@ -649,7 +631,7 @@ class ResultViewerActivity : AppCompatActivity() {
         dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilScaleMin).hint =
             getString(R.string.scale_min_value, unit)
 
-        val existing = customBoundsMap[currentDataIndex]
+        val existing = scaleBoundsFor(currentDataIndex)
         if (existing != null) {
             etMin.setText((existing.first * multiplier).toString())
             etMax.setText((existing.second * multiplier).toString())
@@ -683,8 +665,9 @@ class ResultViewerActivity : AppCompatActivity() {
         val data = rawData ?: return
         isGeneratingHeatmap = true
 
-        val forceMin = customBoundsMap[index]?.first
-        val forceMax = customBoundsMap[index]?.second
+        val bounds = scaleBoundsFor(index)
+        val forceMin = bounds?.first
+        val forceMax = bounds?.second
         val heatKey = ScrubFrameCache.HeatKey(
             frame = currentFrameIndex,
             field = index,
@@ -810,18 +793,28 @@ class ResultViewerActivity : AppCompatActivity() {
         ShareCenter(this).show()
     }
 
-    /** Permanent max/min/mean tiles for [index], from pre-computed [stats]. */
-    private fun updateStatsStripFrom(stats: FloatArray?, index: Int) {
+    /** Finding caption + one-line max/min/mean for [index], from pre-computed [metrics]. */
+    private fun updateCaptionsFrom(metrics: FieldMetrics, index: Int) {
+        val unit = if (DicResult.isStrainFieldIndex(index)) "m\u03b5" else "px"
+        val stats = metrics.stats
         if (stats == null) {
-            findViewById<TextView>(R.id.tvStatMax).text = getString(R.string.stat_empty)
-            findViewById<TextView>(R.id.tvStatMin).text = getString(R.string.stat_empty)
-            findViewById<TextView>(R.id.tvStatMean).text = getString(R.string.stat_empty)
+            tvFinding.text = currentTypeString
+            tvStatsCaption.text = getString(R.string.stat_empty)
             return
         }
-        val unit = if (DicResult.isStrainFieldIndex(index)) " m\u03b5" else " px"
-        findViewById<TextView>(R.id.tvStatMax).text = ReportBuilder.formatMetric(stats[0]) + unit
-        findViewById<TextView>(R.id.tvStatMin).text = ReportBuilder.formatMetric(stats[1]) + unit
-        findViewById<TextView>(R.id.tvStatMean).text = ReportBuilder.formatMetric(stats[2]) + unit
+        val maxText = ReportBuilder.formatMetric(stats[0])
+        val minText = ReportBuilder.formatMetric(stats[1])
+        val meanText = ReportBuilder.formatMetric(stats[2])
+        tvStatsCaption.text = getString(R.string.viewer_stats_fmt, maxText, minText, meanText, unit)
+
+        val data = rawData
+        if (data != null && metrics.maxIdx in data.indices) {
+            val x = data[metrics.maxIdx].toInt()
+            val y = data[metrics.maxIdx + 1].toInt()
+            tvFinding.text = getString(R.string.viewer_finding_fmt, currentTypeString, maxText, unit, x, y)
+        } else {
+            tvFinding.text = getString(R.string.viewer_finding_plain_fmt, currentTypeString, maxText, unit)
+        }
     }
 
     private fun updateNavButtons() {
@@ -839,6 +832,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun enterSummary() {
         showingSummary = true
+        inspect.dismissProbe()
         summary.show()
         tvFrameCounter.text = summary.counterText()
         updateNavButtons()
@@ -899,7 +893,7 @@ class ResultViewerActivity : AppCompatActivity() {
         if (etFrameNumber.text?.toString() != shown) etFrameNumber.setText(shown)
     }
 
-    // ── Field metrics cache (stats strip + Max/Min extrema) ──────────────────
+    // ── Field metrics cache (caption + finding peak) ──────────────────────
 
     /** Immutable per-(frame,field) result: `[max,min,mean]` stats and extrema indices. */
     internal class FieldMetrics(val stats: FloatArray?, val maxIdx: Int, val minIdx: Int)
@@ -916,10 +910,8 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /**
      * Per-thread extrema scratch: [fieldMetricsFor] runs from both the Main thread
-     * (e.g. [ViewerInspectHelper.computeMaxMinIndices]) and a `Dispatchers.Default`
-     * coroutine ([updateVisualization]'s scrub-settle warm-up) concurrently, so a
-     * single shared buffer would race. `ThreadLocal` gives each caller thread its
-     * own reusable array — same allocation saving, no synchronization needed.
+     * and a `Dispatchers.Default` coroutine concurrently, so a single shared buffer
+     * would race. `ThreadLocal` gives each caller thread its own reusable array.
      */
     private val fieldMetricsScratch: ThreadLocal<FloatArray> = ThreadLocal.withInitial { FloatArray(0) }
 
@@ -946,14 +938,9 @@ class ResultViewerActivity : AppCompatActivity() {
         return metrics
     }
 
-    /** Push cached stats + Max/Min extrema to their views. Main thread only. */
+    /** Push cached stats into the finding caption. Main thread only. */
     private fun applyFieldMetrics(metrics: FieldMetrics, index: Int) {
-        updateStatsStripFrom(metrics.stats, index)
-        if (inspect.isMaxMinActive) {
-            inspect.lastMaxIdx = metrics.maxIdx
-            inspect.lastMinIdx = metrics.minIdx
-            inspect.refreshCrosshairs()
-        }
+        updateCaptionsFrom(metrics, index)
     }
 
     private companion object {

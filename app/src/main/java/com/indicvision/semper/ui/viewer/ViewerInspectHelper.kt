@@ -1,49 +1,43 @@
-// Inspect gestures: literal touch thresholds and the combined move/tap
-// conditions read clearest inline, so MagicNumber / ComplexCondition are
-// suppressed for this whole file.
-@file:Suppress("MagicNumber", "ComplexCondition")
+// Probe gestures: literal touch thresholds read clearest inline.
+@file:Suppress("MagicNumber")
 
 @file:SuppressLint("ClickableViewAccessibility", "SetTextI18n")
 
 package com.indicvision.semper.ui.viewer
 
 import android.annotation.SuppressLint
-import android.view.MotionEvent
+import android.graphics.Matrix
 import android.view.View
-import android.widget.Toast
-import android.widget.ToggleButton
-import androidx.cardview.widget.CardView
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.textfield.TextInputEditText
+import android.widget.TextView
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.report.ReportBuilder
 
 /**
- * Point inspection, max/min markers, glass shield, and the coordinate dialog.
- * Frame data and field index stay on [ResultViewerActivity]; this owns the
- * overlay UI and the last-picked indices.
+ * Tap-to-probe overlay: nearest correlated point, one crosshair, one readout.
+ * Frame data and field index stay on [ResultViewerActivity].
  */
 class ViewerInspectHelper(private val host: ResultViewerActivity) {
 
     private val imgMain: TouchImageView get() = host.imgMain
     private val glassShield: InspectOverlayView get() = host.glassShield
-    private val cardInspectorHud: CardView get() = host.cardInspectorHud
-    private val tvInspectorData get() = host.tvInspectorData
-    private val cardMaxMinHud: CardView get() = host.cardMaxMinHud
-    private val tvMaxMinData get() = host.tvMaxMinData
-    private val toggleInspect: ToggleButton get() = host.toggleInspect
+    private val tvProbeReadout: TextView get() = host.tvProbeReadout
 
-    var isInspectModeActive = false
-    var isMaxMinActive = false
     var lastClosestIdx = -1
-    var lastMaxIdx = -1
-    var lastMinIdx = -1
+    private var probeVisible = false
+
+    /** Restore a probe after rotation when [idx] was saved. */
+    fun restoreProbe(idx: Int) {
+        if (idx < 0) return
+        lastClosestIdx = idx
+        probeVisible = true
+        glassShield.visibility = View.VISIBLE
+    }
 
     /**
      * Spatial buckets for the current frame's accepted points. Cleared on frame load
-     * and built lazily on the first inspect-mode tap ([findNearestDataPoint]), so
-     * scrubbing frames that are never inspected pays nothing for it.
+     * and built lazily on the first tap ([findNearestDataPoint]), so scrubbing frames
+     * that are never probed pays nothing for it.
      */
     private var spatialIndex: PointSpatialIndex? = null
 
@@ -51,49 +45,31 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
         spatialIndex = null
     }
 
-    fun wireGlassShieldTouch() {
-        glassShield.setOnTouchListener { view, event ->
-            // The shield forwards taps rather than handling clicks itself, but
-            // accessibility services still need the click hook to fire.
-            if (event.action == MotionEvent.ACTION_UP) view.performClick()
-            if (!isInspectModeActive) {
-                imgMain.dispatchTouchEvent(event)
-                return@setOnTouchListener true
-            }
+    fun wireTapHandling() {
+        imgMain.onTapListener = { x, y -> onScreenTap(x, y) }
+        imgMain.onScrubListener = { delta -> host.stepFrame(delta) }
+        tvProbeReadout.setOnClickListener { dismissProbe() }
+    }
 
-            if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
-                val pts = floatArrayOf(event.x, event.y)
-                val inverse = android.graphics.Matrix()
-                // Logical matrix (true imgW/imgH), not the draw matrix that
-                // may include display-bitmap content scale.
-                imgMain.getZoomMatrix().invert(inverse)
-                inverse.mapPoints(pts)
-                findNearestDataPoint(pts[0], pts[1])
-            }
-            true
+    fun onScreenTap(screenX: Float, screenY: Float) {
+        val pts = floatArrayOf(screenX, screenY)
+        val inverse = Matrix()
+        imgMain.getZoomMatrix().invert(inverse)
+        inverse.mapPoints(pts)
+        val wasVisible = probeVisible
+        val previous = lastClosestIdx
+        findNearestDataPoint(pts[0], pts[1])
+        if (wasVisible && lastClosestIdx == previous) {
+            dismissProbe()
         }
     }
 
-    fun manageGlassShieldState() {
-        if (isInspectModeActive || isMaxMinActive) {
-            glassShield.visibility = View.VISIBLE
-        } else {
-            glassShield.visibility = View.GONE
-        }
-    }
-
-    fun calculateMaxMin() {
-        val (maxIdx, minIdx) = computeMaxMinIndices()
-        lastMaxIdx = maxIdx
-        lastMinIdx = minIdx
-    }
-
-    fun computeMaxMinIndices(): Pair<Int, Int> {
-        val data = host.rawData ?: return -1 to -1
-        // Shares the host's per-(frame,field) memo, so a Max/Min toggle reuses the
-        // extrema already computed for the stats strip instead of re-sorting.
-        val metrics = host.fieldMetricsFor(host.currentFrameIndex, host.currentDataIndex, data)
-        return metrics.maxIdx to metrics.minIdx
+    fun dismissProbe() {
+        probeVisible = false
+        lastClosestIdx = -1
+        glassShield.hide()
+        glassShield.visibility = View.GONE
+        tvProbeReadout.visibility = View.GONE
     }
 
     fun findNearestDataPoint(physX: Float, physY: Float) {
@@ -101,10 +77,17 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
         val searchRadius = host.step * 1.5f
         val index = spatialIndex ?: PointSpatialIndex.build(data, host.step).also { spatialIndex = it }
         lastClosestIdx = index.nearest(physX, physY, searchRadius)
+        probeVisible = true
+        glassShield.visibility = View.VISIBLE
         refreshCrosshairs()
     }
 
     fun refreshCrosshairs() {
+        if (!probeVisible) {
+            glassShield.hide()
+            tvProbeReadout.visibility = View.GONE
+            return
+        }
         val data = host.rawData ?: return
 
         val dataIndex = host.currentDataIndex
@@ -113,83 +96,29 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
         val multiplier = DicResult.strainMultiplier(dataIndex)
         val unit = if (isStrain) "mε" else "px"
 
-        if (isInspectModeActive) {
-            cardInspectorHud.visibility = View.VISIBLE
+        glassShield.visibility = View.VISIBLE
+        tvProbeReadout.visibility = View.VISIBLE
 
-            if (lastClosestIdx != -1 && lastClosestIdx < data.size) {
-                val actualX = data[lastClosestIdx].toInt()
-                val actualY = data[lastClosestIdx + 1].toInt()
-                val value = data[lastClosestIdx + dataIndex] * multiplier
+        if (lastClosestIdx != -1 && lastClosestIdx < data.size) {
+            val actualX = data[lastClosestIdx].toInt()
+            val actualY = data[lastClosestIdx + 1].toInt()
+            val value = data[lastClosestIdx + dataIndex] * multiplier
 
-                tvInspectorData.text =
-                    "Loc: ($actualX, $actualY)\n$typeString: ${ReportBuilder.formatMetric(value)} $unit"
+            tvProbeReadout.text = host.getString(
+                R.string.probe_reading_fmt,
+                typeString,
+                ReportBuilder.formatMetric(value),
+                unit,
+                actualX,
+                actualY,
+            )
 
-                val pts = floatArrayOf(actualX.toFloat(), actualY.toFloat())
-                imgMain.getZoomMatrix().mapPoints(pts)
-                glassShield.updatePosition(pts[0], pts[1])
-            } else {
-                glassShield.hide()
-                tvInspectorData.text = "Out of bounds / No Data"
-            }
+            val pts = floatArrayOf(actualX.toFloat(), actualY.toFloat())
+            imgMain.getZoomMatrix().mapPoints(pts)
+            glassShield.updatePosition(pts[0], pts[1])
         } else {
             glassShield.hide()
-            cardInspectorHud.visibility = View.GONE
+            tvProbeReadout.text = host.getString(R.string.probe_no_data)
         }
-
-        if (isMaxMinActive && lastMaxIdx != -1 && lastMinIdx != -1) {
-            val maxX = data[lastMaxIdx].toInt()
-            val maxY = data[lastMaxIdx + 1].toInt()
-            val minX = data[lastMinIdx].toInt()
-            val minY = data[lastMinIdx + 1].toInt()
-
-            val maxV = data[lastMaxIdx + dataIndex] * multiplier
-            val minV = data[lastMinIdx + dataIndex] * multiplier
-
-            val ptsMax = floatArrayOf(maxX.toFloat(), maxY.toFloat())
-            val ptsMin = floatArrayOf(minX.toFloat(), minY.toFloat())
-            imgMain.getZoomMatrix().mapPoints(ptsMax)
-            imgMain.getZoomMatrix().mapPoints(ptsMin)
-
-            glassShield.updateMaxMinPositions(ptsMax[0], ptsMax[1], ptsMin[0], ptsMin[1])
-
-            tvMaxMinData.text =
-                "🔴 MAX: ($maxX, $maxY) = ${ReportBuilder.formatMetric(maxV)} $unit\n" +
-                "🔵 MIN: ($minX, $minY) = ${ReportBuilder.formatMetric(minV)} $unit"
-            cardMaxMinHud.visibility = View.VISIBLE
-        } else {
-            glassShield.hideMaxMin()
-            cardMaxMinHud.visibility = View.GONE
-        }
-    }
-
-    fun showCoordinateInputDialog() {
-        val dialogView = host.layoutInflater.inflate(R.layout.dialog_coordinate_input, null)
-        val etX = dialogView.findViewById<TextInputEditText>(R.id.etCoordX)
-        val etY = dialogView.findViewById<TextInputEditText>(R.id.etCoordY)
-        dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilCoordX).hint =
-            host.getString(R.string.coord_hint_x, host.imgW)
-        dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilCoordY).hint =
-            host.getString(R.string.coord_hint_y, host.imgH)
-
-        MaterialAlertDialogBuilder(host)
-            .setTitle(R.string.coord_dialog_title)
-            .setView(dialogView)
-            .setPositiveButton(R.string.find) { _, _ ->
-                val x = etX.text?.toString()?.toFloatOrNull()
-                val y = etY.text?.toString()?.toFloatOrNull()
-
-                if (x != null && y != null) {
-                    if (x < 0 || x > host.imgW || y < 0 || y > host.imgH) {
-                        Toast.makeText(host, R.string.coord_out_of_bounds, Toast.LENGTH_LONG).show()
-                    } else {
-                        if (!isInspectModeActive) toggleInspect.isChecked = true
-                        findNearestDataPoint(x, y)
-                    }
-                } else {
-                    Toast.makeText(host, R.string.invalid_input, Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
     }
 }
