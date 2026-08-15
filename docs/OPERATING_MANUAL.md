@@ -356,36 +356,29 @@ Look for the VSG where the curves stop separating.
 <img src="images/result-viewer.png" width="300" alt="Result viewer">
 
 Tabs switch field. Pinch to zoom (~10×), drag to pan; both survive a field
-change. The strip under the image gives max, min and mean.
+change. Double-tap zooms or resets. A horizontal fling while fit-to-screen steps
+frames. Edge chrome (title, field pills, hairline scale, scrub) auto-hides after
+a short idle; pan or scrub brings it back. The ⓘ peek sheet holds max / min
+(with coordinates), mean, and the settings used for this analysis.
 
-**Colour scale.** Auto by default — which rescales every frame separately, so
-frames are *not* comparable by eye. Tap the bar to set fixed min/max. Bounds are
-remembered per field. **Auto scale** releases them.
+**Colour scale.** Default is **this frame's min / max** — the hairline labels
+match the colouring. Tap the bar to set fixed min/max (remembered per field).
+**Auto scale** drops a custom override and returns to the frame range. The
+summary GIF and share field-animations still use a whole-sequence scale so the
+loop stays comparable.
 
-**Tools.**
-
-<img src="images/viewer-tools.png" width="300" alt="Inspect probe and Max/Min markers">
-
-Above: Inspect and Max/Min on together — the probe card gives the point under
-your finger, the other card gives both extrema with their coordinates.
-
-| Tool | Does |
-|---|---|
-| **Inspect** | Tap or drag to probe; HUD gives location and value. Says so outside the correlated area |
-| **X, Y** | Jump the probe to typed coordinates — same point across frames |
-| **Max/Min** | Marks both extrema with values and positions |
+**Tap to probe.** There is no Inspect / X,Y / Max-Min row. A short tap on the
+heatmap places a crosshair and a plain-text reading at the nearest correlated
+point. Drag past the touch slop pans (or flings to the next frame when
+unzoomed); pinch still zooms. Tap the same point again, or the readout, to
+dismiss. Switching field or frame keeps the probe at the same image location and
+updates the value.
 
 **The summary comes first.** The viewer opens on a looping animation of the
 whole sequence in the current field — every frame, never longer than 10 seconds,
 about 300 ms a frame until the frame count forces it faster. **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
-field.
-
-Unlike scrubbing, the animation puts **every frame on one colour scale** — the
-range that covers the whole sequence, shown in the labels beside it. That is the
-point of it: on the per-frame auto scale, a frame late in a test can look exactly
-like an early one. If you have set a fixed scale for a field, the animation uses
-that instead.
+field. Field pills stay available while the GIF plays.
 
 (Animation playback needs Android 9 or newer. Below that you get the first frame
 and a note; the GIFs still export.)

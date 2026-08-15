@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark glass peek sheet: soft top radius, no hard card edges. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/viewer_peek_scrim" />
+    <corners
+        android:topLeftRadius="22dp"
+        android:topRightRadius="22dp" />
+</shape>

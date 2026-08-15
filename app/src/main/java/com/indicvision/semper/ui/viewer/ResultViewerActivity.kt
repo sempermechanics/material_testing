@@ -1,4 +1,4 @@
-// Result viewer Activity: frame scrubbing, overlays, inspect mode and export
+// Result viewer Activity: frame scrubbing, overlays, tap-to-probe and export
 // live on one screen. Size and branching are inherent; suppress rather than
 // baseline so new findings elsewhere still fail CI.
 
@@ -25,17 +25,14 @@ import android.os.Trace
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import android.widget.ToggleButton
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.cardview.widget.CardView
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
@@ -58,9 +55,8 @@ import java.io.File
 
 /**
  * Results browser: renders displacement/strain heatmaps over the reference
- * image, with frame scrubbing (batch runs), point inspection, min/max
- * markers, custom color scales, and all exports (PDF/CSV/PNG/ZIP via
- * [ShareCenter]).
+ * image, with frame scrubbing, tap-to-probe readings, custom color scales,
+ * and all exports (PDF/CSV/PNG/ZIP via [ShareCenter]).
  */
 class ResultViewerActivity : AppCompatActivity() {
 
@@ -72,20 +68,22 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var btnPrevFrame: ImageButton
     private lateinit var btnNextFrame: ImageButton
     private lateinit var tvFrameCounter: TextView
+    private lateinit var tvFinding: TextView
+    private lateinit var tvStatsCaption: TextView
 
     private lateinit var layoutColorScale: LinearLayout
     private lateinit var tvScaleMax: TextView
     private lateinit var tvScaleMin: TextView
+    private lateinit var chromeOverlay: View
 
-    private lateinit var btnInputCoords: Button
-    private lateinit var toggleMaxMin: ToggleButton
-
-    internal lateinit var toggleInspect: ToggleButton
-    internal lateinit var cardInspectorHud: CardView
-    internal lateinit var tvInspectorData: TextView
-    internal lateinit var cardMaxMinHud: CardView
-    internal lateinit var tvMaxMinData: TextView
+    internal lateinit var tvProbeReadout: TextView
     internal lateinit var glassShield: InspectOverlayView
+
+    /** Max / min (with coordinates) / mean for the info peek sheet. */
+    private var detailStats: String = ""
+
+    private val hideChromeRunnable = Runnable { fadeChrome(visible = false) }
+    private val chromeHideDelayMs = 2_500L
 
     private lateinit var inspect: ViewerInspectHelper
 
@@ -187,6 +185,21 @@ class ResultViewerActivity : AppCompatActivity() {
 
     internal fun customBoundsFor(dataIndex: Int): Pair<Float, Float>? = customBoundsMap[dataIndex]
 
+    /**
+     * Colour-scale bounds for the heatmap: custom override, else the current
+     * frame's own min/max (engine Auto). Sequence-global scale is reserved for
+     * the summary GIF / share animations, not the on-screen frame.
+     */
+    private fun scaleBoundsFor(dataIndex: Int): Pair<Float, Float>? {
+        return customBoundsMap[dataIndex]
+    }
+
+    /** Called when [ViewerSummaryHelper] finishes the whole-sequence range pass. */
+    internal fun onSequenceRangesReady() {
+        // Frame heatmaps use per-frame min/max; the summary GIF reads sequence
+        // ranges itself. Nothing to refresh here.
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -198,33 +211,27 @@ class ResultViewerActivity : AppCompatActivity() {
         btnPrevFrame = findViewById(R.id.btnPrevFrame)
         btnNextFrame = findViewById(R.id.btnNextFrame)
         tvFrameCounter = findViewById(R.id.tvFrameCounter)
+        tvFinding = findViewById(R.id.tvFinding)
+        tvStatsCaption = findViewById(R.id.tvStatsCaption)
         etFrameNumber = findViewById(R.id.etFrameNumber)
         tvFrameTotal = findViewById(R.id.tvFrameTotal)
 
         layoutColorScale = findViewById(R.id.layoutColorScale)
         tvScaleMax = findViewById(R.id.tvScaleMax)
         tvScaleMin = findViewById(R.id.tvScaleMin)
+        chromeOverlay = findViewById(R.id.chromeOverlay)
 
         Insets.padTop(findViewById(R.id.topBarHost))
         Insets.padBottom(findViewById(R.id.layoutScrubber))
 
-        toggleInspect = findViewById(R.id.toggleInspect)
-        btnInputCoords = findViewById(R.id.btnInputCoords)
-        toggleMaxMin = findViewById(R.id.toggleMaxMin)
-
-        cardInspectorHud = findViewById(R.id.cardInspectorHud)
-        tvInspectorData = findViewById(R.id.tvInspectorData)
-        cardMaxMinHud = findViewById(R.id.cardMaxMinHud)
-        tvMaxMinData = findViewById(R.id.tvMaxMinData)
+        tvProbeReadout = findViewById(R.id.tvProbeReadout)
         glassShield = findViewById(R.id.glassShield)
 
         inspect = ViewerInspectHelper(this)
 
         if (savedInstanceState != null) {
-            inspect.lastClosestIdx = savedInstanceState.getInt("LAST_CLOSEST_IDX", -1)
-            inspect.lastMaxIdx = savedInstanceState.getInt("LAST_MAX_IDX", -1)
-            inspect.lastMinIdx = savedInstanceState.getInt("LAST_MIN_IDX", -1)
-            inspect.isMaxMinActive = savedInstanceState.getBoolean("MAX_MIN_ACTIVE", false)
+            val savedProbe = savedInstanceState.getInt("LAST_CLOSEST_IDX", -1)
+            inspect.restoreProbe(savedProbe)
             currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
             showingSummary = savedInstanceState.getBoolean("SHOWING_SUMMARY", false)
         } else {
@@ -251,7 +258,7 @@ class ResultViewerActivity : AppCompatActivity() {
         roiH = intent.getIntExtra(DicKeys.ROI_H, imgH)
 
         val refPath = intent.getStringExtra(DicKeys.REF_PATH)
-        // True sensor dims stay on the intent for math / inspect / export; the
+        // True sensor dims stay on the intent for math / probe / export; the
         // on-screen bitmap is decoded off-main at ImageView scale.
         imgMain.setTrueImageDimensions(imgW, imgH)
         if (refPath != null) {
@@ -286,11 +293,11 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
             tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
             loadFrameData(currentFrameIndex)
-            // summary.show() starts the whole-batch colour-scale scan itself, so a
-            // viewer opened straight onto a frame no longer pays for an N-frame decode
-            // pass it may never use.
+            // Whole-sequence ranges still feed the summary GIF / share animations.
+            if (batchFiles.size > 1) summary.start()
             if (showingSummary) summary.show()
             updateNavButtons()
+            bumpChrome()
         } else {
             showingSummary = false
             com.google.android.material.snackbar.Snackbar.make(
@@ -301,25 +308,12 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         btnPrevFrame.setOnClickListener {
-            when {
-                showingSummary -> Unit
-                currentFrameIndex == 0 -> enterSummary()
-                else -> {
-                    currentFrameIndex--
-                    updateNavButtons()
-                    requestFrameLoad(debounced = true)
-                }
-            }
+            bumpChrome()
+            stepFrame(-1)
         }
-
         btnNextFrame.setOnClickListener {
-            if (showingSummary) {
-                leaveSummary()
-            } else if (currentFrameIndex < batchFiles.size - 1) {
-                currentFrameIndex++
-                updateNavButtons()
-                requestFrameLoad(debounced = true)
-            }
+            bumpChrome()
+            stepFrame(1)
         }
 
         wireFrameJump()
@@ -327,10 +321,10 @@ class ResultViewerActivity : AppCompatActivity() {
         imgMain.onMatrixChangedListener = {
             applyHeatmapMatrix()
             inspect.refreshCrosshairs()
-            updateStickyScaleBar()
+            bumpChrome()
         }
 
-        // Five equal-width field buttons spanning the screen (wireframe 08)
+        // Floating glass field pills (separate rounded chips — not a segmented bar).
         val fieldByButton = mapOf(
             R.id.rbFieldU to ("U" to DicResult.IDX_U),
             R.id.rbFieldV to ("V" to DicResult.IDX_V),
@@ -338,57 +332,104 @@ class ResultViewerActivity : AppCompatActivity() {
             R.id.rbFieldEyy to ("Eyy" to DicResult.IDX_EYY),
             R.id.rbFieldExy to ("Exy" to DicResult.IDX_EXY),
         )
-        findViewById<com.google.android.material.button.MaterialButtonToggleGroup>(R.id.fieldToggle)
-            .addOnButtonCheckedListener { _, checkedId, isChecked ->
-                if (!isChecked) return@addOnButtonCheckedListener
-                val (label, index) = fieldByButton[checkedId] ?: return@addOnButtonCheckedListener
+        val fieldButtons = fieldByButton.keys.map { id ->
+            findViewById<com.google.android.material.button.MaterialButton>(id)
+        }
+        fieldButtons.forEach { button ->
+            // Material defaults to 88dp minWidth — collapse so pills hug their label.
+            button.minWidth = 0
+            button.minimumWidth = 0
+            button.setOnClickListener {
+                fieldButtons.forEach { it.isChecked = it === button }
+                bumpChrome()
+                val (label, index) = fieldByButton[button.id] ?: return@setOnClickListener
                 currentTypeString = label
                 currentDataIndex = index
-                // Stats strip + Max/Min are refreshed by updateVisualization once the
+                // Caption + probe value are refreshed by updateVisualization once the
                 // new field's metrics are computed off the main thread.
                 updateVisualization(currentDataIndex)
                 summary.onFieldChanged()
                 if (showingSummary) tvFrameCounter.text = summary.counterText()
                 inspect.refreshCrosshairs()
             }
+        }
 
         findViewById<View>(R.id.btnViewerBack).setOnClickListener { finish() }
-        findViewById<View>(R.id.btnViewerHome).setOnClickListener {
-            val home = Intent(this, com.indicvision.semper.ui.home.HomeActivity::class.java)
-            home.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            startActivity(home)
-            finish()
-        }
         findViewById<View>(R.id.btnViewerShare).setOnClickListener { showShareSheet() }
         findViewById<View>(R.id.btnViewerSettingsInfo).setOnClickListener {
+            bumpChrome()
             ViewerSettingsSheet.show(this)
         }
 
-        layoutColorScale.setOnClickListener { showCustomScaleDialog() }
-
-        toggleInspect.setOnCheckedChangeListener { _, isChecked ->
-            inspect.isInspectModeActive = isChecked
-            inspect.manageGlassShieldState()
-            inspect.refreshCrosshairs()
+        layoutColorScale.setOnClickListener {
+            bumpChrome()
+            showCustomScaleDialog()
         }
-
-        toggleMaxMin.isChecked = inspect.isMaxMinActive
-        toggleMaxMin.setOnCheckedChangeListener { _, isChecked ->
-            inspect.isMaxMinActive = isChecked
-            if (isChecked) inspect.calculateMaxMin()
-            inspect.manageGlassShieldState()
-            inspect.refreshCrosshairs()
-        }
-
-        btnInputCoords.setOnClickListener { inspect.showCoordinateInputDialog() }
-        inspect.wireGlassShieldTouch()
+        inspect.wireTapHandling()
 
         imgMain.post {
             inspect.refreshCrosshairs()
-            updateStickyScaleBar()
-            if (inspect.isMaxMinActive && inspect.lastMaxIdx == -1) {
-                inspect.calculateMaxMin()
-                inspect.refreshCrosshairs()
+            bumpChrome()
+        }
+    }
+
+    /** Clears the back stack to Home. Used by the peek-sheet Home action. */
+    internal fun goHome() {
+        val home = Intent(this, com.indicvision.semper.ui.home.HomeActivity::class.java)
+        home.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        startActivity(home)
+        finish()
+    }
+
+    /** Max / min (with coordinates) / mean for the info peek sheet. */
+    internal fun detailStatsText(): String = detailStats.ifBlank { getString(R.string.stat_empty) }
+
+    /** Bring edge chrome back, then schedule auto-hide (Photos pattern). */
+    internal fun bumpChrome() {
+        fadeChrome(visible = true)
+        chromeOverlay.removeCallbacks(hideChromeRunnable)
+        chromeOverlay.postDelayed(hideChromeRunnable, chromeHideDelayMs)
+    }
+
+    private fun fadeChrome(visible: Boolean) {
+        chromeOverlay.animate().cancel()
+        if (visible) {
+            chromeOverlay.visibility = View.VISIBLE
+            if (chromeOverlay.alpha < 0.99f) {
+                chromeOverlay.animate().alpha(1f).setDuration(180L).start()
+            } else {
+                chromeOverlay.alpha = 1f
+            }
+        } else {
+            chromeOverlay.animate()
+                .alpha(0f)
+                .setDuration(320L)
+                .withEndAction { chromeOverlay.visibility = View.INVISIBLE }
+                .start()
+        }
+    }
+
+    /** Advance or retreat one frame (or leave/enter the summary). Used by buttons and fling. */
+    internal fun stepFrame(delta: Int) {
+        bumpChrome()
+        if (delta == 0) return
+        if (delta > 0) {
+            if (showingSummary) {
+                leaveSummary()
+            } else if (currentFrameIndex < batchFiles.size - 1) {
+                currentFrameIndex++
+                updateNavButtons()
+                requestFrameLoad(debounced = true)
+            }
+            return
+        }
+        when {
+            showingSummary -> Unit
+            currentFrameIndex == 0 -> enterSummary()
+            else -> {
+                currentFrameIndex--
+                updateNavButtons()
+                requestFrameLoad(debounced = true)
             }
         }
     }
@@ -416,6 +457,10 @@ class ResultViewerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (::chromeOverlay.isInitialized) {
+            chromeOverlay.removeCallbacks(hideChromeRunnable)
+            chromeOverlay.animate().cancel()
+        }
         loadFrameJob?.cancel()
         visualizationJob?.cancel()
         scrubDebounceJob?.cancel()
@@ -479,9 +524,6 @@ class ResultViewerActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt("LAST_CLOSEST_IDX", inspect.lastClosestIdx)
-        outState.putInt("LAST_MAX_IDX", inspect.lastMaxIdx)
-        outState.putInt("LAST_MIN_IDX", inspect.lastMinIdx)
-        outState.putBoolean("MAX_MIN_ACTIVE", inspect.isMaxMinActive)
         outState.putInt("CURRENT_FRAME", currentFrameIndex)
         outState.putBoolean("SHOWING_SUMMARY", showingSummary)
     }
@@ -606,7 +648,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // A sweep's frames each have their own grid pitch.
         step = sweepSteps?.getOrNull(index) ?: baseStep
         // Invalidate rather than rebuild: the O(n) bucket map is only needed for
-        // inspect-mode nearest-point taps, and findNearestDataPoint builds it lazily
+        // probe nearest-point taps, and findNearestDataPoint builds it lazily
         // for the new frame. Scrubbing large frames no longer pays for an unused index.
         inspect.clearSpatialIndex()
         val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
@@ -614,25 +656,16 @@ class ResultViewerActivity : AppCompatActivity() {
             tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
         }
         syncFrameNumber()
-        // updateVisualization warms this frame's stats + Max/Min off the main thread
-        // and pushes them to the strip/crosshairs when the render completes, so the
-        // scrub settle no longer runs an O(n)+sort here.
+        // updateVisualization warms this frame's stats off the main thread
+        // and pushes them to the caption when the render completes.
         updateVisualization(currentDataIndex)
-        if (inspect.isInspectModeActive && inspect.lastClosestIdx != -1) {
+        if (inspect.lastClosestIdx != -1) {
             inspect.refreshCrosshairs()
         }
     }
 
     private fun updateStickyScaleBar() {
-        val pts = floatArrayOf(0f, 0f)
-        imgMain.getZoomMatrix().mapPoints(pts)
-        val imageTopY = pts[1]
-
-        val barHeight = layoutColorScale.height.toFloat()
-        if (barHeight > 0) {
-            val targetY = imageTopY - barHeight - 16f
-            layoutColorScale.translationY = maxOf(0f, targetY)
-        }
+        // Scale sits in the edge chrome overlay; no floating translation.
     }
 
     private fun showCustomScaleDialog() {
@@ -649,7 +682,7 @@ class ResultViewerActivity : AppCompatActivity() {
         dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilScaleMin).hint =
             getString(R.string.scale_min_value, unit)
 
-        val existing = customBoundsMap[currentDataIndex]
+        val existing = scaleBoundsFor(currentDataIndex)
         if (existing != null) {
             etMin.setText((existing.first * multiplier).toString())
             etMax.setText((existing.second * multiplier).toString())
@@ -683,8 +716,9 @@ class ResultViewerActivity : AppCompatActivity() {
         val data = rawData ?: return
         isGeneratingHeatmap = true
 
-        val forceMin = customBoundsMap[index]?.first
-        val forceMax = customBoundsMap[index]?.second
+        val bounds = scaleBoundsFor(index)
+        val forceMin = bounds?.first
+        val forceMax = bounds?.second
         val heatKey = ScrubFrameCache.HeatKey(
             frame = currentFrameIndex,
             field = index,
@@ -749,9 +783,10 @@ class ResultViewerActivity : AppCompatActivity() {
         if (!showingSummary) {
             val isStrain = DicResult.isStrainFieldIndex(index)
             val multiplier = DicResult.strainMultiplier(index)
-            val unit = if (isStrain) " [mε]" else " px"
-            tvScaleMax.text = "Max: ${ReportBuilder.formatMetric(actualMax * multiplier)}$unit"
-            tvScaleMin.text = "Min: ${ReportBuilder.formatMetric(actualMin * multiplier)}$unit"
+            val unit = if (isStrain) " mε" else " px"
+            // Labels are this frame's min/max (same values the colour scale uses).
+            tvScaleMin.text = ReportBuilder.formatMetric(actualMin * multiplier)
+            tvScaleMax.text = ReportBuilder.formatMetric(actualMax * multiplier) + unit
         }
         isGeneratingHeatmap = false
     }
@@ -810,18 +845,46 @@ class ResultViewerActivity : AppCompatActivity() {
         ShareCenter(this).show()
     }
 
-    /** Permanent max/min/mean tiles for [index], from pre-computed [stats]. */
-    private fun updateStatsStripFrom(stats: FloatArray?, index: Int) {
+    /** Edge title + peek-sheet stats for [index], from pre-computed [metrics]. */
+    private fun updateCaptionsFrom(metrics: FieldMetrics, index: Int) {
+        val unit = if (DicResult.isStrainFieldIndex(index)) "m\u03b5" else "px"
+        val frameBit = if (showingSummary) {
+            getString(R.string.summary_title)
+        } else {
+            "${currentFrameIndex + 1} / ${batchFiles.size.coerceAtLeast(1)}"
+        }
+        tvFinding.text = getString(R.string.viewer_edge_title_fmt, currentTypeString, frameBit)
+
+        val stats = metrics.stats
         if (stats == null) {
-            findViewById<TextView>(R.id.tvStatMax).text = getString(R.string.stat_empty)
-            findViewById<TextView>(R.id.tvStatMin).text = getString(R.string.stat_empty)
-            findViewById<TextView>(R.id.tvStatMean).text = getString(R.string.stat_empty)
+            detailStats = getString(R.string.stat_empty)
+            tvStatsCaption.text = detailStats
             return
         }
-        val unit = if (DicResult.isStrainFieldIndex(index)) " m\u03b5" else " px"
-        findViewById<TextView>(R.id.tvStatMax).text = ReportBuilder.formatMetric(stats[0]) + unit
-        findViewById<TextView>(R.id.tvStatMin).text = ReportBuilder.formatMetric(stats[1]) + unit
-        findViewById<TextView>(R.id.tvStatMean).text = ReportBuilder.formatMetric(stats[2]) + unit
+        val maxText = ReportBuilder.formatMetric(stats[0])
+        val minText = ReportBuilder.formatMetric(stats[1])
+        val meanText = ReportBuilder.formatMetric(stats[2])
+        val data = rawData
+        detailStats = if (
+            data != null &&
+            metrics.maxIdx in data.indices &&
+            metrics.minIdx in data.indices
+        ) {
+            getString(
+                R.string.viewer_stats_fmt,
+                maxText,
+                data[metrics.maxIdx].toInt(),
+                data[metrics.maxIdx + 1].toInt(),
+                minText,
+                data[metrics.minIdx].toInt(),
+                data[metrics.minIdx + 1].toInt(),
+                meanText,
+                unit,
+            )
+        } else {
+            getString(R.string.viewer_stats_plain_fmt, maxText, minText, meanText, unit)
+        }
+        tvStatsCaption.text = detailStats
     }
 
     private fun updateNavButtons() {
@@ -839,9 +902,16 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun enterSummary() {
         showingSummary = true
+        inspect.dismissProbe()
         summary.show()
         tvFrameCounter.text = summary.counterText()
+        tvFinding.text = getString(
+            R.string.viewer_edge_title_fmt,
+            currentTypeString,
+            getString(R.string.summary_title),
+        )
         updateNavButtons()
+        bumpChrome()
     }
 
     private fun leaveSummary() {
@@ -850,6 +920,7 @@ class ResultViewerActivity : AppCompatActivity() {
         updateNavButtons()
         // Re-apply the frame's own labels and heatmap after the summary's.
         requestFrameLoad(debounced = false)
+        bumpChrome()
     }
 
     // ── Typed frame jump ─────────────────────────────────────────────────
@@ -874,6 +945,7 @@ class ResultViewerActivity : AppCompatActivity() {
      * user did not ask for.
      */
     private fun commitFrameJump() {
+        bumpChrome()
         val typed = etFrameNumber.text?.toString()?.trim()?.toIntOrNull()
         val target = typed?.minus(1)?.takeIf { it in batchFiles.indices }
         if (target == null) {
@@ -899,7 +971,7 @@ class ResultViewerActivity : AppCompatActivity() {
         if (etFrameNumber.text?.toString() != shown) etFrameNumber.setText(shown)
     }
 
-    // ── Field metrics cache (stats strip + Max/Min extrema) ──────────────────
+    // ── Field metrics cache (caption + peek-sheet extrema) ───────────────────
 
     /** Immutable per-(frame,field) result: `[max,min,mean]` stats and extrema indices. */
     internal class FieldMetrics(val stats: FloatArray?, val maxIdx: Int, val minIdx: Int)
@@ -916,10 +988,10 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /**
      * Per-thread extrema scratch: [fieldMetricsFor] runs from both the Main thread
-     * (e.g. [ViewerInspectHelper.computeMaxMinIndices]) and a `Dispatchers.Default`
-     * coroutine ([updateVisualization]'s scrub-settle warm-up) concurrently, so a
-     * single shared buffer would race. `ThreadLocal` gives each caller thread its
-     * own reusable array — same allocation saving, no synchronization needed.
+     * and a `Dispatchers.Default` coroutine ([updateVisualization]'s scrub-settle
+     * warm-up) concurrently, so a single shared buffer would race. `ThreadLocal`
+     * gives each caller thread its own reusable array — same allocation saving,
+     * no synchronization needed.
      */
     private val fieldMetricsScratch: ThreadLocal<FloatArray> = ThreadLocal.withInitial { FloatArray(0) }
 
@@ -946,14 +1018,9 @@ class ResultViewerActivity : AppCompatActivity() {
         return metrics
     }
 
-    /** Push cached stats + Max/Min extrema to their views. Main thread only. */
+    /** Push cached stats into the finding caption. Main thread only. */
     private fun applyFieldMetrics(metrics: FieldMetrics, index: Int) {
-        updateStatsStripFrom(metrics.stats, index)
-        if (inspect.isMaxMinActive) {
-            inspect.lastMaxIdx = metrics.maxIdx
-            inspect.lastMinIdx = metrics.minIdx
-            inspect.refreshCrosshairs()
-        }
+        updateCaptionsFrom(metrics, index)
     }
 
     private companion object {

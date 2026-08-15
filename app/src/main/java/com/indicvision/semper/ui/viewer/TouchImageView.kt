@@ -13,9 +13,13 @@ import android.graphics.Matrix
 import android.graphics.PointF
 import android.graphics.RectF
 import android.util.AttributeSet
+import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import android.view.ViewConfiguration
 import androidx.appcompat.widget.AppCompatImageView
+import kotlin.math.abs
+import kotlin.math.hypot
 
 class TouchImageView @JvmOverloads constructor(
     context: Context,
@@ -33,6 +37,9 @@ class TouchImageView @JvmOverloads constructor(
     private var viewWidth = 0
     private var viewHeight = 0
     private var mScaleDetector: ScaleGestureDetector
+    private val gestureDetector: GestureDetector
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private var dragArmed = false
 
     // --- CRITICAL FIX: Explicit dimensions provided by the Activity ---
     private var trueImageWidth = 0f
@@ -44,30 +51,46 @@ class TouchImageView @JvmOverloads constructor(
 
     var onMatrixChangedListener: (() -> Unit)? = null
 
+    /** Confirmed short tap in view coordinates (not a pan or pinch). */
+    var onTapListener: ((x: Float, y: Float) -> Unit)? = null
+
+    /** Horizontal fling while fit-to-screen: −1 previous frame, +1 next. */
+    var onScrubListener: ((delta: Int) -> Unit)? = null
+
     init {
         super.setClickable(true)
         mScaleDetector = ScaleGestureDetector(context, ScaleListener())
+        gestureDetector = GestureDetector(context, GestureListener())
         scaleType = ScaleType.MATRIX
 
         setOnTouchListener { _, event ->
             mScaleDetector.onTouchEvent(event)
+            gestureDetector.onTouchEvent(event)
             val curr = PointF(event.x, event.y)
 
-            when (event.action and MotionEvent.ACTION_MASK) {
+            when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     last.set(curr)
                     start.set(last)
                     mode = 1
+                    dragArmed = false
                 }
                 MotionEvent.ACTION_MOVE -> if (mode == 1 && !mScaleDetector.isInProgress && event.pointerCount == 1) {
-                    val deltaX = curr.x - last.x
-                    val deltaY = curr.y - last.y
-                    matrix.postTranslate(deltaX, deltaY)
-                    limitPan()
-                    last.set(curr.x, curr.y)
+                    if (!dragArmed) {
+                        val travelled = hypot(curr.x - start.x, curr.y - start.y)
+                        if (travelled > touchSlop) dragArmed = true
+                    }
+                    if (dragArmed) {
+                        val deltaX = curr.x - last.x
+                        val deltaY = curr.y - last.y
+                        matrix.postTranslate(deltaX, deltaY)
+                        limitPan()
+                        last.set(curr.x, curr.y)
+                    }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                     mode = 0
+                    dragArmed = false
                 }
             }
             publishMatrix()
@@ -124,6 +147,45 @@ class TouchImageView @JvmOverloads constructor(
         currentScale = baseScale
 
         publishMatrix()
+    }
+
+    private fun isAtFitScale(): Boolean = currentScale <= minScale * 1.02f
+
+    private fun toggleZoom(focusX: Float, focusY: Float) {
+        if (!isAtFitScale()) {
+            fitToScreen()
+            return
+        }
+        val target = (minScale * 2f).coerceAtMost(maxScale)
+        val factor = target / currentScale
+        currentScale = target
+        matrix.postScale(factor, factor, focusX, focusY)
+        limitPan()
+        publishMatrix()
+    }
+
+    private inner class GestureListener : GestureDetector.SimpleOnGestureListener() {
+        override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            onTapListener?.invoke(e.x, e.y)
+            return true
+        }
+
+        override fun onDoubleTap(e: MotionEvent): Boolean {
+            toggleZoom(e.x, e.y)
+            return true
+        }
+
+        override fun onFling(
+            e1: MotionEvent?,
+            e2: MotionEvent,
+            velocityX: Float,
+            velocityY: Float,
+        ): Boolean {
+            if (!isAtFitScale()) return false
+            if (abs(velocityX) < abs(velocityY) || abs(velocityX) < FLING_MIN_VELOCITY) return false
+            onScrubListener?.invoke(if (velocityX < 0f) 1 else -1)
+            return true
+        }
     }
 
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -191,7 +253,7 @@ class TouchImageView @JvmOverloads constructor(
         }
     }
 
-    /** Logical zoom matrix in true image-pixel space (for overlays / inspect). */
+    /** Logical zoom matrix in true image-pixel space (for overlays / probe). */
     fun getZoomMatrix(): Matrix = Matrix(matrix)
 
     private fun publishMatrix() {
@@ -204,5 +266,9 @@ class TouchImageView @JvmOverloads constructor(
         }
         invalidate()
         onMatrixChangedListener?.invoke()
+    }
+
+    private companion object {
+        const val FLING_MIN_VELOCITY = 800f
     }
 }

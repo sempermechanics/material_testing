@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Result viewer — Photos-minimal wireframes</title>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #6b6b6b;
+    --line: #c8c8c8;
+    --paper: #f2f2f0;
+    --phone: #111;
+    --heat-a: #1d4ed8;
+    --heat-b: #22c55e;
+    --heat-c: #eab308;
+    --heat-d: #ef4444;
+    --accent: #2563eb;
+    --safe: #0a0a0a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    line-height: 1.45;
+  }
+  header.page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px 8px;
+  }
+  header.page h1 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 500;
+    font-size: 1.85rem;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  header.page p { margin: 0 0 10px; color: var(--muted); max-width: 62ch; }
+  header.page .note {
+    font-size: 0.92rem;
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+    color: var(--ink);
+    max-width: 70ch;
+  }
+  .strip {
+    display: flex;
+    gap: 28px;
+    overflow-x: auto;
+    padding: 28px 24px 48px;
+    max-width: 100%;
+    scroll-snap-type: x mandatory;
+  }
+  .card {
+    flex: 0 0 auto;
+    width: 320px;
+    scroll-snap-align: start;
+  }
+  .card h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .card .tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .card .blurb {
+    font-size: 0.82rem;
+    color: var(--muted);
+    min-height: 3.6em;
+    margin: 0 0 14px;
+  }
+  .phone {
+    width: 300px;
+    height: 600px;
+    border-radius: 28px;
+    background: var(--phone);
+    padding: 10px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.18);
+    position: relative;
+  }
+  .screen {
+    width: 100%;
+    height: 100%;
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+    background: #0b1220;
+  }
+  .heatmap {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, var(--heat-a), var(--heat-b) 35%, var(--heat-c) 65%, var(--heat-d));
+  }
+  .heatmap.stripes {
+    background:
+      repeating-linear-gradient(
+        135deg,
+        var(--heat-a) 0 18px,
+        var(--heat-b) 18px 36px,
+        var(--heat-c) 36px 54px,
+        var(--heat-d) 54px 72px
+      );
+  }
+  .status {
+    position: absolute; top: 0; left: 0; right: 0; height: 22px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 14px; font-size: 9px; color: #fff; z-index: 5;
+    text-shadow: 0 1px 2px rgba(0,0,0,.5);
+  }
+  .nav-dots {
+    position: absolute; bottom: 6px; left: 0; right: 0;
+    display: flex; justify-content: center; gap: 28px; z-index: 5;
+    color: #fff; font-size: 14px; opacity: .85;
+  }
+
+  /* —— CURRENT (problem) —— */
+  .panel {
+    background: rgba(255,255,255,.94);
+    border-radius: 12px;
+    margin: 6px 8px;
+    padding: 6px 8px;
+    color: #152430;
+    font-size: 10px;
+  }
+  .row { display: flex; align-items: center; gap: 4px; }
+  .grow { flex: 1; min-width: 0; }
+  .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; font-size: 9px; }
+  .icon { width: 18px; height: 18px; border-radius: 50%; background: #dbeafe; flex: 0 0 auto; }
+  .seg { display: flex; gap: 3px; }
+  .seg span {
+    flex: 1; text-align: center; padding: 5px 0; border-radius: 8px;
+    border: 1px solid #93c5fd; color: var(--accent); font-size: 9px; font-weight: 600;
+  }
+  .seg span.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .scale {
+    display: flex; align-items: center; gap: 6px; font-size: 8px; font-weight: 600;
+  }
+  .scale .bar {
+    flex: 1; height: 8px; border-radius: 4px;
+    background: linear-gradient(90deg, #1d4ed8, #22c55e, #eab308, #ef4444);
+  }
+  .heat-slot {
+    margin: 4px 0; height: 210px; position: relative; overflow: hidden;
+  }
+  .heat-slot .heatmap { border-radius: 0; }
+  .current-stack { position: absolute; inset: 0; display: flex; flex-direction: column; z-index: 2; padding-top: 22px; }
+  .current-stack .spacer { flex: 1; min-height: 0; }
+  .verbose-mark {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    writing-mode: vertical-rl; font-size: 9px; letter-spacing: .12em;
+    text-transform: uppercase; color: #fff; background: rgba(185,28,28,.85);
+    padding: 10px 4px; border-radius: 6px; z-index: 6;
+  }
+
+  /* —— PHOTOS-STYLE SHARED —— */
+  .fade-top {
+    position: absolute; left: 0; right: 0; top: 0; height: 96px; z-index: 3;
+    background: linear-gradient(180deg, rgba(0,0,0,.55), transparent);
+    pointer-events: none;
+  }
+  .fade-bot {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 140px; z-index: 3;
+    background: linear-gradient(0deg, rgba(0,0,0,.6), transparent);
+    pointer-events: none;
+  }
+  .edge-top {
+    position: absolute; top: 26px; left: 8px; right: 8px; z-index: 4;
+    display: flex; align-items: center; gap: 6px; color: #fff;
+  }
+  .edge-top .ghost {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(255,255,255,.18); display: grid; place-items: center;
+    font-size: 12px; backdrop-filter: blur(6px);
+  }
+  .edge-top .title {
+    flex: 1; font-size: 11px; font-weight: 500;
+    text-shadow: 0 1px 3px rgba(0,0,0,.45);
+  }
+  .hairline-scale {
+    position: absolute; left: 16px; right: 16px; bottom: 118px; z-index: 4;
+    height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, #1d4ed8, #22c55e, #eab308, #ef4444);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.25);
+  }
+  .hairline-scale .lo, .hairline-scale .hi {
+    position: absolute; top: -14px; font-size: 8px; color: #fff;
+    text-shadow: 0 1px 2px #000;
+  }
+  .hairline-scale .lo { left: 0; }
+  .hairline-scale .hi { right: 0; }
+  .field-pills {
+    position: absolute; left: 0; right: 0; bottom: 72px; z-index: 4;
+    display: flex; justify-content: center; gap: 6px;
+  }
+  .field-pills span {
+    font-size: 10px; font-weight: 600; color: #fff;
+    padding: 5px 9px; border-radius: 999px;
+    background: rgba(255,255,255,.14);
+    backdrop-filter: blur(8px);
+  }
+  .field-pills span.on {
+    background: #fff; color: #111;
+  }
+  .frame-edge {
+    position: absolute; left: 16px; right: 16px; bottom: 36px; z-index: 4;
+    display: flex; align-items: center; gap: 10px; color: #fff; font-size: 10px;
+  }
+  .frame-edge .track {
+    flex: 1; height: 2px; background: rgba(255,255,255,.35); border-radius: 1px; position: relative;
+  }
+  .frame-edge .track i {
+    position: absolute; left: 22%; top: -3px; width: 8px; height: 8px;
+    border-radius: 50%; background: #fff;
+  }
+  .probe-dot {
+    position: absolute; left: 48%; top: 52%; width: 14px; height: 14px;
+    margin: -7px; border: 2px solid #fff; border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.4); z-index: 4;
+  }
+  .probe-dot::before, .probe-dot::after {
+    content: ""; position: absolute; background: #fff;
+  }
+  .probe-dot::before { left: 5px; top: -8px; width: 2px; height: 28px; }
+  .probe-dot::after { top: 5px; left: -8px; width: 28px; height: 2px; }
+  .probe-chip {
+    position: absolute; left: 18px; bottom: 150px; z-index: 5;
+    background: rgba(0,0,0,.72); color: #fff; backdrop-filter: blur(8px);
+    border-radius: 10px; padding: 8px 10px; font-size: 10px; line-height: 1.35;
+  }
+  .probe-chip strong { font-weight: 600; }
+
+  /* hidden chrome state */
+  .chrome-hidden .fade-top,
+  .chrome-hidden .fade-bot,
+  .chrome-hidden .edge-top,
+  .chrome-hidden .hairline-scale,
+  .chrome-hidden .field-pills,
+  .chrome-hidden .frame-edge { opacity: 0; transition: opacity .35s ease; }
+  .chrome-visible .fade-top,
+  .chrome-visible .fade-bot,
+  .chrome-visible .edge-top,
+  .chrome-visible .hairline-scale,
+  .chrome-visible .field-pills,
+  .chrome-visible .frame-edge { opacity: 1; transition: opacity .25s ease; }
+
+  /* sheet option */
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+    background: rgba(18,18,18,.92); color: #fff;
+    border-radius: 18px 18px 0 0; padding: 8px 16px 28px;
+    backdrop-filter: blur(12px);
+  }
+  .sheet .handle {
+    width: 36px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.35);
+    margin: 4px auto 12px;
+  }
+  .sheet .meta { font-size: 11px; margin-bottom: 10px; }
+  .sheet .meta em { font-style: normal; color: #a3a3a3; }
+  .sheet .fields { display: flex; gap: 6px; margin-bottom: 12px; }
+  .sheet .fields span {
+    flex: 1; text-align: center; padding: 7px 0; border-radius: 8px;
+    background: rgba(255,255,255,.08); font-size: 10px; font-weight: 600;
+  }
+  .sheet .fields span.on { background: #fff; color: #111; }
+  .sheet .statline { font-size: 10px; color: #d4d4d4; font-variant-numeric: tabular-nums; }
+
+  .compare {
+    max-width: 1100px; margin: 0 auto 56px; padding: 0 24px;
+  }
+  .compare h2 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 500; font-size: 1.35rem; margin: 0 0 12px;
+  }
+  table.rules {
+    width: 100%; border-collapse: collapse; font-size: 0.88rem;
+    background: #fff; border-radius: 12px; overflow: hidden;
+  }
+  table.rules th, table.rules td {
+    text-align: left; padding: 10px 12px; border-bottom: 1px solid #e7e7e4;
+    vertical-align: top;
+  }
+  table.rules th { background: #ebebe8; font-weight: 600; width: 28%; }
+  table.rules td.bad { color: #9f1239; }
+  table.rules td.good { color: #166534; }
+  .pick {
+    margin-top: 28px; padding: 16px 18px; background: #fff;
+    border-radius: 12px; border: 1px solid #ddd;
+  }
+  .pick strong { display: block; margin-bottom: 6px; }
+  .actions {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;
+  }
+  .actions button {
+    border: 1px solid #bbb; background: #fafafa; border-radius: 999px;
+    padding: 8px 14px; font: inherit; font-size: 0.85rem; cursor: pointer;
+  }
+  .actions button.active {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  .legend {
+    font-size: 0.8rem; color: var(--muted); margin-top: 8px;
+  }
+  .wire-label {
+    position: absolute; z-index: 7; font-size: 8px; letter-spacing: .04em;
+    text-transform: uppercase; color: #fff; background: rgba(0,0,0,.55);
+    padding: 2px 5px; border-radius: 3px; pointer-events: none;
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500&display=swap" rel="stylesheet" />
+</head>
+<body>
+<header class="page">
+  <h1>Result viewer — less chrome, more figure</h1>
+  <p>
+    The shipped Tufte pass removed Inspect / X,Y / Max-Min, but the screen is still
+    a stack of white panels: finding caption, five-button row, scale card, stats card,
+    scrubber card. Google Photos keeps the photo full-bleed and lets chrome appear
+    only when you need it.
+  </p>
+  <p class="note">
+    Constraint kept: five fields one-tap, tap-to-probe, Share / ⓘ / Home / Back,
+    summary GIF before frame&nbsp;1, sequence colour scale when N&gt;1, sweep
+    <code>START_FRAME</code> skip. What changes is <em>where</em> those live on screen.
+  </p>
+</header>
+
+<section class="strip" aria-label="Wireframe options">
+
+  <!-- 0 CURRENT -->
+  <article class="card">
+    <div class="tag">Now · PR #56</div>
+    <h2>Stacked panels</h2>
+    <p class="blurb">Heatmap is the leftover between six chrome bands. Numbers compete with the figure.</p>
+    <div class="phone"><div class="screen">
+      <div class="status"><span>9:41</span><span>●● ●</span></div>
+      <div class="current-stack">
+        <div class="panel row">
+          <div class="icon"></div>
+          <div class="grow truncate">Exx peaked 1.73000 mε at (32, 0)</div>
+          <div class="icon"></div><div class="icon"></div>
+          <span style="color:var(--accent);font-weight:700;font-size:10px">Share</span>
+        </div>
+        <div class="panel seg">
+          <span>U</span><span>V</span><span class="on">Exx</span><span>Eyy</span><span>Exy</span>
+        </div>
+        <div class="panel scale">
+          <span>Min −1.68</span><div class="bar"></div><span>Max 2.03</span>
+        </div>
+        <div class="heat-slot"><div class="heatmap stripes"></div></div>
+        <div class="panel" style="text-align:center;font-variant-numeric:tabular-nums">
+          max 1.73 · min −1.63 · mean 0.049 mε
+        </div>
+        <div class="panel row" style="justify-content:space-between">
+          <div class="icon"></div>
+          <div style="text-align:center;font-size:9px;font-weight:600">Frame_2 (2 / 8)<br/><span style="color:var(--accent)">2 / 8</span></div>
+          <div class="icon"></div>
+        </div>
+      </div>
+      <div class="verbose-mark">too much</div>
+      <div class="nav-dots"><span>◁</span><span>○</span><span>□</span></div>
+    </div></div>
+  </article>
+
+  <!-- A IMMERSIVE -->
+  <article class="card">
+    <div class="tag">Option A · recommended</div>
+    <h2>Photos immersive</h2>
+    <p class="blurb">Figure is the page. Edge fades only — no cards. Fields as pills; scale as a hairline; scrub as a thin track.</p>
+    <div class="phone"><div class="screen chrome-visible" id="phone-a">
+      <div class="heatmap stripes"></div>
+      <div class="status"><span>9:41</span><span>●● ●</span></div>
+      <div class="fade-top"></div>
+      <div class="fade-bot"></div>
+      <div class="edge-top">
+        <div class="ghost">←</div>
+        <div class="title">Exx · frame 2</div>
+        <div class="ghost">ⓘ</div>
+        <div class="ghost">↗</div>
+        <div class="ghost">⋮</div>
+      </div>
+      <span class="wire-label" style="top:100px;left:12px">no card</span>
+      <div class="hairline-scale">
+        <span class="lo">−1.68</span><span class="hi">2.03 mε</span>
+      </div>
+      <div class="field-pills">
+        <span>U</span><span>V</span><span class="on">Exx</span><span>Eyy</span><span>Exy</span>
+      </div>
+      <div class="frame-edge">
+        <span>‹</span>
+        <div class="track"><i></i></div>
+        <span>2 / 8</span>
+        <span>›</span>
+      </div>
+      <div class="nav-dots"><span>◁</span><span>○</span><span>□</span></div>
+    </div></div>
+    <p class="legend">Idle 2s → chrome fades. Drag / field tap / scrub → chrome returns. Short tap on figure → probe (B).</p>
+  </article>
+
+  <!-- A + probe -->
+  <article class="card">
+    <div class="tag">Option A · probe</div>
+    <h2>Reading without a mode</h2>
+    <p class="blurb">Tap places a reticle. One small chip — value + (x, y). No second HUD. Dismiss by tapping chip or same point.</p>
+    <div class="phone"><div class="screen chrome-visible">
+      <div class="heatmap stripes"></div>
+      <div class="status"><span>9:41</span><span>●● ●</span></div>
+      <div class="fade-top"></div>
+      <div class="fade-bot"></div>
+      <div class="edge-top">
+        <div class="ghost">←</div>
+        <div class="title">Exx · frame 2</div>
+        <div class="ghost">⋮</div>
+      </div>
+      <div class="probe-dot"></div>
+      <div class="probe-chip"><strong>Exx −0.37 mε</strong><br/>(160, 112)</div>
+      <div class="hairline-scale"><span class="lo">−1.68</span><span class="hi">2.03</span></div>
+      <div class="field-pills">
+        <span>U</span><span>V</span><span class="on">Exx</span><span>Eyy</span><span>Exy</span>
+      </div>
+      <div class="frame-edge">
+        <span>‹</span><div class="track"><i></i></div><span>2 / 8</span><span>›</span>
+      </div>
+      <div class="nav-dots"><span>◁</span><span>○</span><span>□</span></div>
+    </div></div>
+  </article>
+
+  <!-- B SHEET -->
+  <article class="card">
+    <div class="tag">Option B</div>
+    <h2>Figure + peek sheet</h2>
+    <p class="blurb">Default is nearly empty (Photos). Swipe up once for fields, scale, stats, jump. Peak lives in the sheet, not a permanent title.</p>
+    <div class="phone"><div class="screen">
+      <div class="heatmap stripes"></div>
+      <div class="status"><span>9:41</span><span>●● ●</span></div>
+      <div class="fade-top"></div>
+      <div class="edge-top">
+        <div class="ghost">←</div>
+        <div class="title"></div>
+        <div class="ghost">↗</div>
+        <div class="ghost">⋮</div>
+      </div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div class="meta"><strong>Exx peaked 1.73 mε</strong> at (32, 0)<br/><em>frame 2 of 8 · sequence scale</em></div>
+        <div class="fields">
+          <span>U</span><span>V</span><span class="on">Exx</span><span>Eyy</span><span>Exy</span>
+        </div>
+        <div class="scale" style="margin-bottom:8px;color:#fff">
+          <span>−1.68</span>
+          <div class="bar" style="height:4px"></div>
+          <span>2.03</span>
+        </div>
+        <div class="statline">max 1.73 · min −1.63 · mean 0.049 mε</div>
+      </div>
+      <div class="nav-dots"><span>◁</span><span>○</span><span>□</span></div>
+    </div></div>
+  </article>
+
+  <!-- C HIDDEN -->
+  <article class="card">
+    <div class="tag">Option A · idle</div>
+    <h2>Chrome off</h2>
+    <p class="blurb">What the user stares at most of the time. One gesture brings tools back. This is the Photos default.</p>
+    <div class="phone"><div class="screen chrome-hidden">
+      <div class="heatmap stripes"></div>
+      <div class="status"><span>9:41</span><span>●● ●</span></div>
+      <div class="fade-top"></div>
+      <div class="fade-bot"></div>
+      <div class="edge-top">
+        <div class="ghost">←</div>
+        <div class="title">Exx · frame 2</div>
+        <div class="ghost">⋮</div>
+      </div>
+      <div class="hairline-scale"><span class="lo">−1.68</span><span class="hi">2.03</span></div>
+      <div class="field-pills">
+        <span>U</span><span>V</span><span class="on">Exx</span><span>Eyy</span><span>Exy</span>
+      </div>
+      <div class="frame-edge">
+        <span>‹</span><div class="track"><i></i></div><span>2 / 8</span><span>›</span>
+      </div>
+      <div class="nav-dots"><span>◁</span><span>○</span><span>□</span></div>
+      <div style="position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none">
+        <span style="background:rgba(0,0,0,.55);color:#fff;font-size:11px;padding:8px 12px;border-radius:8px">figure only</span>
+      </div>
+    </div></div>
+  </article>
+
+  <!-- SUMMARY GIF -->
+  <article class="card">
+    <div class="tag">Summary GIF</div>
+    <h2>Same chrome rules</h2>
+    <p class="blurb">Summary still before frame 1. Field pills stay so U→Exx rebuilds the loop. No stats card while the GIF plays.</p>
+    <div class="phone"><div class="screen chrome-visible">
+      <div class="heatmap"></div>
+      <div class="status"><span>9:41</span><span>●● ●</span></div>
+      <div class="fade-top"></div>
+      <div class="fade-bot"></div>
+      <div class="edge-top">
+        <div class="ghost">←</div>
+        <div class="title">Summary · Exx · 8 frames</div>
+        <div class="ghost">⋮</div>
+      </div>
+      <div class="hairline-scale"><span class="lo">−71</span><span class="hi">78 px</span></div>
+      <div class="field-pills">
+        <span>U</span><span>V</span><span class="on">Exx</span><span>Eyy</span><span>Exy</span>
+      </div>
+      <div class="frame-edge">
+        <span></span>
+        <div class="track" style="opacity:.4"><i style="left:0"></i></div>
+        <span>GIF</span>
+        <span>›</span>
+      </div>
+      <div class="nav-dots"><span>◁</span><span>○</span><span>□</span></div>
+    </div></div>
+  </article>
+</section>
+
+<section class="compare">
+  <h2>What gets cut vs kept</h2>
+  <table class="rules">
+    <thead>
+      <tr><th></th><th>Now (cumbersome)</th><th>Photos-minimal</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th>Finding caption</th>
+        <td class="bad">Always-on bold title in a white bar (long, truncated)</td>
+        <td class="good">Short “Exx · frame 2” in edge chrome; full peak in ⋮ or peek sheet</td>
+      </tr>
+      <tr>
+        <th>Field switch</th>
+        <td class="bad">Full-width Material button row in a panel</td>
+        <td class="good">Floating glass pills on the figure (still one tap)</td>
+      </tr>
+      <tr>
+        <th>Colour scale</th>
+        <td class="bad">Padded card with Min/Max labels</td>
+        <td class="good">3px hairline + tiny end labels; tap opens custom/Auto</td>
+      </tr>
+      <tr>
+        <th>Stats sentence</th>
+        <td class="bad">Permanent card under the image</td>
+        <td class="good">Gone from the canvas; available in sheet / info</td>
+      </tr>
+      <tr>
+        <th>Scrubber</th>
+        <td class="bad">Large prev/next chips + duplicate “2 / 8”</td>
+        <td class="good">Thin scrub track + count; fling still steps frames</td>
+      </tr>
+      <tr>
+        <th>Share / Home / ⓘ</th>
+        <td class="bad">Four controls always visible in the title bar</td>
+        <td class="good">Back + share + ⋮ (Home &amp; settings-used inside ⋮)</td>
+      </tr>
+      <tr>
+        <th>Tap conflict</th>
+        <td class="bad">—</td>
+        <td class="good">Tap figure = probe. Chrome auto-hides; does <em>not</em> use image tap to toggle (Photos does — we can’t, probe owns tap)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="pick">
+    <strong>Decision (locked)</strong>
+    Ship <em>A + B</em>: immersive full-bleed figure with auto-hiding edge chrome;
+    ⓘ opens a peek sheet with variable finding + stats + settings used;
+    share is the node icon at top right; colour scale min/max match the
+    <em>current frame</em> (summary GIF stays sequence-global).
+    <div class="actions" id="vote">
+      <button type="button" data-pick="A+B" class="active">A + B (locked)</button>
+    </div>
+    <p class="legend" id="pick-out">Selected: A + B — immersive canvas, details in ⓘ sheet, frame min/max scale.</p>
+  </div>
+</section>
+
+<script>
+  document.getElementById('vote').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-pick]');
+    if (!btn) return;
+    document.querySelectorAll('#vote button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const labels = {
+      A: 'Selected: A — immersive (recommended).',
+      B: 'Selected: B — peek sheet.',
+      'A+B': 'Selected: A now, B later.'
+    };
+    document.getElementById('pick-out').textContent = labels[btn.dataset.pick];
+  });
+
+  // Demo auto-hide on phone A
+  const phoneA = document.getElementById('phone-a');
+  let t;
+  const bump = () => {
+    phoneA.classList.add('chrome-visible');
+    phoneA.classList.remove('chrome-hidden');
+    clearTimeout(t);
+    t = setTimeout(() => {
+      phoneA.classList.add('chrome-hidden');
+      phoneA.classList.remove('chrome-visible');
+    }, 2200);
+  };
+  phoneA.addEventListener('pointerdown', bump);
+  bump();
+</script>
+</body>
+</html>

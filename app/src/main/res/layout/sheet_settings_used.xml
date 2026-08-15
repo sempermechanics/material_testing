@@ -1,28 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The engine settings a result was actually produced with. Populated at
-     runtime from the intent extras the viewer was launched with, so it always
-     reflects THIS analysis rather than the app's current settings. -->
+<!-- Dark glass peek sheet: max/min with coords + mean, then settings used. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@drawable/bg_viewer_peek_sheet"
+    android:forceDarkAllowed="false"
     android:orientation="vertical"
-    android:paddingHorizontal="20dp"
+    android:paddingHorizontal="22dp"
     android:paddingTop="10dp"
-    android:paddingBottom="24dp">
+    android:paddingBottom="28dp"
+    tools:targetApi="29">
 
     <View
-        android:layout_width="34dp"
+        android:layout_width="36dp"
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="12dp"
-        android:background="@color/surface_outline" />
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/bg_viewer_peek_handle" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/settings_used_title"
-        android:textColor="@color/text_primary"
-        android:textSize="17sp"
+        android:letterSpacing="0.01"
+        android:text="@string/viewer_details_title"
+        android:textColor="@color/viewer_peek_text"
+        android:textSize="20sp"
         android:textStyle="bold" />
 
     <TextView
@@ -32,27 +35,42 @@
         android:layout_marginTop="2dp"
         android:ellipsize="middle"
         android:maxLines="1"
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp"
+        android:textColor="@color/viewer_peek_muted"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/tvSheetStats"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:fontFamily="monospace"
+        android:lineSpacingExtra="4dp"
+        android:textColor="@color/viewer_peek_text"
+        android:textSize="14sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="22dp"
+        android:letterSpacing="0.08"
+        android:text="@string/settings_used_title"
+        android:textAllCaps="true"
+        android:textColor="@color/viewer_peek_muted"
+        android:textSize="11sp"
         android:textStyle="bold" />
 
     <LinearLayout
         android:id="@+id/settingsUsedRows"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:background="@drawable/bg_settings_card"
-        android:orientation="vertical"
-        android:padding="14dp" />
+        android:layout_marginTop="4dp"
+        android:orientation="vertical" />
 
-    <!-- Line cut through the ROI centre. Only a parameter sweep populates it:
-         every combination is read along the same physical line, so the strain
-         profiles of different VSG sizes can be compared directly. -->
     <LinearLayout
         android:id="@+id/lineCutSection"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
+        android:layout_marginTop="18dp"
         android:orientation="vertical"
         android:visibility="gone">
 
@@ -60,21 +78,32 @@
             android:id="@+id/tvLineCutTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/text_primary"
-            android:textSize="14sp"
+            android:letterSpacing="0.08"
+            android:textAllCaps="true"
+            android:textColor="@color/viewer_peek_muted"
+            android:textSize="11sp"
             android:textStyle="bold" />
 
         <com.indicvision.semper.ui.analysis.VsgPlotView
             android:id="@+id/plotLineCut"
             android:layout_width="match_parent"
             android:layout_height="190dp"
-            android:layout_marginTop="6dp" />
+            android:layout_marginTop="8dp" />
 
         <TextView
             android:id="@+id/tvLineCutLegend"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/text_secondary"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/viewer_peek_muted"
             android:textSize="12sp" />
     </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnSheetHome"
+        style="@style/Widget.Semper.Button.ViewerPeekHome"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="@string/viewer_details_home" />
 </LinearLayout>

@@ -105,6 +105,7 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
                 emptyMap()
             }
             ranges = computed
+            host.onSequenceRangesReady()
             if (isShowing) render(host.currentDataIndex)
         }
     }
@@ -143,6 +144,9 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     /** Bounds for [dataIndex]: a user-set fixed scale wins, else the global range. */
     fun boundsFor(dataIndex: Int): Pair<Float, Float>? =
         host.customBoundsFor(dataIndex) ?: ranges[dataIndex]
+
+    /** Whole-sequence range for [dataIndex], ignoring any custom override. */
+    fun sequenceRange(dataIndex: Int): Pair<Float, Float>? = ranges[dataIndex]
 
     /** The label the frame counter shows while the summary is up. */
     fun counterText(): String {

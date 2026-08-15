@@ -230,6 +230,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="download_analysis_already">This analysis is already downloading.</string>
     <string name="download_analysis_failed">Couldn\'t download this analysis. Check your connection and try again.</string>
     <string name="viewer_settings_used_desc">Show the settings used for this analysis</string>
+    <string name="viewer_details_desc">Frame stats and settings used</string>
+    <string name="viewer_details_title">Details</string>
+    <string name="viewer_details_home">Go to Home</string>
+    <string name="viewer_edge_title_fmt">%1$s · %2$s</string>
     <string name="settings_used_title">Settings used</string>
     <string name="setting_subset">Subset size</string>
     <string name="setting_step">Step size</string>
@@ -563,6 +567,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="stat_min">MIN</string>
     <string name="stat_mean">MEAN</string>
     <string name="stat_empty">--</string>
+    <string name="viewer_stats_fmt">max %1$s at (%2$d, %3$d)\nmin %4$s at (%5$d, %6$d)\nmean %7$s %8$s</string>
+    <string name="viewer_stats_plain_fmt">max %1$s · min %2$s · mean %3$s %4$s</string>
+    <string name="probe_reading_fmt">%1$s: %2$s %3$s\n(%4$d, %5$d)</string>
+    <string name="probe_no_data">No data</string>
     
     <string name="share_photo">Result photo</string>
     <string name="share_photo_sub_fmt">%1$s field, %2$s</string>
