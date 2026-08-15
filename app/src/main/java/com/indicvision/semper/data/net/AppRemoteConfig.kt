@@ -21,6 +21,7 @@ object AppRemoteConfig {
     private const val K_MAX_SESSIONS = "max_sessions"
     private const val K_MAX_FILES = "max_files_per_session"
     private const val K_MAX_FRAMES = "max_frames"
+    private const val K_DAT_CODEC_ENCODING = "dat_codec_encoding_enabled"
     private const val K_FAIL_STREAK = "config_fail_streak"
     private const val FAIL_STREAK_HINT = 3
 
@@ -38,6 +39,7 @@ object AppRemoteConfig {
             putInt(K_MAX_SESSIONS, config.maxSessions.coerceAtLeast(0))
             putInt(K_MAX_FILES, config.maxFilesPerSession.coerceAtLeast(0))
             putInt(K_MAX_FRAMES, config.maxFrames.coerceAtLeast(0))
+            putBoolean(K_DAT_CODEC_ENCODING, config.datCodecEncodingEnabled)
             putInt(K_FAIL_STREAK, 0)
         }
     }
@@ -64,6 +66,15 @@ object AppRemoteConfig {
 
     /** Deformed-frame ceiling from cloud; 0 until config is known. */
     fun maxFrames(context: Context): Int = prefs(context).getInt(K_MAX_FRAMES, 0)
+
+    /**
+     * Whether this account may upload `.dat` entries through [DatCodec][com.indicvision.semper.data.DatCodec].
+     * Fails closed like everything else here — `false` (today's raw behaviour)
+     * until a successful [apply] says otherwise, so a device that has never
+     * synced config, or whose last fetch failed, never guesses "on".
+     */
+    fun datCodecEncodingEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(K_DAT_CODEC_ENCODING, false)
 
     /** Drop cached limits (sign-out). */
     fun clear(context: Context) = prefs(context).edit { clear() }

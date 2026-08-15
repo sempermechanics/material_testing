@@ -17,11 +17,13 @@ def test_resolve_uses_fleet_defaults_when_no_override(store, monkeypatch):
     monkeypatch.setattr(settings, "MAX_SESSIONS_PER_USER", 4)
     monkeypatch.setattr(settings, "MAX_FILES_PER_SESSION", 600)
     monkeypatch.setattr(settings, "MAX_FRAMES_PER_ANALYSIS", 150)
+    monkeypatch.setattr(settings, "DAT_CODEC_ENCODING_ENABLED", False)
     cfg = repo.resolve_user_config({"uid": "u1"})
     assert cfg == {
         "maxSessions": 4,
         "maxFilesPerSession": 600,
         "maxFrames": 150,
+        "datCodecEncodingEnabled": False,
     }
 
 
@@ -29,17 +31,36 @@ def test_resolve_prefers_positive_user_overrides(store, monkeypatch):
     monkeypatch.setattr(settings, "MAX_SESSIONS_PER_USER", 4)
     monkeypatch.setattr(settings, "MAX_FILES_PER_SESSION", 600)
     monkeypatch.setattr(settings, "MAX_FRAMES_PER_ANALYSIS", 150)
+    monkeypatch.setattr(settings, "DAT_CODEC_ENCODING_ENABLED", False)
     cfg = repo.resolve_user_config({
         "uid": "u1",
         "maxSessions": 12,
         "maxFilesPerSession": 800,
         "maxFrames": 100,
+        "datCodecEncodingEnabled": True,
     })
     assert cfg == {
         "maxSessions": 12,
         "maxFilesPerSession": 800,
         "maxFrames": 100,
+        "datCodecEncodingEnabled": True,
     }
+
+
+def test_dat_codec_override_can_disable_when_fleet_default_is_on(store, monkeypatch):
+    # The override must be able to go EITHER direction, not just "on" — a
+    # per-account kill switch during rollout needs this, not just canarying.
+    monkeypatch.setattr(settings, "DAT_CODEC_ENCODING_ENABLED", True)
+    cfg = repo.resolve_user_config({"uid": "u1", "datCodecEncodingEnabled": False})
+    assert cfg["datCodecEncodingEnabled"] is False
+
+
+def test_dat_codec_invalid_override_inherits_fleet_default(store, monkeypatch):
+    monkeypatch.setattr(settings, "DAT_CODEC_ENCODING_ENABLED", True)
+    # A non-bool value on the doc (bad manual edit, legacy data) must not
+    # silently truthy/falsy-cast — it inherits the fleet default instead.
+    cfg = repo.resolve_user_config({"uid": "u1", "datCodecEncodingEnabled": "yes"})
+    assert cfg["datCodecEncodingEnabled"] is True
 
 
 def test_resolve_ignores_invalid_overrides(store, monkeypatch):
@@ -76,6 +97,24 @@ def test_set_user_config_missing_user(store):
     assert repo.set_user_config("missing", {"maxSessions": 10}) is None
 
 
+def test_set_user_config_casts_bool_field_as_bool_not_int(store, monkeypatch):
+    # int(True) == 1 would silently turn this into an int on the stored doc —
+    # a naive single-cast implementation would pass a shallower test but store
+    # the wrong type, which _bool_override's isinstance(raw, bool) check would
+    # then reject on the next read (falling back to the fleet default instead
+    # of the override the caller just set).
+    monkeypatch.setattr(settings, "DAT_CODEC_ENCODING_ENABLED", False)
+    store._data["users"] = {"u1": {"email": "a@b.com", "access_status": "APPROVED"}}
+
+    resolved = repo.set_user_config("u1", {"datCodecEncodingEnabled": True})
+    assert resolved["datCodecEncodingEnabled"] is True
+    assert store._data["users"]["u1"]["datCodecEncodingEnabled"] is True
+
+    cleared = repo.set_user_config("u1", {"datCodecEncodingEnabled": None})
+    assert cleared["datCodecEncodingEnabled"] is False
+    assert "datCodecEncodingEnabled" not in store._data["users"]["u1"]
+
+
 @pytest.mark.asyncio
 async def test_config_endpoint_returns_defaults(client):
     resp = await client.get("/v1/config")
@@ -84,6 +123,7 @@ async def test_config_endpoint_returns_defaults(client):
     assert body["maxSessions"] == settings.MAX_SESSIONS_PER_USER
     assert body["maxFilesPerSession"] == settings.MAX_FILES_PER_SESSION
     assert body["maxFrames"] == settings.MAX_FRAMES_PER_ANALYSIS
+    assert body["datCodecEncodingEnabled"] == settings.DAT_CODEC_ENCODING_ENABLED
 
 
 @pytest.mark.asyncio

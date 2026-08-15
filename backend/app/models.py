@@ -136,3 +136,4 @@ class UserConfigPatch(BaseModel):
     maxSessions: Optional[int] = Field(default=None, gt=0)
     maxFilesPerSession: Optional[int] = Field(default=None, gt=0)
     maxFrames: Optional[int] = Field(default=None, gt=0)
+    datCodecEncodingEnabled: Optional[bool] = None

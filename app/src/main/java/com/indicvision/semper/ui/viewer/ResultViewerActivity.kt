@@ -971,7 +971,7 @@ class ResultViewerActivity : AppCompatActivity() {
         if (etFrameNumber.text?.toString() != shown) etFrameNumber.setText(shown)
     }
 
-    // ── Field metrics cache (caption + finding peak) ──────────────────────
+    // ── Field metrics cache (caption + peek-sheet extrema) ───────────────────
 
     /** Immutable per-(frame,field) result: `[max,min,mean]` stats and extrema indices. */
     internal class FieldMetrics(val stats: FloatArray?, val maxIdx: Int, val minIdx: Int)
@@ -988,8 +988,10 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /**
      * Per-thread extrema scratch: [fieldMetricsFor] runs from both the Main thread
-     * and a `Dispatchers.Default` coroutine concurrently, so a single shared buffer
-     * would race. `ThreadLocal` gives each caller thread its own reusable array.
+     * and a `Dispatchers.Default` coroutine ([updateVisualization]'s scrub-settle
+     * warm-up) concurrently, so a single shared buffer would race. `ThreadLocal`
+     * gives each caller thread its own reusable array — same allocation saving,
+     * no synchronization needed.
      */
     private val fieldMetricsScratch: ThreadLocal<FloatArray> = ThreadLocal.withInitial { FloatArray(0) }
 

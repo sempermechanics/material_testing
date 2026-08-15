@@ -237,12 +237,21 @@ def _positive_int_override(user: dict, key: str):
     return n if n > 0 else None
 
 
+def _bool_override(user: dict, key: str):
+    """Optional bool on the user doc; anything else (missing/wrong type) → None
+    (inherit the fleet default). Mirrors [_positive_int_override]'s "invalid
+    input inherits rather than errors" contract."""
+    raw = user.get(key)
+    return raw if isinstance(raw, bool) else None
+
+
 def resolve_user_config(user: dict) -> dict:
     """Product limits for this account: per-user override, else fleet env default.
 
     Missing fields are not written at user creation so changing the env default
     updates everyone who has not been individually overridden.
     """
+    dat_codec_override = _bool_override(user, "datCodecEncodingEnabled")
     return {
         "maxSessions": (
             _positive_int_override(user, "maxSessions") or settings.MAX_SESSIONS_PER_USER
@@ -254,7 +263,24 @@ def resolve_user_config(user: dict) -> dict:
         "maxFrames": (
             _positive_int_override(user, "maxFrames") or settings.MAX_FRAMES_PER_ANALYSIS
         ),
+        "datCodecEncodingEnabled": (
+            dat_codec_override
+            if dat_codec_override is not None
+            else settings.DAT_CODEC_ENCODING_ENABLED
+        ),
     }
+
+
+#: Per-user config override fields and how to cast an incoming patch value for
+#: each — int(True) == 1 would silently turn a bool override into an int, so a
+#: single int() cast for every field (as before datCodecEncodingEnabled) is
+#: wrong here; each field casts to its own resolve_user_config type.
+_CONFIG_CASTERS = {
+    "maxSessions": int,
+    "maxFilesPerSession": int,
+    "maxFrames": int,
+    "datCodecEncodingEnabled": bool,
+}
 
 
 def set_user_config(uid: str, patch: dict) -> dict | None:
@@ -263,8 +289,10 @@ def set_user_config(uid: str, patch: dict) -> dict | None:
     snap = ref.get()
     if not snap.exists:
         return None
-    allowed = ("maxSessions", "maxFilesPerSession", "maxFrames")
-    update = {k: int(patch[k]) for k in allowed if k in patch and patch[k] is not None}
+    allowed = tuple(_CONFIG_CASTERS)
+    update = {
+        k: _CONFIG_CASTERS[k](patch[k]) for k in allowed if k in patch and patch[k] is not None
+    }
     # Explicit null clears an override so the user re-inherits the fleet default.
     deletes = {k: firestore.DELETE_FIELD for k in allowed if k in patch and patch[k] is None}
     if update or deletes:
