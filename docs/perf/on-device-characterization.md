@@ -280,6 +280,131 @@ parameters (`step`/`subset`/`use6x6`/frame count) — the same knobs this report
 have a hard floor below which the engine simply fails to converge (see the LIGHT-scale
 seeding note above).
 
+## Before → after: measured impact of Phase 1/2/4
+
+Real captures, both targets, both before Phase 1/2/4 landed (app `3428584`, engine
+`f954cab`, backend `indic-api-00063-lmk`) and after (app HEAD, engine
+`eb36c02`→`a2c2106`). Provenance for every "before" build was verified empirically —
+pulled the installed APK, dex-grepped for Phase 1/4 markers (absent), cross-checked
+install timestamps against commit timestamps and the live Cloud Run revision — not
+inferred from the working tree, after that inference was caught being wrong once
+mid-session (`perf-runs/before-*/PROVENANCE.txt`).
+
+**Status: partial.** The account's cloud session quota (25/25 stored analyses) was
+exhausted by the volume of testing this exercise itself generated, blocking `restore/large`
+entirely on both targets and most cloud ops on the emulator's after-run. Numbers below are
+real measurements, not estimates; anything not yet captured is marked `pending`, not filled
+with a guess.
+
+### Time — Pixel 6 (arm64/NEON)
+
+| Metric | Before | After | Δ |
+|---|--:|--:|--:|
+| analysis, LIGHT | 4 s | 4 s | ~none |
+| analysis, LARGE (20 fr) | 696 s | 1,108 s | **+59%** — see note below |
+| screen, LIGHT | 4 s | 5 s | ~none |
+| screen, LARGE | 889 s | 1,144 s | **+29%** — same note |
+| backup, LIGHT | 18 s | 16 s | ~none |
+| backup, LARGE | 1,211 s | 1,265 s | within before's own run-to-run spread (882–1,299 s) |
+| restore, LIGHT | 25 s | 22 s | slightly faster |
+| restore, LARGE | 1,353 s (median of 2 successful reps) | 1,249 s (mean of 2 successful reps: 1,434/1,064 — rep 3 quota-failed) | ~8% faster, but see the spread note below |
+
+### Time — Emulator (x86_64/SSE)
+
+| Metric | Before | After | Δ |
+|---|--:|--:|--:|
+| analysis, LIGHT | 2 s | 2 s | ~none |
+| analysis, LARGE (20 fr) | 221 s | 245 s | **+11%** |
+| screen, LIGHT | 2 s | 2 s | ~none |
+| screen, LARGE | 223 s | 233 s | **+4.5%** |
+| backup, LIGHT | 19 s | *pending* — all 3 reps quota-failed across two retry attempts | — |
+| backup, LARGE | 313 s (median of 3) | 400 s (1 successful rep of 3 — reps 1–2 quota-failed) | not directly comparable (n=1) |
+| restore, LIGHT | 26 s (median of 3) | 25 s (median of 3) | ~none |
+| restore, LARGE | 526 s (median of 2 successful reps) | 416 s (median of 3, all succeeded) | ~21% faster |
+
+**On the LARGE analysis/screen slowdown.** Both targets got *slower* on the pure-compute
+path, not faster, which is worth stating plainly rather than glossing over. Three
+candidate causes, weighed against the evidence:
+
+1. **Phase 4.2 added real work to the analysis loop** — a sigma-clamped percentile
+   pass (accepted-point extraction + two quickselects) per field per frame, where
+   before there was none. Ruled out as the primary cause by magnitude: ~5 fields ×
+   20 frames × ~65k points is on the order of 6.5M comparisons total, low tens of
+   milliseconds even unoptimized — nowhere near the ~400 s (Pixel 6) or ~24 s
+   (emulator) observed deltas.
+2. **A Phase 2 engine regression.** Considered and set aside: every Phase 2 change was
+   dead-code/redundant-work removal (a mutex protecting values nobody reads, a
+   rescan already computed elsewhere, a proven-safe lock removal) — none plausibly
+   *adds* work, and the golden-corpus/host-suite verification for Phase 3 (built on
+   top of the same Phase 2 base) shows no timing anomaly on the host.
+3. **Thermal/session-order confound.** Most consistent with the evidence: both
+   captures ran for *hours* of continuous LARGE-scale native compute today (before,
+   then after, on the same physical devices, same session), and the Pixel 6 — a
+   phone SoC under sustained multi-threaded OpenMP load — shows a far larger
+   slowdown (+59%/+29%) than the emulator (+11%/+4.5%), which runs on a
+   presumably better-cooled desktop CPU. A late-session, heat-soaked "after" run
+   following an early-session, cool "before" run is exactly the pattern thermal
+   throttling produces.
+
+None of these is proven from today's data alone — that needs a **clean, isolated
+re-measurement**: idle device, back-to-back before/after with no hours-long gap between
+them, ideally with thermal state logged. Until then, treat the LARGE-scale compute
+deltas above as *not yet attributable*, not as a confirmed regression or a confirmed
+non-issue.
+
+**On Pixel 6 `restore/large`'s wide after-spread (1,434s vs 1,064s, a ~35% swing between
+the two successful reps).** Restore is network-bound, not compute-bound, so this reflects
+real Wi-Fi/Cloud-Run variance on the day, not the code — the same class of variance the
+*before* capture's own backup/large numbers showed (882–1,299 s). Not evidence either way
+on Phase 1.1's adaptive-window change; a controlled network-quality comparison would be
+needed to isolate that, which this capture doesn't provide.
+
+**On the emulator's `restore/large` improvement (526s → 416s, ~21% faster, 3 clean reps
+each side).** More suggestive than the Pixel 6 number since both sides have a full 3-rep
+sample here, but still not attributed to a specific change — the emulator's network is
+host-proxied (per this report's own standing caveat), so this could reflect Phase 1.1's
+adaptive download window, host machine load differing between when before/after ran today,
+or both. Directionally consistent with Phase 1.1's intent (fewer, larger download windows
+on a fast link), not proof of it in isolation.
+
+### Space — both targets agree exactly (as they should)
+
+Byte counts are ISA-independent, so hardware and emulator matching is itself a
+correctness check, not just a convenience. Every value below is **identical** across
+both targets and both before/after — confirming the `.dat` codec's encode side is still
+correctly disabled (no size drift from Phase 1.3) and nothing else silently changed
+on-disk or in-transit payload sizes:
+
+| Metric | Value (all 4 captures) |
+|---|--:|
+| Local session total, LARGE | 49,194,564 B |
+| `.dat` total | 41,616,000 B |
+| `raw_deformed/` total | 7,233,203 B |
+| `reference.png` | 345,361 B |
+| `Session.zip` | 49,199,096 B |
+| Restored session footprint, LARGE | 49,198,165–49,198,177 B *(all 4 captures that completed restore/large — before and after, both targets — agree to within a few bytes of session-metadata JSON)* |
+
+Phase 4.2's new `field_ranges.bin` sidecar (~1 KB for a 20-frame LARGE session) doesn't
+show up in the totals above — `duSummary`'s session-footprint accounting sums named
+categories (`dat`/`reference`/`raw_deformed`) rather than every file on disk, so a small
+untracked sidecar is invisible to it by design, not evidence it's missing.
+
+### What's still pending
+
+- ~~**Pixel 6 `restore/large`**~~ — resolved: quota freed up mid-session, rep 1/2
+  succeeded (rep 3 quota-failed again), numbers folded into the table above.
+- ~~**Emulator cloud ops, after-run**~~ — resolved after two retries: `restore/light`
+  and `restore/large` both completed cleanly (3/3 reps); `backup/light` never got a
+  rep through (3 quota-fails across two attempts) and `backup/large` only got 1 of 3,
+  so those two rows stay a single sample rather than a median.
+- **Cloud request/Firestore-write counts, before vs after** — Phase 1.4's backend
+  changes (throttled `lastSeenAt`, deduped audit log, batched file writes) aren't live
+  in production yet (still on the pre-1.4 revision, `indic-api-00063-lmk`), so a GCP-metrics
+  comparison would currently show the *app-side* Phase 1.1 savings (fewer, larger
+  download windows) but not the *backend-side* Phase 1.4 savings — deploying is a
+  separate, already-scoped decision.
+- **A clean thermal-isolated re-measurement** of LARGE analysis/screen, per the note above.
+
 ## Caveats
 
 - Single device (Pixel 6, `oriole`), single account, single backend project. No
