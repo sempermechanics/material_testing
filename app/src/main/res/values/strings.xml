@@ -127,9 +127,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- Result viewer: summary animation and frame jump -->
     <string name="summary_title">Summary</string>
+    <string name="summary_gif">Summary GIF</string>
     <plurals name="summary_counter_fmt">
-        <item quantity="one">Summary · %1$s · %2$d frame</item>
-        <item quantity="other">Summary · %1$s · %2$d frames</item>
+        <item quantity="one">Summary GIF</item>
+        <item quantity="other">Summary GIF</item>
     </plurals>
     <string name="scale_max_fmt">Max: %1$s %2$s</string>
     <string name="scale_min_fmt">Min: %1$s %2$s</string>
@@ -161,7 +162,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="computing_strain_field">Computing Strain Field</string>
     <string name="label_0">0%</string>
     <string name="initializing_engine">Initializing engine…</string>
-    <string name="elapsed_0s">Elapsed 0s</string>
+    <string name="elapsed_0s">Elapsed 0:00</string>
     <string name="please_keep_the_app_open">Please keep the app open</string>
     <string name="text">—</string>
     <string name="extraction_frame_rate">Extraction frame rate</string>
@@ -499,7 +500,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="line_cut_axis_y">Position along Y (px)</string>
     <string name="line_cut_axis_strain">Strain (mε)</string>
 
-    <string name="run_points_solved">Total points converged</string>
+    <string name="run_points_solved"># converged</string>
     <string name="run_convergence">convergence</string>
     <string name="cancel_run_title">Cancel this analysis?</string>
     <string name="cancel_run_body">Stops after the current frame. Results so far are discarded.</string>

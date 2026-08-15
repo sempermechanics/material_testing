@@ -68,7 +68,7 @@ object AnalysisDeformedBatchHelper {
                 val datesByIndex = List(uris.size) { Long.MAX_VALUE }
                 withContext(Dispatchers.Main) {
                     overlayHelper.update(
-                        percent = 0,
+                        percent = 0f,
                         status = activity.getString(R.string.analysis_importing_fmt, 0, uris.size),
                     )
                 }
@@ -80,7 +80,7 @@ object AnalysisDeformedBatchHelper {
                     displayName = displayName,
                     onProgress = { done, total ->
                         overlayHelper.update(
-                            percent = if (total > 0) done * 100 / total else 0,
+                            percent = if (total > 0) done * 100f / total else 0f,
                             status = activity.getString(R.string.analysis_importing_fmt, done, total),
                         )
                     },
