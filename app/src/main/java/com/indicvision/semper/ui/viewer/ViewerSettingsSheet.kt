@@ -17,8 +17,8 @@ import com.indicvision.semper.ui.analysis.VsgPlotView
 import com.indicvision.semper.ui.analysis.VsgStudy
 
 /**
- * "Settings used" bottom sheet for a result: the parameter rows that produced
- * the frame on screen, plus the sweep line-cut plot when applicable.
+ * Peek sheet for a result: the variable finding + stats for the frame on
+ * screen, then the parameter rows that produced it (and the sweep line-cut).
  */
 object ViewerSettingsSheet {
 
@@ -117,6 +117,9 @@ object ViewerSettingsSheet {
         view.findViewById<TextView>(R.id.tvSettingsUsedSpecimen).text =
             host.intent.getStringExtra(DicKeys.REF_NAME).orEmpty()
 
+        view.findViewById<TextView>(R.id.tvSheetFinding).text = host.detailFindingText()
+        view.findViewById<TextView>(R.id.tvSheetStats).text = host.detailStatsText()
+
         val rows = view.findViewById<LinearLayout>(R.id.settingsUsedRows)
 
         val entries = entriesFor(host)
@@ -126,6 +129,11 @@ object ViewerSettingsSheet {
             rows.addView(settingsRow(host, label, value))
         }
         if (host.isSweep) populateLineCut(host, view)
+
+        view.findViewById<View>(R.id.btnSheetHome).setOnClickListener {
+            sheet.dismiss()
+            host.goHome()
+        }
         sheet.show()
     }
 

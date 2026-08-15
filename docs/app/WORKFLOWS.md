@@ -695,20 +695,21 @@ the Lattice for a sweep.
    │   ├── double-tap zoom / reset
    │   ├── horizontal fling (fit-to-screen) steps frames
    │   └── jet heatmap over the reference (fixed 0.7 alpha)
-   ├── colour scale bar
-   │   ├── default: whole-sequence scale when N > 1
+   ├── colour scale bar (hairline over the figure)
+   │   ├── default: this frame's min / max
    │   ├── tap → custom min / max
-   │   └── Auto scale (drops custom; returns to sequence scale when N > 1)
-   ├── finding caption + max / min / mean sentence
+   │   └── Auto scale (drops custom; returns to frame min / max)
+   ├── edge chrome (auto-hides; pan / scrub / field tap brings it back)
+   │   ├── short title: field · frame
+   │   ├── ⓘ peek sheet: finding + stats + settings used (+ line-cut on sweep)
+   │   └── share icon (top right)
+   ├── field pills: U / V / Exx / Eyy / Exy
    ├── frame scrubbing: prev / next + "name (i / N)"
    │   └── type a frame number to jump straight there
    ├── tap-to-probe
    │   ├── short tap → nearest point reading (location + value)
    │   └── tap same point or readout to dismiss
-   ├── Info — settings used
-   │   ├── subset / step / strain window / VSG / method / ROI / image size
-   │   └── line-cut plot                         [sweep]
-   ├── Share
+   ├── Share (node icon)
    │   ├── result photo (current field + frame)
    │   ├── all field photos (5, zipped)
    │   ├── field animations (5 GIFs, zipped)
@@ -716,7 +717,7 @@ the Lattice for a sweep.
    │   ├── CSV data
    │   ├── everything (.zip: raw photos + animations + results + CSV + PDF)
    │   └── → Send to sheet: Save to Files / Share
-   ├── Return to home
+   ├── Home (from the ⓘ peek sheet)
    └── Back (→ 7. Lattice for sweeps)
 ```
 
@@ -728,8 +729,8 @@ node. **Exit:** Home, or back to the Lattice.
 | # | Action | Expected |
 |---|---|---|
 | [ ] 8.1.1 | Open a result | The U field is shown as a jet heatmap over the reference |
-| [ ] 8.1.2 | Tap through U, V, Exx, Eyy, Exy | Heatmap, colour scale, finding caption and stats caption all follow |
-| [ ] 8.1.3 | Check the scale units | `px` for U and V, `[mε]` for the strain fields |
+| [ ] 8.1.2 | Tap through U, V, Exx, Eyy, Exy | Heatmap and colour scale follow; edge title updates |
+| [ ] 8.1.3 | Check the scale units | `px` for U and V, `mε` for the strain fields |
 | [ ] 8.1.4 | Pinch to zoom | Zooms smoothly up to about 10×; panning is clamped to the image |
 | [ ] 8.1.5 | Zoom in and pan | The heatmap stays registered to the reference — no drift |
 | [ ] 8.1.6 | Zoom, then switch field | Zoom and pan are preserved |
@@ -737,9 +738,9 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.8 | Enter min ≥ max and apply | Rejected with a validation message |
 | [ ] 8.1.9 | Enter valid bounds and apply | The heatmap and the scale labels both change |
 | [ ] 8.1.10 | Switch field, then switch back | The custom bounds are remembered *per field* |
-| [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped; with N > 1 the sequence-wide scale returns |
-| [ ] 8.1.12 | Read the finding caption and stats line | Peak location plus max / min / mean for the field and frame on screen, with units |
-| [ ] 8.1.13 | Scrub a multi-frame analysis without a custom scale | Early and late frames share one colour scale (same as the summary) |
+| [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped; the scale returns to this frame's min / max |
+| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the finding, max / min / mean, and settings used |
+| [ ] 8.1.13 | Scrub frames without a custom scale | Scale labels match each frame's own min / max |
 
 ### 8.2 Frames
 
@@ -787,19 +788,20 @@ drag and pinch keep pan and zoom.
 | [ ] 8.3.4 | Pinch while a probe is up | Zoom works; the crosshair stays glued to the image point |
 | [ ] 8.3.5 | Switch field or frame with a probe up | The value updates for the same image location (or "No data") |
 | [ ] 8.3.6 | Tap the same point again, or the readout | The probe dismisses |
-| [ ] 8.3.7 | Read the finding caption | It names the peak value and its coordinates — no Max/Min toggle |
+| [ ] 8.3.7 | Open ⓘ | Finding names the peak and coordinates; stats line is there too — no Max/Min toggle |
 | [ ] 8.3.8 | Rotate with a probe up | Frame, field and probe survive |
 
-### 8.4 Settings used
+### 8.4 Details (ⓘ peek sheet)
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.4.1 | Tap the info button | Sheet listing subset, step, strain window, strain method, ROI and image size |
+| [ ] 8.4.1 | Tap the info button | Peek sheet with variable finding + stats, then subset, step, strain window, strain method, ROI and image size |
 | [ ] 8.4.2 | Compare against what you entered in the wizard | They match |
 | [ ] 8.4.3 | Open it on a sweep | A **virtual strain gauge** row appears, and the values match the frame on screen |
 | [ ] 8.4.4 | Scrub to another combination and reopen | The values follow the new frame, not the run's first |
 | [ ] 8.4.5 | Open it on a sweep | A line-cut plot with colour-matched Exx / Eyy / Exy and the cut axis named |
 | [ ] 8.4.6 | Open it on a single-setting run | No line-cut section |
+| [ ] 8.4.7 | Tap **Go to Home** in the sheet | Returns to Home and clears the viewer from the stack |
 
 ### 8.5 Share and export
 

@@ -46,7 +46,10 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
     }
 
     fun wireTapHandling() {
-        imgMain.onTapListener = { x, y -> onScreenTap(x, y) }
+        imgMain.onTapListener = { x, y ->
+            host.bumpChrome()
+            onScreenTap(x, y)
+        }
         imgMain.onScrubListener = { delta -> host.stepFrame(delta) }
         tvProbeReadout.setOnClickListener { dismissProbe() }
     }

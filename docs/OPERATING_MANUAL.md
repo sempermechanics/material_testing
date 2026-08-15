@@ -357,14 +357,15 @@ Look for the VSG where the curves stop separating.
 
 Tabs switch field. Pinch to zoom (~10×), drag to pan; both survive a field
 change. Double-tap zooms or resets. A horizontal fling while fit-to-screen steps
-frames. The line under the image gives max, min and mean; the top caption names
-the peak and where it is.
+frames. Edge chrome (title, field pills, hairline scale, scrub) auto-hides after
+a short idle; pan or scrub brings it back. The ⓘ peek sheet holds the finding,
+max / min / mean, and the settings used for this analysis.
 
-**Colour scale.** With more than one frame the default is the **whole-sequence**
-range — the same scale the summary animation uses — so frames stay comparable by
-eye. Tap the bar to set fixed min/max. Bounds are remembered per field.
-**Auto scale** drops a custom override and returns to the sequence scale (or to
-per-frame ranging when there is only one frame).
+**Colour scale.** Default is **this frame's min / max** — the hairline labels
+match the colouring. Tap the bar to set fixed min/max (remembered per field).
+**Auto scale** drops a custom override and returns to the frame range. The
+summary GIF and share field-animations still use a whole-sequence scale so the
+loop stays comparable.
 
 **Tap to probe.** There is no Inspect / X,Y / Max-Min row. A short tap on the
 heatmap places a crosshair and a plain-text reading at the nearest correlated
@@ -377,10 +378,7 @@ updates the value.
 whole sequence in the current field — every frame, never longer than 10 seconds,
 about 300 ms a frame until the frame count forces it faster. **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
-field. The field row stays visible while the GIF plays.
-
-The animation and the scrubbed frames share **one colour scale** for the whole
-sequence unless you have set a fixed scale for a field.
+field. Field pills stay available while the GIF plays.
 
 (Animation playback needs Android 9 or newer. Below that you get the first frame
 and a note; the GIFs still export.)

@@ -230,6 +230,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="download_analysis_already">This analysis is already downloading.</string>
     <string name="download_analysis_failed">Couldn\'t download this analysis. Check your connection and try again.</string>
     <string name="viewer_settings_used_desc">Show the settings used for this analysis</string>
+    <string name="viewer_details_desc">Variable details and settings used</string>
+    <string name="viewer_details_title">Details</string>
+    <string name="viewer_details_variable">Variable</string>
+    <string name="viewer_details_home">Go to Home</string>
+    <string name="viewer_edge_title_fmt">%1$s · %2$s</string>
     <string name="settings_used_title">Settings used</string>
     <string name="setting_subset">Subset size</string>
     <string name="setting_step">Step size</string>
