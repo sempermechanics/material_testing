@@ -914,11 +914,26 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     private val fieldMetricsCache = LinkedHashMap<Long, FieldMetrics>()
 
+    /**
+     * Per-thread extrema scratch: [fieldMetricsFor] runs from both the Main thread
+     * (e.g. [ViewerInspectHelper.computeMaxMinIndices]) and a `Dispatchers.Default`
+     * coroutine ([updateVisualization]'s scrub-settle warm-up) concurrently, so a
+     * single shared buffer would race. `ThreadLocal` gives each caller thread its
+     * own reusable array — same allocation saving, no synchronization needed.
+     */
+    private val fieldMetricsScratch: ThreadLocal<FloatArray> = ThreadLocal.withInitial { FloatArray(0) }
+
     internal fun fieldMetricsFor(frameIndex: Int, dataIndex: Int, data: FloatArray): FieldMetrics {
         val key = (frameIndex.toLong() shl Int.SIZE_BITS) or (dataIndex.toLong() and 0xFFFF_FFFFL)
         synchronized(fieldMetricsCache) { fieldMetricsCache[key]?.let { return it } }
         val stats = DicResult.fieldStats(data, dataIndex)
-        val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex, absoluteStrainValues = false)
+        val needed = data.size / DicResult.STRIDE
+        var scratch = fieldMetricsScratch.get()
+        if (scratch.size < needed) {
+            scratch = FloatArray(needed)
+            fieldMetricsScratch.set(scratch)
+        }
+        val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex, absoluteStrainValues = false, scratch)
         val metrics = FieldMetrics(stats, extrema.maxIdx, extrema.minIdx)
         synchronized(fieldMetricsCache) {
             fieldMetricsCache[key] = metrics

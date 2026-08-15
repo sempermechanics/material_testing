@@ -31,6 +31,8 @@ import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
+import com.indicvision.semper.report.FieldRangesStore
+import com.indicvision.semper.report.VisualizationEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
@@ -817,6 +819,21 @@ class AnalysisViewModel : ViewModel() {
         // Where each frame's image ended up, so the view model can follow the move.
         val resolvedDefPaths = defFilePaths.toMutableList()
 
+        // Every field's sigma-clamped (p02, p98) for this frame, computed once here
+        // while the frame's data is already decoded in outputBuffer — persisted so
+        // SummaryAnimation.globalRanges (viewer summary open, and every backup) never
+        // has to re-decode and re-sort every frame in the batch just to rebuild the
+        // same numbers. One entry per frame actually written below (validPointsCount
+        // == 0 frames are skipped and get no .dat file, so they get no entry either).
+        val summaryFieldIndices = intArrayOf(
+            DicResult.IDX_U,
+            DicResult.IDX_V,
+            DicResult.IDX_EXX,
+            DicResult.IDX_EYY,
+            DicResult.IDX_EXY,
+        )
+        val perFrameSummaryRanges = mutableListOf<Map<Int, Pair<Float, Float>?>>()
+
         for ((frameIndex, defPath) in defFilePaths.withIndex()) {
             currentCoroutineContext().ensureActive()
             if (cancelRequested) {
@@ -944,6 +961,15 @@ class AnalysisViewModel : ViewModel() {
                 outputBuffer.get(bytes, 0, bytes.size)
                 fos.write(bytes)
             }
+            run {
+                // Same bytes just written, reinterpreted as the point-record floats
+                // VisualizationEngine.valueRanges expects — no extra decode, this data
+                // is already in hand.
+                val floatData = FloatArray(validPointsCount * DicResult.STRIDE)
+                outputBuffer.position(0)
+                outputBuffer.asFloatBuffer().get(floatData, 0, floatData.size)
+                perFrameSummaryRanges.add(VisualizationEngine.valueRanges(floatData, summaryFieldIndices))
+            }
 
             solvedFrames++
             totalPointsSolved += validPointsCount
@@ -962,6 +988,22 @@ class AnalysisViewModel : ViewModel() {
                     convergencePercent = lastConvergence,
                 ),
             )
+        }
+
+        // One entry per frame actually written above — matches what batchFiles will
+        // list on a later read, so SummaryAnimation.globalRanges's frame-count check
+        // accepts this cache. A cancelled/failed run's shorter list still writes
+        // correctly: it just describes fewer frames, consistent with fewer .dat files
+        // existing. Best-effort — a write failure here only costs the cache its
+        // speedup, never correctness (globalRanges falls back to decoding).
+        if (perFrameSummaryRanges.isNotEmpty()) {
+            runCatching {
+                FieldRangesStore.write(
+                    File(batchDir, FieldRangesStore.FILE_NAME),
+                    summaryFieldIndices,
+                    perFrameSummaryRanges,
+                )
+            }.onFailure { Timber.w(it, "Could not persist summary field ranges for %s", batchDir) }
         }
 
         // Images an earlier run left behind that this one no longer has. This is
