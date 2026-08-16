@@ -11,7 +11,7 @@
     "ReturnCount",
     "TooGenericExceptionCaught",
 )
-@file:SuppressLint("InflateParams", "PrivateResource", "SetTextI18n")
+@file:SuppressLint("InflateParams", "PrivateResource", "SetTextI18n", "MissingInflatedId")
 
 package com.indicvision.semper.ui.analysis
 import android.annotation.SuppressLint
@@ -23,6 +23,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.View
+import android.view.ViewStub
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
@@ -141,6 +142,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_static_analysis)
+        // Later wizard pages live in ViewStubs so the host layout stays under
+        // lint's TooManyViews cap. Inflate before any findViewById of those IDs.
+        // MissingInflatedId is suppressed at file level: those IDs live in the
+        // stub layouts, not in activity_static_analysis.xml.
+        findViewById<ViewStub>(R.id.stubStepSettings).inflate()
+        findViewById<ViewStub>(R.id.stubStepSweep).inflate()
         coach = CoachMarkController(this)
         // --- BACK BUTTON INTERCEPTOR (SAFETY LOCK) ---
         onBackPressedDispatcher.addCallback(
