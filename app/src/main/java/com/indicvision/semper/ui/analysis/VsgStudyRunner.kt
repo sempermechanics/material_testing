@@ -4,12 +4,12 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.ProgressCallback
 import com.indicvision.semper.SemperNativeLib
+import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.report.EngineStats
 import timber.log.Timber
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.Locale
 
 /**
  * Executes the sweep a [VsgStudy] plans: solves one deformed frame once per
@@ -154,9 +154,9 @@ object VsgStudyRunner {
             // Named by solved index (not plan index) so .dat files stay dense
             // and line up with [runs] / upload's frame_0000..N-1 walk — skipped
             // combinations must not leave gaps the cloud packager cannot find.
-            val datFile = File(
+            val datFile = SessionPaths.frameDat(
                 params.outputDir,
-                String.format(Locale.US, "frame_%04d.dat", runs.size),
+                runs.size,
             )
             writeField(buffer, solved, datFile)
             runs.add(RunOutcome(point, datFile, solved))

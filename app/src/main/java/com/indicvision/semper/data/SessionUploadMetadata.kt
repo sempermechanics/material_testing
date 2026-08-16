@@ -50,7 +50,7 @@ object SessionUploadMetadata {
                     },
                 )
                 .put("image", name)
-                .put("dat", String.format(Locale.US, "frame_%04d.dat", index))
+                .put("dat", SessionPaths.frameDatName(index))
             if (record.isSweep) {
                 val subset = record.sweepSubsets.getOrElse(index) { record.subset }
                 val step = record.sweepSteps.getOrElse(index) { record.step }

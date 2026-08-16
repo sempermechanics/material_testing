@@ -1,5 +1,8 @@
 package com.indicvision.semper.data
 
+import java.io.File
+import java.util.Locale
+
 /**
  * On-disk path segments shared by session writers (AnalysisViewModel),
  * upload ([DicUploadWorker]), and restore ([CloudRestore]).
@@ -13,4 +16,11 @@ object SessionPaths {
 
     /** Transient upload pack folder under the session dir. */
     const val UPLOAD_STAGING_SUBDIR = "upload_staging"
+
+    /** Engine result filename pattern under a session dir (`frame_0000.dat`). */
+    const val FRAME_DAT_FMT = "frame_%04d.dat"
+
+    fun frameDatName(index: Int): String = String.format(Locale.US, FRAME_DAT_FMT, index)
+
+    fun frameDat(sessionDir: File, index: Int): File = File(sessionDir, frameDatName(index))
 }

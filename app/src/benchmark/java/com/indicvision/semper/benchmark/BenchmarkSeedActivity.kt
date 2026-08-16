@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Bundle
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.data.SessionPaths
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -62,7 +63,7 @@ class BenchmarkSeedActivity : Activity() {
     private fun seedSession(frameCount: Int): File {
         val dir = File(File(filesDir, "sessions"), "bench_${frameCount}_${COLS}x$ROWS")
         dir.mkdirs()
-        val expected = File(dir, String.format("frame_%04d.dat", frameCount - 1))
+        val expected = SessionPaths.frameDat(dir, frameCount - 1)
         if (expected.exists()) return dir // already seeded
         val floats = FloatArray(COLS * ROWS * DicResult.STRIDE)
         val buf = ByteBuffer.allocate(floats.size * 4).order(ByteOrder.nativeOrder())
@@ -70,7 +71,7 @@ class BenchmarkSeedActivity : Activity() {
             fillFrame(floats, seed = i)
             buf.clear()
             buf.asFloatBuffer().put(floats)
-            File(dir, String.format("frame_%04d.dat", i)).writeBytes(buf.array())
+            SessionPaths.frameDat(dir, i).writeBytes(buf.array())
         }
         return dir
     }

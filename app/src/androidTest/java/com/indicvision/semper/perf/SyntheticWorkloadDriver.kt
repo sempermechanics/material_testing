@@ -240,7 +240,7 @@ class SyntheticWorkloadDriver {
                 if (validPoints > 0) {
                     // Component: .dat write (I/O)
                     timed("dat_write", once = frameIndex == 0) {
-                        val out = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", frameIndex))
+                        val out = SessionPaths.frameDat(sessionDir, frameIndex)
                         val bytes = ByteArray(validPoints * DicResult.BYTES_PER_POINT)
                         buffer.position(0)
                         buffer.get(bytes, 0, bytes.size)
@@ -337,7 +337,7 @@ class SyntheticWorkloadDriver {
             timed("viewer_summary_prepass") {
                 val fields = intArrayOf(DicResult.IDX_U, DicResult.IDX_V, DicResult.IDX_EXX, DicResult.IDX_EYY, DicResult.IDX_EXY)
                 for (i in 0 until built.record.frameCount) {
-                    val frameData = DicResult.decodeDatFile(File(built.sessionDir, String.format(Locale.US, "frame_%04d.dat", i)))
+                    val frameData = DicResult.decodeDatFile(SessionPaths.frameDat(built.sessionDir, i))
                     if (frameData != null) VisualizationEngine.valueRanges(frameData, fields)
                 }
             }
@@ -355,7 +355,7 @@ class SyntheticWorkloadDriver {
 
         val refFile = File(sessionDir, "reference.png")
         val datMembers = (0 until built.record.frameCount).map {
-            val name = String.format(Locale.US, "frame_%04d.dat", it)
+            val name = SessionPaths.frameDatName(it)
             SessionZip.Member("dat", name, File(sessionDir, name))
         }
         val deformedMembers = built.record.defNames.map {
