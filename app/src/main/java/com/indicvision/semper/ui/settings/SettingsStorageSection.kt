@@ -116,8 +116,9 @@ class SettingsStorageSection(
             val outcome = StorageBudget.freeAllBackedUpAsync(activity)
             if (outcome.didAnything) {
                 activity.toast(
-                    activity.getString(
-                        R.string.storage_freed_fmt,
+                    activity.resources.getQuantityString(
+                        R.plurals.storage_freed_fmt,
+                        outcome.sessionsDropped,
                         activity.humanSize(outcome.freedBytes),
                         outcome.sessionsDropped,
                     ),
@@ -149,8 +150,9 @@ class SettingsStorageSection(
             val outcome = StorageBudget.enforceAsync(activity)
             if (outcome.didAnything) {
                 activity.toast(
-                    activity.getString(
-                        R.string.storage_freed_fmt,
+                    activity.resources.getQuantityString(
+                        R.plurals.storage_freed_fmt,
+                        outcome.sessionsDropped,
                         activity.humanSize(outcome.freedBytes),
                         outcome.sessionsDropped,
                     ),
