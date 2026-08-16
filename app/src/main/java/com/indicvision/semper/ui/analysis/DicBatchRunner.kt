@@ -77,7 +77,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
     onProgress(
         AnalysisViewModel.BatchProgressUpdate(
-            0,
+            0f,
             "Caching reference in engine…",
             "Caching Reference in Native Engine...",
         ),
@@ -140,7 +140,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         val frameLabel = "Processing Frame ${frameIndex + 1}/$plannedFrames..."
         onProgress(
             AnalysisViewModel.BatchProgressUpdate(
-                percent = ((frameIndex.toFloat() / plannedFrames) * 100).toInt(),
+                percent = (frameIndex.toFloat() / plannedFrames) * 100,
                 status = if (plannedFrames > 1) {
                     "Processing frame ${frameIndex + 1} of $plannedFrames"
                 } else {
@@ -194,7 +194,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 val overallProgress = frameProgress + (percentage.toFloat() / plannedFrames)
                 onProgress(
                     AnalysisViewModel.BatchProgressUpdate(
-                        percent = overallProgress.toInt(),
+                        percent = overallProgress,
                         status = if (plannedFrames > 1) {
                             "Processing frame ${frameIndex + 1} of $plannedFrames"
                         } else {
@@ -272,7 +272,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         }
         onProgress(
             AnalysisViewModel.BatchProgressUpdate(
-                percent = (((frameIndex + 1).toFloat() / plannedFrames) * 100).toInt(),
+                percent = ((frameIndex + 1).toFloat() / plannedFrames) * 100,
                 status = "Processing frame ${frameIndex + 1} of $plannedFrames",
                 timerText = frameLabel,
                 pointsSolved = totalPointsSolved,

@@ -79,7 +79,7 @@ class AnalysisViewModel : ViewModel() {
         const val LOW_CONVERGENCE_STRIKES = 2
     }
 
-    private val sessions = SessionRepository()
+    internal val sessions = SessionRepository()
 
     // NATIVE THREAD PINNING: All JNI/OpenMP calls are routed through the global
     // SemperNativeLib.nativeDispatcher to ensure thread affinity.
@@ -169,6 +169,10 @@ class AnalysisViewModel : ViewModel() {
 
     private val _runResult = MutableStateFlow(RunResult())
     val runResult: StateFlow<RunResult> = _runResult.asStateFlow()
+
+    internal fun resetRunResult(batchDirPath: String) {
+        _runResult.value = RunResult(batchDirPath = batchDirPath)
+    }
 
     // Buffered (not conflated): a StateFlow would drop intermediate per-frame /
     // intra-frame ticks when the native solve emits faster than Main collects, so
@@ -459,7 +463,7 @@ class AnalysisViewModel : ViewModel() {
      * finishes; a re-run reading them would find nothing. [defFrameSizes] is
      * keyed by path, so it is re-keyed alongside.
      */
-    private fun repointDeformedPaths(resolved: List<String>) {
+    internal fun repointDeformedPaths(resolved: List<String>) {
         val previous = defFilePaths
         defFrameSizes = defFrameSizes.mapKeys { (path, _) ->
             resolved.getOrNull(previous.indexOf(path)) ?: path
@@ -619,7 +623,7 @@ class AnalysisViewModel : ViewModel() {
      * Returns the outcome to abort with, or null when the run may proceed.
      */
     @Suppress("ReturnCount") // two independent all-clear checks, then the stop
-    private fun sessionLimitOutcome(appContext: Context, plannedFrames: Int): BatchAnalysisOutcome? {
+    internal fun sessionLimitOutcome(appContext: Context, plannedFrames: Int): BatchAnalysisOutcome? {
         if (!wouldCreateNewSession()) return null
         TokenStore.refreshSessionLimit(appContext, SessionStore.list(appContext).size)
         // An unknown cloud quota does not block: analysis is on-device and costs
@@ -636,7 +640,7 @@ class AnalysisViewModel : ViewModel() {
         )
     }
 
-    private fun resolveLocalSessionId(): String =
+    internal fun resolveLocalSessionId(): String =
         workingLocalId ?: UUID.randomUUID().toString().take(12).also { workingLocalId = it }
 
     /**
@@ -656,7 +660,7 @@ class AnalysisViewModel : ViewModel() {
     }
 
     /** Placeholder cloud id a session carries until the upload worker assigns the real one. */
-    private fun newPendingSessionId(): String =
+    internal fun newPendingSessionId(): String =
         "Pending_Cloud_Sync_" + UUID.randomUUID().toString().take(8)
 
     /** The "MMM d, HH:mm:ss" stamp used in default session names / sweep labels. */
