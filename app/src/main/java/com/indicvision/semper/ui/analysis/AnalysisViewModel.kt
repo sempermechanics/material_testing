@@ -699,7 +699,7 @@ class AnalysisViewModel : ViewModel() {
         }
 
     data class BatchProgressUpdate(
-        val percent: Int,
+        val percent: Float,
         val status: String,
         val timerText: String,
         // Live overlay tiles; -1 = no update this tick
@@ -780,7 +780,7 @@ class AnalysisViewModel : ViewModel() {
         var firstFrameAvgIters = 0f
         var engineErrorCode = 0
 
-        onProgress(BatchProgressUpdate(0, "Caching reference in engine…", "Caching Reference in Native Engine..."))
+        onProgress(BatchProgressUpdate(0f, "Caching reference in engine…", "Caching Reference in Native Engine..."))
         SemperNativeLib.initializeReference(
             refBytes,
             params.maskData,
@@ -840,7 +840,7 @@ class AnalysisViewModel : ViewModel() {
             val frameLabel = "Processing Frame ${frameIndex + 1}/$plannedFrames..."
             onProgress(
                 BatchProgressUpdate(
-                    percent = ((frameIndex.toFloat() / plannedFrames) * 100).toInt(),
+                    percent = (frameIndex.toFloat() / plannedFrames) * 100f,
                     status = if (plannedFrames > 1) {
                         "Processing frame ${frameIndex + 1} of $plannedFrames"
                     } else {
@@ -894,7 +894,7 @@ class AnalysisViewModel : ViewModel() {
                     val overallProgress = frameProgress + (percentage.toFloat() / plannedFrames)
                     onProgress(
                         BatchProgressUpdate(
-                            percent = overallProgress.toInt(),
+                            percent = overallProgress.coerceIn(0f, 100f),
                             status = if (plannedFrames > 1) {
                                 "Processing frame ${frameIndex + 1} of $plannedFrames"
                             } else {
@@ -978,7 +978,7 @@ class AnalysisViewModel : ViewModel() {
             }
             onProgress(
                 BatchProgressUpdate(
-                    percent = (((frameIndex + 1).toFloat() / plannedFrames) * 100).toInt(),
+                    percent = (((frameIndex + 1).toFloat() / plannedFrames) * 100f).coerceIn(0f, 100f),
                     status = "Processing frame ${frameIndex + 1} of $plannedFrames",
                     timerText = frameLabel,
                     pointsSolved = totalPointsSolved,

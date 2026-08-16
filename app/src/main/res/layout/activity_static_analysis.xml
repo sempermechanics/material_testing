@@ -1455,7 +1455,7 @@
                         app:indicatorSize="132dp"
                         app:trackThickness="10dp"
                         app:indicatorInset="0dp"
-                        android:max="100"
+                        android:max="1000"
                         android:progress="0" />
 
                     <TextView
@@ -1465,7 +1465,7 @@
                         android:layout_gravity="center"
                         android:text="@string/label_0"
                         android:textColor="@color/sky_primary"
-                        android:textSize="30sp"
+                        android:textSize="24sp"
                         android:textStyle="bold" />
                 </FrameLayout>
 

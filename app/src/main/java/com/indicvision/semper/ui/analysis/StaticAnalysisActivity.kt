@@ -1244,7 +1244,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun showSweepProgress(progress: VsgStudyRunner.Progress) {
         overlayHelper.update(
-            percent = progress.percent,
+            percent = progress.percent.toFloat(),
             status = getString(
                 R.string.sweep_running_fmt,
                 progress.runIndex + 1,
