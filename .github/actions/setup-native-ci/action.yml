@@ -39,7 +39,8 @@ runs:
 
     - name: Sparse OpenCV worktree
       shell: bash
-      run: native/scripts/sparse-opencv.sh
+      # The engine script is not marked executable in the submodule checkout.
+      run: bash native/scripts/sparse-opencv.sh
 
     # Same hash as the cache keys above, so prune-cache except-key cannot drift.
     # Also raise Gradle heap for R8 and let ninja use every runner core.
