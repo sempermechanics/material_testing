@@ -24,30 +24,18 @@ concurrency:
 
 jobs:
   # Green CI was previously only a manual checklist item in RELEASING.md, so a
-  # red suite could still be signed and published. This is the gate.
+  # red suite could still be signed and published. These three jobs are the
+  # gate and run in parallel — same checks as the old sequential `verify` job.
   # Releases only ship from main — refuse other refs.
-  verify:
-    name: Verify before release
+  verify-legal:
+    name: Verify legal pages
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
-        with:
-          # OpenCV's android samples ship ancient gradle-wrapper.jar files that
-          # fail checksum validation; same carve-out as NDK jobs in ci.yml.
-          validate-wrappers: false
 
       - uses: actions/setup-python@v7
         with:
@@ -56,8 +44,42 @@ jobs:
       - name: Legal pages match their source
         run: python scripts/render_legal_pages.py --check
 
+  verify-android:
+    name: Verify Android unit tests
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        # JVM unit tests do not loadLibrary — skip the OpenCV/engine tree.
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+
       - name: Android unit tests
-        run: ./gradlew :app:testDebugUnitTest --no-daemon
+        run: ./gradlew :app:testDebugUnitTest
+
+  verify-backend:
+    name: Verify backend
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements-test.txt
 
       - name: Backend lint and tests
         working-directory: backend
@@ -69,7 +91,7 @@ jobs:
   build-release:
     name: Build signed release
     if: github.ref == 'refs/heads/main'
-    needs: verify
+    needs: [verify-legal, verify-android, verify-backend]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: release
@@ -90,24 +112,10 @@ jobs:
         with:
           validate-wrappers: false
 
-      - name: Cache native build (.cxx) — arm64
-        uses: actions/cache@v6
+      - uses: ./.github/actions/setup-native-ci
+        id: native-ci
         with:
-          path: app/.cxx
-          key: cxx-arm64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
-          restore-keys: cxx-arm64-
-
-      - name: Install ccache
-        run: sudo apt-get install -y -qq ccache
-
-      - name: Cache ccache objects — arm64
-        uses: actions/cache@v6
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ccache-release-arm64-${{ github.sha }}
-          restore-keys: |
-            ccache-release-arm64-
-            ccache-arm64-
+          abi: arm64
 
       - name: Decode keystore
         run: echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
@@ -124,6 +132,7 @@ jobs:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
           CCACHE_MAXSIZE: 1G
           CCACHE_COMPILERCHECK: content
+          CCACHE_SLOPPINESS: include_file_mtime,include_file_ctime,time_macros,file_macro
           SIGNING_KEYSTORE: app/release.keystore
           SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -138,7 +147,6 @@ jobs:
             exit 1
           fi
           ./gradlew --console=plain \
-            :app:minifyReleaseWithR8 \
             :app:assembleRelease \
             -PabiFilters=arm64-v8a \
             -PnativeCompilerLauncher=ccache \
@@ -237,11 +245,17 @@ jobs:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: ccache --show-stats
 
-      # Keep one release ccache per ref instead of one per released commit.
+      # Same prefix as CI tier 5 so a Kotlin-only release reuses the last native
+      # compile instead of uploading a new SHA-keyed blob.
       - uses: ./.github/actions/prune-cache
         with:
-          key-prefix: ccache-release-arm64-
-          except-key: ccache-release-arm64-${{ github.sha }}
+          key-prefix: cxx-arm64-
+          except-key: cxx-arm64-${{ steps.native-ci.outputs.cache-infix }}
+
+      - uses: ./.github/actions/prune-cache
+        with:
+          key-prefix: ccache-arm64-
+          except-key: ccache-arm64-${{ steps.native-ci.outputs.cache-infix }}
 
   publish:
     name: Publish GitHub Release

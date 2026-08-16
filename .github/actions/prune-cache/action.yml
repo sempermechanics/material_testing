@@ -1,7 +1,8 @@
 name: Prune stale caches
 description: >
   Delete the Actions cache entries that share a key prefix on this ref, so a job
-  keyed on the commit SHA leaves one entry behind instead of one per commit.
+  keyed on native sources (or a rolling SHA) leaves one entry behind instead of
+  one per commit.
   Run it as the last step of the job: main steps finish before `actions/cache`
   writes the new entry in its post step, so the old entries go first and the
   fresh one lands afterwards. Best-effort — a token without `actions: write`

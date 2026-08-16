@@ -81,7 +81,7 @@ gitleaks detect --config .gitleaks.toml --log-opts="<base-sha>..HEAD"
 
 | Output | Paths | Jobs |
 |--------|-------|------|
-| `app` | `app/**` except `app/src/main/cpp/**`; `gradle/**`, `*.gradle.kts`, `gradlew`, `gradlew.bat`, `settings.gradle.kts` | tier 1 |
+| `app` | `app/**` except `app/src/main/cpp/**`; `gradle/**`, `*.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat`, `settings.gradle.kts` | tier 1 |
 | `native_core` | `native` (the gitlink itself) and `.gitmodules` | — see note |
 | `native_jni` | `native`, `.gitmodules`, `app/src/main/cpp/**`, `SemperNativeLib.kt` | tiers 3 + 5 on main / labels |
 | `backend` | `backend/**`, `firestore.rules`, `firebase-hosting/**` | tier 4 |
@@ -241,9 +241,9 @@ Create the **`restore-drill`** environment before relying on the schedule — th
 
 | Cache | Key pattern | Purpose |
 |-------|-------------|---------|
-| `app/.cxx` | `cxx-arm64-<hash>` (tier 5), `cxx-x86_64-<hash>` (tier 3) | ABI-specific CMake/ninja tree |
-| `ccache` | `ccache-arm64-<sha>`, `ccache-x86_64-<sha>` | Compiled object cache, per ABI |
-| `~/.gradle` | managed by `setup-gradle` | Dependency/build cache |
+| `app/.cxx` | `cxx-arm64-<hash>` (tier 5 + Release), `cxx-x86_64-<hash>` (tier 3) | ABI-specific CMake/ninja tree |
+| `ccache` | `ccache-arm64-<hash>`, `ccache-x86_64-<hash>` | Compiled object cache, per ABI, keyed on native sources (not commit SHA) so Kotlin-only runs exact-hit |
+| `~/.gradle` | managed by `setup-gradle`; `org.gradle.caching=true` | Dependency + task output cache |
 | pip | managed by `setup-python`, keyed on `backend/requirements-test.txt` | Backend test dependencies |
 
 ### Keeping under the 10 GB limit
