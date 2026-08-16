@@ -630,7 +630,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val ref = intent.getStringExtra(DicKeys.REF_NAME)
         if (!ref.isNullOrBlank()) {
             val defs = intent.getStringArrayExtra(DicKeys.DEF_FILE_NAMES)?.size ?: 0
-            lines += getString(R.string.vsg_export_images_fmt, ref, defs)
+            lines += resources.getQuantityString(R.plurals.vsg_export_images_fmt, defs, ref, defs)
         }
         val node = selectedNode()
         if (node != null) {
@@ -638,7 +638,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
         val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
         if (!isolate) {
-            lines += getString(R.string.vsg_export_combos_fmt, series.size)
+            lines += resources.getQuantityString(R.plurals.vsg_export_combos_fmt, series.size, series.size)
         }
         return lines
     }

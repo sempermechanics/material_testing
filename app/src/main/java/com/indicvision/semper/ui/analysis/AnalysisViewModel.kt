@@ -36,7 +36,6 @@ import com.indicvision.semper.report.VisualizationEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +53,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.coroutineContext
 
 /**
  * Holds analysis inputs/state across configuration changes and runs the
@@ -353,15 +354,12 @@ class AnalysisViewModel : ViewModel() {
         request: SweepRequest,
         onProgress: (VsgStudyRunner.Progress) -> Unit,
     ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
-        Trace.beginSection("Semper.analysis.sweep")
-        try {
+        traceSection("Semper.analysis.sweep") {
             runVsgSweepBody(appContext, request, onProgress)
-        } finally {
-            Trace.endSection()
         }
     }
 
-    private suspend fun runVsgSweepBody(
+    private fun runVsgSweepBody(
         appContext: Context,
         request: SweepRequest,
         onProgress: (VsgStudyRunner.Progress) -> Unit,
@@ -738,18 +736,17 @@ class AnalysisViewModel : ViewModel() {
         params: BatchAnalysisParams,
         onProgress: (BatchProgressUpdate) -> Unit,
     ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
-        Trace.beginSection("Semper.analysis.batch")
-        try {
-            runBatchAnalysisBody(appContext, params, onProgress)
-        } finally {
-            Trace.endSection()
+        val jobContext = coroutineContext
+        traceSection("Semper.analysis.batch") {
+            runBatchAnalysisBody(appContext, params, onProgress, jobContext)
         }
     }
 
-    private suspend fun runBatchAnalysisBody(
+    private fun runBatchAnalysisBody(
         appContext: Context,
         params: BatchAnalysisParams,
         onProgress: (BatchProgressUpdate) -> Unit,
+        jobContext: CoroutineContext,
     ): BatchAnalysisOutcome {
         val limited = sessionLimitOutcome(appContext, defFilePaths.size)
         if (limited != null) {
@@ -835,7 +832,7 @@ class AnalysisViewModel : ViewModel() {
         val perFrameSummaryRanges = mutableListOf<Map<Int, Pair<Float, Float>?>>()
 
         for ((frameIndex, defPath) in defFilePaths.withIndex()) {
-            currentCoroutineContext().ensureActive()
+            jobContext.ensureActive()
             if (cancelRequested) {
                 engineErrorCode = ERROR_CANCELLED
                 break
@@ -1119,6 +1116,20 @@ class AnalysisViewModel : ViewModel() {
             )
         }
         return outcome
+    }
+}
+
+/**
+ * Begin and end a [Trace] section on this thread. [block] must not suspend —
+ * a section that spans a coroutine resume can close on another thread
+ * (lint UnclosedTrace).
+ */
+private inline fun <T> traceSection(name: String, block: () -> T): T {
+    Trace.beginSection(name)
+    try {
+        return block()
+    } finally {
+        Trace.endSection()
     }
 }
 
