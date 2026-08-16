@@ -91,9 +91,24 @@ def _tier(route) -> str:
     return NONE
 
 
+def _iter_api_routes(routes):
+    """Walk `app.routes`, including FastAPI `_IncludedRouter` wrappers.
+
+    `include_router` no longer flattens child APIRoutes onto `app.routes`;
+    they live on `original_router.routes`. The auth-tier table still needs
+    every user-facing path.
+    """
+    for route in routes:
+        nested = getattr(route, "original_router", None)
+        if nested is not None:
+            yield from _iter_api_routes(nested.routes)
+            continue
+        yield route
+
+
 def _actual_routes():
     out = {}
-    for route in app.routes:
+    for route in _iter_api_routes(app.routes):
         if not hasattr(route, "dependant") or not getattr(route, "methods", None):
             continue
         for method in route.methods:
