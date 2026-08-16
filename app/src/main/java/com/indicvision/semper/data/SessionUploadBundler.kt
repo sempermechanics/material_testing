@@ -27,7 +27,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import java.util.Locale
 
 /**
  * Builds per-frame upload artifacts: combined analysis CSV rows, PDF reports,
@@ -118,7 +117,7 @@ object SessionUploadBundler {
         val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep) }
         try {
             record.defNames.forEachIndexed { index, defName ->
-                val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
+                val datFile = SessionPaths.frameDat(sessionDir, index)
                 if (!datFile.exists()) {
                     onFrame(index + 1, frameTotal)
                     return@forEachIndexed
@@ -210,7 +209,7 @@ object SessionUploadBundler {
         processedDir: File,
     ): Int {
         val batchFiles = record.defNames.indices
-            .map { i -> File(sessionDir, String.format(Locale.US, "frame_%04d.dat", i)) }
+            .map { i -> SessionPaths.frameDat(sessionDir, i) }
             .filter { it.exists() }
         if (batchFiles.isEmpty()) return 0
 

@@ -39,6 +39,7 @@ import com.google.android.material.textfield.TextInputEditText
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
@@ -282,7 +283,7 @@ class ResultViewerActivity : AppCompatActivity() {
         refImagePath = intent.getStringExtra(DicKeys.REF_PATH)
         // Prefer the raw deformed originals persisted in the session dir (survive
         // reopen/eviction); fall back to the just-analysed session's temp paths.
-        val rawDeformedDir = batchDirPath?.let { File(it, "raw_deformed") }
+        val rawDeformedDir = batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
         defImagePaths = rawDeformedDir?.takeIf { it.isDirectory }
             ?.listFiles()?.sortedBy { it.name }?.map { it.absolutePath }
             ?: intent.getStringArrayListExtra(DicKeys.DEF_FILE_PATHS)

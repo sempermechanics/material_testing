@@ -43,7 +43,6 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import java.util.Locale
 
 /**
  * Offline-first cloud sync against the Semper GCP backend — **one backend session
@@ -450,7 +449,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 // The .dat is bundled so a restored session is fully viewable in
                 // the app (the heatmap viewer reads it); it also feeds the CSV
                 // and reports. The CSV is one combined file (below), not per frame.
-                val datFile = File(sessionDir, String.format(Locale.US, "frame_%04d.dat", index))
+                val datFile = SessionPaths.frameDat(sessionDir, index)
                 if (datFile.exists()) {
                     artifacts += Artifact("dat", datFile.name, datFile)
                 } else {

@@ -951,7 +951,7 @@ class AnalysisViewModel : ViewModel() {
 
             if (validPointsCount == 0) continue
 
-            val outputFile = File(batchDir, String.format(Locale.US, "frame_%04d.dat", frameIndex))
+            val outputFile = SessionPaths.frameDat(batchDir, frameIndex)
             outputFile.outputStream().use { fos ->
                 val bytes = ByteArray(validPointsCount * DicResult.BYTES_PER_POINT)
                 outputBuffer.position(0)
