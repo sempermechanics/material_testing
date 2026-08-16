@@ -32,7 +32,7 @@ See [../engine/PERF_BASELINE_bd44af0.md](../engine/PERF_BASELINE_bd44af0.md):
 on the release pipeline.
 
 Macrobenchmark CI (`tier-benchmark`) is emulator **smoke**: it suppresses
-`EMULATOR,LOW-BATTERY,UNLOCKED` and does not assert numeric thresholds. Keep API 30
+`EMULATOR,LOW-BATTERY,UNLOCKED` and does not assert numeric thresholds. Keep API 34
 (API 37 `dumpsys gfxinfo framestats` is empty). Dispatch with `run_benchmark` or
 the `benchmark` label.
 

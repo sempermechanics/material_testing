@@ -46,6 +46,7 @@ class PendingApprovalActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_pending_approval)
+        window.decorView.post { reportFullyDrawn() }
 
         Insets.padVertical(findViewById(R.id.pendingRoot))
 

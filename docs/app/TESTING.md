@@ -86,7 +86,7 @@ fixed, so a change in allocations is caused by the code and nothing else.
 ```
 
 CI's `tier-benchmark` job passes the same `suppressErrors` (plus
-`enabledRules=Macrobenchmark`) on an **API 30** emulator. Numbers are smoke, not
+`enabledRules=Macrobenchmark`) on an **API 34** emulator. Numbers are smoke, not
 a regression gate. `benchmark/build.gradle.kts` sets the same suppress list so a
 local emulator run matches CI.
 

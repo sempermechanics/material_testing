@@ -3,6 +3,7 @@ package com.indicvision.semper.benchmark
 import android.content.Intent
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.FrameTimingMetric
+import androidx.benchmark.macro.MacrobenchmarkScope
 import androidx.benchmark.macro.StartupMode
 import androidx.benchmark.macro.StartupTimingMetric
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
@@ -70,8 +71,10 @@ class ScreenBenchmark {
     }
 
     /**
-     * Frame timing while flinging the settings sheet top to bottom — the screen
-     * most likely to regress, since `SettingsActivity.kt` changes most often.
+     * Frame timing while flinging settings top to bottom. Sections start
+     * collapsed, so a fling on the empty headers produces no frames and
+     * [FrameTimingMetric] throws "Observed no expect/actual slices". Expand
+     * first in [setupBlock]; measure only the scroll.
      */
     @Test
     fun settingsScroll() = benchmarkRule.measureRepeated(
@@ -80,7 +83,10 @@ class ScreenBenchmark {
         iterations = ITERATIONS,
         startupMode = StartupMode.WARM,
         compilationMode = CompilationMode.Partial(),
-        setupBlock = { startActivityAndWait(intentFor(SETTINGS_ACTIVITY)) },
+        setupBlock = {
+            startActivityAndWait(intentFor(SETTINGS_ACTIVITY))
+            expandAllSettingsSections()
+        },
     ) {
         val scroll = device.wait(Until.findObject(By.res(PACKAGE, "settingsScroll")), FIND_TIMEOUT_MS)
             ?: error("settingsScroll not found — did SettingsActivity fail to render standalone?")
@@ -108,6 +114,27 @@ class ScreenBenchmark {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
+    private fun MacrobenchmarkScope.expandAllSettingsSections() {
+        val scroll = device.wait(Until.findObject(By.res(PACKAGE, "settingsScroll")), FIND_TIMEOUT_MS)
+            ?: error("settingsScroll not found — did SettingsActivity fail to render standalone?")
+        scroll.setGestureMargin(device.displayWidth / GESTURE_MARGIN_FRACTION)
+        SECTION_HEADERS.forEach { id ->
+            val selector = By.res(PACKAGE, id)
+            if (!device.hasObject(selector)) {
+                var attempts = 0
+                while (!device.hasObject(selector) && attempts++ < SCROLL_ATTEMPTS) {
+                    scroll.fling(Direction.DOWN)
+                }
+            }
+            val header = device.findObject(selector)
+                ?: error("$id not found — settings section header missing")
+            header.click()
+            device.waitForIdle()
+        }
+        repeat(SCROLL_ATTEMPTS) { scroll.fling(Direction.UP) }
+        device.waitForIdle()
+    }
+
     companion object {
         private const val PACKAGE = "com.indicvision.semper"
         private const val SETTINGS_ACTIVITY = "com.indicvision.semper.ui.settings.SettingsActivity"
@@ -116,5 +143,15 @@ class ScreenBenchmark {
         private const val FLINGS = 3
         private const val FIND_TIMEOUT_MS = 5_000L
         private const val GESTURE_MARGIN_FRACTION = 5
+        private const val SCROLL_ATTEMPTS = 8
+        private val SECTION_HEADERS = listOf(
+            "headerAccount",
+            "headerCloud",
+            "headerAnalysesData",
+            "headerStorage",
+            "headerYourData",
+            "headerAnalysisPrefs",
+            "headerHelpSupport",
+        )
     }
 }

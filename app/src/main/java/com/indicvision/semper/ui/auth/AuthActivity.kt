@@ -77,6 +77,7 @@ class AuthActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_auth)
+        window.decorView.post { reportFullyDrawn() }
 
         etEmail = findViewById(R.id.etEmail)
         layoutEmail = findViewById(R.id.layoutEmail)
