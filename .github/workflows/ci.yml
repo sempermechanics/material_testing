@@ -112,6 +112,7 @@ jobs:
               - '!app/src/main/cpp/**'
               - 'gradle/**'
               - '*.gradle.kts'
+              - 'gradle.properties'
               - 'gradlew'
               - 'gradlew.bat'
               - 'settings.gradle.kts'
@@ -299,22 +300,10 @@ jobs:
           validate-wrappers: false
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      - name: Cache native build (.cxx) — x86_64
-        uses: actions/cache@v6
+      - uses: ./.github/actions/setup-native-ci
+        id: native-ci
         with:
-          path: app/.cxx
-          key: cxx-x86_64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
-          restore-keys: cxx-x86_64-
-
-      - name: Install ccache
-        run: sudo apt-get install -y -qq ccache
-
-      - name: Cache ccache objects — x86_64
-        uses: actions/cache@v6
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ccache-x86_64-${{ github.sha }}
-          restore-keys: ccache-x86_64-
+          abi: x86_64
 
       - name: Enable KVM
         run: |
@@ -347,16 +336,17 @@ jobs:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
           CCACHE_MAXSIZE: 1G
           CCACHE_COMPILERCHECK: content
+          CCACHE_SLOPPINESS: include_file_mtime,include_file_ctime,time_macros,file_macro
 
       - uses: ./.github/actions/prune-cache
         with:
           key-prefix: cxx-x86_64-
-          except-key: cxx-x86_64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
+          except-key: cxx-x86_64-${{ steps.native-ci.outputs.cache-infix }}
 
       - uses: ./.github/actions/prune-cache
         with:
           key-prefix: ccache-x86_64-
-          except-key: ccache-x86_64-${{ github.sha }}
+          except-key: ccache-x86_64-${{ steps.native-ci.outputs.cache-infix }}
 
   # ===================================================================
   # Tier 4 — Backend pytest
@@ -516,22 +506,10 @@ jobs:
           validate-wrappers: false
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      - name: Cache native build (.cxx) — arm64
-        uses: actions/cache@v6
+      - uses: ./.github/actions/setup-native-ci
+        id: native-ci
         with:
-          path: app/.cxx
-          key: cxx-arm64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
-          restore-keys: cxx-arm64-
-
-      - name: Install ccache
-        run: sudo apt-get install -y -qq ccache
-
-      - name: Cache ccache objects — arm64
-        uses: actions/cache@v6
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ccache-arm64-${{ github.sha }}
-          restore-keys: ccache-arm64-
+          abi: arm64
 
       - name: Decode keystore
         if: env.KEYSTORE_BASE64 != ''
@@ -544,13 +522,13 @@ jobs:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
           CCACHE_MAXSIZE: 1G
           CCACHE_COMPILERCHECK: content
+          CCACHE_SLOPPINESS: include_file_mtime,include_file_ctime,time_macros,file_macro
           SIGNING_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' && 'app/release.keystore' || '' }}
           SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           SIGNING_STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: >
           ./gradlew --console=plain
-          :app:minifyReleaseWithR8
           :app:assembleRelease
           -PabiFilters=arm64-v8a
           -PnativeCompilerLauncher=ccache
@@ -604,12 +582,12 @@ jobs:
       - uses: ./.github/actions/prune-cache
         with:
           key-prefix: cxx-arm64-
-          except-key: cxx-arm64-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
+          except-key: cxx-arm64-${{ steps.native-ci.outputs.cache-infix }}
 
       - uses: ./.github/actions/prune-cache
         with:
           key-prefix: ccache-arm64-
-          except-key: ccache-arm64-${{ github.sha }}
+          except-key: ccache-arm64-${{ steps.native-ci.outputs.cache-infix }}
 
   # ===================================================================
   # Macrobenchmark — opt-in only (label `benchmark` or dispatch run_benchmark)

@@ -1,0 +1,53 @@
+name: Restore native compile caches
+description: >
+  Restore ABI-specific .cxx and ccache keyed on native sources (not commit SHA),
+  install ccache, and sparse-checkout OpenCV. An exact key hit skips the cache
+  save, so Kotlin-only runs do not re-upload a gigabyte of objects.
+
+inputs:
+  abi:
+    description: Cache-key infix — `arm64` or `x86_64`.
+    required: true
+
+outputs:
+  cache-infix:
+    description: Native-source hash used in cxx/ccache keys (for prune-cache).
+    value: ${{ steps.native-env.outputs.infix }}
+
+runs:
+  using: composite
+  steps:
+    - name: Cache native build (.cxx) — ${{ inputs.abi }}
+      uses: actions/cache@v6
+      with:
+        path: app/.cxx
+        key: cxx-${{ inputs.abi }}-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
+        restore-keys: cxx-${{ inputs.abi }}-
+
+    - name: Install ccache
+      shell: bash
+      run: sudo apt-get install -y -qq ccache
+
+    - name: Cache ccache objects — ${{ inputs.abi }}
+      uses: actions/cache@v6
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ccache-${{ inputs.abi }}-${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}
+        restore-keys: |
+          ccache-${{ inputs.abi }}-
+          ccache-release-${{ inputs.abi }}-
+
+    - name: Sparse OpenCV worktree
+      shell: bash
+      run: native/scripts/sparse-opencv.sh
+
+    # Same hash as the cache keys above, so prune-cache except-key cannot drift.
+    # Also raise Gradle heap for R8 and let ninja use every runner core.
+    - name: Native compile env
+      id: native-env
+      shell: bash
+      run: |
+        infix='${{ hashFiles('native/CMakeLists.txt', 'native/adapters/android/CMakeLists.txt', 'native/cmake/*.cmake', '.gitmodules', 'native/**/*.cpp', 'native/**/*.h', 'native/**/*.hpp') }}'
+        echo "infix=$infix" >> "$GITHUB_OUTPUT"
+        echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> "$GITHUB_ENV"
+        echo "GRADLE_OPTS=-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC -Dfile.encoding=UTF-8" >> "$GITHUB_ENV"

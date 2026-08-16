@@ -62,22 +62,25 @@ Archive the R8 mapping artifact before 90-day expiry (same as any beta).
 
 ## CI-based release (workflow_dispatch)
 
-The [`release.yml`](../../.github/workflows/release.yml) workflow runs three
-jobs: `verify` → `build-release` → `publish`. Dispatch from **`main` only**.
+The [`release.yml`](../../.github/workflows/release.yml) workflow runs
+`verify-legal` / `verify-android` / `verify-backend` in parallel, then
+`build-release` → `publish`. Dispatch from **`main` only**.
 
-### `verify` — the gate
+### Verify jobs — the gate
 
 Green CI used to be a checklist item in this file, which meant a red suite could
-still be signed and published. It is now a job the build depends on:
+still be signed and published. The same checks now run as three jobs so legal,
+JVM unit tests, and backend pytest overlap instead of stacking:
 
-- `python scripts/render_legal_pages.py --check` — the published Privacy Policy
-  and Terms still match `docs/legal/`.
-- `./gradlew :app:testDebugUnitTest` — the Android unit suite.
-- Backend `ruff check app/ tests/ scripts/ ../scripts/` and
+- `verify-legal` — `python scripts/render_legal_pages.py --check`: the published
+  Privacy Policy and Terms still match `docs/legal/`.
+- `verify-android` — `./gradlew :app:testDebugUnitTest`. No engine/OpenCV
+  submodules: the JVM suite does not `loadLibrary`.
+- `verify-backend` — `ruff check app/ tests/ scripts/ ../scripts/` and
   `pytest tests/ -q --cov=app --cov-fail-under=75`.
 
-`build-release` declares `needs: verify`, so none of the signing steps run if any
-of the above fails.
+`build-release` declares `needs: [verify-legal, verify-android, verify-backend]`,
+so none of the signing steps run if any of the above fails.
 
 ### `build-release` — sign and check
 
@@ -86,7 +89,8 @@ of the above fails.
    secrets on Free private orgs. The `signingConfigs.release` block in
    `app/build.gradle.kts` reads the `SIGNING_*` env vars the workflow sets; if
    the keystore is absent the variant stays **unsigned** rather than silently
-   debug-signed.
+   debug-signed. `assembleRelease` still runs R8 minify; the mapping upload
+   fails the job if that file is missing.
 2. Requires variable **`INDIC_API_BASE_URL`** (HTTPS API Gateway or Cloud Run
    URL) and builds with `-PrequireCloudApi=true`. A missing, empty or non-HTTPS
    URL fails the job — cloud sync must not ship silently disabled, and ID tokens
