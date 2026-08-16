@@ -296,8 +296,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
         }
+        val maxFrames = DicSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
         tvDefDropHint.text =
-            getString(R.string.def_formats_hint_fmt, DicSettings.maxFrames(this, AppRemoteConfig.maxFrames(this)))
+            resources.getQuantityString(R.plurals.def_formats_hint_fmt, maxFrames, maxFrames)
         Insets.padBottom(findViewById(R.id.bottomNav))
 
         // Keyboard: the settings/sweep pages hold number fields; pad their scroll

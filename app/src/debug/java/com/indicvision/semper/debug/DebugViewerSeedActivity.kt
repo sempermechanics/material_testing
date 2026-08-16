@@ -10,6 +10,7 @@ import com.indicvision.semper.DicResult
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Locale
 
 /**
  * Debug-only launcher that fabricates a short synthetic DIC session and opens
@@ -46,9 +47,9 @@ class DebugViewerSeedActivity : Activity() {
     }
 
     private fun seedSession(frameCount: Int): File {
-        val dir = File(File(filesDir, "sessions"), "debug_seed_${frameCount}")
+        val dir = File(File(filesDir, "sessions"), "debug_seed_$frameCount")
         dir.mkdirs()
-        val expected = File(dir, String.format("frame_%04d.dat", frameCount - 1))
+        val expected = File(dir, String.format(Locale.US, "frame_%04d.dat", frameCount - 1))
         if (expected.exists()) return dir
         val floats = FloatArray(COLS * ROWS * DicResult.STRIDE)
         val buf = ByteBuffer.allocate(floats.size * 4).order(ByteOrder.nativeOrder())
@@ -56,7 +57,7 @@ class DebugViewerSeedActivity : Activity() {
             fillFrame(floats, seed = i)
             buf.clear()
             buf.asFloatBuffer().put(floats)
-            File(dir, String.format("frame_%04d.dat", i)).writeBytes(buf.array())
+            File(dir, String.format(Locale.US, "frame_%04d.dat", i)).writeBytes(buf.array())
         }
         return dir
     }

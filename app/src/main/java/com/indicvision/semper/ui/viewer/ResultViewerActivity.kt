@@ -690,10 +690,6 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateStickyScaleBar() {
-        // Scale sits in the edge chrome overlay; no floating translation.
-    }
-
     private fun showCustomScaleDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_custom_scale, null)
         val etMax = dialogView.findViewById<TextInputEditText>(R.id.etScaleMax)

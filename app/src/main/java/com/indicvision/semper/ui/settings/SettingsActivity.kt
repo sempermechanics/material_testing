@@ -363,7 +363,14 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val outcome = StorageBudget.freeAllBackedUpAsync(this@SettingsActivity)
             if (outcome.didAnything) {
-                toast(getString(R.string.storage_freed_fmt, humanSize(outcome.freedBytes), outcome.sessionsDropped))
+                toast(
+                    resources.getQuantityString(
+                        R.plurals.storage_freed_fmt,
+                        outcome.sessionsDropped,
+                        humanSize(outcome.freedBytes),
+                        outcome.sessionsDropped,
+                    ),
+                )
             } else {
                 toast(getString(R.string.storage_freed_none))
             }
@@ -390,7 +397,14 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val outcome = StorageBudget.enforceAsync(this@SettingsActivity)
             if (outcome.didAnything) {
-                toast(getString(R.string.storage_freed_fmt, humanSize(outcome.freedBytes), outcome.sessionsDropped))
+                toast(
+                    resources.getQuantityString(
+                        R.plurals.storage_freed_fmt,
+                        outcome.sessionsDropped,
+                        humanSize(outcome.freedBytes),
+                        outcome.sessionsDropped,
+                    ),
+                )
                 wireAnalysesDataSection()
             }
             refreshStorageTotals()
