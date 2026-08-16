@@ -10,6 +10,8 @@ android {
         minSdk = 28
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] =
+            "EMULATOR,LOW-BATTERY,UNLOCKED"
     }
 
     compileOptions {

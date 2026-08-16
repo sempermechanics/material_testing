@@ -36,9 +36,9 @@ Intent extras shared across Activities live in
 |---|---|
 | `ui/auth/` | Splash, sign-in, pending approval, Google / AccessRouter helpers |
 | `ui/home/` | Session list, selection, open-session intents |
-| `ui/analysis/` | Setup wizard, ROI, VSG sweep, import/overlay helpers, ViewModel |
+| `ui/analysis/` | Setup wizard (ViewStub steps 2/3; `AnalysisWizardSlots` / `AnalysisWizardCoach`; `goToStep` on the activity), ROI, VSG sweep, `DicBatchRunner` + `DicFieldIo`, import/overlay helpers, ViewModel |
 | `ui/viewer/` | Heatmaps, inspect, report factory, settings-used sheet |
-| `ui/settings/` | Settings screen, cloud/account controls, analysis-data listing |
+| `ui/settings/` | Settings screen; account/storage/prefs/your-data/help live in `Settings*Section`; restore/download/delete stay on `SettingsActivity` |
 | `ui/admin/` | Admin screen — approve/revoke users via `/v1/admin/*` |
 | `ui/limit/` | Session-quota screen |
 | `ui/common/` | Insets, media source chooser, motion |
@@ -65,9 +65,10 @@ Each saved analysis lives under the app's session directory (see
   …                     # metadata / previews as written by the ViewModel
 ```
 
-The constant `SessionPaths.RAW_DEFORMED_SUBDIR` is shared by the ViewModel,
+The constants `SessionPaths.RAW_DEFORMED_SUBDIR`, `FRAME_DAT_FMT`, and
+`SessionPaths.frameDat` are shared by the ViewModel / `DicBatchRunner`,
 [`DicUploadWorker`](../../app/src/main/java/com/indicvision/semper/data/DicUploadWorker.kt),
-and cloud restore so path segments never diverge.
+and cloud restore so path segments and `frame_0000.dat` names never diverge.
 
 ## Sync workers
 
@@ -113,11 +114,12 @@ data exports use the same path, so there is one place to change export UX.
 Non-obvious rules the analysis and transfer paths depend on. Breaking one tends to
 show up as an OOM, a mid-run crash, or a "nothing happened" report:
 
-- **JNI output buffer is bounded.** `AnalysisViewModel` / `VsgStudyRunner` allocate
-  one direct `ByteBuffer` sized to the ROI grid (`(w/step)·(h/step)` points). The
-  engine's returned point count is checked against that capacity *before* the
-  buffer is read back — a count over capacity is treated as an engine failure, not
-  read past the buffer.
+- **JNI output buffer is bounded.** `DicBatchRunner` / `VsgStudyRunner` allocate
+  one direct `ByteBuffer` via `DicFieldIo` sized to the ROI grid (`(w/step)·(h/step)`
+  points). The engine's returned point count is checked against that capacity
+  *before* the buffer is read back — a count over capacity is treated as an engine
+  failure, not read past the buffer. JNI `computeFullFieldDirect` stays in that
+  one batch loop; do not fragment it.
 - **Report/upload compositing is capped to `VisualizationEngine.REPORT_MAX_EDGE`
   (1280 px).** The PDF/cloud heatmaps downscale to 600 px anyway; the cap only
   stops intermediate full-res `ARGB_8888` bitmaps from OOMing on large (e.g. 26 MP)
@@ -158,13 +160,14 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
 |---|---|
 | Change sign-in providers / access gate | `data/AuthRepository.kt`, `docs/backend/AUTH_SETUP.md` |
 | Change post-auth navigation | `ui/auth/AccessRouter.kt` |
-| Change the analysis wizard UI | `ui/analysis/StaticAnalysisActivity.kt` + helpers in the same package |
+| Change the analysis wizard UI | `StaticAnalysisActivity.goToStep`; slot chrome / coach in `AnalysisWizardSlots` / `AnalysisWizardCoach`; later steps inflate through ViewStubs |
+| Change the full-field batch loop | `DicBatchRunner` + `DicFieldIo` (shared with VSG). Do not split `computeFullFieldDirect` out of that loop |
+| Change Home list / settings | `ui/home/HomeActivity.kt` + `Session*` / `ui/settings/SettingsActivity` + `Settings*Section` |
 | Change import / video extraction | `FrameImportHelper`, `VideoFrameExtractor` |
 | Change parameter-sweep setup UI | `SweepSetupHelper` (run loop stays in the Activity + `VsgStudyRunner`) |
 | Change the sweep result lattice | `ui/analysis/VsgLatticeActivity.kt`, `VsgLatticeView`, `VsgPlotView` |
 | Change heatmap / inspect | `ui/viewer/ResultViewerActivity.kt` + `Viewer*` helpers |
 | Change how exports are handed off | `ui/viewer/ShareCenter.kt`, `SendToSheet.kt`, `SaveExportActivity.kt` |
-| Change Home list / settings | `ui/home/HomeActivity.kt` + `Session*` / `ui/settings/SettingsActivity` |
 | Change storage reclaim behaviour | `data/StorageBudget.kt`, `data/CacheJanitor.kt` |
 | Change crash-reporting consent | `Diagnostics.kt`, `CrashReportingTree.kt` |
 | Change the C++ engine | The engine is a submodule — see [ENGINE_APP_CONTRACT.md](../engine/ENGINE_APP_CONTRACT.md), not this page |

@@ -1,29 +1,47 @@
 # Tech debt
 
-Program status: **cleared**.
+Baselines stay empty: `app/lint-baseline.xml` and `app/detekt-baseline.xml`.
+`./gradlew :app:lintDebug` fails on errors; `lintVitalRelease` is clean.
 
-- `app/lint-baseline.xml` and `app/detekt-baseline.xml` are empty.
-- `./gradlew :app:lintDebug` reports **no errors**; the gate fails on errors, and
-  `lintVitalRelease` is clean. Remaining warnings after the 2026-08-16 Trace/plurals
-  pass: `OldTargetApi` (compileSdk 37 vs targetSdk 36 — inventory only; do not bump
-  in a drive-by), `TooManyViews`, `UseKtx`.
-- Inherent size/complexity in a few UI orchestration files uses targeted
-  `@file:Suppress` — prefer extracting over widening those lists.
-- Catalog version-availability lint IDs are disabled; bump deps in deliberate PRs.
+**Still open warnings** (do not baseline, do not `warningsAsErrors` until decided):
+
+- `OldTargetApi` — `compileSdk` 37 vs `targetSdk` 36. Inventory only; do not bump
+  `targetSdk` in a drive-by.
+- `TooManyViews` on `activity_settings.xml`.
+
+Inherent size/complexity in a few UI orchestration files uses targeted
+`@file:Suppress` — prefer extracting over widening those lists.
+Catalog version-availability lint IDs are disabled; bump deps in deliberate PRs.
+
+`UnclosedTrace`, `PluralsCandidate`, and `UseKtx` from the 2026-08-16 pass are
+fixed (#59 / #60).
 
 ## External / deferred (not blocked on code alone)
 
 | Item | Why deferred |
 |------|----------------|
 | Auth-gated UI E2E | Needs Firebase secrets / fixtures in CI |
-| Kover `minBound` raise | Measure stable % on CI first (local AGP 9 often reports no coverage) |
-| firebase-admin 7.x | Held with cryptography **44.0.0**; bump as a pair after verifying train |
+| Kover `minBound` raise | Floor is 15; measure stable % on CI first (local AGP 9 often reports no coverage) |
+| `ViewerSession` extras bag | `DicKeys` packed in two places (`SessionOpenHelper.intentFor`, `AnalysisNavHelper.openResults`); grill before deepening |
+| firebase-admin / hashed lock | Lock is regenerated from txt on each bump (`pip-compile --generate-hashes` on Python 3.12). Direct-dep versions in the lock must match `requirements.txt`. |
 
 ## Perf / quality gates (do not loosen)
 
 See [../engine/PERF_BASELINE_bd44af0.md](../engine/PERF_BASELINE_bd44af0.md):
 ≥ 4557 solves/s host; smoke/DICe floors; preserve `-O3 -ffast-math` / OpenMP / LTO
 on the release pipeline.
+
+Macrobenchmark CI (`tier-benchmark`) is emulator **smoke**: it suppresses
+`EMULATOR,LOW-BATTERY,UNLOCKED` and does not assert numeric thresholds. Keep API 30
+(API 37 `dumpsys gfxinfo framestats` is empty). Dispatch with `run_benchmark` or
+the `benchmark` label.
+
+## Architecture extracts that missed `main`
+
+GitHub marked #65 (wizard slot chrome / coach) and #67 (`DicBatchRunner` /
+`DicFieldIo`) MERGED, but they targeted already-merged stack branches, so those
+files were not on `origin/main`. Cherry-picks targeting `main` are #69 and #70;
+compile/quality leftovers from the lint split are #68.
 
 ## 2026-08-12 result-viewer / report memory & latency program
 
@@ -54,8 +72,9 @@ by 0-delta parity tests. Measured before/after, including the drawbacks, is in
 | Float16 / ZNSSD quantisation for field data | Would change reported numbers; rejected under the bit-exactness requirement |
 | In-memory X/Y compaction (derive coords from the grid) | Loss-less and worth ~25 %, but a larger change that also touches the native writer |
 
-Long-standing lint warnings above are all pre-existing and none are errors; they are
-tracked here rather than baselined so they stay visible.
+Do not split VisualizationEngine loops, GifEncoder LZW, ReportBuilder fusion,
+`DicResult.decodeDatFile`, `DicUploadWorker.doWork`, `prefetchAround` /
+`ScrubFrameCache`, or `PointSpatialIndex.build`.
 
 ## 2026-08-05 transparency / robustness audit
 
@@ -65,8 +84,9 @@ The branch was already strong; findings and fixes were small:
 - **Crash guards (fixed).** The JNI full-field solve reads its direct output buffer
   back by the engine's returned point count. Added a bound: a count exceeding the
   ROI-grid buffer capacity is now treated as an engine failure instead of reading
-  past the buffer (`AnalysisViewModel`, `VsgStudyRunner`). Closes the residual
-  "JNI buffer" concern from the earlier Tier-0 list.
+  past the buffer (`DicFieldIo` / `VsgStudyRunner` once #70 lands; still inline on
+  `main` until then). Closes the residual "JNI buffer" concern from the earlier
+  Tier-0 list.
 - **Fragile null-asserts (fixed).** `ShareCenter` replaced nine `snap!!` sites with
   a checked `requireSnapshot()` that fails the share job cleanly (snackbar) rather
   than NPE-crashing.
