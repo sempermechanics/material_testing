@@ -1,6 +1,7 @@
-// Pan/zoom gesture view: literal touch thresholds and matrix math read clearest
-// inline, so MagicNumber / ComplexCondition are suppressed for this whole file.
-@file:Suppress("MagicNumber", "ComplexCondition")
+// Pan/zoom gesture view: literal touch thresholds, matrix math, and the
+// gesture API surface read clearest inline, so MagicNumber / ComplexCondition /
+// TooManyFunctions are suppressed for this whole file.
+@file:Suppress("MagicNumber", "ComplexCondition", "TooManyFunctions")
 
 @file:SuppressLint("ClickableViewAccessibility")
 
