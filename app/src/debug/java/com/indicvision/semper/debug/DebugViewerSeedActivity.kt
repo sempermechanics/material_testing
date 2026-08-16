@@ -46,7 +46,7 @@ class DebugViewerSeedActivity : Activity() {
     }
 
     private fun seedSession(frameCount: Int): File {
-        val dir = File(File(filesDir, "sessions"), "debug_seed_${frameCount}")
+        val dir = File(File(filesDir, "sessions"), "debug_seed_$frameCount")
         dir.mkdirs()
         val expected = File(dir, String.format("frame_%04d.dat", frameCount - 1))
         if (expected.exists()) return dir
