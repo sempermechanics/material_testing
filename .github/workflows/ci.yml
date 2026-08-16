@@ -321,7 +321,9 @@ jobs:
       - name: Run instrumented tests on emulator
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
-          api-level: 30
+          # API 34 still has dumpsys gfxinfo framestats; API 37 returns empty
+          # and Macrobenchmark startActivityAndWait cannot confirm launch.
+          api-level: 34
           arch: x86_64
           disable-animations: true
           # Cap below typical free space so AVD create succeeds on crowded runners.
@@ -629,7 +631,9 @@ jobs:
       - name: Run startup Macrobenchmarks
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          # Same image as tier 3. API 37 empties gfxinfo framestats, so
+          # startActivityAndWait cannot confirm launch.
+          api-level: 34
           arch: x86_64
           script: ./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
 

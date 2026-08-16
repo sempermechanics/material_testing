@@ -124,6 +124,7 @@ class HomeActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
+        window.decorView.post { reportFullyDrawn() }
 
         // Edge-to-edge (enforced on API 35+): drop the header below the status
         // bar, otherwise the bar swallows taps on the settings gear. The
