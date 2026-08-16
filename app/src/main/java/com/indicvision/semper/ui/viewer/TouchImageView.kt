@@ -181,10 +181,13 @@ class TouchImageView @JvmOverloads constructor(
             velocityX: Float,
             velocityY: Float,
         ): Boolean {
-            if (!isAtFitScale()) return false
-            if (abs(velocityX) < abs(velocityY) || abs(velocityX) < FLING_MIN_VELOCITY) return false
-            onScrubListener?.invoke(if (velocityX < 0f) 1 else -1)
-            return true
+            val accept = isAtFitScale() &&
+                abs(velocityX) >= abs(velocityY) &&
+                abs(velocityX) >= FLING_MIN_VELOCITY
+            if (accept) {
+                onScrubListener?.invoke(if (velocityX < 0f) 1 else -1)
+            }
+            return accept
         }
     }
 
