@@ -360,13 +360,13 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val s = requireSnapshot()
         val f = File(shareDir(), "${s.baseName}_report.pdf")
         f.outputStream().use { out ->
-                PdfReportGenerator.generateBatch(
-                    frameCount = s.batchFiles.size,
-                    dataAt = { index -> frameReport(index) },
-                    outputStream = out,
-                    frameTitle = { index -> frameTitle(index) },
-                    resources = host.resources,
-                ).collect { progress ->
+            PdfReportGenerator.generateBatch(
+                frameCount = s.batchFiles.size,
+                dataAt = { index -> frameReport(index) },
+                outputStream = out,
+                frameTitle = { index -> frameTitle(index) },
+                resources = host.resources,
+            ).collect { progress ->
                 when (progress) {
                     // generateBatch reports failures as a Flow event rather than
                     // throwing; surface it so the share job actually fails (and logs)

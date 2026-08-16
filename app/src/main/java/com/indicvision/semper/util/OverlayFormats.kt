@@ -1,3 +1,5 @@
+@file:Suppress("MagicNumber")
+
 package com.indicvision.semper.util
 
 import java.util.Locale

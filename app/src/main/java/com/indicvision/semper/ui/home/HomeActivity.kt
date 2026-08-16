@@ -1,6 +1,6 @@
 // Home screen wires many list/menu/callback bindings in onCreate; kept together
-// for locality, so LongMethod / TooManyFunctions are suppressed for this file.
-@file:Suppress("LongMethod", "TooManyFunctions")
+// for locality, so LongMethod / TooManyFunctions / MagicNumber are suppressed.
+@file:Suppress("LongMethod", "TooManyFunctions", "MagicNumber")
 
 package com.indicvision.semper.ui.home
 
