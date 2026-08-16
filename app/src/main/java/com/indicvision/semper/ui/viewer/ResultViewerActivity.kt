@@ -74,7 +74,9 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var layoutColorScale: LinearLayout
     private lateinit var tvScaleMax: TextView
     private lateinit var tvScaleMin: TextView
-    private lateinit var chromeOverlay: View
+    private lateinit var chromeTop: View
+    private lateinit var chromeBottom: View
+    private var chromeVisible = true
 
     internal lateinit var tvProbeReadout: TextView
     internal lateinit var glassShield: InspectOverlayView
@@ -83,6 +85,8 @@ class ResultViewerActivity : AppCompatActivity() {
     private var detailStats: String = ""
 
     private val hideChromeRunnable = Runnable { fadeChrome(visible = false) }
+
+    internal lateinit var shareBanner: com.indicvision.semper.ui.common.TransferBannerController
     private val chromeHideDelayMs = 2_500L
 
     private lateinit var inspect: ViewerInspectHelper
@@ -170,6 +174,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private lateinit var etFrameNumber: EditText
     private lateinit var tvFrameTotal: TextView
+    private lateinit var layoutFrameJump: View
     private lateinit var summary: ViewerSummaryHelper
 
     /**
@@ -215,13 +220,18 @@ class ResultViewerActivity : AppCompatActivity() {
         tvStatsCaption = findViewById(R.id.tvStatsCaption)
         etFrameNumber = findViewById(R.id.etFrameNumber)
         tvFrameTotal = findViewById(R.id.tvFrameTotal)
+        layoutFrameJump = findViewById(R.id.layoutFrameJump)
 
         layoutColorScale = findViewById(R.id.layoutColorScale)
         tvScaleMax = findViewById(R.id.tvScaleMax)
         tvScaleMin = findViewById(R.id.tvScaleMin)
-        chromeOverlay = findViewById(R.id.chromeOverlay)
+        chromeTop = findViewById(R.id.chromeTop)
+        chromeBottom = findViewById(R.id.chromeBottom)
+        shareBanner = com.indicvision.semper.ui.common.TransferBannerController(
+            findViewById(R.id.transferBannerRoot),
+        )
 
-        Insets.padTop(findViewById(R.id.topBarHost))
+        Insets.padTop(findViewById(R.id.viewerTopStack))
         Insets.padBottom(findViewById(R.id.layoutScrubber))
 
         tvProbeReadout = findViewById(R.id.tvProbeReadout)
@@ -296,6 +306,7 @@ class ResultViewerActivity : AppCompatActivity() {
             // Whole-sequence ranges still feed the summary GIF / share animations.
             if (batchFiles.size > 1) summary.start()
             if (showingSummary) summary.show()
+            if (showingSummary) layoutFrameJump.visibility = View.GONE
             updateNavButtons()
             bumpChrome()
         } else {
@@ -356,6 +367,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         findViewById<View>(R.id.btnViewerBack).setOnClickListener { finish() }
         findViewById<View>(R.id.btnViewerShare).setOnClickListener { showShareSheet() }
+        findViewById<View>(R.id.btnViewerHome).setOnClickListener { goHome() }
         findViewById<View>(R.id.btnViewerSettingsInfo).setOnClickListener {
             bumpChrome()
             ViewerSettingsSheet.show(this)
@@ -366,6 +378,7 @@ class ResultViewerActivity : AppCompatActivity() {
             showCustomScaleDialog()
         }
         inspect.wireTapHandling()
+        wireSummaryGestures()
 
         imgMain.post {
             inspect.refreshCrosshairs()
@@ -373,7 +386,7 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    /** Clears the back stack to Home. Used by the peek-sheet Home action. */
+    /** Clears the back stack to Home. Used by the top-bar Home action. */
     internal fun goHome() {
         val home = Intent(this, com.indicvision.semper.ui.home.HomeActivity::class.java)
         home.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -384,28 +397,40 @@ class ResultViewerActivity : AppCompatActivity() {
     /** Max / min (with coordinates) / mean for the info peek sheet. */
     internal fun detailStatsText(): String = detailStats.ifBlank { getString(R.string.stat_empty) }
 
-    /** Bring edge chrome back, then schedule auto-hide (Photos pattern). */
+    /** Bring edge chrome back, then schedule auto-hide. */
     internal fun bumpChrome() {
         fadeChrome(visible = true)
-        chromeOverlay.removeCallbacks(hideChromeRunnable)
-        chromeOverlay.postDelayed(hideChromeRunnable, chromeHideDelayMs)
+        chromeTop.removeCallbacks(hideChromeRunnable)
+        chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
+    }
+
+    internal fun hideChrome() {
+        chromeTop.removeCallbacks(hideChromeRunnable)
+        fadeChrome(visible = false)
+    }
+
+    internal fun toggleChrome() {
+        if (chromeVisible) hideChrome() else bumpChrome()
     }
 
     private fun fadeChrome(visible: Boolean) {
-        chromeOverlay.animate().cancel()
-        if (visible) {
-            chromeOverlay.visibility = View.VISIBLE
-            if (chromeOverlay.alpha < 0.99f) {
-                chromeOverlay.animate().alpha(1f).setDuration(180L).start()
+        chromeVisible = visible
+        listOf(chromeTop, chromeBottom).forEach { bar ->
+            bar.animate().cancel()
+            if (visible) {
+                bar.visibility = View.VISIBLE
+                if (bar.alpha < 0.99f) {
+                    bar.animate().alpha(1f).setDuration(180L).start()
+                } else {
+                    bar.alpha = 1f
+                }
             } else {
-                chromeOverlay.alpha = 1f
+                bar.animate()
+                    .alpha(0f)
+                    .setDuration(320L)
+                    .withEndAction { bar.visibility = View.INVISIBLE }
+                    .start()
             }
-        } else {
-            chromeOverlay.animate()
-                .alpha(0f)
-                .setDuration(320L)
-                .withEndAction { chromeOverlay.visibility = View.INVISIBLE }
-                .start()
         }
     }
 
@@ -457,9 +482,10 @@ class ResultViewerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::chromeOverlay.isInitialized) {
-            chromeOverlay.removeCallbacks(hideChromeRunnable)
-            chromeOverlay.animate().cancel()
+        if (::chromeTop.isInitialized) {
+            chromeTop.removeCallbacks(hideChromeRunnable)
+            chromeTop.animate().cancel()
+            chromeBottom.animate().cancel()
         }
         loadFrameJob?.cancel()
         visualizationJob?.cancel()
@@ -896,11 +922,20 @@ class ResultViewerActivity : AppCompatActivity() {
 
     // ── Summary slot ─────────────────────────────────────────────────────
 
+    private fun wireSummaryGestures() {
+        val gif = findViewById<TouchImageView>(R.id.imgSummary)
+        gif.onScrubListener = { stepFrame(it) }
+        gif.onCenterTapListener = { toggleChrome() }
+        gif.onChromeSwipeListener = { show -> if (show) bumpChrome() else hideChrome() }
+        gif.onTapListener = { _, _ -> bumpChrome() }
+    }
+
     private fun enterSummary() {
         showingSummary = true
         inspect.dismissProbe()
         summary.show()
         tvFrameCounter.text = summary.counterText()
+        layoutFrameJump.visibility = View.GONE
         tvFinding.text = getString(
             R.string.viewer_edge_title_fmt,
             currentTypeString,
@@ -913,6 +948,7 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun leaveSummary() {
         showingSummary = false
         summary.hide()
+        layoutFrameJump.visibility = View.VISIBLE
         updateNavButtons()
         // Re-apply the frame's own labels and heatmap after the summary's.
         requestFrameLoad(debounced = false)
