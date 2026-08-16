@@ -81,8 +81,14 @@ fixed, so a change in allocations is caused by the code and nothing else.
 `Semper.viewer.decodeDat` trace section.
 
 ```bash
-./gradlew :benchmark:connectedBenchmarkAndroidTest
+./gradlew :benchmark:connectedBenchmarkAndroidTest \
+  -P android.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
 ```
+
+CI's `tier-benchmark` job passes the same `suppressErrors` (plus
+`enabledRules=Macrobenchmark`) on an **API 30** emulator. Numbers are smoke, not
+a regression gate. `benchmark/build.gradle.kts` sets the same suppress list so a
+local emulator run matches CI.
 
 Two things that will otherwise cost you an afternoon:
 
@@ -118,7 +124,8 @@ Emulator (all instrumented):
 
 Macrobenchmark / Baseline Profile (`:benchmark` module — not part of default CI):
 ```bash
-./gradlew :benchmark:connectedBenchmarkAndroidTest
+./gradlew :benchmark:connectedBenchmarkAndroidTest \
+  -P android.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
 ```
 CI runs this only with the `benchmark` PR label or workflow_dispatch
 `run_benchmark`. Ship `app/src/main/baseline-prof.txt` + `profileinstaller`;

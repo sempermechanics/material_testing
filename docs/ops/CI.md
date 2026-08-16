@@ -39,7 +39,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest` | main push / labels | ~20–40 / ~60–90 min |
 | `tier4-backend` | ruff, shell-script parse, pip-audit, hashed-lock verification, pytest at `--cov-fail-under=75`, Firestore emulator suite | `backend` (PR); always on `main` push | ~5–10 min |
 | `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, R8 mapping artifact | main push / labels | ~15–40 / up to ~90 min |
-| `tier-benchmark` | Macrobenchmark cold/warm startup (`:benchmark`) | `benchmark` label / `run_benchmark` dispatch only | ~20–40 min |
+| `tier-benchmark` | Macrobenchmark cold/warm startup (`:benchmark`). Emulator **smoke**: `suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`; no numeric thresholds. API 30. | `benchmark` label / `run_benchmark` dispatch only | ~20–40 min |
 | `ci-ok` | Single required status check — every job above passed or was skipped | — | seconds |
 
 **There is no tier 2 here any more.** Host C++ builds, the DICe comparisons and
@@ -84,7 +84,8 @@ gitleaks detect --config .gitleaks.toml --log-opts="<base-sha>..HEAD"
 | `app` | `app/**` except `app/src/main/cpp/**`; `gradle/**`, `*.gradle.kts`, `gradlew`, `gradlew.bat`, `settings.gradle.kts` | tier 1 |
 | `native_core` | `native` (the gitlink itself) and `.gitmodules` | — see note |
 | `native_jni` | `native`, `.gitmodules`, `app/src/main/cpp/**`, `SemperNativeLib.kt` | tiers 3 + 5 on main / labels |
-| `backend` | `backend/**` | tier 4 |
+| `backend` | `backend/**`, `firestore.rules`, `firebase-hosting/**` | tier 4 |
+| `ci_workflow` | `.github/workflows/ci.yml` | sets `app` + `backend` so a workflow-only PR is not gates-only |
 | `full_ci` | `full-ci` label, or `workflow_dispatch` with `full_ci: true`, or **push to `main`** | all |
 
 Because the engine is a submodule, `native_core` and `native_jni` match the
@@ -107,10 +108,10 @@ Two further filters widen `app` rather than gating a job directly:
 
 † Also with the `e2e`, `release`, or `full-ci` label on the PR.
 
-Editing `.github/workflows/ci.yml` alone no longer forces the full matrix on a
-PR (that used to burn the monthly Actions budget). Empty path outputs fail
-**closed** to gates-only (`secret-scan` + `legal-pages` + `ci-ok`), not a full
-matrix.
+Editing `.github/workflows/ci.yml` on a PR runs Tier 1 and Tier 4 (the
+`ci_workflow` filter). Empty path outputs otherwise fail **closed** to gates-only
+(`secret-scan` + `legal-pages` + `ci-ok`), not a full matrix. Rules-only or
+Hosting-only PRs match `backend` so they cannot skip Tier 4.
 
 ### Dependabot cheap path
 
@@ -120,7 +121,7 @@ When `github.head_ref` starts with `dependabot/`:
 |------------------------------|-------|
 | `dependabot/pip/…` | gates + Tier 4 |
 | `dependabot/gradle/…` | gates + Tier 1 |
-| `dependabot/github_actions/…` | gates only |
+| `dependabot/github_actions/…` | gates only — deploy workflows are **not** exercised; read WIF / Cloud Run action inputs by hand before landing |
 
 Never Tier 3 / Tier 5 for Dependabot. Path filters use an explicit
 `base: pull_request.base.sha` so Dependabot's 403 on the PR Files API does not
@@ -273,5 +274,6 @@ blocked by them, which is the point.
 
 **A green backend tier means more than pytest.** Tier 4 also audits dependencies
 with pip-audit, proves `requirements.lock` resolves under `--require-hashes` on
-Python 3.12 and still covers every direct dependency, and runs the concurrency
-tests against a real Firestore emulator.
+Python 3.12, and checks that **versions** of every direct dep in
+`requirements.txt` match the lock (not just package names). Deploy's `test` job
+installs the lock the same way the image does.

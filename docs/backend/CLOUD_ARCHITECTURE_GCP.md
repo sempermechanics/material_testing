@@ -195,7 +195,7 @@ sequenceDiagram
 **One-user-one-device binding.** `devices/{deviceId}.uid` is unique per active
 device. Re-registering the *same* `deviceId` for its owner is idempotent — it refreshes
 the stored public key and returns `201` with `healed: true` (see
-`register_device` in `main.py`). Registering a *different* second device for a
+`register_device` in `backend/app/routers/devices.py`). Registering a *different* second device for a
 `uid` that already has one returns `409 device_conflict`; moving to genuinely
 new hardware means an admin revokes the prior device first. (There is no
 `:rebind` endpoint — that was a design idea, not something implemented.)
@@ -302,7 +302,7 @@ retry/offline.
 **Integrity.** At `:complete` the backend asks Drive for the object's real
 `size`/`md5Checksum` and rejects a mismatch with `422` (`size_mismatch` /
 `checksum_mismatch`), leaving the file `PENDING` rather than marking it
-`COMPLETED` — see `complete_file` in `main.py`. It does **not** currently mark
+`COMPLETED` — see `complete_file` in `backend/app/routers/files.py`. It does **not** currently mark
 `FAILED`, delete the Drive object, or auto-re-enqueue; the client retries the
 completion. Whenever Drive reports an `md5Checksum` (always for our binary
 blobs), the client **must** supply a matching `md5`; omitting it is treated as
@@ -472,7 +472,9 @@ the way it does.
 
 | Concern | File | Notes |
 |---|---|---|
-| FastAPI app, routes | [`backend/app/main.py`](../../backend/app/main.py) | All `/v1/*` endpoints |
+| FastAPI app, middleware, lifespan | [`backend/app/main.py`](../../backend/app/main.py) | App factory; includes routers below |
+| Routes by prefix | [`backend/app/routers/`](../../backend/app/routers/) | `health`, `account`, `devices`, `sessions`, `files`, `provision_tasks`, `admin` |
+| Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
 | Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check, `device_or_legacy_reader` (§4) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
 | Drive folders, resumable init, blob probe | [`backend/app/drive.py`](../../backend/app/drive.py) | Returns the opaque upload URI, and `ALIVE`/`MISSING`/`UNKNOWN` (§4) |
@@ -486,7 +488,7 @@ the way it does.
 | Audit trail | [`backend/app/audit.py`](../../backend/app/audit.py) | |
 | Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `REQUIRE_ATTESTED_UPLOADS`, `TASKS_*` |
 | Schema migrations | [`backend/scripts/migrate_schema.py`](../../backend/scripts/migrate_schema.py) | Versioned steps in `backend/scripts/migrations/` — see [FIRESTORE_SCHEMA_RUNBOOK.md](FIRESTORE_SCHEMA_RUNBOOK.md) |
-| Container | [`backend/Dockerfile`](../../backend/Dockerfile) | Installs from `requirements.lock` with `--require-hashes` |
+| Container | [`backend/Dockerfile`](../../backend/Dockerfile) | Installs from `requirements.lock` with `--require-hashes`. `requirements.txt` is the pin list; lock versions of direct deps must match txt. |
 | API Gateway spec | [`backend/gateway/openapi.yaml`](../../backend/gateway/openapi.yaml) | Covers all current routes; `__CLOUD_RUN_URL__` is substituted at deploy |
 
 **Cursor validation.** Every paginated listing takes a `pageToken`, which becomes

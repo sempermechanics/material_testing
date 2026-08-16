@@ -154,16 +154,17 @@ version bump is two files, in this order:
 ```bash
 cd backend
 # 1. Edit requirements.txt (the direct dependency you actually want to move).
-# 2. Regenerate the hashed lock from it.
+# 2. Regenerate the hashed lock from it on Python 3.12 (CI and Cloud Run runtime).
+#    Do not compile the lock on 3.13 — the header and markers must match runtime.
 pip install pip-tools
 pip-compile --generate-hashes --output-file requirements.lock requirements.txt
 ```
 
 CI tier 4 then proves the lock resolves under `--require-hashes` on Python 3.12
-*and* still covers every direct dependency, so a stale or hand-edited lock fails
-in CI rather than in the Cloud Build step of a deploy. Never edit
-`requirements.lock` by hand — the hashes will not match and the image will fail
-to build.
+*and* that every direct dependency's **version** matches `requirements.txt`, so a
+stale or hand-edited lock fails in CI rather than in the Cloud Build step of a
+deploy. Never edit `requirements.lock` by hand — the hashes will not match and
+the image will fail to build. Never bump txt without regenerating the lock.
 
 ### Local gate before triggering release
 
