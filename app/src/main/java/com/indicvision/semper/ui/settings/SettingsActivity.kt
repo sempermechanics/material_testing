@@ -41,6 +41,8 @@ import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.ui.auth.AuthActivity
 import com.indicvision.semper.ui.common.AuthRoute
+import com.indicvision.semper.ui.common.CrispToast
+import com.indicvision.semper.ui.common.DeleteChoiceDialog
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.TransferBannerController
 import com.indicvision.semper.ui.home.SessionOpenHelper
@@ -535,11 +537,11 @@ class SettingsActivity : AppCompatActivity() {
                                 syncDownloadingKeys()
                                 val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR)
                                     ?: getString(R.string.restore_failed_generic)
-                                Snackbar.make(
-                                    findViewById(android.R.id.content),
+                                CrispToast.show(
+                                    this@SettingsActivity,
                                     getString(R.string.restore_failed_fmt, reason),
-                                    Snackbar.LENGTH_LONG,
-                                ).show()
+                                    long = true,
+                                )
                             }
                         }
                         WorkInfo.State.SUCCEEDED -> {
@@ -693,19 +695,16 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showDeleteBackupChoice(record: SessionRecord, cloud: CloudSessionDto, row: View) {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.cloud_delete_backup_title)
-            .setMessage(R.string.cloud_delete_backup_body)
-            // Addressed by backend id: this row only exists because the cloud
-            // listed that backup, so no lookup is needed.
-            .setPositiveButton(R.string.cloud_delete_backup_only) { _, _ ->
-                scheduleDelete(row, cloud.sessionId, record.id, alsoLocal = false)
-            }
-            .setNeutralButton(R.string.cloud_delete_backup_and_local) { _, _ ->
-                scheduleDelete(row, cloud.sessionId, record.id, alsoLocal = true)
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
+        DeleteChoiceDialog.show(
+            activity = this,
+            title = getString(R.string.cloud_delete_backup_title),
+            message = getString(R.string.cloud_delete_backup_body),
+            leftLabel = getString(R.string.cloud_delete_backup_only),
+            midLabel = getString(R.string.cloud_delete_backup_and_local),
+            rightLabel = getString(R.string.action_cancel),
+            onLeft = { scheduleDelete(row, cloud.sessionId, record.id, alsoLocal = false) },
+            onMid = { scheduleDelete(row, cloud.sessionId, record.id, alsoLocal = true) },
+        )
     }
 
     /**
@@ -733,7 +732,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     internal fun toast(message: String) =
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        CrispToast.show(this, message, long = true)
 
     /** Opens a https URL in the browser; toast if nothing can handle it. */
     internal fun openExternalUrl(url: String) {

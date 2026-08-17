@@ -24,7 +24,6 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
@@ -40,6 +39,7 @@ import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.common.CoachMarkController
+import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.limit.SessionLimitActivity
@@ -157,7 +157,7 @@ class HomeActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
         findViewById<View>(R.id.btnEmptyRestore).setOnClickListener {
-            findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
+            fab.performClick()
         }
 
         // Consent first, then the coach mark — two overlays at once is noise, and
@@ -301,11 +301,11 @@ class HomeActivity : AppCompatActivity() {
                             if (!shownRestoreOutcomes.add(info.id)) return@forEach
                             val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR)
                                 ?: getString(R.string.restore_failed_generic)
-                            Snackbar.make(
-                                findViewById(R.id.homeRoot),
+                            CrispToast.show(
+                                this@HomeActivity,
                                 getString(R.string.restore_failed_fmt, reason),
-                                Snackbar.LENGTH_LONG,
-                            ).show()
+                                long = true,
+                            )
                             refresh()
                         }
                         WorkInfo.State.CANCELLED -> {
@@ -327,11 +327,11 @@ class HomeActivity : AppCompatActivity() {
      * The badge remains the place to deliberately re-attempt (see [retryOrBackup]).
      */
     private fun showUploadFailure(reason: String) {
-        Snackbar.make(
-            findViewById(R.id.homeRoot),
+        CrispToast.show(
+            this,
             getString(R.string.cloud_backup_failed_fmt, reason),
-            Snackbar.LENGTH_LONG,
-        ).show()
+            long = true,
+        )
     }
 
     override fun onResume() {
@@ -595,11 +595,7 @@ class HomeActivity : AppCompatActivity() {
     }.getOrNull()
 
     private fun showDeviceOnlyKeptSnackbar() {
-        Snackbar.make(
-            findViewById(R.id.homeRoot),
-            R.string.delete_device_only_done,
-            Snackbar.LENGTH_LONG,
-        ).show()
+        CrispToast.show(this, getString(R.string.delete_device_only_done), long = true)
     }
 
     private fun positionFabAtEightTenths() {

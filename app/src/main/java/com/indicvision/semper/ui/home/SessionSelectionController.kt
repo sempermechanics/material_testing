@@ -19,6 +19,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.ui.common.DeleteChoiceDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -154,15 +155,21 @@ class SessionSelectionController(
 
         when {
             allHaveLocal && allHaveCloud -> {
-                dialog.setMessage(
-                    activity.getString(R.string.delete_confirm_body_cloud_multi, records.size),
+                DeleteChoiceDialog.show(
+                    activity = activity,
+                    title = activity.resources.getQuantityString(
+                        R.plurals.delete_confirm_title_multi,
+                        records.size,
+                        records.size,
+                    ),
+                    message = activity.getString(R.string.delete_confirm_body_cloud_multi, records.size),
+                    leftLabel = activity.getString(R.string.delete_device_only),
+                    midLabel = activity.getString(R.string.delete_cloud_backup),
+                    rightLabel = activity.getString(R.string.action_cancel),
+                    onLeft = { eraseSelected(records, cloudToo = false) },
+                    onMid = { eraseCloudBackups(records) },
                 )
-                    .setPositiveButton(R.string.delete_cloud_backup) { _, _ ->
-                        eraseCloudBackups(records)
-                    }
-                    .setNeutralButton(R.string.delete_device_only) { _, _ ->
-                        eraseSelected(records, cloudToo = false)
-                    }
+                return
             }
             allHaveLocal && !anyCloud -> {
                 dialog.setMessage(R.string.delete_confirm_body_local_multi)
@@ -218,13 +225,16 @@ class SessionSelectionController(
 
         when {
             hasLocal && hasCloud -> {
-                MaterialAlertDialogBuilder(activity)
-                    .setTitle(R.string.delete_confirm_title)
-                    .setMessage(R.string.delete_confirm_body_cloud)
-                    .setPositiveButton(R.string.delete_cloud_backup) { _, _ -> eraseCloudBackup(record) }
-                    .setNeutralButton(R.string.delete_device_only) { _, _ -> eraseDeviceOnly(record) }
-                    .setNegativeButton(R.string.action_cancel, null)
-                    .show()
+                DeleteChoiceDialog.show(
+                    activity = activity,
+                    title = activity.getString(R.string.delete_confirm_title),
+                    message = activity.getString(R.string.delete_confirm_body_cloud),
+                    leftLabel = activity.getString(R.string.delete_device_only),
+                    midLabel = activity.getString(R.string.delete_cloud_backup),
+                    rightLabel = activity.getString(R.string.action_cancel),
+                    onLeft = { eraseDeviceOnly(record) },
+                    onMid = { eraseCloudBackup(record) },
+                )
             }
             !hasLocal && hasCloud -> {
                 MaterialAlertDialogBuilder(activity)

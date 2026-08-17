@@ -19,6 +19,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.os.Bundle
 import android.os.Trace
@@ -45,6 +46,7 @@ import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
 import com.indicvision.semper.report.VisualizationEngine
+import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -227,6 +229,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         imgMain = findViewById(R.id.imgBaseResult)
         imgHeatmap = findViewById(R.id.imgHeatmapOverlay)
+        imgHeatmap.setOnTouchListener { _, event -> imgMain.dispatchTouchEvent(event) }
 
         btnPrevFrame = findViewById(R.id.btnPrevFrame)
         btnNextFrame = findViewById(R.id.btnNextFrame)
@@ -284,6 +287,14 @@ class ResultViewerActivity : AppCompatActivity() {
         roiH = intent.getIntExtra(DicKeys.ROI_H, imgH)
 
         val refPath = intent.getStringExtra(DicKeys.REF_PATH)
+        if ((imgW <= 0 || imgH <= 0) && refPath != null) {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(refPath, bounds)
+            if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                imgW = bounds.outWidth
+                imgH = bounds.outHeight
+            }
+        }
         // True sensor dims stay on the intent for math / probe / export; the
         // on-screen bitmap is decoded off-main at ImageView scale.
         imgMain.setTrueImageDimensions(imgW, imgH)
@@ -321,17 +332,15 @@ class ResultViewerActivity : AppCompatActivity() {
             loadFrameData(currentFrameIndex)
             // Whole-sequence ranges still feed the summary GIF / share animations.
             if (batchFiles.size > 1) summary.start()
-            if (showingSummary) summary.show()
-            if (showingSummary) layoutFrameJump.visibility = View.GONE
-            updateNavButtons()
-            bumpChrome()
+            if (showingSummary) {
+                enterSummary()
+            } else {
+                updateNavButtons()
+                bumpChrome()
+            }
         } else {
             showingSummary = false
-            com.google.android.material.snackbar.Snackbar.make(
-                findViewById(android.R.id.content),
-                R.string.no_batch_data,
-                com.google.android.material.snackbar.Snackbar.LENGTH_LONG,
-            ).show()
+            CrispToast.show(this, getString(R.string.no_batch_data), long = true)
         }
 
         btnPrevFrame.setOnClickListener {
@@ -811,6 +820,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun showHeatmap(heatmap: Bitmap, actualMin: Float, actualMax: Float, index: Int) {
         cachedHeatmap = heatmap
+        imgHeatmap.scaleType = ImageView.ScaleType.MATRIX
         imgHeatmap.setImageBitmap(heatmap)
         applyHeatmapMatrix()
 

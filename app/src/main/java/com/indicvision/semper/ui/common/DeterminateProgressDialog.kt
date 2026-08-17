@@ -8,6 +8,7 @@ import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.indicvision.semper.R
@@ -39,32 +40,26 @@ class DeterminateProgressDialog(
 
     private var cancelledByButton = false
 
+    private val content = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER_VERTICAL
+        val pad = (activity.resources.displayMetrics.density * 24).toInt()
+        setPadding(pad, pad, pad, pad)
+        addView(label)
+        addView(
+            bar,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = pad / 2 },
+        )
+    }
+
     private val dialog = MaterialAlertDialogBuilder(activity)
         .setTitle(title)
-        .setView(
-            LinearLayout(activity).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_VERTICAL
-                val pad = (activity.resources.displayMetrics.density * 24).toInt()
-                setPadding(pad, pad, pad, pad)
-                addView(label)
-                addView(
-                    bar,
-                    LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                    ).apply { topMargin = pad / 2 },
-                )
-            },
-        )
+        .setView(content)
         .setCancelable(onCancel != null || onBackground != null)
         .apply {
-            if (onCancel != null) {
-                setNegativeButton(R.string.action_cancel) { _, _ ->
-                    cancelledByButton = true
-                    onCancel.invoke()
-                }
-            }
             if (onBackground != null) {
                 setOnCancelListener {
                     if (!cancelledByButton) onBackground.invoke()
@@ -72,6 +67,29 @@ class DeterminateProgressDialog(
             }
         }
         .create()
+
+    init {
+        if (onCancel != null) {
+            val pad = (activity.resources.displayMetrics.density * 24).toInt()
+            content.addView(
+                MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                    setText(R.string.action_cancel)
+                    setOnClickListener {
+                        cancelledByButton = true
+                        onCancel.invoke()
+                        dialog.dismiss()
+                    }
+                },
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    topMargin = pad / 2
+                    gravity = Gravity.END
+                },
+            )
+        }
+    }
 
     val isShowing: Boolean get() = dialog.isShowing
 

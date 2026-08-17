@@ -6,7 +6,6 @@ package com.indicvision.semper.ui.auth
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -14,15 +13,14 @@ import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.graphics.toColorInt
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -485,11 +483,8 @@ class AuthActivity : AppCompatActivity() {
         tvEmailLink.isEnabled = !loading
     }
 
-    private fun showSnackbar(message: String, isError: Boolean) {
-        val snackbar = Snackbar.make(findViewById(android.R.id.content), message, Snackbar.LENGTH_LONG)
-        snackbar.setBackgroundTint(if (isError) "#D32F2F".toColorInt() else "#388E3C".toColorInt())
-        snackbar.setTextColor(Color.WHITE)
-        snackbar.show()
+    private fun showSnackbar(message: String, @Suppress("UNUSED_PARAMETER") isError: Boolean) {
+        CrispToast.show(this, message, long = true)
     }
 
     companion object {

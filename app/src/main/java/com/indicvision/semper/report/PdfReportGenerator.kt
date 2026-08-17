@@ -13,6 +13,7 @@ import android.graphics.pdf.PdfDocument
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.indicvision.semper.R
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -98,6 +99,8 @@ object PdfReportGenerator {
             layout.finishCurrentPage()
             pdfDocument.writeTo(outputStream)
             emit(Progress.Complete)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(Progress.Error(e))
         } finally {
@@ -133,6 +136,8 @@ object PdfReportGenerator {
             pdfDocument.writeTo(outputStream)
 
             emit(Progress.Complete)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(Progress.Error(e))
         } finally {
