@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Field pill ink, matched to field_pill_bg's polarity. The unchecked entry MUST
+     stay theme-adaptive: a fixed white (as before) is invisible on the light theme's
+     white frost. viewer_chrome_text already flips dark/white per theme. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="#FF111111" android:state_checked="true" />
-    <item android:color="#FFFFFFFF" />
+    <item android:color="@color/viewer_pill_on_text" android:state_checked="true" />
+    <item android:color="@color/viewer_chrome_text" />
 </selector>
