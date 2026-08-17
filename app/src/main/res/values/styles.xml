@@ -167,12 +167,14 @@
         <item name="bottomSheetStyle">@style/Widget.Semper.ViewerPeekSheet</item>
         <item name="android:colorBackground">@android:color/transparent</item>
         <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@color/viewer_peek_scrim</item>
         <item name="colorOnSurface">@color/viewer_peek_text</item>
-        <!-- The sheet tints the nav bar with its own scrim, which is light in the
-             light theme — so the nav icons have to flip with it. Reuses the same
-             bool the app already flips in values-night for the system bars. -->
-        <item name="android:windowLightNavigationBar">@bool/light_system_bars</item>
+        <!-- Deliberately does NOT tint the navigation bar. 19e5209 could set it to
+             viewer_peek_scrim because that scrim was always dark, so the system's
+             white nav icons stayed legible. This scrim is now light in the light
+             theme, and the matching android:windowLightNavigationBar needs API 27
+             while minSdk is 24 — on 24-26 that would leave white icons on a white
+             bar. Inheriting the activity's own (already correct) system-bar
+             handling avoids the whole problem on every API level. -->
     </style>
 
     <!-- Segmented chips on the dark ROI draw toolbar -->
