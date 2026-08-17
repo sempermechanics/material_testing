@@ -143,7 +143,7 @@ class HomeActivity : AppCompatActivity() {
         list.layoutManager = LinearLayoutManager(this)
 
         fab = findViewById(R.id.fabNewAnalysis)
-        positionFabAtThreeQuarters()
+        positionFabAtEightTenths()
         fab.setOnClickListener {
             // At the account's analysis limit, block new work behind the persistent
             // limit screen (email support) instead of letting it fail on upload.
@@ -602,14 +602,14 @@ class HomeActivity : AppCompatActivity() {
         ).show()
     }
 
-    private fun positionFabAtThreeQuarters() {
+    private fun positionFabAtEightTenths() {
         val root = findViewById<View>(R.id.homeRoot)
         root.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
             if (fab.width == 0 || view.width == 0) return@addOnLayoutChangeListener
             val params = fab.layoutParams as CoordinatorLayout.LayoutParams
             params.gravity = Gravity.TOP or Gravity.START
             params.leftMargin = (view.width * 3 / 4) - fab.width / 2
-            params.topMargin = (view.height * 3 / 4) - fab.height / 2
+            params.topMargin = (view.height * 8 / 10) - fab.height / 2
             fab.layoutParams = params
         }
     }

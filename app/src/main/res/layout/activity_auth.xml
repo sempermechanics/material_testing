@@ -18,14 +18,15 @@
 
         <!-- Brand -->
         <ImageView
-            android:layout_width="96dp"
-            android:layout_height="96dp"
+            android:layout_width="220dp"
+            android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="12dp"
+            android:adjustViewBounds="true"
             android:contentDescription="@string/app_name"
             android:forceDarkAllowed="false"
             android:scaleType="fitCenter"
-            android:src="@drawable/semper_mark_s" />
+            android:src="@drawable/semper_wordmark" />
 
         <TextView
             android:id="@+id/tvSubtitle"

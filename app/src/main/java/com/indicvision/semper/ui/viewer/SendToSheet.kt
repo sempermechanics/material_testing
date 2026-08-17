@@ -22,22 +22,38 @@ import java.io.File
 object SendToSheet {
 
     fun show(activity: Activity, file: File, mime: String) {
+        showChooser(
+            activity,
+            onSave = { activity.startActivity(SaveExportActivity.intent(activity, file, mime)) },
+            onShare = { activity.startActivity(shareChooser(activity, file, mime)) },
+        )
+    }
+
+    /**
+     * Same Save / Share rows, but the caller owns what happens next — used so
+     * slow exports can pick a folder before generating.
+     */
+    fun showChooser(
+        activity: Activity,
+        onSave: () -> Unit,
+        onShare: () -> Unit,
+    ) {
         val sheet = BottomSheetDialog(activity)
         val v = activity.layoutInflater.inflate(R.layout.sheet_send_to, null)
         sheet.setContentView(v)
 
         v.findViewById<View>(R.id.rowSendSave).setOnClickListener {
             sheet.dismiss()
-            activity.startActivity(SaveExportActivity.intent(activity, file, mime))
+            onSave()
         }
         v.findViewById<View>(R.id.rowSendShare).setOnClickListener {
             sheet.dismiss()
-            activity.startActivity(shareChooser(activity, file, mime))
+            onShare()
         }
         sheet.show()
     }
 
-    private fun shareChooser(activity: Activity, file: File, mime: String): Intent {
+    fun shareChooser(activity: Activity, file: File, mime: String): Intent {
         val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", file)
         val send = Intent(Intent.ACTION_SEND).apply {
             type = mime
