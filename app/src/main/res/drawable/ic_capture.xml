@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Camera body + lens, with a video chevron on the right. -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M3,7h11c1.1,0 2,0.9 2,2v6c0,1.1 -0.9,2 -2,2H3c-1.1,0 -2,-0.9 -2,-2V9c0,-1.1 0.9,-2 2,-2zM8.5,15.25c1.52,0 2.75,-1.23 2.75,-2.75S10.02,9.75 8.5,9.75 5.75,10.98 5.75,12.5 6.98,15.25 8.5,15.25z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M17,9.5l6,-4v13l-6,-4z" />
+</vector>

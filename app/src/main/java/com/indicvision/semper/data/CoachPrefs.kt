@@ -13,6 +13,8 @@ object CoachPrefs {
     private const val KEY_ANALYSIS_SETTINGS = "coach_analysis_settings_seen"
     private const val KEY_ANALYSIS_SWEEP = "coach_analysis_sweep_seen"
     private const val KEY_SWEEP_LATTICE = "coach_sweep_lattice_seen"
+    private const val KEY_MEDIA_PICKER_REF = "coach_media_picker_ref_seen"
+    private const val KEY_MEDIA_PICKER_DEF = "coach_media_picker_def_seen"
 
     enum class Screen {
         HOME,
@@ -22,6 +24,8 @@ object CoachPrefs {
 
         /** The result lattice, where the swept graph is real rather than a preview. */
         SWEEP_LATTICE,
+        MEDIA_PICKER_REF,
+        MEDIA_PICKER_DEF,
     }
 
     private fun prefs(context: Context): SharedPreferences =
@@ -33,6 +37,8 @@ object CoachPrefs {
         Screen.ANALYSIS_SETTINGS -> KEY_ANALYSIS_SETTINGS
         Screen.ANALYSIS_SWEEP -> KEY_ANALYSIS_SWEEP
         Screen.SWEEP_LATTICE -> KEY_SWEEP_LATTICE
+        Screen.MEDIA_PICKER_REF -> KEY_MEDIA_PICKER_REF
+        Screen.MEDIA_PICKER_DEF -> KEY_MEDIA_PICKER_DEF
     }
 
     fun hasSeen(context: Context, screen: Screen): Boolean =

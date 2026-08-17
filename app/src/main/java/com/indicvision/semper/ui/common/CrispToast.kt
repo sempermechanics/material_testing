@@ -14,10 +14,16 @@ import com.indicvision.semper.R
  */
 object CrispToast {
 
-    fun show(context: Context, message: CharSequence, long: Boolean = false) {
+    fun show(
+        context: Context,
+        message: CharSequence,
+        long: Boolean = false,
+        overlayRoot: ViewGroup? = null,
+        fromTop: Boolean = false,
+    ) {
         val activity = context as? Activity
         if (activity == null || activity.isFinishing) return
-        val root = activity.findViewById<ViewGroup>(android.R.id.content) ?: return
+        val root = overlayRoot ?: activity.findViewById(android.R.id.content) ?: return
         val existing = root.findViewWithTag<android.view.View>(TAG)
         if (existing != null) root.removeView(existing)
         val pill = activity.layoutInflater.inflate(R.layout.toast_crisp, root, false)

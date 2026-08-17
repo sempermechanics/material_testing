@@ -956,8 +956,9 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
   disabled there, unlike the result lattice.
 - **`DicUploadWorker` starts the Session limit screen from the background** on a
   quota rejection, which Android 10+ blocks — that path likely never fires.
-- **`READ_MEDIA_IMAGES` is declared but never requested.** All media access goes
-  through the system picker and SAF, so no runtime permission UI exists at all.
+- **`READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested** when the in-sheet
+  Images tab opens (Home also asks for video). Browse still uses SAF, so Drive
+  and DNG work without that grant.
 - **The only notification channel is for transfers** — `TransferNotifications`
   creates one channel and upload/restore workers post a foreground notification
   on it. There are no *completion* notifications; terminal failures surface in-app

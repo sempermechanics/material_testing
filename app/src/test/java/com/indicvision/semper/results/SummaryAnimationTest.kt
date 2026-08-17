@@ -76,6 +76,21 @@ class SummaryAnimationTest {
         assertEquals(SummaryAnimation.PREFERRED_CENTIS, SummaryAnimation.delayCentis(0))
     }
 
+    @Test
+    fun `gif cache filename includes the canvas colour`() {
+        val anim = SummaryAnimation(
+            SummaryAnimation.Spec(
+                batchFiles = emptyList(),
+                imgW = 1,
+                imgH = 1,
+                stepAt = { 1 },
+                outputDir = temp.root,
+                backgroundColor = 0xFFF4F9FC.toInt(),
+            ),
+        )
+        assertEquals("U_animation_FFF4F9FC.gif", anim.fileFor("U").name)
+    }
+
     // ── globalRanges ─────────────────────────────────────────────────────
 
     @Test

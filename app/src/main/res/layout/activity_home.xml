@@ -209,5 +209,5 @@
         android:layout_height="wrap_content"
         android:layout_gravity="top|start"
         android:contentDescription="@string/home_new_analysis"
-        android:src="@drawable/ic_add" />
+        android:src="@drawable/ic_capture" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
