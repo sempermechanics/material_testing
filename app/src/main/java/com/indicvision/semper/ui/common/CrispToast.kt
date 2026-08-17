@@ -33,14 +33,10 @@ object CrispToast {
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT,
         ).apply {
-            gravity = if (fromTop) {
-                Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            } else {
-                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            }
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             val m = (PAD_DP * activity.resources.displayMetrics.density).toInt()
-            val edge = (EDGE_DP * activity.resources.displayMetrics.density).toInt()
-            if (fromTop) setMargins(m, edge, m, m) else setMargins(m, m, m, edge)
+            val bottom = (EDGE_DP * activity.resources.displayMetrics.density).toInt()
+            setMargins(m, m, m, bottom)
         }
         root.addView(pill, lp)
         val duration = if (long) LONG_MS else SHORT_MS

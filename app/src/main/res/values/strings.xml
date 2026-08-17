@@ -532,7 +532,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="use_full_image">Use full image</string>
     <string name="region_of_interest">Region of interest</string>
     <string name="jpeg_warning_inline">JPEG detected, use lossless formats (eg. PNG, TIFF) to improve accuracy</string>
-    <string name="subset_low_texture_fmt">Speckle contrast is low, consider using a larger subset or selecting a small RoI</string>
+    <string name="subset_low_texture_fmt">Speckle contrast is low, consider using a large subset or selecting a small RoI</string>
     <string name="next_reason_ref">add a reference image to continue</string>
     <string name="next_reason_def">add at least one deformed frame to continue</string>
     <string name="run_analysis">Compute</string>
@@ -604,7 +604,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="share_photo">Single Field</string>
     <string name="share_photo_sub_fmt">%1$s field, %2$s</string>
     <string name="share_all_photos">All fields</string>
-    <string name="share_all_photos_sub">U V Exx Eyy Exy · 5 images</string>
+    <plurals name="share_all_photos_sub_fmt">
+        <item quantity="one">1 field of %2$s</item>
+        <item quantity="other">%1$d fields of %2$s</item>
+    </plurals>
     <string name="share_pdf">PDF report</string>
     
     <string name="share_csv">CSV data</string>

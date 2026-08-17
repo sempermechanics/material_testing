@@ -1,5 +1,7 @@
 package com.indicvision.semper.ui.common
 
+import android.app.Activity
+import android.os.Looper
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
@@ -45,25 +47,31 @@ class TransferBannerController(
     }
 
     fun upsert(transfer: Transfer) {
-        val isNew = transfer.id !in transfers
-        transfers[transfer.id] = transfer
-        if (isNew) pageIndex = transfers.size - 1
-        render()
+        onMain {
+            val isNew = transfer.id !in transfers
+            transfers[transfer.id] = transfer
+            if (isNew) pageIndex = transfers.size - 1
+            render()
+        }
     }
 
     fun updateProgress(id: String, percent: Int, status: String? = null) {
-        val existing = transfers[id] ?: return
-        transfers[id] = existing.copy(
-            percent = percent.coerceIn(0, PERCENT_MAX),
-            status = status ?: existing.status,
-        )
-        render()
+        onMain {
+            val existing = transfers[id] ?: return@onMain
+            transfers[id] = existing.copy(
+                percent = percent.coerceIn(0, PERCENT_MAX),
+                status = status ?: existing.status,
+            )
+            render()
+        }
     }
 
     fun remove(id: String) {
-        if (transfers.remove(id) == null) return
-        if (pageIndex >= transfers.size) pageIndex = (transfers.size - 1).coerceAtLeast(0)
-        render()
+        onMain {
+            if (transfers.remove(id) == null) return@onMain
+            if (pageIndex >= transfers.size) pageIndex = (transfers.size - 1).coerceAtLeast(0)
+            render()
+        }
     }
 
     fun contains(id: String): Boolean = id in transfers
@@ -109,6 +117,20 @@ class TransferBannerController(
             statusView.text = item.status.ifBlank {
                 root.context.getString(R.string.transfer_banner_percent, item.percent)
             }
+        }
+    }
+
+    /** Share jobs report progress off the main thread; hop UI writes here. */
+    private fun onMain(block: () -> Unit) {
+        val activity = root.context as? Activity
+        if (activity != null) {
+            activity.runOnUiThread(block)
+            return
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            block()
+        } else {
+            root.post(block)
         }
     }
 
