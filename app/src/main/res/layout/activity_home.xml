@@ -172,7 +172,8 @@
             android:layout_height="72dp"
             android:layout_marginBottom="12dp"
             android:contentDescription="@string/app_name_short"
-            android:src="@mipmap/ic_semper_launcher" />
+            android:forceDarkAllowed="false"
+            android:src="@drawable/semper_mark_s" />
 
         <TextView
             android:layout_width="wrap_content"
