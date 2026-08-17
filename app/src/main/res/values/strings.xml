@@ -212,15 +212,15 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="selection_selected_desc">Selected</string>
     
     <string name="delete_confirm_body_local_multi">Permanently removes them from your phone. This can\'t be undone.</string>
-    <string name="delete_confirm_body_cloud_multi">%1$d of these are backed up. Delete cloud backup removes only the cloud copies (phone copies stay). Device only removes phone copies (cloud backups stay — tap a row to re-download).</string>
+    <string name="delete_confirm_body_cloud_multi">%1$d of these are backed up. Delete cloud: Removes only the cloud copies (phone copies stay). Delete device: Only removes phone copies (cloud backups stay — tap a row to re-download).</string>
 
     <string name="delete_confirm_title">Delete this analysis?</string>
     <string name="delete_confirm_body_local">Permanently removes this analysis from your phone. This can\'t be undone.</string>
-    <string name="delete_confirm_body_cloud">Choose what to remove.\n\nDelete cloud backup removes the cloud copy and keeps this phone\'s copy (marked Not backed up).\n\nDevice only removes the phone copy and keeps the cloud backup — tap the row later to download it again.</string>
+    <string name="delete_confirm_body_cloud">Choose what to remove.\n\nDelete cloud removes the cloud copy and keeps this phone\'s copy.\n\nDelete device removes the phone copy and keeps the cloud backup.</string>
     <string name="delete_confirm_body_cloud_only">Permanently erases this analysis from cloud storage and removes it from this list. This can\'t be undone.</string>
-    <string name="delete_cloud_backup">Delete cloud backup</string>
+    <string name="delete_cloud_backup">Delete cloud</string>
     <string name="delete_everywhere">Delete everywhere</string>
-    <string name="delete_device_only">Device only</string>
+    <string name="delete_device_only">Delete device</string>
     <string name="delete_everywhere_done">Analysis erased from this device and the cloud.</string>
     <string name="delete_device_only_done">Removed from this phone. Tap the row to download from the cloud.</string>
     <string name="delete_cloud_failed">Couldn\'t reach the cloud, so nothing was deleted. Check your connection and try again.</string>
@@ -349,7 +349,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_delete_backup">Delete from backup</string>
     <string name="cloud_delete_backup_title">Delete from backup</string>
     <string name="cloud_delete_backup_body">Choose what to remove for this analysis.\n\nDeleting the cloud backup is permanent — the raw images, results and report are erased from the cloud and cannot be recovered.</string>
-    <string name="cloud_delete_backup_only">Delete cloud backup only</string>
+    <string name="cloud_delete_backup_only">Delete cloud backup</string>
     <string name="cloud_delete_backup_and_local">Delete local + cloud</string>
     <string name="cloud_delete_backup_done">Cloud backup deleted.</string>
     <string name="cloud_delete_backup_failed">Couldn\'t delete from cloud. Try again.</string>
@@ -550,7 +550,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="coach_skip">Skip</string>
     <string name="coach_next">Next</string>
     <string name="coach_done">Got it</string>
-    <string name="coach_home_fab">Start a new analysis from here — pick a reference photo or a video of the deformation.</string>
+    <string name="coach_home_fab">Pick a reference photo or a video</string>
     <string name="coach_analysis_ref">The reference image can be changed at any time.</string>
     <string name="coach_analysis_def">Add deformed frames next. When you pick several, you can sort by name, date, or drag.</string>
     <string name="coach_analysis_mode">Single solve or parameter sweep?</string>
