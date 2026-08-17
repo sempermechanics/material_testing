@@ -78,4 +78,19 @@ class TransferBannerControllerTest {
         assertFalse(controller.contains("a"))
         assertTrue(controller.contains("b"))
     }
+
+    @Test
+    fun `progress from a worker thread updates on the main thread`() {
+        controller.upsert(TransferBannerController.Transfer(id = "a", title = "A", percent = 1))
+        val worker = Thread {
+            controller.updateProgress("a", 50, "halfway")
+        }
+        worker.start()
+        worker.join()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(
+            "halfway",
+            root.findViewById<TextView>(R.id.tvTransferStatus).text.toString(),
+        )
+    }
 }

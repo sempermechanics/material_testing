@@ -104,6 +104,7 @@ object PdfReportGenerator {
         } catch (e: Exception) {
             emit(Progress.Error(e))
         } finally {
+            layout.finishCurrentPage()
             pdfDocument.close()
             recycleLogo(brandLogo)
         }

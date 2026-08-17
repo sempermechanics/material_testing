@@ -28,8 +28,8 @@ object CrispToast {
             FrameLayout.LayoutParams.WRAP_CONTENT,
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            val m = (12 * activity.resources.displayMetrics.density).toInt()
-            val bottom = (72 * activity.resources.displayMetrics.density).toInt()
+            val m = (PAD_DP * activity.resources.displayMetrics.density).toInt()
+            val bottom = (EDGE_DP * activity.resources.displayMetrics.density).toInt()
             setMargins(m, m, m, bottom)
         }
         root.addView(pill, lp)
@@ -43,4 +43,6 @@ object CrispToast {
     private const val TAG = "semper_crisp_toast"
     private const val SHORT_MS = 2000L
     private const val LONG_MS = 3500L
+    private const val PAD_DP = 12
+    private const val EDGE_DP = 72
 }

@@ -80,6 +80,14 @@ class ShareCenter(private val host: ResultViewerActivity) {
             )
         v.findViewById<TextView>(R.id.tvSharePhotoSub).text =
             host.getString(R.string.share_photo_sub_fmt, s.typeString, frameName)
+        val allName = sourceImageName(s, s.frameIndex) ?: frameName
+        v.findViewById<TextView>(R.id.tvShareAllPhotosSub).text =
+            host.resources.getQuantityString(
+                R.plurals.share_all_photos_sub_fmt,
+                FIELDS.size,
+                FIELDS.size,
+                allName,
+            )
         v.findViewById<TextView>(R.id.tvSharePdfSub).text =
             host.resources.getQuantityString(R.plurals.share_pdf_sub_fmt, s.batchFiles.size, s.batchFiles.size)
         v.findViewById<TextView>(R.id.tvShareCsvSub).text =
