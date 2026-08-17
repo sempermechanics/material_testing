@@ -96,7 +96,9 @@ class IndicApi private constructor(context: Context) {
         onError: (Int, String) -> Nothing = { code, body -> throw ApiException(code, body) },
     ): String {
         val req = Request.Builder().url(url)
-            .header("Authorization", "Bearer $idToken").get().build()
+            .header("Authorization", "Bearer $idToken")
+            .header("X-Device-Id", device.getDeviceId())
+            .get().build()
         client.newCall(req).execute().use { resp ->
             return if (resp.code == HttpStatus.OK) {
                 resp.body.string()
@@ -112,7 +114,9 @@ class IndicApi private constructor(context: Context) {
     suspend fun me(idToken: String): MeResponse = withContext(Dispatchers.IO) {
         json.decodeFromString(
             authedGet(idToken, "$base/v1/me") { code, body ->
-                if (code == HttpStatus.FORBIDDEN) throw NotApprovedException() else throw ApiException(code, body)
+                if (code == HttpStatus.FORBIDDEN) throw NotApprovedException()
+                if (code == HttpStatus.CONFLICT) throw DeviceConflictException()
+                throw ApiException(code, body)
             },
         )
     }

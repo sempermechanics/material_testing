@@ -300,6 +300,7 @@ object ReportBuilder {
                     FIELD_KEYS[fieldIndex], unit, extrema.maxIdx, extrema.minIdx, data,
                     drawMinMarker = params.drawMinMarker,
                     coordScale = renderScale,
+                    imageName = params.deformedImageName,
                 )
             }
             val bakedHeatmap = composite.compressForPdf()
@@ -367,6 +368,7 @@ object ReportBuilder {
         dataArray: FloatArray,
         drawMinMarker: Boolean = true,
         coordScale: Float = 1f,
+        imageName: String? = null,
     ) {
         val multiplier = if (unit == "mε") DicResult.STRAIN_TO_MILLISTRAIN else 1f
         val maxVal = maxValRaw * multiplier
@@ -383,8 +385,9 @@ object ReportBuilder {
         }
         val bgPaint = Paint().apply { color = Color.argb(160, 0, 0, 0) }
 
-        val infoText = arrayOf(
+        val infoText = listOfNotNull(
             "Semper Analysis Report",
+            imageName?.takeIf { it.isNotBlank() }?.let { "Image: $it" },
             "Field: $typeString [$unit]",
             "Max: ${formatMetric(maxVal)}",
             "Min: ${formatMetric(minVal)}",

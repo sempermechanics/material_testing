@@ -253,6 +253,45 @@ def test_session_erasure_deletes_more_than_old_2000_file_cap(store):
     assert store._data["sessions"] == {}
 
 
+# ---------------- device-bound accounts ----------------
+def test_same_device_same_email_reuses_pending_user(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    first = repo.get_or_create_user(_claims(sub="sub-a", email="a@b.com"), device_id="dev-1")
+    assert first["uid"] == "sub-a"
+    assert first["claimedDeviceId"] == "dev-1"
+
+    second = repo.get_or_create_user(_claims(sub="sub-b", email="a@b.com"), device_id="dev-1")
+    assert second["uid"] == "sub-a"
+    assert "sub-b" not in store._data["users"]
+    assert store._data["auth_links"]["sub-b"]["uid"] == "sub-a"
+    assert "sub-b" in store._data["users"]["sub-a"]["linkedAuthUids"]
+
+
+def test_same_device_different_email_does_not_steal(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    repo.get_or_create_user(_claims(sub="sub-a", email="a@b.com"), device_id="dev-1")
+    with pytest.raises(repo.DeviceInUseError):
+        repo.get_or_create_user(_claims(sub="sub-c", email="other@b.com"), device_id="dev-1")
+    assert "sub-c" not in store._data.get("users", {})
+
+
+def test_active_device_same_email_reuses_user(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    first = repo.get_or_create_user(_claims(sub="sub-a", email="a@b.com"), device_id="dev-1")
+    store._data.setdefault("devices", {})["dev-1"] = {
+        "uid": first["uid"], "status": "ACTIVE",
+    }
+    second = repo.get_or_create_user(_claims(sub="sub-b", email="A@B.com"), device_id="dev-1")
+    assert second["uid"] == first["uid"]
+    assert "sub-b" not in store._data["users"]
+
+
 def test_new_documents_include_schema_version(store):
     monkey_claims = _claims(sub="versioned")
     repo.get_or_create_user(monkey_claims)

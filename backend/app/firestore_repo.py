@@ -109,45 +109,118 @@ def _auto_approved(claims: dict) -> bool:
     return claims.get("email", "").lower().endswith("@" + hd)
 
 
-def get_or_create_user(claims: dict) -> dict:
-    uid = claims["sub"]
-    ref = db().collection("users").document(uid)
+class DeviceInUseError(Exception):
+    """This device is already bound to a different email."""
+
+
+def _emails_conflict(left, right) -> bool:
+    a = (left or "").strip().lower()
+    b = (right or "").strip().lower()
+    return bool(a and b and a != b)
+
+
+def _load_user(uid: str):
+    snap = db().collection("users").document(uid).get()
+    if not snap.exists:
+        return None
+    return {**snap.to_dict(), "uid": uid}
+
+
+def _link_auth_uid(canonical_uid: str, firebase_sub: str) -> None:
+    db().collection("auth_links").document(firebase_sub).set({"uid": canonical_uid})
+    if firebase_sub == canonical_uid:
+        return
+    ref = db().collection("users").document(canonical_uid)
     snap = ref.get()
+    if not snap.exists:
+        return
+    linked = list((snap.to_dict() or {}).get("linkedAuthUids") or [])
+    if firebase_sub not in linked:
+        linked.append(firebase_sub)
+        ref.update({"linkedAuthUids": linked})
+
+
+def _user_for_device(device_id: str | None):
+    if not device_id:
+        return None
+    dev = get_device(device_id)
+    if dev and dev.get("status") == "ACTIVE":
+        found = _load_user(dev["uid"])
+        if found:
+            return found
+    query = (
+        db().collection("users")
+        .where("claimedDeviceId", "==", device_id)
+        .limit(1)
+    )
+    for snap in query.stream():
+        return {**snap.to_dict(), "uid": snap.id}
+    return None
+
+
+def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
+    uid = cur["uid"]
+    ref = db().collection("users").document(uid)
     verified = bool(claims.get("email_verified"))
     provider = (claims.get("firebase") or {}).get("sign_in_provider")
+    # Only the fields that actually changed — a write with nothing new to say
+    # is exactly what the throttle below is trying to avoid.
+    changed: dict = {}
+    if provider and cur.get("signInProvider") != provider:
+        changed["signInProvider"] = provider
+    if cur.get("emailVerified") != verified:
+        changed["emailVerified"] = verified
+    if cur.get("schemaVersion") != SCHEMA_VERSION:
+        changed["schemaVersion"] = SCHEMA_VERSION
+    # Keep admin role in sync with ADMIN_EMAILS for pre-existing users.
+    if _is_admin_email(claims) and cur.get("role") != "admin":
+        changed["role"] = "admin"
+    # A previously-PENDING user who has since verified a domain email (or been
+    # made admin) is auto-approved on this sign-in.
+    if cur.get("access_status") == "PENDING" and _auto_approved(claims):
+        changed["access_status"] = "APPROVED"
+    if device_id and not cur.get("claimedDeviceId"):
+        changed["claimedDeviceId"] = device_id
+
+    last_seen = cur.get("lastSeenAt")
+    stale = last_seen is None or (datetime.now(timezone.utc) - last_seen) >= _LAST_SEEN_THROTTLE
+    # This used to write lastSeenAt on every authenticated request — but a
+    # single restore is now dozens of requests (one challenge+content pair
+    # per adaptive download window, see DriveTransfer.nextWindowBytes), so
+    # that was dozens of writes to say the same thing. "Last seen" only
+    # needs hour granularity; skip the write when nothing else changed and
+    # the timestamp is still fresh.
+    if not changed and not stale:
+        return {**cur, "uid": uid}
+
+    patch = {**changed, "lastSeenAt": firestore.SERVER_TIMESTAMP}
+    ref.update(patch)
+    return {**cur, **patch, "uid": uid}
+
+
+def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
+    uid = claims["sub"]
+    link = db().collection("auth_links").document(uid).get()
+    if link.exists:
+        canonical = (link.to_dict() or {}).get("uid")
+        existing = _load_user(canonical) if canonical else None
+        if existing:
+            return _touch_existing(existing, claims, device_id)
+
+    ref = db().collection("users").document(uid)
+    snap = ref.get()
     if snap.exists:
-        cur = snap.to_dict()
-        # Only the fields that actually changed — a write with nothing new to say
-        # is exactly what the throttle below is trying to avoid.
-        changed: dict = {}
-        if provider and cur.get("signInProvider") != provider:
-            changed["signInProvider"] = provider
-        if cur.get("emailVerified") != verified:
-            changed["emailVerified"] = verified
-        if cur.get("schemaVersion") != SCHEMA_VERSION:
-            changed["schemaVersion"] = SCHEMA_VERSION
-        # Keep admin role in sync with ADMIN_EMAILS for pre-existing users.
-        if _is_admin_email(claims) and cur.get("role") != "admin":
-            changed["role"] = "admin"
-        # A previously-PENDING user who has since verified a domain email (or been
-        # made admin) is auto-approved on this sign-in.
-        if cur.get("access_status") == "PENDING" and _auto_approved(claims):
-            changed["access_status"] = "APPROVED"
+        return _touch_existing({**snap.to_dict(), "uid": uid}, claims, device_id)
 
-        last_seen = cur.get("lastSeenAt")
-        stale = last_seen is None or (datetime.now(timezone.utc) - last_seen) >= _LAST_SEEN_THROTTLE
-        # This used to write lastSeenAt on every authenticated request — but a
-        # single restore is now dozens of requests (one challenge+content pair
-        # per adaptive download window, see DriveTransfer.nextWindowBytes), so
-        # that was dozens of writes to say the same thing. "Last seen" only
-        # needs hour granularity; skip the write when nothing else changed and
-        # the timestamp is still fresh.
-        if not changed and not stale:
-            return {**cur, "uid": uid}
+    bound = _user_for_device(device_id)
+    if bound:
+        if _emails_conflict(bound.get("email"), claims.get("email")):
+            raise DeviceInUseError()
+        _link_auth_uid(bound["uid"], uid)
+        return _touch_existing(bound, claims, device_id)
 
-        patch = {**changed, "lastSeenAt": firestore.SERVER_TIMESTAMP}
-        ref.update(patch)
-        return {**cur, **patch, "uid": uid}
+    verified = bool(claims.get("email_verified"))
+    provider = (claims.get("firebase") or {}).get("sign_in_provider")
     data = {
         "email": claims.get("email"),
         "emailVerified": verified,
@@ -156,13 +229,16 @@ def get_or_create_user(claims: dict) -> dict:
         "role": "admin" if _is_admin_email(claims) else "user",
         "access_status": "APPROVED" if _auto_approved(claims) else "PENDING",
         "activeDeviceId": None,
+        "claimedDeviceId": device_id,
+        "linkedAuthUids": [],
         "createdAt": firestore.SERVER_TIMESTAMP,
         "lastSeenAt": firestore.SERVER_TIMESTAMP,
         "schemaVersion": SCHEMA_VERSION,
     }
     ref.set(data)
+    _link_auth_uid(uid, uid)
     # Only ever reached once per account — every later sign-in takes the
-    # snap.exists branch above — so support gets exactly one mail per user.
+    # snap.exists / auth_links branch above — so support gets exactly one mail per user.
     if data["access_status"] == "PENDING":
         notify.access_request(uid, data["email"], data["displayName"], provider)
     return {**data, "uid": uid}

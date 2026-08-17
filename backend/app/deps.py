@@ -39,6 +39,7 @@ def current_user(
     request: Request,
     authorization: str = Header(default=""),
     x_forwarded_authorization: str = Header(default=""),
+    x_device_id: str = Header(default=""),
 ) -> dict:
     """Resolve the caller from a Google ID token.
 
@@ -68,7 +69,10 @@ def current_user(
             )
         except HTTPException as exc:
             raise HTTPException(401, "invalid_token") from exc
-        user = repo.get_or_create_user(claims)
+        try:
+            user = repo.get_or_create_user(claims, device_id=x_device_id or None)
+        except repo.DeviceInUseError as exc:
+            raise HTTPException(409, "device_in_use") from exc
         if user["access_status"] != "APPROVED":
             raise HTTPException(403, "not_approved")
     try:

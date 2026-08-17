@@ -262,10 +262,19 @@ class ShareCenter(private val host: ResultViewerActivity) {
             canvas, renderW, renderH, actualMin, actualMax,
             typeString, unit, extrema.maxIdx, extrema.minIdx, data,
             coordScale = renderScale,
+            imageName = sourceImageName(s, frameIndex),
         )
         heatmap.recycle()
         if (base !== s.baseImage) base.recycle()
         return out
+    }
+
+    /** Filename stamped on share photos: the real image, not a sweep settings label. */
+    private fun sourceImageName(s: Snapshot, frameIndex: Int): String? {
+        if (s.stepPerFrame != null) {
+            return s.defImagePaths.firstOrNull()?.let { File(it).name }
+        }
+        return s.defNames.getOrNull(frameIndex)?.takeIf { it.isNotBlank() }
     }
 
     /**
