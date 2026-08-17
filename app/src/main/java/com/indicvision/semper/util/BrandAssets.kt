@@ -1,3 +1,5 @@
+@file:Suppress("ReturnCount")
+
 package com.indicvision.semper.util
 
 import android.graphics.Bitmap

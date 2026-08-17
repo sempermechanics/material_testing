@@ -14,6 +14,7 @@ import kotlinx.coroutines.ensureActive
 import timber.log.Timber
 import java.io.File
 import java.io.OutputStream
+import java.util.Locale
 
 /**
  * The result viewer's summary animation: every frame of one field, as a looping
@@ -48,7 +49,11 @@ class SummaryAnimation(private val spec: Spec) {
     /** Bounds a field's GIF on disk was rendered with, so a scale change rebuilds it. */
     private val builtWith = mutableMapOf<Int, Pair<Float, Float>>()
 
-    fun fileFor(label: String): File = File(spec.outputDir, "${label}_animation.gif")
+    fun fileFor(label: String): File =
+        File(spec.outputDir, "${label}_animation_${bgKey()}.gif")
+
+    /** Hex of the baked canvas colour so light and night GIFs do not collide. */
+    private fun bgKey(): String = String.format(Locale.US, "%08X", spec.backgroundColor)
 
     /** True when [fileFor] is on disk and was built against [bounds]. */
     fun isBuilt(dataIndex: Int, label: String, bounds: Pair<Float, Float>): Boolean =

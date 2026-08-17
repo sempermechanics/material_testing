@@ -1,6 +1,6 @@
 // Selection controller wires a fixed set of named views and one method per
 // selection action; both read clearest passed and defined directly.
-@file:Suppress("LongParameterList", "TooManyFunctions")
+@file:Suppress("LongParameterList", "TooManyFunctions", "ReturnCount")
 
 package com.indicvision.semper.ui.home
 

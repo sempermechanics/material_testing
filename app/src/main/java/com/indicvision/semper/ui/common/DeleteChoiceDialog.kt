@@ -1,3 +1,5 @@
+@file:Suppress("LongParameterList")
+
 package com.indicvision.semper.ui.common
 
 import android.view.LayoutInflater

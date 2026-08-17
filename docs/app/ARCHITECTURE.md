@@ -41,7 +41,7 @@ Intent extras shared across Activities live in
 | `ui/settings/` | Settings screen; account/storage/prefs/your-data/help live in `Settings*Section`; restore/download/delete stay on `SettingsActivity` |
 | `ui/admin/` | Admin screen — approve/revoke users via `/v1/admin/*` |
 | `ui/limit/` | Session-quota screen |
-| `ui/common/` | Insets, media source chooser, motion |
+| `ui/common/` | Insets, in-sheet media picker, motion |
 | `data/` | Auth, session store, cloud sync/upload/restore, storage budget, param clipboard |
 | `data/net/` | Backend HTTP client (`IndicApi`), token store/provider |
 | `report/` | PDF / CSV / visualization |

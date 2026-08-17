@@ -32,7 +32,6 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -53,6 +52,7 @@ import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.common.Motion
 import kotlinx.coroutines.Dispatchers
@@ -368,22 +368,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
             },
         ).observe()
 
-        // Reference: one image, from either source. Files (SAF) is the route that
-        // reaches DNG/RAW, which the Photo Picker does not index.
-        val pickRefPhotos =
-            registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-                uri?.let { handleReferenceImage(it) }
+        // Browse (SAF) still reaches DNG/RAW and Drive, which MediaStore may not index.
+        var mediaPicker: MediaPickerSheet? = null
+        val requestMediaPermission =
+            registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+                mediaPicker?.onPermissionResult()
             }
         val pickRefFiles =
             registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 uri?.let { handleReferenceImage(it) }
-            }
-
-        // Deformed frames: multi-select from either source. handleDeformedBatch
-        // enforces the per-analysis frame cap, so both launchers stay uncapped here.
-        val pickDefPhotos =
-            registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
-                onDeformedPicked(uris)
             }
         val pickDefFiles =
             registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -424,32 +417,32 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         val launchRefPicker = {
-            MediaSourceChooser.show(
+            mediaPicker = MediaSourceChooser.show(
                 activity = this,
-                titleRes = R.string.reference_image,
-                captionRes = R.string.ref_formats_hint,
-                onPhotos = {
-                    pickRefPhotos.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                mode = MediaSourceChooser.Mode.REFERENCE,
+                requestPermission = {
+                    requestMediaPermission.launch(
+                        MediaSourceChooser.requiredPermissions(includeVideo = false),
                     )
                 },
-                onFiles = { pickRefFiles.launch(arrayOf("image/*")) },
+                onBrowseSaf = { pickRefFiles.launch(arrayOf("image/*")) },
+                onPicked = { uris -> uris.firstOrNull()?.let { handleReferenceImage(it) } },
             )
         }
         refDropzone.setOnClickListener { launchRefPicker() }
         findViewById<View>(R.id.btnRefChange).setOnClickListener { launchRefPicker() }
 
         val launchDefPicker = {
-            MediaSourceChooser.show(
+            mediaPicker = MediaSourceChooser.show(
                 activity = this,
-                titleRes = R.string.deformed_frames,
-                captionRes = R.string.picker_select_deformed,
-                onPhotos = {
-                    pickDefPhotos.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                mode = MediaSourceChooser.Mode.DEFORMED,
+                requestPermission = {
+                    requestMediaPermission.launch(
+                        MediaSourceChooser.requiredPermissions(includeVideo = false),
                     )
                 },
-                onFiles = { pickDefFiles.launch(arrayOf("image/*")) },
+                onBrowseSaf = { pickDefFiles.launch(arrayOf("image/*")) },
+                onPicked = { uris -> onDeformedPicked(uris) },
             )
         }
         defDropzone.setOnClickListener { launchDefPicker() }
@@ -966,7 +959,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // the largest allowed subset misses the accuracy target on this pattern.
         lowTextureWarnRow.visibility = if (rec.lowTexture) View.VISIBLE else View.GONE
         if (rec.lowTexture) {
-            tvLowTextureWarning.text = getString(R.string.subset_low_texture_fmt, rec.subsetSize)
+            tvLowTextureWarning.text = getString(R.string.subset_low_texture_fmt)
         }
         if (!viewModel.subsetUserModified) {
             val snapped = snapToSlider(etSubsetSize, rec.subsetSize)
