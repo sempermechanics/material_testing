@@ -531,8 +531,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="action_reset">Reset</string>
     <string name="use_full_image">Use full image</string>
     <string name="region_of_interest">Region of interest</string>
-    <string name="jpeg_warning_inline">JPEG detected — lossless formats improve accuracy</string>
-    <string name="subset_low_texture_fmt">Speckle contrast is low — %1$d px is the largest allowed subset and still falls short of 0.007 px accuracy</string>
+    <string name="jpeg_warning_inline">JPEG detected, use lossless formats (eg. PNG, TIFF) to improve accuracy</string>
+    <string name="subset_low_texture_fmt">Speckle contrast is low, consider using a larger subset or selecting a small RoI</string>
     <string name="next_reason_ref">add a reference image to continue</string>
     <string name="next_reason_def">add at least one deformed frame to continue</string>
     <string name="run_analysis">Compute</string>
@@ -564,12 +564,24 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     
     <string name="roi_full_fmt">Full image · %1$d × %2$d px</string>
     <string name="roi_custom_fmt">%1$d × %2$d px at (%3$d, %4$d)</string>
-    <string name="picker_select_reference">Select the reference — a photo, or a video of the deformation</string>
+    <string name="picker_select_reference_toast">Select the reference image</string>
     <string name="picker_select_deformed">Select the deformed frames</string>
-    <string name="source_photos">Photos</string>
-    <string name="source_photos_sub">Gallery and Google Photos</string>
+    <string name="source_images">Images</string>
     <string name="source_files">Files</string>
-    <string name="source_files_sub">Downloads, Drive, on-device storage</string>
+    <string name="media_browse">Browse</string>
+    <string name="media_allow_access">Allow access</string>
+    <string name="media_need_permission">Allow access to show your gallery</string>
+    <string name="media_empty">No images here yet. Browse files instead.</string>
+    <string name="media_empty_files">No files in Downloads. Browse storage, Drive, or DNG.</string>
+    <string name="media_use">Use</string>
+    <plurals name="media_use_fmt">
+        <item quantity="one">Use %d image</item>
+        <item quantity="other">Use %d images</item>
+    </plurals>
+    <string name="coach_picker_images">Images from the gallery</string>
+    <string name="coach_picker_files">Or files from Downloads, Drive, or storage</string>
+    <string name="coach_picker_multi">Tap several images to add them together</string>
+    <string name="coach_picker_select_all">Select all files in this list at once</string>
     <string name="results_title">Results</string>
     <string name="action_share">Share</string>
     <string name="viewer_back_desc">Back to settings</string>
@@ -603,7 +615,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="share_zip_sub">All frames: photos + PDF + CSV + GIFs</string>
     <string name="share_generating_gif">Rendering the animations — this can take a moment…</string>
     <string name="share_generating">Preparing files…</string>
-    <string name="share_generating_pdf">Building the report — this can take a moment …</string>
+    <string name="share_generating_pdf">Building the report …</string>
     <string name="share_failed">Could not prepare the files. Try again.</string>
     <string name="share_cancelled">Cancelled</string>
     <string name="share_save_to_files">Save to Files</string>

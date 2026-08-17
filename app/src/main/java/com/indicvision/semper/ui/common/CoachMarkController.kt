@@ -30,6 +30,7 @@ class CoachMarkController(
     data class Step(
         val target: View,
         val message: String,
+        val onEnter: (() -> Unit)? = null,
     )
 
     private var overlayRoot: FrameLayout? = null
@@ -48,14 +49,18 @@ class CoachMarkController(
      * (and when the sequence finishes via Next).
      */
     @Suppress("ReturnCount") // three independent "nothing to show" guards
-    fun maybeShow(screen: CoachPrefs.Screen, steps: List<Step>) {
+    fun maybeShow(
+        screen: CoachPrefs.Screen,
+        steps: List<Step>,
+        overlayParent: ViewGroup? = null,
+    ) {
         if (steps.isEmpty()) return
         if (CoachPrefs.hasSeen(activity, screen)) return
         if (overlayRoot != null) return
         this.screen = screen
         this.steps = steps
         this.index = 0
-        attachOverlay()
+        attachOverlay(overlayParent)
         showStep(0)
     }
 
@@ -75,8 +80,8 @@ class CoachMarkController(
         steps = emptyList()
     }
 
-    private fun attachOverlay() {
-        val content = activity.findViewById<ViewGroup>(android.R.id.content)
+    private fun attachOverlay(overlayParent: ViewGroup?) {
+        val content = overlayParent ?: activity.findViewById(android.R.id.content)
         val root = FrameLayout(activity).apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -175,6 +180,7 @@ class CoachMarkController(
             if (last) R.string.coach_done else R.string.coach_next,
         )
         skipButton?.visibility = if (last) View.GONE else View.VISIBLE
+        step.onEnter?.invoke()
 
         step.target.post {
             if (overlayRoot == null) return@post

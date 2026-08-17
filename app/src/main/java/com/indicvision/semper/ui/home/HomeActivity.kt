@@ -11,7 +11,6 @@ import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.coordinatorlayout.widget.CoordinatorLayout
@@ -41,6 +40,7 @@ import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.limit.SessionLimitActivity
 import com.indicvision.semper.ui.settings.SettingsActivity
@@ -91,16 +91,16 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    /** Source A: the system Photo Picker (gallery / Google Photos). */
-    private val pickReference =
-        registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            routePickedMedia(uri)
-        }
-
-    /** Source B: the Storage Access Framework (Downloads, Drive, on-device files). */
+    /** Browse fallback: Storage Access Framework (Downloads, Drive, DNG). */
     private val pickDocument =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             routePickedMedia(uri)
+        }
+
+    private var mediaPicker: MediaPickerSheet? = null
+    private val requestMediaPermission =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            mediaPicker?.onPermissionResult()
         }
 
     /**
@@ -143,7 +143,7 @@ class HomeActivity : AppCompatActivity() {
         list.layoutManager = LinearLayoutManager(this)
 
         fab = findViewById(R.id.fabNewAnalysis)
-        positionFabAtEightTenths()
+        positionFabAtNineTenths()
         fab.setOnClickListener {
             // At the account's analysis limit, block new work behind the persistent
             // limit screen (email support) instead of letting it fail on upload.
@@ -384,23 +384,21 @@ class HomeActivity : AppCompatActivity() {
     }
 
     /**
-     * Ask where to pick the reference from, in a styled sheet we control, before
-     * opening the system picker. The system Photo Picker runs in its own window
-     * and can't be labelled or overlaid, so the instruction and source choice
-     * live here instead — Photos routes to the Photo Picker, Files to the Storage
-     * Access Framework (Downloads, Drive, on-device storage).
+     * In-sheet Images / Files picker. Browse still opens SAF for Drive / DNG.
      */
-    private fun showSourceChooser() = MediaSourceChooser.show(
-        activity = this,
-        titleRes = R.string.new_analysis_title,
-        captionRes = R.string.picker_select_reference,
-        onPhotos = {
-            pickReference.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
-            )
-        },
-        onFiles = { pickDocument.launch(arrayOf("image/*", "video/*")) },
-    )
+    private fun showSourceChooser() {
+        mediaPicker = MediaSourceChooser.show(
+            activity = this,
+            mode = MediaSourceChooser.Mode.HOME_REFERENCE,
+            requestPermission = {
+                requestMediaPermission.launch(
+                    MediaSourceChooser.requiredPermissions(includeVideo = true),
+                )
+            },
+            onBrowseSaf = { pickDocument.launch(arrayOf("image/*", "video/*")) },
+            onPicked = { uris -> routePickedMedia(uris.firstOrNull()) },
+        )
+    }
 
     /**
      * @param deep verify blobs really exist in Drive (pull-to-refresh) rather
@@ -598,14 +596,14 @@ class HomeActivity : AppCompatActivity() {
         CrispToast.show(this, getString(R.string.delete_device_only_done), long = true)
     }
 
-    private fun positionFabAtEightTenths() {
+    private fun positionFabAtNineTenths() {
         val root = findViewById<View>(R.id.homeRoot)
         root.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
             if (fab.width == 0 || view.width == 0) return@addOnLayoutChangeListener
             val params = fab.layoutParams as CoordinatorLayout.LayoutParams
             params.gravity = Gravity.TOP or Gravity.START
-            params.leftMargin = (view.width * 3 / 4) - fab.width / 2
-            params.topMargin = (view.height * 8 / 10) - fab.height / 2
+            params.leftMargin = (view.width / 2) - fab.width / 2
+            params.topMargin = (view.height * 9 / 10) - fab.height / 2
             fab.layoutParams = params
         }
     }

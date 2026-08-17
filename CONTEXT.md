@@ -118,16 +118,18 @@ Kover `minBound` floor is 15. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-08-16)
+## Current state (2026-08-17)
 
 Refresh with `gh pr list --state open` — numbers below will rot.
 
 **On `origin/main`:** lint extracts #59–#64 and #66; compile/quality #68; wizard
 slots/coach #69; `DicBatchRunner` + `DicFieldIo` #70; hashed lock / Gradle 9.7 /
-docs #71; faster Release CI #74.
+docs #71; faster Release CI #74; device-bound accounts / share logos #78.
 
-**Open:** [#75](https://github.com/semperdic/semperdic-app/pull/75) — emulator
-API 34, Macrobenchmark `settingsScroll` / `reportFullyDrawn`, uvicorn lock sync.
+New analysis picks media in-sheet (Images | Files, MediaStore + SAF Browse).
+`READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when the gallery tab
+opens. Summary GIFs bake `viewer_canvas` (night `#101518`) into the cache
+filename. Launcher adaptive background is transparent; night inverts the S.
 
 **Next architecture (grill before coding):** `DicKeys` extras bag packed in
 `SessionOpenHelper.intentFor` and `AnalysisNavHelper.openResults` (~25 extras).
