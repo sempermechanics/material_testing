@@ -1,17 +1,11 @@
 package com.indicvision.semper.util
 
-import android.content.res.Resources
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.PorterDuff
-import android.widget.ImageView
-import com.indicvision.semper.R
 
 /**
- * The wordmark PNG is an opaque black plate with dark “semper” and cyan “DIC”.
- * Punch the plate so callers can fill the background from context (sky / black
- * in-app, white on PDF pages).
+ * Punch a solid black plate out of a brand bitmap so the remaining ink can sit
+ * on whatever surface the caller draws (login, PDF, launcher).
  */
 object BrandAssets {
 
@@ -36,19 +30,6 @@ object BrandAssets {
             out.setPixels(row, 0, w, 0, y, w, 1)
         }
         return out
-    }
-
-    fun wordmarkForPdf(resources: Resources): Bitmap? {
-        val raw = BitmapFactory.decodeResource(resources, R.drawable.semper_wordmark) ?: return null
-        val punched = punchBlackPlate(raw)
-        if (punched !== raw && !raw.isRecycled) raw.recycle()
-        return punched
-    }
-
-    fun bindLoginWordmark(imageView: ImageView) {
-        val punched = wordmarkForPdf(imageView.resources) ?: return
-        imageView.setImageBitmap(punched)
-        imageView.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
     }
 
     private const val PLATE_MAX = 8
