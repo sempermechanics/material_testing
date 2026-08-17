@@ -606,7 +606,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="share_all_photos">All fields</string>
     <plurals name="share_all_photos_sub_fmt">
         <item quantity="one">1 field of %2$s</item>
-        <item quantity="other">%1$d fields of %2$s</item>
+        <item quantity="other">U V Exx Eyy Exy · %1$d fields of %2$s</item>
     </plurals>
     <string name="share_pdf">PDF report</string>
     
@@ -616,7 +616,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="share_animations_sub">U V Exx Eyy Exy · all frames</string>
     <string name="share_zip">Everything (.zip)</string>
     <string name="share_zip_sub">All frames: photos + PDF + CSV + GIFs</string>
-    <string name="share_generating_gif">Rendering the animations — this can take a moment…</string>
+    <string name="share_generating_gif">Rendering the animations …</string>
     <string name="share_generating">Preparing files…</string>
     <string name="share_generating_pdf">Building the report …</string>
     <string name="share_failed">Could not prepare the files. Try again.</string>
@@ -804,8 +804,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">frame %1$d of %2$d shown · photos share the current frame</item>
     </plurals>
     <plurals name="share_pdf_sub_fmt">
-        <item quantity="one">All 1 frame · fields, stats, telemetry</item>
-        <item quantity="other">All %1$d frames · fields, stats, telemetry</item>
+        <item quantity="one">fields, stats, telemetry . All 1 frame</item>
+        <item quantity="other">fields, stats, telemetry . All %1$d frames</item>
     </plurals>
     <plurals name="share_csv_sub_fmt">
         <item quantity="one">Whole analysis · 1 frame, one file</item>
