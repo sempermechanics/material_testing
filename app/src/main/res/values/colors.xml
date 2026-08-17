@@ -53,4 +53,15 @@
          night variant instead (see values-night/colors.xml). -->
     <color name="bar_system">@color/surface_muted</color>
     <color name="splash_bg">@color/surface_muted</color>
+
+    <!-- Brand plate behind the S / wordmark: sky in light, black in night. -->
+    <color name="brand_plate">@color/sky_primary</color>
+
+    <!-- Result-viewer chrome when force-dark is opted out. -->
+    <color name="viewer_chrome_bg">@color/surface</color>
+    <color name="viewer_chrome_text">@color/text_primary</color>
+    <color name="viewer_chrome_muted">@color/text_secondary</color>
+
+    <color name="toast_crisp_bg">#E61A1A1A</color>
+    <color name="toast_crisp_text">#FFFFFFFF</color>
 </resources>

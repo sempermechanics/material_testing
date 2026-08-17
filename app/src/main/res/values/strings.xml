@@ -176,7 +176,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Home screen -->
     <string name="home_title">Analyses</string>
     <string name="home_empty_title">No analyses yet</string>
-    <string name="home_empty_body">Tap + to pick a reference image or video and run your first analysis.</string>
+    <string name="home_empty_body">Pick reference image or video.</string>
     <string name="home_new_analysis">New analysis</string>
     <string name="home_settings">Settings</string>
     <string name="home_thumb_desc">Reference image preview</string>
@@ -368,6 +368,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
     <string name="sync_status_up_to_date">Cloud backups up to date</string>
     <string name="home_empty_restore">Restore from cloud</string>
+    <string name="home_empty_start">Start analysis</string>
     <string name="delete_device_kept_snackbar">Kept in the cloud</string>
     <string name="delete_device_restore_action">Restore…</string>
     <string name="setting_max_frames">Max frames</string>
@@ -552,8 +553,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="coach_home_fab">Start a new analysis from here — pick a reference photo or a video of the deformation.</string>
     <string name="coach_analysis_ref">The reference image can be changed at any time.</string>
     <string name="coach_analysis_def">Add deformed frames next. When you pick several, you can sort by name, date, or drag.</string>
-    <string name="coach_analysis_mode">Choose a single solve or a parameter sweep.</string>
-    <string name="coach_analysis_roi">Open the editor to crop a region of interest, or Use the full image.</string>
+    <string name="coach_analysis_mode">Single solve or parameter sweep?</string>
+    <string name="coach_analysis_roi">Choose RoI or defaults to full image.</string>
     <string name="coach_analysis_advanced">Change parameters when you need finer control.</string>
     <string name="coach_sweep_subset">Set the subset size range for sweep granularity.</string>
     <string name="coach_sweep_lattice">This is the planned lattice — each node is one analysis.</string>
@@ -588,22 +589,23 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="probe_reading_fmt">%1$s: %2$s %3$s\n(%4$d, %5$d)</string>
     <string name="probe_no_data">No data</string>
     
-    <string name="share_photo">Result photo</string>
+    <string name="share_photo">Single Field</string>
     <string name="share_photo_sub_fmt">%1$s field, %2$s</string>
-    <string name="share_all_photos">All field photos</string>
+    <string name="share_all_photos">All fields</string>
     <string name="share_all_photos_sub">U V Exx Eyy Exy · 5 images</string>
     <string name="share_pdf">PDF report</string>
     
     <string name="share_csv">CSV data</string>
     
-    <string name="share_animations">Field animations (GIF)</string>
-    <string name="share_animations_sub">U V Exx Eyy Exy · every frame, one scale</string>
+    <string name="share_animations">Animations</string>
+    <string name="share_animations_sub">U V Exx Eyy Exy · all frames</string>
     <string name="share_zip">Everything (.zip)</string>
     <string name="share_zip_sub">All frames: photos + PDF + CSV + GIFs</string>
     <string name="share_generating_gif">Rendering the animations — this can take a moment…</string>
     <string name="share_generating">Preparing files…</string>
-    <string name="share_generating_pdf">Building the report — this can take a moment…</string>
+    <string name="share_generating_pdf">Building the report — this can take a moment …</string>
     <string name="share_failed">Could not prepare the files. Try again.</string>
+    <string name="share_cancelled">Cancelled</string>
     <string name="share_save_to_files">Save to Files</string>
     <string name="send_to_title">Send to</string>
     <string name="send_to_save_sub">Save a copy to this device</string>
@@ -651,7 +653,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- First-login beta / data-use declaration (shown once per account on Home) -->
     <string name="beta_notice_title">Beta notice</string>
-    <string name="beta_notice_body">To help improve the app and its services, analysis data generated while using the app will be collected and used to enhance performance, reliability, and future features. The user has the right to access, update, or delete their data at any time.</string>
+    <string name="beta_notice_body">Analysis data generated while using the app will be collected for enhancing performance, reliability, and features of the app. \n\nThe user has the right to access, update, or delete their data at any time.</string>
     <string name="beta_notice_ack">I understand</string>
 
     <!-- Session/analysis quota limit screen -->
@@ -679,11 +681,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Auth: sign-in errors -->
     <string name="error_passwords_mismatch">Passwords do not match.</string>
     <string name="auth_link_send_failed">Could not send the link.</string>
-    <string name="auth_link_wrong_device">Open the sign-in link on the device that requested it.</string>
+    <string name="auth_link_wrong_device">Kindly open the sign-in link on the requested device.</string>
     <string name="auth_google_no_account">No Google account available on this device.</string>
     <string name="auth_google_failed">Google sign-in failed.</string>
     <string name="auth_sign_in_failed">Sign-in failed.</string>
-    <string name="auth_verify_first">Open the link in your email, then sign in.</string>
+    <string name="auth_verify_first">Check your email for the verification link.</string>
 
     <!-- Auth: startup routing -->
     <string name="status_offline_mode">Offline Mode</string>

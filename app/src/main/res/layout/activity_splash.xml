@@ -10,8 +10,11 @@
     <ImageView
         android:layout_width="96dp"
         android:layout_height="96dp"
+        android:background="@drawable/bg_semper_mark"
         android:contentDescription="@string/app_name_short"
-        android:src="@mipmap/ic_semper_launcher" />
+        android:padding="14dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/semper_mark_s" />
 
     <TextView
         android:layout_width="wrap_content"
