@@ -5,10 +5,14 @@
 
 package com.indicvision.semper.report
 
+import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.pdf.PdfDocument
-import com.indicvision.semper.util.BrandAssets
+import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.createBitmap
+import com.indicvision.semper.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -39,6 +43,9 @@ object PdfReportGenerator {
     private const val FRAMES_PROGRESS_START = 2
     private const val FRAMES_PROGRESS_SPAN = 92
     private const val TELEMETRY_PROGRESS = 96
+
+    /** Raster width for the vector wordmark; PDF draws it at [PdfLayoutEngine.BRAND_LOGO_WIDTH]. */
+    private const val BRAND_LOGO_RASTER_WIDTH = 1040
 
     /**
      * The all-frames PDF: the single-frame report of [generate], repeated once
@@ -268,8 +275,26 @@ object PdfReportGenerator {
     }
 
     private fun decodeBrandLogo(resources: Resources?): Bitmap? {
-        if (resources == null) return null
-        return BrandAssets.wordmarkForPdf(resources)
+        val src = resources ?: return null
+        // Reports are always printed on a light page, so ignore night fills.
+        val lightConfig = Configuration(src.configuration)
+        lightConfig.uiMode = (lightConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+            Configuration.UI_MODE_NIGHT_NO
+        @Suppress("DEPRECATION")
+        val lightResources = Resources(src.assets, src.displayMetrics, lightConfig)
+        val drawable = ResourcesCompat.getDrawable(lightResources, R.drawable.semper_wordmark, null)
+        return if (drawable == null) {
+            null
+        } else {
+            val intrinsicW = drawable.intrinsicWidth.coerceAtLeast(1)
+            val intrinsicH = drawable.intrinsicHeight.coerceAtLeast(1)
+            val width = BRAND_LOGO_RASTER_WIDTH
+            val height = (width.toLong() * intrinsicH / intrinsicW).toInt().coerceAtLeast(1)
+            val bitmap = createBitmap(width, height)
+            drawable.setBounds(0, 0, width, height)
+            drawable.draw(Canvas(bitmap))
+            bitmap
+        }
     }
 
     private fun recycleLogo(logo: Bitmap?) {

@@ -22,8 +22,8 @@ import java.util.UUID
  * - A non-exportable **EC P-256** key pair lives in the Android Keystore; the
  *   private key never leaves the device. The public key is uploaded once at
  *   registration and stored in Firestore by the backend.
- * - The device id is a random UUID persisted in app-private storage — **not**
- *   IMEI / serial / MAC / ANDROID_ID (per the security requirements).
+ * - The device id is persisted in app-private storage on first use so it never
+ *   flips between `and-{ANDROID_ID}` and a legacy `dev-{uuid}`.
  * - [signMessage] produces an ECDSA-SHA256 signature the backend verifies with
  *   the stored public key (see backend/app/deps.py).
  */
@@ -60,25 +60,24 @@ class DeviceKeyManager(private val context: Context) {
     }
 
     /**
-     * Stable device id that **survives app reinstalls**: `ANDROID_ID` (scoped to
-     * the app signing key + user + device — not a hardware serial/IMEI/MAC, needs
-     * no permission; resets only on factory reset). Because it survives reinstall,
-     * the backend can *heal* the re-registered Keystore key on the same device id
-     * instead of treating a reinstall as a brand-new device. Falls back to a
-     * persisted random UUID if ANDROID_ID is unavailable.
+     * Stable device id persisted on first use. Prefers a previously stored value
+     * so an upgrade cannot flip `dev-{uuid}` to `and-{ANDROID_ID}`. If none is
+     * stored, writes `and-{ANDROID_ID}` (app-scoped, survives reinstall) or a
+     * `dev-{uuid}` fallback.
      */
     @Suppress("HardwareIds") // ANDROID_ID is app-scoped, not a hardware identifier
     fun getDeviceId(): String {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.getString(K_DEVICE_ID, null)?.let { return it }
         val androidId = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ANDROID_ID,
         )
-        if (!androidId.isNullOrBlank() && androidId != LEGACY_BAD_ANDROID_ID) {
-            return "and-$androidId"
+        val id = if (!androidId.isNullOrBlank() && androidId != LEGACY_BAD_ANDROID_ID) {
+            "and-$androidId"
+        } else {
+            "dev-" + UUID.randomUUID().toString()
         }
-        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        prefs.getString(K_DEVICE_ID, null)?.let { return it }
-        val id = "dev-" + UUID.randomUUID().toString()
         prefs.edit { putString(K_DEVICE_ID, id) }
         return id
     }

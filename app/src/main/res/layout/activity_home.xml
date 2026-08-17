@@ -171,9 +171,8 @@
             android:layout_width="72dp"
             android:layout_height="72dp"
             android:layout_marginBottom="12dp"
-            android:background="@drawable/bg_semper_mark"
             android:contentDescription="@string/app_name_short"
-            android:padding="12dp"
+            android:forceDarkAllowed="false"
             android:scaleType="fitCenter"
             android:src="@drawable/semper_mark_s" />
 

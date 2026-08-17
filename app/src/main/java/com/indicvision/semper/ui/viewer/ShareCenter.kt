@@ -12,8 +12,10 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
+import android.net.Uri
 import android.view.View
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import androidx.lifecycle.lifecycleScope
@@ -45,8 +47,9 @@ import java.util.zip.ZipOutputStream
 /**
  * The Results share sheet (wireframe 08). One scope rule: photos share the
  * current frame; the PDF and CSV cover the whole analysis; the ZIP bundles
- * everything. Files are generated into `cacheDir/share` and handed to
- * [SendToSheet], which offers Save to Files (folder icon) and Share.
+ * everything. Fast single-photo export still generates into `cacheDir/share`
+ * then offers Save/Share. Slow exports (PDF, ZIP, all-fields, animations, CSV)
+ * pick a Save-to-Files destination first, then write there.
  */
 class ShareCenter(private val host: ResultViewerActivity) {
 
@@ -88,31 +91,89 @@ class ShareCenter(private val host: ResultViewerActivity) {
         }
         v.findViewById<View>(R.id.rowShareAllPhotos).setOnClickListener {
             sheet.dismiss()
-            runJob(R.string.share_generating) { allFieldPhotos() to "image/png" }
+            offerSlowExport(KIND_PHOTOS, "application/zip", photosZipName(), R.string.share_generating)
         }
         v.findViewById<View>(R.id.rowShareAnimations).setOnClickListener {
             sheet.dismiss()
-            runJob(R.string.share_generating_gif) { fieldAnimations() to "image/gif" }
+            offerSlowExport(KIND_GIFS, "application/zip", animationsZipName(), R.string.share_generating_gif)
         }
         v.findViewById<View>(R.id.rowSharePdf).setOnClickListener {
             sheet.dismiss()
-            runJob(R.string.share_generating_pdf) { report -> listOf(allFramesPdf(report)) to "application/pdf" }
+            offerSlowExport(KIND_PDF, "application/pdf", pdfName(), R.string.share_generating_pdf)
         }
         v.findViewById<View>(R.id.rowShareCsv).setOnClickListener {
             sheet.dismiss()
-            runJob(R.string.share_generating) { listOf(batchCsv()) to "text/csv" }
+            offerSlowExport(KIND_CSV, "text/csv", csvName(), R.string.share_generating)
         }
         v.findViewById<View>(R.id.rowShareZip).setOnClickListener {
             sheet.dismiss()
-            runJob(R.string.share_generating_pdf) { report -> listOf(everythingZip(report)) to "application/zip" }
+            offerSlowExport(KIND_ZIP, "application/zip", zipName(), R.string.share_generating_pdf)
         }
         sheet.show()
     }
 
     // ── Job runner: progress dialog → system share sheet (+ Local) ───────
 
+    /**
+     * Save vs Share before any generation. Save opens SAF immediately; Share
+     * still has to wait on the job, then hands the file to the system sheet.
+     */
+    private fun offerSlowExport(
+        kind: String,
+        mime: String,
+        filename: String,
+        progressText: Int,
+    ) {
+        SendToSheet.showChooser(
+            host,
+            onSave = { host.pickShareDocument(kind, mime, filename) },
+            onShare = {
+                runJob(progressText, shareDirect = true) { report -> buildKind(kind, report) }
+            },
+        )
+    }
+
+    internal fun writeKindToUri(kind: String, uri: Uri) {
+        val progressText = when (kind) {
+            KIND_PDF, KIND_ZIP -> R.string.share_generating_pdf
+            KIND_GIFS -> R.string.share_generating_gif
+            else -> R.string.share_generating
+        }
+        runJob(progressText, destUri = uri) { report -> buildKind(kind, report) }
+    }
+
+    private suspend fun buildKind(
+        kind: String,
+        report: (Int, String) -> Unit,
+    ): Pair<List<File>, String> = when (kind) {
+        KIND_PDF -> listOf(allFramesPdf(report)) to "application/pdf"
+        KIND_ZIP -> listOf(everythingZip(report)) to "application/zip"
+        KIND_CSV -> listOf(batchCsv()) to "text/csv"
+        KIND_PHOTOS -> allFieldPhotos() to "image/png"
+        KIND_GIFS -> fieldAnimations() to "image/gif"
+        else -> error("Unknown share kind $kind")
+    }
+
+    private fun pdfName(): String = "${requireSnapshot().baseName}_report.pdf"
+
+    private fun csvName(): String = "${requireSnapshot().baseName}_data.csv"
+
+    private fun zipName(): String {
+        val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        return "${requireSnapshot().baseName}_everything_$ts.zip"
+    }
+
+    private fun photosZipName(): String {
+        val s = requireSnapshot()
+        return "${s.baseName}_fields_frame${s.frameIndex + 1}.zip"
+    }
+
+    private fun animationsZipName(): String = "${requireSnapshot().baseName}_animations.zip"
+
     private fun runJob(
         progressText: Int,
+        destUri: Uri? = null,
+        shareDirect: Boolean = false,
         build: suspend (report: (Int, String) -> Unit) -> Pair<List<File>, String>,
     ) {
         var job: Job? = null
@@ -167,7 +228,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 }
                 progress.dismiss()
                 host.shareBanner.remove(transferId)
-                shareWithLocalOption(handoff.first, handoff.second)
+                deliverHandoff(handoff.first, handoff.second, destUri, shareDirect)
             } catch (e: CancellationException) {
                 progress.dismiss()
                 host.shareBanner.remove(transferId)
@@ -192,6 +253,34 @@ class ShareCenter(private val host: ResultViewerActivity) {
         host.shareBanner.remove(transferId)
         if (e != null) Timber.e(e, log) else Timber.e(log)
         CrispToast.show(host, host.getString(R.string.share_failed), long = true)
+    }
+
+    private suspend fun deliverHandoff(
+        file: File,
+        mime: String,
+        destUri: Uri?,
+        shareDirect: Boolean,
+    ) {
+        if (destUri != null) {
+            val copied = withContext(Dispatchers.IO) {
+                runCatching {
+                    host.contentResolver.openOutputStream(destUri)?.use { out ->
+                        file.inputStream().use { it.copyTo(out) }
+                    } ?: 0L
+                }.onFailure { Timber.e(it, "Save to Files failed") }.getOrDefault(0L)
+            }
+            Toast.makeText(
+                host,
+                if (copied > 0L) R.string.save_success else R.string.save_failed,
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        if (shareDirect) {
+            host.startActivity(SendToSheet.shareChooser(host, file, mime))
+        } else {
+            shareWithLocalOption(file, mime)
+        }
     }
 
     /**
@@ -259,10 +348,19 @@ class ShareCenter(private val host: ResultViewerActivity) {
             canvas, renderW, renderH, actualMin, actualMax,
             typeString, unit, extrema.maxIdx, extrema.minIdx, data,
             coordScale = renderScale,
+            imageName = sourceImageName(s, frameIndex),
         )
         heatmap.recycle()
         if (base !== s.baseImage) base.recycle()
         return out
+    }
+
+    /** Filename stamped on share photos: the real image, not a sweep settings label. */
+    private fun sourceImageName(s: Snapshot, frameIndex: Int): String? {
+        if (s.stepPerFrame != null) {
+            return s.defImagePaths.firstOrNull()?.let { File(it).name }
+        }
+        return s.defNames.getOrNull(frameIndex)?.takeIf { it.isNotBlank() }
     }
 
     /**
@@ -557,5 +655,11 @@ class ShareCenter(private val host: ResultViewerActivity) {
             "Eyy" to DicResult.IDX_EYY,
             "Exy" to DicResult.IDX_EXY,
         )
+
+        const val KIND_PDF = "pdf"
+        const val KIND_ZIP = "zip"
+        const val KIND_CSV = "csv"
+        const val KIND_PHOTOS = "photos"
+        const val KIND_GIFS = "gifs"
     }
 }

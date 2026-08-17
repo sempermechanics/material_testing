@@ -7,6 +7,9 @@
 <resources>
     <color name="bar_system">#101518</color>
     <color name="splash_bg">#101518</color>
+    <!-- Splash/auth set forceDarkAllowed=false on the wordmark, so ink must
+         invert here; cyan stays the light-theme value. -->
+    <color name="wordmark_ink">#E9E9E7</color>
     <color name="brand_plate">#000000</color>
     <color name="viewer_chrome_bg">#101518</color>
     <color name="viewer_chrome_text">#FFFFFFFF</color>

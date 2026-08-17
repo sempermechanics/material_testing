@@ -8,22 +8,13 @@
     android:orientation="vertical" tools:ignore="Overdraw">
 
     <ImageView
-        android:layout_width="96dp"
-        android:layout_height="96dp"
-        android:background="@drawable/bg_semper_mark"
-        android:contentDescription="@string/app_name_short"
-        android:padding="14dp"
-        android:scaleType="fitCenter"
-        android:src="@drawable/semper_mark_s" />
-
-    <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="220dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:text="@string/app_name_short"
-        android:textColor="@color/text_primary"
-        android:textSize="22sp"
-        android:textStyle="bold" />
+        android:adjustViewBounds="true"
+        android:contentDescription="@string/app_name_short"
+        android:forceDarkAllowed="false"
+        android:scaleType="fitCenter"
+        android:src="@drawable/semper_wordmark" />
 
     <!-- Hidden unless routing exceeds 400 ms: a spinner that flashes for a
          fast session restore reads as slowness, not speed. -->

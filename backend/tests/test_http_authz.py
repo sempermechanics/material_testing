@@ -77,7 +77,7 @@ async def test_pending_user_is_403(secure, client, monkeypatch):
     }
     monkeypatch.setattr(
         repo, "get_or_create_user",
-        lambda claims: {**secure._data["users"]["u-pending"], "uid": "u-pending"},
+        lambda claims, device_id=None: {**secure._data["users"]["u-pending"], "uid": "u-pending"},
     )
     r = await client.get("/v1/me", headers={"Authorization": "Bearer ok"})
     assert r.status_code == 403
@@ -87,7 +87,7 @@ async def test_pending_user_is_403(secure, client, monkeypatch):
 @pytest.mark.asyncio
 async def test_non_admin_cannot_list_users(secure, client, monkeypatch):
     monkeypatch.setattr(deps, "verify_id_token", lambda _t: {"sub": "u1", "email": "u@e.com"})
-    monkeypatch.setattr(repo, "get_or_create_user", lambda claims: _approved_user())
+    monkeypatch.setattr(repo, "get_or_create_user", lambda claims, device_id=None: _approved_user())
     r = await client.get("/v1/admin/users", headers={"Authorization": "Bearer ok"})
     assert r.status_code == 403
     assert r.json()["detail"] == "not_admin"
@@ -96,7 +96,7 @@ async def test_non_admin_cannot_list_users(secure, client, monkeypatch):
 @pytest.mark.asyncio
 async def test_cross_user_session_is_404(secure, client, monkeypatch):
     monkeypatch.setattr(deps, "verify_id_token", lambda _t: {"sub": "u-approved", "email": "u@e.com"})
-    monkeypatch.setattr(repo, "get_or_create_user", lambda claims: _approved_user())
+    monkeypatch.setattr(repo, "get_or_create_user", lambda claims, device_id=None: _approved_user())
     secure._data["sessions"] = {
         "s-other": {"uid": "someone-else", "status": "COMPLETED", "localSessionId": "x"},
     }
@@ -113,7 +113,7 @@ async def test_admin_mutation_requires_device_attestation(secure, client, monkey
     )
     monkeypatch.setattr(
         repo, "get_or_create_user",
-        lambda claims: {
+        lambda claims, device_id=None: {
             "uid": "admin-1", "email": "admin@indicvision.com",
             "role": "admin", "access_status": "APPROVED", "activeDeviceId": "adev",
         },
@@ -142,7 +142,7 @@ async def test_admin_mutation_with_valid_device_attestation(secure, client, monk
     )
     monkeypatch.setattr(
         repo, "get_or_create_user",
-        lambda claims: {
+        lambda claims, device_id=None: {
             "uid": "admin-1", "email": "admin@indicvision.com",
             "role": "admin", "access_status": "APPROVED", "activeDeviceId": "adev",
         },

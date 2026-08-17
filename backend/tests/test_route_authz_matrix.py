@@ -177,7 +177,7 @@ def attacker(monkeypatch):
         "access_status": "APPROVED", "activeDeviceId": "atk-device",
     }
     monkeypatch.setattr(deps, "verify_id_token", lambda _t: {"sub": ATTACKER})
-    monkeypatch.setattr(repo, "get_or_create_user", lambda claims: dict(profile))
+    monkeypatch.setattr(repo, "get_or_create_user", lambda claims, device_id=None: dict(profile))
     store._data["devices"] = {"atk-device": {
         "uid": ATTACKER, "status": "ACTIVE", "publicKeyPem": pem,
     }}

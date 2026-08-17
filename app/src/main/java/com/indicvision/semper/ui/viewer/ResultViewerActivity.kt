@@ -32,6 +32,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -91,6 +92,19 @@ class ResultViewerActivity : AppCompatActivity() {
 
     internal lateinit var shareBanner: com.indicvision.semper.ui.common.TransferBannerController
     private val chromeHideDelayMs = 2_500L
+
+    /** Stashed while the SAF save-as picker is open for a slow share export. */
+    internal var pendingShareKind: String? = null
+
+    private val createShareDocument = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val kind = pendingShareKind
+        pendingShareKind = null
+        val uri = result.data?.data
+        if (result.resultCode != RESULT_OK || uri == null || kind == null) return@registerForActivityResult
+        ShareCenter(this).writeKindToUri(kind, uri)
+    }
 
     private lateinit var inspect: ViewerInspectHelper
 
@@ -248,6 +262,7 @@ class ResultViewerActivity : AppCompatActivity() {
             inspect.restoreProbe(savedProbe)
             currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
             showingSummary = savedInstanceState.getBoolean("SHOWING_SUMMARY", false)
+            pendingShareKind = savedInstanceState.getString(STATE_SHARE_KIND)
         } else {
             // A lattice node tap asks to open on a specific frame; clamped once
             // the batch is loaded below.
@@ -562,6 +577,7 @@ class ResultViewerActivity : AppCompatActivity() {
         outState.putInt("LAST_CLOSEST_IDX", inspect.lastClosestIdx)
         outState.putInt("CURRENT_FRAME", currentFrameIndex)
         outState.putBoolean("SHOWING_SUMMARY", showingSummary)
+        pendingShareKind?.let { outState.putString(STATE_SHARE_KIND, it) }
     }
 
     private fun loadFrameData(index: Int) {
@@ -878,6 +894,18 @@ class ResultViewerActivity : AppCompatActivity() {
         ShareCenter(this).show()
     }
 
+    /** SAF CreateDocument for a slow export; generation starts only after a URI returns. */
+    internal fun pickShareDocument(kind: String, mime: String, filename: String) {
+        pendingShareKind = kind
+        createShareDocument.launch(
+            Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = mime
+                putExtra(Intent.EXTRA_TITLE, filename)
+            },
+        )
+    }
+
     /** Edge title + peek-sheet stats for [index], from pre-computed [metrics]. */
     private fun updateCaptionsFrom(metrics: FieldMetrics, index: Int) {
         val unit = if (DicResult.isStrainFieldIndex(index)) "m\u03b5" else "px"
@@ -1071,5 +1099,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         /** Field metrics are tiny (5 floats + 2 ints); keep plenty across frames/fields. */
         const val FIELD_METRICS_CACHE_MAX = 64
+
+        const val STATE_SHARE_KIND = "PENDING_SHARE_KIND"
     }
 }

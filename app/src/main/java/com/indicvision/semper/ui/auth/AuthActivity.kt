@@ -22,7 +22,6 @@ import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
-import com.indicvision.semper.util.BrandAssets
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -76,7 +75,6 @@ class AuthActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_auth)
-        BrandAssets.bindLoginWordmark(findViewById(R.id.imgBrandWordmark))
         window.decorView.post { reportFullyDrawn() }
 
         etEmail = findViewById(R.id.etEmail)

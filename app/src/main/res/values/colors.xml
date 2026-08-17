@@ -7,6 +7,10 @@
     <!--  reference these names only when an attr doesn't fit.          -->
     <!-- ============================================================= -->
 
+    <!-- Login / splash / PDF wordmark. Night inverts only the charcoal ink. -->
+    <color name="wordmark_ink">#161618</color>
+    <color name="wordmark_dic">#00A9A6</color>
+
     <!-- Brand: deep sky blue ramp -->
     <color name="sky_primary">#0288D1</color>          <!-- primary actions, headers -->
     <color name="sky_primary_dark">#0277BD</color>     <!-- status bar / pressed -->
