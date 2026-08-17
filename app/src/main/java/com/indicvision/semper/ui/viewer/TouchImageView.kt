@@ -13,6 +13,7 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.PointF
 import android.graphics.RectF
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.GestureDetector
@@ -119,9 +120,14 @@ class TouchImageView @JvmOverloads constructor(
         super.setImageDrawable(drawable)
         val w = drawable?.intrinsicWidth ?: 0
         val h = drawable?.intrinsicHeight ?: 0
-        if (w > 0 && h > 0) {
+        // GIF / unset views learn size from the drawable. Heatmaps already have
+        // specimen pixels from setTrueImageDimensions — do not overwrite those.
+        if (trueImageWidth <= 0f && w > 0 && h > 0) {
             setTrueImageDimensions(w, h)
+            return
         }
+        updateContentScale((drawable as? BitmapDrawable)?.bitmap)
+        publishMatrix()
     }
 
     private fun maybeFitSwipe(curr: PointF) {

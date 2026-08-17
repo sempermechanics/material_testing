@@ -368,6 +368,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
     <string name="sync_status_up_to_date">Cloud backups up to date</string>
     <string name="home_empty_restore">Restore from cloud</string>
+    <string name="home_empty_start">Start analysis</string>
     <string name="delete_device_kept_snackbar">Kept in the cloud</string>
     <string name="delete_device_restore_action">Restore…</string>
     <string name="setting_max_frames">Max frames</string>
@@ -602,8 +603,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="share_zip_sub">All frames: photos + PDF + CSV + GIFs</string>
     <string name="share_generating_gif">Rendering the animations — this can take a moment…</string>
     <string name="share_generating">Preparing files…</string>
-    <string name="share_generating_pdf">Building the report — this can take a moment…</string>
+    <string name="share_generating_pdf">Building the report — this can take a moment …</string>
     <string name="share_failed">Could not prepare the files. Try again.</string>
+    <string name="share_cancelled">Cancelled</string>
     <string name="share_save_to_files">Save to Files</string>
     <string name="send_to_title">Send to</string>
     <string name="send_to_save_sub">Save a copy to this device</string>
@@ -651,7 +653,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- First-login beta / data-use declaration (shown once per account on Home) -->
     <string name="beta_notice_title">Beta notice</string>
-    <string name="beta_notice_body">To help improve the app and its services, analysis data generated while using the app will be collected and used to enhance performance, reliability, and future features. The user has the right to access, update, or delete their data at any time.</string>
+    <string name="beta_notice_body">Analysis data generated while using the app will be collected for enhancing performance, reliability, and features of the app. The user has the right to access, update, or delete their data at any time.</string>
     <string name="beta_notice_ack">I understand</string>
 
     <!-- Session/analysis quota limit screen -->

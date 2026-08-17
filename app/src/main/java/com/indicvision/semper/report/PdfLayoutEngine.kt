@@ -129,6 +129,7 @@ class PdfLayoutEngine(
         val scale = targetW / logo.width.toFloat()
         val targetH = logo.height * scale
         val dest = RectF(margin, cursorY, margin + targetW, cursorY + targetH)
+        canvas?.drawRect(dest, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
         canvas?.drawBitmap(logo, null, dest, upscalerPaint)
         cursorY += targetH + BRAND_LOGO_GAP
     }

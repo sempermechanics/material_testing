@@ -7,9 +7,9 @@ package com.indicvision.semper.report
 
 import android.content.res.Resources
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfDocument
-import com.indicvision.semper.R
+import com.indicvision.semper.util.BrandAssets
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -92,6 +92,8 @@ object PdfReportGenerator {
             layout.finishCurrentPage()
             pdfDocument.writeTo(outputStream)
             emit(Progress.Complete)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(Progress.Error(e))
         } finally {
@@ -127,6 +129,8 @@ object PdfReportGenerator {
             pdfDocument.writeTo(outputStream)
 
             emit(Progress.Complete)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(Progress.Error(e))
         } finally {
@@ -265,7 +269,7 @@ object PdfReportGenerator {
 
     private fun decodeBrandLogo(resources: Resources?): Bitmap? {
         if (resources == null) return null
-        return BitmapFactory.decodeResource(resources, R.drawable.semper_wordmark)
+        return BrandAssets.wordmarkForPdf(resources)
     }
 
     private fun recycleLogo(logo: Bitmap?) {

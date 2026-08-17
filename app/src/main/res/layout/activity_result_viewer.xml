@@ -111,12 +111,14 @@
             android:id="@+id/chromeTop"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/surface"
+            android:background="@color/viewer_chrome_bg"
+            android:forceDarkAllowed="false"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="8dp"
             android:paddingTop="6dp"
-            android:paddingBottom="6dp">
+            android:paddingBottom="6dp"
+            tools:targetApi="29">
 
             <ImageButton
                 android:id="@+id/btnViewerBack"
@@ -138,7 +140,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text="@string/results_title"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/viewer_chrome_text"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -184,9 +186,11 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@color/surface"
+        android:background="@color/viewer_chrome_bg"
+        android:forceDarkAllowed="false"
         android:orientation="vertical"
-        android:paddingTop="8dp">
+        android:paddingTop="8dp"
+        tools:targetApi="29">
 
         <LinearLayout
             android:id="@+id/layoutColorScale"
@@ -195,7 +199,6 @@
             android:layout_marginHorizontal="16dp"
             android:clickable="true"
             android:focusable="true"
-            android:forceDarkAllowed="false"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingVertical="6dp"
@@ -206,7 +209,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/min_0_0"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/viewer_chrome_text"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -216,14 +219,16 @@
                 android:layout_height="8dp"
                 android:layout_marginHorizontal="8dp"
                 android:layout_weight="1"
-                android:background="@drawable/jet_gradient_horizontal" />
+                android:background="@drawable/jet_gradient_horizontal"
+                android:forceDarkAllowed="false"
+                tools:targetApi="29" />
 
             <TextView
                 android:id="@+id/tvScaleMax"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/max_0_0"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/viewer_chrome_text"
                 android:textSize="13sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -326,7 +331,7 @@
                     android:gravity="center"
                     android:singleLine="true"
                     android:text="@string/frame_1_1"
-                    android:textColor="@color/text_primary"
+                    android:textColor="@color/viewer_chrome_text"
                     android:textSize="15sp"
                     android:textStyle="bold" />
 
@@ -350,8 +355,8 @@
                         android:maxLength="4"
                         android:minWidth="28dp"
                         android:paddingVertical="1dp"
-                        android:textColor="@color/text_primary"
-                        android:textColorHint="@color/text_secondary"
+                        android:textColor="@color/viewer_chrome_text"
+                        android:textColorHint="@color/viewer_chrome_muted"
                         android:textSize="14sp"
                         android:textStyle="bold" />
 
@@ -359,7 +364,7 @@
                         android:id="@+id/tvFrameTotal"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="@color/viewer_chrome_muted"
                         android:textSize="14sp" />
                 </LinearLayout>
             </LinearLayout>

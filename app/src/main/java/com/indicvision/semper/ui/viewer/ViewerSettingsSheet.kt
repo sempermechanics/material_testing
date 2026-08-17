@@ -224,7 +224,7 @@ object ViewerSettingsSheet {
         row.addView(
             TextView(host).apply {
                 text = label
-                setTextColor(host.getColor(R.color.text_secondary))
+                setTextColor(host.getColor(R.color.viewer_chrome_muted))
                 textSize = SETTINGS_ROW_SP
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             },
@@ -232,7 +232,7 @@ object ViewerSettingsSheet {
         row.addView(
             TextView(host).apply {
                 text = value
-                setTextColor(host.getColor(R.color.text_primary))
+                setTextColor(host.getColor(R.color.viewer_chrome_text))
                 textSize = SETTINGS_ROW_SP
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
             },

@@ -18,7 +18,6 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.imaging.BitmapDecode
@@ -27,6 +26,7 @@ import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.VisualizationEngine
+import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeterminateProgressDialog
 import com.indicvision.semper.ui.common.TransferBannerController
 import kotlinx.coroutines.CancellationException
@@ -171,6 +171,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             } catch (e: CancellationException) {
                 progress.dismiss()
                 host.shareBanner.remove(transferId)
+                CrispToast.show(host, host.getString(R.string.share_cancelled))
                 throw e
             } catch (e: Throwable) {
                 // Throwable, not just Exception: a large multi-frame ZIP/PDF export
@@ -190,11 +191,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         progress.dismiss()
         host.shareBanner.remove(transferId)
         if (e != null) Timber.e(e, log) else Timber.e(log)
-        Snackbar.make(
-            host.findViewById(android.R.id.content),
-            R.string.share_failed,
-            Snackbar.LENGTH_LONG,
-        ).show()
+        CrispToast.show(host, host.getString(R.string.share_failed), long = true)
     }
 
     /**

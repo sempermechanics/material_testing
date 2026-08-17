@@ -171,8 +171,11 @@
             android:layout_width="72dp"
             android:layout_height="72dp"
             android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_semper_mark"
             android:contentDescription="@string/app_name_short"
-            android:src="@mipmap/ic_semper_launcher" />
+            android:padding="12dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/semper_mark_s" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -198,7 +201,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="@string/home_empty_restore" />
+            android:text="@string/home_empty_start" />
     </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
