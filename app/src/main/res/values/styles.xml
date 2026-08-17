@@ -100,18 +100,6 @@
         <item name="rippleColor">#220288D1</item>
     </style>
 
-    <!-- Compact field row in the result viewer. -->
-    <style name="Widget.Semper.SegmentedButton.Viewer" parent="Widget.Semper.SegmentedButton">
-        <item name="android:minHeight">40dp</item>
-        <item name="android:insetTop">0dp</item>
-        <item name="android:insetBottom">0dp</item>
-        <item name="android:textSize">14sp</item>
-        <item name="android:paddingLeft">12dp</item>
-        <item name="android:paddingRight">12dp</item>
-        <item name="android:paddingTop">6dp</item>
-        <item name="android:paddingBottom">6dp</item>
-    </style>
-
     <!-- Floating glass field pills over the immersive heatmap (wireframe: rounded-full).
          Shape and colour are the immersive treatment — stadium, no stroke, translucent
          fill that inverts to solid when checked. Metrics are deliberately the LARGER
