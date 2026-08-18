@@ -127,6 +127,21 @@
         <item name="ensureMinTouchTargetSize">false</item>
     </style>
 
+    <!-- Flat variant of Widget.Semper.SegmentedButton.ViewerImmersive for buttons
+         living inside a togglePlotMode-style group: no corner rounding of its
+         own at all. Neither MaterialButtonToggleGroup's automatic inner/outer
+         corner-squaring nor a per-child shapeAppearanceOverlay reliably took
+         effect for this control (tried both; both rendered fully square), so
+         the one-pill look is produced a different way entirely: the group is
+         wrapped in a container with a stadium background and
+         clipToOutline="true" (see bg_pill_clip_mask.xml and
+         activity_vsg_lattice.xml's togglePlotMode wrapper), which clips these
+         flat rectangular buttons into a pill from the outside instead of
+         relying on each button's own shape. -->
+    <style name="Widget.Semper.SegmentedButton.ViewerImmersive.Grouped" parent="Widget.Semper.SegmentedButton.ViewerImmersive">
+        <item name="cornerRadius">0dp</item>
+    </style>
+
     <!-- Peek sheet home action: soft glass pill on dark. -->
     <style name="Widget.Semper.Button.ViewerPeekHome" parent="Widget.MaterialComponents.Button.UnelevatedButton">
         <item name="android:textAllCaps">false</item>

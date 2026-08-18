@@ -32,6 +32,7 @@ import androidx.core.graphics.drawable.toDrawable
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.DicKeys
@@ -40,6 +41,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.ui.common.CoachMarkController
+import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
@@ -126,8 +128,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     private lateinit var chipSelectedParams: MaterialButton
     private lateinit var btnPrevNode: ImageButton
     private lateinit var btnNextNode: ImageButton
-    private lateinit var btnPlotHighlight: MaterialButton
-    private lateinit var btnPlotIsolate: MaterialButton
+    private lateinit var togglePlotMode: MaterialButtonToggleGroup
     private lateinit var strainSlider: Slider
     private lateinit var btnSaveGraph: MaterialButton
     private lateinit var btnView: MaterialButton
@@ -214,22 +215,16 @@ class VsgLatticeActivity : AppCompatActivity() {
         chipSelectedParams = findViewById(R.id.chipSelectedParams)
         btnPrevNode = findViewById(R.id.btnPrevNode)
         btnNextNode = findViewById(R.id.btnNextNode)
-        btnPlotHighlight = findViewById(R.id.btnPlotHighlight)
-        btnPlotIsolate = findViewById(R.id.btnPlotIsolate)
+        togglePlotMode = findViewById(R.id.togglePlotMode)
+        findViewById<View>(R.id.togglePlotModeClip).clipToOutline = true
         strainSlider = findViewById(R.id.sliderScrub)
         btnSaveGraph = findViewById(R.id.btnSaveGraph)
         btnView = findViewById(R.id.btnView)
 
         btnPrevNode.setOnClickListener { stepFocus(-1) }
         btnNextNode.setOnClickListener { stepFocus(1) }
-        // Manual mutual exclusion, not MaterialButtonToggleGroup -- see the layout
-        // comment on this pair for why (corner-squaring broke the pill shape).
-        val plotModeButtons = listOf(btnPlotHighlight, btnPlotIsolate)
-        plotModeButtons.forEach { button ->
-            button.setOnClickListener {
-                plotModeButtons.forEach { it.isChecked = it === button }
-                redrawStrainPlot()
-            }
+        togglePlotMode.addOnButtonCheckedListener { _, _, isChecked ->
+            if (isChecked) redrawStrainPlot()
         }
         btnView.setOnClickListener { if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex) }
         btnSaveGraph.setOnClickListener { saveGraph() }
@@ -244,19 +239,23 @@ class VsgLatticeActivity : AppCompatActivity() {
             if (fromUser && !syncingSlider) strainPlot.scrubToFraction(value)
         }
         // The chip is now the only params surface (the readout dropped its params
-        // tail, see scrubReadout), so it is the only remaining double-tap-copy target.
-        bindDoubleTapCopy(chipSelectedParams)
+        // tail, see scrubReadout), so it is the only remaining copy target.
+        bindCopyGestures(chipSelectedParams)
         setupStrainSpinner()
     }
 
-    /** Double-tapping [target] copies the selected node's params (readout or param chip). */
-    private fun bindDoubleTapCopy(target: View) {
+    /** Double-tapping or long-pressing [target] copies the selected node's params. */
+    private fun bindCopyGestures(target: View) {
         val detector = GestureDetector(
             this,
             object : GestureDetector.SimpleOnGestureListener() {
                 override fun onDoubleTap(e: MotionEvent): Boolean {
                     copySelectedParams(target)
                     return true
+                }
+
+                override fun onLongPress(e: MotionEvent) {
+                    copySelectedParams(target)
                 }
             },
         )
@@ -441,7 +440,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
         val component = selectedStrainComponent()
         val horizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
-        val isolate = btnPlotIsolate.isChecked
+        val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
         // Keep the zoom across node / mode switches; reset it when the component changes.
         val preserveViewport = component == lastStrainComponent
         lastStrainComponent = component
@@ -559,6 +558,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val node = selectedNode() ?: return
         ParamClipboard.copy(this, node.subset, node.step, node.window)
         animateCopyConfirmation(animateOn)
+        CrispToast.show(this, getString(R.string.vsg_lattice_params_copied))
     }
 
     /** A quick "pop + highlight" on [view] to confirm the params were copied. */
@@ -652,7 +652,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         if (node != null) {
             lines += getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, node.window)
         }
-        val isolate = btnPlotIsolate.isChecked
+        val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
         if (!isolate) {
             lines += resources.getQuantityString(R.plurals.vsg_export_combos_fmt, series.size, series.size)
         }

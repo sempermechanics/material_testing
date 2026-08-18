@@ -311,7 +311,7 @@
             android:id="@+id/plannedLatticeCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="12dp"
             app:cardBackgroundColor="@android:color/transparent"
             app:strokeColor="@color/viewer_glass_stroke">
 

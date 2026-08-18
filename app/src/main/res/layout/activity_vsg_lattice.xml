@@ -147,37 +147,46 @@
                     android:textStyle="bold"
                     tools:text="Strain along X" />
 
-                <!-- Plain LinearLayout, not MaterialButtonToggleGroup: the group
-                     auto-squares the corners where adjacent buttons touch, which
-                     overrode each button's own 999dp cornerRadius. fieldToggle
-                     (activity_result_viewer.xml) is the same fix already proven:
-                     independent checkable buttons with a real gap between them,
-                     each staying a full stadium, mutual exclusion done by hand in
-                     VsgLatticeActivity. -->
-                <LinearLayout
+                <!-- One seamless pill, not two separate ones: clip the whole group to
+                     a stadium outline from the outside (bg_pill_clip_mask.xml +
+                     clipToOutline, set in code: see VsgLatticeActivity.bindStrainControls,
+                     since android:clipToOutline as an XML attribute only takes effect on
+                     API 31+ and minSdk here is 24) rather than relying on
+                     MaterialButtonToggleGroup's own per-child corner-squaring, which
+                     did not reliably round the outer corners in this Material
+                     version (tried both a per-child shapeAppearanceOverlay and a
+                     group-level one; both still rendered fully square). The two
+                     buttons inside are plain flat rectangles. -->
+                <FrameLayout
+                    android:id="@+id/togglePlotModeClip"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
-                    android:orientation="horizontal">
+                    android:background="@drawable/bg_pill_clip_mask">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPlotHighlight"
-                        style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/togglePlotMode"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginEnd="8dp"
-                        android:checkable="true"
-                        android:checked="true"
-                        android:text="@string/vsg_lattice_curves_all" />
+                        app:checkedButton="@id/btnPlotHighlight"
+                        app:selectionRequired="true"
+                        app:singleSelection="true">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPlotIsolate"
-                        style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checkable="true"
-                        android:text="@string/vsg_lattice_curves_node" />
-                </LinearLayout>
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnPlotHighlight"
+                            style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/vsg_lattice_curves_all" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnPlotIsolate"
+                            style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/vsg_lattice_curves_node" />
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+                </FrameLayout>
 
                 <!-- bg_pill_glass moved off the Spinner onto this wrapper so a
                      trailing chevron can sit inside the same pill (the Spinner's

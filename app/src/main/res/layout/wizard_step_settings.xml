@@ -68,6 +68,7 @@
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             app:cardBackgroundColor="@android:color/transparent"
             app:strokeColor="@color/viewer_glass_stroke">
 
@@ -125,6 +126,7 @@
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             app:cardBackgroundColor="@android:color/transparent"
             app:strokeColor="@color/viewer_glass_stroke">
 
@@ -196,6 +198,7 @@
             android:id="@+id/lineCutPreviewCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             android:visibility="gone"
             app:cardBackgroundColor="@android:color/transparent"
             app:strokeColor="@color/viewer_glass_stroke">
@@ -269,6 +272,7 @@
             android:id="@+id/advancedParamsCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             app:cardBackgroundColor="@android:color/transparent"
             app:strokeColor="@color/viewer_glass_stroke">
 

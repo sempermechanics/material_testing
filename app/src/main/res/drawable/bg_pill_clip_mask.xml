@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Transparent stadium shape used only for its geometry: a ViewGroup with
+     this as its background and android:clipToOutline="true" clips every
+     child's own drawing (including each child's own square background
+     fill) to this outline. That's what makes togglePlotMode's two flat
+     buttons read as one seamless pill regardless of what
+     MaterialButtonToggleGroup's own per-child corner logic does or does
+     not do to them. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="999dp" />
+    <solid android:color="@android:color/transparent" />
+</shape>

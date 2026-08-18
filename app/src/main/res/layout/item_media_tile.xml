@@ -29,15 +29,16 @@
          hardcoded black with no tint (ic_check_circle.xml), so in light mode it
          drew literal black on an arbitrary thumbnail with no guaranteed contrast,
          only reading as visible in dark mode by force-dark's accidental
-         inversion. Matches item_session.xml's sessionCheck, the same badge used
-         correctly elsewhere in the app. -->
+         inversion. A round plate (bg_media_check_badge.xml), not a square one,
+         since the checkmark it sits behind is round too: a square plate under a
+         circular icon read as two different toggle shapes stacked. -->
     <ImageView
         android:id="@+id/imgMediaCheck"
         android:layout_width="22dp"
         android:layout_height="22dp"
         android:layout_gravity="top|end"
         android:layout_margin="6dp"
-        android:background="@color/sky_container"
+        android:background="@drawable/bg_media_check_badge"
         android:src="@drawable/ic_check_circle"
         app:tint="@color/sky_primary"
         android:importantForAccessibility="no"
