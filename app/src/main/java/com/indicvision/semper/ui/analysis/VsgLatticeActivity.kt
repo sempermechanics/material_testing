@@ -32,7 +32,6 @@ import androidx.core.graphics.drawable.toDrawable
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.DicKeys
@@ -127,7 +126,8 @@ class VsgLatticeActivity : AppCompatActivity() {
     private lateinit var chipSelectedParams: MaterialButton
     private lateinit var btnPrevNode: ImageButton
     private lateinit var btnNextNode: ImageButton
-    private lateinit var togglePlotMode: MaterialButtonToggleGroup
+    private lateinit var btnPlotHighlight: MaterialButton
+    private lateinit var btnPlotIsolate: MaterialButton
     private lateinit var strainSlider: Slider
     private lateinit var btnSaveGraph: MaterialButton
     private lateinit var btnView: MaterialButton
@@ -214,15 +214,22 @@ class VsgLatticeActivity : AppCompatActivity() {
         chipSelectedParams = findViewById(R.id.chipSelectedParams)
         btnPrevNode = findViewById(R.id.btnPrevNode)
         btnNextNode = findViewById(R.id.btnNextNode)
-        togglePlotMode = findViewById(R.id.togglePlotMode)
+        btnPlotHighlight = findViewById(R.id.btnPlotHighlight)
+        btnPlotIsolate = findViewById(R.id.btnPlotIsolate)
         strainSlider = findViewById(R.id.sliderScrub)
         btnSaveGraph = findViewById(R.id.btnSaveGraph)
         btnView = findViewById(R.id.btnView)
 
         btnPrevNode.setOnClickListener { stepFocus(-1) }
         btnNextNode.setOnClickListener { stepFocus(1) }
-        togglePlotMode.addOnButtonCheckedListener { _, _, isChecked ->
-            if (isChecked) redrawStrainPlot()
+        // Manual mutual exclusion, not MaterialButtonToggleGroup -- see the layout
+        // comment on this pair for why (corner-squaring broke the pill shape).
+        val plotModeButtons = listOf(btnPlotHighlight, btnPlotIsolate)
+        plotModeButtons.forEach { button ->
+            button.setOnClickListener {
+                plotModeButtons.forEach { it.isChecked = it === button }
+                redrawStrainPlot()
+            }
         }
         btnView.setOnClickListener { if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex) }
         btnSaveGraph.setOnClickListener { saveGraph() }
@@ -342,7 +349,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val reason = node.failureReason.ifEmpty { getString(R.string.sweep_node_skipped) }
         MaterialAlertDialogBuilder(this)
             .setTitle(
-                getString(R.string.sweep_node_title_fmt, node.subset, node.step, node.window, node.vsg),
+                getString(R.string.sweep_node_title_fmt, node.subset, node.step, node.window),
             )
             .setMessage(reason)
             .setPositiveButton(android.R.string.ok, null)
@@ -434,7 +441,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
         val component = selectedStrainComponent()
         val horizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
-        val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
+        val isolate = btnPlotIsolate.isChecked
         // Keep the zoom across node / mode switches; reset it when the component changes.
         val preserveViewport = component == lastStrainComponent
         lastStrainComponent = component
@@ -645,7 +652,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         if (node != null) {
             lines += getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, node.window)
         }
-        val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
+        val isolate = btnPlotIsolate.isChecked
         if (!isolate) {
             lines += resources.getQuantityString(R.plurals.vsg_export_combos_fmt, series.size, series.size)
         }

@@ -78,14 +78,8 @@ object ViewerSettingsSheet {
                 host.getString(R.string.setting_strain_window) to
                     host.resources.getQuantityString(R.plurals.setting_subsets_fmt, strainWin, strainWin),
             )
-            if (host.isSweep) {
-                add(
-                    host.getString(R.string.setting_vsg) to host.getString(
-                        R.string.setting_px_fmt,
-                        VsgStudy.vsgFor(host.step, strainWin),
-                    ),
-                )
-            }
+            // VSG is derived from Step and Strain window, both already rows above --
+            // no separate row for a number that adds no information beyond them.
             add(
                 host.getString(R.string.setting_strain_method) to
                     (host.intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG"),

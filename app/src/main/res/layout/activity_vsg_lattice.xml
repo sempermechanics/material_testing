@@ -147,20 +147,27 @@
                     android:textStyle="bold"
                     tools:text="Strain along X" />
 
-                <com.google.android.material.button.MaterialButtonToggleGroup
-                    android:id="@+id/togglePlotMode"
+                <!-- Plain LinearLayout, not MaterialButtonToggleGroup: the group
+                     auto-squares the corners where adjacent buttons touch, which
+                     overrode each button's own 999dp cornerRadius. fieldToggle
+                     (activity_result_viewer.xml) is the same fix already proven:
+                     independent checkable buttons with a real gap between them,
+                     each staying a full stadium, mutual exclusion done by hand in
+                     VsgLatticeActivity. -->
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
-                    app:checkedButton="@id/btnPlotHighlight"
-                    app:selectionRequired="true"
-                    app:singleSelection="true">
+                    android:orientation="horizontal">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnPlotHighlight"
                         style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:checkable="true"
+                        android:checked="true"
                         android:text="@string/vsg_lattice_curves_all" />
 
                     <com.google.android.material.button.MaterialButton
@@ -168,16 +175,39 @@
                         style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:checkable="true"
                         android:text="@string/vsg_lattice_curves_node" />
-                </com.google.android.material.button.MaterialButtonToggleGroup>
+                </LinearLayout>
 
-                <Spinner
-                    android:id="@+id/spinnerStrainComponent"
+                <!-- bg_pill_glass moved off the Spinner onto this wrapper so a
+                     trailing chevron can sit inside the same pill (the Spinner's
+                     own native dropdown arrow is lost once its background is
+                     replaced, so nothing signalled "tap for more" without this). -->
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="40dp"
                     android:background="@drawable/bg_pill_glass"
-                    android:paddingHorizontal="12dp"
-                    android:spinnerMode="dropdown" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="8dp">
+
+                    <Spinner
+                        android:id="@+id/spinnerStrainComponent"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:background="@null"
+                        android:spinnerMode="dropdown" />
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_marginStart="2dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_expand_more"
+                        app:tint="@color/viewer_chrome_text" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- compactAxes=true (VsgLatticeActivity): no separate axis-title

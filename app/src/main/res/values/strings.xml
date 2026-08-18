@@ -433,7 +433,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="line_cut_preview_heading">Line cut</string>
     <string name="planned_lattice_heading">Planned lattice</string>
     <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · window %5$d</string>
-    <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d · VSG %4$d</string>
+    <!-- VSG is derived (= (window-1)*step + 1), never independent info: dropped
+         from this label since step and window are already both spelled out in it. -->
+    <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d</string>
     <string name="sweep_failed">The parameter sweep could not run.</string>
     
     <string name="sweep_fail_features">The engine couldn\'t match the two images (AKAZE feature extraction failed). \n\nThe image pair:During the test, specimen might have moved or too much deformation could have decorrelated with the reference.</string>
@@ -456,7 +458,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_reason_decode">Image could not be decoded</string>
     <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
     <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
-    <string name="sweep_node_title_fmt">S%1$d · St%2$d · W%3$d · VSG %4$d</string>
+    <string name="sweep_node_title_fmt">S%1$d · St%2$d · W%3$d</string>
     <string name="sweep_node_skipped">This combination was skipped</string>
     <!-- Which frame a failure happened on; prefixes the reason above. -->
     <string name="failure_frame_fmt">Frame %1$d (%2$s): </string>

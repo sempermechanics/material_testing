@@ -44,10 +44,10 @@ class VsgLatticeView @JvmOverloads constructor(
     /**
      * When true, drops the separate axis-title lines and shrinks the gutters to
      * just the tick labels (subset size's unit folds onto the rightmost tick
-     * instead) -- for the result lattice, which is space-constrained and
-     * already explains both axes via its coach mark. The wizard's sweep
-     * preview leaves this false: more room, and it is the user's first look
-     * at the concept.
+     * instead). Set on both consumers of this view -- the result lattice and
+     * the wizard's sweep preview -- which now share the same 136dp height;
+     * neither has room for the full gutters at that size. Defaults false only
+     * because a shared view shouldn't assume a caller wants it.
      */
     var compact: Boolean = false
         set(value) {

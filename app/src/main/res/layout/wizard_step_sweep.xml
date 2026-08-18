@@ -18,10 +18,15 @@
         android:orientation="vertical"
         android:padding="14dp">
 
-        <!-- Collapsible: sweep settings -->
+        <!-- Collapsible: sweep settings. cardCornerRadius/contentPadding/elevation
+             inherit Widget.Semper.Card (the app theme's materialCardViewStyle);
+             only the fill and stroke move to the glass-pill hairline treatment,
+             matching the result lattice/viewer. -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:strokeColor="@color/viewer_glass_stroke">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -53,7 +58,8 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/sweep_settings"
-                            android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
+                            android:textAppearance="@style/TextAppearance.Semper.SectionHeader"
+                            android:textColor="@color/viewer_chrome_text" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -69,7 +75,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginBottom="8dp"
-                        android:background="@color/surface_outline" />
+                        android:background="@color/viewer_glass_stroke" />
 
                     <!-- Subset size range: min text | range slider | max text -->
                     <LinearLayout
@@ -88,7 +94,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/subset_range"
-                            android:textColor="@color/text_primary"
+                            android:textColor="@color/viewer_chrome_text"
                             android:textStyle="bold" />
 
                         <ImageButton
@@ -100,7 +106,7 @@
                             android:contentDescription="@string/info"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_info_min"
-                            app:tint="@color/text_secondary" />
+                            app:tint="@color/viewer_chrome_muted" />
                     </LinearLayout>
 
                     <LinearLayout
@@ -174,7 +180,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/strain_win_range"
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/viewer_chrome_text"
                                 android:textStyle="bold" />
 
                             <ImageButton
@@ -186,7 +192,7 @@
                                 android:contentDescription="@string/info"
                                 android:scaleType="fitCenter"
                                 android:src="@drawable/ic_info_min"
-                                app:tint="@color/text_secondary" />
+                                app:tint="@color/viewer_chrome_muted" />
                         </LinearLayout>
 
                         <LinearLayout
@@ -260,7 +266,7 @@
                             android:contentDescription="@string/info"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_info_min"
-                            app:tint="@color/text_secondary" />
+                            app:tint="@color/viewer_chrome_muted" />
 
                         <com.google.android.material.textfield.TextInputLayout
                             android:id="@+id/tilStepDepth"
@@ -269,7 +275,7 @@
                             android:layout_height="wrap_content"
                             android:hint="@string/step_depth"
                             app:boxStrokeColor="@color/sky_primary"
-                            app:hintTextColor="@color/text_secondary"
+                            app:hintTextColor="@color/viewer_chrome_muted"
                             app:prefixText="@string/step_depth_prefix">
 
                             <com.google.android.material.textfield.TextInputEditText
@@ -280,7 +286,7 @@
                                 android:importantForAutofill="no"
                                 android:inputType="number"
                                 android:maxLength="1"
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/viewer_chrome_text"
                                 tools:text="3" />
                         </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
@@ -305,7 +311,9 @@
             android:id="@+id/plannedLatticeCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp">
+            android:layout_marginTop="10dp"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:strokeColor="@color/viewer_glass_stroke">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -323,16 +331,22 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/planned_lattice_heading"
-                        android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
+                        android:textAppearance="@style/TextAppearance.Semper.SectionHeader"
+                        android:textColor="@color/viewer_chrome_text" />
 
+                    <!-- bg_chrome_ghost, not a borderless ripple: a standalone
+                         40dp icon-only button, same role as the toolbar buttons
+                         it now matches (activity_result_viewer.xml, activity_vsg_lattice.xml). -->
                     <ImageButton
                         android:id="@+id/btnLatticeSamples"
                         android:layout_width="40dp"
                         android:layout_height="40dp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:background="@drawable/bg_chrome_ghost"
                         android:contentDescription="@string/lattice_samples_settings"
+                        android:padding="8dp"
+                        android:scaleType="fitCenter"
                         android:src="@drawable/ic_settings_gear"
-                        app:tint="@color/text_secondary" />
+                        app:tint="@color/viewer_chrome_text" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -359,7 +373,7 @@
                             android:contentDescription="@string/info"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_info_min"
-                            app:tint="@color/text_secondary" />
+                            app:tint="@color/viewer_chrome_muted" />
 
                         <com.google.android.material.textfield.TextInputLayout
                             android:id="@+id/tilSubsetSamples"
@@ -370,7 +384,7 @@
                             android:layout_weight="1"
                             android:hint="@string/subset_samples"
                             app:boxStrokeColor="@color/sky_primary"
-                            app:hintTextColor="@color/text_secondary">
+                            app:hintTextColor="@color/viewer_chrome_muted">
 
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/etSubsetSamplesValue"
@@ -380,7 +394,7 @@
                                 android:importantForAutofill="no"
                                 android:inputType="number"
                                 android:maxLength="1"
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/viewer_chrome_text"
                                 tools:text="3" />
                         </com.google.android.material.textfield.TextInputLayout>
 
@@ -392,7 +406,7 @@
                             android:layout_weight="1"
                             android:hint="@string/vsg_samples"
                             app:boxStrokeColor="@color/sky_primary"
-                            app:hintTextColor="@color/text_secondary">
+                            app:hintTextColor="@color/viewer_chrome_muted">
 
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/etVsgSamplesValue"
@@ -402,16 +416,19 @@
                                 android:importantForAutofill="no"
                                 android:inputType="number"
                                 android:maxLength="1"
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/viewer_chrome_text"
                                 tools:text="3" />
                         </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
                 </LinearLayout>
 
+                <!-- Matches the result lattice's height (compact=true set in
+                     SweepSetupHelper.setup()) so the planned and solved lattices
+                     read as the same element at two points in the flow. -->
                 <com.indicvision.semper.ui.analysis.VsgLatticeView
                     android:id="@+id/sweepLatticePreview"
                     android:layout_width="match_parent"
-                    android:layout_height="260dp"
+                    android:layout_height="136dp"
                     android:layout_marginTop="10dp" />
 
                 <TextView
@@ -419,7 +436,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:textColor="@color/text_secondary"
+                    android:textColor="@color/viewer_chrome_muted"
                     android:textSize="12sp"
                     tools:text="8 analyses" />
             </LinearLayout>

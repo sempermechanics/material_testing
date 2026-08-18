@@ -19,7 +19,9 @@
         <!-- Inputs summary -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:strokeColor="@color/viewer_glass_stroke">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -31,7 +33,7 @@
                     android:id="@+id/ivInputsThumb"
                     android:layout_width="46dp"
                     android:layout_height="46dp"
-                    android:background="@color/surface_muted"
+                    android:background="@color/viewer_canvas"
                     android:contentDescription="@string/reference_image_preview"
                     android:scaleType="centerCrop" />
 
@@ -48,7 +50,7 @@
                         android:layout_height="wrap_content"
                         android:ellipsize="middle"
                         android:maxLines="1"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/viewer_chrome_text"
                         android:textSize="14sp"
                         android:textStyle="bold" />
 
@@ -56,7 +58,7 @@
                         android:id="@+id/tvInputsMeta"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="@color/viewer_chrome_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
@@ -65,7 +67,9 @@
         <!-- Region of interest -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:strokeColor="@color/viewer_glass_stroke">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -83,7 +87,7 @@
                         android:layout_height="24dp"
                         android:contentDescription="@string/region_of_interest"
                         android:src="@drawable/ic_crop"
-                        app:tint="@color/text_secondary" />
+                        app:tint="@color/viewer_chrome_muted" />
 
                     <LinearLayout
                         android:layout_width="0dp"
@@ -96,13 +100,14 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/region_of_interest"
-                            android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
+                            android:textAppearance="@style/TextAppearance.Semper.SectionHeader"
+                            android:textColor="@color/viewer_chrome_text" />
 
                         <TextView
                             android:id="@+id/tvInstruction"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:textColor="@color/text_secondary"
+                            android:textColor="@color/viewer_chrome_muted"
                             android:textSize="12sp" />
                     </LinearLayout>
 
@@ -119,7 +124,9 @@
         <!-- Card: analysis mode — one setting, or a parameter sweep -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:strokeColor="@color/viewer_glass_stroke">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -136,7 +143,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/analysis_mode"
-                        android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
+                        android:textAppearance="@style/TextAppearance.Semper.SectionHeader"
+                        android:textColor="@color/viewer_chrome_text" />
 
                     <View
                         android:layout_width="0dp"
@@ -151,7 +159,7 @@
                         android:contentDescription="@string/info"
                         android:scaleType="fitCenter"
                         android:src="@drawable/ic_info_min"
-                        app:tint="@color/text_secondary" />
+                        app:tint="@color/viewer_chrome_muted" />
                 </LinearLayout>
 
                 <com.google.android.material.button.MaterialButtonToggleGroup
@@ -188,7 +196,9 @@
             android:id="@+id/lineCutPreviewCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:visibility="gone">
+            android:visibility="gone"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:strokeColor="@color/viewer_glass_stroke">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -205,7 +215,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/line_cut_preview_heading"
-                        android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
+                        android:textAppearance="@style/TextAppearance.Semper.SectionHeader"
+                        android:textColor="@color/viewer_chrome_text" />
 
                     <ImageButton
                         android:id="@+id/btnLineCutInfo"
@@ -216,7 +227,7 @@
                         android:contentDescription="@string/info"
                         android:scaleType="fitCenter"
                         android:src="@drawable/ic_info_min"
-                        app:tint="@color/text_secondary" />
+                        app:tint="@color/viewer_chrome_muted" />
                 </LinearLayout>
 
                 <com.google.android.material.button.MaterialButtonToggleGroup
@@ -257,7 +268,9 @@
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/advancedParamsCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:strokeColor="@color/viewer_glass_stroke">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -284,7 +297,8 @@
                         android:layout_marginStart="10dp"
                         android:layout_weight="1"
                         android:text="@string/advanced_parameters"
-                        android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
+                        android:textAppearance="@style/TextAppearance.Semper.SectionHeader"
+                        android:textColor="@color/viewer_chrome_text" />
 
                     <com.google.android.material.chip.Chip
                         android:id="@+id/btnPasteParams"
@@ -319,7 +333,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginBottom="12dp"
-                        android:background="@color/surface_outline" />
+                        android:background="@color/viewer_glass_stroke" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -329,7 +343,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/subset_size"
-                            android:textColor="@color/text_primary"
+                            android:textColor="@color/viewer_chrome_text"
                             android:textStyle="bold" />
 
                         <ImageButton
@@ -341,7 +355,7 @@
                             android:contentDescription="@string/info"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_info_min"
-                            app:tint="@color/text_secondary" />
+                            app:tint="@color/viewer_chrome_muted" />
 
                         <View
                             android:layout_width="0dp"
@@ -391,7 +405,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/step_size_density"
-                            android:textColor="@color/text_primary"
+                            android:textColor="@color/viewer_chrome_text"
                             android:textStyle="bold" />
 
                         <ImageButton
@@ -403,7 +417,7 @@
                             android:contentDescription="@string/info"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_info_min"
-                            app:tint="@color/text_secondary" />
+                            app:tint="@color/viewer_chrome_muted" />
 
                         <View
                             android:layout_width="0dp"
@@ -453,7 +467,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/strain_window"
-                            android:textColor="@color/text_primary"
+                            android:textColor="@color/viewer_chrome_text"
                             android:textStyle="bold" />
 
                         <ImageButton
@@ -465,7 +479,7 @@
                             android:contentDescription="@string/info"
                             android:scaleType="fitCenter"
                             android:src="@drawable/ic_info_min"
-                            app:tint="@color/text_secondary" />
+                            app:tint="@color/viewer_chrome_muted" />
 
                         <View
                             android:layout_width="0dp"
@@ -513,7 +527,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="14dp"
                         android:text="@string/sub_pixel_interpolation_kernel"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/viewer_chrome_text"
                         android:textStyle="bold" />
 
                     <com.google.android.material.button.MaterialButtonToggleGroup
@@ -554,7 +568,7 @@
             android:text="@string/result"
             android:textSize="18sp"
             android:textStyle="bold"
-            android:textColor="@color/text_primary"
+            android:textColor="@color/viewer_chrome_text"
             android:textAlignment="center"
             android:layout_marginTop="12dp"
             android:paddingBottom="20dp" />
