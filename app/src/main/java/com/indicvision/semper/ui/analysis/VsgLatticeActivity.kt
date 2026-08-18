@@ -33,7 +33,6 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.DicKeys
@@ -42,6 +41,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.ui.common.CoachMarkController
+import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
@@ -125,7 +125,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     private lateinit var strainPlotTitle: TextView
     private lateinit var strainPlotReadout: TextView
     private lateinit var stepperRow: View
-    private lateinit var chipSelectedParams: Chip
+    private lateinit var chipSelectedParams: MaterialButton
     private lateinit var btnPrevNode: ImageButton
     private lateinit var btnNextNode: ImageButton
     private lateinit var togglePlotMode: MaterialButtonToggleGroup
@@ -148,6 +148,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         setContentView(R.layout.activity_vsg_lattice)
 
         Insets.padTop(findViewById(R.id.toolbar))
+        Insets.padBottom(findViewById(R.id.actionBarRow))
 
         findViewById<MaterialToolbar>(R.id.toolbar).apply {
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
@@ -176,6 +177,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         latticeView = findViewById(R.id.latticeView)
         latticeView.apply {
             interactionEnabled = true
+            compact = true
             setNodes(nodes)
             onNodeClick = { node ->
                 if (node.solved) selectFocus(node.frameIndex) else showSkipReason(node)
@@ -205,6 +207,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         strainPlotSection = findViewById(R.id.strainPlotSection)
         strainPlot = findViewById(R.id.plotLatticeStrain)
         strainPlot.zoomEnabled = true
+        strainPlot.compactAxes = true
         strainSpinner = findViewById(R.id.spinnerStrainComponent)
         strainPlotTitle = findViewById(R.id.tvStrainPlotTitle)
         strainPlotReadout = findViewById(R.id.tvStrainPlotReadout)
@@ -213,6 +216,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         btnPrevNode = findViewById(R.id.btnPrevNode)
         btnNextNode = findViewById(R.id.btnNextNode)
         togglePlotMode = findViewById(R.id.togglePlotMode)
+        findViewById<View>(R.id.togglePlotModeClip).clipToOutline = true
         strainSlider = findViewById(R.id.sliderScrub)
         btnSaveGraph = findViewById(R.id.btnSaveGraph)
         btnView = findViewById(R.id.btnView)
@@ -234,19 +238,24 @@ class VsgLatticeActivity : AppCompatActivity() {
         strainSlider.addOnChangeListener { _, value, fromUser ->
             if (fromUser && !syncingSlider) strainPlot.scrubToFraction(value)
         }
-        bindDoubleTapCopy(strainPlotReadout)
-        bindDoubleTapCopy(chipSelectedParams)
+        // The chip is now the only params surface (the readout dropped its params
+        // tail, see scrubReadout), so it is the only remaining copy target.
+        bindCopyGestures(chipSelectedParams)
         setupStrainSpinner()
     }
 
-    /** Double-tapping [target] copies the selected node's params (readout or param chip). */
-    private fun bindDoubleTapCopy(target: View) {
+    /** Double-tapping or long-pressing [target] copies the selected node's params. */
+    private fun bindCopyGestures(target: View) {
         val detector = GestureDetector(
             this,
             object : GestureDetector.SimpleOnGestureListener() {
                 override fun onDoubleTap(e: MotionEvent): Boolean {
                     copySelectedParams(target)
                     return true
+                }
+
+                override fun onLongPress(e: MotionEvent) {
+                    copySelectedParams(target)
                 }
             },
         )
@@ -257,17 +266,15 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
     }
 
-    /** Scrub readout for the selected node only: labeled (x, y) and subset/step/strain. */
+    /**
+     * Scrub readout: x only. y is already at the scrub point on the plot itself
+     * (the dot + value label VsgPlotView draws there), and params are already on
+     * [chipSelectedParams] -- showing either again here would be the same fact
+     * twice, ~2dp apart, at two different precisions.
+     */
     private fun scrubReadout(x: Float, samples: List<VsgPlotView.Sample>): CharSequence {
-        val node = selectedNode()
-        if (x.isNaN() || samples.isEmpty() || node == null) return ""
-        val params = getString(
-            R.string.vsg_lattice_param_labeled_fmt,
-            node.subset,
-            node.step,
-            node.window,
-        )
-        return getString(R.string.vsg_lattice_scrub_value_fmt, x, samples.first().value, params)
+        if (x.isNaN() || samples.isEmpty()) return ""
+        return getString(R.string.vsg_lattice_scrub_x_fmt, x)
     }
 
     private fun maybeCoachTheGraph() {
@@ -341,7 +348,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val reason = node.failureReason.ifEmpty { getString(R.string.sweep_node_skipped) }
         MaterialAlertDialogBuilder(this)
             .setTitle(
-                getString(R.string.sweep_node_title_fmt, node.subset, node.step, node.window, node.vsg),
+                getString(R.string.sweep_node_title_fmt, node.subset, node.step, node.window),
             )
             .setMessage(reason)
             .setPositiveButton(android.R.string.ok, null)
@@ -468,7 +475,14 @@ class VsgLatticeActivity : AppCompatActivity() {
         exportSeries = toShow
         exportXLabel = getString(if (horizontal) R.string.line_cut_axis_x else R.string.line_cut_axis_y)
         exportYLabel = getString(R.string.line_cut_axis_strain)
-        strainPlot.setData(toShow, exportXLabel, exportYLabel, preserveViewport = preserveViewport)
+        strainPlot.setData(
+            toShow,
+            exportXLabel,
+            exportYLabel,
+            preserveViewport = preserveViewport,
+            xUnit = getString(R.string.scale_unit_px),
+            yUnit = getString(R.string.scale_unit_strain),
+        )
         strainPlotReadout.text = ""
         syncingSlider = true
         strainSlider.value = 0f
@@ -493,7 +507,7 @@ class VsgLatticeActivity : AppCompatActivity() {
                 frameIndex = index,
                 series = VsgPlotView.Series(
                     label = label,
-                    color = VsgPlotView.paletteColor(index),
+                    color = VsgPlotView.paletteColor(this, index),
                     points = points,
                     markers = false,
                     muted = index != focusedFrameIndex,
@@ -544,6 +558,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val node = selectedNode() ?: return
         ParamClipboard.copy(this, node.subset, node.step, node.window)
         animateCopyConfirmation(animateOn)
+        CrispToast.show(this, getString(R.string.vsg_lattice_params_copied))
     }
 
     /** A quick "pop + highlight" on [view] to confirm the params were copied. */

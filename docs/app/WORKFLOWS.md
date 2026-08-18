@@ -610,8 +610,9 @@ aiming at a small target.
 ```
 7. Parameter sweep — VsgLatticeActivity
    ├── coach marks                       (first visit: the lattice, then the plot)
-   ├── result lattice: subset × VSG, solved (filled) vs skipped (hollow)
-   │   ├── node fill colour matches that combination's curve in the plot
+   ├── result lattice: subset × VSG, solved (filled) vs skipped (hollow ring)
+   │   ├── every solved node shares one colour; the focused one also gets a
+   │   │   selection ring (no legend row — the coach mark covers it once)
    │   ├── tap a node → focus it
    │   └── double-tap / long-press → open that combination in the viewer
    ├── stepper row: ‹ prev · parameter chip · next ›   (solved nodes only)
@@ -621,8 +622,8 @@ aiming at a small target.
    │   ├── Highlight ↔ Isolate           (Isolate is the default)
    │   ├── plot: pinch-zoom, two-finger pan, double-tap to reset
    │   ├── scrub slider under the plot   (two-way synced with the drag)
-   │   └── readout: "x=… · y=… · subset … · step … · strain …"
-   │       └── double-tap to copy the parameters
+   │   └── readout: "x=…"                (y is on the plot at the scrub point;
+   │                                       params are on the chip above)
    └── Save graph · View                 (pinned bottom bar)
 ```
 
@@ -633,9 +634,9 @@ aiming at a small target.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 7.1.1 | Open a sweep | Lattice with subset across and VSG up; a legend explains filled vs hollow |
-| [ ] 7.1.2 | Open a sweep that had failures | Skipped combinations are hollow red rings |
-| [ ] 7.1.3 | Compare a filled node with the plot below | Its fill colour is the same as its curve's colour — the two views are colour-keyed |
+| [ ] 7.1.1 | Open a sweep | Lattice with subset across and VSG up; the coach mark explains filled vs hollow (no persistent legend row) |
+| [ ] 7.1.2 | Open a sweep that had failures | Skipped combinations are hollow rings with no fill — any surface behind them shows through |
+| [ ] 7.1.3 | Compare two different filled nodes | Same fill colour — node identity comes from position + the selection ring, not a colour key. The plot below only puts colour on the *focused* curve (§7.2.4) |
 | [ ] 7.1.4 | Read the summary line | "N combinations · S solved · K skipped · step subset÷D" |
 | [ ] 7.1.5 | Tap a solved node | A selection ring appears; the stepper chip and the plot follow it |
 | [ ] 7.1.6 | Tap a skipped node | A dialog explains why it was skipped; nothing is focused |
@@ -653,7 +654,7 @@ aiming at a small target.
 | [ ] 7.2.1 | Read the plot title | It names the cut axis — "Strain along X axis" or "…Y axis" |
 | [ ] 7.2.2 | Change the strain component spinner | The plot redraws for Exx / Eyy / Exy |
 | [ ] 7.2.3 | Look at the Highlight/Isolate toggle on open | **Isolate** is selected by default — one curve, not a thicket |
-| [ ] 7.2.4 | Switch to **Highlight** | Every solved combination is drawn, with the focused one at full strength and the rest muted |
+| [ ] 7.2.4 | Switch to **Highlight** | Every solved combination is drawn: the focused curve at full strength in its own colour, every other curve sharing one muted neutral (not each its own dimmed colour) — only one hue ever carries meaning at a time |
 | [ ] 7.2.5 | Pinch to zoom on the plot | It zooms about the pinch centre |
 | [ ] 7.2.6 | Drag with two fingers | The zoomed plot pans |
 | [ ] 7.2.7 | Double-tap the plot | The viewport resets to fit |
@@ -662,14 +663,14 @@ aiming at a small target.
 | [ ] 7.2.10 | Drag one finger across the plot | A vertical guide follows it; a dot marks the selected curve and its value is drawn beside it |
 | [ ] 7.2.11 | Watch the slider while dragging | It tracks the finger |
 | [ ] 7.2.12 | Drag the slider instead | The guide, dot and readout follow it — the sync works both ways |
-| [ ] 7.2.13 | Read the readout | "x=… · y=… · subset N · step N · strain N" for the **selected** node |
+| [ ] 7.2.13 | Read the readout | "x=…" only — y is already drawn on the plot at the scrub point (§7.2.10), and subset/step/strain are already on the parameter chip (§7.1) |
 | [ ] 7.2.14 | Step to another node with the plot scrubbed | The readout clears and the slider returns to 0 |
 
 ### 7.3 Copy, save and open
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 7.3.1 | Double-tap the readout line | "Parameters copied" — subset, step and strain window go to the app's parameter clipboard |
+| [ ] 7.3.1 | Double-tap the parameter chip | "Parameters copied" — subset, step and strain window go to the app's parameter clipboard. (The readout line no longer carries params, so it is no longer a copy target — the chip is the only one.) |
 | [ ] 7.3.2 | Start a new single-setting analysis afterwards | Step 2 offers a **Paste params** chip that fills all three (§5.2.13b) |
 | [ ] 7.3.3 | Tap **View** with a node focused | The result viewer opens on that combination |
 | [ ] 7.3.4 | Tap **Save graph** | A PNG is rendered and handed to the share sheet |
@@ -696,9 +697,11 @@ the Lattice for a sweep.
    │   ├── horizontal fling (fit-to-screen) steps frames
    │   └── jet heatmap over the reference (fixed 0.7 alpha)
    ├── colour scale bar (hairline over the figure)
-   │   ├── default: this frame's min / max
+   │   ├── default: this frame's 2nd/98th-percentile clamp, labeled "≤ / ≥"
+   │   │   (not "Min:"/"Max:" — the true extrema can lie beyond the label;
+   │   │   the ⓘ peek sheet shows those instead, and the two are allowed to differ)
    │   ├── tap → custom min / max
-   │   └── Auto scale (drops custom; returns to frame min / max)
+   │   └── Auto scale (drops custom; returns to the frame's clamped bounds)
    ├── edge chrome (auto-hides; pan / scrub / field tap brings it back)
    │   ├── short title: field · frame
    │   ├── ⓘ peek sheet: max/min (with coords) + mean + settings used (+ line-cut on sweep)
@@ -731,6 +734,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.1 | Open a result | The U field is shown as a jet heatmap over the reference |
 | [ ] 8.1.2 | Tap through U, V, Exx, Eyy, Exy | Heatmap and colour scale follow; edge title updates |
 | [ ] 8.1.3 | Check the scale units | `px` for U and V, `mε` for the strain fields |
+| [ ] 8.1.3b | Compare the scale labels with the ⓘ sheet's max/min | Scale labels read "≤ x" / "≥ y" and may be narrower — that's the display clamp, disclosed rather than hidden; the ⓘ sheet's numbers are the field's true extrema |
 | [ ] 8.1.4 | Pinch to zoom | Zooms smoothly up to about 10×; panning is clamped to the image |
 | [ ] 8.1.5 | Zoom in and pan | The heatmap stays registered to the reference — no drift |
 | [ ] 8.1.6 | Zoom, then switch field | Zoom and pan are preserved |

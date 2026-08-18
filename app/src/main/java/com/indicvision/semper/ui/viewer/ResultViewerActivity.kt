@@ -832,10 +832,16 @@ class ResultViewerActivity : AppCompatActivity() {
         if (!showingSummary) {
             val isStrain = DicResult.isStrainFieldIndex(index)
             val multiplier = DicResult.strainMultiplier(index)
-            val unit = if (isStrain) " mε" else " px"
-            // Labels are this frame's min/max (same values the colour scale uses).
-            tvScaleMin.text = ReportBuilder.formatMetric(actualMin * multiplier)
-            tvScaleMax.text = ReportBuilder.formatMetric(actualMax * multiplier) + unit
+            val unit = getString(if (isStrain) R.string.scale_unit_strain else R.string.scale_unit_px)
+            // ≤/≥, not "Min:"/"Max:": these are the 2nd/98th-percentile clamp the
+            // colour ramp is built on (VisualizationEngine.computeSigmaClampedRange),
+            // not the field's true extrema -- the ⓘ details sheet shows those,
+            // via DicResult.fieldStats. Same wording as the summary-mode scale
+            // (ViewerSummaryHelper) so the two paths agree.
+            val minText = ReportBuilder.formatMetric(actualMin * multiplier)
+            val maxText = ReportBuilder.formatMetric(actualMax * multiplier)
+            tvScaleMin.text = getString(R.string.scale_min_fmt, minText, unit)
+            tvScaleMax.text = getString(R.string.scale_max_fmt, maxText, unit)
         }
         isGeneratingHeatmap = false
     }

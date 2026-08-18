@@ -154,6 +154,17 @@ class CoachMarkController(
             setTextColor(ContextCompat.getColor(activity, R.color.text_primary))
             textSize = 15f
         }
+        bubbleLayout.addView(illustration)
+        bubbleLayout.addView(msg)
+        bubbleLayout.addView(buildBubbleActions())
+
+        illustrationView = illustration
+        messageView = msg
+        return bubbleLayout
+    }
+
+    /** Skip/Next row appended to the bubble; also binds [skipButton]/[nextButton]. */
+    private fun buildBubbleActions(): LinearLayout {
         val actions = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
@@ -172,15 +183,9 @@ class CoachMarkController(
         }
         actions.addView(skip)
         actions.addView(next)
-        bubbleLayout.addView(illustration)
-        bubbleLayout.addView(msg)
-        bubbleLayout.addView(actions)
-
-        illustrationView = illustration
-        messageView = msg
-        nextButton = next
         skipButton = skip
-        return bubbleLayout
+        nextButton = next
+        return actions
     }
 
     private fun advance() {

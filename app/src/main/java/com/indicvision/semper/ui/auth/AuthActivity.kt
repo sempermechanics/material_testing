@@ -455,7 +455,8 @@ class AuthActivity : AppCompatActivity() {
         etPassword.setText("")
         etConfirm.setText("")
         // Not an error: what they asked for happened, and the next step is theirs.
-        showSnackbar(error.message ?: getString(R.string.auth_verify_first), isError = false)
+        // Held to the short 2000ms duration, not the default long 3500ms.
+        showSnackbar(error.message ?: getString(R.string.auth_verify_first), isError = false, long = false)
     }
 
     /** The bound is part of the message for the length rules, so they format it in. */
@@ -483,8 +484,8 @@ class AuthActivity : AppCompatActivity() {
         tvEmailLink.isEnabled = !loading
     }
 
-    private fun showSnackbar(message: String, @Suppress("UNUSED_PARAMETER") isError: Boolean) {
-        CrispToast.show(this, message, long = true)
+    private fun showSnackbar(message: String, @Suppress("UNUSED_PARAMETER") isError: Boolean, long: Boolean = true) {
+        CrispToast.show(this, message, long = long)
     }
 
     companion object {

@@ -131,6 +131,9 @@ class SweepSetupHelper(
         tvSweepPlan = activity.findViewById(R.id.tvSweepPlan)
         lineCutPreview = activity.findViewById(R.id.lineCutPreview)
         sweepLatticePreview = activity.findViewById(R.id.sweepLatticePreview)
+        // Same compact axes as the result lattice, now that the preview is the
+        // same 136dp height -- full/default mode needs more room than that.
+        sweepLatticePreview.compact = true
         btnRunSweep = activity.findViewById(R.id.btnRunSweep)
         latticeSamplesBody = activity.findViewById(R.id.latticeSamplesBody)
 
@@ -213,6 +216,12 @@ class SweepSetupHelper(
     fun seedSweepSuggestions() {
         if (!::rangeSubset.isInitialized) return
         if (sweepUserModified) {
+            // Past this point their values stand -- but an ROI edit can still
+            // shrink what it's physically possible to solve, so the displayed
+            // range must keep up even though the app stops suggesting a fresh
+            // default. Without this, currentPlan() silently clamped subsetMax
+            // for plan generation while the slider kept showing the old value.
+            reclampSubsetRangeToRoi()
             refreshSweepPlan()
             return
         }
@@ -295,7 +304,6 @@ class SweepSetupHelper(
         point.subset,
         point.step,
         point.strainWindow,
-        point.vsg,
     )
 
     /** Centre-line cut over the reference image and current ROI. */
@@ -407,6 +415,23 @@ class SweepSetupHelper(
 
     private fun effectiveSubsetCeiling(): Int =
         minOf(SubsetRecommender.MAX_SUBSET, callbacks.maxSubsetForRoi())
+
+    /**
+     * Keeps the user's own subset range inside what the current ROI can
+     * support -- same ceiling, same clamp [currentPlan] already applies when
+     * generating nodes, just also written back to [viewModel] and the slider
+     * so what's displayed matches what will actually be planned.
+     */
+    private fun reclampSubsetRangeToRoi() {
+        val ceiling = effectiveSubsetCeiling()
+        val clampedMax = viewModel.subsetMax.coerceAtMost(ceiling)
+        val clampedMin = viewModel.subsetMin.coerceAtMost(clampedMax)
+        if (clampedMin != viewModel.subsetMin || clampedMax != viewModel.subsetMax) {
+            viewModel.subsetMin = clampedMin
+            viewModel.subsetMax = clampedMax
+            writeSubsetRange(clampedMin, clampedMax)
+        }
+    }
 
     private fun oddSubset(raw: Int): Int =
         raw.coerceIn(SubsetRecommender.MIN_SUBSET, SubsetRecommender.MAX_SUBSET) or 1

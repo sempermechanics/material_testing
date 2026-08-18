@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Round plate for item_media_tile.xml's imgMediaCheck: matches the round
+     check icon it sits behind, instead of the square plate it used to sit
+     on (a circle inside a square read as two mismatched toggle shapes). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/sky_container" />
+</shape>

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -24,13 +25,22 @@
         android:importantForAccessibility="no"
         android:visibility="gone" />
 
+    <!-- background + tint explicit, not left to force-dark: the bare drawable is
+         hardcoded black with no tint (ic_check_circle.xml), so in light mode it
+         drew literal black on an arbitrary thumbnail with no guaranteed contrast,
+         only reading as visible in dark mode by force-dark's accidental
+         inversion. A round plate (bg_media_check_badge.xml), not a square one,
+         since the checkmark it sits behind is round too: a square plate under a
+         circular icon read as two different toggle shapes stacked. -->
     <ImageView
         android:id="@+id/imgMediaCheck"
         android:layout_width="22dp"
         android:layout_height="22dp"
         android:layout_gravity="top|end"
         android:layout_margin="6dp"
+        android:background="@drawable/bg_media_check_badge"
         android:src="@drawable/ic_check_circle"
+        app:tint="@color/sky_primary"
         android:importantForAccessibility="no"
         android:visibility="gone" />
 </FrameLayout>

@@ -16,6 +16,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.GestureDetector
@@ -70,17 +71,60 @@ class VsgPlotView @JvmOverloads constructor(
     data class Sample(val label: String, val value: Float, val color: Int)
 
     companion object {
+        // Resource-backed, not literal ints: each slot needs an independent night
+        // value (see values-night/colors.xml) since this view is shared with the
+        // dark-glass viewer peek sheet. Under emphasis (dataviz skill: onDraw draws
+        // every muted series in one neutral, see ALPHA_MUTED below) at most one
+        // slot is ever shown in colour at a time, so these are validated per-slot
+        // (lightness band, chroma floor, contrast) rather than for pairwise
+        // separation -- scripts/validate_palette.js, run against both surfaces.
+        private val PALETTE_RES = intArrayOf(
+            R.color.viewer_plot_palette_0,
+            R.color.viewer_plot_palette_1,
+            R.color.viewer_plot_palette_2,
+            R.color.viewer_plot_palette_3,
+            R.color.viewer_plot_palette_4,
+            R.color.viewer_plot_palette_5,
+            R.color.viewer_plot_palette_6,
+            R.color.viewer_plot_palette_7,
+        )
+
+        /** exx/eyy/exy on the line-cut: always 3 concurrent curves, so (unlike
+         *  [PALETTE_RES]) this is validated all-pairs, not just per-slot. */
+        private val LINE_CUT_RES = intArrayOf(
+            R.color.viewer_line_cut_0,
+            R.color.viewer_line_cut_1,
+            R.color.viewer_line_cut_2,
+        )
+
         /** Colour for the n-th series of a multi-line plot; safe for any index
          *  (a skipped lattice node has frameIndex -1). */
-        fun paletteColor(index: Int): Int = PALETTE[index.mod(PALETTE.size)]
+        fun paletteColor(context: Context, index: Int): Int =
+            ContextCompat.getColor(context, PALETTE_RES[index.mod(PALETTE_RES.size)])
+
+        /** Colour for the n-th of the line-cut's 3 concurrent strain components. */
+        fun lineCutColor(context: Context, slot: Int): Int =
+            ContextCompat.getColor(context, LINE_CUT_RES[slot.mod(LINE_CUT_RES.size)])
 
         const val AXIS_LABEL_SP = 11f
         const val LINE_WIDTH_DP = 2f
         const val MARKER_RADIUS_DP = 3.5f
-        const val PAD_LEFT_DP = 46f
+
+        /** Full axis gutters: a separate descriptive title line/rotated title
+         *  beside the tick labels -- used for the detached PNG export, which has
+         *  the 1600x1000px room to spare and no other on-screen context to lean on. */
+        const val PAD_LEFT_FULL_DP = 46f
+        const val PAD_BOTTOM_FULL_DP = 30f
+
+        /** Compact axis gutters ([compactAxes]): no separate title, just the tick
+         *  labels with the unit folded onto the outermost tick -- for the
+         *  space-constrained on-screen lattice and peek-sheet plots, whose
+         *  section headers/params chip already say what each axis is. */
+        const val PAD_LEFT_COMPACT_DP = 34f
+        const val PAD_BOTTOM_COMPACT_DP = 18f
+
         const val PAD_RIGHT_DP = 12f
         const val PAD_TOP_DP = 10f
-        const val PAD_BOTTOM_DP = 30f
         const val GRID_LINES = 4
         const val TICK_GAP_DP = 4f
 
@@ -92,18 +136,6 @@ class VsgPlotView @JvmOverloads constructor(
 
         /** Smallest viewport span as a fraction of the full data extent. */
         const val MIN_SPAN_FRACTION = 0.05f
-
-        /** Series colours, reused cyclically for line-scan plots. */
-        val PALETTE = intArrayOf(
-            0xFF0288D1.toInt(),
-            0xFFE53935.toInt(),
-            0xFF43A047.toInt(),
-            0xFFF5A623.toInt(),
-            0xFF8E24AA.toInt(),
-            0xFF00897B.toInt(),
-            0xFF5D4037.toInt(),
-            0xFF3949AB.toInt(),
-        )
     }
 
     private val density = resources.displayMetrics.density
@@ -132,23 +164,41 @@ class VsgPlotView @JvmOverloads constructor(
     /** The y value drawn on the plot beside the scrub point. */
     private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = axisLabelPx
-        color = ContextCompat.getColor(context, R.color.text_primary)
+        color = ContextCompat.getColor(context, R.color.viewer_plot_ink_strong)
         isFakeBoldText = true
+        typeface = Typeface.MONOSPACE
     }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(1f)
-        color = ContextCompat.getColor(context, R.color.surface_outline)
+        color = ContextCompat.getColor(context, R.color.viewer_plot_grid)
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = axisLabelPx
-        color = ContextCompat.getColor(context, R.color.text_secondary)
+        color = ContextCompat.getColor(context, R.color.viewer_plot_ink)
+        typeface = Typeface.MONOSPACE
     }
     private val path = Path()
 
     private var series: List<Series> = emptyList()
     private var xLabel: String = ""
     private var yLabel: String = ""
+    private var xUnit: String = ""
+    private var yUnit: String = ""
+
+    /**
+     * When true, the plot drops its separate axis-title lines and instead folds
+     * the unit onto the outermost tick, freeing [PAD_LEFT_COMPACT_DP] /
+     * [PAD_BOTTOM_COMPACT_DP] of gutter -- for the on-screen lattice and
+     * peek-sheet plots. The detached PNG export leaves this false (default) for
+     * the full descriptive titles, since it has the room and no surrounding
+     * screen context to lean on.
+     */
+    var compactAxes: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
 
     /** Data-unit x of a vertical guide line, e.g. the recommended VSG. */
     private var highlightX: Float? = null
@@ -234,17 +284,24 @@ class VsgPlotView @JvmOverloads constructor(
      * @param preserveViewport keep the current pinch-zoom / pan viewport instead
      *   of resetting to fit — used when the data changes but its scale does not
      *   (switching solved node or Highlight/Isolate), so the zoom survives.
+     * @param xUnit @param yUnit only used when [compactAxes] is true, appended to
+     *   the outermost tick in place of the (then unused) [xLabel] / [yLabel] title.
      */
+    @Suppress("LongParameterList") // a plot's full config: series + 4 optional, named, defaulted display params
     fun setData(
         series: List<Series>,
         xLabel: String,
         yLabel: String,
         highlightX: Float? = null,
         preserveViewport: Boolean = false,
+        xUnit: String = "",
+        yUnit: String = "",
     ) {
         this.series = series
         this.xLabel = xLabel
         this.yLabel = yLabel
+        this.xUnit = xUnit
+        this.yUnit = yUnit
         this.highlightX = highlightX
         scrubX = null
         dataBounds = null // series changed → recompute extent lazily on next access
@@ -426,10 +483,10 @@ class VsgPlotView @JvmOverloads constructor(
         val full = dataBounds() ?: return
         val b = viewport(full)
 
-        val left = dp(PAD_LEFT_DP)
+        val left = dp(if (compactAxes) PAD_LEFT_COMPACT_DP else PAD_LEFT_FULL_DP)
         val right = width - dp(PAD_RIGHT_DP)
         val top = dp(PAD_TOP_DP)
-        val bottom = height - dp(PAD_BOTTOM_DP)
+        val bottom = height - dp(if (compactAxes) PAD_BOTTOM_COMPACT_DP else PAD_BOTTOM_FULL_DP)
         if (right <= left || bottom <= top) return
 
         fun sx(x: Float) = left + (x - b.xMin) / (b.xMax - b.xMin) * (right - left)
@@ -443,14 +500,19 @@ class VsgPlotView @JvmOverloads constructor(
                 drawLine(left, y, right, y, gridPaint)
             }
             (scrubX ?: highlightX)?.let {
-                gridPaint.color = ContextCompat.getColor(context, R.color.sky_primary)
+                gridPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_node_solved)
                 drawLine(sx(it), top, sx(it), bottom, gridPaint)
-                gridPaint.color = ContextCompat.getColor(context, R.color.surface_outline)
+                gridPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_grid)
             }
 
+            // Emphasis (dataviz skill): the focused series keeps its real hue;
+            // every muted one shares a single neutral instead of its own dimmed
+            // hue, so at most one categorical colour is ever on screen at once
+            // -- see PALETTE_RES's per-slot (not pairwise) validation above.
+            val mutedColor = ContextCompat.getColor(context, R.color.viewer_plot_muted)
             for (s in series) {
                 if (s.points.isEmpty()) continue
-                linePaint.color = s.color
+                linePaint.color = if (s.muted) mutedColor else s.color
                 linePaint.alpha = if (s.muted) ALPHA_MUTED else ALPHA_SOLID
                 path.reset()
                 s.points.forEachIndexed { i, (x, y) ->
@@ -458,7 +520,7 @@ class VsgPlotView @JvmOverloads constructor(
                 }
                 drawPath(path, linePaint)
                 if (s.markers) {
-                    markerPaint.color = s.color
+                    markerPaint.color = if (s.muted) mutedColor else s.color
                     s.points.forEach { (x, y) -> drawCircle(sx(x), sy(y), dp(MARKER_RADIUS_DP), markerPaint) }
                 }
             }
@@ -485,7 +547,9 @@ class VsgPlotView @JvmOverloads constructor(
         }
 
         drawGridTicks(canvas, b, frame)
-        drawAxisLabels(canvas, left, right, bottom)
+        // Compact mode folds the unit onto the outermost tick instead of a
+        // separate title line -- drawAxisLabels draws that line, so skip it.
+        if (!compactAxes) drawAxisLabels(canvas, left, right, top, bottom)
     }
 
     @Suppress("ReturnCount", "CyclomaticComplexMethod") // gesture phases: scale, pan, scrub, double-tap
@@ -652,35 +716,47 @@ class VsgPlotView @JvmOverloads constructor(
     }
 
     private fun drawGridTicks(canvas: Canvas, b: Bounds, f: Frame) {
-        textPaint.color = ContextCompat.getColor(context, R.color.text_secondary)
+        textPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_ink)
+        textPaint.textAlign = Paint.Align.RIGHT
         for (i in 0..GRID_LINES) {
             val y = f.bottom - (f.bottom - f.top) * i / GRID_LINES
             val value = b.yMin + (b.yMax - b.yMin) * i / GRID_LINES
-            textPaint.textAlign = Paint.Align.RIGHT
             canvas.drawText(format(value), f.left - dp(TICK_GAP_DP), y + textPaint.textSize * TICK_BASELINE, textPaint)
+        }
+        if (compactAxes && yUnit.isNotEmpty()) {
+            // A number+unit tick right-aligned into PAD_LEFT_COMPACT_DP would run
+            // past the view's own left edge (there isn't room for both digits and
+            // a unit in that gutter) -- draw the unit on its own, left-aligned
+            // into the data area's top-left corner instead, where there's slack.
+            textPaint.textAlign = Paint.Align.LEFT
+            canvas.drawText(yUnit, f.left + dp(TICK_GAP_DP), f.top + textPaint.textSize, textPaint)
         }
         val baseline = f.bottom + textPaint.textSize + dp(TICK_GAP_DP)
         textPaint.textAlign = Paint.Align.LEFT
         canvas.drawText(format(b.xMin), f.left, baseline, textPaint)
         textPaint.textAlign = Paint.Align.RIGHT
-        canvas.drawText(format(b.xMax), f.right, baseline, textPaint)
+        val xMaxLabel = if (compactAxes && xUnit.isNotEmpty()) "${format(b.xMax)} $xUnit" else format(b.xMax)
+        canvas.drawText(xMaxLabel, f.right, baseline, textPaint)
     }
 
-    private fun drawAxisLabels(canvas: Canvas, left: Float, right: Float, bottom: Float) {
+    private fun drawAxisLabels(canvas: Canvas, left: Float, right: Float, top: Float, bottom: Float) {
         textPaint.textAlign = Paint.Align.CENTER
-        textPaint.color = ContextCompat.getColor(context, R.color.text_primary)
+        textPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_ink_strong)
         canvas.drawText(
             xLabel,
             (left + right) / 2f,
             bottom + textPaint.textSize * 2f + dp(TICK_GAP_DP),
             textPaint,
         )
+        // Pivot at the frame's vertical centre, not bottom/2f -- the old pivot
+        // ignored top's offset (PAD_TOP_DP), so the rotated title sat high.
+        val pivot = (top + bottom) / 2f
         canvas.withRotation(
             -QUARTER_TURN,
             dp(TICK_GAP_DP) + textPaint.textSize,
-            bottom / 2f,
+            pivot,
         ) {
-            drawText(yLabel, dp(TICK_GAP_DP) + textPaint.textSize, bottom / 2f, textPaint)
+            drawText(yLabel, dp(TICK_GAP_DP) + textPaint.textSize, pivot, textPaint)
         }
         textPaint.textAlign = Paint.Align.LEFT
     }

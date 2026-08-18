@@ -10,20 +10,22 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/surface_muted">
+    android:background="@color/viewer_canvas">
 
     <!-- ===================== App bar ===================== -->
+    <!-- Same minimal-chrome vocabulary as the result viewer and result
+         lattice: viewer_canvas/viewer_chrome_* tokens, zero elevation. -->
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:minHeight="?attr/actionBarSize"
-        android:background="@color/surface"
-        app:titleTextColor="@color/text_primary"
-        app:subtitleTextColor="@color/text_secondary"
-        app:navigationIconTint="@color/text_primary"
+        android:background="@color/viewer_canvas"
+        app:titleTextColor="@color/viewer_chrome_text"
+        app:subtitleTextColor="@color/viewer_chrome_muted"
+        app:navigationIconTint="@color/viewer_chrome_text"
         app:titleCentered="false"
-        android:elevation="2dp">
+        android:elevation="0dp">
     </com.google.android.material.appbar.MaterialToolbar>
 
     <!-- ===================== Pages ===================== -->
@@ -66,14 +68,14 @@
                             android:layout_height="28dp"
                             android:contentDescription="@string/reference_image"
                             android:src="@drawable/ic_add"
-                            app:tint="@color/text_secondary" />
+                            app:tint="@color/viewer_chrome_muted" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="6dp"
                             android:text="@string/reference_image"
-                            android:textColor="@color/text_primary"
+                            android:textColor="@color/viewer_chrome_text"
                             android:textSize="14sp"
                             android:textStyle="bold" />
 
@@ -81,7 +83,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/ref_formats_hint"
-                            android:textColor="@color/text_secondary"
+                            android:textColor="@color/viewer_chrome_muted"
                             android:textSize="12sp" />
 
                     </LinearLayout>
@@ -90,7 +92,9 @@
                         android:id="@+id/refCard"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:visibility="gone">
+                        android:visibility="gone"
+                        app:cardBackgroundColor="@android:color/transparent"
+                        app:strokeColor="@color/viewer_glass_stroke">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -102,7 +106,7 @@
                                 android:id="@+id/ivRefThumb"
                                 android:layout_width="46dp"
                                 android:layout_height="46dp"
-                                android:background="@color/surface_muted"
+                                android:background="@color/viewer_canvas"
                                 android:contentDescription="@string/reference_image_preview"
                                 android:scaleType="centerCrop" />
 
@@ -119,7 +123,7 @@
                                     android:layout_height="wrap_content"
                                     android:ellipsize="middle"
                                     android:maxLines="1"
-                                    android:textColor="@color/text_primary"
+                                    android:textColor="@color/viewer_chrome_text"
                                     android:textSize="14sp"
                                     android:textStyle="bold" />
 
@@ -127,7 +131,7 @@
                                     android:id="@+id/tvRefMeta"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:textColor="@color/text_secondary"
+                                    android:textColor="@color/viewer_chrome_muted"
                                     android:textSize="12sp" />
                             </LinearLayout>
 
@@ -161,14 +165,14 @@
                             android:layout_height="28dp"
                             android:contentDescription="@string/deformed_frames"
                             android:src="@drawable/ic_add"
-                            app:tint="@color/text_secondary" />
+                            app:tint="@color/viewer_chrome_muted" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="6dp"
                             android:text="@string/deformed_frames"
-                            android:textColor="@color/text_primary"
+                            android:textColor="@color/viewer_chrome_text"
                             android:textSize="14sp"
                             android:textStyle="bold" />
 
@@ -176,7 +180,7 @@
                             android:id="@+id/tvDefDropHint"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:textColor="@color/text_secondary"
+                            android:textColor="@color/viewer_chrome_muted"
                             android:textSize="12sp" />
 
                     </LinearLayout>
@@ -185,7 +189,9 @@
                         android:id="@+id/defCard"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:visibility="gone">
+                        android:visibility="gone"
+                        app:cardBackgroundColor="@android:color/transparent"
+                        app:strokeColor="@color/viewer_glass_stroke">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -204,11 +210,11 @@
                                     android:id="@+id/ivDefIcon"
                                     android:layout_width="46dp"
                                     android:layout_height="46dp"
-                                    android:background="@color/surface_muted"
+                                    android:background="@color/viewer_canvas"
                                     android:contentDescription="@string/deformed_frames"
                                     android:padding="11dp"
                                     android:src="@drawable/ic_photos_share"
-                                    app:tint="@color/text_secondary" />
+                                    app:tint="@color/viewer_chrome_muted" />
 
                                 <LinearLayout
                                     android:layout_width="0dp"
@@ -221,7 +227,7 @@
                                         android:id="@+id/tvDefName"
                                         android:layout_width="match_parent"
                                         android:layout_height="wrap_content"
-                                        android:textColor="@color/text_primary"
+                                        android:textColor="@color/viewer_chrome_text"
                                         android:textSize="14sp"
                                         android:textStyle="bold" />
 
@@ -231,7 +237,7 @@
                                         android:layout_height="wrap_content"
                                         android:ellipsize="middle"
                                         android:maxLines="1"
-                                        android:textColor="@color/text_secondary"
+                                        android:textColor="@color/viewer_chrome_muted"
                                         android:textSize="12sp" />
                                 </LinearLayout>
 
@@ -251,7 +257,7 @@
                                     android:padding="8dp"
                                     android:src="@drawable/ic_sort"
                                     android:visibility="gone"
-                                    app:tint="@color/text_secondary" />
+                                    app:tint="@color/viewer_chrome_muted" />
                             </LinearLayout>
 
                             <androidx.recyclerview.widget.RecyclerView
@@ -357,7 +363,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:gravity="center"
-                    android:textColor="@color/text_secondary"
+                    android:textColor="@color/viewer_chrome_muted"
                     android:textSize="12sp" />
             </LinearLayout>
         </ScrollView>
@@ -383,8 +389,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:background="@color/surface"
-        android:elevation="10dp"
+        android:background="@color/viewer_canvas"
+        android:elevation="0dp"
         android:padding="12dp">
 
         <com.google.android.material.button.MaterialButton

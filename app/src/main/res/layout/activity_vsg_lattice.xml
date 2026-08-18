@@ -1,23 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Same minimal-chrome vocabulary as the result viewer (glass pucks, hairline
+     rules, zero elevation, monospace numerics); see viewer_* tokens in
+     colors.xml. forceDarkAllowed=false: every colour on this screen is an
+     explicit day/night resource now, so the OS's force-dark auto-invert would
+     only double-apply on top of the already-tuned glass fills. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface_muted"
+    android:background="@color/viewer_canvas"
+    android:forceDarkAllowed="false"
     android:orientation="vertical"
-    tools:ignore="Overdraw">
+    tools:ignore="Overdraw"
+    tools:targetApi="29">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/surface"
-        android:elevation="2dp"
+        android:background="@color/viewer_canvas"
+        android:elevation="0dp"
         android:minHeight="?attr/actionBarSize"
-        app:navigationIconTint="@color/text_primary"
+        app:navigationIconTint="@color/viewer_chrome_text"
         app:title="@string/vsg_lattice_title"
-        app:titleTextColor="@color/text_primary" />
+        app:titleTextColor="@color/viewer_chrome_text" />
 
     <!-- Scrolling column: lattice, controls, then plot; action bar stays pinned below. -->
     <androidx.core.widget.NestedScrollView
@@ -33,136 +40,81 @@
         android:orientation="vertical"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
-        android:paddingTop="8dp"
+        android:paddingTop="4dp"
         android:paddingBottom="4dp">
 
-        <com.google.android.material.card.MaterialCardView
+        <TextView
+            android:id="@+id/tvLatticeSummary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:contentPadding="10dp">
+            android:textColor="@color/viewer_chrome_muted"
+            android:textSize="12sp"
+            tools:text="12 combinations · 10 solved · 2 skipped" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
+        <!-- compact=true (VsgLatticeActivity): no separate axis-title lines, the
+             coach mark already explains both axes on first open. -->
+        <com.indicvision.semper.ui.analysis.VsgLatticeView
+            android:id="@+id/latticeView"
+            android:layout_width="match_parent"
+            android:layout_height="136dp"
+            android:layout_marginTop="6dp" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/vsg_lattice_heading"
-                    android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
-
-                <TextView
-                    android:id="@+id/tvLatticeSummary"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp"
-                    tools:text="12 combinations · 10 solved · 2 skipped" />
-
-                <com.indicvision.semper.ui.analysis.VsgLatticeView
-                    android:id="@+id/latticeView"
-                    android:layout_width="match_parent"
-                    android:layout_height="160dp"
-                    android:layout_marginTop="8dp" />
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <View
-                        android:layout_width="10dp"
-                        android:layout_height="10dp"
-                        android:background="@drawable/dot_solved" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:layout_marginEnd="18dp"
-                        android:text="@string/vsg_lattice_legend_solved"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <View
-                        android:layout_width="10dp"
-                        android:layout_height="10dp"
-                        android:background="@drawable/dot_skipped" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:text="@string/vsg_lattice_legend_skipped"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/vsg_lattice_caption"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Prev · param chip · next — primary one-thumb selection. -->
+        <!-- Prev · param chip · next: primary one-thumb selection. -->
         <LinearLayout
             android:id="@+id/stepperRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="10dp"
             android:clipChildren="false"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
             <ImageButton
                 android:id="@+id/btnPrevNode"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_chrome_ghost"
                 android:contentDescription="@string/vsg_lattice_prev"
-                android:padding="12dp"
+                android:padding="8dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_nav_prev"
-                app:tint="@color/sky_primary" />
+                app:tint="@color/viewer_chrome_text" />
 
-            <com.google.android.material.chip.Chip
+            <!-- MaterialButton, not Chip: Chip's chipBackgroundColor did not
+                 respect this colour's alpha (rendered as opaque white, hiding
+                 white-on-white text in dark mode). MaterialButton's
+                 backgroundTint does, and it's the same glass-pill style already
+                 proven by Widget.Semper.Button.ViewerPeekHome elsewhere. -->
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/chipSelectedParams"
+                style="@style/Widget.Semper.Button.ViewerPeekHome"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:clickable="true"
                 android:contentDescription="@string/vsg_lattice_readout_copy_hint"
-                android:focusable="true"
-                android:gravity="center"
+                android:fontFamily="monospace"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
                 android:textAlignment="center"
-                android:textAppearance="?attr/textAppearanceBody2"
-                android:textColor="@color/text_primary"
-                app:chipBackgroundColor="@color/sky_container"
-                app:chipStrokeColor="@color/surface_outline"
-                app:chipStrokeWidth="1dp"
-                app:ensureMinTouchTargetSize="false"
+                android:textColor="@color/viewer_chrome_text"
+                android:textSize="13sp"
+                app:cornerRadius="999dp"
                 tools:text="ss:41 · st:5 · sw:15" />
 
             <ImageButton
                 android:id="@+id/btnNextNode"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_chrome_ghost"
                 android:contentDescription="@string/vsg_lattice_next"
-                android:padding="12dp"
+                android:padding="8dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_nav_next"
-                app:tint="@color/sky_primary" />
+                app:tint="@color/viewer_chrome_text" />
         </LinearLayout>
 
         <!-- Centre-line strain profiles; plot has a fixed tall height in the scroll. -->
@@ -170,7 +122,7 @@
             android:id="@+id/strainPlotSection"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="10dp"
             android:clipChildren="false"
             android:orientation="vertical"
             android:visibility="gone"
@@ -190,58 +142,90 @@
                     android:layout_weight="1"
                     android:ellipsize="end"
                     android:maxLines="1"
-                    android:textColor="@color/text_primary"
+                    android:textColor="@color/viewer_chrome_text"
                     android:textSize="14sp"
                     android:textStyle="bold"
                     tools:text="Strain along X" />
 
-                <com.google.android.material.button.MaterialButtonToggleGroup
-                    android:id="@+id/togglePlotMode"
+                <!-- One seamless pill, not two separate ones: clip the whole group to
+                     a stadium outline from the outside (bg_pill_clip_mask.xml +
+                     clipToOutline, set in code: see VsgLatticeActivity.bindStrainControls,
+                     since android:clipToOutline as an XML attribute only takes effect on
+                     API 31+ and minSdk here is 24) rather than relying on
+                     MaterialButtonToggleGroup's own per-child corner-squaring, which
+                     did not reliably round the outer corners in this Material
+                     version (tried both a per-child shapeAppearanceOverlay and a
+                     group-level one; both still rendered fully square). The two
+                     buttons inside are plain flat rectangles. -->
+                <FrameLayout
+                    android:id="@+id/togglePlotModeClip"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
-                    app:checkedButton="@id/btnPlotHighlight"
-                    app:selectionRequired="true"
-                    app:singleSelection="true">
+                    android:background="@drawable/bg_pill_clip_mask">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPlotHighlight"
-                        style="@style/Widget.Semper.SegmentedButton"
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/togglePlotMode"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:minWidth="0dp"
-                        android:minHeight="32dp"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:text="@string/vsg_lattice_curves_all"
-                        android:textSize="12sp" />
+                        app:checkedButton="@id/btnPlotHighlight"
+                        app:selectionRequired="true"
+                        app:singleSelection="true">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPlotIsolate"
-                        style="@style/Widget.Semper.SegmentedButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minWidth="0dp"
-                        android:minHeight="32dp"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:text="@string/vsg_lattice_curves_node"
-                        android:textSize="12sp" />
-                </com.google.android.material.button.MaterialButtonToggleGroup>
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnPlotHighlight"
+                            style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/vsg_lattice_curves_all" />
 
-                <Spinner
-                    android:id="@+id/spinnerStrainComponent"
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnPlotIsolate"
+                            style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/vsg_lattice_curves_node" />
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+                </FrameLayout>
+
+                <!-- bg_pill_glass moved off the Spinner onto this wrapper so a
+                     trailing chevron can sit inside the same pill (the Spinner's
+                     own native dropdown arrow is lost once its background is
+                     replaced, so nothing signalled "tap for more" without this). -->
+                <LinearLayout
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minHeight="36dp"
-                    android:spinnerMode="dropdown" />
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_pill_glass"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="8dp">
+
+                    <Spinner
+                        android:id="@+id/spinnerStrainComponent"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:background="@null"
+                        android:spinnerMode="dropdown" />
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_marginStart="2dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_expand_more"
+                        app:tint="@color/viewer_chrome_text" />
+                </LinearLayout>
             </LinearLayout>
 
+            <!-- compactAxes=true (VsgLatticeActivity): no separate axis-title
+                 lines, the unit folds onto the outermost tick instead. -->
             <com.indicvision.semper.ui.analysis.VsgPlotView
                 android:id="@+id/plotLatticeStrain"
                 android:layout_width="match_parent"
                 android:layout_height="300dp"
-                android:layout_marginTop="4dp" />
+                android:layout_marginTop="6dp" />
 
             <com.google.android.material.slider.Slider
                 android:id="@+id/sliderScrub"
@@ -254,23 +238,24 @@
                 android:valueFrom="0"
                 android:valueTo="1" />
 
+            <!-- x only: y is already at the scrub point on the plot itself, and
+                 params are already on chipSelectedParams above. -->
             <TextView
                 android:id="@+id/tvStrainPlotReadout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:clickable="true"
-                android:contentDescription="@string/vsg_lattice_readout_copy_hint"
-                android:focusable="true"
+                android:fontFamily="monospace"
                 android:minLines="1"
-                android:textColor="@color/text_secondary"
+                android:textColor="@color/viewer_chrome_muted"
                 android:textSize="12sp"
-                tools:text="x=24.0 · y=0.0031 · subset 41 · step 5 · strain 15" />
+                tools:text="x=24.0" />
         </LinearLayout>
     </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
     <LinearLayout
+        android:id="@+id/actionBarRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"

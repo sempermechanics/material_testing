@@ -4,9 +4,11 @@ package com.indicvision.semper.ui.viewer
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.graphics.drawable.ShapeDrawable
+import android.graphics.drawable.shapes.OvalShape
 import android.text.Spannable
 import android.text.SpannableStringBuilder
-import android.text.style.ForegroundColorSpan
+import android.text.style.ImageSpan
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -16,6 +18,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.ui.analysis.EngineFailure
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import com.indicvision.semper.ui.analysis.VsgStudy
+import kotlin.math.roundToInt
 
 /**
  * Peek sheet for a result: max / min (with coordinates) / mean for the frame on
@@ -75,14 +78,8 @@ object ViewerSettingsSheet {
                 host.getString(R.string.setting_strain_window) to
                     host.resources.getQuantityString(R.plurals.setting_subsets_fmt, strainWin, strainWin),
             )
-            if (host.isSweep) {
-                add(
-                    host.getString(R.string.setting_vsg) to host.getString(
-                        R.string.setting_px_fmt,
-                        VsgStudy.vsgFor(host.step, strainWin),
-                    ),
-                )
-            }
+            // VSG is derived from Step and Strain window, both already rows above --
+            // no separate row for a number that adds no information beyond them.
             add(
                 host.getString(R.string.setting_strain_method) to
                     (host.intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG"),
@@ -163,7 +160,7 @@ object ViewerSettingsSheet {
         val series = VsgStudy.STRAIN_COMPONENTS.mapIndexed { slot, component ->
             VsgPlotView.Series(
                 label = host.getString(labels[slot]),
-                color = VsgPlotView.paletteColor(slot),
+                color = VsgPlotView.lineCutColor(host, slot),
                 points = profiles[component].orEmpty(),
                 markers = false,
             )
@@ -182,16 +179,26 @@ object ViewerSettingsSheet {
             ),
             line.position,
         )
+        plot.compactAxes = true
         plot.setData(
             series,
             host.getString(
                 if (host.lineCutHorizontal) R.string.line_cut_axis_x else R.string.line_cut_axis_y,
             ),
             host.getString(R.string.line_cut_axis_strain),
+            xUnit = host.getString(R.string.scale_unit_px),
+            yUnit = host.getString(R.string.scale_unit_strain),
         )
     }
 
-    /** Prefix plus colour-matched Exx / Eyy / Exy labels for the line-cut plot. */
+    private const val LEGEND_SWATCH_DP = 10f
+
+    /**
+     * Prefix plus a colour swatch beside each of Exx / Eyy / Exy for the line-cut
+     * plot -- identity comes from the swatch, not from colouring the label text
+     * itself (a light categorical hue is illegible as text; see the dataviz
+     * skill's marks-and-anatomy.md). Labels stay in the row's own ink colour.
+     */
     fun lineCutLegend(
         host: ResultViewerActivity,
         axis: String,
@@ -199,23 +206,34 @@ object ViewerSettingsSheet {
     ): CharSequence {
         val prefix = host.getString(R.string.line_cut_legend_prefix_fmt, axis, position)
         val parts = listOf(
-            host.getString(R.string.line_cut_legend_exx) to VsgPlotView.paletteColor(0),
-            host.getString(R.string.line_cut_legend_eyy) to VsgPlotView.paletteColor(1),
-            host.getString(R.string.line_cut_legend_exy) to VsgPlotView.paletteColor(2),
+            host.getString(R.string.line_cut_legend_exx) to VsgPlotView.lineCutColor(host, 0),
+            host.getString(R.string.line_cut_legend_eyy) to VsgPlotView.lineCutColor(host, 1),
+            host.getString(R.string.line_cut_legend_exy) to VsgPlotView.lineCutColor(host, 2),
         )
         val spanned = SpannableStringBuilder(prefix).append(' ')
         parts.forEachIndexed { index, (label, color) ->
-            if (index > 0) spanned.append(" · ")
-            val start = spanned.length
-            spanned.append(label)
+            if (index > 0) spanned.append("  ")
+            val swatchStart = spanned.length
+            spanned.append('●') // placeholder glyph the ImageSpan replaces
             spanned.setSpan(
-                ForegroundColorSpan(color),
-                start,
+                legendSwatchSpan(host, color),
+                swatchStart,
                 spanned.length,
                 Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
             )
+            spanned.append(' ').append(label)
         }
         return spanned
+    }
+
+    /** A small filled circle, [color], sized to sit on one text line. */
+    private fun legendSwatchSpan(host: ResultViewerActivity, color: Int): ImageSpan {
+        val sizePx = (LEGEND_SWATCH_DP * host.resources.displayMetrics.density).roundToInt()
+        val dot = ShapeDrawable(OvalShape()).apply {
+            paint.color = color
+            setBounds(0, 0, sizePx, sizePx)
+        }
+        return ImageSpan(dot, ImageSpan.ALIGN_BASELINE)
     }
 
     private fun settingsRow(host: ResultViewerActivity, label: String, value: String): View {

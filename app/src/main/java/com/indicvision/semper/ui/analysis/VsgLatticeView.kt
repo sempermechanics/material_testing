@@ -7,6 +7,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.GestureDetector
@@ -41,6 +42,20 @@ class VsgLatticeView @JvmOverloads constructor(
     var interactionEnabled: Boolean = false
 
     /**
+     * When true, drops the separate axis-title lines and shrinks the gutters to
+     * just the tick labels (subset size's unit folds onto the rightmost tick
+     * instead). Set on both consumers of this view -- the result lattice and
+     * the wizard's sweep preview -- which now share the same 136dp height;
+     * neither has room for the full gutters at that size. Defaults false only
+     * because a shared view shouldn't assume a caller wants it.
+     */
+    var compact: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    /**
      * One analysis of the sweep. [solved] is false for a combination the engine
      * skipped; [frameIndex] is its position in the result viewer, or -1 when it
      * was skipped and has no frame to open.
@@ -73,10 +88,17 @@ class VsgLatticeView @JvmOverloads constructor(
 
     private companion object {
         const val AXIS_LABEL_SP = 11f
-        const val PAD_LEFT_DP = 44f
+
+        /** Full gutters (wizard sweep preview): tick labels + a separate axis title. */
+        const val PAD_LEFT_FULL_DP = 44f
+        const val PAD_BOTTOM_FULL_DP = 44f
+
+        /** [compact] gutters (result lattice): tick labels only, unit folded in. */
+        const val PAD_LEFT_COMPACT_DP = 30f
+        const val PAD_BOTTOM_COMPACT_DP = 20f
+
         const val PAD_RIGHT_DP = 14f
         const val PAD_TOP_DP = 14f
-        const val PAD_BOTTOM_DP = 44f
         const val NODE_RADIUS_DP = 5f
         const val NODE_STROKE_DP = 2f
         const val CONNECTOR_DP = 1.5f
@@ -118,25 +140,22 @@ class VsgLatticeView @JvmOverloads constructor(
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(GRID_DP)
-        color = ContextCompat.getColor(context, R.color.surface_outline)
+        color = ContextCompat.getColor(context, R.color.viewer_plot_grid)
     }
     private val connectorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(CONNECTOR_DP)
-        color = ContextCompat.getColor(context, R.color.sky_container)
+        color = ContextCompat.getColor(context, R.color.viewer_plot_connector)
     }
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(NODE_STROKE_DP)
     }
-    private val holePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        color = ContextCompat.getColor(context, R.color.surface)
-    }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = axisLabelPx
-        color = ContextCompat.getColor(context, R.color.text_secondary)
+        color = ContextCompat.getColor(context, R.color.viewer_plot_ink)
+        typeface = Typeface.MONOSPACE
     }
     private val path = Path()
 
@@ -165,10 +184,10 @@ class VsgLatticeView @JvmOverloads constructor(
         placed.clear()
         if (nodes.isEmpty() || columns.isEmpty()) return
 
-        val left = dp(PAD_LEFT_DP)
+        val left = dp(if (compact) PAD_LEFT_COMPACT_DP else PAD_LEFT_FULL_DP)
         val right = width - dp(PAD_RIGHT_DP)
         val top = dp(PAD_TOP_DP)
-        val bottom = height - dp(PAD_BOTTOM_DP)
+        val bottom = height - dp(if (compact) PAD_BOTTOM_COMPACT_DP else PAD_BOTTOM_FULL_DP)
         if (right <= left || bottom <= top) return
 
         columnX.clear()
@@ -272,7 +291,7 @@ class VsgLatticeView @JvmOverloads constructor(
     private fun drawGrid(canvas: Canvas, columnX: Map<Int, Float>, f: Frame) {
         columnX.values.forEach { x -> canvas.drawLine(x, f.top, x, f.bottom, gridPaint) }
         textPaint.textAlign = Paint.Align.RIGHT
-        textPaint.color = ContextCompat.getColor(context, R.color.text_secondary)
+        textPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_ink)
         for (i in 0..Y_TICKS) {
             val y = f.bottom - (f.bottom - f.top) * i / Y_TICKS
             canvas.drawLine(f.left, y, f.right, y, gridPaint)
@@ -299,27 +318,30 @@ class VsgLatticeView @JvmOverloads constructor(
     private fun drawNodes(canvas: Canvas, columnX: Map<Int, Float>, yFor: (Int) -> Float) {
         val radius = dp(NODE_RADIUS_DP)
         val selectedRadius = radius + dp(SELECT_RING_DP)
-        val skipped = ContextCompat.getColor(context, R.color.semantic_danger)
+        // Single solved colour, not one per curve (VsgPlotView.paletteColor is
+        // reserved for the plot's own emphasis -- keying the node fill to it too
+        // taught a colour that never matched once more than one node was solved,
+        // since only the FOCUSED curve is ever shown in colour there now).
+        val solved = ContextCompat.getColor(context, R.color.viewer_plot_node_solved)
+        val skipped = ContextCompat.getColor(context, R.color.viewer_plot_node_skipped)
+        val ring = ContextCompat.getColor(context, R.color.viewer_plot_ink_strong)
         nodes.forEach { node ->
             val x = columnX[node.subset] ?: return@forEach
             val y = yFor(node.window)
             placed.add(Placed(node, x, y))
             if (node.solved) {
-                // On the result lattice, match each node to its strain-curve colour;
-                // planned-preview nodes (no frame yet) stay the plain solved colour.
-                fillPaint.color = if (node.frameIndex >= 0) {
-                    VsgPlotView.paletteColor(node.frameIndex)
-                } else {
-                    ContextCompat.getColor(context, R.color.sky_primary)
-                }
+                fillPaint.color = solved
                 canvas.drawCircle(x, y, radius, fillPaint)
                 if (selectedFrameIndex >= 0 && node.frameIndex == selectedFrameIndex) {
-                    strokePaint.color = ContextCompat.getColor(context, R.color.text_primary)
+                    strokePaint.color = ring
                     canvas.drawCircle(x, y, selectedRadius, strokePaint)
                 }
             } else {
-                // Hollow red ring: a combination that was attempted and failed.
-                canvas.drawCircle(x, y, radius, holePaint)
+                // Hollow ring, no fill: a combination that was attempted and
+                // failed. Deliberately transparent at the centre rather than a
+                // background-matched disc -- this view is hosted on different
+                // surfaces (result lattice, wizard preview card), and only a
+                // truly empty centre is guaranteed to match all of them.
                 strokePaint.color = skipped
                 canvas.drawCircle(x, y, radius, strokePaint)
             }
@@ -327,22 +349,36 @@ class VsgLatticeView @JvmOverloads constructor(
     }
 
     private fun drawLabels(canvas: Canvas, columnX: Map<Int, Float>, f: Frame) {
-        textPaint.color = ContextCompat.getColor(context, R.color.text_secondary)
+        textPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_ink)
         textPaint.textAlign = Paint.Align.CENTER
+        val lastColumn = columns.lastOrNull()
         columns.forEach { subset ->
             val x = columnX[subset] ?: return@forEach
-            canvas.drawText(subset.toString(), x, f.bottom + textPaint.textSize + dp(TICK_GAP_DP), textPaint)
+            // Compact mode has no separate "Subset size (px)" title, so the
+            // rightmost tick carries the unit instead.
+            val label = if (compact && subset == lastColumn) {
+                context.getString(R.string.vsg_lattice_axis_subset_unit_fmt, subset)
+            } else {
+                subset.toString()
+            }
+            canvas.drawText(label, x, f.bottom + textPaint.textSize + dp(TICK_GAP_DP), textPaint)
+        }
+        if (compact) {
+            textPaint.textAlign = Paint.Align.LEFT
+            return
         }
 
-        textPaint.color = ContextCompat.getColor(context, R.color.text_primary)
+        textPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_ink_strong)
         canvas.drawText(
             context.getString(R.string.vsg_lattice_axis_subset),
             (f.left + f.right) / 2f,
             f.bottom + textPaint.textSize * AXIS_TITLE_OFFSET + dp(TICK_GAP_DP),
             textPaint,
         )
+        // Pivot at the frame's vertical centre, not bottom/2f -- the old pivot
+        // ignored top's offset (PAD_TOP_DP), so the rotated title sat high.
         canvas.withSave {
-            val pivot = f.bottom / 2f
+            val pivot = (f.top + f.bottom) / 2f
             rotate(-QUARTER_TURN, textPaint.textSize, pivot)
             drawText(context.getString(R.string.vsg_lattice_axis_vsg), textPaint.textSize, pivot, textPaint)
         }
