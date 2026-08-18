@@ -3,6 +3,7 @@
 package com.indicvision.semper.ui.viewer
 
 import android.annotation.SuppressLint
+import android.graphics.Color
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
@@ -110,9 +111,16 @@ object ViewerSettingsSheet {
     }
 
     fun show(host: ResultViewerActivity) {
-        val sheet = BottomSheetDialog(host)
+        // Themed so Material's own sheet background is transparent and the content
+        // layout's bg_viewer_peek_sheet supplies the 22dp top radius — otherwise the
+        // two stack and you get a hard card edge inside a rounded one.
+        val sheet = BottomSheetDialog(host, R.style.ThemeOverlay_Semper_ViewerPeekSheet)
         val view = host.layoutInflater.inflate(R.layout.sheet_settings_used, null)
         sheet.setContentView(view)
+        // The overlay makes the *dialog* window transparent; this clears the sheet
+        // container Material inflates around the content, which the theme cannot reach.
+        sheet.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            ?.setBackgroundColor(Color.TRANSPARENT)
 
         view.findViewById<TextView>(R.id.tvSettingsUsedSpecimen).text =
             host.intent.getStringExtra(DicKeys.REF_NAME).orEmpty()

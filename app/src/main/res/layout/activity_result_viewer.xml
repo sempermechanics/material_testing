@@ -79,7 +79,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:textColor="@color/text_primary"
+                    android:textColor="@color/viewer_probe_ink"
                     android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton
@@ -89,7 +89,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="@string/action_cancel"
-                    android:textColor="@color/sky_primary"
+                    android:textColor="@color/viewer_probe_ink"
                     android:visibility="gone" />
             </LinearLayout>
         </FrameLayout>
@@ -111,7 +111,6 @@
             android:id="@+id/chromeTop"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/viewer_chrome_bg"
             android:forceDarkAllowed="false"
             android:gravity="center_vertical"
             android:orientation="horizontal"
@@ -123,12 +122,12 @@
                 android:id="@+id/btnViewerBack"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="@drawable/bg_chrome_ghost"
                 android:contentDescription="@string/viewer_back_desc"
                 android:padding="8dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_nav_prev"
-                app:tint="@color/sky_primary" />
+                app:tint="@color/viewer_chrome_text" />
 
             <TextView
                 android:id="@+id/tvFinding"
@@ -138,6 +137,10 @@
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="1"
+                android:shadowColor="@color/viewer_text_halo"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="3"
                 android:text="@string/results_title"
                 android:textColor="@color/viewer_chrome_text"
                 android:textSize="18sp"
@@ -148,35 +151,35 @@
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:layout_marginEnd="12dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="@drawable/bg_chrome_ghost"
                 android:contentDescription="@string/viewer_details_desc"
                 android:padding="10dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_info_min"
-                app:tint="@color/sky_primary" />
+                app:tint="@color/viewer_chrome_text" />
 
             <ImageButton
                 android:id="@+id/btnViewerHome"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:layout_marginEnd="16dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="@drawable/bg_chrome_ghost"
                 android:contentDescription="@string/viewer_home_desc"
                 android:padding="8dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_home"
-                app:tint="@color/sky_primary" />
+                app:tint="@color/viewer_chrome_text" />
 
             <ImageButton
                 android:id="@+id/btnViewerShare"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="@drawable/bg_chrome_ghost"
                 android:contentDescription="@string/action_share"
                 android:padding="10dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_share"
-                app:tint="@color/sky_primary" />
+                app:tint="@color/viewer_chrome_text" />
         </LinearLayout>
     </LinearLayout>
 
@@ -185,7 +188,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@color/viewer_chrome_bg"
         android:forceDarkAllowed="false"
         android:orientation="vertical"
         android:paddingTop="8dp"
@@ -207,6 +209,10 @@
                 android:id="@+id/tvScaleMin"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:shadowColor="@color/viewer_text_halo"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="2"
                 android:text="@string/min_0_0"
                 android:textColor="@color/viewer_chrome_text"
                 android:textSize="13sp"
@@ -215,7 +221,7 @@
             <View
                 android:id="@+id/viewColorScale"
                 android:layout_width="0dp"
-                android:layout_height="8dp"
+                android:layout_height="3dp"
                 android:layout_marginHorizontal="8dp"
                 android:layout_weight="1"
                 android:background="@drawable/jet_gradient_horizontal"
@@ -226,6 +232,10 @@
                 android:id="@+id/tvScaleMax"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:shadowColor="@color/viewer_text_halo"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="2"
                 android:text="@string/max_0_0"
                 android:textColor="@color/viewer_chrome_text"
                 android:textSize="13sp"
@@ -243,7 +253,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldU"
-                style="@style/Widget.Semper.SegmentedButton.Viewer"
+                style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="8dp"
@@ -254,7 +264,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldV"
-                style="@style/Widget.Semper.SegmentedButton.Viewer"
+                style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="8dp"
@@ -264,7 +274,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldExx"
-                style="@style/Widget.Semper.SegmentedButton.Viewer"
+                style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="8dp"
@@ -274,7 +284,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldEyy"
-                style="@style/Widget.Semper.SegmentedButton.Viewer"
+                style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="8dp"
@@ -284,7 +294,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rbFieldExy"
-                style="@style/Widget.Semper.SegmentedButton.Viewer"
+                style="@style/Widget.Semper.SegmentedButton.ViewerImmersive"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="8dp"
@@ -307,12 +317,12 @@
                 android:id="@+id/btnPrevFrame"
                 android:layout_width="56dp"
                 android:layout_height="56dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="@drawable/bg_chrome_ghost"
                 android:contentDescription="@string/prev_frame"
                 android:padding="12dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_nav_prev"
-                app:tint="@color/sky_primary" />
+                app:tint="@color/viewer_chrome_text" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -328,6 +338,10 @@
                     android:layout_height="wrap_content"
                     android:ellipsize="middle"
                     android:gravity="center"
+                    android:shadowColor="@color/viewer_text_halo"
+                    android:shadowDx="0"
+                    android:shadowDy="1"
+                    android:shadowRadius="2"
                     android:singleLine="true"
                     android:text="@string/frame_1_1"
                     android:textColor="@color/viewer_chrome_text"
@@ -354,6 +368,10 @@
                         android:maxLength="4"
                         android:minWidth="28dp"
                         android:paddingVertical="1dp"
+                        android:shadowColor="@color/viewer_text_halo"
+                        android:shadowDx="0"
+                        android:shadowDy="1"
+                        android:shadowRadius="2"
                         android:textColor="@color/viewer_chrome_text"
                         android:textColorHint="@color/viewer_chrome_muted"
                         android:textSize="14sp"
@@ -363,6 +381,10 @@
                         android:id="@+id/tvFrameTotal"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:shadowColor="@color/viewer_text_halo"
+                        android:shadowDx="0"
+                        android:shadowDy="1"
+                        android:shadowRadius="2"
                         android:textColor="@color/viewer_chrome_muted"
                         android:textSize="14sp" />
                 </LinearLayout>
@@ -372,12 +394,12 @@
                 android:id="@+id/btnNextFrame"
                 android:layout_width="56dp"
                 android:layout_height="56dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="@drawable/bg_chrome_ghost"
                 android:contentDescription="@string/next_frame"
                 android:padding="12dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_nav_next"
-                app:tint="@color/sky_primary" />
+                app:tint="@color/viewer_chrome_text" />
         </LinearLayout>
     </LinearLayout>
 
@@ -393,7 +415,7 @@
         android:forceDarkAllowed="false"
         android:paddingHorizontal="12dp"
         android:paddingVertical="8dp"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/viewer_probe_ink"
         android:textSize="12sp"
         android:visibility="gone"
         tools:targetApi="29" />

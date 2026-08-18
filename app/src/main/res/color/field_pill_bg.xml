@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Field pill fill. Unchecked is the translucent frost so the figure reads through
+     it; checked flips to the opposite polarity (see viewer_pill_on_bg). Both halves
+     are theme-adaptive, so this list needs no color-night variant. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="#FFFFFFFF" android:state_checked="true" />
+    <item android:color="@color/viewer_pill_on_bg" android:state_checked="true" />
     <item android:color="@color/viewer_glass_pill" />
 </selector>

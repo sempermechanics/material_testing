@@ -12,9 +12,32 @@
     <color name="wordmark_ink">#E9E9E7</color>
     <color name="brand_plate">#000000</color>
     <color name="viewer_canvas">#101518</color>
-    <color name="viewer_chrome_bg">#101518</color>
     <color name="viewer_chrome_text">#FFFFFFFF</color>
     <color name="viewer_chrome_muted">#B0B8C0</color>
+
+    <!-- Immersive viewer chrome, dark half. These are the original 19e5209 values:
+         white frost over a dark canvas with white ink and a dark text shadow. The
+         light half (values/colors.xml) is the mirror — white frost, dark ink, light
+         halo — so the glass vocabulary reads in both themes. -->
+    <color name="viewer_glass_fill">#52FFFFFF</color>       <!-- ~32% white frost -->
+    <color name="viewer_glass_stroke">#73FFFFFF</color>
+    <color name="viewer_glass_pill">#38FFFFFF</color>       <!-- ~22% white field pills -->
+    <color name="viewer_glass_ripple">#33FFFFFF</color>     <!-- 19e5209's white ripple -->
+    <color name="viewer_text_halo">#80000000</color>
+
+    <!-- Checked field pill inverts against the dark frost: 19e5209's solid white
+         puck with near-black ink. (viewer_probe_ink / viewer_probe_stroke are
+         deliberately NOT overridden — bg_probe_chip is dark in both themes.) -->
+    <color name="viewer_pill_on_bg">#FFFFFFFF</color>
+    <color name="viewer_pill_on_text">#FF111111</color>
+
+    <color name="viewer_peek_scrim">#F2121212</color>       <!-- dark glass peek sheet -->
+    <color name="viewer_peek_divider">#33FFFFFF</color>
+    <color name="viewer_peek_handle">#66FFFFFF</color>
+    <color name="viewer_peek_text">#FFFFFFFF</color>
+    <color name="viewer_peek_muted">#B3B3B3</color>
+    <color name="viewer_peek_accent">#FF7DD3FC</color>      <!-- soft sky on dark -->
+
     <color name="toast_crisp_bg">#F0FFFFFF</color>
     <color name="toast_crisp_text">#152430</color>
 </resources>

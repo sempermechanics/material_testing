@@ -40,17 +40,42 @@
     <color name="viewer_chip_off">#FFFFFF</color>
     <color name="viewer_on_dark">#152430</color> <!-- now "on viewer panel"; light theme -->
 
-    <!-- Immersive viewer chrome (Photos-style frosted glass on #0B1220) -->
-    <color name="viewer_immersive_canvas">#0B1220</color>
-    <color name="viewer_glass_fill">#52FFFFFF</color>       <!-- ~32% white frost -->
-    <color name="viewer_glass_stroke">#73FFFFFF</color>
-    <color name="viewer_glass_pill">#38FFFFFF</color>       <!-- ~22% white field pills -->
-    <color name="viewer_peek_scrim">#F2121212</color>       <!-- dark glass peek sheet -->
-    <color name="viewer_peek_divider">#33FFFFFF</color>
-    <color name="viewer_peek_handle">#66FFFFFF</color>
-    <color name="viewer_peek_text">#FFFFFFFF</color>
-    <color name="viewer_peek_muted">#B3B3B3</color>
-    <color name="viewer_peek_accent">#FF7DD3FC</color>      <!-- soft sky on dark -->
+    <!-- Immersive viewer chrome: translucent glass pucks floating over a full-bleed
+         figure, no opaque bars and no elevation (see values-night for the dark half).
+         The chrome sits over an arbitrary jet heatmap, so legibility comes from the
+         puck fill + 1dp rim + a text halo — never from a solid plate.
+         Light theme keeps a white-translucent frost with dark ink; night flips to the
+         original #52FFFFFF-on-dark treatment. -->
+    <color name="viewer_immersive_canvas">#0B1220</color>   <!-- unused: canvas stays theme-adaptive -->
+    <color name="viewer_glass_fill">#B8FFFFFF</color>       <!-- ~72% white frost under dark ink -->
+    <color name="viewer_glass_stroke">#33152430</color>     <!-- rim that defines the puck on a light canvas -->
+    <color name="viewer_glass_pill">#8CFFFFFF</color>       <!-- ~55% white unchecked field pill -->
+    <color name="viewer_glass_ripple">#1F152430</color>     <!-- dark ripple on a light frost -->
+
+    <!-- Halo behind bare chrome text (no puck): keeps 13-18sp labels readable over
+         both the light canvas and a saturated heatmap. Night inverts to a shadow. -->
+    <color name="viewer_text_halo">#B3FFFFFF</color>
+
+    <!-- bg_probe_chip is deliberately dark in BOTH themes (a dark puck reads over any
+         jet colour), so its ink and rim stay light in both — no night override. Used
+         by the probe readout and the summary progress card. -->
+    <color name="viewer_probe_ink">#FFFFFFFF</color>
+    <color name="viewer_probe_stroke">#73FFFFFF</color>
+
+    <!-- Selected field pill. The idiom is inversion: the checked pill flips to the
+         opposite polarity of the unchecked frost, so selection reads at a glance.
+         Light = dark fill / white ink; night = white fill / near-black ink (19e5209).
+         The UNCHECKED ink is viewer_chrome_text, which already flips per theme —
+         a fixed white would vanish on the light theme's white frost. -->
+    <color name="viewer_pill_on_bg">#E6152430</color>
+    <color name="viewer_pill_on_text">#FFFFFFFF</color>
+
+    <color name="viewer_peek_scrim">#FFFFFFFF</color>       <!-- peek sheet surface -->
+    <color name="viewer_peek_divider">#1F152430</color>
+    <color name="viewer_peek_handle">#40152430</color>
+    <color name="viewer_peek_text">#152430</color>
+    <color name="viewer_peek_muted">#5B6B7A</color>
+    <color name="viewer_peek_accent">#0288D1</color>
 
     <!-- Dark mode is force-dark (render-time inversion of this palette), which
          never touches window/system-bar colors — these two aliases carry the
@@ -61,8 +86,6 @@
     <!-- Brand plate behind the S / wordmark: sky in light, black in night. -->
     <color name="brand_plate">@color/sky_primary</color>
 
-    <!-- Result-viewer chrome when force-dark is opted out. -->
-    <color name="viewer_chrome_bg">@color/surface</color>
     <color name="viewer_chrome_text">@color/text_primary</color>
     <color name="viewer_chrome_muted">@color/text_secondary</color>
 

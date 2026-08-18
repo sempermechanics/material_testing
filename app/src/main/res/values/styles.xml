@@ -100,37 +100,29 @@
         <item name="rippleColor">#220288D1</item>
     </style>
 
-    <!-- Compact field row in the result viewer. -->
-    <style name="Widget.Semper.SegmentedButton.Viewer" parent="Widget.Semper.SegmentedButton">
-        <item name="android:minHeight">40dp</item>
-        <item name="android:insetTop">0dp</item>
-        <item name="android:insetBottom">0dp</item>
-        <item name="android:textSize">14sp</item>
-        <item name="android:paddingLeft">12dp</item>
-        <item name="android:paddingRight">12dp</item>
-        <item name="android:paddingTop">6dp</item>
-        <item name="android:paddingBottom">6dp</item>
-    </style>
-
-    <!-- Floating glass field pills over the immersive heatmap (wireframe: rounded-full). -->
+    <!-- Floating glass field pills over the immersive heatmap (wireframe: rounded-full).
+         Shape and colour are the immersive treatment — stadium, no stroke, translucent
+         fill that inverts to solid when checked. Metrics are deliberately the LARGER
+         touch sizes the viewer settled on (40dp / 14sp), not the original compact
+         30dp / 11sp: the shape language changes, the tap target does not. -->
     <style name="Widget.Semper.SegmentedButton.ViewerImmersive" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="android:textAllCaps">false</item>
-        <item name="android:minHeight">30dp</item>
+        <item name="android:minHeight">40dp</item>
         <item name="android:minWidth">0dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
         <item name="android:insetLeft">0dp</item>
         <item name="android:insetRight">0dp</item>
-        <item name="android:textSize">11sp</item>
+        <item name="android:textSize">14sp</item>
         <item name="android:paddingLeft">12dp</item>
         <item name="android:paddingRight">12dp</item>
-        <item name="android:paddingTop">4dp</item>
-        <item name="android:paddingBottom">4dp</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
         <item name="cornerRadius">999dp</item>
         <item name="strokeWidth">0dp</item>
         <item name="backgroundTint">@color/field_pill_bg</item>
         <item name="android:textColor">@color/field_pill_text</item>
-        <item name="rippleColor">#33FFFFFF</item>
+        <item name="rippleColor">@color/viewer_glass_ripple</item>
         <item name="android:letterSpacing">0.02</item>
         <item name="ensureMinTouchTargetSize">false</item>
     </style>
@@ -143,7 +135,7 @@
         <item name="backgroundTint">@color/viewer_glass_fill</item>
         <item name="strokeColor">@color/viewer_glass_stroke</item>
         <item name="strokeWidth">0.5dp</item>
-        <item name="rippleColor">#33FFFFFF</item>
+        <item name="rippleColor">@color/viewer_glass_ripple</item>
         <item name="cornerRadius">999dp</item>
         <item name="elevation">0dp</item>
     </style>
@@ -163,8 +155,14 @@
         <item name="bottomSheetStyle">@style/Widget.Semper.ViewerPeekSheet</item>
         <item name="android:colorBackground">@android:color/transparent</item>
         <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@color/viewer_peek_scrim</item>
         <item name="colorOnSurface">@color/viewer_peek_text</item>
+        <!-- Deliberately does NOT tint the navigation bar. 19e5209 could set it to
+             viewer_peek_scrim because that scrim was always dark, so the system's
+             white nav icons stayed legible. This scrim is now light in the light
+             theme, and the matching android:windowLightNavigationBar needs API 27
+             while minSdk is 24 — on 24-26 that would leave white icons on a white
+             bar. Inheriting the activity's own (already correct) system-bar
+             handling avoids the whole problem on every API level. -->
     </style>
 
     <!-- Segmented chips on the dark ROI draw toolbar -->

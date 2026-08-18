@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/viewer_chrome_bg"
+    android:background="@drawable/bg_viewer_peek_sheet"
     android:forceDarkAllowed="false"
     android:orientation="vertical"
     android:paddingHorizontal="22dp"
@@ -17,7 +17,7 @@
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
         android:layout_marginBottom="16dp"
-        android:background="@color/viewer_chrome_muted" />
+        android:background="@drawable/bg_viewer_peek_handle" />
 
     <TextView
         android:layout_width="wrap_content"
