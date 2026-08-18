@@ -22,7 +22,6 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
@@ -62,7 +61,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var adapter: SessionListAdapter
     private lateinit var selection: SessionSelectionController
-    private lateinit var fab: FloatingActionButton
+    private lateinit var fab: ImageButton
     private lateinit var tvHomeQuota: TextView
 
     /** Upload WorkInfo ids already surfaced, so one failure isn't snackbar-spammed. */
@@ -91,7 +90,7 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    /** Browse fallback: Storage Access Framework (Downloads, Drive, DNG). */
+    /** Files tab: Storage Access Framework (Drive, storage, DNG). */
     private val pickDocument =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             routePickedMedia(uri)
@@ -384,7 +383,7 @@ class HomeActivity : AppCompatActivity() {
     }
 
     /**
-     * In-sheet Images / Files picker. Browse still opens SAF for Drive / DNG.
+     * In-sheet Images gallery; Files opens SAF for Drive / storage / DNG.
      */
     private fun showSourceChooser() {
         mediaPicker = MediaSourceChooser.show(

@@ -203,11 +203,16 @@
             android:text="@string/home_empty_start" />
     </LinearLayout>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
+    <ImageButton
         android:id="@+id/fabNewAnalysis"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="96dp"
+        android:layout_height="56dp"
         android:layout_gravity="top|start"
+        android:background="@drawable/bg_fab_rect"
         android:contentDescription="@string/home_new_analysis"
-        android:src="@drawable/ic_capture" />
+        android:elevation="6dp"
+        android:padding="6dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_capture"
+        app:tint="@color/text_on_primary" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

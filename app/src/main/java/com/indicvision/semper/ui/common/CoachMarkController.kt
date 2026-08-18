@@ -9,10 +9,12 @@ import android.app.Activity
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -31,11 +33,13 @@ class CoachMarkController(
         val target: View,
         val message: String,
         val onEnter: (() -> Unit)? = null,
+        val illustration: Int? = null,
     )
 
     private var overlayRoot: FrameLayout? = null
     private var holeView: View? = null
     private var bubble: LinearLayout? = null
+    private var illustrationView: ImageView? = null
     private var messageView: TextView? = null
     private var nextButton: MaterialButton? = null
     private var skipButton: MaterialButton? = null
@@ -70,6 +74,7 @@ class CoachMarkController(
         overlayRoot = null
         holeView = null
         bubble = null
+        illustrationView = null
         messageView = null
         nextButton = null
         skipButton = null
@@ -132,6 +137,19 @@ class CoachMarkController(
             }
         }
 
+        val illustration = ImageView(activity).apply {
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            visibility = View.GONE
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                isForceDarkAllowed = false
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(10) }
+        }
         val msg = TextView(activity).apply {
             setTextColor(ContextCompat.getColor(activity, R.color.text_primary))
             textSize = 15f
@@ -154,9 +172,11 @@ class CoachMarkController(
         }
         actions.addView(skip)
         actions.addView(next)
+        bubbleLayout.addView(illustration)
         bubbleLayout.addView(msg)
         bubbleLayout.addView(actions)
 
+        illustrationView = illustration
         messageView = msg
         nextButton = next
         skipButton = skip
@@ -175,6 +195,17 @@ class CoachMarkController(
         index = stepIndex
         val step = steps[stepIndex]
         messageView?.text = step.message
+        val ill = illustrationView
+        if (ill != null) {
+            val res = step.illustration
+            if (res != null) {
+                ill.setImageResource(res)
+                ill.visibility = View.VISIBLE
+            } else {
+                ill.setImageDrawable(null)
+                ill.visibility = View.GONE
+            }
+        }
         val last = stepIndex == steps.lastIndex
         nextButton?.text = activity.getString(
             if (last) R.string.coach_done else R.string.coach_next,

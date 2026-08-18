@@ -16,6 +16,7 @@
 package com.indicvision.semper.ui.analysis
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Rect
@@ -205,10 +206,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvDefMeta = findViewById(R.id.tvDefMeta)
         tvDefDropHint = findViewById(R.id.tvDefDropHint)
         jpegWarnRow = findViewById(R.id.jpegWarnRow)
+        findViewById<View>(R.id.btnJpegFaq).setOnClickListener {
+            confirmOpenFaq(getString(R.string.url_faq_jpeg))
+        }
         rvFrameOrder = findViewById(R.id.rvFrameOrder)
         btnFrameOrderSort = findViewById(R.id.btnFrameOrderSort)
         setupFrameOrderStrip()
         lowTextureWarnRow = findViewById(R.id.lowTextureWarnRow)
+        findViewById<View>(R.id.btnSpeckleFaq).setOnClickListener {
+            confirmOpenFaq(getString(R.string.url_faq_speckle))
+        }
         tvLowTextureWarning = findViewById(R.id.tvLowTextureWarning)
         tvNextReason = findViewById(R.id.tvNextReason)
         ivInputsThumb = findViewById(R.id.ivInputsThumb)
@@ -368,7 +375,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             },
         ).observe()
 
-        // Browse (SAF) still reaches DNG/RAW and Drive, which MediaStore may not index.
+        // Files (SAF) still reaches DNG/RAW and Drive, which MediaStore may not index.
         var mediaPicker: MediaPickerSheet? = null
         val requestMediaPermission =
             registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -1412,6 +1419,24 @@ class StaticAnalysisActivity : AppCompatActivity() {
             .setMessage(bodyRes)
             .setPositiveButton(android.R.string.ok, null)
             .show()
+    }
+
+    private fun confirmOpenFaq(url: String) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.faq_redirect_title)
+            .setMessage(R.string.faq_redirect_body)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.faq_redirect_open) { _, _ -> openExternalUrl(url) }
+            .show()
+    }
+
+    private fun openExternalUrl(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+        } catch (e: ActivityNotFoundException) {
+            Timber.w(e, "No browser to open %s", url)
+            Toast.makeText(this, url, Toast.LENGTH_LONG).show()
+        }
     }
 
     // ------------------------------------------------------------------

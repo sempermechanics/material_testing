@@ -21,8 +21,8 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.CoachPrefs
 
 /**
- * In-sheet Images / Files picker. The host Activity owns permission and SAF
- * launchers (they must be registered before STARTED); this owns the grid.
+ * In-sheet Images picker. Files dismisses this sheet and hands off to SAF
+ * (the host Activity owns that launcher). Multi-select stays on the gallery.
  */
 class MediaPickerSheet private constructor(
     private val activity: AppCompatActivity,
@@ -37,8 +37,6 @@ class MediaPickerSheet private constructor(
     private val toggle: MaterialButtonToggleGroup = root.findViewById(R.id.toggleMediaSource)
     private val btnImages: View = root.findViewById(R.id.btnMediaImages)
     private val btnFiles: View = root.findViewById(R.id.btnMediaFiles)
-    private val btnBrowse: View = root.findViewById(R.id.btnMediaBrowse)
-    private val btnSelectAll: View = root.findViewById(R.id.btnMediaSelectAll)
     private val btnUse: MaterialButton = root.findViewById(R.id.btnMediaUse)
     private val btnAllow: View = root.findViewById(R.id.btnMediaAllow)
     private val empty: View = root.findViewById(R.id.mediaEmpty)
@@ -46,7 +44,6 @@ class MediaPickerSheet private constructor(
     private val list: RecyclerView = root.findViewById(R.id.listMedia)
     private val coach = CoachMarkController(activity)
     private val selected = linkedSetOf<Uri>()
-    private var filesTab = false
     private val includeVideo = mode == MediaSourceChooser.Mode.HOME_REFERENCE
     private val multi = mode == MediaSourceChooser.Mode.DEFORMED
 
@@ -67,14 +64,11 @@ class MediaPickerSheet private constructor(
         list.adapter = adapter
         toggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
-            filesTab = checkedId == R.id.btnMediaFiles
-            reload()
+            if (checkedId == R.id.btnMediaFiles) {
+                sheet.dismiss()
+                onBrowseSaf()
+            }
         }
-        btnBrowse.setOnClickListener {
-            sheet.dismiss()
-            onBrowseSaf()
-        }
-        btnSelectAll.setOnClickListener { selectAll() }
         btnAllow.setOnClickListener { requestPermission() }
         btnUse.setOnClickListener { confirm() }
         sheet.setOnDismissListener {
@@ -107,7 +101,6 @@ class MediaPickerSheet private constructor(
     }
 
     private fun reload() {
-        btnSelectAll.isVisible = multi && filesTab
         if (!MediaStoreBrowser.hasReadAccess(activity)) {
             adapter.submit(emptyList())
             showEmpty(needPermission = true)
@@ -117,14 +110,13 @@ class MediaPickerSheet private constructor(
             MediaStoreBrowser.query(
                 context = activity,
                 includeVideo = includeVideo,
-                downloadsOnly = filesTab,
             )
         }.getOrDefault(emptyList())
         adapter.submit(items)
         empty.isVisible = items.isEmpty()
         list.isVisible = items.isNotEmpty()
         btnAllow.isVisible = false
-        emptyText.setText(if (filesTab) R.string.media_empty_files else R.string.media_empty)
+        emptyText.setText(R.string.media_empty)
         refreshUse()
     }
 
@@ -144,12 +136,6 @@ class MediaPickerSheet private constructor(
             return
         }
         if (!selected.add(item.uri)) selected.remove(item.uri)
-        adapter.notifyDataSetChanged()
-        refreshUse()
-    }
-
-    private fun selectAll() {
-        adapter.items().forEach { selected.add(it.uri) }
         adapter.notifyDataSetChanged()
         refreshUse()
     }
@@ -182,42 +168,38 @@ class MediaPickerSheet private constructor(
 
     private fun maybeCoach() {
         val overlay = sheet.window?.decorView as? FrameLayout ?: return
-        val screen = if (multi) CoachPrefs.Screen.MEDIA_PICKER_DEF else CoachPrefs.Screen.MEDIA_PICKER_REF
-        val steps = buildList {
-            add(
+        if (multi) {
+            coach.maybeShow(
+                CoachPrefs.Screen.MEDIA_PICKER_DEF,
+                listOf(
+                    CoachMarkController.Step(
+                        list,
+                        activity.getString(R.string.coach_picker_multi),
+                    ),
+                    CoachMarkController.Step(
+                        btnFiles,
+                        activity.getString(R.string.coach_picker_files_select_all),
+                        illustration = R.drawable.coach_saf_select_all,
+                    ),
+                ),
+                overlayParent = overlay,
+            )
+            return
+        }
+        coach.maybeShow(
+            CoachPrefs.Screen.MEDIA_PICKER_REF,
+            listOf(
                 CoachMarkController.Step(
                     btnImages,
                     activity.getString(R.string.coach_picker_images),
                 ),
-            )
-            add(
                 CoachMarkController.Step(
                     btnFiles,
                     activity.getString(R.string.coach_picker_files),
                 ),
-            )
-            if (multi) {
-                add(
-                    CoachMarkController.Step(
-                        list,
-                        activity.getString(R.string.coach_picker_multi),
-                        onEnter = {
-                            toggle.check(R.id.btnMediaImages)
-                        },
-                    ),
-                )
-                add(
-                    CoachMarkController.Step(
-                        btnSelectAll,
-                        activity.getString(R.string.coach_picker_select_all),
-                        onEnter = {
-                            toggle.check(R.id.btnMediaFiles)
-                        },
-                    ),
-                )
-            }
-        }
-        coach.maybeShow(screen, steps, overlayParent = overlay)
+            ),
+            overlayParent = overlay,
+        )
     }
 
     companion object {

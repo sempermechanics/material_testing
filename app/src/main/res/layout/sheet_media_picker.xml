@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/surface"
     android:orientation="vertical"
     android:paddingHorizontal="16dp"
     android:paddingTop="10dp"
@@ -30,6 +31,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
+        android:layout_marginBottom="10dp"
         app:checkedButton="@+id/btnMediaImages"
         app:selectionRequired="true"
         app:singleSelection="true">
@@ -50,37 +52,6 @@
             android:layout_weight="1"
             android:text="@string/source_files" />
     </com.google.android.material.button.MaterialButtonToggleGroup>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnMediaBrowse"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/media_browse"
-            android:textAllCaps="false"
-            android:textColor="@color/sky_primary" />
-
-        <View
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnMediaSelectAll"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/selection_select_all"
-            android:textAllCaps="false"
-            android:textColor="@color/sky_primary"
-            android:visibility="gone" />
-    </LinearLayout>
 
     <FrameLayout
         android:layout_width="match_parent"

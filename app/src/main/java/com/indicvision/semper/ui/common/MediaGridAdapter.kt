@@ -34,8 +34,6 @@ class MediaGridAdapter(
         notifyDataSetChanged()
     }
 
-    fun items(): List<MediaStoreBrowser.Item> = items
-
     fun shutdown() {
         executor.shutdownNow()
         thumbs.values.forEach { it.recycle() }

@@ -7,8 +7,8 @@ import androidx.appcompat.app.AppCompatActivity
 /**
  * Asks *where* to pick media from, in a sheet styled like the rest of the app.
  *
- * Images lists the gallery in the sheet (default). Files lists Downloads, with
- * Browse handing off to the Storage Access Framework for Drive / DNG.
+ * Images lists the gallery in the sheet (default). Files dismisses the sheet
+ * and opens the system picker (SAF) for Drive, storage, or DNG.
  */
 object MediaSourceChooser {
 
