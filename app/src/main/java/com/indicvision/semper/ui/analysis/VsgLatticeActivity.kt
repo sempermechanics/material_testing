@@ -33,7 +33,6 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.DicKeys
@@ -125,7 +124,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     private lateinit var strainPlotTitle: TextView
     private lateinit var strainPlotReadout: TextView
     private lateinit var stepperRow: View
-    private lateinit var chipSelectedParams: Chip
+    private lateinit var chipSelectedParams: MaterialButton
     private lateinit var btnPrevNode: ImageButton
     private lateinit var btnNextNode: ImageButton
     private lateinit var togglePlotMode: MaterialButtonToggleGroup

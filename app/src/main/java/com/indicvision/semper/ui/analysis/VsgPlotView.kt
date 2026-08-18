@@ -717,18 +717,19 @@ class VsgPlotView @JvmOverloads constructor(
 
     private fun drawGridTicks(canvas: Canvas, b: Bounds, f: Frame) {
         textPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_ink)
+        textPaint.textAlign = Paint.Align.RIGHT
         for (i in 0..GRID_LINES) {
             val y = f.bottom - (f.bottom - f.top) * i / GRID_LINES
             val value = b.yMin + (b.yMax - b.yMin) * i / GRID_LINES
-            textPaint.textAlign = Paint.Align.RIGHT
-            // Compact mode has no separate axis title, so the topmost tick (the
-            // one nearest the plot's own header) carries the unit instead.
-            val label = if (compactAxes && i == GRID_LINES && yUnit.isNotEmpty()) {
-                "${format(value)} $yUnit"
-            } else {
-                format(value)
-            }
-            canvas.drawText(label, f.left - dp(TICK_GAP_DP), y + textPaint.textSize * TICK_BASELINE, textPaint)
+            canvas.drawText(format(value), f.left - dp(TICK_GAP_DP), y + textPaint.textSize * TICK_BASELINE, textPaint)
+        }
+        if (compactAxes && yUnit.isNotEmpty()) {
+            // A number+unit tick right-aligned into PAD_LEFT_COMPACT_DP would run
+            // past the view's own left edge (there isn't room for both digits and
+            // a unit in that gutter) -- draw the unit on its own, left-aligned
+            // into the data area's top-left corner instead, where there's slack.
+            textPaint.textAlign = Paint.Align.LEFT
+            canvas.drawText(yUnit, f.left + dp(TICK_GAP_DP), f.top + textPaint.textSize, textPaint)
         }
         val baseline = f.bottom + textPaint.textSize + dp(TICK_GAP_DP)
         textPaint.textAlign = Paint.Align.LEFT

@@ -80,26 +80,29 @@
                 android:src="@drawable/ic_nav_prev"
                 app:tint="@color/viewer_chrome_text" />
 
-            <com.google.android.material.chip.Chip
+            <!-- MaterialButton, not Chip: Chip's chipBackgroundColor did not
+                 respect this colour's alpha (rendered as opaque white, hiding
+                 white-on-white text in dark mode). MaterialButton's
+                 backgroundTint does, and it's the same glass-pill style already
+                 proven by Widget.Semper.Button.ViewerPeekHome elsewhere. -->
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/chipSelectedParams"
+                style="@style/Widget.Semper.Button.ViewerPeekHome"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:clickable="true"
                 android:contentDescription="@string/vsg_lattice_readout_copy_hint"
-                android:focusable="true"
                 android:fontFamily="monospace"
-                android:gravity="center"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
                 android:textAlignment="center"
                 android:textColor="@color/viewer_chrome_text"
                 android:textSize="13sp"
-                app:chipBackgroundColor="@color/viewer_glass_fill"
-                app:chipStrokeColor="@color/viewer_glass_stroke"
-                app:chipStrokeWidth="0.5dp"
-                app:ensureMinTouchTargetSize="false"
-                app:rippleColor="@color/viewer_glass_ripple"
+                app:cornerRadius="999dp"
                 tools:text="ss:41 · st:5 · sw:15" />
 
             <ImageButton
