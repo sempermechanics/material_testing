@@ -1,13 +1,17 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
+    android:width="40dp"
     android:height="24dp"
-    android:viewportWidth="24"
+    android:viewportWidth="40"
     android:viewportHeight="24">
-    <!-- Camera body + lens, with a video chevron on the right. -->
+    <!-- ~2.5 viewport units (~4 px at the FAB size) on each side of the divider. -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M3,7h11c1.1,0 2,0.9 2,2v6c0,1.1 -0.9,2 -2,2H3c-1.1,0 -2,-0.9 -2,-2V9c0,-1.1 0.9,-2 2,-2zM8.5,15.25c1.52,0 2.75,-1.23 2.75,-2.75S10.02,9.75 8.5,9.75 5.75,10.98 5.75,12.5 6.98,15.25 8.5,15.25z" />
+        android:fillType="evenOdd"
+        android:pathData="M6.6,2.2L4.9,5.2H2.2C1.2,5.2 0.4,6 0.4,7v10c0,1 0.8,1.8 1.8,1.8h13c1,0 1.8,-0.8 1.8,-1.8V7c0,-1 -0.8,-1.8 -1.8,-1.8h-2.9L12.4,2.2H6.6zM8.7,16.4c-2.3,0 -4.2,-1.9 -4.2,-4.2s1.9,-4.2 4.2,-4.2 4.2,1.9 4.2,4.2 -1.9,4.2 -4.2,4.2z" />
     <path
         android:fillColor="#FF000000"
-        android:pathData="M17,9.5l6,-4v13l-6,-4z" />
+        android:pathData="M19.65,6h0.7v12h-0.7z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M24.4,5.4h10.4c0.8,0 1.5,0.7 1.5,1.5v10.2c0,0.8 -0.7,1.5 -1.5,1.5H24.4c-0.8,0 -1.5,-0.7 -1.5,-1.5V6.9c0,-0.8 0.7,-1.5 1.5,-1.5zM36.3,8.2l3.3,-2.6v13.2l-3.3,-2.6z" />
 </vector>

@@ -126,10 +126,12 @@ Refresh with `gh pr list --state open` — numbers below will rot.
 slots/coach #69; `DicBatchRunner` + `DicFieldIo` #70; hashed lock / Gradle 9.7 /
 docs #71; faster Release CI #74; device-bound accounts / share logos #78.
 
-New analysis picks media in-sheet (Images | Files, MediaStore + SAF Browse).
+New analysis picks media in-sheet (Images gallery; Files opens the system
+picker). JPEG and low-speckle chips link to FAQ anchors on the public site.
 `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when the gallery tab
 opens. Summary GIFs bake `viewer_canvas` (night `#101518`) into the cache
-filename. Launcher adaptive background is transparent; night inverts the S.
+filename. Launcher adaptive background is transparent; night inverts the S
+on splash (`windowSplashScreenAnimatedIcon`).
 
 **Next architecture (grill before coding):** `DicKeys` extras bag packed in
 `SessionOpenHelper.intentFor` and `AnalysisNavHelper.openResults` (~25 extras).

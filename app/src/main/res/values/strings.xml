@@ -565,23 +565,26 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="roi_full_fmt">Full image · %1$d × %2$d px</string>
     <string name="roi_custom_fmt">%1$d × %2$d px at (%3$d, %4$d)</string>
     <string name="picker_select_reference_toast">Select the reference image</string>
-    <string name="picker_select_deformed">Select the deformed frames</string>
+    <string name="picker_select_deformed">Select the deformed frames — tap several</string>
     <string name="source_images">Images</string>
     <string name="source_files">Files</string>
-    <string name="media_browse">Browse</string>
     <string name="media_allow_access">Allow access</string>
     <string name="media_need_permission">Allow access to show your gallery</string>
-    <string name="media_empty">No images here yet. Browse files instead.</string>
-    <string name="media_empty_files">No files in Downloads. Browse storage, Drive, or DNG.</string>
+    <string name="media_empty">No images here yet. Use Files to pick from storage.</string>
     <string name="media_use">Use</string>
     <plurals name="media_use_fmt">
         <item quantity="one">Use %d image</item>
         <item quantity="other">Use %d images</item>
     </plurals>
     <string name="coach_picker_images">Images from the gallery</string>
-    <string name="coach_picker_files">Or files from Downloads, Drive, or storage</string>
+    <string name="coach_picker_files">Files opens the system file picker</string>
     <string name="coach_picker_multi">Tap several images to add them together</string>
-    <string name="coach_picker_select_all">Select all files in this list at once</string>
+    <string name="coach_picker_files_select_all">In the next screen, Select all is under the three-dot menu (top right)</string>
+    <string name="jpeg_faq_desc">Why JPEG is a problem</string>
+    <string name="speckle_faq_desc">Why speckle contrast is low</string>
+    <string name="faq_redirect_title">Open in browser?</string>
+    <string name="faq_redirect_body">This opens the FAQ on the Semper website.</string>
+    <string name="faq_redirect_open">Open</string>
     <string name="results_title">Results</string>
     <string name="action_share">Share</string>
     <string name="viewer_back_desc">Back to settings</string>
@@ -662,6 +665,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="help_support_email_action">Email support</string>
     <string name="help_support_subject">Semper support request</string>
     <string name="url_manual">https://semperdic.github.io/website/manual/</string>
+    <string name="url_faq_jpeg" translatable="false">https://semperdic.github.io/website/manual/faq/#jpeg-warning</string>
+    <string name="url_faq_speckle" translatable="false">https://semperdic.github.io/website/manual/faq/#speckle-contrast</string>
     <string name="url_community">https://semperdic.github.io/website/community/</string>
     <string name="url_report_bug">https://semperdic.github.io/website/bugs/</string>
     <string name="url_request_feature">https://semperdic.github.io/website/features/</string>

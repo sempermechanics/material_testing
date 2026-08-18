@@ -42,10 +42,15 @@
     </style>
 
     <!-- Splash window matches the layout so the first frame doesn't flash —
-         splash_bg is night-qualified for the same guarantee in dark mode -->
+         splash_bg is night-qualified for the same guarantee in dark mode.
+         Android 12+ draws the system splash from these attributes before
+         SplashActivity; the inset S already inverts in drawable-night. -->
     <style name="Theme.Semper.Splash" parent="Theme.Semper">
         <item name="android:statusBarColor">@color/splash_bg</item>
         <item name="android:windowBackground">@color/splash_bg</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="s">@color/splash_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/ic_semper_launcher_fg</item>
+        <item name="android:windowSplashScreenIconBackgroundColor" tools:targetApi="s">@android:color/transparent</item>
     </style>
 
     <!-- Proxy activity for Save-to-Files from the share chooser -->

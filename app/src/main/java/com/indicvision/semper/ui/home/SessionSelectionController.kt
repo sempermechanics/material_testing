@@ -14,7 +14,6 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.SessionRecord
@@ -37,7 +36,7 @@ class SessionSelectionController(
     private val selectionCount: TextView,
     private val btnSelectionRename: ImageButton,
     private val selectAllBox: MaterialCheckBox,
-    private val fab: FloatingActionButton,
+    private val fab: ImageButton,
     private val backCallback: OnBackPressedCallback,
     private val onRefresh: () -> Unit,
     private val onDeviceOnlyDeleted: () -> Unit = {},
@@ -115,7 +114,7 @@ class SessionSelectionController(
         selectionBar.isVisible = active
         topBar.isVisible = !active
         backCallback.isEnabled = active
-        if (active) fab.hide() else fab.show()
+        fab.isVisible = !active
         selectionCount.text = activity.resources.getQuantityString(
             R.plurals.selection_count_fmt,
             selectedIds.size,

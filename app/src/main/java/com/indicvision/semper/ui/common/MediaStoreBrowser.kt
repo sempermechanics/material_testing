@@ -45,10 +45,9 @@ object MediaStoreBrowser {
     fun query(
         context: Context,
         includeVideo: Boolean,
-        downloadsOnly: Boolean,
         limit: Int = MAX_ITEMS,
     ): List<Item> {
-        val (selection, selectionArgs) = filter(includeVideo, downloadsOnly)
+        val (selection, selectionArgs) = filter(includeVideo)
         val out = ArrayList<Item>(limit)
         context.contentResolver.query(
             collectionUri(),
@@ -68,7 +67,7 @@ object MediaStoreBrowser {
             MediaStore.Files.getContentUri("external")
         }
 
-    private fun filter(includeVideo: Boolean, downloadsOnly: Boolean): Pair<String, Array<String>> {
+    private fun filter(includeVideo: Boolean): Pair<String, Array<String>> {
         val typeClause = if (includeVideo) {
             "(${MediaStore.Files.FileColumns.MEDIA_TYPE}=? OR ${MediaStore.Files.FileColumns.MEDIA_TYPE}=?)"
         } else {
@@ -78,11 +77,7 @@ object MediaStoreBrowser {
             add(MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString())
             if (includeVideo) add(MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString())
         }
-        if (!downloadsOnly || Build.VERSION.SDK_INT < SDK_RELATIVE_PATH) {
-            return typeClause to args.toTypedArray()
-        }
-        return "$typeClause AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?" to
-            (args + "%Download%").toTypedArray()
+        return typeClause to args.toTypedArray()
     }
 
     private fun readRows(

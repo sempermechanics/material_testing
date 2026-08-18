@@ -385,8 +385,8 @@ Lattice, Session limit, or back to Home.
 | [ ] 5.1.6 | Load a reference only | **Next** is disabled with "add at least one deformed frame to continue" |
 | [ ] 5.1.7 | Load deformed frames only | **Next** is disabled with the matching reference message |
 | [ ] 5.1.8 | Include one frame of a different pixel size | A blocking message appears and **Run** stays disabled |
-| [ ] 5.1.9 | Load JPEGs | A non-blocking accuracy warning chip appears |
-| [ ] 5.1.10 | Load a poorly speckled reference | A low-texture warning names a suggested subset size |
+| [ ] 5.1.9 | Load JPEGs | A non-blocking accuracy warning chip appears; its info icon opens the JPEG FAQ |
+| [ ] 5.1.10 | Load a poorly speckled reference | A low-texture warning names a suggested subset size; its info icon opens the speckle FAQ |
 | [ ] 5.1.11 | Open the sort menu → **Name A–Z** | Thumbnails reorder; the badge numbers renumber 1…N |
 | [ ] 5.1.12 | Choose **Date oldest first** | Order follows capture date, not filename |
 | [ ] 5.1.13 | Choose **Manual** | Hint toast about dragging; drag a thumbnail and it stays where dropped |
@@ -957,8 +957,8 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
 - **`DicUploadWorker` starts the Session limit screen from the background** on a
   quota rejection, which Android 10+ blocks — that path likely never fires.
 - **`READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested** when the in-sheet
-  Images tab opens (Home also asks for video). Browse still uses SAF, so Drive
-  and DNG work without that grant.
+  Images tab opens (Home also asks for video). Files opens the system picker
+  (SAF), so Drive and DNG work without that grant.
 - **The only notification channel is for transfers** — `TransferNotifications`
   creates one channel and upload/restore workers post a foreground notification
   on it. There are no *completion* notifications; terminal failures surface in-app
