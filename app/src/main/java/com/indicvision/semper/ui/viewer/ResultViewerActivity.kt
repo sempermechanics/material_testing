@@ -361,13 +361,7 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         // Floating glass field pills (separate rounded chips — not a segmented bar).
-        val fieldByButton = mapOf(
-            R.id.rbFieldU to ("U" to DicResult.IDX_U),
-            R.id.rbFieldV to ("V" to DicResult.IDX_V),
-            R.id.rbFieldExx to ("Exx" to DicResult.IDX_EXX),
-            R.id.rbFieldEyy to ("Eyy" to DicResult.IDX_EYY),
-            R.id.rbFieldExy to ("Exy" to DicResult.IDX_EXY),
-        )
+        val fieldByButton = ViewerFieldPills.BY_ID
         val fieldButtons = fieldByButton.keys.map { id ->
             findViewById<com.google.android.material.button.MaterialButton>(id)
         }
@@ -389,6 +383,10 @@ class ResultViewerActivity : AppCompatActivity() {
                 inspect.refreshCrosshairs()
             }
         }
+        // The layout checks U; the live field comes back from the ViewModel after a
+        // rotation, so re-derive the lit pill or it disagrees with the heatmap.
+        val checkedFieldId = ViewerFieldPills.idFor(currentDataIndex)
+        fieldButtons.forEach { it.isChecked = it.id == checkedFieldId }
 
         findViewById<View>(R.id.btnViewerBack).setOnClickListener { finish() }
         findViewById<View>(R.id.btnViewerShare).setOnClickListener { showShareSheet() }

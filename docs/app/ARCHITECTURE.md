@@ -37,14 +37,18 @@ Intent extras shared across Activities live in
 | `ui/auth/` | Splash, sign-in, pending approval, Google / AccessRouter helpers |
 | `ui/home/` | Session list, selection, open-session intents |
 | `ui/analysis/` | Setup wizard (ViewStub steps 2/3; `AnalysisWizardSlots` / `AnalysisWizardCoach`; `goToStep` on the activity), ROI, VSG sweep, `DicBatchRunner` + `DicFieldIo`, import/overlay helpers, ViewModel |
-| `ui/viewer/` | Heatmaps, inspect, report factory, settings-used sheet |
+| `ui/viewer/` | Heatmaps, tap-to-probe, report factory, the ⓘ details sheet, `ViewerFieldPills` |
 | `ui/settings/` | Settings screen; account/storage/prefs/your-data/help live in `Settings*Section`; restore/download/delete stay on `SettingsActivity` |
 | `ui/admin/` | Admin screen — approve/revoke users via `/v1/admin/*` |
 | `ui/limit/` | Session-quota screen |
-| `ui/common/` | Insets, in-sheet media picker, motion |
-| `data/` | Auth, session store, cloud sync/upload/restore, storage budget, param clipboard |
+| `ui/common/` | Insets, motion, `MediaPickerSheet` (the one new-analysis sheet), `CrispToast`, `TransferBannerController` |
+| `data/` | Auth, session store, cloud sync/upload/restore/download, storage budget, param clipboard |
 | `data/net/` | Backend HTTP client (`IndicApi`), token store/provider |
 | `report/` | PDF / CSV / visualization |
+| `analytics/` | `SemperAnalytics` — consent-gated Firebase Analytics events |
+| `imaging/` | `BitmapDecode`, `ImageEncode` — decode/encode away from the UI classes |
+| `navigation/` | `AppIntents` — intent factories so `data` / `report` never import a `ui` Activity |
+| `util/` | `BrandAssets`, `Digests`, `OverlayFormats` |
 | *(root)* | `SemperApp`, `Diagnostics`, `CrashReportingTree`, `DicKeys`, `DicResult` |
 
 Style for shared UI logic: plain `object` / small classes named `*Helper`,
@@ -79,7 +83,9 @@ When cloud is configured (`INDIC_API_BASE_URL`):
 | Upload | `DicUploadWorker` | Resume/create remote session, stage artifacts, upload bundles |
 | Metadata JSON | `SessionUploadMetadata` | frames / device / engine JSON for the API |
 | Bundle build | `SessionUploadBundler` | Render frame bundles + CSV lists offline-testable |
-| Restore | `CloudRestore` | Pull remote sessions back into local session dirs |
+| Restore | `CloudRestore` / `DicRestoreWorker` | Pull remote sessions back into local session dirs |
+| Bundle download | `DicBundleDownloadWorker` | Write a session `.zip` into a SAF document the user picked **before** enqueue. Falls back to packing the local session when the cloud copy is unavailable, and deletes the empty destination on failure |
+| Backup delete | `BackupDeleteWorker` | Erase a cloud backup once the 5-second undo window closes |
 
 `IndicApi.listSessions` **pages**: it follows `nextPageToken` until the backend
 stops returning one, so a deep refresh sees the whole account rather than the
@@ -95,7 +101,8 @@ with no framework behind it:
 |---|---|---|
 | Local disk budget | `data/StorageBudget.kt`, `data/CacheJanitor.kt` | Measures analyses and cache; frees the local frames of **backed-up** analyses only. A user-set GB budget is enforced from `SemperApp.onCreate`, so it runs before any screen |
 | Crash reporting | `Diagnostics.kt`, `CrashReportingTree.kt` | Crashlytics collection is **off in the manifest** and enabled only on consent (first-run prompt or the Settings toggle). `CrashReportingTree` is a release-only Timber tree feeding breadcrumbs and non-fatals |
-| Parameter hand-off | `data/ParamClipboard.kt` | Holds one subset/step/strain-window triple, copied from the sweep lattice readout and pasted into the analysis wizard's advanced parameters |
+| Product analytics | `analytics/SemperAnalytics.kt` | Same consent flag as Crashlytics (`DicSettings.diagnosticsEnabled`) — events are dropped, not queued, when it is off. Params must stay PII-free: enums, coarse buckets, success/fail. The user-facing copy still says only "crash reports"; see [ops/TECH_DEBT.md](../ops/TECH_DEBT.md) |
+| Parameter hand-off | `data/ParamClipboard.kt` | Holds one subset/step/strain-window triple, copied from the sweep lattice's parameter chip and pasted into the analysis wizard's advanced parameters |
 
 An analysis whose local frames were freed becomes a **cloud-only row**: Home
 still lists it, badges it, and downloads it on open rather than reporting the
@@ -104,10 +111,21 @@ data as gone. The "session data gone" path now means *no* copy exists anywhere.
 ## Export hand-off
 
 Exports do not go straight to the system chooser. `ui/viewer/ShareCenter.kt`
-builds the artifact with determinate progress, then hands it to
-`SendToSheet`, a bottom sheet offering **Save to Files** (which routes through
-the transparent `SaveExportActivity` to open SAF) or **Share**. Settings' two
-data exports use the same path, so there is one place to change export UX.
+hands off to `SendToSheet`, a bottom sheet offering **Save to Files** (SAF) or
+**Share**. For the single-photo target the artifact is built first and then
+offered through the transparent `SaveExportActivity`; for the five slow targets
+the sheet comes **first** and the export is written straight into the chosen
+document. Settings' two data exports use the same path, so there is one place to
+change export UX.
+
+Two exports deliberately bypass it: Settings' **Download** already has its
+destination (§4 of [WORKFLOWS.md](WORKFLOWS.md)), and the lattice's **Save graph**
+goes to the system chooser directly.
+
+Long exports are not modal. Dismissing the progress dialog parks the job in
+`ui/common/TransferBannerController` — a non-modal strip with progress, Cancel
+and prev/next paging — hosted by both `ResultViewerActivity` and
+`SettingsActivity`, where it also carries restores and bundle downloads.
 
 ## Memory & failure invariants
 
@@ -166,8 +184,11 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
 | Change import / video extraction | `FrameImportHelper`, `VideoFrameExtractor` |
 | Change parameter-sweep setup UI | `SweepSetupHelper` (run loop stays in the Activity + `VsgStudyRunner`) |
 | Change the sweep result lattice | `ui/analysis/VsgLatticeActivity.kt`, `VsgLatticeView`, `VsgPlotView` |
-| Change heatmap / inspect | `ui/viewer/ResultViewerActivity.kt` + `Viewer*` helpers |
+| Change heatmap / probe | `ui/viewer/ResultViewerActivity.kt` + `Viewer*` helpers |
 | Change how exports are handed off | `ui/viewer/ShareCenter.kt`, `SendToSheet.kt`, `SaveExportActivity.kt` |
+| Change transfer progress UI | `ui/common/TransferBannerController.kt` (Settings + viewer), `data/TransferNotifications.kt` (the one channel) |
+| Change the new-analysis media sheet | `ui/common/MediaPickerSheet.kt` / `MediaSourceChooser.kt` — shared by the Home FAB and both wizard dropzones |
+| Add an analytics event | `analytics/SemperAnalytics.kt` — keep params PII-free and consent-gated |
 | Change storage reclaim behaviour | `data/StorageBudget.kt`, `data/CacheJanitor.kt` |
 | Change crash-reporting consent | `Diagnostics.kt`, `CrashReportingTree.kt` |
 | Change the C++ engine | The engine is a submodule — see [ENGINE_APP_CONTRACT.md](../engine/ENGINE_APP_CONTRACT.md), not this page |

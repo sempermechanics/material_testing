@@ -113,9 +113,17 @@ live frame-count estimate. Frame 0 becomes the reference.
 
 Tap each dropzone and pick your images:
 
-<img src="images/new-analysis-source.png" width="300" alt="Photos or Files chooser">
+<img src="images/new-analysis-source.png" width="300" alt="The New analysis sheet">
 
-**Photos** is the system picker. **Files** is the only route to RAW and DNG.
+The **New analysis** sheet opens on an **Images** tab — your device's gallery,
+three columns, inside the sheet, with videos badged. Tapping the **Files** tab
+hands you to the system file browser instead; that is still the only route to RAW
+and DNG. Picking deformed frames is multi-select: tap the tiles you want and
+confirm with **Use N**. Select-all lives in the three-dot menu.
+
+The sheet asks for media permission the first time the Images tab needs it. The
+Files tab needs no permission at all, so a phone that denies gallery access can
+still work entirely through Files.
 
 The strip shows the deformed frames with order badges.
 
@@ -306,15 +314,17 @@ run. The coach mark points it out on a first visit.
 
 | | |
 |---|---|
-| Filled dot | Solved |
+| Filled dot | Solved. All solved nodes share one colour; the focused one gains a ring |
 | Hollow red ring | Skipped — tap it and the reason names the combination and what went wrong |
 
-Each filled node is drawn in the same colour as its curve on the plot below, so
-you can read the two together without a legend.
+Every solved node is drawn in the **same** colour; the one you have focused also
+carries a selection ring. Colour on the plot below is reserved for the focused
+curve, so only one hue ever carries meaning at a time.
 
-The screen is built to be worked with one thumb. It scrolls — lattice, then
-controls, then plot — while **Save graph** and **View** stay pinned at the
-bottom.
+The screen is built to be worked with one thumb. It scrolls — summary line,
+lattice, controls, then plot — while **Save graph** and **View** stay pinned at
+the bottom. The y axis is the **strain window**; the lattice draws compact, so
+the coach mark on first visit is what names the axes.
 
 **Choosing a combination**
 
@@ -325,12 +335,15 @@ bottom.
 
 **Reading the plot**
 
-- **Isolate** (the default) shows only the selected combination. **Highlight**
-  draws all of them, with the selected one at full strength.
+- The **All / Node** pill above the plot chooses how much is drawn. **All** is
+  the default: every combination, the focused one at full strength in colour and
+  the rest sharing one muted neutral. **Node** narrows it to the focused
+  combination alone.
 - **Drag across the plot** — a guide follows your finger, a dot marks the curve
   and the value is printed beside it. The **slider** under the plot does the same
   thing and stays in sync with the drag, which is easier one-handed.
-- The readout reads `x=… · y=… · subset N · step N · strain N`.
+- The readout reads `x=…` only. The y value is printed on the plot at the scrub
+  point, and the parameters are already on the chip above.
 - **Pinch to zoom**, **two-finger drag** to pan, **double-tap** to reset. The
   zoom survives stepping to another node; changing component resets it, because
   Exx, Eyy and Exy differ in magnitude.
@@ -338,13 +351,15 @@ bottom.
 
 **Taking the answer with you**
 
-- **Double-tap the readout** to copy that combination's subset, step and strain
-  window. Start a new single-setting analysis and a **Paste params** chip on
+- **Double-tap or long-press the parameter chip** to copy that combination's
+  subset, step and strain window. Start a new single-setting analysis and a **Paste params** chip on
   step 2 fills them in — this is how you go from "the sweep says 41 · 5 · 15" to
   running the whole batch at it.
-- **Save graph** writes a PNG: a header naming the study, the reference image and
-  deformed count, and the parameters (or the combination count in Highlight
-  mode); the plot; and a colour legend. It is rendered fit-to-data, so your
+- **Save graph** writes a PNG and hands it straight to the system share sheet —
+  it is the one export that does not go through **Send to**. The file carries a
+  header naming the study, the reference image and deformed count, and the
+  focused combination's parameters (plus the combination count when the plot is
+  showing **All**); the plot; and a single-column colour legend. It is rendered fit-to-data, so your
   on-screen zoom neither leaks into the file nor is disturbed by saving.
 
 Look for the VSG where the curves stop separating.
@@ -355,28 +370,36 @@ Look for the VSG where the curves stop separating.
 
 <img src="images/result-viewer.png" width="300" alt="Result viewer">
 
-Tabs switch field. Pinch to zoom (~10×), drag to pan; both survive a field
-change. Double-tap zooms or resets. A horizontal fling while fit-to-screen steps
-frames. Edge chrome (title, field pills, hairline scale, scrub) auto-hides after
-a short idle; pan or scrub brings it back. The ⓘ peek sheet holds max / min
-(with coordinates), mean, and the settings used for this analysis.
+Field pills switch field. Pinch to zoom (~10×), drag to pan; both survive a
+field change. Double-tap zooms or resets. A horizontal fling while fit-to-screen
+steps frames. Edge chrome — back, title, ⓘ, Home, share along the top; field
+pills, hairline scale and scrub along the bottom — auto-hides after a short idle;
+pan or scrub brings it back, and so does a tap in the middle of the screen or a
+downward swipe. The figure itself runs edge to edge, under the system bars. The
+ⓘ sheet holds the specimen name, max / min (with coordinates), mean, and the
+settings used for this analysis.
 
-**Colour scale.** Default is **this frame's min / max** — the hairline labels
-match the colouring. Tap the bar to set fixed min/max (remembered per field).
-**Auto scale** drops a custom override and returns to the frame range. The
+**Colour scale.** Default is a **clamp at this frame's 2nd and 98th percentiles**,
+which is why the hairline reads "≤" and "≥" rather than "Min"/"Max" — a handful of
+outliers must not flatten the whole map. The ⓘ sheet still gives you the true
+extrema, and the two are allowed to disagree. Tap the bar to set fixed min/max
+(remembered per field). **Auto scale** drops a custom override and returns to the
+clamped bounds. The
 summary GIF and share field-animations still use a whole-sequence scale so the
 loop stays comparable.
 
 **Tap to probe.** There is no Inspect / X,Y / Max-Min row. A short tap on the
-heatmap places a crosshair and a plain-text reading at the nearest correlated
-point. Drag past the touch slop pans (or flings to the next frame when
+heatmap — anywhere but the middle of the screen, which is reserved for showing
+and hiding chrome — places a crosshair and a plain-text reading at the nearest
+correlated point. Drag past the touch slop pans (or flings to the next frame when
 unzoomed); pinch still zooms. Tap the same point again, or the readout, to
 dismiss. Switching field or frame keeps the probe at the same image location and
 updates the value.
 
 **The summary comes first.** The viewer opens on a looping animation of the
 whole sequence in the current field — every frame, never longer than 10 seconds,
-about 300 ms a frame until the frame count forces it faster. **Next** enters the
+about 300 ms a frame until the frame count forces it faster. While it builds you
+get a progress readout and a **Cancel**. **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
 field. Field pills stay available while the GIF plays.
 
@@ -393,9 +416,11 @@ where you are. On a sweep each frame is a parameter combination, labelled like
 
 <img src="images/settings-used.png" width="300" alt="Settings used sheet">
 
-The ⓘ button. Everything the result was computed with — and on a sweep, the VSG
-plus the line-cut plot. Note `(13 − 1) × 5 + 1 = 61 px`, the VSG relation from
-[§5](#5-parameters).
+The ⓘ button. Everything the result was computed with — and on a sweep, the
+line-cut plot. There is no separate VSG row: it is `(strain window − 1) × step + 1`,
+and both of those are already listed, so `(13 − 1) × 5 + 1 = 61 px` is yours to
+read off (the relation is in [§5](#5-parameters)). A run that stopped early also
+carries **Stopped early** and **Frames solved** here.
 
 **Changing settings later never changes an old result.** This sheet is your
 provenance record.
@@ -404,19 +429,22 @@ provenance record.
 
 ## 9. Exports
 
-**Share** gives six targets. Whichever you pick, the app builds the file with a
-progress dialog and then offers it through a **Send to** sheet with two rows:
-**Save to Files** (a folder picker, so it lands somewhere you choose and stays)
-or **Share** (the usual system chooser). Exports are named after the analysis, so
-a folder of them is still readable a month later.
+**Share** gives six targets. Each ends at a **Send to** sheet with two rows:
+**Save to Files** (a folder picker, so it lands somewhere you choose and stays) or
+**Share** (the usual system chooser). For everything but the single photo the
+sheet comes up **first**, so the file is written straight into the folder you
+picked instead of being staged and handed over. Exports are named after the
+analysis, so a folder of them is still readable a month later. A long export does
+not hold the screen: dismiss the progress dialog and it carries on behind a strip
+at the top, with its own progress and a Cancel.
 
 | Export | Contents |
 |---|---|
-| Result photo | One PNG: current field and frame, annotated, full resolution |
-| All field photos | Five PNGs for this frame, zipped |
-| Field animations (GIF) | Five looping GIFs — one per field, every frame, each on its own whole-sequence scale — zipped |
+| Single Field | One PNG: current field and frame, annotated, composited to a 1280 px long edge |
+| All fields | Five PNGs for this frame, zipped; the sheet and each stamp name the source image |
+| Animations | Five looping GIFs — one per field, every frame, each on its own whole-sequence scale — zipped |
 | PDF report | Every frame, plus a telemetry page |
-| CSV data | `x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — sweeps add subset, step, window |
+| CSV data | `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — a sweep adds `subset_px, step_px, strain_window, vsg_px` |
 | Everything (.zip) | Raw photos + animations + all fields + CSV + PDF |
 
 The animations are shared as a set, not one at a time — they are only comparable
@@ -442,8 +470,9 @@ goes from the phone and that is that:
 
 <img src="images/delete-dialog.png" width="300" alt="Delete confirmation">
 
-With a backup you are asked *where* instead — **on this device only**, keeping
-the backup, or **everywhere**. Read that dialog before tapping.
+With a backup you are asked *where* instead — **Delete device**, keeping the
+backup, or **Delete cloud**, keeping the phone's copy. Read that dialog before
+tapping.
 
 **Deleting on this device only is not losing it.** The row stays on Home, badged
 **Only in cloud**, and tapping it offers to download the analysis back before
@@ -454,8 +483,16 @@ from being local again, so freeing space is a reversible decision.
 
 **Cloud backup**: turn it on and it offers to back up what is already
 local. **Wi-Fi only** holds uploads until Wi-Fi. **Analyses data management**
-lists local and cloud together — back up, restore or delete per row. A deleted
-backup has a **5-second Undo**.
+lists local and cloud together, with three actions per row:
+
+| Action | Does | Shows when |
+|---|---|---|
+| **Download** | Saves a `Session.zip` to a folder you pick — you choose the destination *before* it starts, and the bytes go straight there | Any row with a cloud copy, including ones already on the phone |
+| **Restore** | Pulls the analysis back into the app so it opens normally | Only when the local frames are missing |
+| **Delete** | Removes the backup, with a **5-second Undo** | Any row with a backup |
+
+Downloads and restores keep running if you leave Settings, and report back when
+they land.
 
 **Storage** is the section to reach for when the phone fills up. It measures what
 the analyses and the cache actually occupy, and gives you three tools:
@@ -476,6 +513,11 @@ Home badge explaining why, with **Try again**. A restore that fails (the backup
 was deleted, or is not this account's) says so on Home *and* in Settings. You are
 no longer left guessing.
 
+**Your data** also holds **Send crash reports**. That one switch governs both
+crash diagnostics and anonymous product analytics — which screens and actions get
+used, in coarse buckets. Neither carries your images, results, specimen names or
+addresses, and nothing is sent until you turn it on.
+
 **Your data** holds the two exports and the account delete. **Export my data**
 builds a ZIP of everything on this phone; **Download my cloud account data** asks
 the server for its copy. Both show progress and finish at the same **Send to**
@@ -492,7 +534,9 @@ signs you out. If the cloud cannot be reached nothing is deleted at all.
 Not a paywall — email support from the limit screen, or delete something and
 tap **Re-check**.
 
-**Help & support** is the last section. Prefer the
+**Help & support** is the last section, and it now opens the **Manual** directly
+as well. **Send feedback** is for "this could be better" — it opens a mail with
+your app version and phone model and nothing else. Prefer the
 [Manual](https://semperdic.github.io/website/manual/) for how-to, and the
 [community](https://semperdic.github.io/website/community/) for questions, bugs,
 and feature requests (GitHub login required to post). The section also shows
@@ -538,7 +582,7 @@ Write above that block; leave it in place.
 <!-- ## 12. Limits
 
 - An interrupted run is lost. No resume.
-- No notifications for background work.
+- Background transfers notify while they run, but nothing tells you they finished.
 - No spatial calibration — pixels only.
 - Coach marks show once and cannot be replayed.
 - Approval never polls.

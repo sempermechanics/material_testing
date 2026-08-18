@@ -61,10 +61,12 @@ Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`
 | Package | Role |
 |---------|------|
 | `ui/analysis/` | Wizard, ROI, import, VSG sweep, batch run |
-| `ui/viewer/` | Heatmaps, inspect, `ShareCenter` |
+| `ui/viewer/` | Heatmaps, probe, `ShareCenter` |
 | `ui/settings/` | `SettingsActivity` + `Settings*Section` |
 | `ui/home/` | Session list |
-| `data/` | Auth, session store, upload/restore workers, storage budget |
+| `ui/common/` | Insets, `MediaPickerSheet`, `CrispToast`, `TransferBannerController` |
+| `data/` | Auth, session store, upload/restore/download workers, storage budget |
+| `analytics/` | `SemperAnalytics` — consent-gated events, same flag as Crashlytics |
 | `report/` | PDF / CSV / `VisualizationEngine` |
 | `backend/app/main.py` | App, middleware, lifespan |
 | `backend/app/routers/` | `/v1/*` by prefix: health, account, devices, sessions, files, provision_tasks, admin |
@@ -79,6 +81,11 @@ Wizard later steps inflate through **ViewStubs**. `goToStep` stays on
 
 Full-field batch: `DicBatchRunner` + `DicFieldIo` shared with VSG. JNI
 `computeFullFieldDirect` stays **inside that one loop**.
+
+New analysis starts in `MediaPickerSheet` — one sheet for the Home FAB and both
+wizard dropzones (Images grid in-sheet, Files → SAF). Long transfers show a
+non-modal `TransferBannerController` strip in Settings and the viewer; uploads,
+restores, `DicBundleDownloadWorker` downloads and backup deletes are WorkManager.
 
 ## Invariants
 
@@ -96,6 +103,9 @@ Full-field batch: `DicBatchRunner` + `DicFieldIo` shared with VSG. JNI
 - **Drive unknown ≠ deleted.** Drop local metadata only when the backend confirms
   a blob is missing.
 - **Storage reclaim** frees local frames of **backed-up** sessions only.
+- **Analytics and crash reporting share one consent flag** (`DicSettings.diagnosticsEnabled`).
+  Events stay PII-free — buckets and enums only, never images, results, session ids
+  or specimen names.
 - **Release** builds require HTTPS `INDIC_API_BASE_URL`. Debug emulator boots
   local-only unless `INDIC_DEV_AUTH_BYPASS=false`.
 - **Legal pages** are generated: edit `docs/legal/`, run `scripts/render_legal_pages.py`,
@@ -118,20 +128,32 @@ Kover `minBound` floor is 15. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-08-17)
+## Current state (2026-08-18)
 
-Refresh with `gh pr list --state open` — numbers below will rot.
+`origin/main` is `d9acee5` (PR #83). **No open PRs.** Refresh with
+`gh pr list --state open` — anything named here will rot.
 
-**On `origin/main`:** lint extracts #59–#64 and #66; compile/quality #68; wizard
-slots/coach #69; `DicBatchRunner` + `DicFieldIo` #70; hashed lock / Gradle 9.7 /
-docs #71; faster Release CI #74; device-bound accounts / share logos #78.
+**Merged since 2026-08-08:** lint extracts #59–#64 and #66; compile/quality #68;
+wizard slots/coach #69; `DicBatchRunner` + `DicFieldIo` #70; hashed lock /
+Gradle 9.7 / docs #71; faster Release CI #74; API-34 emulators #75; brand/UX
+polish #77; device-bound accounts + share logos #78; viewer chrome + media
+picker #79; share caption / PDF thread #80; viewer Tufte restyle #81; FAB Files
+→ SAF + splash #82; lattice viewer Tufte #83.
 
-New analysis picks media in-sheet (Images gallery; Files opens the system
-picker). JPEG and low-speckle chips link to FAQ anchors on the public site.
-`READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when the gallery tab
-opens. Summary GIFs bake `viewer_canvas` (night `#101518`) into the cache
-filename. Launcher adaptive background is transparent; night inverts the S
-on splash (`windowSplashScreenAnimatedIcon`).
+New analysis picks media in-sheet (Images gallery; **Files** dismisses the sheet
+and opens SAF). JPEG and low-speckle chips link to FAQ anchors on the public site
+behind a leave-the-app confirm. `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are
+requested when the gallery tab needs them. Summary GIFs bake `viewer_canvas`
+(night `#101518`) into the cache filename. Launcher adaptive background is
+transparent; night inverts the S on splash (`windowSplashScreenAnimatedIcon`).
+
+Viewer chrome is full-bleed glass: back · title · ⓘ · Home · share, auto-hiding,
+toggled by a centre tap or a vertical swipe. Settings' Analyses rows carry three
+actions — **Download** (SAF destination first, then a worker), **Restore** (only
+when local frames are gone) and **Delete**. The sweep lattice's plot toggle is an
+**All / Node** pill defaulting to **All**.
+
+Docs for all of the above: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md).
 
 **Next architecture (grill before coding):** `DicKeys` extras bag packed in
 `SessionOpenHelper.intentFor` and `AnalysisNavHelper.openResults` (~25 extras).
