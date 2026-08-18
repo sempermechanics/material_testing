@@ -148,6 +148,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         setContentView(R.layout.activity_vsg_lattice)
 
         Insets.padTop(findViewById(R.id.toolbar))
+        Insets.padBottom(findViewById(R.id.actionBarRow))
 
         findViewById<MaterialToolbar>(R.id.toolbar).apply {
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
@@ -176,6 +177,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         latticeView = findViewById(R.id.latticeView)
         latticeView.apply {
             interactionEnabled = true
+            compact = true
             setNodes(nodes)
             onNodeClick = { node ->
                 if (node.solved) selectFocus(node.frameIndex) else showSkipReason(node)
@@ -205,6 +207,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         strainPlotSection = findViewById(R.id.strainPlotSection)
         strainPlot = findViewById(R.id.plotLatticeStrain)
         strainPlot.zoomEnabled = true
+        strainPlot.compactAxes = true
         strainSpinner = findViewById(R.id.spinnerStrainComponent)
         strainPlotTitle = findViewById(R.id.tvStrainPlotTitle)
         strainPlotReadout = findViewById(R.id.tvStrainPlotReadout)
@@ -234,7 +237,8 @@ class VsgLatticeActivity : AppCompatActivity() {
         strainSlider.addOnChangeListener { _, value, fromUser ->
             if (fromUser && !syncingSlider) strainPlot.scrubToFraction(value)
         }
-        bindDoubleTapCopy(strainPlotReadout)
+        // The chip is now the only params surface (the readout dropped its params
+        // tail, see scrubReadout), so it is the only remaining double-tap-copy target.
         bindDoubleTapCopy(chipSelectedParams)
         setupStrainSpinner()
     }
@@ -257,17 +261,15 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
     }
 
-    /** Scrub readout for the selected node only: labeled (x, y) and subset/step/strain. */
+    /**
+     * Scrub readout: x only. y is already at the scrub point on the plot itself
+     * (the dot + value label VsgPlotView draws there), and params are already on
+     * [chipSelectedParams] -- showing either again here would be the same fact
+     * twice, ~2dp apart, at two different precisions.
+     */
     private fun scrubReadout(x: Float, samples: List<VsgPlotView.Sample>): CharSequence {
-        val node = selectedNode()
-        if (x.isNaN() || samples.isEmpty() || node == null) return ""
-        val params = getString(
-            R.string.vsg_lattice_param_labeled_fmt,
-            node.subset,
-            node.step,
-            node.window,
-        )
-        return getString(R.string.vsg_lattice_scrub_value_fmt, x, samples.first().value, params)
+        if (x.isNaN() || samples.isEmpty()) return ""
+        return getString(R.string.vsg_lattice_scrub_x_fmt, x)
     }
 
     private fun maybeCoachTheGraph() {
@@ -468,7 +470,14 @@ class VsgLatticeActivity : AppCompatActivity() {
         exportSeries = toShow
         exportXLabel = getString(if (horizontal) R.string.line_cut_axis_x else R.string.line_cut_axis_y)
         exportYLabel = getString(R.string.line_cut_axis_strain)
-        strainPlot.setData(toShow, exportXLabel, exportYLabel, preserveViewport = preserveViewport)
+        strainPlot.setData(
+            toShow,
+            exportXLabel,
+            exportYLabel,
+            preserveViewport = preserveViewport,
+            xUnit = getString(R.string.scale_unit_px),
+            yUnit = getString(R.string.scale_unit_strain),
+        )
         strainPlotReadout.text = ""
         syncingSlider = true
         strainSlider.value = 0f
@@ -493,7 +502,7 @@ class VsgLatticeActivity : AppCompatActivity() {
                 frameIndex = index,
                 series = VsgPlotView.Series(
                     label = label,
-                    color = VsgPlotView.paletteColor(index),
+                    color = VsgPlotView.paletteColor(this, index),
                     points = points,
                     markers = false,
                     muted = index != focusedFrameIndex,

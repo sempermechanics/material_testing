@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stadium glass pill: soft frosted fill + hairline rim, same vocabulary as
+     bg_chrome_ghost but rectangular/stadium rather than circular. For controls
+     that aren't checkable buttons (e.g. the strain-component spinner) but
+     still want the viewer's glass-puck look. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="999dp" />
+            <solid android:color="@color/viewer_glass_fill" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="999dp" />
+            <stroke
+                android:width="0.5dp"
+                android:color="@color/viewer_glass_stroke" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+</layer-list>

@@ -135,8 +135,16 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">Summary GIF</item>
         <item quantity="other">Summary GIF</item>
     </plurals>
-    <string name="scale_max_fmt">Max: %1$s %2$s</string>
-    <string name="scale_min_fmt">Min: %1$s %2$s</string>
+    <!-- The scale bar's colour mapping is clamped to the 2nd/98th percentile
+         (VisualizationEngine.computeSigmaClampedRange), not the field's true
+         extrema: measured on real sessions, that clamp discards real signal
+         (strain fields as low as ~1 to 8% of the true span), so it cannot be
+         switched to true min/max without letting one real concentrator wash
+         out the whole heatmap. "≤"/"≥" discloses that the true extreme may lie
+         beyond this label, instead of a bare "Min:"/"Max:" implying it's the
+         literal extremum, which is what the ⓘ details sheet shows instead. -->
+    <string name="scale_max_fmt">≥ %1$s %2$s</string>
+    <string name="scale_min_fmt">≤ %1$s %2$s</string>
     <string name="summary_building_fmt">Rendering %1$s… %2$d of %3$d</string>
     <string name="summary_scanning_fmt">Reading frames… %1$d of %2$d</string>
     <string name="summary_failed">Could not build the animation.</string>
@@ -470,17 +478,18 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- Sweep lattice staging screen (VsgLatticeActivity) -->
     <string name="vsg_lattice_title">Parameter sweep</string>
-    <string name="vsg_lattice_heading">Result lattice</string>
-    <string name="vsg_lattice_caption">Step through solved nodes · scrub the curve · copy params for full analysis</string>
     <string name="vsg_lattice_axis_subset">Subset size (px)</string>
     <string name="vsg_lattice_axis_vsg">Strain window</string>
-    <string name="vsg_lattice_legend_solved">Solved</string>
-    <string name="vsg_lattice_legend_skipped">Skipped</string>
+    <!-- Compact lattice: unit folded onto the rightmost subset tick instead of a
+         separate axis title (see VsgLatticeView.compact). -->
+    <string name="vsg_lattice_axis_subset_unit_fmt">%1$d px</string>
     <string name="vsg_lattice_view_results">View results</string>
     <string name="vsg_lattice_open_analysis">Open analysis</string>
     <string name="vsg_lattice_param_fmt">ss:%1$d · st:%2$d · sw:%3$d</string>
     <string name="vsg_lattice_param_labeled_fmt">subset size %1$d · step size %2$d · strain window %3$d</string>
-    <string name="vsg_lattice_scrub_value_fmt">x=%1$.1f · y=%2$.2f · %3$s</string>
+    <!-- y is already on the plot at the scrub point; params are already on the
+         chip: this readout carries only what neither of those already shows. -->
+    <string name="vsg_lattice_scrub_x_fmt">x=%1$.1f</string>
     <string name="vsg_lattice_curves_all">All</string>
     <string name="vsg_lattice_curves_node">Node</string>
     <string name="vsg_lattice_view">View</string>
@@ -559,7 +568,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="coach_sweep_subset">Set the subset size range for sweep granularity.</string>
     <string name="coach_sweep_lattice">This is the planned lattice — each node is one analysis.</string>
     <string name="coach_sweep_graph">Each node is one combination: subset size across, strain window up. Filled nodes solved — tap one to focus its curve, double-tap to open it. Hollow ones failed; tap for the reason.</string>
-    <string name="coach_sweep_scrub">Drag across the plot to read every curve at one position. Each value is shown in its own curve\'s colour, so you can tell them apart without checking the legend.</string>
+    <string name="coach_sweep_scrub">Drag across the plot to read the focused curve\'s value at any position — it\'s marked with a dot in its own colour.</string>
     <string name="coach_sweep_run">Run the sweep when the plan looks right.</string>
     
     <string name="roi_full_fmt">Full image · %1$d × %2$d px</string>

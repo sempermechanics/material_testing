@@ -40,4 +40,29 @@
 
     <color name="toast_crisp_bg">#F0FFFFFF</color>
     <color name="toast_crisp_text">#152430</color>
+
+    <!-- VsgPlotView / VsgLatticeView dark half: see values/colors.xml for why
+         these exist instead of reusing text_*/surface_outline/sky_* directly. -->
+    <color name="viewer_plot_grid">#26FFFFFF</color>          <!-- faint hairline on a dark canvas -->
+    <color name="viewer_plot_ink">@color/viewer_chrome_muted</color>
+    <color name="viewer_plot_ink_strong">@color/viewer_chrome_text</color>
+    <color name="viewer_plot_muted">#7E8B99</color>           <!-- desaturated neutral, visible on dark -->
+    <color name="viewer_plot_node_solved">#7DD3FC</color>     <!-- viewer_peek_accent's soft sky on dark -->
+    <color name="viewer_plot_node_skipped">#FF6F68</color>    <!-- lightened danger red for dark-bg contrast -->
+    <color name="viewer_plot_connector">#263241</color>
+
+    <!-- viewer_plot_palette dark half: only slot 7 (indigo) differs. The light
+         hex fails the dark-surface lightness band (L 0.451, band is 0.48-0.67
+         against #101518), lightened to a periwinkle that clears it. Every other
+         slot already passes lightness band + chroma floor + contrast against
+         #101518 unchanged (scripts/validate_palette.js), so they are not
+         repeated here; values/colors.xml's values apply as-is. -->
+    <color name="viewer_plot_palette_7">#5C6BC0</color>
+
+    <!-- Line-cut dark half: all 3 differ (the light triad reads too dark, low
+         contrast against #101518). Validated all-pairs, worst pair deutan
+         ΔE 8.0, normal ΔE 21.8. -->
+    <color name="viewer_line_cut_0">#039BE5</color>
+    <color name="viewer_line_cut_1">#EF5350</color>
+    <color name="viewer_line_cut_2">#AB47BC</color>
 </resources>

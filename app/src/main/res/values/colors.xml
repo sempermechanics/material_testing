@@ -91,4 +91,50 @@
 
     <color name="toast_crisp_bg">#E61A1A1A</color>
     <color name="toast_crisp_text">#FFFFFFFF</color>
+
+    <!-- VsgPlotView / VsgLatticeView: shared by the result lattice, the wizard's
+         sweep preview, and the immersive viewer's peek-sheet line-cut, so these
+         cannot be the light-locked text_*/surface_outline/sky_* tokens the two
+         views used to read directly: that left the peek sheet's dark glass line-
+         cut plot always rendering in light-mode ink. Light values below equal
+         today's literal colours (sky_primary, text_secondary, etc.), so light
+         mode is pixel-identical; only night is new. -->
+    <color name="viewer_plot_grid">@color/surface_outline</color>
+    <color name="viewer_plot_ink">@color/text_secondary</color>
+    <color name="viewer_plot_ink_strong">@color/text_primary</color>
+    <!-- Emphasis mode (dataviz skill): non-focused curves share one desaturated
+         neutral instead of their own hue, so only the focused curve carries
+         colour meaning, so the categorical palette below no longer needs to
+         separate 8 simultaneous hues, only ever one against this neutral. -->
+    <color name="viewer_plot_muted">#9FB0BC</color>
+    <color name="viewer_plot_node_solved">@color/sky_primary</color>
+    <color name="viewer_plot_node_skipped">@color/semantic_danger</color>
+    <color name="viewer_plot_connector">@color/sky_container</color>
+
+    <!-- 8-slot categorical palette for the lattice curves (VsgPlotView.paletteColor,
+         keyed by solved-frame index). Under emphasis only one slot is ever shown
+         in colour at a time (the focused curve; every other curve renders in
+         viewer_plot_muted; see the dataviz skill's anti-patterns.md on "8
+         categorical hues when the story is one"), so each slot is validated
+         per-slot with scripts/validate_palette.js (lightness band, chroma floor,
+         contrast vs surface), not for pairwise separation. Night overrides only
+         slot 7: every other slot already clears the dark-surface checks
+         unchanged, so this array is otherwise identical in both themes. -->
+    <color name="viewer_plot_palette_0">#0288D1</color>
+    <color name="viewer_plot_palette_1">#E53935</color>
+    <color name="viewer_plot_palette_2">#43A047</color>
+    <color name="viewer_plot_palette_3">#B15C00</color>
+    <color name="viewer_plot_palette_4">#8E24AA</color>
+    <color name="viewer_plot_palette_5">#00897B</color>
+    <color name="viewer_plot_palette_6">#A6462D</color>
+    <color name="viewer_plot_palette_7">#3949AB</color>
+
+    <!-- Line-cut (exx/eyy/exy): always 3 concurrent curves, so this IS validated
+         all-pairs (scripts/validate_palette.js, pairs=all): worst pair ΔE 10.7
+         deutan / 24.7 normal against surface #F4F9FC. Deliberately not slots
+         0/1/2 of viewer_plot_palette above: that triad's green sits at deutan
+         ΔE 2.9 from red; this substitutes slot 4's purple for green. -->
+    <color name="viewer_line_cut_0">#0288D1</color>
+    <color name="viewer_line_cut_1">#E53935</color>
+    <color name="viewer_line_cut_2">#8E24AA</color>
 </resources>
