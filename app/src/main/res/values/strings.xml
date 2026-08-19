@@ -601,6 +601,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="viewer_back_desc">Back to settings</string>
     <string name="viewer_home_desc">Home</string>
     <string name="viewer_heatmap_overlay_desc">Strain or displacement heatmap overlay</string>
+    <string name="viewer_field_fab_desc">Change field</string>
     <string name="field_u">U</string>
     <string name="field_v">V</string>
     <string name="field_exx">Exx</string>

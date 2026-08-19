@@ -39,6 +39,12 @@ class TouchImageView @JvmOverloads constructor(
     private var m: FloatArray = FloatArray(9)
     private var viewWidth = 0
     private var viewHeight = 0
+
+    /** Chrome-reserved space the image must fit/pan within, not the raw view bounds. */
+    private var contentInsetTop = 0
+    private var contentInsetBottom = 0
+    private var contentInsetLeft = 0
+    private var contentInsetRight = 0
     private var mScaleDetector: ScaleGestureDetector
     private val gestureDetector: GestureDetector
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
@@ -153,6 +159,33 @@ class TouchImageView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Chrome-reserved space (in view pixels) the fit/pan math should treat as
+     * off-limits — e.g. the top bar, bottom scrubber, right colour rail — so the
+     * image sits framed by chrome instead of running underneath it. Re-fits only
+     * if currently at fit scale (a zoomed-in user isn't yanked); otherwise just
+     * refreshes the pan clamp so an already-zoomed view snaps back into the new
+     * safe area if it now falls outside it.
+     */
+    fun setContentInsets(top: Int, bottom: Int, left: Int = 0, right: Int = 0) {
+        if (top == contentInsetTop && bottom == contentInsetBottom &&
+            left == contentInsetLeft && right == contentInsetRight
+        ) {
+            return
+        }
+        val wasAtFit = isAtFitScale()
+        contentInsetTop = top
+        contentInsetBottom = bottom
+        contentInsetLeft = left
+        contentInsetRight = right
+        if (wasAtFit) {
+            fitToScreen()
+        } else {
+            limitPan()
+            publishMatrix()
+        }
+    }
+
     private fun updateContentScale(bm: Bitmap?) {
         if (bm != null && trueImageWidth > 0f && bm.width > 0) {
             contentScaleX = trueImageWidth / bm.width
@@ -173,8 +206,15 @@ class TouchImageView @JvmOverloads constructor(
     private fun fitToScreen() {
         if (trueImageWidth <= 0f || trueImageHeight <= 0f || viewWidth <= 0 || viewHeight <= 0) return
 
+        val safeLeft = contentInsetLeft.toFloat()
+        val safeTop = contentInsetTop.toFloat()
+        val safeRight = (viewWidth - contentInsetRight).toFloat()
+        val safeBottom = (viewHeight - contentInsetBottom).toFloat()
+        // Degenerate mid-layout, before the chrome bars have their real size yet.
+        if (safeRight <= safeLeft || safeBottom <= safeTop) return
+
         val drawableRect = RectF(0f, 0f, trueImageWidth, trueImageHeight)
-        val viewRect = RectF(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat())
+        val viewRect = RectF(safeLeft, safeTop, safeRight, safeBottom)
 
         matrix.setRectToRect(drawableRect, viewRect, Matrix.ScaleToFit.CENTER)
 
@@ -268,28 +308,35 @@ class TouchImageView @JvmOverloads constructor(
         val contentW = trueImageWidth * scaleX
         val contentH = trueImageHeight * scaleY
 
+        val safeLeft = contentInsetLeft.toFloat()
+        val safeTop = contentInsetTop.toFloat()
+        val safeRight = (viewWidth - contentInsetRight).toFloat()
+        val safeBottom = (viewHeight - contentInsetBottom).toFloat()
+        val safeW = safeRight - safeLeft
+        val safeH = safeBottom - safeTop
+
         var deltaX = 0f
         var deltaY = 0f
 
-        if (contentW <= viewWidth) {
-            val targetX = (viewWidth - contentW) / 2f
+        if (contentW <= safeW) {
+            val targetX = safeLeft + (safeW - contentW) / 2f
             deltaX = targetX - transX
         } else {
-            if (transX > 0) {
-                deltaX = -transX
-            } else if (transX + contentW < viewWidth) {
-                deltaX = viewWidth - (transX + contentW)
+            if (transX > safeLeft) {
+                deltaX = safeLeft - transX
+            } else if (transX + contentW < safeRight) {
+                deltaX = safeRight - (transX + contentW)
             }
         }
 
-        if (contentH <= viewHeight) {
-            val targetY = (viewHeight - contentH) / 2f
+        if (contentH <= safeH) {
+            val targetY = safeTop + (safeH - contentH) / 2f
             deltaY = targetY - transY
         } else {
-            if (transY > 0) {
-                deltaY = -transY
-            } else if (transY + contentH < viewHeight) {
-                deltaY = viewHeight - (transY + contentH)
+            if (transY > safeTop) {
+                deltaY = safeTop - transY
+            } else if (transY + contentH < safeBottom) {
+                deltaY = safeBottom - (transY + contentH)
             }
         }
 

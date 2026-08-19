@@ -63,12 +63,7 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
         val inverse = Matrix()
         imgMain.getZoomMatrix().invert(inverse)
         inverse.mapPoints(pts)
-        val wasVisible = probeVisible
-        val previous = lastClosestIdx
         findNearestDataPoint(pts[0], pts[1])
-        if (wasVisible && lastClosestIdx == previous) {
-            dismissProbe()
-        }
     }
 
     fun dismissProbe() {
