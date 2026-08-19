@@ -24,18 +24,22 @@ import android.graphics.Matrix
 import android.os.Bundle
 import android.os.Trace
 import android.view.View
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.PopupWindow
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.indicvision.semper.DicKeys
@@ -79,7 +83,8 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var tvScaleMax: TextView
     private lateinit var tvScaleMin: TextView
     private lateinit var chromeTop: View
-    private lateinit var chromeBottom: View
+    private lateinit var layoutScrubber: View
+    private lateinit var btnFieldFab: MaterialButton
     private var chromeVisible = true
 
     internal lateinit var tvProbeReadout: TextView
@@ -244,13 +249,15 @@ class ResultViewerActivity : AppCompatActivity() {
         tvScaleMax = findViewById(R.id.tvScaleMax)
         tvScaleMin = findViewById(R.id.tvScaleMin)
         chromeTop = findViewById(R.id.chromeTop)
-        chromeBottom = findViewById(R.id.chromeBottom)
+        layoutScrubber = findViewById(R.id.layoutScrubber)
+        btnFieldFab = findViewById(R.id.btnFieldFab)
         shareBanner = com.indicvision.semper.ui.common.TransferBannerController(
             findViewById(R.id.transferBannerRoot),
         )
 
         Insets.padTop(findViewById(R.id.viewerTopStack))
-        Insets.padBottom(findViewById(R.id.layoutScrubber))
+        Insets.padBottom(layoutScrubber)
+        wireContentInsets()
 
         tvProbeReadout = findViewById(R.id.tvProbeReadout)
         glassShield = findViewById(R.id.glassShield)
@@ -360,33 +367,14 @@ class ResultViewerActivity : AppCompatActivity() {
             bumpChrome()
         }
 
-        // Floating glass field pills (separate rounded chips — not a segmented bar).
-        val fieldByButton = ViewerFieldPills.BY_ID
-        val fieldButtons = fieldByButton.keys.map { id ->
-            findViewById<com.google.android.material.button.MaterialButton>(id)
+        // Field FAB: shows the current field, tap opens a glass-pill popup of the
+        // other four. The live field comes back from the ViewModel after a
+        // rotation, so re-derive the label or it disagrees with the heatmap.
+        btnFieldFab.text = ViewerFieldPills.BY_ID[ViewerFieldPills.idFor(currentDataIndex)]?.first ?: "U"
+        btnFieldFab.setOnClickListener {
+            bumpChrome()
+            showFieldPopup(it)
         }
-        fieldButtons.forEach { button ->
-            // Material defaults to 88dp minWidth — collapse so pills hug their label.
-            button.minWidth = 0
-            button.minimumWidth = 0
-            button.setOnClickListener {
-                fieldButtons.forEach { it.isChecked = it === button }
-                bumpChrome()
-                val (label, index) = fieldByButton[button.id] ?: return@setOnClickListener
-                currentTypeString = label
-                currentDataIndex = index
-                // Caption + probe value are refreshed by updateVisualization once the
-                // new field's metrics are computed off the main thread.
-                updateVisualization(currentDataIndex)
-                summary.onFieldChanged()
-                if (showingSummary) tvFrameCounter.text = summary.counterText()
-                inspect.refreshCrosshairs()
-            }
-        }
-        // The layout checks U; the live field comes back from the ViewModel after a
-        // rotation, so re-derive the lit pill or it disagrees with the heatmap.
-        val checkedFieldId = ViewerFieldPills.idFor(currentDataIndex)
-        fieldButtons.forEach { it.isChecked = it.id == checkedFieldId }
 
         findViewById<View>(R.id.btnViewerBack).setOnClickListener { finish() }
         findViewById<View>(R.id.btnViewerShare).setOnClickListener { showShareSheet() }
@@ -407,6 +395,60 @@ class ResultViewerActivity : AppCompatActivity() {
             inspect.refreshCrosshairs()
             bumpChrome()
         }
+    }
+
+    /**
+     * Measures the chrome bars once they've laid out and feeds their sizes to
+     * [imgMain] as content insets, so the heatmap's fit-to-screen view frames
+     * itself between the bars instead of running underneath them. The inset
+     * values only change on a real layout event (initial layout, rotation) —
+     * [fadeChrome] toggles VISIBLE/INVISIBLE, never GONE, so a bar keeps its
+     * laid-out size while faded and the safe area stays stable through the
+     * auto-hide animation.
+     */
+    private fun wireContentInsets() {
+        imgMain.viewTreeObserver.addOnGlobalLayoutListener(
+            object : ViewTreeObserver.OnGlobalLayoutListener {
+                override fun onGlobalLayout() {
+                    val top = chromeTop.height
+                    val bottom = layoutScrubber.height
+                    val right = layoutColorScale.width
+                    if (top > 0 && bottom > 0) {
+                        imgMain.setContentInsets(top = top, bottom = bottom, right = right)
+                    }
+                }
+            },
+        )
+    }
+
+    /** Glass-pill popup listing the fields other than the one currently shown. */
+    private fun showFieldPopup(anchor: View) {
+        val popupView = layoutInflater.inflate(R.layout.popup_field_options, null)
+        val window = PopupWindow(popupView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        window.isOutsideTouchable = true
+        ViewerFieldPills.BY_ID.forEach { (id, pair) ->
+            val (label, index) = pair
+            val button = popupView.findViewById<MaterialButton>(id)
+            if (index == currentDataIndex) {
+                button.visibility = View.GONE
+                return@forEach
+            }
+            button.text = label
+            button.setOnClickListener {
+                currentTypeString = label
+                currentDataIndex = index
+                btnFieldFab.text = label
+                // Caption + probe value are refreshed by updateVisualization once the
+                // new field's metrics are computed off the main thread.
+                updateVisualization(currentDataIndex)
+                summary.onFieldChanged()
+                if (showingSummary) tvFrameCounter.text = summary.counterText()
+                inspect.refreshCrosshairs()
+                bumpChrome()
+                window.dismiss()
+            }
+        }
+        window.showAsDropDown(anchor, 0, 4)
     }
 
     /** Clears the back stack to Home. Used by the top-bar Home action. */
@@ -438,7 +480,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun fadeChrome(visible: Boolean) {
         chromeVisible = visible
-        listOf(chromeTop, chromeBottom).forEach { bar ->
+        listOf(chromeTop, layoutScrubber, btnFieldFab, layoutColorScale).forEach { bar ->
             bar.animate().cancel()
             if (visible) {
                 bar.visibility = View.VISIBLE
@@ -508,7 +550,9 @@ class ResultViewerActivity : AppCompatActivity() {
         if (::chromeTop.isInitialized) {
             chromeTop.removeCallbacks(hideChromeRunnable)
             chromeTop.animate().cancel()
-            chromeBottom.animate().cancel()
+            layoutScrubber.animate().cancel()
+            btnFieldFab.animate().cancel()
+            layoutColorScale.animate().cancel()
         }
         loadFrameJob?.cancel()
         visualizationJob?.cancel()
