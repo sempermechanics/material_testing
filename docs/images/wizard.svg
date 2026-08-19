@@ -30,7 +30,7 @@
   <text x="486" y="162" text-anchor="middle" font-size="11" fill="#656d76">ranges + samples</text>
 
   <rect x="426" y="60" width="120" height="44" rx="8" fill="#f6f8fa" stroke="#d8dee4"/>
-  <text x="486" y="87" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">Run</text>
+  <text x="486" y="87" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">Compute</text>
 
   <path d="M552 82 h30" stroke="#9aa4ae" stroke-width="1.5" marker-end="url(#w)"/>
   <path d="M552 149 h14 v-46 h16" stroke="#9aa4ae" stroke-width="1.5" fill="none" marker-end="url(#w)"/>

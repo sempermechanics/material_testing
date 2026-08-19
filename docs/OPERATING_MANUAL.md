@@ -21,6 +21,13 @@ you have images. -->
 
 ---
 
+> **Screenshots below are from before the 2026-08 UI refresh** (new-analysis
+> sheet, viewer chrome, Settings' Download/Restore split, the sweep lattice) and
+> no longer match what's on screen. The diagrams (`pipeline.svg`, `wizard.svg`,
+> `subset-step.svg`, `vsg.svg`, `lattice.svg`) are conceptual, not screen
+> captures, and are current. Recapture checklist:
+> [images/CAPTURE_CHECKLIST.md](images/CAPTURE_CHECKLIST.md).
+
 ## 1. What it does
 
 You give it one reference frame and N deformed frames. It matches subsets on a
