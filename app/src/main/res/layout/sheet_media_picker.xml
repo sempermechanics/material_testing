@@ -63,6 +63,7 @@
             android:id="@+id/listMedia"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:background="@color/surface_muted"
             android:clipToPadding="false"
             tools:listitem="@layout/item_media_tile" />
 
