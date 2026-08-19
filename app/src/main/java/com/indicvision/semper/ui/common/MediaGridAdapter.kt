@@ -44,11 +44,6 @@ class MediaGridAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_media_tile, parent, false)
-        val span = 3
-        val available = parent.measuredWidth.takeIf { it > 0 }
-            ?: parent.resources.displayMetrics.widthPixels
-        val size = available / span
-        view.layoutParams = RecyclerView.LayoutParams(size, size)
         return Holder(view)
     }
 
