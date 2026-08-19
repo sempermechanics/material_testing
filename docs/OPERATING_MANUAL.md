@@ -21,11 +21,13 @@ you have images. -->
 
 ---
 
-> **Screenshots below are from before the 2026-08 UI refresh** (new-analysis
-> sheet, viewer chrome, Settings' Download/Restore split, the sweep lattice) and
-> no longer match what's on screen. The diagrams (`pipeline.svg`, `wizard.svg`,
-> `subset-step.svg`, `vsg.svg`, `lattice.svg`) are conceptual, not screen
-> captures, and are current. Recapture checklist:
+> **`delete-dialog.png` below still shows the pre-2026-08 UI** — recapturing it
+> needs a signed-in account with a cloud-backed analysis. `home.png` and
+> `settings.png` show the current UI but only its local-only state; the cloud
+> sync-badge variety and the Settings **Download** row need the same real-account
+> pass. Every other screenshot on this page matches the current UI. The diagrams
+> (`pipeline.svg`, `wizard.svg`, `subset-step.svg`, `vsg.svg`, `lattice.svg`) are
+> conceptual, not screen captures, and are current. Remaining work:
 > [images/CAPTURE_CHECKLIST.md](images/CAPTURE_CHECKLIST.md).
 
 ## 1. What it does
@@ -128,9 +130,14 @@ hands you to the system file browser instead; that is still the only route to RA
 and DNG. Picking deformed frames is multi-select: tap the tiles you want and
 confirm with **Use N**. Select-all lives in the three-dot menu.
 
-The sheet asks for media permission the first time the Images tab needs it. The
-Files tab needs no permission at all, so a phone that denies gallery access can
-still work entirely through Files.
+The sheet asks for media permission the first time the Images tab needs it:
+
+<img src="images/media-picker-permission-empty.png" width="300" alt="Media picker permission empty state">
+
+The Files tab needs no permission at all, so a phone that denies gallery access
+can still work entirely through Files — it opens the system file browser:
+
+<img src="images/media-picker-files-saf.png" width="300" alt="Files tab opening the system file browser">
 
 The strip shows the deformed frames with order badges.
 
@@ -168,7 +175,7 @@ Then **Compute**.
 
 <img src="images/running.png" width="300" alt="Progress dialog">
 
-**Total points converged** and convergence update live. **Cancel** stops the run
+**# converged** and **convergence** update live. **Cancel** stops the run
 where it is, within a moment — it does not wait out the frame being solved.
 Nothing is kept. Back is blocked. Cancelling a parameter sweep abandons the whole
 sweep, not just the combination in flight.
@@ -324,9 +331,8 @@ run. The coach mark points it out on a first visit.
 | Filled dot | Solved. All solved nodes share one colour; the focused one gains a ring |
 | Hollow red ring | Skipped — tap it and the reason names the combination and what went wrong |
 
-Every solved node is drawn in the **same** colour; the one you have focused also
-carries a selection ring. Colour on the plot below is reserved for the focused
-curve, so only one hue ever carries meaning at a time.
+Colour on the plot below is reserved for the focused curve, so only one hue
+ever carries meaning at a time.
 
 The screen is built to be worked with one thumb. It scrolls — summary line,
 lattice, controls, then plot — while **Save graph** and **View** stay pinned at
@@ -379,12 +385,11 @@ Look for the VSG where the curves stop separating.
 
 Field pills switch field. Pinch to zoom (~10×), drag to pan; both survive a
 field change. Double-tap zooms or resets. A horizontal fling while fit-to-screen
-steps frames. Edge chrome — back, title, ⓘ, Home, share along the top; field
-pills, hairline scale and scrub along the bottom — auto-hides after a short idle;
-pan or scrub brings it back, and so does a tap in the middle of the screen or a
-downward swipe. The figure itself runs edge to edge, under the system bars. The
-ⓘ sheet holds the specimen name, max / min (with coordinates), mean, and the
-settings used for this analysis.
+steps frames. Chrome auto-hides after a short idle; pan or scrub brings it back,
+and so does a tap in the middle of the screen or a downward swipe. The figure
+itself runs edge to edge, under the system bars. The ⓘ sheet holds the specimen
+name, max / min (with coordinates), mean, and the settings used for this
+analysis.
 
 **Colour scale.** Default is a **clamp at this frame's 2nd and 98th percentiles**,
 which is why the hairline reads "≤" and "≥" rather than "Min"/"Max" — a handful of
