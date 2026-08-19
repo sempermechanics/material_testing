@@ -14,7 +14,12 @@ Inherent size/complexity in a few UI orchestration files uses targeted
 Catalog version-availability lint IDs are disabled; bump deps in deliberate PRs.
 
 `UnclosedTrace`, `PluralsCandidate`, and `UseKtx` from the 2026-08-16 pass are
-fixed (#59 / #60).
+fixed (#59 / #60). The architecture extracts that had missed `main` (#65 / #67,
+re-landed as #69 / #70) are on `origin/main` as of 2026-08-16.
+
+Orphaned strings the 2026-08-18 workflow audit found are listed in
+[../app/WORKFLOWS.md](../app/WORKFLOWS.md) §11 — none of them fail a gate, so they
+are removed opportunistically rather than in a sweep.
 
 ## External / deferred (not blocked on code alone)
 
@@ -36,12 +41,15 @@ Macrobenchmark CI (`tier-benchmark`) is emulator **smoke**: it suppresses
 (API 37 `dumpsys gfxinfo framestats` is empty). Dispatch with `run_benchmark` or
 the `benchmark` label.
 
-## Architecture extracts that missed `main`
+## User-facing copy that understates what it controls
 
-GitHub marked #65 (wizard slot chrome / coach) and #67 (`DicBatchRunner` /
-`DicFieldIo`) MERGED, but they targeted already-merged stack branches, so those
-files were not on `origin/main`. Cherry-picks targeting `main` are #69 and #70;
-compile/quality leftovers from the lint split are #68.
+**Send crash reports** (`setting_diagnostics` / `diagnostics_prompt_body`) is the
+consent gate for `analytics/SemperAnalytics` as well as Crashlytics — analysis
+started / completed / failed, the two data exports and Send feedback all check the
+same `DicSettings.diagnosticsEnabled` flag. The events are PII-free buckets and the
+[privacy policy](../legal/PRIVACY_POLICY.md) §2.4 already covers both, but the
+in-app label and the first-run prompt name only crash reporting. Fix is a copy
+change to those two strings, deliberately not bundled into a docs pass.
 
 ## 2026-08-12 result-viewer / report memory & latency program
 

@@ -645,7 +645,8 @@ class VsgLatticeActivity : AppCompatActivity() {
         )
         val ref = intent.getStringExtra(DicKeys.REF_NAME)
         if (!ref.isNullOrBlank()) {
-            val defs = intent.getStringArrayExtra(DicKeys.DEF_FILE_NAMES)?.size ?: 0
+            // Both writers use putStringArrayListExtra, so this must read the list form.
+            val defs = intent.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES)?.size ?: 0
             lines += resources.getQuantityString(R.plurals.vsg_export_images_fmt, defs, ref, defs)
         }
         val node = selectedNode()

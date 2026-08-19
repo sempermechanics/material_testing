@@ -53,7 +53,8 @@ Decides where you land. No user input; the whole flow is a routing decision.
    ├── status PENDING ............................ → 2. Pending approval
    ├── status APPROVED ........................... → 3. Home
    ├── offline + cached approval ................. → 3. Home, "Offline mode" toast
-   ├── quota already full ........................ → 9. Session limit
+   ├── quota already full ........................ → 3. Home, with 9. Session limit
+   │                                                 opening on top (Home checks, not Splash)
    └── [debug] dev bypass ........................ → 3. Home, cloud disabled
 ```
 
@@ -66,7 +67,7 @@ Decides where you land. No user input; the whole flow is a routing decision.
 | [ ] 0.3 | Cold start, signed in but not yet approved | Pending approval screen |
 | [ ] 0.4 | Cold start in airplane mode, previously approved | Home opens with an "Offline mode" toast |
 | [ ] 0.5 | Cold start in airplane mode, never approved | Login with an explanatory message |
-| [ ] 0.6 | Cold start with the analysis quota already full | Session limit screen |
+| [ ] 0.6 | Cold start with the analysis quota already full | Home opens and the Session limit screen comes up on top of it — the quota check lives in `HomeActivity.onCreate`, not in Splash |
 | [ ] 0.7 | Slow network on launch | Spinner appears after ~400 ms, not instantly |
 
 ---
@@ -104,7 +105,7 @@ approval, depending on the backend's answer.
 | [ ] 1.2 | Dismiss the Google chooser | Returns to Login silently — no error toast |
 | [ ] 1.3 | Google sign-in on a device with no Google account | "No Google account available on this device." |
 | [ ] 1.4 | Sign in with a valid email + password | Routes onward per account status |
-| [ ] 1.5 | Sign in with a wrong password | Red snackbar, fields keep their contents |
+| [ ] 1.5 | Sign in with a wrong password | Red message pill at the bottom (`CrispToast`, not a Snackbar), fields keep their contents |
 | [ ] 1.6 | Enter a malformed email | Inline "invalid email" before any network call |
 | [ ] 1.7 | Tap the mode toggle | Becomes "Create account"; the confirm-password field appears |
 | [ ] 1.8 | Create an account with a 5-character password | Blocked: at least 8 characters |
@@ -117,16 +118,16 @@ approval, depending on the backend's answer.
 | [ ] 1.10b | Open the link, then sign in | Signs in and lands on Pending approval (new accounts aren't pre-approved) |
 | [ ] 1.10c | Sign in with Google, or via an email sign-in link | No verification step — both arrive already verified |
 | [ ] 1.11 | In register mode, look for the recovery links | Forgot-password / email-link links are hidden |
-| [ ] 1.12 | Tap **Forgot password** with a registered email | Green snackbar confirming the email was sent |
+| [ ] 1.12 | Tap **Forgot password** with a registered email | Green message pill confirming the email was sent |
 | [ ] 1.13 | Tap **Forgot password** with an unregistered email | Same success message — enumeration is deliberately not leaked |
 | [ ] 1.13a | Open the reset link from that email on this device | The **app** opens on a set-new-password form — you never land on a Firebase web page |
 | [ ] 1.13b | Enter a new password there | Same policy as registration applies; on success you are signed in and routed onward |
 | [ ] 1.13c | Open a reset link that has expired or was already used | The form reports the link is no longer valid and offers to request a fresh one |
-| [ ] 1.14 | Tap **Email me a sign-in link** | Confirmation snackbar; the email arrives with a link |
+| [ ] 1.14 | Tap **Email me a sign-in link** | Confirmation pill; the email arrives with a link |
 | [ ] 1.15 | Open that link on the same device | App opens and completes sign-in (needs verified asset links — see §11) |
 | [ ] 1.16 | Open that link on a different device | "Open the sign-in link on the device that requested it." |
 | [ ] 1.17 | Open the link while Login is already in the foreground | Handled in place, no duplicate screen |
-| [ ] 1.18 | Arrive here from Splash after a status failure | The routing error is shown as a red snackbar |
+| [ ] 1.18 | Arrive here from Splash after a status failure | The routing error is shown as a red message pill |
 
 ---
 
@@ -177,19 +178,20 @@ The session list and the only entry point to a new analysis.
    ├── Session list
    │   ├── open a session ............ → 8. Result viewer, or 7. Lattice for sweeps
    │   ├── sync badge tap ............ retry backup / open Settings
-   │   ├── "Only in cloud" row ....... download-then-open dialog + progress
+   │   ├── "Only in cloud" row ....... "Restore this analysis?" → background restore
    │   ├── live row progress ......... backup (prepare/upload) and restore/download
    │   └── "session data gone" dialog  (local frames deleted, no cloud copy either)
    ├── Selection mode (long-press)
    │   ├── select all
    │   ├── rename                      (only with exactly one selected)
-   │   └── delete → "everywhere" / "on this device only"
+   │   └── delete → "Delete device" / "Delete cloud" when the row has both;
+   │                a row with only one copy goes outright
    ├── Quota chip ...................... → 9. Session limit / 4. Settings
    ├── Pull-to-refresh                  (deep cloud reconcile, repairs blobs)
-   ├── Empty state → "Restore"          (opens Settings)
+   ├── Empty state → "Start analysis"   (same as the FAB — no longer Settings)
    ├── Start new analysis (FAB)
    │   ├── quota gate .................. → 9. Session limit
-   │   └── source chooser: Photos (system picker) / Files (SAF)
+   │   └── New analysis sheet ......... → 3a. Media picker sheet
    ├── Settings (gear)
    └── Exit-app confirm on Back
 ```
@@ -207,39 +209,72 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.4 | Look at a session row | Thumbnail, name, "date · N frames" (or "Parameter sweep"), headline value, sync badge |
 | [ ] 3.5 | Tap a normal session | Result viewer opens on frame 1 |
 | [ ] 3.6 | Tap a sweep session | **Lattice** opens, not the viewer |
-| [ ] 3.7 | Tap a row whose local files were deleted but which has a cloud backup | It carries an **"Only in cloud"** badge; tapping offers to download it, shows determinate progress, then opens it |
+| [ ] 3.7 | Tap a row whose local files were deleted but which has a cloud backup | It carries an **"Only in cloud"** badge; tapping raises a **"Restore this analysis?"** dialog with a **Download** button, which queues a background restore and **leaves you on Home** — it does not open the analysis when it lands |
 | [ ] 3.7a | Tap a row with no local files *and* no cloud copy | "Session data gone" dialog — this is now the only case that reaches it |
 | [ ] 3.7b | Watch a row during a backup | The badge and an inline progress bar track the prepare and upload phases |
-| [ ] 3.7c | Watch a row during a restore or download | Same row progress, so you are not left guessing while it runs |
-| [ ] 3.7d | Let a restore fail terminally while on Home | A snackbar names the reason here too, not only in Settings |
+| [ ] 3.7c | Watch a row during a restore or download | Same row progress. The bundle phase is deliberately **indeterminate** until the backend reports a percentage |
+| [ ] 3.7d | Let a restore fail terminally while on Home | A message pill names the reason here too, not only in Settings |
 | [ ] 3.8 | Tap a "Pending" sync badge | Upload is retried / queued |
 | [ ] 3.8a | Tap a "Failed" sync badge | A dialog names *why* the last backup failed (device conflict, too large, render ran out of memory) with a **Try again** action — not a silent re-queue |
-| [ ] 3.8b | Let a background backup fail terminally while on Home | A snackbar surfaces the reason once (quota-full is excluded — it has its own screen) |
+| [ ] 3.8b | Let a background backup fail terminally while on Home | A message pill surfaces the reason once (quota-full is excluded — it has its own screen) |
 | [ ] 3.9 | Tap a badge with cloud backup switched off | Settings opens |
 | [ ] 3.10 | Long-press a row | Selection bar with count, select-all, rename, delete, close |
 | [ ] 3.11 | Select two rows | Rename disappears; delete still offered |
 | [ ] 3.12 | Rename a single selection | Text dialog; the new name persists after leaving and returning |
-| [ ] 3.13 | Delete one session | Choice of "Delete everywhere" / "Delete on device only" |
-| [ ] 3.13a | Choose **on device only** | Snackbar: "Removed from this phone. Tap the row to download from the cloud." The row stays, now badged "Only in cloud" |
+| [ ] 3.13 | Delete one session that exists **both** on the phone and in the cloud | Choice of **"Delete device"** / **"Delete cloud"** — there is no single "delete everywhere" button on this branch |
+| [ ] 3.13a | Choose **Delete device** | Message pill: "Removed from this phone. Tap the row to download from the cloud." The row stays, now badged "Only in cloud" |
 | [ ] 3.13b | Delete a row that is already cloud-only, on device only | No-op branch — there is nothing local left to remove |
-| [ ] 3.14 | Delete several sessions | Same choice, with counts in the message |
+| [ ] 3.14 | Delete several sessions | Same choice, with counts in the message. A selection with no cloud copy, or a cloud-only stub, is deleted outright rather than offering the choice |
 | [ ] 3.15 | Press Back in selection mode | Selection clears; the app does not exit |
 | [ ] 3.16 | Tap the quota chip below the cap | Settings (or the limit screen at the cap) |
 | [ ] 3.17 | Reach the quota cap | The chip turns red |
 | [ ] 3.18 | Pull to refresh | Cloud reconcile runs; a repair or failure is reported by toast |
-| [ ] 3.19 | Open Home with no sessions | Empty state with a **Restore** button (it opens Settings) |
-| [ ] 3.20 | Tap **+** below the quota | Source chooser sheet: Photos / Files |
-| [ ] 3.21 | Tap **+** at the quota cap | Session limit screen instead of the chooser |
-| [ ] 3.22 | Choose **Photos** | System photo picker, images *and* video |
-| [ ] 3.23 | Choose **Files** | SAF browser — the only route to DNG/RAW |
+| [ ] 3.19 | Open Home with no sessions | Empty state reading "Pick reference image or video." with a **Start analysis** button — it does what the FAB does; it no longer opens Settings |
+| [ ] 3.20 | Tap **+** below the quota | The **New analysis** sheet (§3a), not a two-button chooser |
+| [ ] 3.21 | Tap **+** at the quota cap | Session limit screen instead of the sheet |
+| [ ] 3.22 | Look for a transfer banner, feedback prompt or upgrade prompt on Home | There is none. Home's only progress surface is the per-row badge and bar; the transfer banner lives in Settings and the result viewer |
 | [ ] 3.24 | Press Back on Home | "Exit app?" confirmation |
+
+### 3a. New analysis — the media picker sheet
+
+Not an Activity: `MediaPickerSheet`, a full-height bottom sheet titled **New
+analysis**. It replaced the old two-button Photos/Files chooser, and it is the
+same sheet the wizard's two dropzones open (§5.1), so test it once here.
+
+```
+3a. New analysis — MediaPickerSheet (bottom sheet)
+    ├── segmented tabs: Images | Files      (Images pre-checked)
+    ├── Images
+    │   ├── in-sheet 3-column gallery of the device's media
+    │   ├── video tiles carry a video badge
+    │   ├── no permission yet → empty state + "Allow access"
+    │   └── multi-select (deformed frames only) → "Use N" confirm
+    ├── Files ......................... dismisses the sheet, opens SAF
+    │                                    (image/* + video/*; the only route to DNG/RAW)
+    └── coach marks on first use       (one pair for reference, one for deformed)
+```
+
+| # | Action | Expected |
+|---|---|---|
+| [ ] 3a.1 | Tap **+** on Home | The **New analysis** sheet opens on the **Images** tab, with a hint toast at the top |
+| [ ] 3a.2 | First open, having never granted media access | An empty state with an **Allow access** button; granting fills the grid without reopening the sheet |
+| [ ] 3a.3 | Look at the grid | Three columns of device media; videos carry a badge so they are distinguishable from stills |
+| [ ] 3a.4 | Pick a still as the reference | The sheet closes and step 1 shows it |
+| [ ] 3a.5 | Pick a video | The sampling sheet opens instead (§5.1a) |
+| [ ] 3a.6 | Open the sheet for deformed frames and tap several tiles | Multi-select; the confirm button counts them ("Use 12") |
+| [ ] 3a.7 | Look for select-all | It is under the three-dot menu, which the first-run coach mark points out |
+| [ ] 3a.8 | Tap the **Files** tab | The sheet dismisses and the system SAF browser opens for images *and* video — this is still the only route to DNG/RAW |
+| [ ] 3a.9 | Open the sheet the first time in each mode | Coach marks run once for the reference pick and once for the deformed pick, then never again |
+| [ ] 3a.10 | Check what permission is asked for, and when | `READ_MEDIA_IMAGES` (and `READ_MEDIA_VIDEO` from Home) is requested when the **Images** tab needs it — never on the Files path |
 
 ---
 
 ## 4. Settings
 
 One scrolling screen of seven collapsible sections, all collapsed on open, plus a
-two-button footer.
+two-button footer. Long-running work here does **not** block the screen: restores,
+downloads and the two data exports run behind a **transfer banner** pinned at the
+top of Settings (§4.0).
 
 ```
 4. Settings — SettingsActivity
@@ -254,32 +289,50 @@ two-button footer.
    ├── Analyses data management         (local ⋈ cloud, merged)
    │   ├── open the analysis
    │   ├── Back up now / Retry backup
-   │   ├── Restore from cloud           (background worker)
+   │   ├── Download                     (any row with a cloud copy, incl. phone+cloud;
+   │   │                                 SAF destination picked first, then a worker)
+   │   ├── Restore from cloud           (background worker; only when local is missing)
    │   └── Delete backup → cloud only / cloud + local / forever
-   │       └── 5-second Undo snackbar before the delete really fires
+   │       └── 5-second Undo before the delete really fires
    ├── Storage
    │   ├── analyses size + cache size   (measured, refreshed on expand)
    │   ├── Free up space                (drops local frames of backed-up analyses)
    │   ├── Clear cache
    │   └── Auto-free budget             (slider 0–64 GB, 0 = off; enforced at app start)
    ├── Your data
-   │   ├── Send crash reports           (opt-in toggle; mirrors the first-run prompt)
+   │   ├── Send crash reports           (opt-in toggle; mirrors the first-run prompt.
+   │   │                                 The same flag gates product analytics — see §11)
    │   ├── Export my data               (master ZIP → 8.5a Send to)
    │   ├── Download my cloud account data  (server-side export of the account)
    │   └── Delete my account and data   (backend first; local wipe only on success)
    ├── Analysis preferences
    │   └── Max frames per analysis      (10–150, default 50) + info dialog
    ├── Help & support
-   │   ├── Ask the community / Report a bug / Request a feature
+   │   ├── Open Manual / Ask the community / Report a bug / Request a feature
    │   │     → https://semperdic.github.io/website/…
+   │   ├── Send feedback                (mailto, prefilled with version/device/build)
    │   ├── support@indicvision.com      (selectable, copyable)
    │   └── Email support                (mailto, prefilled with account/device/build)
    ├── About                            (version + Privacy Policy / Terms links)
    └── Sign out
 ```
 
-**Entry:** the Home gear (also the empty-state Restore button, the quota chip and
-any sync badge). **Exit:** Home, Admin, a result, or Login.
+**Entry:** the Home gear (also the quota chip and any sync badge).
+**Exit:** Home, Admin, a result, or Login.
+
+#### 4.0 The transfer banner
+
+A non-modal strip at the top of Settings, not a dialog: title, a progress bar
+(determinate once a percentage is known), **Cancel**, and — when more than one
+transfer is live — **‹ ›** arrows with an "n / N" page count. It carries restores,
+bundle downloads, **Export my data** and **Download my cloud account data**.
+
+| # | Action | Expected |
+|---|---|---|
+| [ ] 4.0.1 | Start any restore, download or export | A banner appears at the top of Settings; the rest of the screen stays usable |
+| [ ] 4.0.2 | Start a second one while the first runs | The banner pages: "1 / 2", with ‹ › to step between them |
+| [ ] 4.0.3 | Tap **Cancel** on a page | That transfer stops; the others keep running and the paging recounts |
+| [ ] 4.0.4 | Let one finish | Its page disappears; the banner hides itself once the last one is done |
 
 | # | Action | Expected |
 |---|---|---|
@@ -295,24 +348,32 @@ any sync badge). **Exit:** Home, Admin, a result, or Login.
 | [ ] 4.10 | Expand **Analyses data management** | Merged local + cloud list; each row shows a state line |
 | [ ] 4.11 | Same, while signed out or with no backend | An explanatory line instead of an empty list |
 | [ ] 4.12 | Tap a row that exists locally | That analysis opens (viewer or lattice) |
+| [ ] 4.12a | Tap a row with no local data | The restore confirm, not a "session data gone" dialog |
 | [ ] 4.13 | Tap **Back up now** on a local-only row | Upload is queued; the row state changes |
-| [ ] 4.14 | Tap **Restore** on a cloud-only row | Toast says the restore continues in the background; on success the analysis appears in the list without reopening Settings |
-| [ ] 4.14a | Restore a backup that fails terminally (deleted server-side, or not this account) | A snackbar names the failure — the restore is no longer silent |
+| [ ] 4.14 | Tap **Restore** on a cloud-only row | A **"Restore this analysis?"** confirm first; accepting toasts that it continues in the background, adds a **stub row immediately** so you can see it, and raises a banner entry (§4.0). The analysis appears in the list without reopening Settings |
+| [ ] 4.14a | Restore a backup that fails terminally (deleted server-side, or not this account) | A message pill names the failure — the restore is no longer silent |
+| [ ] 4.14b | Look at a row that is on the phone **and** in the cloud | It offers **Download**, but not Restore — Restore only appears when the local frames are missing |
+| [ ] 4.14c | Tap **Download** | A SAF save dialog opens **first**, suggesting `<name>_Session.zip`; choosing a location starts a `DicBundleDownloadWorker` and the row reads "Downloading…" |
+| [ ] 4.14d | Leave the section, or Settings entirely, mid-download | It keeps going — this is WorkManager, not an Activity scope — and reports the result when it lands |
+| [ ] 4.14e | Look for a **Send to** sheet after a Download | There is none, by design: you already chose the destination, so the bytes go straight there |
+| [ ] 4.14f | Download a row whose cloud zip is unavailable | It falls back to packing the local session into the same destination |
+| [ ] 4.14g | Cause a Download to fail | The empty destination file is removed rather than left as a 0-byte zip, and the failure is named |
 | [ ] 4.15 | Tap the bin on a row with a local copy | Choice: cloud backup only / local + cloud / cancel |
 | [ ] 4.16 | Tap the bin on a cloud-only row | "Delete this backup forever?" naming the analysis |
 | [ ] 4.17 | Confirm any backup delete, then tap **Undo** within 5 s | The row returns; nothing is deleted server-side |
 | [ ] 4.18 | Confirm and wait past the undo window | The backup is really gone after a refresh |
 | [ ] 4.18a | Expand **Storage** | Analyses and cache sizes are measured and shown, not left on "Measuring…" |
-| [ ] 4.18b | Tap **Free up space** with backed-up analyses present | Their local frames are dropped; the rows become "Only in cloud" on Home and the analyses total falls |
-| [ ] 4.18c | Tap it with nothing safely backed up | The subtitle says there is nothing to free and the button does not strand un-backed-up data |
-| [ ] 4.18d | Tap **Clear cache** | The cache total drops; open analyses still work — only regenerable files go |
+| [ ] 4.18b | Tap **Free up space** with backed-up analyses present | A confirm dialog first, **naming how much it will reclaim**; accepting drops those local frames, the rows become "Only in cloud" on Home and the analyses total falls |
+| [ ] 4.18c | Tap it with nothing safely backed up | The button is **disabled** and the subtitle says there is nothing to free — it cannot strand un-backed-up data |
+| [ ] 4.18d | Tap **Clear cache** | The cache total drops; open analyses still work — only regenerable files go. At 0 bytes the button is disabled |
 | [ ] 4.18e | Drag the **auto-free** slider off 0 | The label names the budget in GB; at 0 it reads "off" |
 | [ ] 4.18f | Set a budget below current usage and restart the app | Space is reclaimed at start-up, oldest backed-up analyses first |
 | [ ] 4.18g | Tap the ⓘ beside it | Explains that only cloud-backed analyses are ever dropped |
-| [ ] 4.19 | Tap **Export my data** | A master ZIP is built with determinate progress, then handed to the **Send to** sheet (§8.5a) |
-| [ ] 4.19a | Tap **Download my cloud account data** | The server-side export of the account is fetched with progress, then offered through the same sheet |
+| [ ] 4.19 | Tap **Export my data** | A master ZIP is built behind the **transfer banner** (§4.0) — not a blocking dialog — then handed to the **Send to** sheet (§8.5a) |
+| [ ] 4.19a | Tap **Download my cloud account data** | The server-side export of the account is fetched the same way, banner and all, then offered through the same sheet |
 | [ ] 4.19b | Trigger either export with no network | It fails with a named reason, not a silent no-op |
 | [ ] 4.19c | Toggle **Send crash reports** off, then force a crash on a debug build | Nothing is uploaded; turning it on again resumes collection without a restart |
+| [ ] 4.19d | Read what that toggle actually controls | It gates **both** crash reporting and consent-gated product analytics (analysis started/completed/failed, exports, feedback). The label says only "crash reports" — see §11 |
 | [ ] 4.20 | Tap **Delete my account and data** | Dialog listing exactly what goes: local analyses, cloud backups, profile and device |
 | [ ] 4.20a | Confirm it | The **sign-in screen** opens to re-verify, with your email filled in and locked, and no "create account" toggle |
 | [ ] 4.20b | Enter the wrong password there | "Incorrect password." and nothing is deleted |
@@ -322,10 +383,12 @@ any sync badge). **Exit:** Home, Admin, a result, or Login.
 | [ ] 4.21 | Confirm the delete with no network | Nothing local is touched; a failure toast is shown |
 | [ ] 4.22 | Confirm the delete online | Everything is wiped, including the sign-in identity, and you land back on Login |
 | [ ] 4.22a | Sign up again with the same email afterwards | It behaves as a brand-new account — the old identity is gone |
-| [ ] 4.23 | Drag the **Max frames** slider | Value label tracks in steps of 10 between 10 and 150 |
+| [ ] 4.23 | Drag the **Max frames** slider | Value label tracks in steps of 10 from 10 up to the ceiling. 150 is the compile-time fallback; the live ceiling comes from remote config, so a backend can lower it |
 | [ ] 4.24 | Tap the ⓘ next to it | Explains the cost of more frames |
 | [ ] 4.25 | Set it to 20, then import 40 frames in an analysis | Only the first 20 are kept, with a "capped" toast |
-| [ ] 4.26 | Expand **Help & support** | Community / bug / feature buttons and the support address are shown; address can be selected and copied |
+| [ ] 4.26 | Expand **Help & support** | Six actions: **Open Manual**, Ask the community, Report a bug, Request a feature, **Send feedback**, Email support — plus the support address, selectable and copyable |
+| [ ] 4.26a | Tap **Open Manual** | The hosted manual opens in a browser |
+| [ ] 4.26b | Tap **Send feedback** | Mail app opens to support@, subject "Semper feedback (v… / …)", body carrying app version, device model, Android level and build type — no account address needed |
 | [ ] 4.27 | Tap **Email support** | Mail app opens to support@, subject "Semper support request", body carrying account, device ID, app version and device model |
 | [ ] 4.28 | Same with no mail app installed | "No email app found…" toast naming the address; no crash |
 | [ ] 4.29 | Tap **About** | "Semper v<name> (<code>)" plus **Privacy Policy** and **Terms of Service** buttons |
@@ -363,8 +426,9 @@ Lattice, Session limit, or back to Home.
 
 ```
 5.1 Load frames
-    ├── Reference image → Photos / Files      (RAW/DNG only via Files)
-    ├── Deformed frames → Photos / Files      (multi-select, capped)
+    ├── coach marks on first visit            (both dropzones)
+    ├── Reference image → 3a. New analysis sheet   (RAW/DNG only via Files)
+    ├── Deformed frames → 3a. New analysis sheet   (multi-select, capped)
     ├── Video source
     │   ├── sampling sheet: fps slider, time-segment range, live estimate
     │   └── extraction progress
@@ -377,29 +441,30 @@ Lattice, Session limit, or back to Home.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 5.1.1 | Tap the reference dropzone → **Photos** | Picker opens, images only |
+| [ ] 5.1.1 | Tap the reference dropzone | The **New analysis** sheet (§3a) opens on Images — the same sheet the Home FAB uses |
 | [ ] 5.1.2 | Pick a `.dng` or `.tif` via **Files** | Card shows the filename and `W × H`; no decode error |
 | [ ] 5.1.3 | Tap **Change** on the reference card | Source chooser reopens; the new image replaces the old |
-| [ ] 5.1.4 | Pick deformed frames via **Photos** (multi-select) | Card shows "N frames" and the first…last filenames |
+| [ ] 5.1.4 | Pick deformed frames from the sheet's grid (multi-select, then **Use N**) | Card shows "N frames" and the first…last filenames |
 | [ ] 5.1.5 | Pick more frames than *Max frames* | The first N are kept, with a "capped" toast |
 | [ ] 5.1.6 | Load a reference only | **Next** is disabled with "add at least one deformed frame to continue" |
 | [ ] 5.1.7 | Load deformed frames only | **Next** is disabled with the matching reference message |
-| [ ] 5.1.8 | Include one frame of a different pixel size | A blocking message appears and **Run** stays disabled |
-| [ ] 5.1.9 | Load JPEGs | A non-blocking accuracy warning chip appears; its info icon opens the JPEG FAQ |
-| [ ] 5.1.10 | Load a poorly speckled reference | A low-texture warning names a suggested subset size; its info icon opens the speckle FAQ |
+| [ ] 5.1.8 | Include one frame of a different pixel size | A blocking message appears and **Compute** stays disabled |
+| [ ] 5.1.9 | Load JPEGs | A non-blocking accuracy warning chip appears; its info icon asks first whether to leave the app, then opens the JPEG FAQ |
+| [ ] 5.1.10 | Load a poorly speckled reference | A low-texture warning names a suggested subset size; its info icon opens the speckle FAQ behind the same leave-the-app confirm |
 | [ ] 5.1.11 | Open the sort menu → **Name A–Z** | Thumbnails reorder; the badge numbers renumber 1…N |
 | [ ] 5.1.12 | Choose **Date oldest first** | Order follows capture date, not filename |
 | [ ] 5.1.13 | Choose **Manual** | Hint toast about dragging; drag a thumbnail and it stays where dropped |
 | [ ] 5.1.14 | Load a single deformed frame | The sort control is hidden |
-| [ ] 5.1.15 | Press Back with inputs loaded | "Exit analysis?" confirmation |
+| [ ] 5.1.15 | Press Back on step 1 with inputs loaded | "Exit analysis?" confirmation. On steps 2 and 3 Back walks back a step instead — the confirm is step 1 only |
+| [ ] 5.1.16 | Open step 1 for the first time | Coach marks point at the reference dropzone, then the deformed one |
 
 #### 5.1a Video source
 
-Reached only when the file picked on Home was a video.
+Reached whenever the file picked — from the grid or through Files — is a video.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 5.1a.1 | Pick a video on Home | Sampling sheet opens with resolution, source fps and duration |
+| [ ] 5.1a.1 | Pick a video (a badged tile in the grid, or via Files) | Sampling sheet opens with resolution, source fps and duration |
 | [ ] 5.1a.2 | Drag the **fps** slider | The estimated frame count updates live |
 | [ ] 5.1a.3 | Drag the time-segment handles | Estimate updates; the button relabels to "Extract N frames" |
 | [ ] 5.1a.4 | Choose settings that exceed *Max frames* | The estimate shows the cap being applied |
@@ -421,7 +486,8 @@ Reached only when the file picked on Home was a video.
     │   ├── strain window    (slider + typed field + ⓘ)
     │   ├── interpolator: Bicubic 4×4 / Keys 6×6
     │   └── Reset to recommended
-    └── Run analysis
+    ├── coach marks on first visit  (mode toggle, ROI, advanced-params header)
+    └── Compute
 ```
 
 | # | Action | Expected |
@@ -445,8 +511,9 @@ Reached only when the file picked on Home was a video.
 | [ ] 5.2.15 | Switch the interpolator to **Keys 6×6** | Selection sticks; the run uses it |
 | [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, strain window to 15, interpolator to Bicubic |
 | [ ] 5.2.17 | Load a well-speckled reference and watch the subset | It is pre-seeded from the SSSIG recommendation — until you touch it |
-| [ ] 5.2.18 | Draw an ROI smaller than the subset and run | "ROI too small" toast; the run does not start |
-| [ ] 5.2.19 | Edit a parameter field and tap **Run** without pressing Done | The typed value is committed and used |
+| [ ] 5.2.18 | Draw an ROI smaller than the subset and tap **Compute** | "ROI too small" toast; the run does not start |
+| [ ] 5.2.19 | Edit a parameter field and tap **Compute** without pressing Done | The typed value is committed and used |
+| [ ] 5.2.20 | Open step 2 for the first time | Coach marks point at the analysis-mode toggle, the ROI card, then the advanced-parameters header |
 
 ### 5.3 Step 3 — Sweep setup `[sweep]`
 
@@ -454,12 +521,13 @@ Reached only when the file picked on Home was a video.
 5.3 Sweep setup
     ├── subset size range      (dual slider + min/max fields, 15–121)
     ├── strain window range    (dual slider + min/max fields, 5–101)
-    ├── step denominator       ("subset ÷ n", 2–6)
+    ├── step denominator       ("subset ÷ n", 2–9)
     ├── frame to sweep         (dialog: radio list + number + live preview)
     ├── planned lattice preview
     ├── lattice samples: no. of subsets × no. of VSGs (1–8 each)
     ├── plan summary, or "empty plan" / "subset too big for this ROI"
-    └── Run sweep
+    ├── coach marks on first visit  (subset range, planned lattice, Compute)
+    └── Compute
 ```
 
 | # | Action | Expected |
@@ -468,13 +536,13 @@ Reached only when the file picked on Home was a video.
 | [ ] 5.3.2 | Drag the subset range handles | Both ends stay odd; min never crosses max |
 | [ ] 5.3.3 | Type a subset min above the max | Clamped so min ≤ max |
 | [ ] 5.3.4 | Look for a "max VSG size" field | There is none — the ceiling comes from the **strain window range** below the subset range |
-| [ ] 5.3.5 | Type a step denominator of 1, then 9 | Clamped into 2–6; the prefix reads "subset ÷ n" |
+| [ ] 5.3.5 | Type a step denominator of 1, then 12 | Clamped into 2–9; the prefix reads "subset ÷ n" |
 | [ ] 5.3.6 | Tap each ⓘ | Subset range, strain window range, step depth and samples each explain themselves |
 | [ ] 5.3.6b | Read the strain window control | It has its own title and ⓘ and spans the row, like the subset range above it |
 | [ ] 5.3.6d | Drag the strain window range | Two handles like the subset's; the min and max boxes track it and the plan count updates |
 | [ ] 5.3.6e | Find the step size | On its own row below the range, not sharing one with it |
 | [ ] 5.3.6c | Type a min above the max | Clamped rather than inverted; the sweep still plans |
-| [ ] 5.3.6a | Open sweep setup for the first time | A coach mark points out the lattice preview graph |
+| [ ] 5.3.6a | Open sweep setup for the first time | Three coach marks in order: the subset range, the planned-lattice graph, then the **Compute** button |
 | [ ] 5.3.7 | Tap **Pick frame** | Dialog with a radio list, a frame-number field and a live preview |
 | [ ] 5.3.8 | Type a frame number in that dialog | The radio selection and preview follow |
 | [ ] 5.3.9 | Scrub quickly through frames in the dialog | Preview keeps up; no stale image is left behind |
@@ -482,8 +550,8 @@ Reached only when the file picked on Home was a video.
 | [ ] 5.3.11 | Look at the planned lattice | Grid of nodes, subset across, VSG up; taps do nothing (it's a preview) |
 | [ ] 5.3.12 | Open the samples panel (gear) and set 4 × 4 | The plan summary reads 16 analyses and the lattice redraws |
 | [ ] 5.3.13 | Set samples to 9 | Clamped to 8 |
-| [ ] 5.3.14 | Set the subset min above what the ROI can hold | "Subset range starts above what this image and ROI can hold"; **Run sweep** is disabled |
-| [ ] 5.3.15 | Set a strain window range that no subset can satisfy | "No combination fits this ceiling — raise Max strain window or lower the subset range"; **Run sweep** is disabled |
+| [ ] 5.3.14 | Set the subset min above what the ROI can hold | "Subset range starts above what this image and ROI can hold"; **Compute** is disabled |
+| [ ] 5.3.15 | Set a strain window range that no subset can satisfy | "No combination fits this ceiling — raise Max strain window or lower the subset range"; **Compute** is disabled |
 | [ ] 5.3.16 | Read a valid plan summary | "N analyses · subset a–b px · VSG c–d px" |
 
 ### 5.4 Running
@@ -491,7 +559,7 @@ Reached only when the file picked on Home was a video.
 ```
 5.4 Running
     ├── progress %, elapsed
-    ├── compute tiles: Total points converged, convergence %   [compute/sweep only]
+    ├── compute tiles: "# converged", "convergence"            [compute/sweep only]
     ├── Cancel (confirm; cooperative — the engine stops mid-frame)
     └── Back is hard-blocked, screen kept on
 ```
@@ -503,7 +571,7 @@ extraction show determinate progress instead.
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.4.1 | Start a run | Overlay with title, percentage, status, elapsed seconds |
-| [ ] 5.4.2 | Watch the two tiles during a solve | **Total points converged** and convergence % update as it goes |
+| [ ] 5.4.2 | Watch the two tiles during a solve | **# converged** and **convergence** update as it goes |
 | [ ] 5.4.2a | Watch the overlay while frames import or a video extracts | The two tiles are absent; progress is a determinate count of frames |
 | [ ] 5.4.2b | Tap **Cancel** during an import | A confirm dialog ("Cancel this import?"); confirming leaves no half-imported frames behind |
 | [ ] 5.4.3 | Leave the device untouched during a long run | The screen does not sleep |
@@ -610,16 +678,18 @@ aiming at a small target.
 ```
 7. Parameter sweep — VsgLatticeActivity
    ├── coach marks                       (first visit: the lattice, then the plot)
-   ├── result lattice: subset × VSG, solved (filled) vs skipped (hollow ring)
+   ├── summary: total / solved / skipped / step denominator   (above the lattice)
+   ├── result lattice: subset across × strain window up,
+   │                   solved (filled) vs skipped (hollow ring)
    │   ├── every solved node shares one colour; the focused one also gets a
    │   │   selection ring (no legend row — the coach mark covers it once)
+   │   ├── a faint connector ladder joins the nodes of each subset column
    │   ├── tap a node → focus it
    │   └── double-tap / long-press → open that combination in the viewer
    ├── stepper row: ‹ prev · parameter chip · next ›   (solved nodes only)
-   ├── summary: total / solved / skipped / step denominator
-   ├── strain plot section
-   │   ├── component spinner: Exx / Eyy / Exy
-   │   ├── Highlight ↔ Isolate           (Isolate is the default)
+   ├── strain plot section               (hidden until the profiles load)
+   │   ├── component spinner: Exx / Eyy / Exy   (in a glass pill with a chevron)
+   │   ├── All ↔ Node — one pill         (**All** is the default)
    │   ├── plot: pinch-zoom, two-finger pan, double-tap to reset
    │   ├── scrub slider under the plot   (two-way synced with the drag)
    │   └── readout: "x=…"                (y is on the plot at the scrub point;
@@ -634,10 +704,13 @@ aiming at a small target.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 7.1.1 | Open a sweep | Lattice with subset across and VSG up; the coach mark explains filled vs hollow (no persistent legend row) |
+| [ ] 7.1.1 | Open a sweep | Lattice with **subset across and strain window up**; the coach mark explains filled vs hollow (no persistent legend row) |
+| [ ] 7.1.1a | Look for axis titles on the result lattice | There are none — it draws compact, so only tick numbers and a "px" unit on the last subset tick. The coach mark is what names the axes |
 | [ ] 7.1.2 | Open a sweep that had failures | Skipped combinations are hollow rings with no fill — any surface behind them shows through |
 | [ ] 7.1.3 | Compare two different filled nodes | Same fill colour — node identity comes from position + the selection ring, not a colour key. The plot below only puts colour on the *focused* curve (§7.2.4) |
-| [ ] 7.1.4 | Read the summary line | "N combinations · S solved · K skipped · step subset÷D" |
+| [ ] 7.1.4 | Read the summary line, above the lattice | "N combinations · S solved · K skipped · step subset÷D" |
+| [ ] 7.1.4a | Open a sweep where every combination failed | The line is replaced by "All combinations failed — tap a node for details." |
+| [ ] 7.1.4b | Open one where the step denominator cannot be derived | The "step subset÷D" tail is dropped rather than printing a wrong number |
 | [ ] 7.1.5 | Tap a solved node | A selection ring appears; the stepper chip and the plot follow it |
 | [ ] 7.1.6 | Tap a skipped node | A dialog explains why it was skipped; nothing is focused |
 | [ ] 7.1.7 | Double-tap a solved node | The result viewer opens on that combination |
@@ -645,7 +718,7 @@ aiming at a small target.
 | [ ] 7.1.9 | Tap **›** repeatedly | Focus walks the solved nodes in order; the chip names each one |
 | [ ] 7.1.10 | Reach the first or last solved node | **‹** or **›** disables rather than wrapping |
 | [ ] 7.1.11 | Open a sweep with no solved nodes at all | The stepper row is hidden and both bottom buttons are disabled |
-| [ ] 7.1.12 | Scroll the screen down | Lattice, stepper and plot scroll together; the **Save graph · View** bar stays pinned |
+| [ ] 7.1.12 | Scroll the screen down | Summary, lattice, stepper and plot scroll together; the **Save graph · View** bar stays pinned |
 
 ### 7.2 Strain plot
 
@@ -653,8 +726,9 @@ aiming at a small target.
 |---|---|---|
 | [ ] 7.2.1 | Read the plot title | It names the cut axis — "Strain along X axis" or "…Y axis" |
 | [ ] 7.2.2 | Change the strain component spinner | The plot redraws for Exx / Eyy / Exy |
-| [ ] 7.2.3 | Look at the Highlight/Isolate toggle on open | **Isolate** is selected by default — one curve, not a thicket |
-| [ ] 7.2.4 | Switch to **Highlight** | Every solved combination is drawn: the focused curve at full strength in its own colour, every other curve sharing one muted neutral (not each its own dimmed colour) — only one hue ever carries meaning at a time |
+| [ ] 7.2.3 | Look at the **All / Node** pill on open | It is one physical pill, and **All** is selected — a sweep opens on every curve, not on one |
+| [ ] 7.2.4 | Read the plot in **All** | Every solved combination is drawn: the focused curve at full strength in its own colour, every other curve sharing one muted neutral (not each its own dimmed colour) — only one hue ever carries meaning at a time |
+| [ ] 7.2.4a | Switch to **Node** | Only the focused combination is drawn |
 | [ ] 7.2.5 | Pinch to zoom on the plot | It zooms about the pinch centre |
 | [ ] 7.2.6 | Drag with two fingers | The zoomed plot pans |
 | [ ] 7.2.7 | Double-tap the plot | The viewport resets to fit |
@@ -670,11 +744,11 @@ aiming at a small target.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 7.3.1 | Double-tap the parameter chip | "Parameters copied" — subset, step and strain window go to the app's parameter clipboard. (The readout line no longer carries params, so it is no longer a copy target — the chip is the only one.) |
+| [ ] 7.3.1 | Double-tap **or long-press** the parameter chip | "Parameters copied" — subset, step and strain window go to the app's parameter clipboard. (The readout line no longer carries params, so the chip is the only copy target; its content description still mentions only double-tap.) |
 | [ ] 7.3.2 | Start a new single-setting analysis afterwards | Step 2 offers a **Paste params** chip that fills all three (§5.2.13b) |
 | [ ] 7.3.3 | Tap **View** with a node focused | The result viewer opens on that combination |
-| [ ] 7.3.4 | Tap **Save graph** | A PNG is rendered and handed to the share sheet |
-| [ ] 7.3.5 | Open that PNG | A header (study, reference name + deformed count, and either the isolated node's parameters or the combination count), the plot at full fit, and a two-column colour legend of the curves |
+| [ ] 7.3.4 | Tap **Save graph** | A PNG is rendered and handed straight to the **system chooser**. This is the one export that skips the in-app **Send to** sheet (§8.5a), so there is no "Save to Files" row here |
+| [ ] 7.3.5 | Open that PNG | A header — study, reference name + deformed frame count, the focused node's parameters **always**, and *additionally* the combination count when the plot is in **All** — then the plot at full fit and a **single-column** colour legend of the curves |
 | [ ] 7.3.6 | Save a graph while the on-screen plot is zoomed in | The export is rendered fit-to-data from a detached view — your zoom is neither baked in nor disturbed |
 | [ ] 7.3.7 | Open a combination, then press Back | You return here, not to Home |
 
@@ -703,9 +777,11 @@ the Lattice for a sweep.
    │   ├── tap → custom min / max
    │   └── Auto scale (drops custom; returns to the frame's clamped bounds)
    ├── edge chrome (auto-hides; pan / scrub / field tap brings it back)
-   │   ├── short title: field · frame
-   │   ├── ⓘ peek sheet: max/min (with coords) + mean + settings used (+ line-cut on sweep)
-   │   └── share icon (top right)
+   │   │   back · short title (field · frame) · ⓘ · Home · share
+   │   ├── ⓘ peek sheet: specimen name, max/min (with coords) + mean +
+   │   │                 settings used (+ stop reason, + line-cut on sweep)
+   │   ├── centre tap, or a vertical swipe at fit, toggles chrome
+   │   └── figure runs edge-to-edge under the status / nav bars
    ├── field pills: U / V / Exx / Eyy / Exy
    ├── frame scrubbing: prev / next + "name (i / N)"
    │   └── type a frame number to jump straight there
@@ -713,15 +789,15 @@ the Lattice for a sweep.
    │   ├── short tap → nearest point reading (location + value)
    │   └── tap same point or readout to dismiss
    ├── Share (node icon)
-   │   ├── result photo (current field + frame)
-   │   ├── all field photos (5, zipped)
-   │   ├── field animations (5 GIFs, zipped)
+   │   ├── Single Field (current field + frame)
+   │   ├── All fields (5, zipped)
+   │   ├── Animations (5 GIFs, zipped)
    │   ├── PDF report (all frames)
    │   ├── CSV data
-   │   ├── everything (.zip: raw photos + animations + results + CSV + PDF)
-   │   └── → Send to sheet: Save to Files / Share
-   ├── Home (from the ⓘ peek sheet)
-   └── Back (→ 7. Lattice for sweeps)
+   │   ├── Everything (.zip: raw photos + animations + results + CSV + PDF)
+   │   └── → Send to sheet: Save to Files / Share  (§8.5a)
+   ├── Home (chrome icon, top bar)
+   └── Back (chrome arrow, or system Back → 7. Lattice for sweeps)
 ```
 
 **Entry:** a finished single-setting run, a Home or Settings row, or a Lattice
@@ -742,9 +818,9 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.8 | Enter min ≥ max and apply | Rejected with a validation message |
 | [ ] 8.1.9 | Enter valid bounds and apply | The heatmap and the scale labels both change |
 | [ ] 8.1.10 | Switch field, then switch back | The custom bounds are remembered *per field* |
-| [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped; the scale returns to this frame's min / max |
-| [ ] 8.1.12 | Open ⓘ | Peek sheet shows max / min with coordinates, mean, and settings used |
-| [ ] 8.1.13 | Scrub frames without a custom scale | Scale labels match each frame's own min / max |
+| [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped; the scale returns to this frame's clamped bounds — not to its true extrema |
+| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the specimen name, max / min with coordinates, mean, and settings used |
+| [ ] 8.1.13 | Scrub frames without a custom scale | Scale labels follow each frame's own 2nd/98th-percentile clamp |
 
 ### 8.2 Frames
 
@@ -767,7 +843,8 @@ node. **Exit:** Home, or back to the Lattice.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.2a.1 | Open a result | It lands on the summary, which builds and then loops; the counter reads "Summary · <field> · N frames" |
+| [ ] 8.2a.1 | Open a result | It lands on the summary, which builds and then loops. The **counter** reads "Summary GIF"; the **edge title** carries "<field> · Summary" |
+| [ ] 8.2a.1a | Watch it build | Determinate progress with a status ("Reading frames…", then "Rendering <field>…") and a **Cancel** button |
 | [ ] 8.2a.2 | Watch a short (≤33 frame) analysis | Each frame is visible for about 300 ms |
 | [ ] 8.2a.3 | Watch a 150-frame analysis | Every frame is there and the loop still finishes inside 10 s |
 | [ ] 8.2a.4 | Compare early and late frames of a growing test | Colour rises through the sequence — one scale throughout, no per-frame renormalising |
@@ -782,11 +859,14 @@ node. **Exit:** Home, or back to the Lattice.
 ### 8.3 Tap to probe
 
 No Inspect / X,Y / Max-Min tools. A short tap on the heatmap is the reading;
-drag and pinch keep pan and zoom.
+drag and pinch keep pan and zoom. The **centre** of the screen is reserved for
+chrome, so probe away from it.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.3.1 | Short-tap the heatmap | Plain-text readout shows the nearest correlated point: field value with units and `(x, y)` |
+| [ ] 8.3.1 | Short-tap the heatmap **outside the middle of the screen** | Plain-text readout shows the nearest correlated point: field value with units and `(x, y)` |
+| [ ] 8.3.1a | Tap dead centre (the middle ~third of the screen, both axes) | Chrome toggles instead — no probe is placed. This is the deliberate escape hatch for hidden chrome |
+| [ ] 8.3.1b | Swipe down, then up, while fit-to-screen | Chrome shows, then hides |
 | [ ] 8.3.2 | Drag past the touch slop | The image pans (when zoomed) or a horizontal fling steps frames (when fit); no probe is placed mid-drag |
 | [ ] 8.3.3 | Tap outside the correlated area | Readout says "No data" rather than a wrong number |
 | [ ] 8.3.4 | Pinch while a probe is up | Zoom works; the crosshair stays glued to the image point |
@@ -799,50 +879,60 @@ drag and pinch keep pan and zoom.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.4.1 | Tap the info button | Peek sheet with max / min (coordinates) / mean, then subset, step, strain window, strain method, ROI and image size |
+| [ ] 8.4.1 | Tap the info button | Peek sheet titled **Details** with the specimen name under it, then max / min (coordinates) / mean, then subset, step, strain window, strain method, ROI and image size |
+| [ ] 8.4.1a | Open it on a run that stopped early | Two extra rows: **Stopped early** and **Frames solved (n of N)** — the provenance survives a restart |
 | [ ] 8.4.2 | Compare against what you entered in the wizard | They match |
-| [ ] 8.4.3 | Open it on a sweep | A **virtual strain gauge** row appears, and the values match the frame on screen |
+| [ ] 8.4.3 | Look for a **virtual strain gauge** row | There is none, deliberately: VSG is `(strain window − 1) × step + 1`, and both of those are already rows above it |
 | [ ] 8.4.4 | Scrub to another combination and reopen | The values follow the new frame, not the run's first |
 | [ ] 8.4.5 | Open it on a sweep | A line-cut plot with colour-matched Exx / Eyy / Exy and the cut axis named |
 | [ ] 8.4.6 | Open it on a single-setting run | No line-cut section |
-| [ ] 8.4.7 | Tap **Go to Home** in the sheet | Returns to Home and clears the viewer from the stack |
+| [ ] 8.4.7 | Look for **Go to Home** in the sheet | It is not there any more — Home is a chrome icon in the top bar (§8.6.1) |
 
 ### 8.5 Share and export
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.5.1 | Tap Share | Sheet with six targets and a caption naming the current frame |
-| [ ] 8.5.2 | **Result photo** | One annotated PNG of the field and frame on screen |
-| [ ] 8.5.3 | **All field photos** | Five PNGs for the current frame, zipped for hand-off |
-| [ ] 8.5.3a | **Field animations (GIF)** | Five GIFs, one per field, zipped; each loops when opened in a gallery app |
+| [ ] 8.5.1 | Tap Share | Sheet with six targets, captioned positionally — "frame N of M shown · photos share the current frame". It no longer names the frame; the frame's own name is on the **Single Field** row's sub-line |
+| [ ] 8.5.2 | **Single Field** | One annotated PNG of the field and frame on screen |
+| [ ] 8.5.3 | **All fields** | Five PNGs for the current frame, zipped for hand-off. The row's sub-line and each PNG's stamp name the **source image**; the file names still come from the analysis name |
+| [ ] 8.5.3a | **Animations** | Five GIFs, one per field, zipped; each loops when opened in a gallery app |
 | [ ] 8.5.3b | Same, immediately on entering the viewer | Fields not built yet are built under the progress dialog — never silently missing |
 | [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
-| [ ] 8.5.5 | **CSV data** | Header `x_px,y_px,u_px,v_px,exx,eyy,exy,znssd`; sweeps add subset/step/window columns |
+| [ ] 8.5.5 | **CSV data** | Header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd`; a sweep inserts four more after `image` — `subset_px,step_px,strain_window,vsg_px` |
 | [ ] 8.5.6 | **Everything (.zip)** | Raw photos, the five animations, per-frame results for all five fields, the CSV and the PDF |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
-| [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a snackbar naming the failure — never a crash, and never an OOM from rendering the report |
-| [ ] 8.5.9 | Check an exported PNG | Full resolution, heatmap baked in, min/max annotated |
+| [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |
+| [ ] 8.5.8a | Dismiss that dialog with Back, or by tapping outside | The export keeps running behind a **transfer banner** at the top of the viewer, with its own progress, Cancel and ‹ › paging — the same strip Settings uses (§4.0) |
+| [ ] 8.5.9 | Check an exported PNG | Heatmap baked in, min/max annotated, composited to a **1280 px long edge** — not the reference's full sensor resolution |
 
 ### 8.5a Send to — the export handoff
 
-Every export in the app — from the viewer, from Settings → Export my data, and
-from Download my cloud account data — ends at the same in-app **Send to** bottom
-sheet rather than being thrown straight at the system chooser. The sheet has two
+Viewer exports and the two Settings data exports end at the same in-app **Send
+to** bottom sheet rather than being thrown straight at the system chooser. Two
 rows, so "keep this file" and "send this file somewhere" are separate decisions.
+
+**When the sheet appears depends on the target.** The single **Single Field**
+photo is generated first and then offered. The five slow targets — All fields,
+Animations, PDF, CSV, Everything — ask **first**: the sheet comes up before any
+work, and choosing **Save to Files** opens SAF straight away so the export is
+written directly into the document you picked. Two exports skip the sheet
+entirely by design: Settings' **Download** (§4.14e, destination already chosen)
+and the lattice's **Save graph** (§7.3.4, straight to the system chooser).
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.5a.1 | Finish any export | A **Send to** sheet appears with a folder-icon **Save to Files** row and a **Share** row, captioned with the filename |
-| [ ] 8.5a.2 | Tap **Save to Files** | A SAF save dialog opens (via the transparent `SaveExportActivity`); the file lands where you choose |
-| [ ] 8.5a.3 | Cancel that SAF dialog | You come back to the app cleanly, with the export still available to share |
-| [ ] 8.5a.4 | Tap **Share** | The normal system chooser opens with the same file attached |
+| [ ] 8.5a.1 | Trigger any viewer export | A **Send to** sheet with a folder-icon **Save to Files** row ("Save a copy to this device") and a **Share** row ("Send to another app"). There is no filename caption on it |
+| [ ] 8.5a.2 | Tap **Save to Files** for **Single Field** | A SAF save dialog opens via the transparent `SaveExportActivity`; the already-built file lands where you choose |
+| [ ] 8.5a.2a | Tap **Save to Files** for a slow target (PDF, Everything, …) | SAF opens **before** generation, and the export is written straight into that document — nothing is staged and re-offered |
+| [ ] 8.5a.3 | Cancel that SAF dialog | You come back to the app cleanly, with nothing half-written |
+| [ ] 8.5a.4 | Tap **Share** | The normal system chooser opens with the file attached |
 | [ ] 8.5a.5 | Dismiss the sheet without choosing | Nothing is written and nothing is sent; no error |
 
 ### 8.6 Leaving
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.6.1 | Tap the home button | Home, with the back stack cleared |
+| [ ] 8.6.1 | Tap the home icon in the top chrome | Home, with the back stack cleared |
 | [ ] 8.6.2 | Press Back on a single-setting result | Wherever you came from |
 | [ ] 8.6.3 | Press Back on a sweep combination | The Lattice |
 | [ ] 8.6.4 | Leave a single-setting result and look at its Home row | The headline reads "<Field> max <value> <unit>" for the last field you viewed |
@@ -880,24 +970,35 @@ sweep hitting the cap, or a background upload rejected with a quota error.
 
 ## 10. Background work
 
-Uploads, restores and backup deletes run in WorkManager and survive leaving the
-screen. They are **no longer silent about failure**: a terminal upload failure
-surfaces on Home (snackbar + a "why + retry" dialog on the badge), and a terminal
-restore failure surfaces on **both** Home and Settings, each carrying a human
-reason. Success is quiet by design — the badge/list simply updates.
+Uploads, restores, **bundle downloads** and backup deletes run in WorkManager and
+survive leaving the screen:
 
-Progress is visible in two places: the transfer's foreground notification while
-you are elsewhere in the system, and — new — a live badge and progress bar on the
-Home row itself whenever Home is on screen, for uploads as well as
-restores/downloads.
+| Worker | Job |
+|---|---|
+| `DicUploadWorker` | Back up a session to the cloud |
+| `DicRestoreWorker` | Pull a session back into the app |
+| `DicBundleDownloadWorker` | Write a `Session.zip` into a SAF document the user picked first (§4.14c) |
+| `BackupDeleteWorker` | Erase a cloud backup after the undo window |
+
+They are **no longer silent about failure**: a terminal upload failure surfaces on
+Home (message pill + a "why + retry" dialog on the badge), and a terminal restore
+failure surfaces on **both** Home and Settings, each carrying a human reason.
+Success is quiet by design — the badge/list simply updates.
+
+Progress is visible in three places: the transfer's foreground notification while
+you are elsewhere in the system; a live badge and progress bar on the Home row
+whenever Home is on screen, for downloads as well as uploads; and the **transfer
+banner** inside Settings (§4.0) and the result viewer (§8.5.8a), which is what
+carries exports and anything started from those screens.
 
 | # | Action | Expected |
 |---|---|---|
 | [ ] 10.1 | Finish an analysis with cloud backup on | Upload is queued; the Home badge moves Pending → Synced, with live progress on the row |
 | [ ] 10.2 | Queue an upload with no network | It retries and eventually succeeds once you reconnect |
 | [ ] 10.3 | Restore from Settings and leave the screen | It completes anyway; the analysis appears on Home / in the list |
-| [ ] 10.3a | Cause a terminal upload or restore failure | The reason is surfaced on return (Home snackbar/badge dialog, or Settings snackbar) — not swallowed |
+| [ ] 10.3a | Cause a terminal upload or restore failure | The reason is surfaced on return (Home message pill / badge dialog, or the same pill in Settings) — not swallowed |
 | [ ] 10.3b | Start a restore, then sit on Home while it runs | That row shows a progress bar and badge throughout — you are not left guessing |
+| [ ] 10.3c | Start a Download from Settings and leave Settings | It finishes anyway and reports the outcome; it is a worker, not an Activity-scoped job |
 | [ ] 10.4 | Background the app during a transfer | Its foreground notification tracks it; returning to Home picks the row progress back up |
 | [ ] 10.5 | Delete a backup and background the app inside the undo window | The delete still fires after the window |
 | [ ] 10.6 | Pull to refresh on Home with many cloud sessions | The listing pages through the backend until complete — sessions past the first page are not silently missing |
@@ -917,6 +1018,7 @@ Not part of the test pass. Recorded so nobody rediscovers them the hard way.
 | Settings → **Pending access requests** → Admin | Hidden unless the backend reports role `admin` |
 | Dev sign-in bypass (skips auth, disables cloud) | Debug build **and** the bypass flag **and** an emulator |
 | Splash → Home without auth | Debug build with no `INDIC_API_BASE_URL`. A *release* build with no base URL cannot get past sign-in at all |
+| `DebugViewerSeedActivity` | A 13th activity, declared only in `app/src/debug/AndroidManifest.xml` and exported so `adb` can drop straight into the result viewer for emulator screenshots. The "12 activities" count above is the **main** manifest |
 
 ### Blocked on external setup
 
@@ -936,6 +1038,12 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
 | `VsgStudyRunner.ERROR_ENGINE_FAILED` | `VsgStudyRunner` | Declared, never assigned or matched |
 | Frame-order *picker* mode | `FrameOrderHelper` | Only the initial state; the sort menu offers no way back once you sort |
 | `cloud_delete_backup_failed` string | `strings.xml` | Leftover from the pre-undo-window delete; the live path uses `delete_cloud_failed`. Its sibling `cloud_delete_backup_done` **is** used, by `SessionSelectionController.eraseCloudBackup` |
+| `delete_everywhere` string | `strings.xml` | Orphaned when the local+cloud delete became the two-way "Delete device" / "Delete cloud" choice (§3.13) |
+| `home_empty_restore` string | `strings.xml` | Orphaned when the empty state became **Start analysis** (§3.19) |
+| `download_analysis_save_title` / `_save_body` | `strings.xml` | Orphaned when Download started picking its SAF destination *before* enqueue — there is no confirm dialog left to title |
+| `delete_device_restore_action` string | `strings.xml` | Unused |
+| `viewer_details_home` ("Go to Home") | `strings.xml` | Orphaned when Home moved out of the ⓘ peek sheet into the viewer's top chrome (§8.4.7) |
+| `summary_counter_fmt` plurals | `strings.xml` | Orphaned when the summary counter became the flat "Summary GIF" (§8.2a.1) |
 
 ### Behavioural gaps worth knowing
 
@@ -951,8 +1059,8 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
   checks.
 - **Coach marks cannot be replayed or reset** — the flags are write-once with no
   UI to clear them.
-- **Home's empty-state "Restore" button just opens Settings**; there is no
-  dedicated restore screen.
+- **There is still no dedicated restore screen** — restoring is done from a Home
+  row or from Settings → Analyses data management.
 - **The advanced-parameters and sweep-settings headers look collapsible** (icon,
   title) but have no click listener. Only the lattice-samples panel really
   collapses.
@@ -961,18 +1069,26 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
 - **`DicUploadWorker` starts the Session limit screen from the background** on a
   quota rejection, which Android 10+ blocks — that path likely never fires.
 - **`READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested** when the in-sheet
-  Images tab opens (Home also asks for video). Files opens the system picker
-  (SAF), so Drive and DNG work without that grant.
+  Images tab needs them (Home also asks for video). The Files tab opens SAF
+  instead, so Drive and DNG work without that grant (§3a).
 - **The only notification channel is for transfers** — `TransferNotifications`
-  creates one channel and upload/restore workers post a foreground notification
-  on it. There are no *completion* notifications; terminal failures surface in-app
-  instead (§10).
+  creates one channel (`semper_transfers`) carrying three notifications: upload,
+  restore and download. There are no *completion* notifications; terminal failures
+  surface in-app instead (§10).
 - **No open-source licenses screen.** Privacy Policy and Terms of Service are
   linked from the About dialog and open the hosted pages in a browser; there is
   no in-app licence attribution list.
 - **Crash reporting is opt-in and off until accepted.** Crashlytics collection
   is disabled in the manifest and enabled only after the first-run prompt or the
   Settings toggle, so a user who never answers sends nothing.
+- **The same consent flag also gates product analytics.** `SemperAnalytics` fires
+  Firebase Analytics events for analysis started / completed / failed, the two
+  data exports and Send feedback — all buckets and enums, never images, results,
+  session ids or specimen names — and every one of them is dropped unless
+  `DicSettings.diagnosticsEnabled` is on. The **consent copy names only crash
+  reports**, which understates what the toggle controls; the
+  [privacy policy](../legal/PRIVACY_POLICY.md) §2.4 already describes both. Copy
+  fix tracked in [ops/TECH_DEBT.md](../ops/TECH_DEBT.md).
 - **An interrupted solve cannot be resumed** — it is a foreground coroutine, so
   process death loses the run.
 - **`AnalysisWizardSmokeTest`** opens the analysis wizard and asserts chrome

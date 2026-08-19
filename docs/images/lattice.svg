@@ -6,7 +6,7 @@
   <line x1="70" y1="240" x2="330" y2="240" stroke="#9aa4ae" stroke-width="1.5"/>
   <line x1="70" y1="240" x2="70" y2="70" stroke="#9aa4ae" stroke-width="1.5"/>
   <text x="200" y="264" text-anchor="middle" font-size="11" fill="#656d76">subset size →</text>
-  <text x="40" y="155" text-anchor="middle" font-size="11" fill="#656d76" transform="rotate(-90 40 155)">VSG size →</text>
+  <text x="40" y="155" text-anchor="middle" font-size="11" fill="#656d76" transform="rotate(-90 40 155)">strain window size →</text>
 
   <!-- nodes -->
   <g>
@@ -40,7 +40,7 @@
 
   <line x1="560" y1="96" x2="560" y2="222" stroke="#0288d1" stroke-width="1.5" stroke-dasharray="4 3"/>
   <circle cx="560" cy="140" r="3.5" fill="#0288d1"/>
-  <text x="404" y="232" font-size="10" fill="#656d76">drag to scrub — the readout gives (x, y) for every curve</text>
+  <text x="404" y="232" font-size="10" fill="#656d76">drag to scrub — a dot marks each curve; the readout gives x</text>
 
   <text x="24" y="286" font-size="11" fill="#656d76">Look for the VSG where the curves stop separating: below it you resolve the gradient, above it you smooth it away.</text>
 </svg>

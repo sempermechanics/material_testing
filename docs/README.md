@@ -40,6 +40,7 @@ docs/
   legal/     privacy policy and terms — the source the hosted pages are generated from
   ops/       running the project — CI, releases, environments, tech debt, readiness gate
   perf/      measured before/after reports backing performance changes
+  design/    UI wireframes kept as reference for a redesign in flight
 ```
 
 `docs/engine/` is mostly signposts: the engine lives in its own repository, and
