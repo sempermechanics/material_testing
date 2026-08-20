@@ -16,7 +16,7 @@ that site. If a heading moves, update the matching `url_faq_*` string.
 | Wizard step 2 | ROI smaller than subset | `roi_too_small` snackbar **Why?** | `url_faq_roi_too_small` | `#roi-too-small` |
 | Wizard sweep | Subset range above ROI | sweep plan chip | `url_faq_sweep_subset_range` | `#sweep-subset-range` |
 | Wizard sweep | Empty plan (no combinations) | sweep plan chip | `url_faq_sweep_empty_plan` | `#sweep-empty-plan` |
-| Wizard (run) | Engine failure dialog | `EngineFailure.reasonRes` + **Why?** | `url_faq_engine_features` / `_roi` / `_init` / `_convergence` / `_vsg` | `#engine-features` … `#engine-vsg` |
+| Wizard (run) | Engine failure dialog | `EngineFailure.reasonRes` + **Why?**; after dismiss, ⓘ beside `tvStaticResult` | `url_faq_engine_features` / `_roi` / `_init` / `_convergence` / `_vsg` | `#engine-features` … `#engine-vsg` |
 | Wizard import | Reference decode / load failed | `failed_load_reference` / `failed_decode_raw` snackbar **Why?** | `url_faq_import_reference` | `#import-reference` |
 | Wizard import | Deformed batch load failed | `error_loading_images` snackbar **Why?** | `url_faq_import_deformed` | `#import-deformed` |
 | Wizard video | Meta read failed | `video_read_failed` snackbar **Why?** | `url_faq_video_read` | `#video-read` |

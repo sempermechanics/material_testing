@@ -28,6 +28,7 @@ class BatchRunController(
     private val openResultViewer: () -> Unit,
     private val engineFailureMessage: (code: Int, frameIndex: Int, frameName: String?) -> String,
     private val showEngineFailureDialog: (code: Int, titleRes: Int, frameIndex: Int, frameName: String?) -> Unit,
+    private val clearEngineFailFaq: () -> Unit,
 ) {
 
     fun observe() {
@@ -60,6 +61,7 @@ class BatchRunController(
         activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         result.onFailure { e ->
+            clearEngineFailFaq()
             val detail = e.message ?: e::class.java.simpleName
             tvResult.text = activity.getString(R.string.analysis_unexpected_title)
             MaterialAlertDialogBuilder(activity)
@@ -79,12 +81,19 @@ class BatchRunController(
                 AnalysisNavHelper.openSessionLimit(activity)
             }
             outcome.engineErrorCode == AnalysisRunCodes.ERROR_LOW_CONVERGENCE &&
-                outcome.totalFrames > 0 -> onPartialRun(outcome)
-            outcome.engineErrorCode < 0 && outcome.totalFrames > 0 -> onPartialRun(outcome)
+                outcome.totalFrames > 0 -> {
+                clearEngineFailFaq()
+                onPartialRun(outcome)
+            }
+            outcome.engineErrorCode < 0 && outcome.totalFrames > 0 -> {
+                clearEngineFailFaq()
+                onPartialRun(outcome)
+            }
             outcome.engineErrorCode < 0 || outcome.firstFrameValidPoints <= 0 -> {
                 showNamedEngineFailure(outcome)
             }
             else -> {
+                clearEngineFailFaq()
                 tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
                 viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
                 viewModel.lastBatchDirPath = outcome.batchDirPath

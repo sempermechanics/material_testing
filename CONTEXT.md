@@ -150,8 +150,9 @@ and opens SAF). The reference picker opens full height and dims the grid for
 1 s behind a large centred hint ("Select the reference image"); deformed
 multi-select stays immediate. Wizard warnings (JPEG, low speckle, frame-size
 mismatch, ROI too small, empty/too-big sweep plan) and remaining actionable
-errors (engine failure, import / video, viewer batch/OOM/scale, lattice hollow
-nodes) link to FAQ anchors on the public site behind a leave-the-app confirm
+errors (engine failure dialog **Why?** plus a lasting ⓘ on the status line,
+import / video, viewer batch/OOM/scale, lattice hollow nodes) link to FAQ
+anchors on the public site behind a leave-the-app confirm
 ([docs/app/FAQ_LINKS.md](docs/app/FAQ_LINKS.md)). Frame-size copy names the
 mismatched files. `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when
 the gallery tab needs them. Summary GIFs bake `viewer_canvas` (night `#101518`)

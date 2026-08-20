@@ -35,6 +35,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
@@ -82,6 +83,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // UI Components
     private lateinit var btnDefineRoi: Button
     private lateinit var tvResult: TextView
+    private lateinit var btnEngineFailFaq: ImageButton
     private lateinit var tvInstruction: TextView
     private lateinit var tvRefName: TextView
     private lateinit var tvDefName: TextView
@@ -197,6 +199,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
         btnDefineRoi = findViewById(R.id.btnDefineRoi)
         tvResult = findViewById(R.id.tvStaticResult)
+        btnEngineFailFaq = findViewById(R.id.btnEngineFailFaq)
         clearRunStatus()
         frameSizeWarnRow = findViewById(R.id.frameSizeWarnRow)
         frameSizeWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
@@ -384,6 +387,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             showEngineFailureDialog = { code, titleRes, frameIndex, frameName ->
                 showEngineFailureDialog(code, titleRes, frameIndex, frameName)
             },
+            clearEngineFailFaq = { setEngineFailFaq(null) },
         ).observe()
 
         // Files (SAF) still reaches DNG/RAW and Drive, which MediaStore may not index.
@@ -935,6 +939,22 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun clearRunStatus() {
         if (isProcessing) return
         if (::tvResult.isInitialized) tvResult.text = ""
+        if (::btnEngineFailFaq.isInitialized) setEngineFailFaq(null)
+    }
+
+    /**
+     * ⓘ beside the run-status line after an engine-failure dialog — same FAQ
+     * hop as that dialog's **Why?**, still reachable once the alert is gone.
+     */
+    private fun setEngineFailFaq(@StringRes faqUrlRes: Int?) {
+        if (!::btnEngineFailFaq.isInitialized) return
+        if (faqUrlRes == null) {
+            btnEngineFailFaq.isVisible = false
+            btnEngineFailFaq.setOnClickListener(null)
+            return
+        }
+        btnEngineFailFaq.isVisible = true
+        btnEngineFailFaq.setOnClickListener { FaqRedirect.confirm(this, faqUrlRes) }
     }
 
     /** Region the recommendation samples: the ROI when set, else the frame. */
@@ -1422,11 +1442,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
         frameIndex: Int = -1,
         frameName: String? = null,
     ) {
+        val faqRes = EngineFailure.faqUrlRes(engineErrorCode)
+        setEngineFailFaq(faqRes)
         FaqRedirect.errorDialog(
             this,
             getString(titleRes),
             engineFailureMessage(engineErrorCode, frameIndex, frameName),
-            EngineFailure.faqUrlRes(engineErrorCode),
+            faqRes,
         )
     }
 

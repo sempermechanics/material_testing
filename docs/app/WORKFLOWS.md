@@ -600,7 +600,7 @@ extraction show determinate progress instead.
 | [ ] 5.5.1f | Read that Home row | "39 of 50 frames" and the reason, not a bare "39 frames" |
 | [ ] 5.5.1g | Open it and tap ⓘ | Settings used lists **Stopped early** and **Frames solved** |
 | [ ] 5.5.1h | Force-stop the app, reopen, look again | Both still say why — the reason is stored, not held in memory |
-| [ ] 5.5.1i | Run with a strain window the correlated area cannot support (0 points solved) | Engine-failure dialog naming VSG failure — not the generic "No data produced" copy — with **Why?** → VSG FAQ |
+| [ ] 5.5.1i | Run with a strain window the correlated area cannot support (0 points solved) | Engine-failure dialog naming VSG failure — not the generic "No data produced" copy — with **Why?** → VSG FAQ; after OK, ⓘ beside the error line opens the same FAQ confirm |
 | [ ] 5.5.1j | Trigger an OOM (huge ROI, step 1) | "Analysis stopped unexpectedly" dialog naming the error and what causes it |
 | [ ] 5.5.1k | Fail to decode a reference (corrupt / unsupported) | Snackbar with **Why?** → import-reference FAQ |
 | [ ] 5.5.1l | Fail to import deformed frames | Snackbar with **Why?** → import-deformed FAQ |

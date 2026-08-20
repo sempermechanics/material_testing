@@ -579,16 +579,41 @@
             android:layout_marginTop="12dp"
             android:visibility="gone" />
 
-        <TextView
-            android:id="@+id/tvStaticResult"
+        <!-- Status after Compute; ⓘ stays after an engine-failure dialog so FAQ
+             is still reachable once Why? is gone. -->
+        <LinearLayout
+            android:id="@+id/runStatusRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/result"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="@color/viewer_chrome_text"
-            android:textAlignment="center"
             android:layout_marginTop="12dp"
-            android:paddingBottom="20dp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="20dp">
+
+            <TextView
+                android:id="@+id/tvStaticResult"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/result"
+                android:textAlignment="center"
+                android:textColor="@color/viewer_chrome_text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btnEngineFailFaq"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/warn_faq_desc"
+                android:padding="4dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_info_min"
+                android:visibility="gone"
+                app:tint="@color/semantic_danger"
+                tools:visibility="visible" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>
