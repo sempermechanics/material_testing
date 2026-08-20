@@ -410,8 +410,10 @@ same image location and updates the value.
 
 **The summary comes first.** The viewer opens on a looping animation of the
 whole sequence in the current field — every frame, never longer than 10 seconds,
-about 300 ms a frame until the frame count forces it faster. While it builds you
-get a progress readout and a **Cancel**. **Next** enters the
+about 300 ms a frame until the frame count forces it faster. The GIF is framed
+on the same coloured region the live view rest-fits to (your ROI, or the
+accepted points), scaled to fill — not a letterboxed full photo. While it builds
+you get a progress readout and a **Cancel**. **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
 field. Field pills stay available while the GIF plays.
 

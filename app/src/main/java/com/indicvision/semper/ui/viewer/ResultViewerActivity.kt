@@ -780,25 +780,31 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     private fun updateHeatmapFitBounds(data: FloatArray?) {
         if (imgW <= 0 || imgH <= 0) return
-        val customRoi = roiW > 0 && roiH > 0 &&
-            (roiX > 0 || roiY > 0 || roiW < imgW || roiH < imgH)
-        when {
-            customRoi -> imgMain.setFitBounds(
-                roiX.toFloat(),
-                roiY.toFloat(),
-                (roiX + roiW).toFloat(),
-                (roiY + roiH).toFloat(),
-            )
-            data != null -> {
-                val box = DicResult.acceptedPointsBounds(data)
-                if (box != null) {
-                    imgMain.setFitBounds(box[0], box[1], box[2], box[3])
-                } else {
-                    imgMain.setFitBounds(0f, 0f, imgW.toFloat(), imgH.toFloat())
-                }
-            }
-            else -> imgMain.setFitBounds(0f, 0f, imgW.toFloat(), imgH.toFloat())
-        }
+        val box = HeatmapFit.resolve(
+            imgW,
+            imgH,
+            roiX,
+            roiY,
+            roiW,
+            roiH,
+            accepted = data?.let { DicResult.acceptedPointsBounds(it) },
+        )
+        imgMain.setFitBounds(box[0], box[1], box[2], box[3])
+    }
+
+    /**
+     * Same rest-fit box the summary GIF should fill. Custom ROI when set;
+     * otherwise null so [SummaryAnimation] discovers accepted points from the
+     * first readable frame.
+     */
+    internal fun summaryFitBounds(): FloatArray? {
+        if (!HeatmapFit.isCustomRoi(imgW, imgH, roiX, roiY, roiW, roiH)) return null
+        return floatArrayOf(
+            roiX.toFloat(),
+            roiY.toFloat(),
+            (roiX + roiW).toFloat(),
+            (roiY + roiH).toFloat(),
+        )
     }
 
     private fun showCustomScaleDialog() {
@@ -1162,7 +1168,7 @@ class ResultViewerActivity : AppCompatActivity() {
         synchronized(fieldMetricsCache) { fieldMetricsCache[key]?.let { return it } }
         val stats = DicResult.fieldStats(data, dataIndex)
         val needed = data.size / DicResult.STRIDE
-        var scratch = fieldMetricsScratch.get()
+        var scratch = fieldMetricsScratch.get() ?: FloatArray(0)
         if (scratch.size < needed) {
             scratch = FloatArray(needed)
             fieldMetricsScratch.set(scratch)

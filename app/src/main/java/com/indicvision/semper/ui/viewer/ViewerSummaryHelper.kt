@@ -65,6 +65,7 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
                 stepAt = { index -> host.sweepSteps?.getOrNull(index) ?: host.baseStep },
                 outputDir = File(host.cacheDir, "share").apply { mkdirs() },
                 backgroundColor = ContextCompat.getColor(host, R.color.viewer_canvas),
+                fitBounds = host.summaryFitBounds(),
             ),
         )
     }
