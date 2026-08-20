@@ -197,6 +197,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
         btnDefineRoi = findViewById(R.id.btnDefineRoi)
         tvResult = findViewById(R.id.tvStaticResult)
+        clearRunStatus()
         frameSizeWarnRow = findViewById(R.id.frameSizeWarnRow)
         frameSizeWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
             confirmOpenFaq(getString(R.string.url_faq_frame_size))
@@ -234,6 +235,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etStrainWindow = findViewById(R.id.etStrainWindow)
         btnCalculateFullField = findViewById(R.id.btnCalculateFullField)
         rgInterpolator = findViewById(R.id.rgInterpolator)
+        rgInterpolator.addOnButtonCheckedListener { _, _, isChecked ->
+            if (isChecked) clearRunStatus()
+        }
 
         // --- Parameter sliders: live value labels ---
         tvSubsetValue = findViewById(R.id.tvSubsetValue)
@@ -619,6 +623,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             onApplied = {
                 wizardSlots.refreshDefSlot()
                 validateFrameSizes()
+                clearRunStatus()
                 checkReady()
             },
             onFinished = ::finishImportOperation,
@@ -853,6 +858,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 wizardSlots.refreshRefSlot(refPreviewBmp)
                 wizardSlots.refreshDefSlot()
                 validateFrameSizes()
+                clearRunStatus()
                 checkReady()
                 requestSubsetRecommendation()
             },
@@ -893,16 +899,42 @@ class StaticAnalysisActivity : AppCompatActivity() {
         viewModel.frameSizeError = if (refW <= 0 || refH <= 0 || sizes.isEmpty()) {
             null
         } else {
-            val mismatched = viewModel.defFilePaths.count { path ->
+            val badNames = mutableListOf<String>()
+            viewModel.defFilePaths.forEachIndexed { index, path ->
                 val size = sizes[path]
-                size != null && size != (refW to refH)
+                if (size != null && size != (refW to refH)) {
+                    val name = viewModel.defOriginalNames.getOrNull(index)
+                        ?: java.io.File(path).name
+                    badNames.add(name)
+                }
             }
-            if (mismatched == 0) {
+            if (badNames.isEmpty()) {
                 null
             } else {
-                resources.getQuantityString(R.plurals.frames_size_mismatch_fmt, mismatched, mismatched, refW, refH)
+                val listed = formatMismatchNames(badNames)
+                resources.getQuantityString(
+                    R.plurals.frames_size_mismatch_fmt,
+                    badNames.size,
+                    refW,
+                    refH,
+                    listed,
+                )
             }
         }
+    }
+
+    /** First few mismatched filenames, then "and N more" when the list is long. */
+    private fun formatMismatchNames(names: List<String>): String {
+        val limit = 3
+        if (names.size <= limit) return names.joinToString(", ")
+        val head = names.take(limit).joinToString(", ")
+        return getString(R.string.frames_size_mismatch_and_more_fmt, head, names.size - limit)
+    }
+
+    /** Drop a previous run's ❌ / success line when the user changes inputs. */
+    private fun clearRunStatus() {
+        if (isProcessing) return
+        if (::tvResult.isInitialized) tvResult.text = ""
     }
 
     /** Region the recommendation samples: the ROI when set, else the frame. */
@@ -1237,8 +1269,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     sweepHelper.resetUserModified()
                     sweepHelper.seedSweepSuggestions()
                 }
+                clearRunStatus()
             },
             onPasteParams = { pasteCopiedParams() },
+            onParamsChanged = { clearRunStatus() },
         ).also { it.bind() }
     }
 
@@ -1251,6 +1285,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etStepSize.value = snapToSlider(etStepSize, params.step).toFloat()
         etStrainWindow.value = snapToSlider(etStrainWindow, params.window).toFloat()
         if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
+        clearRunStatus()
         // Bring the advanced-params card into view so the pasted values are visible.
         val card = findViewById<View>(R.id.advancedParamsCard)
         card.post { card.requestRectangleOnScreen(Rect(0, 0, card.width, card.height), false) }

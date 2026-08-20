@@ -90,6 +90,8 @@
     <color name="viewer_chrome_muted">@color/text_secondary</color>
 
     <color name="toast_crisp_bg">#E61A1A1A</color>
+    <!-- Near-opaque for instructional toasts (e.g. reference picker gate). -->
+    <color name="toast_crisp_prominent_bg">#F51A1A1A</color>
     <color name="toast_crisp_text">#FFFFFFFF</color>
 
     <!-- VsgPlotView / VsgLatticeView: shared by the result lattice, the wizard's

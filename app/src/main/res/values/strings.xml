@@ -489,9 +489,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="vsg_lattice_open_analysis">Open analysis</string>
     <string name="vsg_lattice_param_fmt">ss:%1$d · st:%2$d · sw:%3$d</string>
     <string name="vsg_lattice_param_labeled_fmt">subset size %1$d · step size %2$d · strain window %3$d</string>
-    <!-- y is already on the plot at the scrub point; params are already on the
-         chip: this readout carries only what neither of those already shows. -->
     <string name="vsg_lattice_scrub_x_fmt">x=%1$.1f</string>
+    <string name="vsg_lattice_scrub_xy_fmt">x=%1$.1f  y=%2$.4g</string>
+    <string name="vsg_lattice_scrub_x_multi_fmt">x=%1$.1f  %2$s</string>
     <string name="vsg_lattice_curves_all">All</string>
     <string name="vsg_lattice_curves_node">Node</string>
     <string name="vsg_lattice_view">View</string>
@@ -805,9 +805,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">First %1$d frames kept — raise Max frames in Settings</item>
     </plurals>
     <plurals name="frames_size_mismatch_fmt">
-        <item quantity="one">❌ 1 frame(s) are not 1 × 1 like the reference. Deformed frame must match the reference exactly — reload matching frame to continue.</item>
-        <item quantity="other">❌ %1$d frame(s) are not %2$d × %3$d like the reference. Deformed frames must match the reference exactly — reload matching frames to continue.</item>
+        <item quantity="one">The image resolution isn\'t matching to the reference (%1$d × %2$d): %3$s</item>
+        <item quantity="other">The image resolution isn\'t matching to the reference (%1$d × %2$d): %3$s</item>
     </plurals>
+    <string name="frames_size_mismatch_and_more_fmt">%1$s, and %2$d more</string>
     <plurals name="sweep_plan_grid_fmt">
         <item quantity="one">1 analyses · subset 1–1 px · window 1–1</item>
         <item quantity="other">%1$d analyses · subset %2$d–%3$d px · window %4$d–%5$d</item>

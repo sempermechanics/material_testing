@@ -124,11 +124,13 @@ Tap each dropzone and pick your images:
 
 <img src="images/new-analysis-source.png" width="300" alt="The New analysis sheet">
 
-The **New analysis** sheet opens on an **Images** tab — your device's gallery,
-three columns, inside the sheet, with videos badged. Tapping the **Files** tab
-hands you to the system file browser instead; that is still the only route to RAW
-and DNG. Picking deformed frames is multi-select: tap the tiles you want and
-confirm with **Use N**. Select-all lives in the three-dot menu.
+The **New analysis** sheet opens full height on an **Images** tab — your device's
+gallery, three columns, with videos badged so you can tell them apart. For about
+1 second the grid is dimmed behind a large centred hint so you read "Select
+the reference image" before tiles unlock. Tapping the **Files** tab hands you to the
+system file browser instead; that is still the only route to RAW and DNG. Picking
+deformed frames is multi-select: tap the tiles you want and confirm with
+**Use N**. Select-all lives in the three-dot menu.
 
 The sheet asks for media permission the first time the Images tab needs it:
 
@@ -355,8 +357,8 @@ the coach mark on first visit is what names the axes.
 - **Drag across the plot** — a guide follows your finger, a dot marks the curve
   and the value is printed beside it. The **slider** under the plot does the same
   thing and stays in sync with the drag, which is easier one-handed.
-- The readout reads `x=…` only. The y value is printed on the plot at the scrub
-  point, and the parameters are already on the chip above.
+- The readout under the plot shows `x=…  y=…` for one unmuted curve, or `x=…`
+  plus each `label=value` when **All** is showing several series.
 - **Pinch to zoom**, **two-finger drag** to pan, **double-tap** to reset. The
   zoom survives stepping to another node; changing component resets it, because
   Exx, Eyy and Exy differ in magnitude.
@@ -401,17 +403,19 @@ summary GIF and share field-animations still use a whole-sequence scale so the
 loop stays comparable.
 
 **Tap to probe.** There is no Inspect / X,Y / Max-Min row. A short tap on the
-heatmap — anywhere but the middle of the screen, which is reserved for showing
-and hiding chrome — places a crosshair and a plain-text reading at the nearest
-correlated point. Drag past the touch slop pans (or flings to the next frame when
-unzoomed); pinch still zooms. Tap the same point again, or the readout, to
-dismiss. Switching field or frame keeps the probe at the same image location and
-updates the value.
+heatmap — including the centre — places a crosshair and a plain-text reading at
+the nearest correlated point. The bars hide on an idle timer, not from a tap;
+a centre double-tap brings them back when they have faded. Drag past the touch
+slop pans (or flings to the next frame when unzoomed); pinch still zooms. Tap
+the readout chip to dismiss. Switching field or frame keeps the probe at the
+same image location and updates the value.
 
 **The summary comes first.** The viewer opens on a looping animation of the
 whole sequence in the current field — every frame, never longer than 10 seconds,
-about 300 ms a frame until the frame count forces it faster. While it builds you
-get a progress readout and a **Cancel**. **Next** enters the
+about 300 ms a frame until the frame count forces it faster. The GIF is framed
+on the same coloured region the live view rest-fits to (your ROI, or the
+accepted points), scaled to fill — not a letterboxed full photo. While it builds
+you get a progress readout and a **Cancel**. **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
 field. Field pills stay available while the GIF plays.
 

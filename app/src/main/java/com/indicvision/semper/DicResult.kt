@@ -141,6 +141,32 @@ object DicResult {
         return if (n == 0) null else floatArrayOf(maxV, minV, (sum / n).toFloat())
     }
 
+    /**
+     * Axis-aligned box of accepted points as `[minX, minY, maxX, maxY]`, or null
+     * when nothing is accepted. Used by the result viewer to rest-fit the heatmap.
+     */
+    fun acceptedPointsBounds(data: FloatArray): FloatArray? {
+        var minX = Float.POSITIVE_INFINITY
+        var minY = Float.POSITIVE_INFINITY
+        var maxX = Float.NEGATIVE_INFINITY
+        var maxY = Float.NEGATIVE_INFINITY
+        var n = 0
+        var i = 0
+        while (i < data.size) {
+            if (isAcceptedPoint(data[i + IDX_ZNSSD])) {
+                val x = data[i + IDX_X]
+                val y = data[i + IDX_Y]
+                if (x < minX) minX = x
+                if (y < minY) minY = y
+                if (x > maxX) maxX = x
+                if (y > maxY) maxY = y
+                n++
+            }
+            i += STRIDE
+        }
+        return if (n == 0) null else floatArrayOf(minX, minY, maxX, maxY)
+    }
+
     // ------------------------------------------------------------------
     // CSV export — one format shared by every writer (share sheet, cloud
     // upload). Coordinates are grid integers, displacements/ZNSSD fixed to a
