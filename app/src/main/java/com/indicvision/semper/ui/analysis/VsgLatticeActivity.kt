@@ -267,14 +267,17 @@ class VsgLatticeActivity : AppCompatActivity() {
     }
 
     /**
-     * Scrub readout: x only. y is already at the scrub point on the plot itself
-     * (the dot + value label VsgPlotView draws there), and params are already on
-     * [chipSelectedParams] -- showing either again here would be the same fact
-     * twice, ~2dp apart, at two different precisions.
+     * Scrub readout: x plus the unmuted series' y values (one series → `y=…`,
+     * several → each `label=value`).
      */
     private fun scrubReadout(x: Float, samples: List<VsgPlotView.Sample>): CharSequence {
         if (x.isNaN() || samples.isEmpty()) return ""
-        return getString(R.string.vsg_lattice_scrub_x_fmt, x)
+        return if (samples.size == 1) {
+            getString(R.string.vsg_lattice_scrub_xy_fmt, x, samples[0].value)
+        } else {
+            val ys = samples.joinToString("  ") { "${it.label}=${"%.4g".format(it.value)}" }
+            getString(R.string.vsg_lattice_scrub_x_multi_fmt, x, ys)
+        }
     }
 
     private fun maybeCoachTheGraph() {

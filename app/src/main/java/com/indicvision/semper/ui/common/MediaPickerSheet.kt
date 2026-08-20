@@ -42,15 +42,34 @@ class MediaPickerSheet private constructor(
     private val empty: View = root.findViewById(R.id.mediaEmpty)
     private val emptyText: TextView = root.findViewById(R.id.tvMediaEmpty)
     private val list: RecyclerView = root.findViewById(R.id.listMedia)
+    private val pickScrim: View = root.findViewById(R.id.mediaPickScrim)
     private val coach = CoachMarkController(activity)
     private val selected = linkedSetOf<Uri>()
     private val includeVideo = mode == MediaSourceChooser.Mode.HOME_REFERENCE
     private val multi = mode == MediaSourceChooser.Mode.DEFORMED
 
+    /** Reference modes wait [REF_HINT_MS] so the hint is readable first. */
+    private var selectionUnlocked = multi
+
     private val adapter = MediaGridAdapter(
         isSelected = { selected.contains(it) },
         onClick = { item -> onTile(item) },
     )
+
+    private val unlockSelection = Runnable {
+        selectionUnlocked = true
+        pickScrim.animate()
+            .alpha(0f)
+            .setDuration(180L)
+            .withEndAction {
+                pickScrim.isVisible = false
+                pickScrim.alpha = 1f
+            }
+            .start()
+    }
+
+    private var expandWaitBehavior: BottomSheetBehavior<View>? = null
+    private var expandWaitCallback: BottomSheetBehavior.BottomSheetCallback? = null
 
     init {
         title.setText(
@@ -72,17 +91,24 @@ class MediaPickerSheet private constructor(
         btnAllow.setOnClickListener { requestPermission() }
         btnUse.setOnClickListener { confirm() }
         sheet.setOnDismissListener {
+            list.removeCallbacks(unlockSelection)
+            clearExpandWait()
             coach.dismiss(markSeen = false)
             adapter.shutdown()
         }
         sheet.setContentView(root)
         root.layoutParams?.height = ViewGroup.LayoutParams.MATCH_PARENT
+        sheet.behavior.skipCollapsed = true
+        // Keep the first layout off-screen so wrap→match-parent remesaure is invisible.
+        sheet.behavior.peekHeight = 0
         sheet.setOnShowListener {
-            expand()
-            showToast()
-            root.post { maybeCoach() }
+            prepareFullHeightThenExpand {
+                // Gallery query + thumbnails after the slide so they cannot hitch settle.
+                reload()
+                beginReferenceHintGate()
+                maybeCoach()
+            }
         }
-        reload()
         sheet.show()
     }
 
@@ -90,14 +116,72 @@ class MediaPickerSheet private constructor(
         reload()
     }
 
-    private fun expand() {
+    /**
+     * Full-height sheet with one continuous expand. Remeasuring wrap→match while
+     * collapsed at a normal peek made the drawer grow taller, then slide — two
+     * motions. peekHeight=0 keeps that remesaure off-screen; only the expand shows.
+     */
+    private fun prepareFullHeightThenExpand(onReady: () -> Unit) {
         val bottom = sheet.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-            ?: return
-        bottom.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
-        BottomSheetBehavior.from(bottom).apply {
-            skipCollapsed = true
-            state = BottomSheetBehavior.STATE_EXPANDED
+            ?: run {
+                onReady()
+                return
+            }
+        val behavior = BottomSheetBehavior.from(bottom)
+        behavior.skipCollapsed = true
+        behavior.peekHeight = 0
+        if (bottom.layoutParams.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+            bottom.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
+            bottom.requestLayout()
         }
+        bottom.post {
+            if (behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+                behavior.state = BottomSheetBehavior.STATE_EXPANDED
+            }
+            whenExpanded(onReady)
+        }
+    }
+
+    /**
+     * Runs [action] once the sheet reaches [BottomSheetBehavior.STATE_EXPANDED].
+     * If it is already expanded (or the sheet view is missing), runs immediately.
+     */
+    private fun whenExpanded(action: () -> Unit) {
+        clearExpandWait()
+        val bottom = sheet.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+        val behavior = bottom?.let { BottomSheetBehavior.from(it) }
+        if (behavior == null || behavior.state == BottomSheetBehavior.STATE_EXPANDED) {
+            action()
+            return
+        }
+        var done = false
+        val finish = {
+            if (!done) {
+                done = true
+                clearExpandWait()
+                action()
+            }
+        }
+        val callback = object : BottomSheetBehavior.BottomSheetCallback() {
+            override fun onStateChanged(bottomSheet: View, newState: Int) {
+                if (newState == BottomSheetBehavior.STATE_EXPANDED) finish()
+            }
+
+            override fun onSlide(bottomSheet: View, slideOffset: Float) = Unit
+        }
+        expandWaitBehavior = behavior
+        expandWaitCallback = callback
+        behavior.addBottomSheetCallback(callback)
+    }
+
+    private fun clearExpandWait() {
+        val callback = expandWaitCallback
+        val behavior = expandWaitBehavior
+        if (callback != null && behavior != null) {
+            behavior.removeBottomSheetCallback(callback)
+        }
+        expandWaitCallback = null
+        expandWaitBehavior = null
     }
 
     private fun reload() {
@@ -129,7 +213,24 @@ class MediaPickerSheet private constructor(
         )
     }
 
+    private fun beginReferenceHintGate() {
+        if (multi) {
+            pickScrim.isVisible = false
+            selectionUnlocked = true
+            showToast(durationMs = null)
+            return
+        }
+        selectionUnlocked = false
+        pickScrim.animate().cancel()
+        pickScrim.alpha = 1f
+        pickScrim.isVisible = true
+        showToast(durationMs = REF_HINT_MS)
+        list.removeCallbacks(unlockSelection)
+        list.postDelayed(unlockSelection, REF_HINT_MS)
+    }
+
     private fun onTile(item: MediaStoreBrowser.Item) {
+        if (!selectionUnlocked) return
         if (!multi) {
             onPicked(listOf(item.uri))
             sheet.dismiss()
@@ -157,13 +258,28 @@ class MediaPickerSheet private constructor(
         sheet.dismiss()
     }
 
-    private fun showToast() {
-        val overlay = sheet.window?.decorView as? ViewGroup ?: return
+    private fun showToast(durationMs: Long?) {
         val msg = when (mode) {
             MediaSourceChooser.Mode.DEFORMED -> activity.getString(R.string.picker_select_deformed)
             else -> activity.getString(R.string.picker_select_reference_toast)
         }
-        CrispToast.show(activity, msg, overlayRoot = overlay, fromTop = true)
+        // Reference gate: centre the larger pill over the dimmed grid. Deformed
+        // tips stay a compact top toast on the sheet chrome.
+        if (durationMs != null) {
+            val overlay = pickScrim.parent as? ViewGroup
+            if (overlay != null) CrispToast.showProminent(activity, msg, overlay, durationMs)
+        } else {
+            val overlay = sheet.window?.decorView as? ViewGroup
+            if (overlay != null) {
+                CrispToast.show(
+                    activity,
+                    msg,
+                    overlayRoot = overlay,
+                    fromTop = true,
+                    durationMs = 2000L,
+                )
+            }
+        }
     }
 
     private fun maybeCoach() {
@@ -203,6 +319,8 @@ class MediaPickerSheet private constructor(
     }
 
     companion object {
+        private const val REF_HINT_MS = 1000L
+
         fun show(
             activity: AppCompatActivity,
             mode: MediaSourceChooser.Mode,
