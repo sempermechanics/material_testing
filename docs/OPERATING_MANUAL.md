@@ -124,11 +124,11 @@ Tap each dropzone and pick your images:
 
 <img src="images/new-analysis-source.png" width="300" alt="The New analysis sheet">
 
-The **New analysis** sheet opens on an **Images** tab — your device's gallery,
-three columns, with videos badged so you can tell them apart. For about 1.5
-seconds the grid is dimmed behind a top hint so you read "Select the reference
-image" before tiles unlock. Tapping the **Files** tab hands you to the system
-file browser instead; that is still the only route to RAW and DNG. Picking
+The **New analysis** sheet opens full height on an **Images** tab — your device's
+gallery, three columns, with videos badged so you can tell them apart. For about
+1 second the grid is dimmed behind a large centred hint so you read "Select
+the reference image" before tiles unlock. Tapping the **Files** tab hands you to the
+system file browser instead; that is still the only route to RAW and DNG. Picking
 deformed frames is multi-select: tap the tiles you want and confirm with
 **Use N**. Select-all lives in the three-dot menu.
 

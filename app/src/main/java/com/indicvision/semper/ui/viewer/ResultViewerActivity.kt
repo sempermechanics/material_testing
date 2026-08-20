@@ -1124,7 +1124,7 @@ class ResultViewerActivity : AppCompatActivity() {
         synchronized(fieldMetricsCache) { fieldMetricsCache[key]?.let { return it } }
         val stats = DicResult.fieldStats(data, dataIndex)
         val needed = data.size / DicResult.STRIDE
-        var scratch = fieldMetricsScratch.get()
+        var scratch = fieldMetricsScratch.get() ?: FloatArray(0)
         if (scratch.size < needed) {
             scratch = FloatArray(needed)
             fieldMetricsScratch.set(scratch)

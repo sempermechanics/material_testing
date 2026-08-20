@@ -145,8 +145,10 @@ media-picker grid seam #87; wizard Paste params row #88; wizard warning FAQs
 #91; engine failure reason #92.
 
 New analysis picks media in-sheet (Images gallery; **Files** dismisses the sheet
-and opens SAF). The reference picker dims the grid for 1.5 s behind a top hint
-before tiles unlock. Wizard warnings (JPEG, low speckle, frame-size mismatch,
+and opens SAF). The reference picker opens full height and dims the grid for
+1 s behind a large centred hint ("Select the reference image"); deformed
+multi-select stays immediate.
+Wizard warnings (JPEG, low speckle, frame-size mismatch,
 ROI too small, empty/too-big sweep plan) link to FAQ anchors on the public site
 behind a leave-the-app confirm. Frame-size copy names the mismatched files.
 `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when the gallery tab

@@ -256,7 +256,7 @@ same sheet the wizard's two dropzones open (§5.1), so test it once here.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 3a.1 | Tap **+** on Home | The **New analysis** sheet opens on the **Images** tab; for ~1.5 s the grid is dimmed behind a top hint ("Select the reference image"), then tiles unlock |
+| [ ] 3a.1 | Tap **+** on Home | The **New analysis** sheet opens **full height**; for ~1 s the grid is dimmed behind a large centred hint ("Select the reference image"), then tiles unlock |
 | [ ] 3a.1a | Tap a tile during the dim | Nothing is selected until the hint ends |
 | [ ] 3a.1b | Open the deformed-frames picker | Multi-select works immediately — no dim, no delay |
 | [ ] 3a.2 | First open, having never granted media access | An empty state with an **Allow access** button; granting fills the grid without reopening the sheet |

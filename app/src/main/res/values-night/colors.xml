@@ -39,6 +39,7 @@
     <color name="viewer_peek_accent">#FF7DD3FC</color>      <!-- soft sky on dark -->
 
     <color name="toast_crisp_bg">#F0FFFFFF</color>
+    <color name="toast_crisp_prominent_bg">#FFFFFFFF</color>
     <color name="toast_crisp_text">#152430</color>
 
     <!-- VsgPlotView / VsgLatticeView dark half: see values/colors.xml for why
