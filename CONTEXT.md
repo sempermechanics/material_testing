@@ -130,8 +130,8 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-08-20)
 
-`origin/main` includes PRs #85–#92 (wizard FAQ chips, engine 0-point VSG wording).
-Open PR #94 is the viewer probe / rest-fit follow-up. Refresh with
+`origin/main` includes PRs #85–#92 and viewer probe / rest-fit #94.
+Open follow-ups: lattice/wizard picker #95. Refresh with
 `gh pr list --state open` — anything named here will rot.
 
 **Merged since 2026-08-08:** lint extracts #59–#64 and #66; compile/quality #68;
@@ -142,7 +142,7 @@ picker #79; share caption / PDF thread #80; viewer Tufte restyle #81; FAB Files
 → SAF + splash #82; lattice viewer Tufte #83; workflows/docs recapture #84;
 launcher icon contrast #85; viewer field FAB + vertical colour rail #86;
 media-picker grid seam #87; wizard Paste params row #88; wizard warning FAQs
-#91; engine failure reason #92.
+#91; engine failure reason #92; viewer probe / rest-fit #94.
 
 New analysis picks media in-sheet (Images gallery; **Files** dismisses the sheet
 and opens SAF). The reference picker opens full height and dims the grid for
@@ -156,9 +156,13 @@ needs them. Summary GIFs bake `viewer_canvas` (night `#101518`) into the cache
 filename. Launcher adaptive background is day `#F4F9FC` / night `#101518`; night
 inverts the S on splash (`windowSplashScreenAnimatedIcon`).
 
-Viewer chrome is inset-aware glass (see open #94 for probe / rest-fit). Settings'
-Analyses rows carry three actions — **Download** (SAF destination first, then a
-worker), **Restore** (only when local frames are gone) and **Delete**. The sweep
+Viewer chrome is inset-aware glass: heatmap rest-fit contains the ROI or
+accepted points between the top bar and the scrub bar (colour scale overlays
+the right edge), field switcher as a top-left glass pill with the live field
+checked in its popup, auto-hiding on a timer, restored by a centre double-tap
+when faded. A short tap anywhere on the figure probes. Settings' Analyses rows
+carry three actions — **Download** (SAF destination first, then a worker),
+**Restore** (only when local frames are gone) and **Delete**. The sweep
 lattice's plot toggle is an **All / Node** pill defaulting to **All**; the scrub
 readout shows x and y.
 

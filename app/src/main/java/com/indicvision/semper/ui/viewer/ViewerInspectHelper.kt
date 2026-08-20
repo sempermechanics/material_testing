@@ -51,9 +51,9 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
             onScreenTap(x, y)
         }
         imgMain.onScrubListener = { delta -> host.stepFrame(delta) }
-        imgMain.onCenterTapListener = { host.toggleChrome() }
+        imgMain.onCenterDoubleTapShowChrome = { host.showChromeIfHidden() }
         imgMain.onChromeSwipeListener = { show ->
-            if (show) host.bumpChrome() else host.hideChrome()
+            if (show) host.bumpChrome()
         }
         tvProbeReadout.setOnClickListener { dismissProbe() }
     }

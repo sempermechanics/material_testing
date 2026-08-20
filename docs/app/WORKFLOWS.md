@@ -779,18 +779,18 @@ the Lattice for a sweep.
    │   │   the ⓘ peek sheet shows those instead, and the two are allowed to differ)
    │   ├── tap → custom min / max
    │   └── Auto scale (drops custom; returns to the frame's clamped bounds)
-   ├── edge chrome (auto-hides; pan / scrub / field tap brings it back)
+   ├── edge chrome (auto-hides on a timer; pan / scrub / field tap / probe brings it back)
    │   │   back · short title (field · frame) · ⓘ · Home · share
    │   ├── ⓘ peek sheet: specimen name, max/min (with coords) + mean +
    │   │                 settings used (+ stop reason, + line-cut on sweep)
-   │   ├── centre tap, or a vertical swipe at fit, toggles chrome
+   │   ├── centre double-tap while hidden shows chrome; swipe down may show it
    │   └── figure runs edge-to-edge under the status / nav bars
-   ├── field pills: U / V / Exx / Eyy / Exy
+   ├── field FAB (top-left pill) → popup of all five; live field checked
    ├── frame scrubbing: prev / next + "name (i / N)"
    │   └── type a frame number to jump straight there
    ├── tap-to-probe
-   │   ├── short tap → nearest point reading (location + value)
-   │   └── tap same point or readout to dismiss
+   │   ├── short tap anywhere on the figure → nearest point reading
+   │   └── tap readout chip to dismiss
    ├── Share (node icon)
    │   ├── Single Field (current field + frame)
    │   ├── All fields (5, zipped)
@@ -811,7 +811,10 @@ node. **Exit:** Home, or back to the Lattice.
 | # | Action | Expected |
 |---|---|---|
 | [ ] 8.1.1 | Open a result | The U field is shown as a jet heatmap over the reference |
-| [ ] 8.1.2 | Tap through U, V, Exx, Eyy, Exy | Heatmap and colour scale follow; edge title updates |
+| [ ] 8.1.2 | Tap the field FAB, then pick V / Exx / Eyy / Exy | Heatmap and colour scale follow; edge title updates; the live field stays checked in the popup |
+| [ ] 8.1.2a | Open the field popup | All five fields are listed; the one on screen is highlighted |
+| [ ] 8.1.2b | Check fit at rest | Heatmap (ROI or accepted points) is contained between the top bar and scrub bar; the colour scale may overlay the right edge and stays put while the figure pans |
+| [ ] 8.1.2c | Zoom, pan a region that was under the scale into the open area, then tap to probe | Probe readout shows a real point; tapping the scale itself still opens the custom-scale dialog, not a probe |
 | [ ] 8.1.3 | Check the scale units | `px` for U and V, `mε` for the strain fields |
 | [ ] 8.1.3b | Compare the scale labels with the ⓘ sheet's max/min | Scale labels read "≤ x" / "≥ y" and may be narrower — that's the display clamp, disclosed rather than hidden; the ⓘ sheet's numbers are the field's true extrema |
 | [ ] 8.1.4 | Pinch to zoom | Zooms smoothly up to about 10×; panning is clamped to the image |
@@ -847,6 +850,7 @@ node. **Exit:** Home, or back to the Lattice.
 | # | Action | Expected |
 |---|---|---|
 | [ ] 8.2a.1 | Open a result | It lands on the summary, which builds and then loops. The **counter** reads "Summary GIF"; the **edge title** carries "<field> · Summary" |
+| [ ] 8.2a.1b | Open a result with a sub-frame ROI (or a small accepted patch) | The summary GIF is framed on that coloured region — same rest-fit contain scale as the live viewer, not a letterboxed full photo |
 | [ ] 8.2a.1a | Watch it build | Determinate progress with a status ("Reading frames…", then "Rendering <field>…") and a **Cancel** button |
 | [ ] 8.2a.2 | Watch a short (≤33 frame) analysis | Each frame is visible for about 300 ms |
 | [ ] 8.2a.3 | Watch a 150-frame analysis | Every frame is there and the loop still finishes inside 10 s |
@@ -862,19 +866,20 @@ node. **Exit:** Home, or back to the Lattice.
 ### 8.3 Tap to probe
 
 No Inspect / X,Y / Max-Min tools. A short tap on the heatmap is the reading;
-drag and pinch keep pan and zoom. The **centre** of the screen is reserved for
-chrome, so probe away from it.
+drag and pinch keep pan and zoom. Chrome hides only after the idle timer;
+a centre double-tap brings the bars back when they have faded.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.3.1 | Short-tap the heatmap **outside the middle of the screen** | Plain-text readout shows the nearest correlated point: field value with units and `(x, y)` |
-| [ ] 8.3.1a | Tap dead centre (the middle ~third of the screen, both axes) | Chrome toggles instead — no probe is placed. This is the deliberate escape hatch for hidden chrome |
-| [ ] 8.3.1b | Swipe down, then up, while fit-to-screen | Chrome shows, then hides |
+| [ ] 8.3.1 | Short-tap the heatmap (including the centre) | Plain-text readout shows the nearest correlated point: field value with units and `(x, y)` |
+| [ ] 8.3.1a | Wait for chrome to fade, then centre double-tap | Bars come back; no zoom from that double-tap |
+| [ ] 8.3.1b | Centre double-tap while chrome is already visible | Zooms about 2× (same as off-centre double-tap) |
+| [ ] 8.3.1c | Swipe down while fit-to-screen | Chrome shows if it was hidden; swipe does not hide chrome |
 | [ ] 8.3.2 | Drag past the touch slop | The image pans (when zoomed) or a horizontal fling steps frames (when fit); no probe is placed mid-drag |
 | [ ] 8.3.3 | Tap outside the correlated area | Readout says "No data" rather than a wrong number |
 | [ ] 8.3.4 | Pinch while a probe is up | Zoom works; the crosshair stays glued to the image point |
 | [ ] 8.3.5 | Switch field or frame with a probe up | The value updates for the same image location (or "No data") |
-| [ ] 8.3.6 | Tap the same point again, or the readout | The probe dismisses |
+| [ ] 8.3.6 | Tap the readout chip | The probe dismisses |
 | [ ] 8.3.7 | Open ⓘ | Stats list max and min with coordinates, plus mean — no Max/Min toggle |
 | [ ] 8.3.8 | Rotate with a probe up | Frame, field and probe survive |
 

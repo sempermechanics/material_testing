@@ -305,6 +305,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // True sensor dims stay on the intent for math / probe / export; the
         // on-screen bitmap is decoded off-main at ImageView scale.
         imgMain.setTrueImageDimensions(imgW, imgH)
+        updateHeatmapFitBounds(data = null)
         if (refPath != null) {
             decodeReferenceForDisplay(refPath)
         }
@@ -367,9 +368,10 @@ class ResultViewerActivity : AppCompatActivity() {
             bumpChrome()
         }
 
-        // Field FAB: shows the current field, tap opens a glass-pill popup of the
-        // other four. The live field comes back from the ViewModel after a
-        // rotation, so re-derive the label or it disagrees with the heatmap.
+        // Field FAB: shows the current field, tap opens a glass-pill popup of all
+        // five with the live field checked. The live field comes back from the
+        // ViewModel after a rotation, so re-derive the label or it disagrees
+        // with the heatmap.
         btnFieldFab.text = ViewerFieldPills.BY_ID[ViewerFieldPills.idFor(currentDataIndex)]?.first ?: "U"
         btnFieldFab.setOnClickListener {
             bumpChrome()
@@ -398,11 +400,12 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     /**
-     * Measures the chrome bars once they've laid out and feeds their sizes to
-     * [imgMain] as content insets, so the heatmap's fit-to-screen view frames
-     * itself between the bars instead of running underneath them. The inset
-     * values only change on a real layout event (initial layout, rotation) —
-     * [fadeChrome] toggles VISIBLE/INVISIBLE, never GONE, so a bar keeps its
+     * Measures the top bar and scrub bar once they've laid out and feeds those
+     * sizes to [imgMain] as content insets, so the heatmap's fit-to-screen view
+     * fills the space between them (full width). The colour scale is a sibling
+     * overlay on the right — it may cover the image; it is not a reserved inset.
+     * Inset values only change on a real layout event (initial layout, rotation)
+     * — [fadeChrome] toggles VISIBLE/INVISIBLE, never GONE, so a bar keeps its
      * laid-out size while faded and the safe area stays stable through the
      * auto-hide animation.
      */
@@ -412,16 +415,15 @@ class ResultViewerActivity : AppCompatActivity() {
                 override fun onGlobalLayout() {
                     val top = chromeTop.height
                     val bottom = layoutScrubber.height
-                    val right = layoutColorScale.width
                     if (top > 0 && bottom > 0) {
-                        imgMain.setContentInsets(top = top, bottom = bottom, right = right)
+                        imgMain.setContentInsets(top = top, bottom = bottom)
                     }
                 }
             },
         )
     }
 
-    /** Glass-pill popup listing the fields other than the one currently shown. */
+    /** Glass-pill popup listing every field; the live field is checked. */
     private fun showFieldPopup(anchor: View) {
         val popupView = layoutInflater.inflate(R.layout.popup_field_options, null)
         val window = PopupWindow(
@@ -434,12 +436,14 @@ class ResultViewerActivity : AppCompatActivity() {
         ViewerFieldPills.BY_ID.forEach { (id, pair) ->
             val (label, index) = pair
             val button = popupView.findViewById<MaterialButton>(id)
-            if (index == currentDataIndex) {
-                button.visibility = View.GONE
-                return@forEach
-            }
             button.text = label
+            button.isCheckable = true
+            button.isChecked = index == currentDataIndex
             button.setOnClickListener {
+                if (index == currentDataIndex) {
+                    window.dismiss()
+                    return@setOnClickListener
+                }
                 currentTypeString = label
                 currentDataIndex = index
                 btnFieldFab.text = label
@@ -479,8 +483,14 @@ class ResultViewerActivity : AppCompatActivity() {
         fadeChrome(visible = false)
     }
 
-    internal fun toggleChrome() {
-        if (chromeVisible) hideChrome() else bumpChrome()
+    /**
+     * Centre double-tap while chrome is hidden: show the bars. Returns true when
+     * consumed so zoom does not also run.
+     */
+    internal fun showChromeIfHidden(): Boolean {
+        if (chromeVisible) return false
+        bumpChrome()
+        return true
     }
 
     private fun fadeChrome(visible: Boolean) {
@@ -750,6 +760,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // probe nearest-point taps, and findNearestDataPoint builds it lazily
         // for the new frame. Scrubbing large frames no longer pays for an unused index.
         inspect.clearSpatialIndex()
+        updateHeatmapFitBounds(data)
         val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
         if (!showingSummary) {
             tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
@@ -761,6 +772,39 @@ class ResultViewerActivity : AppCompatActivity() {
         if (inspect.lastClosestIdx != -1) {
             inspect.refreshCrosshairs()
         }
+    }
+
+    /**
+     * Rest-fit the coloured region: custom ROI if set, else accepted-point
+     * bounds for this frame, else the full specimen.
+     */
+    private fun updateHeatmapFitBounds(data: FloatArray?) {
+        if (imgW <= 0 || imgH <= 0) return
+        val box = HeatmapFit.resolve(
+            imgW,
+            imgH,
+            roiX,
+            roiY,
+            roiW,
+            roiH,
+            accepted = data?.let { DicResult.acceptedPointsBounds(it) },
+        )
+        imgMain.setFitBounds(box[0], box[1], box[2], box[3])
+    }
+
+    /**
+     * Same rest-fit box the summary GIF should fill. Custom ROI when set;
+     * otherwise null so [SummaryAnimation] discovers accepted points from the
+     * first readable frame.
+     */
+    internal fun summaryFitBounds(): FloatArray? {
+        if (!HeatmapFit.isCustomRoi(imgW, imgH, roiX, roiY, roiW, roiH)) return null
+        return floatArrayOf(
+            roiX.toFloat(),
+            roiY.toFloat(),
+            (roiX + roiW).toFloat(),
+            (roiY + roiH).toFloat(),
+        )
     }
 
     private fun showCustomScaleDialog() {
@@ -1017,8 +1061,8 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun wireSummaryGestures() {
         val gif = findViewById<TouchImageView>(R.id.imgSummary)
         gif.onScrubListener = { stepFrame(it) }
-        gif.onCenterTapListener = { toggleChrome() }
-        gif.onChromeSwipeListener = { show -> if (show) bumpChrome() else hideChrome() }
+        gif.onCenterDoubleTapShowChrome = { showChromeIfHidden() }
+        gif.onChromeSwipeListener = { show -> if (show) bumpChrome() }
         gif.onTapListener = { _, _ -> bumpChrome() }
     }
 
