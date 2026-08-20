@@ -130,8 +130,9 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-08-20)
 
-`origin/main` is `9765bcb` (Dependabot monthly; PRs #85–#88). Refresh with
-`gh pr list --state open` — anything named here will rot.
+`origin/main` is `8b40245` (PR #92). Push-to-main CI after that merge failed:
+hashed lock compiled on Python 3.13/Windows (missing `uvloop`), and debug
+emulator ran `HotPathMicroBenchmark`. Refresh with `gh pr list --state open`.
 
 **Merged since 2026-08-08:** lint extracts #59–#64 and #66; compile/quality #68;
 wizard slots/coach #69; `DicBatchRunner` + `DicFieldIo` #70; hashed lock /
@@ -140,7 +141,8 @@ polish #77; device-bound accounts + share logos #78; viewer chrome + media
 picker #79; share caption / PDF thread #80; viewer Tufte restyle #81; FAB Files
 → SAF + splash #82; lattice viewer Tufte #83; workflows/docs recapture #84;
 launcher icon contrast #85; viewer field FAB + vertical colour rail #86;
-media-picker grid seam #87; wizard Paste params row #88.
+media-picker grid seam #87; wizard Paste params row #88; wizard FAQ chips #91;
+VSG zero-point wording #92.
 
 New analysis picks media in-sheet (Images gallery; **Files** dismisses the sheet
 and opens SAF). Wizard warnings (JPEG, low speckle, frame-size mismatch, ROI
