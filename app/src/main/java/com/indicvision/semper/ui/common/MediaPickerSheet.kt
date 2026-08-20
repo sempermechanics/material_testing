@@ -42,15 +42,31 @@ class MediaPickerSheet private constructor(
     private val empty: View = root.findViewById(R.id.mediaEmpty)
     private val emptyText: TextView = root.findViewById(R.id.tvMediaEmpty)
     private val list: RecyclerView = root.findViewById(R.id.listMedia)
+    private val pickScrim: View = root.findViewById(R.id.mediaPickScrim)
     private val coach = CoachMarkController(activity)
     private val selected = linkedSetOf<Uri>()
     private val includeVideo = mode == MediaSourceChooser.Mode.HOME_REFERENCE
     private val multi = mode == MediaSourceChooser.Mode.DEFORMED
 
+    /** Reference modes wait [REF_HINT_MS] so the top hint is readable first. */
+    private var selectionUnlocked = multi
+
     private val adapter = MediaGridAdapter(
         isSelected = { selected.contains(it) },
         onClick = { item -> onTile(item) },
     )
+
+    private val unlockSelection = Runnable {
+        selectionUnlocked = true
+        pickScrim.animate()
+            .alpha(0f)
+            .setDuration(180L)
+            .withEndAction {
+                pickScrim.isVisible = false
+                pickScrim.alpha = 1f
+            }
+            .start()
+    }
 
     init {
         title.setText(
@@ -72,6 +88,7 @@ class MediaPickerSheet private constructor(
         btnAllow.setOnClickListener { requestPermission() }
         btnUse.setOnClickListener { confirm() }
         sheet.setOnDismissListener {
+            list.removeCallbacks(unlockSelection)
             coach.dismiss(markSeen = false)
             adapter.shutdown()
         }
@@ -79,7 +96,7 @@ class MediaPickerSheet private constructor(
         root.layoutParams?.height = ViewGroup.LayoutParams.MATCH_PARENT
         sheet.setOnShowListener {
             expand()
-            showToast()
+            beginReferenceHintGate()
             root.post { maybeCoach() }
         }
         reload()
@@ -129,7 +146,24 @@ class MediaPickerSheet private constructor(
         )
     }
 
+    private fun beginReferenceHintGate() {
+        if (multi) {
+            pickScrim.isVisible = false
+            selectionUnlocked = true
+            showToast(durationMs = null)
+            return
+        }
+        selectionUnlocked = false
+        pickScrim.animate().cancel()
+        pickScrim.alpha = 1f
+        pickScrim.isVisible = true
+        showToast(durationMs = REF_HINT_MS)
+        list.removeCallbacks(unlockSelection)
+        list.postDelayed(unlockSelection, REF_HINT_MS)
+    }
+
     private fun onTile(item: MediaStoreBrowser.Item) {
+        if (!selectionUnlocked) return
         if (!multi) {
             onPicked(listOf(item.uri))
             sheet.dismiss()
@@ -157,13 +191,19 @@ class MediaPickerSheet private constructor(
         sheet.dismiss()
     }
 
-    private fun showToast() {
+    private fun showToast(durationMs: Long?) {
         val overlay = sheet.window?.decorView as? ViewGroup ?: return
         val msg = when (mode) {
             MediaSourceChooser.Mode.DEFORMED -> activity.getString(R.string.picker_select_deformed)
             else -> activity.getString(R.string.picker_select_reference_toast)
         }
-        CrispToast.show(activity, msg, overlayRoot = overlay, fromTop = true)
+        CrispToast.show(
+            activity,
+            msg,
+            overlayRoot = overlay,
+            fromTop = true,
+            durationMs = durationMs ?: 2000L,
+        )
     }
 
     private fun maybeCoach() {
@@ -203,6 +243,8 @@ class MediaPickerSheet private constructor(
     }
 
     companion object {
+        private const val REF_HINT_MS = 1500L
+
         fun show(
             activity: AppCompatActivity,
             mode: MediaSourceChooser.Mode,

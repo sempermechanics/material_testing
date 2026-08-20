@@ -27,6 +27,7 @@ class AnalysisSettingsSheetHelper(
     private val onSubsetRecommendationRefresh: () -> Unit,
     private val onAdvancedReset: () -> Unit,
     private val onPasteParams: () -> Unit,
+    private val onParamsChanged: () -> Unit = {},
 ) {
     fun bind() {
         val updateLabels = {
@@ -36,9 +37,12 @@ class AnalysisSettingsSheetHelper(
         }
         updateLabels()
 
-        bindParamField(subsetValue, subset) { onSubsetUserModified() }
-        bindParamField(stepValue, step, null)
-        bindParamField(strainValue, strain, null)
+        bindParamField(subsetValue, subset) {
+            onSubsetUserModified()
+            onParamsChanged()
+        }
+        bindParamField(stepValue, step) { onParamsChanged() }
+        bindParamField(strainValue, strain) { onParamsChanged() }
 
         root.findViewById<View>(R.id.btnAdvancedReset).setOnClickListener { onAdvancedReset() }
         val pasteChip = root.findViewById<View>(R.id.btnPasteParams)
@@ -55,11 +59,18 @@ class AnalysisSettingsSheetHelper(
             if (fromUser) {
                 onSubsetUserModified()
                 onSubsetRecommendationRefresh()
+                onParamsChanged()
             }
             updateLabels()
         }
-        step.addOnChangeListener { _, _, _ -> updateLabels() }
-        strain.addOnChangeListener { _, _, _ -> updateLabels() }
+        step.addOnChangeListener { _, _, fromUser ->
+            if (fromUser) onParamsChanged()
+            updateLabels()
+        }
+        strain.addOnChangeListener { _, _, fromUser ->
+            if (fromUser) onParamsChanged()
+            updateLabels()
+        }
     }
 
     /** Show Paste only when the sweep clipboard has values. */

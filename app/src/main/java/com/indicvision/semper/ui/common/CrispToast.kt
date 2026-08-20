@@ -21,6 +21,33 @@ object CrispToast {
         overlayRoot: ViewGroup? = null,
         fromTop: Boolean = false,
     ) {
+        showInternal(
+            context,
+            message,
+            overlayRoot,
+            fromTop,
+            if (long) LONG_MS else SHORT_MS,
+        )
+    }
+
+    /** Same pill with an explicit hold time (e.g. the 1500 ms reference hint). */
+    fun show(
+        context: Context,
+        message: CharSequence,
+        overlayRoot: ViewGroup?,
+        fromTop: Boolean,
+        durationMs: Long,
+    ) {
+        showInternal(context, message, overlayRoot, fromTop, durationMs)
+    }
+
+    private fun showInternal(
+        context: Context,
+        message: CharSequence,
+        overlayRoot: ViewGroup?,
+        fromTop: Boolean,
+        durationMs: Long,
+    ) {
         val activity = context as? Activity
         if (activity == null || activity.isFinishing) return
         val root = overlayRoot ?: activity.findViewById(android.R.id.content) ?: return
@@ -39,11 +66,10 @@ object CrispToast {
             if (fromTop) setMargins(m, edge, m, m) else setMargins(m, m, m, edge)
         }
         root.addView(pill, lp)
-        val duration = if (long) LONG_MS else SHORT_MS
         pill.postDelayed({
             val parent = pill.parent as? ViewGroup
             parent?.removeView(pill)
-        }, duration)
+        }, durationMs)
     }
 
     private const val TAG = "semper_crisp_toast"

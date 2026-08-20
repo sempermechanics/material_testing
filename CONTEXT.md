@@ -130,7 +130,8 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-08-20)
 
-`origin/main` is `9765bcb` (Dependabot monthly; PRs #85–#88). Refresh with
+`origin/main` includes PRs #85–#92 (wizard FAQ chips, engine 0-point VSG wording).
+Open PR #94 is the viewer probe / rest-fit follow-up. Refresh with
 `gh pr list --state open` — anything named here will rot.
 
 **Merged since 2026-08-08:** lint extracts #59–#64 and #66; compile/quality #68;
@@ -140,23 +141,24 @@ polish #77; device-bound accounts + share logos #78; viewer chrome + media
 picker #79; share caption / PDF thread #80; viewer Tufte restyle #81; FAB Files
 → SAF + splash #82; lattice viewer Tufte #83; workflows/docs recapture #84;
 launcher icon contrast #85; viewer field FAB + vertical colour rail #86;
-media-picker grid seam #87; wizard Paste params row #88.
+media-picker grid seam #87; wizard Paste params row #88; wizard warning FAQs
+#91; engine failure reason #92.
 
 New analysis picks media in-sheet (Images gallery; **Files** dismisses the sheet
-and opens SAF). Wizard warnings (JPEG, low speckle, frame-size mismatch, ROI
-too small, empty/too-big sweep plan) link to FAQ anchors on the public site
-behind a leave-the-app confirm. `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are
-requested when the gallery tab needs them. Summary GIFs bake `viewer_canvas`
-(night `#101518`) into the cache filename. Launcher adaptive background is
-day `#F4F9FC` / night `#101518`; night inverts the S on splash
-(`windowSplashScreenAnimatedIcon`).
+and opens SAF). The reference picker dims the grid for 1.5 s behind a top hint
+before tiles unlock. Wizard warnings (JPEG, low speckle, frame-size mismatch,
+ROI too small, empty/too-big sweep plan) link to FAQ anchors on the public site
+behind a leave-the-app confirm. Frame-size copy names the mismatched files.
+`READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when the gallery tab
+needs them. Summary GIFs bake `viewer_canvas` (night `#101518`) into the cache
+filename. Launcher adaptive background is day `#F4F9FC` / night `#101518`; night
+inverts the S on splash (`windowSplashScreenAnimatedIcon`).
 
-Viewer chrome is inset-aware glass: heatmap fit between the top bar and the
-scrub bar, field switcher as a top-left glass pill, colour scale as a right
-rail, auto-hiding, toggled by a centre tap or a vertical swipe. Settings'
+Viewer chrome is inset-aware glass (see open #94 for probe / rest-fit). Settings'
 Analyses rows carry three actions — **Download** (SAF destination first, then a
 worker), **Restore** (only when local frames are gone) and **Delete**. The sweep
-lattice's plot toggle is an **All / Node** pill defaulting to **All**.
+lattice's plot toggle is an **All / Node** pill defaulting to **All**; the scrub
+readout shows x and y.
 
 Docs for all of the above: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md).
 

@@ -256,7 +256,9 @@ same sheet the wizard's two dropzones open (§5.1), so test it once here.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 3a.1 | Tap **+** on Home | The **New analysis** sheet opens on the **Images** tab, with a hint toast at the top |
+| [ ] 3a.1 | Tap **+** on Home | The **New analysis** sheet opens on the **Images** tab; for ~1.5 s the grid is dimmed behind a top hint ("Select the reference image"), then tiles unlock |
+| [ ] 3a.1a | Tap a tile during the dim | Nothing is selected until the hint ends |
+| [ ] 3a.1b | Open the deformed-frames picker | Multi-select works immediately — no dim, no delay |
 | [ ] 3a.2 | First open, having never granted media access | An empty state with an **Allow access** button; granting fills the grid without reopening the sheet |
 | [ ] 3a.3 | Look at the grid | Three columns of device media; videos carry a badge so they are distinguishable from stills |
 | [ ] 3a.4 | Pick a still as the reference | The sheet closes and step 1 shows it |
@@ -448,7 +450,7 @@ Lattice, Session limit, or back to Home.
 | [ ] 5.1.5 | Pick more frames than *Max frames* | The first N are kept, with a "capped" toast |
 | [ ] 5.1.6 | Load a reference only | **Next** is disabled with "add at least one deformed frame to continue" |
 | [ ] 5.1.7 | Load deformed frames only | **Next** is disabled with the matching reference message |
-| [ ] 5.1.8 | Include one frame of a different pixel size | **Compute** stays disabled. On step 2 a warning chip names the mismatch; its info icon asks first whether to leave the app, then opens the frame-size FAQ |
+| [ ] 5.1.8 | Include one frame of a different pixel size | **Compute** stays disabled. On step 2 a warning chip says the image resolution isn't matching the reference (W×H) and lists the mismatched filename(s); its info icon asks first whether to leave the app, then opens the frame-size FAQ |
 | [ ] 5.1.9 | Load JPEGs | A non-blocking accuracy warning chip appears; its info icon asks first whether to leave the app, then opens the JPEG FAQ |
 | [ ] 5.1.10 | Load a poorly speckled reference | A low-texture warning names a suggested subset size; its info icon opens the speckle FAQ behind the same leave-the-app confirm |
 | [ ] 5.1.11 | Open the sort menu → **Name A–Z** | Thumbnails reorder; the badge numbers renumber 1…N |
@@ -511,6 +513,7 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | [ ] 5.2.14 | Tap each ⓘ | Subset, step and strain window each explain themselves |
 | [ ] 5.2.15 | Switch the interpolator to **Keys 6×6** | Selection sticks; the run uses it |
 | [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, strain window to 15, interpolator to Bicubic |
+| [ ] 5.2.16a | After a failed run leaves an ❌ line on step 2, change subset / paste params / replace frames | The run-status line clears; the frame-size chip (if any) only shows when sizes still mismatch |
 | [ ] 5.2.17 | Load a well-speckled reference and watch the subset | It is pre-seeded from the SSSIG recommendation — until you touch it |
 | [ ] 5.2.18 | Draw an ROI smaller than the subset and tap **Compute** | "ROI too small" snackbar with a **Why?** action; that asks first whether to leave the app, then opens the ROI FAQ. The run does not start |
 | [ ] 5.2.19 | Edit a parameter field and tap **Compute** without pressing Done | The typed value is committed and used |
@@ -693,8 +696,7 @@ aiming at a small target.
    │   ├── All ↔ Node — one pill         (**All** is the default)
    │   ├── plot: pinch-zoom, two-finger pan, double-tap to reset
    │   ├── scrub slider under the plot   (two-way synced with the drag)
-   │   └── readout: "x=…"                (y is on the plot at the scrub point;
-   │                                       params are on the chip above)
+   │   └── readout: "x=…  y=…" (Node) or "x=…  label=…" (All curves)
    └── Save graph · View                 (pinned bottom bar)
 ```
 
@@ -738,7 +740,7 @@ aiming at a small target.
 | [ ] 7.2.10 | Drag one finger across the plot | A vertical guide follows it; a dot marks the selected curve and its value is drawn beside it |
 | [ ] 7.2.11 | Watch the slider while dragging | It tracks the finger |
 | [ ] 7.2.12 | Drag the slider instead | The guide, dot and readout follow it — the sync works both ways |
-| [ ] 7.2.13 | Read the readout | "x=…" only — y is already drawn on the plot at the scrub point (§7.2.10), and subset/step/strain are already on the parameter chip (§7.1) |
+| [ ] 7.2.13 | Read the readout | "x=…  y=…" for one unmuted series; when **All** shows several curves, "x=…" plus each `label=value` |
 | [ ] 7.2.14 | Step to another node with the plot scrubbed | The readout clears and the slider returns to 0 |
 
 ### 7.3 Copy, save and open

@@ -125,10 +125,12 @@ Tap each dropzone and pick your images:
 <img src="images/new-analysis-source.png" width="300" alt="The New analysis sheet">
 
 The **New analysis** sheet opens on an **Images** tab — your device's gallery,
-three columns, inside the sheet, with videos badged. Tapping the **Files** tab
-hands you to the system file browser instead; that is still the only route to RAW
-and DNG. Picking deformed frames is multi-select: tap the tiles you want and
-confirm with **Use N**. Select-all lives in the three-dot menu.
+three columns, with videos badged so you can tell them apart. For about 1.5
+seconds the grid is dimmed behind a top hint so you read "Select the reference
+image" before tiles unlock. Tapping the **Files** tab hands you to the system
+file browser instead; that is still the only route to RAW and DNG. Picking
+deformed frames is multi-select: tap the tiles you want and confirm with
+**Use N**. Select-all lives in the three-dot menu.
 
 The sheet asks for media permission the first time the Images tab needs it:
 
@@ -355,8 +357,8 @@ the coach mark on first visit is what names the axes.
 - **Drag across the plot** — a guide follows your finger, a dot marks the curve
   and the value is printed beside it. The **slider** under the plot does the same
   thing and stays in sync with the drag, which is easier one-handed.
-- The readout reads `x=…` only. The y value is printed on the plot at the scrub
-  point, and the parameters are already on the chip above.
+- The readout under the plot shows `x=…  y=…` for one unmuted curve, or `x=…`
+  plus each `label=value` when **All** is showing several series.
 - **Pinch to zoom**, **two-finger drag** to pan, **double-tap** to reset. The
   zoom survives stepping to another node; changing component resets it, because
   Exx, Eyy and Exy differ in magnitude.

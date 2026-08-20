@@ -238,8 +238,7 @@
                 android:valueFrom="0"
                 android:valueTo="1" />
 
-            <!-- x only: y is already at the scrub point on the plot itself, and
-                 params are already on chipSelectedParams above. -->
+            <!-- Scrub readout: x and y (or labelled y values when All curves show). -->
             <TextView
                 android:id="@+id/tvStrainPlotReadout"
                 android:layout_width="match_parent"
@@ -249,7 +248,7 @@
                 android:minLines="1"
                 android:textColor="@color/viewer_chrome_muted"
                 android:textSize="12sp"
-                tools:text="x=24.0" />
+                tools:text="x=24.0  y=1.2e-4" />
         </LinearLayout>
     </LinearLayout>
     </androidx.core.widget.NestedScrollView>
