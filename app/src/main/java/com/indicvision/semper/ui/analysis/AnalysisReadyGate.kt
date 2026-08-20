@@ -2,9 +2,11 @@
 
 package com.indicvision.semper.ui.analysis
 
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
 import com.indicvision.semper.R
 
 /**
@@ -19,7 +21,7 @@ object AnalysisReadyGate {
         isProcessing: Boolean,
         btnNext: Button,
         tvNextReason: TextView,
-        tvResult: TextView,
+        frameSizeWarnRow: View,
         btnCalculateFullField: Button,
         btnDefineRoi: Button,
         btnBack: Button,
@@ -37,7 +39,12 @@ object AnalysisReadyGate {
         }
 
         val sizeError = viewModel.frameSizeError
-        if (sizeError != null) tvResult.text = sizeError
+        if (sizeError != null) {
+            frameSizeWarnRow.findViewById<TextView>(R.id.tvWarnText).text = sizeError
+            frameSizeWarnRow.isVisible = true
+        } else {
+            frameSizeWarnRow.isVisible = false
+        }
 
         val computeEnabled = ready &&
             viewModel.settingsReviewed &&

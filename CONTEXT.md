@@ -128,9 +128,9 @@ Kover `minBound` floor is 15. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-08-18)
+## Current state (2026-08-20)
 
-`origin/main` is `d9acee5` (PR #83). **No open PRs.** Refresh with
+`origin/main` is `9765bcb` (Dependabot monthly; PRs #85–#88). Refresh with
 `gh pr list --state open` — anything named here will rot.
 
 **Merged since 2026-08-08:** lint extracts #59–#64 and #66; compile/quality #68;
@@ -138,20 +138,25 @@ wizard slots/coach #69; `DicBatchRunner` + `DicFieldIo` #70; hashed lock /
 Gradle 9.7 / docs #71; faster Release CI #74; API-34 emulators #75; brand/UX
 polish #77; device-bound accounts + share logos #78; viewer chrome + media
 picker #79; share caption / PDF thread #80; viewer Tufte restyle #81; FAB Files
-→ SAF + splash #82; lattice viewer Tufte #83.
+→ SAF + splash #82; lattice viewer Tufte #83; workflows/docs recapture #84;
+launcher icon contrast #85; viewer field FAB + vertical colour rail #86;
+media-picker grid seam #87; wizard Paste params row #88.
 
 New analysis picks media in-sheet (Images gallery; **Files** dismisses the sheet
-and opens SAF). JPEG and low-speckle chips link to FAQ anchors on the public site
+and opens SAF). Wizard warnings (JPEG, low speckle, frame-size mismatch, ROI
+too small, empty/too-big sweep plan) link to FAQ anchors on the public site
 behind a leave-the-app confirm. `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are
 requested when the gallery tab needs them. Summary GIFs bake `viewer_canvas`
 (night `#101518`) into the cache filename. Launcher adaptive background is
-transparent; night inverts the S on splash (`windowSplashScreenAnimatedIcon`).
+day `#F4F9FC` / night `#101518`; night inverts the S on splash
+(`windowSplashScreenAnimatedIcon`).
 
-Viewer chrome is full-bleed glass: back · title · ⓘ · Home · share, auto-hiding,
-toggled by a centre tap or a vertical swipe. Settings' Analyses rows carry three
-actions — **Download** (SAF destination first, then a worker), **Restore** (only
-when local frames are gone) and **Delete**. The sweep lattice's plot toggle is an
-**All / Node** pill defaulting to **All**.
+Viewer chrome is inset-aware glass: heatmap fit between the top bar and the
+scrub bar, field switcher as a top-left glass pill, colour scale as a right
+rail, auto-hiding, toggled by a centre tap or a vertical swipe. Settings'
+Analyses rows carry three actions — **Download** (SAF destination first, then a
+worker), **Restore** (only when local frames are gone) and **Delete**. The sweep
+lattice's plot toggle is an **All / Node** pill defaulting to **All**.
 
 Docs for all of the above: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md).
 

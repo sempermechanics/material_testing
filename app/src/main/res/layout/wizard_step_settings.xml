@@ -571,6 +571,14 @@
 
         <!-- Results chrome (Compute is in bottomNav) -->
 
+        <include
+            android:id="@+id/frameSizeWarnRow"
+            layout="@layout/warn_chip_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/tvStaticResult"
             android:layout_width="match_parent"
