@@ -21,6 +21,7 @@ import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.RoiData
 import com.indicvision.semper.report.VisualizationEngine
+import com.indicvision.semper.ui.viewer.HeatmapFit
 import com.indicvision.semper.ui.viewer.SummaryAnimation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -221,6 +222,14 @@ object SessionUploadBundler {
                 stepAt = { i -> record.sweepSteps.getOrElse(i) { record.step } },
                 outputDir = File(processedDir, "animations").apply { mkdirs() },
                 backgroundColor = ContextCompat.getColor(context, R.color.viewer_canvas),
+                fitBounds = HeatmapFit.resolve(
+                    record.imgW,
+                    record.imgH,
+                    record.roiX,
+                    record.roiY,
+                    record.roiW,
+                    record.roiH,
+                ),
             ),
         )
         val rangesFile = File(sessionDir, FieldRangesStore.FILE_NAME)

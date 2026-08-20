@@ -401,17 +401,19 @@ summary GIF and share field-animations still use a whole-sequence scale so the
 loop stays comparable.
 
 **Tap to probe.** There is no Inspect / X,Y / Max-Min row. A short tap on the
-heatmap — anywhere but the middle of the screen, which is reserved for showing
-and hiding chrome — places a crosshair and a plain-text reading at the nearest
-correlated point. Drag past the touch slop pans (or flings to the next frame when
-unzoomed); pinch still zooms. Tap the same point again, or the readout, to
-dismiss. Switching field or frame keeps the probe at the same image location and
-updates the value.
+heatmap — including the centre — places a crosshair and a plain-text reading at
+the nearest correlated point. The bars hide on an idle timer, not from a tap;
+a centre double-tap brings them back when they have faded. Drag past the touch
+slop pans (or flings to the next frame when unzoomed); pinch still zooms. Tap
+the readout chip to dismiss. Switching field or frame keeps the probe at the
+same image location and updates the value.
 
 **The summary comes first.** The viewer opens on a looping animation of the
 whole sequence in the current field — every frame, never longer than 10 seconds,
-about 300 ms a frame until the frame count forces it faster. While it builds you
-get a progress readout and a **Cancel**. **Next** enters the
+about 300 ms a frame until the frame count forces it faster. The GIF is framed
+on the same coloured region the live view rest-fits to (your ROI, or the
+accepted points), scaled to fill — not a letterboxed full photo. While it builds
+you get a progress readout and a **Cancel**. **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
 field. Field pills stay available while the GIF plays.
 

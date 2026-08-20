@@ -88,7 +88,23 @@ class SummaryAnimationTest {
                 backgroundColor = 0xFFF4F9FC.toInt(),
             ),
         )
-        assertEquals("U_animation_FFF4F9FC.gif", anim.fileFor("U").name)
+        assertEquals("U_animation_FFF4F9FC_auto.gif", anim.fileFor("U").name)
+    }
+
+    @Test
+    fun `gif cache filename includes the fit box when set`() {
+        val anim = SummaryAnimation(
+            SummaryAnimation.Spec(
+                batchFiles = emptyList(),
+                imgW = 100,
+                imgH = 100,
+                stepAt = { 1 },
+                outputDir = temp.root,
+                backgroundColor = 0xFF101518.toInt(),
+                fitBounds = floatArrayOf(10f, 20f, 40f, 80f),
+            ),
+        )
+        assertEquals("Exx_animation_FF101518_10-20-40-80.gif", anim.fileFor("Exx").name)
     }
 
     // ── globalRanges ─────────────────────────────────────────────────────

@@ -35,6 +35,7 @@ import java.util.Locale
 class SummaryAnimation(private val spec: Spec) {
 
     /** Everything a build needs from the viewer, captured once. */
+    @Suppress("LongParameterList")
     class Spec(
         val batchFiles: List<File>,
         val imgW: Int,
@@ -44,16 +45,38 @@ class SummaryAnimation(private val spec: Spec) {
         val outputDir: File,
         /** Drawn where no correlated data covers a pixel; the viewer's canvas colour. */
         val backgroundColor: Int,
+        /**
+         * Image-pixel box `[left, top, right, bottom]` the GIF should fill
+         * (same rest-fit region as the viewer). Null = discover from the first
+         * readable frame's accepted points, else the full specimen.
+         */
+        val fitBounds: FloatArray? = null,
     )
 
     /** Bounds a field's GIF on disk was rendered with, so a scale change rebuilds it. */
     private val builtWith = mutableMapOf<Int, Pair<Float, Float>>()
 
+    /** Resolved once per encode so every frame shares the same crop. */
+    private var resolvedFit: FloatArray? = null
+
     fun fileFor(label: String): File =
-        File(spec.outputDir, "${label}_animation_${bgKey()}.gif")
+        File(spec.outputDir, "${label}_animation_${bgKey()}_${fitKey()}.gif")
 
     /** Hex of the baked canvas colour so light and night GIFs do not collide. */
     private fun bgKey(): String = String.format(Locale.US, "%08X", spec.backgroundColor)
+
+    /** Fit box in the filename so a ROI GIF never collides with a full-frame one. */
+    private fun fitKey(): String {
+        val b = spec.fitBounds ?: return "auto"
+        return String.format(
+            Locale.US,
+            "%.0f-%.0f-%.0f-%.0f",
+            b[HeatmapFit.LEFT],
+            b[HeatmapFit.TOP],
+            b[HeatmapFit.RIGHT],
+            b[HeatmapFit.BOTTOM],
+        )
+    }
 
     /** True when [fileFor] is on disk and was built against [bounds]. */
     fun isBuilt(dataIndex: Int, label: String, bounds: Pair<Float, Float>): Boolean =
@@ -114,6 +137,7 @@ class SummaryAnimation(private val spec: Spec) {
         val frameCount = spec.batchFiles.size
         val delay = delayCentis(frameCount)
         val palette = VisualizationEngine.gifPalette(spec.backgroundColor)
+        val fit = fitBoundsForEncode()
         // Opened on the first frame, once its dimensions are known.
         var encoder: GifEncoder? = null
         try {
@@ -123,7 +147,7 @@ class SummaryAnimation(private val spec: Spec) {
                 if (data == null) {
                     Timber.w("Frame %d unreadable, skipped in the %s animation", index + 1, label)
                 } else {
-                    val plane = renderFrame(data, dataIndex, index, bounds)
+                    val plane = renderFrame(data, dataIndex, index, bounds, fit)
                     val gif = encoder
                         ?: GifEncoder(stream, plane.width, plane.height, palette).also { encoder = it }
                     gif.addFrame(plane.indices, delay)
@@ -135,21 +159,57 @@ class SummaryAnimation(private val spec: Spec) {
         }
     }
 
+    /**
+     * Custom ROI from [Spec.fitBounds], else the first readable frame's accepted
+     * points, else the full image — same priority as the viewer rest pose.
+     */
+    private fun fitBoundsForEncode(): FloatArray {
+        resolvedFit?.let { return it }
+        val fromSpec = spec.fitBounds
+        if (fromSpec != null && fromSpec.size >= HeatmapFit.BOX_LEN) {
+            resolvedFit = fromSpec
+            return fromSpec
+        }
+        for (file in spec.batchFiles) {
+            val data = DicResult.decodeDatFile(file) ?: continue
+            val accepted = DicResult.acceptedPointsBounds(data)
+            val box = HeatmapFit.resolve(
+                spec.imgW,
+                spec.imgH,
+                roiX = 0,
+                roiY = 0,
+                roiW = spec.imgW,
+                roiH = spec.imgH,
+                accepted = accepted,
+            )
+            resolvedFit = box
+            return box
+        }
+        val full = floatArrayOf(0f, 0f, spec.imgW.toFloat(), spec.imgH.toFloat())
+        resolvedFit = full
+        return full
+    }
+
     private fun renderFrame(
         data: FloatArray,
         dataIndex: Int,
         index: Int,
         bounds: Pair<Float, Float>,
-    ): VisualizationEngine.IndexPlane = VisualizationEngine.generateHeatmapIndices(
-        data = data,
-        imgW = spec.imgW,
-        imgH = spec.imgH,
-        valIndex = dataIndex,
-        step = spec.stepAt(index),
-        customMin = bounds.first,
-        customMax = bounds.second,
-        maxLongEdge = MAX_EDGE,
-    )
+        fit: FloatArray,
+    ): VisualizationEngine.IndexPlane {
+        val renderCap = HeatmapFit.renderLongEdgeCap(spec.imgW, spec.imgH, fit, MAX_EDGE)
+        val plane = VisualizationEngine.generateHeatmapIndices(
+            data = data,
+            imgW = spec.imgW,
+            imgH = spec.imgH,
+            valIndex = dataIndex,
+            step = spec.stepAt(index),
+            customMin = bounds.first,
+            customMax = bounds.second,
+            maxLongEdge = renderCap,
+        )
+        return HeatmapFit.cropAndScale(plane, spec.imgW, spec.imgH, fit, MAX_EDGE)
+    }
 
     companion object {
         /** Long-edge cap for animation frames — small enough to encode fast and share. */
