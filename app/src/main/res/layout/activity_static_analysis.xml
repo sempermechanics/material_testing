@@ -276,86 +276,23 @@
                 </FrameLayout>
 
                 <!-- Inline JPEG accuracy warning (non-blocking) -->
-                <LinearLayout
+                <include
                     android:id="@+id/jpegWarnRow"
+                    layout="@layout/warn_chip_row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:background="@drawable/bg_warn_chip"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:padding="10dp"
-                    android:visibility="gone">
-
-                    <ImageView
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:contentDescription="@string/info"
-                        android:src="@android:drawable/stat_sys_warning"
-                        app:tint="@color/semantic_warning" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:layout_weight="1"
-                        android:text="@string/jpeg_warning_inline"
-                        android:textColor="@color/semantic_warning"
-                        android:textSize="12sp" />
-
-                    <ImageButton
-                        android:id="@+id/btnJpegFaq"
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:layout_marginStart="8dp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/jpeg_faq_desc"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_info_min"
-                        app:tint="@color/semantic_warning" />
-                </LinearLayout>
+                    android:visibility="gone" />
 
                 <!-- Inline speckle-quality warning: the SSSIG measurement could
                      not reach the accuracy target even at the largest subset. -->
-                <LinearLayout
+                <include
                     android:id="@+id/lowTextureWarnRow"
+                    layout="@layout/warn_chip_row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:background="@drawable/bg_warn_chip"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:padding="10dp"
-                    android:visibility="gone">
-
-                    <ImageView
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:contentDescription="@string/info"
-                        android:src="@android:drawable/stat_sys_warning"
-                        app:tint="@color/semantic_warning" />
-
-                    <TextView
-                        android:id="@+id/tvLowTextureWarning"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:layout_weight="1"
-                        android:textColor="@color/semantic_warning"
-                        android:textSize="12sp"
-                        tools:text="Speckle contrast is low — 101 px is the largest allowed subset and still falls short of 0.007 px accuracy" />
-
-                    <ImageButton
-                        android:id="@+id/btnSpeckleFaq"
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:layout_marginStart="8dp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/speckle_faq_desc"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_info_min"
-                        app:tint="@color/semantic_warning" />
-                </LinearLayout>
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/tvNextReason"

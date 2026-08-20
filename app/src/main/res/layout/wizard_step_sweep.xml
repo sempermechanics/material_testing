@@ -439,6 +439,14 @@
                     android:textColor="@color/viewer_chrome_muted"
                     android:textSize="12sp"
                     tools:text="8 analyses" />
+
+                <include
+                    android:id="@+id/sweepPlanWarnRow"
+                    layout="@layout/warn_chip_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

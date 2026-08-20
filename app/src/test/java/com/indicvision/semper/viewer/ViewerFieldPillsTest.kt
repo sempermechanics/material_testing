@@ -9,8 +9,6 @@ import com.indicvision.semper.R
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import com.indicvision.semper.ui.viewer.ViewerFieldPills
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -25,9 +23,9 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * The lit pill has to name the field on screen. The layout checks U, and the
- * field itself survives rotation in the ViewModel, so a rebuild that trusts the
- * layout comes back showing Exx with the U pill lit.
+ * The field FAB has to name the field on screen. The layout defaults to U, and
+ * the field itself survives rotation in the ViewModel, so a rebuild that trusts
+ * the layout comes back showing Exx with a U label.
  */
 // Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
@@ -73,7 +71,7 @@ class ViewerFieldPillsTest {
             .putExtra(DicKeys.BATCH_DIR_PATH, batchDir.absolutePath)
             .putExtra(DicKeys.START_FRAME, 0)
 
-    private fun ResultViewerActivity.pill(id: Int): MaterialButton = findViewById(id)
+    private fun ResultViewerActivity.fieldFab(): MaterialButton = findViewById(R.id.btnFieldFab)
 
     @Test
     fun `every field index maps to its own pill`() {
@@ -90,19 +88,18 @@ class ViewerFieldPillsTest {
     }
 
     @Test
-    fun `the pill follows the field across a rebuild`() {
+    fun `the field FAB follows the field across a rebuild`() {
         val controller = Robolectric.buildActivity(ResultViewerActivity::class.java, intent()).setup()
         val activity = controller.get()
         shadowOf(activity.mainLooper).idle()
 
-        activity.pill(R.id.rbFieldExx).performClick()
+        activity.currentDataIndex = DicResult.IDX_EXX
         shadowOf(activity.mainLooper).idle()
         assertEquals(DicResult.IDX_EXX, activity.currentDataIndex)
 
         val rebuilt = controller.recreate().get()
         shadowOf(rebuilt.mainLooper).idle()
 
-        assertTrue(rebuilt.pill(R.id.rbFieldExx).isChecked)
-        assertFalse(rebuilt.pill(R.id.rbFieldU).isChecked)
+        assertEquals("Exx", rebuilt.fieldFab().text.toString())
     }
 }

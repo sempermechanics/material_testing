@@ -29,6 +29,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -44,6 +45,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
+import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
@@ -105,7 +107,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Inline speckle-quality warning from the SSSIG measurement. */
     private lateinit var lowTextureWarnRow: View
-    private lateinit var tvLowTextureWarning: TextView
+    private lateinit var frameSizeWarnRow: View
     private lateinit var tvNextReason: TextView
     private lateinit var ivInputsThumb: ImageView
     private lateinit var tvInputsTitle: TextView
@@ -196,6 +198,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
         btnDefineRoi = findViewById(R.id.btnDefineRoi)
         tvResult = findViewById(R.id.tvStaticResult)
+        frameSizeWarnRow = findViewById(R.id.frameSizeWarnRow)
+        frameSizeWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
+            confirmOpenFaq(getString(R.string.url_faq_frame_size))
+        }
         refDropzone = findViewById(R.id.refDropzone)
         refCard = findViewById(R.id.refCard)
         ivRefThumb = findViewById(R.id.ivRefThumb)
@@ -206,17 +212,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvDefMeta = findViewById(R.id.tvDefMeta)
         tvDefDropHint = findViewById(R.id.tvDefDropHint)
         jpegWarnRow = findViewById(R.id.jpegWarnRow)
-        findViewById<View>(R.id.btnJpegFaq).setOnClickListener {
+        jpegWarnRow.findViewById<TextView>(R.id.tvWarnText).text = getString(R.string.jpeg_warning_inline)
+        jpegWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
             confirmOpenFaq(getString(R.string.url_faq_jpeg))
         }
         rvFrameOrder = findViewById(R.id.rvFrameOrder)
         btnFrameOrderSort = findViewById(R.id.btnFrameOrderSort)
         setupFrameOrderStrip()
         lowTextureWarnRow = findViewById(R.id.lowTextureWarnRow)
-        findViewById<View>(R.id.btnSpeckleFaq).setOnClickListener {
+        lowTextureWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
             confirmOpenFaq(getString(R.string.url_faq_speckle))
         }
-        tvLowTextureWarning = findViewById(R.id.tvLowTextureWarning)
         tvNextReason = findViewById(R.id.tvNextReason)
         ivInputsThumb = findViewById(R.id.ivInputsThumb)
         tvInputsTitle = findViewById(R.id.tvInputsTitle)
@@ -281,6 +287,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 override fun refPreviewBitmap() = refPreviewBmp
                 override fun renderParamField(field: EditText, value: Int) =
                     this@StaticAnalysisActivity.renderParamField(field, value)
+                override fun confirmOpenFaq(url: String) =
+                    this@StaticAnalysisActivity.confirmOpenFaq(url)
             },
         )
         // After the wizard views exist: the sweep controls call checkReady().
@@ -966,7 +974,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // the largest allowed subset misses the accuracy target on this pattern.
         lowTextureWarnRow.visibility = if (rec.lowTexture) View.VISIBLE else View.GONE
         if (rec.lowTexture) {
-            tvLowTextureWarning.text = getString(R.string.subset_low_texture_fmt)
+            wireWarningChip(
+                lowTextureWarnRow,
+                getString(R.string.subset_low_texture_fmt),
+                getString(R.string.url_faq_speckle),
+            )
         }
         if (!viewModel.subsetUserModified) {
             val snapped = snapToSlider(etSubsetSize, rec.subsetSize)
@@ -998,7 +1010,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             realRefHeight = viewModel.realRefHeight,
         )
         if (roi == null) {
-            Toast.makeText(this, R.string.roi_too_small, Toast.LENGTH_LONG).show()
+            Snackbar.make(findViewById(android.R.id.content), R.string.roi_too_small, Snackbar.LENGTH_LONG)
+                .setAction(R.string.action_why) {
+                    confirmOpenFaq(getString(R.string.url_faq_roi_too_small))
+                }
+                .show()
         }
         return roi
     }
@@ -1421,6 +1437,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun wireWarningChip(row: View, message: String, faqUrl: String) {
+        row.findViewById<TextView>(R.id.tvWarnText).text = message
+        row.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
+            confirmOpenFaq(faqUrl)
+        }
+        row.isVisible = true
+    }
+
     private fun confirmOpenFaq(url: String) {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.faq_redirect_title)
@@ -1478,7 +1502,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             isProcessing = isProcessing,
             btnNext = btnNext,
             tvNextReason = tvNextReason,
-            tvResult = tvResult,
+            frameSizeWarnRow = frameSizeWarnRow,
             btnCalculateFullField = btnCalculateFullField,
             btnDefineRoi = btnDefineRoi,
             btnBack = btnBack,

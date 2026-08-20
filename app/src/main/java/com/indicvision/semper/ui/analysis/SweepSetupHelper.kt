@@ -13,6 +13,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.RadioGroup
@@ -61,6 +62,7 @@ class SweepSetupHelper(
         fun maxSubsetForRoi(): Int
         fun refPreviewBitmap(): Bitmap?
         fun renderParamField(field: EditText, value: Int)
+        fun confirmOpenFaq(url: String)
     }
 
     companion object {
@@ -92,6 +94,7 @@ class SweepSetupHelper(
     private lateinit var rgLineCutAxis: MaterialButtonToggleGroup
     private lateinit var btnPickSweepFrame: Button
     private lateinit var tvSweepPlan: TextView
+    private lateinit var sweepPlanWarnRow: View
     private lateinit var lineCutPreview: LineCutPreviewView
     private lateinit var sweepLatticePreview: VsgLatticeView
     lateinit var btnRunSweep: Button
@@ -129,6 +132,7 @@ class SweepSetupHelper(
         rgLineCutAxis = activity.findViewById(R.id.rgLineCutAxis)
         btnPickSweepFrame = activity.findViewById(R.id.btnPickSweepFrame)
         tvSweepPlan = activity.findViewById(R.id.tvSweepPlan)
+        sweepPlanWarnRow = activity.findViewById(R.id.sweepPlanWarnRow)
         lineCutPreview = activity.findViewById(R.id.lineCutPreview)
         sweepLatticePreview = activity.findViewById(R.id.sweepLatticePreview)
         // Same compact axes as the result lattice, now that the preview is the
@@ -263,15 +267,41 @@ class SweepSetupHelper(
         refreshSweepFrameUi()
 
         val plan = currentPlan()
-        tvSweepPlan.text = when {
-            plan.isNotEmpty() -> planSummary(plan)
-            viewModel.subsetMin > callbacks.maxSubsetForRoi() ->
-                activity.getString(R.string.sweep_plan_subset_too_big_fmt, callbacks.maxSubsetForRoi())
-            else -> activity.getString(R.string.sweep_plan_empty)
+        when {
+            plan.isNotEmpty() -> {
+                tvSweepPlan.isVisible = true
+                sweepPlanWarnRow.isVisible = false
+                tvSweepPlan.text = planSummary(plan)
+            }
+            viewModel.subsetMin > callbacks.maxSubsetForRoi() -> {
+                tvSweepPlan.isVisible = false
+                showSweepPlanWarning(
+                    activity.getString(
+                        R.string.sweep_plan_subset_too_big_fmt,
+                        callbacks.maxSubsetForRoi(),
+                    ),
+                    activity.getString(R.string.url_faq_sweep_subset_range),
+                )
+            }
+            else -> {
+                tvSweepPlan.isVisible = false
+                showSweepPlanWarning(
+                    activity.getString(R.string.sweep_plan_empty),
+                    activity.getString(R.string.url_faq_sweep_empty_plan),
+                )
+            }
         }
         refreshLatticePreview(plan)
         refreshLineCutPreview()
         callbacks.checkReady()
+    }
+
+    private fun showSweepPlanWarning(message: String, faqUrl: String) {
+        sweepPlanWarnRow.findViewById<TextView>(R.id.tvWarnText).text = message
+        sweepPlanWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
+            callbacks.confirmOpenFaq(faqUrl)
+        }
+        sweepPlanWarnRow.isVisible = true
     }
 
     /** Defaults to the middle of the sequence (1-based frame n/2+1). */

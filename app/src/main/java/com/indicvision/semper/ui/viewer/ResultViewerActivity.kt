@@ -424,7 +424,12 @@ class ResultViewerActivity : AppCompatActivity() {
     /** Glass-pill popup listing the fields other than the one currently shown. */
     private fun showFieldPopup(anchor: View) {
         val popupView = layoutInflater.inflate(R.layout.popup_field_options, null)
-        val window = PopupWindow(popupView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        val window = PopupWindow(
+            popupView,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            true,
+        )
         window.isOutsideTouchable = true
         ViewerFieldPills.BY_ID.forEach { (id, pair) ->
             val (label, index) = pair
