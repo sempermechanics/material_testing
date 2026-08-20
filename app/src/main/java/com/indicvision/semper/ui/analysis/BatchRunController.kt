@@ -81,33 +81,8 @@ class BatchRunController(
             outcome.engineErrorCode == AnalysisRunCodes.ERROR_LOW_CONVERGENCE &&
                 outcome.totalFrames > 0 -> onPartialRun(outcome)
             outcome.engineErrorCode < 0 && outcome.totalFrames > 0 -> onPartialRun(outcome)
-            outcome.engineErrorCode < 0 -> {
-                val errorMsg = engineFailureMessage(
-                    outcome.engineErrorCode,
-                    outcome.failedFrameIndex,
-                    outcome.failedFrameName,
-                )
-                tvResult.text = "❌ Error: $errorMsg"
-                showEngineFailureDialog(
-                    outcome.engineErrorCode,
-                    R.string.analysis_failed_title,
-                    outcome.failedFrameIndex,
-                    outcome.failedFrameName,
-                )
-            }
-            outcome.firstFrameValidPoints <= 0 -> {
-                val errorMsg = engineFailureMessage(
-                    outcome.engineErrorCode,
-                    outcome.failedFrameIndex,
-                    outcome.failedFrameName,
-                )
-                tvResult.text = "❌ Error: $errorMsg"
-                showEngineFailureDialog(
-                    outcome.engineErrorCode,
-                    R.string.analysis_failed_title,
-                    outcome.failedFrameIndex,
-                    outcome.failedFrameName,
-                )
+            outcome.engineErrorCode < 0 || outcome.firstFrameValidPoints <= 0 -> {
+                showNamedEngineFailure(outcome)
             }
             else -> {
                 tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
@@ -118,5 +93,20 @@ class BatchRunController(
                 openResultViewer()
             }
         }
+    }
+
+    private fun showNamedEngineFailure(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
+        val errorMsg = engineFailureMessage(
+            outcome.engineErrorCode,
+            outcome.failedFrameIndex,
+            outcome.failedFrameName,
+        )
+        tvResult.text = "❌ Error: $errorMsg"
+        showEngineFailureDialog(
+            outcome.engineErrorCode,
+            R.string.analysis_failed_title,
+            outcome.failedFrameIndex,
+            outcome.failedFrameName,
+        )
     }
 }
