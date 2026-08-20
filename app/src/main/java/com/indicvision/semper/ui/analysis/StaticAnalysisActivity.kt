@@ -16,7 +16,6 @@
 package com.indicvision.semper.ui.analysis
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Rect
@@ -45,7 +44,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
-import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
@@ -54,6 +52,7 @@ import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.CoachMarkController
+import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
@@ -526,11 +525,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
                 if (loaded == null) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(
+                        FaqRedirect.snackbar(
                             this@StaticAnalysisActivity,
                             if (isRaw) R.string.failed_decode_raw else R.string.failed_load_reference,
-                            Toast.LENGTH_SHORT,
-                        ).show()
+                            R.string.url_faq_import_reference,
+                        )
                     }
                     return@launch
                 }
@@ -557,11 +556,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load reference image")
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(
+                    FaqRedirect.snackbar(
                         this@StaticAnalysisActivity,
                         R.string.failed_load_reference,
-                        Toast.LENGTH_LONG,
-                    ).show()
+                        R.string.url_faq_import_reference,
+                    )
                 }
             }
         }
@@ -748,7 +747,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
             if (meta.durationMs <= 0L) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@StaticAnalysisActivity, R.string.video_read_failed, Toast.LENGTH_LONG).show()
+                    FaqRedirect.snackbar(
+                        this@StaticAnalysisActivity,
+                        R.string.video_read_failed,
+                        R.string.url_faq_video_read,
+                    )
                 }
                 return@launch
             }
@@ -1010,11 +1013,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             realRefHeight = viewModel.realRefHeight,
         )
         if (roi == null) {
-            Snackbar.make(findViewById(android.R.id.content), R.string.roi_too_small, Snackbar.LENGTH_LONG)
-                .setAction(R.string.action_why) {
-                    confirmOpenFaq(getString(R.string.url_faq_roi_too_small))
-                }
-                .show()
+            FaqRedirect.snackbar(
+                this,
+                R.string.roi_too_small,
+                R.string.url_faq_roi_too_small,
+            )
         }
         return roi
     }
@@ -1384,11 +1387,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
         frameIndex: Int = -1,
         frameName: String? = null,
     ) {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(titleRes)
-            .setMessage(engineFailureMessage(engineErrorCode, frameIndex, frameName))
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
+        FaqRedirect.errorDialog(
+            this,
+            getString(titleRes),
+            engineFailureMessage(engineErrorCode, frameIndex, frameName),
+            EngineFailure.faqUrlRes(engineErrorCode),
+        )
     }
 
     private suspend fun ensureSessionQuota(): Boolean =
@@ -1446,21 +1450,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun confirmOpenFaq(url: String) {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.faq_redirect_title)
-            .setMessage(R.string.faq_redirect_body)
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.faq_redirect_open) { _, _ -> openExternalUrl(url) }
-            .show()
-    }
-
-    private fun openExternalUrl(url: String) {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-        } catch (e: ActivityNotFoundException) {
-            Timber.w(e, "No browser to open %s", url)
-            Toast.makeText(this, url, Toast.LENGTH_LONG).show()
-        }
+        FaqRedirect.confirm(this, url)
     }
 
     // ------------------------------------------------------------------

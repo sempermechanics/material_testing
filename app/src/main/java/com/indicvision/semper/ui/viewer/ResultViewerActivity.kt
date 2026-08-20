@@ -34,7 +34,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -50,7 +49,7 @@ import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
 import com.indicvision.semper.report.VisualizationEngine
-import com.indicvision.semper.ui.common.CrispToast
+import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -347,7 +346,7 @@ class ResultViewerActivity : AppCompatActivity() {
             }
         } else {
             showingSummary = false
-            CrispToast.show(this, getString(R.string.no_batch_data), long = true)
+            FaqRedirect.snackbar(this, R.string.no_batch_data, R.string.url_faq_no_batch_data)
         }
 
         btnPrevFrame.setOnClickListener {
@@ -654,7 +653,11 @@ class ResultViewerActivity : AppCompatActivity() {
                 Timber.e(e, "OOM loading frame $index")
                 scrubCache.clear()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@ResultViewerActivity, R.string.viewer_frame_oom, Toast.LENGTH_LONG).show()
+                    FaqRedirect.snackbar(
+                        this@ResultViewerActivity,
+                        R.string.viewer_frame_oom,
+                        R.string.url_faq_viewer_oom,
+                    )
                 }
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "Failed to load frame $index")
@@ -795,7 +798,11 @@ class ResultViewerActivity : AppCompatActivity() {
                     updateVisualization(currentDataIndex)
                     summary.onScaleChanged(currentDataIndex)
                 } else {
-                    Toast.makeText(this, R.string.invalid_scale_inputs, Toast.LENGTH_LONG).show()
+                    FaqRedirect.snackbar(
+                        this,
+                        R.string.invalid_scale_inputs,
+                        R.string.url_faq_custom_scale,
+                    )
                 }
             }
             .setNeutralButton(R.string.auto_scale) { _, _ ->

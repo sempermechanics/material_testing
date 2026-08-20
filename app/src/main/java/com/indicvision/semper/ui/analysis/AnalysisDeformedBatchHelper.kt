@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.ui.common.FaqRedirect
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -128,11 +129,11 @@ object AnalysisDeformedBatchHelper {
             } catch (e: Exception) {
                 Timber.e(e, "Error handling batch")
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(
+                    FaqRedirect.snackbar(
                         activity,
                         activity.getString(R.string.error_loading_images, e.message),
-                        Toast.LENGTH_LONG,
-                    ).show()
+                        R.string.url_faq_import_deformed,
+                    )
                 }
             } finally {
                 withContext(NonCancellable + Dispatchers.Main) {

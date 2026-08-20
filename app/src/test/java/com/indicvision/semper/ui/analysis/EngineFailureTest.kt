@@ -53,4 +53,26 @@ class EngineFailureTest {
             EngineFailure.shortReasonRes(AnalysisRunCodes.ERROR_LOW_CONVERGENCE),
         )
     }
+
+    @Test
+    fun `each cause maps to its own FAQ URL resource`() {
+        assertEquals(
+            R.string.url_faq_engine_features,
+            EngineFailure.faqUrlRes(EngineFailure.ENGINE_ERROR_FEATURES),
+        )
+        assertEquals(
+            R.string.url_faq_engine_roi,
+            EngineFailure.faqUrlRes(EngineFailure.ENGINE_ERROR_ROI),
+        )
+        assertEquals(
+            R.string.url_faq_engine_init,
+            EngineFailure.faqUrlRes(EngineFailure.ENGINE_ERROR_INIT),
+        )
+        assertEquals(
+            R.string.url_faq_engine_convergence,
+            EngineFailure.faqUrlRes(AnalysisRunCodes.ERROR_LOW_CONVERGENCE),
+        )
+        assertEquals(R.string.url_faq_engine_vsg, EngineFailure.faqUrlRes(0))
+        assertEquals(R.string.url_faq_engine_vsg, EngineFailure.faqUrlRes(99))
+    }
 }
