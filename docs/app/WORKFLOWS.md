@@ -596,7 +596,7 @@ extraction show determinate progress instead.
 | [ ] 5.5.1f | Read that Home row | "39 of 50 frames" and the reason, not a bare "39 frames" |
 | [ ] 5.5.1g | Open it and tap ⓘ | Settings used lists **Stopped early** and **Frames solved** |
 | [ ] 5.5.1h | Force-stop the app, reopen, look again | Both still say why — the reason is stored, not held in memory |
-| [ ] 5.5.1i | Run with a featureless ROI that solves nothing | "No data produced" dialog explaining speckle/ROI, not a bare line of text |
+| [ ] 5.5.1i | Run with a strain window the correlated area cannot support (0 points solved) | Engine-failure dialog naming VSG failure — not the generic "No data produced" copy |
 | [ ] 5.5.1j | Trigger an OOM (huge ROI, step 1) | "Analysis stopped unexpectedly" dialog naming the error and what causes it |
 | [ ] 5.5.1b | Sweep a decorrelated pair | Stops after two combinations under 50% rather than sweeping the rest |
 | [ ] 5.5.2 | Run with an unusable ROI | Engine failure dialog naming the ROI cause |

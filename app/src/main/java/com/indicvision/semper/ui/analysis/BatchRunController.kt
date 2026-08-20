@@ -96,12 +96,18 @@ class BatchRunController(
                 )
             }
             outcome.firstFrameValidPoints <= 0 -> {
-                tvResult.text = activity.getString(R.string.analysis_no_data_title)
-                MaterialAlertDialogBuilder(activity)
-                    .setTitle(R.string.analysis_no_data_title)
-                    .setMessage(R.string.analysis_no_data)
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show()
+                val errorMsg = engineFailureMessage(
+                    outcome.engineErrorCode,
+                    outcome.failedFrameIndex,
+                    outcome.failedFrameName,
+                )
+                tvResult.text = "❌ Error: $errorMsg"
+                showEngineFailureDialog(
+                    outcome.engineErrorCode,
+                    R.string.analysis_failed_title,
+                    outcome.failedFrameIndex,
+                    outcome.failedFrameName,
+                )
             }
             else -> {
                 tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
