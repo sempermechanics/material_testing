@@ -11,6 +11,7 @@ import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.ui.common.FaqRedirect
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -66,11 +67,11 @@ object AnalysisVideoExtractHelper {
                 // state aligned if cancellation arrives before this dispatch.
                 withContext(NonCancellable + Dispatchers.Main) {
                     if (result == null) {
-                        Toast.makeText(
+                        FaqRedirect.snackbar(
                             activity,
                             R.string.video_extract_insufficient,
-                            Toast.LENGTH_LONG,
-                        ).show()
+                            R.string.url_faq_video_extract,
+                        )
                         return@withContext
                     }
 
@@ -114,11 +115,11 @@ object AnalysisVideoExtractHelper {
             } catch (e: Exception) {
                 Timber.e(e, "Error extracting video frames")
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(
+                    FaqRedirect.snackbar(
                         activity,
                         activity.getString(R.string.video_read_error, e.message),
-                        Toast.LENGTH_LONG,
-                    ).show()
+                        R.string.url_faq_video_extract,
+                    )
                 }
             } finally {
                 withContext(NonCancellable + Dispatchers.Main) {

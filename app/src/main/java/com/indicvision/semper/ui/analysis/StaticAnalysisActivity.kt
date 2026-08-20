@@ -16,7 +16,6 @@
 package com.indicvision.semper.ui.analysis
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Rect
@@ -36,6 +35,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
@@ -45,7 +45,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
-import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
@@ -54,6 +53,7 @@ import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.CoachMarkController
+import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
@@ -83,6 +83,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // UI Components
     private lateinit var btnDefineRoi: Button
     private lateinit var tvResult: TextView
+    private lateinit var btnEngineFailFaq: ImageButton
     private lateinit var tvInstruction: TextView
     private lateinit var tvRefName: TextView
     private lateinit var tvDefName: TextView
@@ -198,6 +199,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
         btnDefineRoi = findViewById(R.id.btnDefineRoi)
         tvResult = findViewById(R.id.tvStaticResult)
+        btnEngineFailFaq = findViewById(R.id.btnEngineFailFaq)
         clearRunStatus()
         frameSizeWarnRow = findViewById(R.id.frameSizeWarnRow)
         frameSizeWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
@@ -385,6 +387,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             showEngineFailureDialog = { code, titleRes, frameIndex, frameName ->
                 showEngineFailureDialog(code, titleRes, frameIndex, frameName)
             },
+            clearEngineFailFaq = { setEngineFailFaq(null) },
         ).observe()
 
         // Files (SAF) still reaches DNG/RAW and Drive, which MediaStore may not index.
@@ -530,11 +533,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
                 if (loaded == null) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(
+                        FaqRedirect.snackbar(
                             this@StaticAnalysisActivity,
                             if (isRaw) R.string.failed_decode_raw else R.string.failed_load_reference,
-                            Toast.LENGTH_SHORT,
-                        ).show()
+                            R.string.url_faq_import_reference,
+                        )
                     }
                     return@launch
                 }
@@ -561,11 +564,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load reference image")
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(
+                    FaqRedirect.snackbar(
                         this@StaticAnalysisActivity,
                         R.string.failed_load_reference,
-                        Toast.LENGTH_LONG,
-                    ).show()
+                        R.string.url_faq_import_reference,
+                    )
                 }
             }
         }
@@ -753,7 +756,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
             if (meta.durationMs <= 0L) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@StaticAnalysisActivity, R.string.video_read_failed, Toast.LENGTH_LONG).show()
+                    FaqRedirect.snackbar(
+                        this@StaticAnalysisActivity,
+                        R.string.video_read_failed,
+                        R.string.url_faq_video_read,
+                    )
                 }
                 return@launch
             }
@@ -932,6 +939,22 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun clearRunStatus() {
         if (isProcessing) return
         if (::tvResult.isInitialized) tvResult.text = ""
+        if (::btnEngineFailFaq.isInitialized) setEngineFailFaq(null)
+    }
+
+    /**
+     * ⓘ beside the run-status line after an engine-failure dialog — same FAQ
+     * hop as that dialog's **Why?**, still reachable once the alert is gone.
+     */
+    private fun setEngineFailFaq(@StringRes faqUrlRes: Int?) {
+        if (!::btnEngineFailFaq.isInitialized) return
+        if (faqUrlRes == null) {
+            btnEngineFailFaq.isVisible = false
+            btnEngineFailFaq.setOnClickListener(null)
+            return
+        }
+        btnEngineFailFaq.isVisible = true
+        btnEngineFailFaq.setOnClickListener { FaqRedirect.confirm(this, faqUrlRes) }
     }
 
     /** Region the recommendation samples: the ROI when set, else the frame. */
@@ -1042,11 +1065,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             realRefHeight = viewModel.realRefHeight,
         )
         if (roi == null) {
-            Snackbar.make(findViewById(android.R.id.content), R.string.roi_too_small, Snackbar.LENGTH_LONG)
-                .setAction(R.string.action_why) {
-                    confirmOpenFaq(getString(R.string.url_faq_roi_too_small))
-                }
-                .show()
+            FaqRedirect.snackbar(
+                this,
+                R.string.roi_too_small,
+                R.string.url_faq_roi_too_small,
+            )
         }
         return roi
     }
@@ -1419,11 +1442,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
         frameIndex: Int = -1,
         frameName: String? = null,
     ) {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(titleRes)
-            .setMessage(engineFailureMessage(engineErrorCode, frameIndex, frameName))
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
+        val faqRes = EngineFailure.faqUrlRes(engineErrorCode)
+        setEngineFailFaq(faqRes)
+        FaqRedirect.errorDialog(
+            this,
+            getString(titleRes),
+            engineFailureMessage(engineErrorCode, frameIndex, frameName),
+            faqRes,
+        )
     }
 
     private suspend fun ensureSessionQuota(): Boolean =
@@ -1481,21 +1507,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun confirmOpenFaq(url: String) {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.faq_redirect_title)
-            .setMessage(R.string.faq_redirect_body)
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.faq_redirect_open) { _, _ -> openExternalUrl(url) }
-            .show()
-    }
-
-    private fun openExternalUrl(url: String) {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-        } catch (e: ActivityNotFoundException) {
-            Timber.w(e, "No browser to open %s", url)
-            Toast.makeText(this, url, Toast.LENGTH_LONG).show()
-        }
+        FaqRedirect.confirm(this, url)
     }
 
     // ------------------------------------------------------------------

@@ -33,7 +33,6 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
@@ -42,6 +41,7 @@ import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.CrispToast
+import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
@@ -325,8 +325,14 @@ class VsgLatticeActivity : AppCompatActivity() {
         val summary = findViewById<TextView>(R.id.tvLatticeSummary)
         if (solvedCount == 0) {
             summary.text = getString(R.string.vsg_lattice_all_failed)
+            summary.isClickable = true
+            summary.setOnClickListener {
+                FaqRedirect.confirm(this, R.string.url_faq_engine_vsg)
+            }
             return
         }
+        summary.isClickable = false
+        summary.setOnClickListener(null)
         summary.text = if (stepDenom > 0) {
             resources.getQuantityString(
                 R.plurals.vsg_lattice_summary_fmt,
@@ -349,13 +355,14 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private fun showSkipReason(node: VsgLatticeView.Node) {
         val reason = node.failureReason.ifEmpty { getString(R.string.sweep_node_skipped) }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(
-                getString(R.string.sweep_node_title_fmt, node.subset, node.step, node.window),
-            )
-            .setMessage(reason)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
+        val faqRes = node.failureCode?.let { EngineFailure.faqUrlRes(it) }
+            ?: R.string.url_faq_engine_vsg
+        FaqRedirect.errorDialog(
+            this,
+            getString(R.string.sweep_node_title_fmt, node.subset, node.step, node.window),
+            reason,
+            faqRes,
+        )
     }
 
     private fun nodesFrom(
@@ -380,6 +387,7 @@ class VsgLatticeActivity : AppCompatActivity() {
                 failureReason = codes.getOrNull(i)
                     ?.let { code -> getString(EngineFailure.shortReasonRes(code)) }
                     .orEmpty(),
+                failureCode = codes.getOrNull(i),
             )
         }
     }

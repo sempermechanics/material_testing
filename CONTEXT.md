@@ -130,9 +130,9 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-08-20)
 
-`origin/main` includes PRs #85–#92 and viewer probe / rest-fit #94.
-Open follow-ups: lattice/wizard picker #95. Refresh with
-`gh pr list --state open` — anything named here will rot.
+`origin/main` includes PRs #85–#95 (through viewer probe/rest-fit #94 and
+lattice/wizard picker #95). Open follow-up: this FAQ error map (#96). Refresh
+with `gh pr list --state open` — anything named here will rot.
 
 **Merged since 2026-08-08:** lint extracts #59–#64 and #66; compile/quality #68;
 wizard slots/coach #69; `DicBatchRunner` + `DicFieldIo` #70; hashed lock /
@@ -142,19 +142,22 @@ picker #79; share caption / PDF thread #80; viewer Tufte restyle #81; FAB Files
 → SAF + splash #82; lattice viewer Tufte #83; workflows/docs recapture #84;
 launcher icon contrast #85; viewer field FAB + vertical colour rail #86;
 media-picker grid seam #87; wizard Paste params row #88; wizard warning FAQs
-#91; engine failure reason #92; viewer probe / rest-fit #94.
+#91; engine failure reason #92; viewer probe / rest-fit #94; lattice Y readout /
+mismatch names / picker dim #95.
 
 New analysis picks media in-sheet (Images gallery; **Files** dismisses the sheet
 and opens SAF). The reference picker opens full height and dims the grid for
 1 s behind a large centred hint ("Select the reference image"); deformed
-multi-select stays immediate.
-Wizard warnings (JPEG, low speckle, frame-size mismatch,
-ROI too small, empty/too-big sweep plan) link to FAQ anchors on the public site
-behind a leave-the-app confirm. Frame-size copy names the mismatched files.
-`READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when the gallery tab
-needs them. Summary GIFs bake `viewer_canvas` (night `#101518`) into the cache
-filename. Launcher adaptive background is day `#F4F9FC` / night `#101518`; night
-inverts the S on splash (`windowSplashScreenAnimatedIcon`).
+multi-select stays immediate. Wizard warnings (JPEG, low speckle, frame-size
+mismatch, ROI too small, empty/too-big sweep plan) and remaining actionable
+errors (engine failure dialog **Why?** plus a lasting ⓘ on the status line,
+import / video, viewer batch/OOM/scale, lattice hollow nodes) link to FAQ
+anchors on the public site behind a leave-the-app confirm
+([docs/app/FAQ_LINKS.md](docs/app/FAQ_LINKS.md)). Frame-size copy names the
+mismatched files. `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when
+the gallery tab needs them. Summary GIFs bake `viewer_canvas` (night `#101518`)
+into the cache filename. Launcher adaptive background is day `#F4F9FC` / night
+`#101518`; night inverts the S on splash (`windowSplashScreenAnimatedIcon`).
 
 Viewer chrome is inset-aware glass: heatmap rest-fit contains the ROI or
 accepted points between the top bar and the scrub bar (colour scale overlays

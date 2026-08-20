@@ -75,4 +75,17 @@ object EngineFailure {
         Cause.CONVERGENCE -> R.string.sweep_reason_low_convergence
         Cause.VSG -> R.string.sweep_reason_vsg
     }
+
+    /**
+     * FAQ page for [engineErrorCode] (guessed anchors on the public manual).
+     * Same cause table as [reasonRes] / [shortReasonRes].
+     */
+    @StringRes
+    fun faqUrlRes(engineErrorCode: Int): Int = when (cause(engineErrorCode)) {
+        Cause.FEATURES -> R.string.url_faq_engine_features
+        Cause.ROI -> R.string.url_faq_engine_roi
+        Cause.INIT -> R.string.url_faq_engine_init
+        Cause.CONVERGENCE -> R.string.url_faq_engine_convergence
+        Cause.VSG -> R.string.url_faq_engine_vsg
+    }
 }
