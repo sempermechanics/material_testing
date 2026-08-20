@@ -160,6 +160,9 @@ lattice's plot toggle is an **All / Node** pill defaulting to **All**.
 
 Docs for all of the above: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md).
 
+A single-setting run that solves zero points shows the same VSG-failure
+wording as a sweep lattice node, not the generic "No data produced" dialog.
+
 **Next architecture (grill before coding):** `DicKeys` extras bag packed in
 `SessionOpenHelper.intentFor` and `AnalysisNavHelper.openResults` (~25 extras).
 A deep `ViewerSession` module would be the one pack/unpack. Session **commit**

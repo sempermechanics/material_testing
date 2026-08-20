@@ -23,18 +23,35 @@ object EngineFailure {
     /** An image failed to decode, or the engine could not start. */
     const val ENGINE_ERROR_INIT = -3
 
+    private enum class Cause {
+        FEATURES,
+        ROI,
+        INIT,
+        CONVERGENCE,
+        VSG,
+    }
+
+    private fun cause(engineErrorCode: Int): Cause = when (engineErrorCode) {
+        ENGINE_ERROR_FEATURES -> Cause.FEATURES
+        ENGINE_ERROR_ROI -> Cause.ROI
+        ENGINE_ERROR_INIT -> Cause.INIT
+        AnalysisRunCodes.ERROR_LOW_CONVERGENCE -> Cause.CONVERGENCE
+        else -> Cause.VSG
+    }
+
     /**
-     * The full explanation for [engineErrorCode] — what to change and why. Every
-     * string here takes the raw code as `%1$d` so the unknown case can name it;
-     * the known ones simply ignore it.
+     * The full explanation for [engineErrorCode] — what to change and why.
+     * Callers may still pass the raw code as a format argument; known causes
+     * ignore it. Zero and unrecognised codes land on the strain-window case,
+     * matching [shortReasonRes].
      */
     @StringRes
-    fun reasonRes(engineErrorCode: Int): Int = when (engineErrorCode) {
-        ENGINE_ERROR_FEATURES -> R.string.sweep_fail_features
-        ENGINE_ERROR_ROI -> R.string.sweep_fail_roi
-        ENGINE_ERROR_INIT -> R.string.sweep_fail_init
-        AnalysisRunCodes.ERROR_LOW_CONVERGENCE -> R.string.error_low_convergence
-        else -> R.string.sweep_fail_unknown
+    fun reasonRes(engineErrorCode: Int): Int = when (cause(engineErrorCode)) {
+        Cause.FEATURES -> R.string.sweep_fail_features
+        Cause.ROI -> R.string.sweep_fail_roi
+        Cause.INIT -> R.string.sweep_fail_init
+        Cause.CONVERGENCE -> R.string.error_low_convergence
+        Cause.VSG -> R.string.sweep_reason_vsg
     }
 
     /**
@@ -51,11 +68,11 @@ object EngineFailure {
      * ROI cannot support at that step.
      */
     @StringRes
-    fun shortReasonRes(engineErrorCode: Int): Int = when (engineErrorCode) {
-        ENGINE_ERROR_FEATURES -> R.string.sweep_reason_decorrelated
-        ENGINE_ERROR_ROI -> R.string.sweep_reason_subset_too_big
-        ENGINE_ERROR_INIT -> R.string.sweep_reason_decode
-        AnalysisRunCodes.ERROR_LOW_CONVERGENCE -> R.string.sweep_reason_low_convergence
-        else -> R.string.sweep_reason_vsg
+    fun shortReasonRes(engineErrorCode: Int): Int = when (cause(engineErrorCode)) {
+        Cause.FEATURES -> R.string.sweep_reason_decorrelated
+        Cause.ROI -> R.string.sweep_reason_subset_too_big
+        Cause.INIT -> R.string.sweep_reason_decode
+        Cause.CONVERGENCE -> R.string.sweep_reason_low_convergence
+        Cause.VSG -> R.string.sweep_reason_vsg
     }
 }
