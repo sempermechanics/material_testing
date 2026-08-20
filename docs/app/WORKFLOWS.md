@@ -435,8 +435,8 @@ Lattice, Session limit, or back to Home.
     ├── Frame order
     │   ├── Name ↑ / Name ↓ / Date oldest / Date newest / Manual
     │   └── drag thumbnails to reorder (Manual)
-    ├── warnings: JPEG accuracy, low texture (SSSIG)
-    └── blocking error: frame size mismatch
+    ├── warnings: JPEG accuracy, low texture (SSSIG) — chip + FAQ
+    └── blocking error: frame size mismatch (chip on step 2 + FAQ)
 ```
 
 | # | Action | Expected |
@@ -448,7 +448,7 @@ Lattice, Session limit, or back to Home.
 | [ ] 5.1.5 | Pick more frames than *Max frames* | The first N are kept, with a "capped" toast |
 | [ ] 5.1.6 | Load a reference only | **Next** is disabled with "add at least one deformed frame to continue" |
 | [ ] 5.1.7 | Load deformed frames only | **Next** is disabled with the matching reference message |
-| [ ] 5.1.8 | Include one frame of a different pixel size | A blocking message appears and **Compute** stays disabled |
+| [ ] 5.1.8 | Include one frame of a different pixel size | **Compute** stays disabled. On step 2 a warning chip names the mismatch; its info icon asks first whether to leave the app, then opens the frame-size FAQ |
 | [ ] 5.1.9 | Load JPEGs | A non-blocking accuracy warning chip appears; its info icon asks first whether to leave the app, then opens the JPEG FAQ |
 | [ ] 5.1.10 | Load a poorly speckled reference | A low-texture warning names a suggested subset size; its info icon opens the speckle FAQ behind the same leave-the-app confirm |
 | [ ] 5.1.11 | Open the sort menu → **Name A–Z** | Thumbnails reorder; the badge numbers renumber 1…N |
@@ -486,6 +486,7 @@ Reached whenever the file picked — from the grid or through Files — is a vid
     │   ├── strain window    (slider + typed field + ⓘ)
     │   ├── interpolator: Bicubic 4×4 / Keys 6×6
     │   └── Reset to recommended
+    ├── frame-size mismatch warning chip + FAQ   (when a deformed frame differs)
     ├── coach marks on first visit  (mode toggle, ROI, advanced-params header)
     └── Compute
 ```
@@ -511,7 +512,7 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | [ ] 5.2.15 | Switch the interpolator to **Keys 6×6** | Selection sticks; the run uses it |
 | [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, strain window to 15, interpolator to Bicubic |
 | [ ] 5.2.17 | Load a well-speckled reference and watch the subset | It is pre-seeded from the SSSIG recommendation — until you touch it |
-| [ ] 5.2.18 | Draw an ROI smaller than the subset and tap **Compute** | "ROI too small" toast; the run does not start |
+| [ ] 5.2.18 | Draw an ROI smaller than the subset and tap **Compute** | "ROI too small" snackbar with a **Why?** action; that asks first whether to leave the app, then opens the ROI FAQ. The run does not start |
 | [ ] 5.2.19 | Edit a parameter field and tap **Compute** without pressing Done | The typed value is committed and used |
 | [ ] 5.2.20 | Open step 2 for the first time | Coach marks point at the analysis-mode toggle, the ROI card, then the advanced-parameters header |
 
@@ -525,7 +526,7 @@ Reached whenever the file picked — from the grid or through Files — is a vid
     ├── frame to sweep         (dialog: radio list + number + live preview)
     ├── planned lattice preview
     ├── lattice samples: no. of subsets × no. of VSGs (1–8 each)
-    ├── plan summary, or "empty plan" / "subset too big for this ROI"
+    ├── plan summary, or a warning chip + FAQ for "empty plan" / "subset too big"
     ├── coach marks on first visit  (subset range, planned lattice, Compute)
     └── Compute
 ```
@@ -550,8 +551,8 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | [ ] 5.3.11 | Look at the planned lattice | Grid of nodes, subset across, VSG up; taps do nothing (it's a preview) |
 | [ ] 5.3.12 | Open the samples panel (gear) and set 4 × 4 | The plan summary reads 16 analyses and the lattice redraws |
 | [ ] 5.3.13 | Set samples to 9 | Clamped to 8 |
-| [ ] 5.3.14 | Set the subset min above what the ROI can hold | "Subset range starts above what this image and ROI can hold"; **Compute** is disabled |
-| [ ] 5.3.15 | Set a strain window range that no subset can satisfy | "No combination fits this ceiling — raise Max strain window or lower the subset range"; **Compute** is disabled |
+| [ ] 5.3.14 | Set the subset min above what the ROI can hold | Warning chip: "Subset range starts above what this image and ROI can hold"; info icon opens the sweep-subset FAQ behind the leave-the-app confirm. **Compute** is disabled |
+| [ ] 5.3.15 | Set a strain window range that no subset can satisfy | Warning chip: "No combination fits this ceiling — raise Max strain window or lower the subset range"; info icon opens the empty-plan FAQ behind the same confirm. **Compute** is disabled |
 | [ ] 5.3.16 | Read a valid plan summary | "N analyses · subset a–b px · VSG c–d px" |
 
 ### 5.4 Running
