@@ -398,16 +398,17 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="analysis_mode">Analysis mode</string>
     <string name="mode_single">Single</string>
     <string name="mode_sweep">Sweep</string>
-    <string name="info_analysis_mode">Single: Runs every frame for the parameters chosen below. \n\n Sweep: Compares 2 frame across different subset and VSG sizes for a given step size.</string>
+    <string name="info_analysis_mode">Single: Runs every frame for the parameters chosen below. \n\n Sweep: Compares one frame across different subset and strain-window sizes at a chosen subset overlap.</string>
 
     <string name="subset_min">Subset size (min)</string>
     <string name="subset_max">Subset size (max)</string>
     <string name="subset_range">Subset size range</string>
     <string name="subset_samples">No. of subsets</string>
     <string name="vsg_samples">No. of strain windows</string>
-    <string name="step_depth">Step size</string>
+    <string name="subset_overlap">Subset overlap</string>
+    <string name="info_subset_overlap">How much neighbouring subsets cover each other after a step (1 − step / subset). The iDICs Good Practices Guide keeps this at least 0.5 (step no larger than half the subset) and below 1.0 (step at least 1 px). Typical values are 0.50–0.75. Lower than 0.5 under-samples the field; near 1.0 neighbouring windows almost coincide and extra points cost time without new information.</string>
+    <string name="sweep_overlap_step_hint_fmt">About %1$d px at subset %2$d</string>
     <string name="info_subset_samples">Total No. of analyses = No. of subsets × No. of VSGs.</string>
-    <string name="info_step_depth">Step size given as subset ÷ N(Larger N means denser correlation). Capped between 2 and 6.</string>
     <string name="info_subset_range"> Min to Max (px) capped by the image/ROI(Odd subset sizes) and speckle pattern.</string>
     <string name="strain_win_min">Min</string>
     <string name="strain_win_max">Max</string>
@@ -424,9 +425,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     
     <string name="sweep_plan_empty">No combination fits this ceiling — raise Max strain window or lower the subset range.</string>
     <string name="sweep_plan_subset_too_big_fmt">Subset range starts above what this image and ROI can hold (max %1$d px). Lower the minimum subset, or draw a larger region of interest.</string>
-    <string name="next_sweep">Next: Sweep →</string>
+    <string name="next_sweep">Next: Summary →</string>
     <string name="sweep_settings">Sweep settings</string>
-    <string name="step_depth_prefix">subset ÷ </string>
     <string name="lattice_samples_settings">Sample counts</string>
     <string name="sweep_frame_summary_fmt">%1$s · Frame %2$d of %3$d</string>
     <string name="sweep_frame_out_of_fmt">out of %1$d</string>
@@ -569,6 +569,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="coach_analysis_advanced">Change parameters when you need finer control.</string>
     <string name="coach_sweep_subset">Set the subset size range for sweep granularity.</string>
     <string name="coach_sweep_lattice">This is the planned lattice — each node is one analysis.</string>
+    <string name="coach_sweep_line_cut">Strain will be read along this centre line of the region of interest.</string>
     <string name="coach_sweep_graph">Each node is one combination: subset size across, strain window up. Filled nodes solved — tap one to focus its curve, double-tap to open it. Hollow ones failed; tap for the reason.</string>
     <string name="coach_sweep_scrub">Drag across the plot to read the focused curve\'s value at any position — it\'s marked with a dot in its own colour.</string>
     <string name="coach_sweep_run">Run the sweep when the plan looks right.</string>
@@ -723,7 +724,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="video_capped_suffix">" (capped — raise Max frames in Settings)"</string>
     <string name="video_first_frame_note">First frame becomes the reference</string>
     <string name="info_subset">Bigger means more robust on weak speckle, but smoothens sharp strain gradients.</string>
-    <string name="info_step">Smaller means denser results but longer analysis time.</string>
+    <string name="info_step">Spacing between tracked points, in pixels. Smaller means denser results but longer analysis time. Linked to subset overlap: overlap = 1 − step / subset.</string>
     <string name="info_strain_window">Bigger means smoother strain but less local detail.</string>
 
     <!-- Auth: sign-in errors -->

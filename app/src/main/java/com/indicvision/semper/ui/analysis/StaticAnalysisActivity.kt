@@ -89,6 +89,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var tvDefName: TextView
     private lateinit var etSubsetSize: Slider
     private lateinit var etStepSize: Slider
+    private lateinit var etOverlap: Slider
     private lateinit var etStrainWindow: Slider
 
     // Wireframe slots (load-frames page + confirm-settings page)
@@ -110,9 +111,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var lowTextureWarnRow: View
     private lateinit var frameSizeWarnRow: View
     private lateinit var tvNextReason: TextView
-    private lateinit var ivInputsThumb: ImageView
-    private lateinit var tvInputsTitle: TextView
-    private lateinit var tvInputsMeta: TextView
     private var refPreviewBmp: android.graphics.Bitmap? = null
     private lateinit var btnCalculateFullField: Button
 
@@ -126,6 +124,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // both drive the same slider value)
     private lateinit var tvSubsetValue: EditText
     private lateinit var tvStepValue: EditText
+    private lateinit var tvOverlapValue: EditText
     private lateinit var tvStrainValue: EditText
 
     // Three-step wizard: images → settings → (sweep setup when Parameter sweep)
@@ -227,14 +226,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
             confirmOpenFaq(getString(R.string.url_faq_speckle))
         }
         tvNextReason = findViewById(R.id.tvNextReason)
-        ivInputsThumb = findViewById(R.id.ivInputsThumb)
-        tvInputsTitle = findViewById(R.id.tvInputsTitle)
-        tvInputsMeta = findViewById(R.id.tvInputsMeta)
         tvInstruction = findViewById(R.id.tvInstruction)
         tvRefName = findViewById(R.id.tvRefName)
         tvDefName = findViewById(R.id.tvDefName)
         etSubsetSize = findViewById(R.id.etSubsetSize)
         etStepSize = findViewById(R.id.etStepSize)
+        etOverlap = findViewById(R.id.etOverlap)
         etStrainWindow = findViewById(R.id.etStrainWindow)
         btnCalculateFullField = findViewById(R.id.btnCalculateFullField)
         rgInterpolator = findViewById(R.id.rgInterpolator)
@@ -245,6 +242,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // --- Parameter sliders: live value labels ---
         tvSubsetValue = findViewById(R.id.tvSubsetValue)
         tvStepValue = findViewById(R.id.tvStepValue)
+        tvOverlapValue = findViewById(R.id.tvOverlapValue)
         tvStrainValue = findViewById(R.id.tvStrainValue)
         setupParameterControls()
 
@@ -316,9 +314,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             rvFrameOrder = rvFrameOrder,
             btnFrameOrderSort = btnFrameOrderSort,
             frameOrderAdapter = frameOrderAdapter,
-            tvInputsTitle = tvInputsTitle,
-            tvInputsMeta = tvInputsMeta,
-            ivInputsThumb = ivInputsThumb,
             tvInstruction = tvInstruction,
             onLineCutPreview = { sweepHelper.refreshLineCutPreview() },
         )
@@ -1223,6 +1218,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun commitParamFields() {
         tvSubsetValue.clearFocus()
         tvStepValue.clearFocus()
+        tvOverlapValue.clearFocus()
         tvStrainValue.clearFocus()
         if (::sweepHelper.isInitialized) sweepHelper.clearSweepFieldFocus()
     }
@@ -1266,9 +1262,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             root = findViewById(android.R.id.content),
             subset = etSubsetSize,
             step = etStepSize,
+            overlap = etOverlap,
             strain = etStrainWindow,
             subsetValue = tvSubsetValue,
             stepValue = tvStepValue,
+            overlapValue = tvOverlapValue,
             strainValue = tvStrainValue,
             renderParamField = ::renderParamField,
             bindParamField = { field, slider, onUser -> bindParamField(field, slider, onUser) },
@@ -1285,7 +1283,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 etStepSize.value = 5f
                 etStrainWindow.value = 15f
                 rgInterpolator.check(R.id.rbBicubic)
+                settingsSheetHelper.syncFromStep()
                 if (::sweepHelper.isInitialized) {
+                    viewModel.subsetOverlap = VsgStudy.DEFAULT_OVERLAP
                     sweepHelper.resetUserModified()
                     sweepHelper.seedSweepSuggestions()
                 }
@@ -1304,6 +1304,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etSubsetSize.value = snapToSlider(etSubsetSize, params.subset).toFloat()
         etStepSize.value = snapToSlider(etStepSize, params.step).toFloat()
         etStrainWindow.value = snapToSlider(etStrainWindow, params.window).toFloat()
+        settingsSheetHelper.syncFromStep()
         if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
         clearRunStatus()
         // Bring the advanced-params card into view so the pasted values are visible.
@@ -1528,7 +1529,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (target >= 2) viewModel.settingsReviewed = true
 
         if (target == 2) {
-            wizardSlots.refreshInputsCard(refPreviewBmp)
             wizardSlots.updateRoiSummary()
             // Cheap no-op when the reference/ROI have not changed since the
             // last measurement; covers inputs that arrived before this page.

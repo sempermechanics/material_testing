@@ -12,7 +12,7 @@ import com.indicvision.semper.R
 
 /**
  * Load-frames and confirm-settings slot chrome: dropzones vs filled cards,
- * JPEG warning, inputs summary, ROI subtitle.
+ * JPEG warning, ROI subtitle.
  *
  * Readiness / Compute enablement stays in [AnalysisReadyGate].
  */
@@ -33,9 +33,6 @@ class AnalysisWizardSlots(
     private val rvFrameOrder: View,
     private val btnFrameOrderSort: View,
     private val frameOrderAdapter: FrameOrderAdapter,
-    private val tvInputsTitle: TextView,
-    private val tvInputsMeta: TextView,
-    private val ivInputsThumb: ImageView,
     private val tvInstruction: TextView,
     private val onLineCutPreview: () -> Unit,
 ) {
@@ -85,17 +82,6 @@ class AnalysisWizardSlots(
             frameOrderAdapter.submit(emptyList())
         }
         updateJpegChip()
-    }
-
-    /** Confirm-settings inputs summary card. */
-    fun refreshInputsCard(preview: Bitmap?) {
-        tvInputsTitle.text = viewModel.refName
-        tvInputsMeta.text = activity.resources.getQuantityString(
-            R.plurals.inputs_meta_fmt,
-            viewModel.defFilePaths.size,
-            viewModel.defFilePaths.size,
-        )
-        preview?.let { ivInputsThumb.setImageBitmap(it) }
     }
 
     /** ROI card subtitle reflecting the current selection. */

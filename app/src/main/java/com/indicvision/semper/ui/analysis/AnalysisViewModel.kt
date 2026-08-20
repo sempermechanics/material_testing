@@ -305,10 +305,10 @@ class AnalysisViewModel : ViewModel() {
     var strainWinSamples: Int = VsgStudy.DEFAULT_VSG_SAMPLES
 
     /**
-     * Step-depth denominator (z axis): step sizes are subset/2 down to
-     * subset/[stepDenominator]. 2 = one step (subset/2), 6 = five steps.
+     * Subset overlap shared by every combination in a sweep (`1 − step/subset`).
+     * Each subset then gets its own pixel step from [VsgStudy.stepSizeFor].
      */
-    var stepDenominator: Int = VsgStudy.DEFAULT_STEP_DENOM
+    var subsetOverlap: Double = VsgStudy.DEFAULT_OVERLAP
 
     /** True when the line cut runs along x; false for a cut along y. */
     var lineCutHorizontal: Boolean = true

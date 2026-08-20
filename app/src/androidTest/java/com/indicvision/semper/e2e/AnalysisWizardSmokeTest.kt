@@ -2,21 +2,31 @@
 
 package com.indicvision.semper.e2e
 
+import android.graphics.Bitmap
 import android.view.View
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.google.android.material.appbar.MaterialToolbar
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 /**
  * Instrumented UI smoke: open the analysis screen and assert cold-start wizard
@@ -28,6 +38,12 @@ class AnalysisWizardSmokeTest {
 
     @get:Rule
     val scenarioRule = ActivityScenarioRule(StaticAnalysisActivity::class.java)
+
+    @Before
+    fun markCoachSeen() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        CoachPrefs.Screen.entries.forEach { CoachPrefs.markSeen(ctx, it) }
+    }
 
     @Test
     fun analysisActivity_showsWizardNextWithoutCrashing() {
@@ -64,6 +80,58 @@ class AnalysisWizardSmokeTest {
             val compute = activity.findViewById<View>(R.id.btnCalculateFullField)
             assertNotNull(compute)
             assertEquals(View.GONE, compute.visibility)
+        }
+    }
+
+    @Test
+    fun analysisActivity_step2SingleSweepAndStep3Summary() {
+        goToWizardStep(2)
+        onView(withId(R.id.rgAnalysisMode)).check(matches(isDisplayed()))
+        onView(withId(R.id.etOverlap)).check(matches(isDisplayed()))
+        scenarioRule.scenario.onActivity { activity ->
+            assertTrue(activity.findViewById<View>(R.id.advancedParamsCard).isVisible)
+            assertFalse(activity.findViewById<View>(R.id.sweepSettingsCard).isVisible)
+        }
+        captureWizardShot("step2-single.png")
+
+        onView(withId(R.id.rbModeSweep)).perform(click())
+        scenarioRule.scenario.onActivity { activity ->
+            assertFalse(activity.findViewById<View>(R.id.advancedParamsCard).isVisible)
+            assertTrue(activity.findViewById<View>(R.id.sweepSettingsCard).isVisible)
+            assertTrue(activity.findViewById<View>(R.id.etSweepOverlap).isVisible)
+            val toolbar = activity.findViewById<MaterialToolbar>(R.id.toolbar)
+            assertEquals(activity.getString(R.string.step_of_fmt, 2, 3), toolbar.subtitle)
+        }
+        captureWizardShot("step2-sweep.png")
+
+        goToWizardStep(3)
+        scenarioRule.scenario.onActivity { activity ->
+            assertTrue(activity.findViewById<View>(R.id.plannedLatticeCard).isShown)
+            assertTrue(activity.findViewById<View>(R.id.lineCutPreviewCard).isShown)
+        }
+        captureWizardShot("step3-summary.png")
+    }
+
+    private fun goToWizardStep(step: Int) {
+        scenarioRule.scenario.onActivity { activity ->
+            val method = StaticAnalysisActivity::class.java.getDeclaredMethod(
+                "goToStep",
+                Int::class.javaPrimitiveType,
+                Boolean::class.javaPrimitiveType,
+            )
+            method.isAccessible = true
+            method.invoke(activity, step, false)
+        }
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+    }
+
+    private fun captureWizardShot(name: String) {
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        Thread.sleep(400)
+        val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        val dir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        File(dir, name).outputStream().use { out ->
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
     }
 }
