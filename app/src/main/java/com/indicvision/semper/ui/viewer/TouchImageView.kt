@@ -168,8 +168,10 @@ class TouchImageView @JvmOverloads constructor(
      * safe area if it now falls outside it.
      */
     fun setContentInsets(top: Int, bottom: Int, left: Int = 0, right: Int = 0) {
-        if (top == contentInsetTop && bottom == contentInsetBottom &&
-            left == contentInsetLeft && right == contentInsetRight
+        if (top == contentInsetTop &&
+            bottom == contentInsetBottom &&
+            left == contentInsetLeft &&
+            right == contentInsetRight
         ) {
             return
         }
