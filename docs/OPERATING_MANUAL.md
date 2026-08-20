@@ -401,12 +401,12 @@ summary GIF and share field-animations still use a whole-sequence scale so the
 loop stays comparable.
 
 **Tap to probe.** There is no Inspect / X,Y / Max-Min row. A short tap on the
-heatmap — anywhere but the middle of the screen, which is reserved for showing
-and hiding chrome — places a crosshair and a plain-text reading at the nearest
-correlated point. Drag past the touch slop pans (or flings to the next frame when
-unzoomed); pinch still zooms. Tap the same point again, or the readout, to
-dismiss. Switching field or frame keeps the probe at the same image location and
-updates the value.
+heatmap — including the centre — places a crosshair and a plain-text reading at
+the nearest correlated point. The bars hide on an idle timer, not from a tap;
+a centre double-tap brings them back when they have faded. Drag past the touch
+slop pans (or flings to the next frame when unzoomed); pinch still zooms. Tap
+the readout chip to dismiss. Switching field or frame keeps the probe at the
+same image location and updates the value.
 
 **The summary comes first.** The viewer opens on a looping animation of the
 whole sequence in the current field — every frame, never longer than 10 seconds,

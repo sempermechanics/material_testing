@@ -151,11 +151,13 @@ requested when the gallery tab needs them. Summary GIFs bake `viewer_canvas`
 day `#F4F9FC` / night `#101518`; night inverts the S on splash
 (`windowSplashScreenAnimatedIcon`).
 
-Viewer chrome is inset-aware glass: heatmap fit between the top bar and the
-scrub bar, field switcher as a top-left glass pill, colour scale as a right
-rail, auto-hiding, toggled by a centre tap or a vertical swipe. Settings'
-Analyses rows carry three actions — **Download** (SAF destination first, then a
-worker), **Restore** (only when local frames are gone) and **Delete**. The sweep
+Viewer chrome is inset-aware glass: heatmap rest-fit contains the ROI or
+accepted points between the top bar and the scrub bar (colour scale overlays
+the right edge), field switcher as a top-left glass pill with the live field
+checked in its popup, auto-hiding on a timer, restored by a centre double-tap
+when faded. A short tap anywhere on the figure probes. Settings' Analyses rows
+carry three actions — **Download** (SAF destination first, then a worker),
+**Restore** (only when local frames are gone) and **Delete**. The sweep
 lattice's plot toggle is an **All / Node** pill defaulting to **All**.
 
 Docs for all of the above: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md).
