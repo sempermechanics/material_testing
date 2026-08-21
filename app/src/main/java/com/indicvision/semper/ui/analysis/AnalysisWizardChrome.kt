@@ -72,6 +72,11 @@ class AnalysisWizardChrome(
 
     /** Bottom nav labels and visibility for the current wizard step + mode. */
     fun updateBottomNav(step: Int, sweepMode: Boolean) {
+        toolbar.subtitle = activity.getString(
+            R.string.step_of_fmt,
+            step,
+            if (sweepMode) 3 else 2,
+        )
         when (step) {
             1 -> {
                 btnNext.visibility = View.VISIBLE

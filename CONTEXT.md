@@ -130,9 +130,9 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-08-20)
 
-`origin/main` includes PRs #85–#95 (through viewer probe/rest-fit #94 and
-lattice/wizard picker #95). Open follow-up: this FAQ error map (#96). Refresh
-with `gh pr list --state open` — anything named here will rot.
+`origin/main` includes PRs #85–#96 (FAQ error map). Open follow-up: wizard
+step/overlap + step-2/3 reorder ([#97](https://github.com/semperdic/semperdic-app/pull/97)).
+Refresh with `gh pr list --state open` — anything named here will rot.
 
 **Merged since 2026-08-08:** lint extracts #59–#64 and #66; compile/quality #68;
 wizard slots/coach #69; `DicBatchRunner` + `DicFieldIo` #70; hashed lock /

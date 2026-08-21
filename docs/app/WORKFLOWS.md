@@ -477,84 +477,79 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 
 ```
 5.2 Confirm settings
-    ├── inputs summary card
-    ├── Region of interest ......... → 6. ROI editor (cancel = full image)
     ├── Analysis mode: Single setting / Parameter sweep
-    ├── Line-cut preview + X/Y axis           [sweep]
+    ├── Region of interest ......... → 6. ROI editor (cancel = full image)
     ├── Advanced parameters                   [single]
     │   ├── Paste params chip  (only when the lattice clipboard holds a set)
     │   ├── subset size      (slider + typed field + ⓘ)
-    │   ├── step size        (slider + typed field + ⓘ)
+    │   ├── step size        (title + ⓘ; short slider + typed px on the next row)
+    │   ├── overlap          (title + ⓘ on the step title row; typed ratio beside the step readout)
     │   ├── strain window    (slider + typed field + ⓘ)
     │   ├── interpolator: Bicubic 4×4 / Keys 6×6
     │   └── Reset to recommended
+    ├── Sweep settings                        [sweep]
+    │   ├── subset size range
+    │   ├── strain window range
+    │   ├── step size (subset ÷ N, default 3) + overlap at the end
+    │   └── frame to sweep
     ├── frame-size mismatch warning chip + FAQ   (when a deformed frame differs)
-    ├── coach marks on first visit  (mode toggle, ROI, advanced-params header)
-    └── Compute
+    ├── coach marks on first visit  (mode toggle, ROI, visible settings card)
+    └── Compute  [single]  /  Next: Summary →  [sweep]
 ```
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 5.2.1 | Arrive on step 2 | Summary card shows the reference thumbnail, name and frame count |
+| [ ] 5.2.1 | Arrive on step 2 | Analysis mode is at the top; there is no inputs-summary card |
 | [ ] 5.2.2 | Read the ROI line before editing | "Full image W × H" |
 | [ ] 5.2.3 | Tap **Edit** → draw an ROI → save | The line becomes "W × H at (x, y)" |
 | [ ] 5.2.4 | Tap **Edit** → cancel | Falls back to full image; any mask is cleared |
-| [ ] 5.2.5 | Switch to **Parameter sweep** | Advanced parameters hide; the line-cut preview appears |
-| [ ] 5.2.6 | Toggle the line-cut axis X ↔ Y | The preview redraws the cut line through the ROI centre |
+| [ ] 5.2.5 | Switch to **Parameter sweep** | Advanced parameters hide; sweep settings appear. Bottom nav reads **Next: Summary →** |
+| [ ] 5.2.6 | Type **step size** as subset ÷ N in sweep settings | N is 2–9 (default 3); overlap on the same row is `1 − 1/N`; each subset uses `step = round(subset / N)` |
 | [ ] 5.2.7 | Tap the ⓘ next to the mode toggle | Explains single setting vs sweep |
 | [ ] 5.2.8 | Switch back to **Single setting** | Advanced parameters return with their previous values |
-| [ ] 5.2.9 | Drag the **subset size** slider | Only odd values between 15 and 121; the field mirrors it |
+| [ ] 5.2.9 | Drag the **subset size** slider | Only odd values between 15 and 121; the field mirrors it; overlap updates from the current step |
 | [ ] 5.2.10 | Type an even subset size and press Done | Snapped to the nearest valid odd value |
 | [ ] 5.2.11 | Type nonsense in a parameter field | Reverts to the previous value on commit |
-| [ ] 5.2.12 | Drag **step size** | 1–30, field mirrors it |
+| [ ] 5.2.12 | Drag **step size** | Max is `min(30, subset/2)` so overlap stays ≥ 0.5; the overlap field mirrors it |
+| [ ] 5.2.12a | Type **overlap** on the step-size row | 0.50–0.99; step size rewrites to `round(subset × (1 − overlap))` |
 | [ ] 5.2.13 | Drag **strain window** | Odd values 5–101, field mirrors it |
 | [ ] 5.2.13a | Open step 2 having never copied params from a lattice | No **Paste params** chip — it only appears when the clipboard holds a set |
-| [ ] 5.2.13b | Copy params from a sweep lattice (§7.3), then return here | The chip appears beside **Reset**; tapping it fills subset, step and strain window and scrolls them into view |
-| [ ] 5.2.14 | Tap each ⓘ | Subset, step and strain window each explain themselves |
+| [ ] 5.2.13b | Copy params from a sweep lattice (§7.3), then return here | The chip appears beside **Reset**; tapping it fills subset, step and strain window (overlap follows step) and scrolls them into view |
+| [ ] 5.2.14 | Tap each ⓘ | Subset, step, overlap and strain window each explain themselves |
 | [ ] 5.2.15 | Switch the interpolator to **Keys 6×6** | Selection sticks; the run uses it |
-| [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, strain window to 15, interpolator to Bicubic |
+| [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, overlap follows step, strain window to 15, interpolator to Bicubic |
 | [ ] 5.2.16a | After a failed run leaves an ❌ line on step 2, change subset / paste params / replace frames | The run-status line clears; the frame-size chip (if any) only shows when sizes still mismatch |
 | [ ] 5.2.17 | Load a well-speckled reference and watch the subset | It is pre-seeded from the SSSIG recommendation — until you touch it |
 | [ ] 5.2.18 | Draw an ROI smaller than the subset and tap **Compute** | "ROI too small" snackbar with a **Why?** action; that asks first whether to leave the app, then opens the ROI FAQ. The run does not start |
 | [ ] 5.2.19 | Edit a parameter field and tap **Compute** without pressing Done | The typed value is committed and used |
 | [ ] 5.2.20 | Open step 2 for the first time | Coach marks point at the analysis-mode toggle, the ROI card, then the advanced-parameters header |
+| [ ] 5.2.21 | Tap **Pick frame** (sweep, multi-frame) | Dialog with a radio list, a frame-number field and a live preview |
+| [ ] 5.2.23 | Drag the subset range handles | Both ends stay odd; min never crosses max |
+| [ ] 5.2.24 | Type a subset min above the max | Clamped so min ≤ max |
+| [ ] 5.2.25 | Drag the strain window range | Two handles like the subset's; the min and max boxes track it |
 
-### 5.3 Step 3 — Sweep setup `[sweep]`
+### 5.3 Step 3 — Sweep summary `[sweep]`
 
 ```
-5.3 Sweep setup
-    ├── subset size range      (dual slider + min/max fields, 15–121)
-    ├── strain window range    (dual slider + min/max fields, 5–101)
-    ├── step denominator       ("subset ÷ n", 2–9)
-    ├── frame to sweep         (dialog: radio list + number + live preview)
+5.3 Sweep summary
     ├── planned lattice preview
     ├── lattice samples: no. of subsets × no. of VSGs (1–8 each)
     ├── plan summary, or a warning chip + FAQ for "empty plan" / "subset too big"
-    ├── coach marks on first visit  (subset range, planned lattice, Compute)
+    ├── Line-cut preview + X/Y axis
+    ├── coach marks on first visit  (planned lattice, line cut, Compute)
     └── Compute
 ```
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 5.3.1 | Arrive on step 3 | Ranges are pre-seeded around the recommended subset; the toolbar reads "Step 3 of 3" |
-| [ ] 5.3.2 | Drag the subset range handles | Both ends stay odd; min never crosses max |
-| [ ] 5.3.3 | Type a subset min above the max | Clamped so min ≤ max |
-| [ ] 5.3.4 | Look for a "max VSG size" field | There is none — the ceiling comes from the **strain window range** below the subset range |
-| [ ] 5.3.5 | Type a step denominator of 1, then 12 | Clamped into 2–9; the prefix reads "subset ÷ n" |
-| [ ] 5.3.6 | Tap each ⓘ | Subset range, strain window range, step depth and samples each explain themselves |
-| [ ] 5.3.6b | Read the strain window control | It has its own title and ⓘ and spans the row, like the subset range above it |
-| [ ] 5.3.6d | Drag the strain window range | Two handles like the subset's; the min and max boxes track it and the plan count updates |
-| [ ] 5.3.6e | Find the step size | On its own row below the range, not sharing one with it |
-| [ ] 5.3.6c | Type a min above the max | Clamped rather than inverted; the sweep still plans |
-| [ ] 5.3.6a | Open sweep setup for the first time | Three coach marks in order: the subset range, the planned-lattice graph, then the **Compute** button |
-| [ ] 5.3.7 | Tap **Pick frame** | Dialog with a radio list, a frame-number field and a live preview |
-| [ ] 5.3.8 | Type a frame number in that dialog | The radio selection and preview follow |
-| [ ] 5.3.9 | Scrub quickly through frames in the dialog | Preview keeps up; no stale image is left behind |
-| [ ] 5.3.10 | With one deformed frame only | The frame picker is hidden |
+| [ ] 5.3.1 | Arrive on step 3 | Toolbar reads "Step 3 of 3"; planned lattice is first, line cut below it |
+| [ ] 5.3.6 | Tap each ⓘ | Line-cut axis and samples each explain themselves |
+| [ ] 5.3.6a | Open the summary page for the first time | Three coach marks in order: the planned lattice, the line cut, then the **Compute** button |
+| [ ] 5.3.6f | Toggle the line-cut axis X ↔ Y | The preview redraws the cut line through the ROI centre |
 | [ ] 5.3.11 | Look at the planned lattice | Grid of nodes, subset across, VSG up; taps do nothing (it's a preview) |
 | [ ] 5.3.12 | Open the samples panel (gear) and set 4 × 4 | The plan summary reads 16 analyses and the lattice redraws |
 | [ ] 5.3.13 | Set samples to 9 | Clamped to 8 |
-| [ ] 5.3.14 | Set the subset min above what the ROI can hold | Warning chip: "Subset range starts above what this image and ROI can hold"; info icon opens the sweep-subset FAQ behind the leave-the-app confirm. **Compute** is disabled |
+| [ ] 5.3.14 | Set the subset min (on step 2) above what the ROI can hold | Warning chip: "Subset range starts above what this image and ROI can hold"; info icon opens the sweep-subset FAQ behind the leave-the-app confirm. **Compute** is disabled |
 | [ ] 5.3.15 | Set a strain window range that no subset can satisfy | Warning chip: "No combination fits this ceiling — raise Max strain window or lower the subset range"; info icon opens the empty-plan FAQ behind the same confirm. **Compute** is disabled |
 | [ ] 5.3.16 | Read a valid plan summary | "N analyses · subset a–b px · VSG c–d px" |
 

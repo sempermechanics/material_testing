@@ -161,17 +161,19 @@ deformed frame the control is hidden.
 
 <img src="images/step2-parameters.png" width="300" alt="Step 2 parameters">
 
-Three decisions:
+Three decisions, in this order:
 
-- **Region of interest** — defaults to the full image. **Edit** opens the editor
-  ([§6](#6-region-of-interest)).
 - **Single setting** or **Parameter sweep** — Single solves every frame once. A
   parameter sweep solves one frame many times ([§7](#7-parameter-sweeps)).
-- **Advanced parameters** — [§5](#5-parameters). If you copied a set of
-  parameters from a sweep lattice, a **Paste params** chip appears here and fills
-  all three in one tap.
+- **Region of interest** — defaults to the full image. **Edit** opens the editor
+  ([§6](#6-region-of-interest)).
+- **Parameters** — in Single, the advanced set ([§5](#5-parameters)). In Sweep,
+  the subset range, strain-window range, and step as subset ÷ N (default 3),
+  with overlap shown at the end of that row.
+  If you copied a set of parameters from a sweep lattice, a **Paste params**
+  chip appears in Single and fills subset, step and strain window in one tap.
 
-Then **Compute**.
+Then **Compute** (Single) or **Next: Summary →** (Sweep).
 
 ### While it runs
 
@@ -220,12 +222,14 @@ new one.
 
 ## 5. Parameters
 
-Single mode only. Slider or typed field, each with an ⓘ.
+Single mode only. Slider or typed field, each with an ⓘ. Step and overlap
+share a title row; the overlap ratio sits beside the step readout.
 
 | Parameter | Range | Reset to |
 |---|---|---|
 | Subset size | 15–121, odd | Recommended |
-| Step size | 1–30 | 5 |
+| Step size | 1–`min(30, subset/2)` | 5 |
+| Subset overlap | 0.50–0.99 (`1 − step / subset`) | Follows step |
 | Strain window | 5–101, odd | 15 |
 | Kernel | 4×4 Bicubic / 6×6 Keys | 4×4 Bicubic |
 
@@ -240,6 +244,11 @@ for 0.007 px accuracy, sampled on a 4×4 grid and taken as the median.
 
 It is a starting point. Touch the slider and it stops tracking the image.
 **Reset** brings it back.
+
+**Subset overlap** is how much neighbouring windows cover each other after a
+step: `overlap = 1 − step / subset`. The two controls stay in sync. The iDICs
+Good Practices Guide keeps overlap at least 0.5 and strictly below 1.0;
+typical values are about 0.50–0.75.
 
 ### Strain window and VSG
 
@@ -298,17 +307,20 @@ Good Practices Guide asks for (Tip 5.4).
 
 A sweep uses **one** deformed frame.
 
-### Setting it up (step 3)
+### Setting it up (step 2, then step 3)
 
-<img src="images/step3-sweep.png" width="300" alt="Sweep setup, step 3">
+Sweep parameters live on step 2. Step 3 is the summary: planned lattice, then
+the line cut, then **Compute**.
+
+<img src="images/step3-sweep.png" width="300" alt="Sweep summary, step 3">
 
 | Control | Range |
 |---|---|
-| Subset range | 15–121, odd |
-| Strain window range | 5–101, odd — min and max, the sweep's y axis |
-| Step denominator | 2–9 — step is `subset ÷ n`, never below 1 px |
-| Samples | 1–8 per axis |
-| Frame to sweep | radio list + number + preview |
+| Subset range | 15–121, odd (step 2) |
+| Strain window range | 5–101, odd — min and max, the sweep's y axis (step 2) |
+| Step size | subset ÷ N, N 2–9, default 3. Overlap on the same row is `1 − 1/N`. Pixel step is `round(subset / N)` (step 2) |
+| Frame to sweep | radio list + number + preview (step 2) |
+| Samples | 1–8 per axis (step 3, lattice gear) |
 
 Runtime is the product of the two sample counts. 8 × 8 is 64 solves. Start at
 3 × 3.

@@ -1,7 +1,7 @@
 // Sweep setup wires many sliders/fields and seeds suggested values. Per-control
 // methods and literal UI constants are inherent; suppress rather than baseline.
 
-@file:Suppress("TooManyFunctions", "MagicNumber")
+@file:Suppress("TooManyFunctions", "MagicNumber", "LargeClass")
 
 package com.indicvision.semper.ui.analysis
 
@@ -80,8 +80,7 @@ class SweepSetupHelper(
 
     private lateinit var rgAnalysisMode: MaterialButtonToggleGroup
     private lateinit var advancedParamsCard: View
-    private lateinit var lineCutPreviewCard: View
-    private lateinit var sweepBody: View
+    private lateinit var sweepSettingsCard: View
     private lateinit var rangeSubset: RangeSlider
     private lateinit var etSubsetMinValue: EditText
     private lateinit var etSubsetMaxValue: EditText
@@ -89,6 +88,7 @@ class SweepSetupHelper(
     private lateinit var etStrainWinMinValue: EditText
     private lateinit var etStrainWinMaxValue: EditText
     private lateinit var etStepDepthValue: EditText
+    private lateinit var tvSweepOverlapValue: EditText
     private lateinit var etSubsetSamplesValue: EditText
     private lateinit var etStrainWinSamplesValue: EditText
     private lateinit var rgLineCutAxis: MaterialButtonToggleGroup
@@ -118,8 +118,7 @@ class SweepSetupHelper(
     fun setup() {
         rgAnalysisMode = activity.findViewById(R.id.rgAnalysisMode)
         advancedParamsCard = activity.findViewById(R.id.advancedParamsCard)
-        lineCutPreviewCard = activity.findViewById(R.id.lineCutPreviewCard)
-        sweepBody = activity.findViewById(R.id.sweepBody)
+        sweepSettingsCard = activity.findViewById(R.id.sweepSettingsCard)
         rangeSubset = activity.findViewById(R.id.rangeSubset)
         etSubsetMinValue = activity.findViewById(R.id.etSubsetMinValue)
         etSubsetMaxValue = activity.findViewById(R.id.etSubsetMaxValue)
@@ -127,6 +126,7 @@ class SweepSetupHelper(
         etStrainWinMinValue = activity.findViewById(R.id.etStrainWinMinValue)
         etStrainWinMaxValue = activity.findViewById(R.id.etStrainWinMaxValue)
         etStepDepthValue = activity.findViewById(R.id.etStepDepthValue)
+        tvSweepOverlapValue = activity.findViewById(R.id.tvSweepOverlapValue)
         etSubsetSamplesValue = activity.findViewById(R.id.etSubsetSamplesValue)
         etStrainWinSamplesValue = activity.findViewById(R.id.etVsgSamplesValue)
         rgLineCutAxis = activity.findViewById(R.id.rgLineCutAxis)
@@ -179,19 +179,19 @@ class SweepSetupHelper(
         applyAnalysisModeUi()
         callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
         callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
-        callbacks.renderParamField(etStepDepthValue, viewModel.stepDenominator)
+        writeStepDepth(viewModel.stepDenominator)
         seedSweepSuggestions()
     }
 
     /**
-     * Single setting keeps Advanced + Compute on page 2. Parameter sweep hides
-     * Advanced, shows the line-cut preview, and routes through Next → page 3.
+     * Single setting keeps Advanced + Compute on page 2. Parameter sweep shows
+     * sweep settings on page 2 and routes through Next → page 3 (summary).
      */
     fun applyAnalysisModeUi() {
         val sweep = viewModel.sweepMode
         advancedParamsCard.isVisible = !sweep
-        lineCutPreviewCard.isVisible = sweep
-        if (sweep) refreshLineCutPreview()
+        sweepSettingsCard.isVisible = sweep
+        if (sweep) refreshSweepPlan()
         callbacks.updateWizardChrome()
         callbacks.checkReady()
     }
@@ -203,6 +203,8 @@ class SweepSetupHelper(
         etSubsetMaxValue.clearFocus()
         etStrainWinMinValue.clearFocus()
         etStrainWinMaxValue.clearFocus()
+        etStepDepthValue.clearFocus()
+        tvSweepOverlapValue.clearFocus()
     }
 
     /** Hands the sweep back to suggested inputs (e.g. Advanced Reset). */
@@ -263,7 +265,7 @@ class SweepSetupHelper(
         if (!::tvSweepPlan.isInitialized) return
         callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
         callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
-        callbacks.renderParamField(etStepDepthValue, viewModel.stepDenominator)
+        writeStepDepth(viewModel.stepDenominator)
         refreshSweepFrameUi()
 
         val plan = currentPlan()
@@ -395,6 +397,7 @@ class SweepSetupHelper(
         wireSweepField(etStrainWinMinValue, { viewModel.strainWinMin }) { commitStrainWinMin(it) }
         wireSweepField(etStrainWinMaxValue, { viewModel.strainWinMax }) { commitStrainWinMax(it) }
         wireSweepField(etStepDepthValue, { viewModel.stepDenominator }) { commitStepDepth(it) }
+        wireSweepOverlapField()
         wireSweepField(etSubsetSamplesValue, { viewModel.subsetSamples }) { commitSubsetSamples(it) }
         wireSweepField(etStrainWinSamplesValue, { viewModel.strainWinSamples }) { commitStrainWinSamples(it) }
     }
@@ -439,6 +442,8 @@ class SweepSetupHelper(
             .setOnClickListener { callbacks.showInfo(R.string.subset_samples, R.string.info_subset_samples) }
         activity.findViewById<View>(R.id.btnStepDepthInfo)
             .setOnClickListener { callbacks.showInfo(R.string.step_depth, R.string.info_step_depth) }
+        activity.findViewById<View>(R.id.btnSweepOverlapInfo)
+            .setOnClickListener { callbacks.showInfo(R.string.subset_overlap, R.string.info_subset_overlap) }
         activity.findViewById<View>(R.id.btnLineCutInfo)
             .setOnClickListener { callbacks.showInfo(R.string.line_cut_axis, R.string.info_line_cut_axis) }
     }
@@ -529,8 +534,54 @@ class SweepSetupHelper(
 
     private fun commitStepDepth(raw: Int) {
         viewModel.stepDenominator = raw.coerceIn(VsgStudy.STEP_DENOM_MIN, VsgStudy.STEP_DENOM_MAX)
-        callbacks.renderParamField(etStepDepthValue, viewModel.stepDenominator)
+        viewModel.subsetOverlap = VsgStudy.overlapForDenominator(viewModel.stepDenominator)
+        writeStepDepth(viewModel.stepDenominator)
         refreshSweepPlan()
+    }
+
+    private fun commitOverlap(raw: Double) {
+        commitStepDepth(VsgStudy.denominatorForOverlap(raw))
+    }
+
+    private fun writeStepDepth(denominator: Int) {
+        val n = denominator.coerceIn(VsgStudy.STEP_DENOM_MIN, VsgStudy.STEP_DENOM_MAX)
+        viewModel.stepDenominator = n
+        viewModel.subsetOverlap = VsgStudy.overlapForDenominator(n)
+        if (!etStepDepthValue.hasFocus()) {
+            callbacks.renderParamField(etStepDepthValue, n)
+        }
+        if (!tvSweepOverlapValue.hasFocus()) {
+            tvSweepOverlapValue.setText(
+                String.format(Locale.US, "%.2f", viewModel.subsetOverlap),
+            )
+        }
+    }
+
+    private fun wireSweepOverlapField() {
+        val commit = {
+            val typed = tvSweepOverlapValue.text.toString().trim().replace(',', '.').toDoubleOrNull()
+            if (typed == null) {
+                writeStepDepth(viewModel.stepDenominator)
+            } else {
+                sweepUserModified = true
+                commitOverlap(typed)
+            }
+        }
+        bindSweepCommitField(tvSweepOverlapValue, commit)
+    }
+
+    private fun bindSweepCommitField(field: EditText, commit: () -> Unit) {
+        field.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commit() }
+        field.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                field.clearFocus()
+                activity.getSystemService(InputMethodManager::class.java)
+                    ?.hideSoftInputFromWindow(field.windowToken, 0)
+                true
+            } else {
+                false
+            }
+        }
     }
 
     private fun commitSubsetSamples(raw: Int) {
