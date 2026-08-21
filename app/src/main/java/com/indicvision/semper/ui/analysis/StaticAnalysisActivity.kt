@@ -1285,7 +1285,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 rgInterpolator.check(R.id.rbBicubic)
                 settingsSheetHelper.syncFromStep()
                 if (::sweepHelper.isInitialized) {
-                    viewModel.subsetOverlap = VsgStudy.DEFAULT_OVERLAP
+                    viewModel.stepDenominator = VsgStudy.DEFAULT_STEP_DENOM
+                    viewModel.subsetOverlap = VsgStudy.overlapForDenominator(VsgStudy.DEFAULT_STEP_DENOM)
                     sweepHelper.resetUserModified()
                     sweepHelper.seedSweepSuggestions()
                 }

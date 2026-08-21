@@ -24,7 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:cardBackgroundColor="@android:color/transparent"
-            app:strokeColor="@color/viewer_glass_stroke">
+            app:strokeColor="@color/surface_outline">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -94,7 +94,7 @@
                             android:layout_marginEnd="6dp"
                             android:layout_weight="1"
                             android:hint="@string/subset_samples"
-                            app:boxStrokeColor="@color/sky_primary"
+                            app:boxStrokeColor="@color/input_box_stroke"
                             app:hintTextColor="@color/viewer_chrome_muted">
 
                             <com.google.android.material.textfield.TextInputEditText
@@ -116,7 +116,7 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:hint="@string/vsg_samples"
-                            app:boxStrokeColor="@color/sky_primary"
+                            app:boxStrokeColor="@color/input_box_stroke"
                             app:hintTextColor="@color/viewer_chrome_muted">
 
                             <com.google.android.material.textfield.TextInputEditText
@@ -168,7 +168,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             app:cardBackgroundColor="@android:color/transparent"
-            app:strokeColor="@color/viewer_glass_stroke">
+            app:strokeColor="@color/surface_outline">
 
             <LinearLayout
                 android:layout_width="match_parent"

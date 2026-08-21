@@ -87,7 +87,7 @@ class AnalysisWizardSmokeTest {
     fun analysisActivity_step2SingleSweepAndStep3Summary() {
         goToWizardStep(2)
         onView(withId(R.id.rgAnalysisMode)).check(matches(isDisplayed()))
-        onView(withId(R.id.etOverlap)).check(matches(isDisplayed()))
+        onView(withId(R.id.tvOverlapValue)).check(matches(isDisplayed()))
         scenarioRule.scenario.onActivity { activity ->
             assertTrue(activity.findViewById<View>(R.id.advancedParamsCard).isVisible)
             assertFalse(activity.findViewById<View>(R.id.sweepSettingsCard).isVisible)
@@ -98,7 +98,7 @@ class AnalysisWizardSmokeTest {
         scenarioRule.scenario.onActivity { activity ->
             assertFalse(activity.findViewById<View>(R.id.advancedParamsCard).isVisible)
             assertTrue(activity.findViewById<View>(R.id.sweepSettingsCard).isVisible)
-            assertTrue(activity.findViewById<View>(R.id.etSweepOverlap).isVisible)
+            assertTrue(activity.findViewById<View>(R.id.tilStepDepth).isVisible)
             val toolbar = activity.findViewById<MaterialToolbar>(R.id.toolbar)
             assertEquals(activity.getString(R.string.step_of_fmt, 2, 3), toolbar.subtitle)
         }

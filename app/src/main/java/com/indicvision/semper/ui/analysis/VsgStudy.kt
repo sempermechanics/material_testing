@@ -23,10 +23,12 @@ import kotlin.math.roundToInt
  * this object derives the rest:
  *
  *  - subset sizes are the odd values across the requested range;
- *  - step size follows the chosen subset overlap (`1 − step/subset`), kept
- *    at least 0.5 and strictly below 1.0 — the iDICs good-practice band;
- *    below 0.5 the field is under-sampled, at 1.0 neighbouring windows
- *    would coincide;
+ *  - step size is an integer between 1/6 and 1/3 of each subset, the usual
+ *    overlap band — below 1/6 neighbouring subsets are so redundant that the
+ *    extra runtime buys nothing, above 1/3 the field is under-sampled.
+ *    The sweep asks for that fraction as `subset ÷ N`; single analysis asks
+ *    for a pixel step plus the linked overlap `1 − step/subset`;
+ *  - the strain window then follows from the VSG relation below.
  *  - the strain window then follows from the VSG relation below.
  *
  * Every surviving combination is solved in its own right and lands in the
@@ -67,10 +69,19 @@ object VsgStudy {
     const val MAX_SUBSET_SPAN = 200
 
     /**
-     * Overlap after a step stride: `1 − step/subset`. The sweep uses one
-     * overlap for every subset (so step in pixels follows each subset). The
-     * iDICs guide keeps this at least half (step ≤ subset/2) and strictly
-     * below 1.0 (step ≥ 1 px). Typical practice is about 0.50–0.75.
+     * Step fraction for a sweep. One denominator for every subset:
+     * `step = round(subset / N)`. The user picks N — `2` (half the subset,
+     * the coarsest) through `9` (the finest).
+     */
+    const val STEP_DENOM_MIN = 2
+    const val STEP_DENOM_MAX = 9
+    const val DEFAULT_STEP_DENOM = 3
+
+    /**
+     * Overlap after a step stride: `1 − step/subset`. Single analysis links
+     * pixel step to this ratio. The iDICs guide keeps this at least half
+     * (step ≤ subset/2) and strictly below 1.0 (step ≥ 1 px). Typical
+     * practice is about 0.50–0.75.
      */
     const val MIN_OVERLAP = 0.5
 
@@ -94,7 +105,7 @@ object VsgStudy {
     // Sweep planning
     //
     // The sweep is a grid: the user picks how many subset sizes (x) and VSG
-    // sizes (y) to sample, plus one overlap shared by the whole sweep.
+    // sizes (y) to sample, plus one step fraction shared by the whole sweep.
     // The number of analyses is x · y — one full solve per grid cell — set
     // explicitly rather than through a single opaque "runs" budget.
     // ------------------------------------------------------------------
@@ -107,6 +118,12 @@ object VsgStudy {
     ) {
         /** Footprint the strain calculation averages over, in pixels. */
         val vsg: Int get() = vsgFor(step, strainWindow)
+    }
+
+    /** The single step size for [subset] at the chosen [denominator]: `subset/N`, in pixels. */
+    fun stepSizeFor(subset: Int, denominator: Int): Int {
+        val d = denominator.coerceIn(STEP_DENOM_MIN, STEP_DENOM_MAX)
+        return (subset.toDouble() / d).roundToInt().coerceIn(MIN_STEP, MAX_STEP)
     }
 
     /** Largest step that still keeps overlap ≥ [MIN_OVERLAP] and within [MAX_STEP]. */
@@ -124,6 +141,19 @@ object VsgStudy {
         return clampOverlap(1.0 - s.toDouble() / subset)
     }
 
+    /** Overlap implied by sweep denominator N: `1 − 1/N`. */
+    fun overlapForDenominator(denominator: Int): Double {
+        val d = denominator.coerceIn(STEP_DENOM_MIN, STEP_DENOM_MAX)
+        return clampOverlap(1.0 - 1.0 / d)
+    }
+
+    /** Sweep denominator nearest [overlap]: `round(1 / (1 − overlap))`. */
+    fun denominatorForOverlap(overlap: Double): Int {
+        val o = clampOverlap(overlap)
+        val denom = (1.0 / (1.0 - o)).roundToInt()
+        return denom.coerceIn(STEP_DENOM_MIN, STEP_DENOM_MAX)
+    }
+
     /** Pixel step for [subset] at the chosen [overlap]. */
     fun stepSizeFor(subset: Int, overlap: Double): Int {
         val o = clampOverlap(overlap)
@@ -138,11 +168,11 @@ object VsgStudy {
 
     /** Smallest VSG reachable for [subset]: its finest step, narrowest window. */
     fun minVsg(subset: Int): Int =
-        vsgFor(stepSizeFor(subset, MAX_OVERLAP), MIN_STRAIN_WINDOW)
+        vsgFor(stepSizeFor(subset, STEP_DENOM_MAX), MIN_STRAIN_WINDOW)
 
     /** Largest VSG reachable for [subset]: its coarsest step, widest window. */
     fun maxVsg(subset: Int): Int =
-        vsgFor(stepSizeFor(subset, MIN_OVERLAP), MAX_STRAIN_WINDOW)
+        vsgFor(stepSizeFor(subset, STEP_DENOM_MIN), MAX_STRAIN_WINDOW)
 
     /** Default VSG ceiling offered for [subset], inside the reachable range. */
     fun defaultVsgMax(subset: Int): Int =
@@ -181,8 +211,9 @@ object VsgStudy {
     /**
      * The sweep grid: for each sampled subset (x) and each of [strainWinSamples]
      * strain windows (y) sampled across `[strainWinMin, strainWinMax]`, one
-     * analysis at `step = subset × (1 − overlap)`. Deduplicated, ordered by
-     * subset then VSG — the order the frames are solved and scrubbed through in.
+     * analysis at the fixed step size `subset/[stepDenominator]`. Deduplicated,
+     * ordered by subset then VSG — the order the frames are solved and scrubbed
+     * through in.
      */
     @Suppress("LongParameterList") // the sweep's independent axes
     fun plan(
@@ -192,18 +223,38 @@ object VsgStudy {
         strainWinMin: Int,
         strainWinMax: Int,
         strainWinSamples: Int,
-        overlap: Double,
+        stepDenominator: Int,
     ): List<Point> {
         val windows = sampledWindows(strainWinMin, strainWinMax, strainWinSamples)
         val out = LinkedHashSet<Point>()
         for (subset in sampledSubsets(subsetMin, subsetMax, subsetSamples)) {
-            val step = stepSizeFor(subset, overlap)
+            val step = stepSizeFor(subset, stepDenominator)
             for (window in windows) {
                 out.add(Point(subset, step, window))
             }
         }
         return out.sortedWith(compareBy({ it.subset }, { it.vsg }, { it.step }))
     }
+
+    /** Same grid as [plan], with step taken from [overlap] via [denominatorForOverlap]. */
+    @Suppress("LongParameterList") // overlap overload of the sweep planner
+    fun plan(
+        subsetMin: Int,
+        subsetMax: Int,
+        subsetSamples: Int,
+        strainWinMin: Int,
+        strainWinMax: Int,
+        strainWinSamples: Int,
+        overlap: Double,
+    ): List<Point> = plan(
+        subsetMin,
+        subsetMax,
+        subsetSamples,
+        strainWinMin,
+        strainWinMax,
+        strainWinSamples,
+        denominatorForOverlap(overlap),
+    )
 
     /** [count] items of [items], evenly spaced, both ends included. */
     private fun <T> sampleEvenly(items: List<T>, count: Int): List<T> = when {

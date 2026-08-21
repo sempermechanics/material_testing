@@ -482,15 +482,15 @@ Reached whenever the file picked — from the grid or through Files — is a vid
     ├── Advanced parameters                   [single]
     │   ├── Paste params chip  (only when the lattice clipboard holds a set)
     │   ├── subset size      (slider + typed field + ⓘ)
-    │   ├── step size        (slider + typed field + ⓘ)
-    │   ├── subset overlap   (slider + typed field + ⓘ; linked to step)
+    │   ├── step size        (title + ⓘ; short slider + typed px on the next row)
+    │   ├── overlap          (title + ⓘ on the step title row; typed ratio beside the step readout)
     │   ├── strain window    (slider + typed field + ⓘ)
     │   ├── interpolator: Bicubic 4×4 / Keys 6×6
     │   └── Reset to recommended
     ├── Sweep settings                        [sweep]
     │   ├── subset size range
     │   ├── strain window range
-    │   ├── subset overlap (default 0.80; step follows each subset)
+    │   ├── step size (subset ÷ N, default 3) + overlap at the end
     │   └── frame to sweep
     ├── frame-size mismatch warning chip + FAQ   (when a deformed frame differs)
     ├── coach marks on first visit  (mode toggle, ROI, visible settings card)
@@ -504,14 +504,14 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | [ ] 5.2.3 | Tap **Edit** → draw an ROI → save | The line becomes "W × H at (x, y)" |
 | [ ] 5.2.4 | Tap **Edit** → cancel | Falls back to full image; any mask is cleared |
 | [ ] 5.2.5 | Switch to **Parameter sweep** | Advanced parameters hide; sweep settings appear. Bottom nav reads **Next: Summary →** |
-| [ ] 5.2.6 | Drag **subset overlap** in sweep settings | Clamped to 0.50–0.99; the hint shows the derived pixel step at the min subset |
+| [ ] 5.2.6 | Type **step size** as subset ÷ N in sweep settings | N is 2–9 (default 3); overlap on the same row is `1 − 1/N`; each subset uses `step = round(subset / N)` |
 | [ ] 5.2.7 | Tap the ⓘ next to the mode toggle | Explains single setting vs sweep |
 | [ ] 5.2.8 | Switch back to **Single setting** | Advanced parameters return with their previous values |
 | [ ] 5.2.9 | Drag the **subset size** slider | Only odd values between 15 and 121; the field mirrors it; overlap updates from the current step |
 | [ ] 5.2.10 | Type an even subset size and press Done | Snapped to the nearest valid odd value |
 | [ ] 5.2.11 | Type nonsense in a parameter field | Reverts to the previous value on commit |
 | [ ] 5.2.12 | Drag **step size** | Max is `min(30, subset/2)` so overlap stays ≥ 0.5; the overlap field mirrors it |
-| [ ] 5.2.12a | Drag **subset overlap** | 0.50–0.99; step size rewrites to `round(subset × (1 − overlap))` |
+| [ ] 5.2.12a | Type **overlap** on the step-size row | 0.50–0.99; step size rewrites to `round(subset × (1 − overlap))` |
 | [ ] 5.2.13 | Drag **strain window** | Odd values 5–101, field mirrors it |
 | [ ] 5.2.13a | Open step 2 having never copied params from a lattice | No **Paste params** chip — it only appears when the clipboard holds a set |
 | [ ] 5.2.13b | Copy params from a sweep lattice (§7.3), then return here | The chip appears beside **Reset**; tapping it fills subset, step and strain window (overlap follows step) and scrolls them into view |

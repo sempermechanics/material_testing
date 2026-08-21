@@ -405,9 +405,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="subset_range">Subset size range</string>
     <string name="subset_samples">No. of subsets</string>
     <string name="vsg_samples">No. of strain windows</string>
+    <string name="step_depth">Step size</string>
+    <string name="info_step_depth">Step size given as subset ÷ N(Larger N means denser correlation). Capped between 2 and 6.</string>
+    <string name="step_depth_prefix">subset ÷ </string>
     <string name="subset_overlap">Subset overlap</string>
-    <string name="info_subset_overlap">How much neighbouring subsets cover each other after a step (1 − step / subset). The iDICs Good Practices Guide keeps this at least 0.5 (step no larger than half the subset) and below 1.0 (step at least 1 px). Typical values are 0.50–0.75. Lower than 0.5 under-samples the field; near 1.0 neighbouring windows almost coincide and extra points cost time without new information.</string>
-    <string name="sweep_overlap_step_hint_fmt">About %1$d px at subset %2$d</string>
+    <string name="overlap">Overlap</string>
+    <string name="info_subset_overlap">How much neighbouring subsets cover each other. Typical values are 0.50–0.75.</string>
     <string name="info_subset_samples">Total No. of analyses = No. of subsets × No. of VSGs.</string>
     <string name="info_subset_range"> Min to Max (px) capped by the image/ROI(Odd subset sizes) and speckle pattern.</string>
     <string name="strain_win_min">Min</string>
@@ -416,7 +419,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="info_strain_win_range">Min to Max (odd values) for the sweep\'s y axis. Larger windows smooth strain more; smaller ones resolve finer gradients.</string>
 
     <string name="line_cut_axis">Line cut axis</string>
-    <string name="info_line_cut_axis">Strain along an axis through the ROI centre.</string>
+    <string name="info_line_cut_axis">Strains along the axis through the ROI centre are monitored.</string>
     <string name="axis_x">X</string>
     <string name="axis_y">Y</string>
 
@@ -576,7 +579,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     
     <string name="roi_full_fmt">Full image · %1$d × %2$d px</string>
     <string name="roi_custom_fmt">%1$d × %2$d px at (%3$d, %4$d)</string>
-    <string name="picker_select_reference_toast">Select the reference image</string>
+    <string name="picker_select_reference_toast">Select the reference image or video</string>
     <string name="picker_select_deformed">Select the deformed frames — tap several</string>
     <string name="source_images">Images</string>
     <string name="source_files">Files</string>

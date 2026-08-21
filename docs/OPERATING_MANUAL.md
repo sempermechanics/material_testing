@@ -168,7 +168,8 @@ Three decisions, in this order:
 - **Region of interest** — defaults to the full image. **Edit** opens the editor
   ([§6](#6-region-of-interest)).
 - **Parameters** — in Single, the advanced set ([§5](#5-parameters)). In Sweep,
-  the subset range, strain-window range, and subset overlap (default 0.80).
+  the subset range, strain-window range, and step as subset ÷ N (default 3),
+  with overlap shown at the end of that row.
   If you copied a set of parameters from a sweep lattice, a **Paste params**
   chip appears in Single and fills subset, step and strain window in one tap.
 
@@ -221,7 +222,8 @@ new one.
 
 ## 5. Parameters
 
-Single mode only. Slider or typed field, each with an ⓘ.
+Single mode only. Slider or typed field, each with an ⓘ. Step and overlap
+share a title row; the overlap ratio sits beside the step readout.
 
 | Parameter | Range | Reset to |
 |---|---|---|
@@ -316,7 +318,7 @@ the line cut, then **Compute**.
 |---|---|
 | Subset range | 15–121, odd (step 2) |
 | Strain window range | 5–101, odd — min and max, the sweep's y axis (step 2) |
-| Subset overlap | 0.50–0.99, default 0.80 — step is `round(subset × (1 − overlap))`, never below 1 px (step 2) |
+| Step size | subset ÷ N, N 2–9, default 3. Overlap on the same row is `1 − 1/N`. Pixel step is `round(subset / N)` (step 2) |
 | Frame to sweep | radio list + number + preview (step 2) |
 | Samples | 1–8 per axis (step 3, lattice gear) |
 
