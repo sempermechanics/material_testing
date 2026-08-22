@@ -25,7 +25,7 @@ import timber.log.Timber
 /**
  * Persistent gate shown when the account's cloud analysis quota is full. Unlike
  * a transient warning, this screen stays until the limit is resolved: it directs
- * the user to email support@indicvision.com to raise their limit, and lets them
+ * the user to email support@sempermechanics.com to raise their limit, and lets them
  * re-check or go back to manage (delete) existing analyses.
  */
 class SessionLimitActivity : AppCompatActivity() {

@@ -1,7 +1,7 @@
 # Engine architecture — moved
 
 The C++ correlation engine no longer lives in this repository. It is developed
-in [`semperdic/semper-dic-engine`](https://github.com/semperdic/semper-dic-engine)
+in [`sempermechanics/semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine)
 and linked here as a pinned git submodule at `native/`.
 
 **Read the canonical document at [`native/docs/ARCHITECTURE.md`](../../native/docs/ARCHITECTURE.md)**

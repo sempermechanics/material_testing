@@ -19,7 +19,7 @@ The README links here rather than repeating them.
 ## Clone and native deps
 
 The `--recursive` matters: `native/` is a submodule
-([`semperdic/semper-dic-engine`](https://github.com/semperdic/semper-dic-engine)),
+([`sempermechanics/semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine)),
 and it has submodules of its own for Eigen and OpenCV. A non-recursive clone
 gives you an empty `native/` and a confusing CMake failure on first build.
 

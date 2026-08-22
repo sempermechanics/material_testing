@@ -116,7 +116,7 @@ jobs:
               - 'gradlew'
               - 'gradlew.bat'
               - 'settings.gradle.kts'
-            # Engine sources live in semperdic/semper-dic-engine. App CI only
+            # Engine sources live in sempermechanics/semper-dic-engine. App CI only
             # sees pin bumps (gitlink) / .gitmodules — host/sanitizer suites run
             # in the engine repo's own workflow.
             native_core:
@@ -261,7 +261,7 @@ jobs:
 
   # ===================================================================
   # Tier 2 — Engine host / sanitizers
-  # Moved to semperdic/semper-dic-engine (.github/workflows/ci.yml).
+  # Moved to sempermechanics/semper-dic-engine (.github/workflows/ci.yml).
   # App CI only links the pinned submodule (Tier 3 / Tier 5).
   # ===================================================================
 
@@ -671,4 +671,4 @@ jobs:
             esac
           done
           echo "All tiers passed or were skipped."
-          echo "Note: engine host/sanitizer/C-SDK CI runs in semperdic/semper-dic-engine."
+          echo "Note: engine host/sanitizer/C-SDK CI runs in sempermechanics/semper-dic-engine."

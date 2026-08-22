@@ -67,18 +67,10 @@ class HelpSupportSectionTest {
     }
 
     @Test
-    fun `community opens the public community URL`() {
+    fun `community action stays hidden`() {
         val activity = settings()
 
-        activity.findViewById<View>(R.id.btnCommunity).performClick()
-
-        val started = shadowOf(activity).nextStartedActivity
-        assertNotNull("no intent was started", started)
-        assertEquals(Intent.ACTION_VIEW, started.action)
-        assertEquals(
-            activity.getString(R.string.url_community),
-            started.data.toString(),
-        )
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.btnCommunity).visibility)
     }
 
     @Test

@@ -2,7 +2,7 @@
 
 This baseline predates the engine extraction: commit `bd44af0` exists only in
 this repository's pre-extraction history, not in
-[`semperdic/semper-dic-engine`](https://github.com/semperdic/semper-dic-engine).
+[`sempermechanics/semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine).
 
 **The maintained copy is [`native/docs/PERF_BASELINE_bd44af0.md`](../../native/docs/PERF_BASELINE_bd44af0.md).**
 
