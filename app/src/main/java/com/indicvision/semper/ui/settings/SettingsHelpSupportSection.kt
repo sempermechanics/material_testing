@@ -23,9 +23,6 @@ class SettingsHelpSupportSection(
         activity.findViewById<View>(R.id.btnOpenManual).setOnClickListener {
             activity.openExternalUrl(activity.getString(R.string.url_manual))
         }
-        activity.findViewById<View>(R.id.btnCommunity).setOnClickListener {
-            activity.openExternalUrl(activity.getString(R.string.url_community))
-        }
         activity.findViewById<View>(R.id.btnReportBug).setOnClickListener {
             activity.openExternalUrl(activity.getString(R.string.url_report_bug))
         }

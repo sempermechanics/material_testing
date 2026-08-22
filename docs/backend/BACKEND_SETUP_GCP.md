@@ -210,7 +210,7 @@ gcloud run deploy indic-api \
   --min-instances 0 --max-instances 10 \
   --concurrency 40 --cpu 1 --memory 512Mi --timeout 300 \
   --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
-  --set-env-vars "SUPPORT_EMAIL=support@indicvision.com,NOTIFY_FROM=Semper <noreply@yourdomain.com>" \
+  --set-env-vars "SUPPORT_EMAIL=support@sempermechanics.com,NOTIFY_FROM=Semper <noreply@yourdomain.com>" \
   --set-secrets "RESEND_API_KEY=resend-api-key:latest"
 ```
 > `FIREBASE_PROJECT_ID` can be omitted when Firebase Auth lives in the same
@@ -501,7 +501,7 @@ gcloud run services update indic-api --region asia-south1 \
   on first sign-in.
 - Any account may sign in regardless — there is no domain gate on
   authentication, deliberately. Non-domain accounts land **PENDING** and use
-  the in-app **Request access** button (emails `support@indicvision.com`), then
+  the in-app **Request access** button (emails `support@sempermechanics.com`), then
   an admin approves them individually.
 - `AUTO_APPROVE` (blanket approve-everyone) **removed**.
 
@@ -509,7 +509,7 @@ Designate admins with `ADMIN_EMAILS` (comma-separated) — they're always
 approved and can call the admin API:
 ```bash
 gcloud run services update indic-api --region asia-south1 \
-  --update-env-vars ADMIN_EMAILS=support@indicvision.com
+  --update-env-vars ADMIN_EMAILS=support@sempermechanics.com
 ```
 
 **Approve / revoke via the admin API** (ID-token + admin role; no device

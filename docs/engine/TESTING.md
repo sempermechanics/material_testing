@@ -1,7 +1,7 @@
 # Engine tests — moved
 
 The C++ test suite (`dic_tests`) lives with the engine source in
-[`semperdic/semper-dic-engine`](https://github.com/semperdic/semper-dic-engine),
+[`sempermechanics/semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine),
 linked here as a pinned submodule at `native/`.
 
 **Read the canonical document at [`native/docs/TESTING.md`](../../native/docs/TESTING.md)**

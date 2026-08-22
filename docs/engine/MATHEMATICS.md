@@ -2,7 +2,7 @@
 
 The derivations for ICGN, ZNSSD, the warp Jacobian, reliability-guided
 propagation and virtual strain gauge fitting live with the engine source in
-[`semperdic/semper-dic-engine`](https://github.com/semperdic/semper-dic-engine).
+[`sempermechanics/semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine).
 
 **Read the canonical document at [`native/docs/MATHEMATICS.md`](../../native/docs/MATHEMATICS.md)**
 (after `git submodule update --init --recursive`), or browse it in the engine
