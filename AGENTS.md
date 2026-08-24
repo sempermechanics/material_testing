@@ -85,5 +85,6 @@ invariant list, and none of them are drive-by changes.
   runs every tier on your branch.
 - Change a workflow → update its row in [docs/WORKFLOWS.md](docs/WORKFLOWS.md) in
   the same PR, then the **Current state** section of
-  [CONTEXT.md](CONTEXT.md) if the picture changed.
+  [CONTEXT.md](CONTEXT.md) if the picture changed. `python scripts/check_doc_paths.py`
+  fails when a doc points at a file that no longer exists; it runs in CI too.
 - PRs target `main`. No force-push to `main`, no `--no-verify`.

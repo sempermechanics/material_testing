@@ -356,9 +356,11 @@ DicSettings.diagnosticsEnabled ─┬─ Diagnostics.apply/setEnabled → Crashl
 ```
 
 Asked once on first run (after the beta notice, defaulting to **off**), mirrored
-by the Settings toggle. Events carry buckets and enums only — never images,
-results, session ids, specimen names or paths. The in-app copy names only crash
-reports, which understates it; see [ops/TECH_DEBT.md](ops/TECH_DEBT.md).
+by the Settings toggle (**Send crash reports and usage data**). Events carry
+buckets and enums only — never images, results, session ids, specimen names or
+paths. The label, its subtitle, the first-run prompt and
+[legal/PRIVACY_POLICY.md](legal/PRIVACY_POLICY.md) §2.4 all name both halves;
+keep them in step if the event set changes.
 Tests: `analytics/SemperAnalyticsTest`.
 
 ### B11 Device identity and attestation 🔒
@@ -472,7 +474,7 @@ app), and the rest of `backend/tests/`.
 |---|---|---|---|
 | D1 | CI gate | `.github/workflows/ci.yml` | PR to `main`, push to `main`, or `workflow_dispatch` (`full_ci` runs every tier on any branch). Path filters pick the tiers; `full-ci` / `e2e` / `release` / `benchmark` labels widen them |
 | D2 | Secret scan | same, `secret-scan` job | Every run, full history, `.gitleaks.toml` |
-| D3 | Legal pages match source | same, `legal-pages` job | Every run: `python scripts/render_legal_pages.py --check` — edit `docs/legal/`, never `firebase-hosting/public/` |
+| D3 | Legal pages match source, and docs point at real files | same, `legal-pages` job | Every run: `python scripts/render_legal_pages.py --check` (edit `docs/legal/`, never `firebase-hosting/public/`) and `python scripts/check_doc_paths.py` (§E3) |
 | D4 | Backend deploy | `.github/workflows/deploy-backend.yml` | Manual |
 | D5 | Release | `.github/workflows/release.yml` | Manual — see [ops/RELEASING.md](ops/RELEASING.md) |
 | D6 | Firestore backup / restore drill 🔒 | `firestore-backup.yml` (daily), `firestore-restore-drill.yml` (monthly) | Scheduled — see [backend/FIRESTORE_DATA_PROTECTION.md](backend/FIRESTORE_DATA_PROTECTION.md) |
@@ -554,12 +556,14 @@ files. Adding a code the client must branch on means remembering both.
 
 A workflow map that has rotted is worse than none. When a change adds, removes or
 re-routes a flow, update the row here in the **same PR** — the same rule
-[CLAUDE.md](../CLAUDE.md) applies to `docs/`. Two cheap checks before you push:
+[CLAUDE.md](../CLAUDE.md) applies to `docs/`.
+
+Renames are caught for you: `scripts/check_doc_paths.py` fails CI when any doc
+points at a file that does not exist (D3). Run it before you push:
 
 ```bash
-# every file this map names still exists
-rg -o '`(app|backend|docs|native)/[A-Za-z0-9_./-]+`' docs/WORKFLOWS.md \
-  | tr -d '`' | sort -u | while read -r f; do [ -e "$f" ] || echo "missing: $f"; done
-
-# pick three ids at random and re-read the chain against the source
+python scripts/check_doc_paths.py
 ```
+
+It cannot tell whether a chain is still *correct*, only that its files exist — so
+when you touch a flow, re-read its row against the source.

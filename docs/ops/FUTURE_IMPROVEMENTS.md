@@ -131,18 +131,21 @@ set `REQUIRE_ATTESTED_UPLOADS=1`, then delete the wrapper and its branch in
 `routers/sessions.py`. Ship the flag flip and the deletion separately so the flip
 can be rolled back without a deploy of code.
 
-## FI-8 Say what the diagnostics consent actually covers
+## FI-8 Say what the diagnostics consent actually covers — **done 2026-08-24**
 
-**Affects** B10 · *privacy* · already tracked
+**Affects** B10 · *privacy*
 
-The **Send crash reports** toggle gates `analytics/SemperAnalytics` as well as
-Crashlytics. The events are PII-free buckets and
-[the privacy policy](../legal/PRIVACY_POLICY.md) §2.4 describes both, but the
-in-app label and the first-run prompt name only crash reporting. Fix is a copy
-change to `setting_diagnostics` and `diagnostics_prompt_body`. Tracked in
-[TECH_DEBT.md](TECH_DEBT.md); repeated here because a consent string that
-understates its scope is the highest-priority item on this page by the ranking
-above, even though the change is two lines.
+The toggle gated `analytics/SemperAnalytics` as well as Crashlytics while its
+label named only crash reporting — the highest-priority item on this page by the
+ranking above, even though the change was copy only.
+
+**Shipped.** `setting_diagnostics` now reads **Send crash reports and usage
+data**; `setting_diagnostics_sub` and `diagnostics_prompt_body` name the coarse
+usage events alongside what is never sent (images, results, specimen names, file
+paths). `docs/legal/PRIVACY_POLICY.md` §2.4 names the new label and the hosted
+pages were regenerated with `scripts/render_legal_pages.py`. String **values**
+only — no identifier changed, so no code moved and nothing about what is
+collected changed.
 
 ## FI-9 Make the error-code contract one edit
 
@@ -156,14 +159,19 @@ a code the client branches on is still two edits in two languages.
 the reverse) so the second edit is a build step. Only worth doing if the code
 list keeps growing; the contract test is enough while it does not.
 
-## FI-10 Keep the workflow map honest automatically
+## FI-10 Keep the workflow map honest automatically — **done 2026-08-24**
 
 **Affects** all · *debuggability*
 
 [../WORKFLOWS.md](../WORKFLOWS.md) names hundreds of files. A rotted map is worse
 than none.
 
-**Fix.** A CI step (Tier 1 or the docs job) that extracts every backticked repo
-path from `docs/**.md` and fails when one no longer exists. Cheap, and it catches
-the common rot — renames — without pretending to verify prose. §E3 of the map has
-the shell one-liner it would run.
+**Shipped.** `scripts/check_doc_paths.py` extracts every relative Markdown link
+and every backticked repository path from the Markdown tree and fails when one
+does not exist; it runs in the `legal-pages` CI job, which has no path filter and
+so fires on every event. It checks only references that name a file, skips the
+engine submodule, and carries a short allowlist for paths that are absent from a
+clean checkout by design (the release keystore, generated gateway spec). It found
+four stale references on its first run, all now fixed.
+
+It deliberately does not verify prose — only that a path you are sent to exists.

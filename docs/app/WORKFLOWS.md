@@ -241,7 +241,7 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 | [ ] 4.19a | Tap **Download my cloud account data** | The server-side export of the account is fetched the same way, banner and all, then offered through the same sheet |
 | [ ] 4.19b | Trigger either export with no network | It fails with a named reason, not a silent no-op |
 | [ ] 4.19c | Toggle **Send crash reports** off, then force a crash on a debug build | Nothing is uploaded; turning it on again resumes collection without a restart |
-| [ ] 4.19d | Read what that toggle actually controls | It gates **both** crash reporting and consent-gated product analytics (analysis started/completed/failed, exports, feedback). The label says only "crash reports" — see §11 |
+| [ ] 4.19d | Read what that toggle actually controls | It gates **both** crash reporting and consent-gated product analytics (analysis started/completed/failed, exports, feedback), and the label now says so: **Send crash reports and usage data**, with the subtitle naming the usage events and what is never sent |
 | [ ] 4.20 | Tap **Delete my account and data** | Dialog listing exactly what goes: local analyses, cloud backups, profile and device |
 | [ ] 4.20a | Confirm it | The **sign-in screen** opens to re-verify, with your email filled in and locked, and no "create account" toggle |
 | [ ] 4.20b | Enter the wrong password there | "Incorrect password." and nothing is deleted |
@@ -814,10 +814,9 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
   Firebase Analytics events for analysis started / completed / failed, the two
   data exports and Send feedback — all buckets and enums, never images, results,
   session ids or specimen names — and every one of them is dropped unless
-  `DicSettings.diagnosticsEnabled` is on. The **consent copy names only crash
-  reports**, which understates what the toggle controls; the
-  [privacy policy](../legal/PRIVACY_POLICY.md) §2.4 already describes both. Copy
-  fix tracked in [ops/TECH_DEBT.md](../ops/TECH_DEBT.md).
+  `DicSettings.diagnosticsEnabled` is on. The consent copy names both halves —
+  **Send crash reports and usage data** — matching
+  [the privacy policy](../legal/PRIVACY_POLICY.md) §2.4.
 - **An interrupted solve cannot be resumed** — it is a foreground coroutine, so
   process death loses the run.
 - **`AnalysisWizardSmokeTest`** opens the analysis wizard and asserts chrome
