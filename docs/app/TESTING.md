@@ -8,7 +8,7 @@ Each chunk owns one layer; no duplicate assertions across chunks.
 | Chunk | User journey | JVM tests (`app/src/test`) | Instrumented (`androidTest`) |
 |-------|--------------|---------------------------|------------------------------|
 | **auth** | Splash → Auth / Pending / Home, re-auth, password rules | `auth/AccessRouterTest`, `ReauthFlowTest`, `PasswordPolicyTest` | `auth/FirebaseAuthIntegrationTest` |
-| **analysis** | Import → ROI → batch / parameter sweep | `analysis/VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `BitmapDecodeTest` | — |
+| **analysis** | Import → ROI → batch / parameter sweep; capture planner / budget | `analysis/VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `BitmapDecodeTest`; `capture/CapturePlannerTest`, `CaptureBudgetTest`, `StillSequenceRunnerTest`, `CaptureFocusLockTest` | — |
 | **session** | Session store durability, disk footprint, failure provenance | `session/SessionStoreAtomicTest`, `LocalStorageFootprintTest`, `FailureProvenanceTest` | — |
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `ReportBuilderMeanStdParityTest`, `GifEncoderTest`, `SummaryAnimationTest` | — |
 | **viewer** | Result viewer controls, frame cache bounds | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest` | — |

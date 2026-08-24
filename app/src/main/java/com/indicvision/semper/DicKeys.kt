@@ -15,6 +15,9 @@ object DicKeys {
     const val PICKED_REF_URI = "PICKED_REF_URI"
     const val PICKED_VIDEO_URI = "PICKED_VIDEO_URI"
 
+    /** Deformed-frame URI strings (capture hand-off); consumed once on wizard open. */
+    const val PICKED_DEF_URIS = "PICKED_DEF_URIS"
+
     // ── StaticAnalysisActivity  RoiDrawActivity
     const val IMAGE_FILE_PATH = "IMAGE_FILE_PATH"
     const val MASK_FILE_PATH = "MASK_FILE_PATH"

@@ -41,7 +41,8 @@ Intent extras shared across Activities live in
 | `ui/settings/` | Settings screen; account/storage/prefs/your-data/help live in `Settings*Section`; restore/download/delete stay on `SettingsActivity` |
 | `ui/admin/` | Admin screen — approve/revoke users via `/v1/admin/*` |
 | `ui/limit/` | Session-quota screen |
-| `ui/common/` | Insets, motion, `MediaPickerSheet` (the one new-analysis sheet), `CrispToast`, `TransferBannerController` |
+| `ui/common/` | Insets, motion, `MediaPickerSheet` (Import / wizard dropzones), `CrispToast`, `TransferBannerController` |
+| `ui/capture/` | Home **Record** path: setup, Camera-app test shot, SSSIG gate, AF lock, timed stills / video |
 | `data/` | Auth, session store, cloud sync/upload/restore/download, storage budget, param clipboard |
 | `data/net/` | Backend HTTP client (`IndicApi`), token store/provider |
 | `report/` | PDF / CSV / visualization |
@@ -187,7 +188,8 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
 | Change heatmap / probe | `ui/viewer/ResultViewerActivity.kt` + `Viewer*` helpers |
 | Change how exports are handed off | `ui/viewer/ShareCenter.kt`, `SendToSheet.kt`, `SaveExportActivity.kt` |
 | Change transfer progress UI | `ui/common/TransferBannerController.kt` (Settings + viewer), `data/TransferNotifications.kt` (the one channel) |
-| Change the new-analysis media sheet | `ui/common/MediaPickerSheet.kt` / `MediaSourceChooser.kt` — shared by the Home FAB and both wizard dropzones |
+| Change the new-analysis media sheet | `ui/common/MediaPickerSheet.kt` / `MediaSourceChooser.kt` — shared by Home **Import** and both wizard dropzones |
+| Change Home Record / test-shot capture | `ui/capture/` (`CaptureSetupActivity`, `CaptureSessionActivity`, `CapturePlanner`, `CaptureBudget`, `LockedCameraSession`) |
 | Add an analytics event | `analytics/SemperAnalytics.kt` — keep params PII-free and consent-gated |
 | Change storage reclaim behaviour | `data/StorageBudget.kt`, `data/CacheJanitor.kt` |
 | Change crash-reporting consent | `Diagnostics.kt`, `CrashReportingTree.kt` |

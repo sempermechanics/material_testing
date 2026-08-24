@@ -76,11 +76,15 @@ object SubsetRecommender {
      * @param samples how many ROI points were evaluated
      * @param cappedSamples how many of them never reached the SSSIG threshold
      *   and were capped at the largest allowed subset
+     * @param focusNormX normalized x of the strongest-contrast sample (0..1)
+     * @param focusNormY normalized y of the strongest-contrast sample (0..1)
      */
     data class Result(
         val subsetSize: Int,
         val samples: Int,
         val cappedSamples: Int,
+        val focusNormX: Float = 0.5f,
+        val focusNormY: Float = 0.5f,
     ) {
         /** True when the speckle is too weak for the target accuracy at any allowed size. */
         val lowTexture: Boolean get() = samples > 0 && cappedSamples * 2 >= samples
@@ -172,6 +176,10 @@ object SubsetRecommender {
             val side = cappedMax + 2
             val halfPatch = side / 2
             val perPoint = ArrayList<Int>(GRID * GRID)
+            // Smallest recommended subset = strongest local contrast → focus there.
+            var bestSize = Int.MAX_VALUE
+            var bestCx = region.centerX()
+            var bestCy = region.centerY()
 
             for (row in 0 until GRID) {
                 for (col in 0 until GRID) {
@@ -180,7 +188,13 @@ object SubsetRecommender {
                     val x0 = (cx - halfPatch).coerceIn(0, imgW - side)
                     val y0 = (cy - halfPatch).coerceIn(0, imgH - side)
                     val patch = source.readGray(x0, y0, side) ?: continue
-                    perPoint.add(subsetSizeForPatch(patch, side, minSize, cappedMax))
+                    val size = subsetSizeForPatch(patch, side, minSize, cappedMax)
+                    perPoint.add(size)
+                    if (size < bestSize) {
+                        bestSize = size
+                        bestCx = cx
+                        bestCy = cy
+                    }
                 }
             }
 
@@ -190,6 +204,8 @@ object SubsetRecommender {
                 subsetSize = perPoint[perPoint.size / 2],
                 samples = perPoint.size,
                 cappedSamples = perPoint.count { it >= cappedMax },
+                focusNormX = bestCx.toFloat() / imgW.coerceAtLeast(1),
+                focusNormY = bestCy.toFloat() / imgH.coerceAtLeast(1),
             )
         } finally {
             source.close()

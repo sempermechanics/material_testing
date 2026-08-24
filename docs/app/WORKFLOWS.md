@@ -191,13 +191,15 @@ The session list and the only entry point to a new analysis.
    ├── Empty state → "Start analysis"   (same as the FAB — no longer Settings)
    ├── Start new analysis (FAB)
    │   ├── quota gate .................. → 9. Session limit
-   │   └── New analysis sheet ......... → 3a. Media picker sheet
+   │   ├── expands to Import | Record
+   │   ├── Import ...................... → 3a. Media picker sheet
+   │   └── Record ...................... → 3b. Capture setup / session
    ├── Settings (gear)
    └── Exit-app confirm on Back
 ```
 
 **Entry:** Splash, Pending approval, the viewer's home button, sign-in.
-**Exit:** Analysis, Settings, Result viewer, Lattice, Session limit.
+**Exit:** Analysis, Settings, Result viewer, Lattice, Session limit, Capture setup.
 
 | # | Action | Expected |
 |---|---|---|
@@ -229,17 +231,19 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.16 | Tap the quota chip below the cap | Settings (or the limit screen at the cap) |
 | [ ] 3.17 | Reach the quota cap | The chip turns red |
 | [ ] 3.18 | Pull to refresh | Cloud reconcile runs; a repair or failure is reported by toast |
-| [ ] 3.19 | Open Home with no sessions | Empty state reading "Pick reference image or video." with a **Start analysis** button — it does what the FAB does; it no longer opens Settings |
-| [ ] 3.20 | Tap **+** below the quota | The **New analysis** sheet (§3a), not a two-button chooser |
-| [ ] 3.21 | Tap **+** at the quota cap | Session limit screen instead of the sheet |
+| [ ] 3.19 | Open Home with no sessions | Empty state reading "Import photos or record a new test." with a **Start analysis** button — it does what the FAB does; it no longer opens Settings |
+| [ ] 3.20 | Tap **+** below the quota | A short menu expands: **Import** and **Record** (not the media sheet immediately) |
+| [ ] 3.20a | Tap **Import** | The **New analysis** sheet (§3a) |
+| [ ] 3.20b | Tap **Record** | Capture setup (§3b) |
+| [ ] 3.21 | Tap **+** at the quota cap | Session limit screen instead of the menu |
 | [ ] 3.22 | Look for a transfer banner, feedback prompt or upgrade prompt on Home | There is none. Home's only progress surface is the per-row badge and bar; the transfer banner lives in Settings and the result viewer |
 | [ ] 3.24 | Press Back on Home | "Exit app?" confirmation |
 
 ### 3a. New analysis — the media picker sheet
 
 Not an Activity: `MediaPickerSheet`, a full-height bottom sheet titled **New
-analysis**. It replaced the old two-button Photos/Files chooser, and it is the
-same sheet the wizard's two dropzones open (§5.1), so test it once here.
+analysis**. It is what **Import** opens from the Home FAB menu, and the same
+sheet the wizard's two dropzones open (§5.1), so test it once here.
 
 ```
 3a. New analysis — MediaPickerSheet (bottom sheet)
@@ -268,6 +272,32 @@ same sheet the wizard's two dropzones open (§5.1), so test it once here.
 | [ ] 3a.8 | Tap the **Files** tab | The sheet dismisses and the system SAF browser opens for images *and* video — this is still the only route to DNG/RAW |
 | [ ] 3a.9 | Open the sheet the first time in each mode | Coach marks run once for the reference pick and once for the deformed pick, then never again |
 | [ ] 3a.10 | Check what permission is asked for, and when | `READ_MEDIA_IMAGES` (and `READ_MEDIA_VIDEO` from Home) is requested when the **Images** tab needs it — never on the Files path |
+
+### 3b. Record — capture setup and session
+
+```
+3b. Record — CaptureSetupActivity → CaptureSessionActivity
+    ├── fps (1..device max), duration, resolution (Camera2 catalogue)
+    ├── mode line: stills (locked JPEG) vs one video then extract
+    ├── RAM ≥ 1.5× and storage ≥ 1.25× before the test shot
+    ├── Test shot via manufacturer Camera app (ACTION_IMAGE_CAPTURE)
+    ├── SSSIG / low-texture gate (hard fail → Retry)
+    ├── Re-check budget from the real JPEG; request CAMERA
+    ├── Lock AF (+ AE) on the test-shot focus point
+    ├── Timed stills or locked video → extract PNGs
+    └── Hand-off: PICKED_REF_URI + PICKED_DEF_URIS → analysis wizard
+```
+
+| # | Action | Expected |
+|---|---|---|
+| [ ] 3b.1 | From Home FAB → **Record** | Setup screen with fps, duration, resolution, and a mode summary |
+| [ ] 3b.2 | Choose a plan that exceeds free RAM or storage | Blocking dialog; no test shot |
+| [ ] 3b.3 | Continue with a valid plan | Phone Camera app opens for one test shot |
+| [ ] 3b.4 | Cancel the test shot or save nothing | Retry / Cancel |
+| [ ] 3b.5 | Test shot with weak / blank pattern | Speckle-fail dialog with FAQ **Why?** |
+| [ ] 3b.6 | Good test shot | Focus locks; **Start recording** appears |
+| [ ] 3b.7 | Complete a stills run | Wizard opens with reference + deformed frames filled |
+| [ ] 3b.8 | Complete a video-mode run | Frames extracted; wizard opens the same way |
 
 ---
 

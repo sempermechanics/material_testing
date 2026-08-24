@@ -340,6 +340,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
             intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
             handleVideo(it.toUri())
         }
+        intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
+            intent.removeExtra(DicKeys.PICKED_DEF_URIS)
+            if (list.isNotEmpty()) {
+                onDeformedPicked(list.map { it.toUri() })
+            }
+        }
 
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
         // and keep the wizard nav above the nav-bar gesture area so the top

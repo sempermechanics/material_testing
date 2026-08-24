@@ -65,6 +65,7 @@ Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`
 | `ui/settings/` | `SettingsActivity` + `Settings*Section` |
 | `ui/home/` | Session list |
 | `ui/common/` | Insets, `MediaPickerSheet`, `CrispToast`, `TransferBannerController` |
+| `ui/capture/` | Home Record: setup, test shot, AF lock, timed capture |
 | `data/` | Auth, session store, upload/restore/download workers, storage budget |
 | `analytics/` | `SemperAnalytics` — consent-gated events, same flag as Crashlytics |
 | `report/` | PDF / CSV / `VisualizationEngine` |
@@ -82,8 +83,9 @@ Wizard later steps inflate through **ViewStubs**. `goToStep` stays on
 Full-field batch: `DicBatchRunner` + `DicFieldIo` shared with VSG. JNI
 `computeFullFieldDirect` stays **inside that one loop**.
 
-New analysis starts in `MediaPickerSheet` — one sheet for the Home FAB and both
-wizard dropzones (Images grid in-sheet, Files → SAF). Long transfers show a
+New analysis starts from the Home FAB menu: **Import** opens `MediaPickerSheet`
+(shared with wizard dropzones); **Record** runs the capture flow in `ui/capture/`.
+Long transfers show a
 non-modal `TransferBannerController` strip in Settings and the viewer; uploads,
 restores, `DicBundleDownloadWorker` downloads and backup deletes are WorkManager.
 
@@ -128,7 +130,11 @@ Kover `minBound` floor is 15. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-08-20)
+## Current state (2026-08-24)
+
+Home **+** expands to **Import** (existing `MediaPickerSheet`) or **Record**
+(`ui/capture/`: setup → Camera-app test shot → SSSIG gate → hardware AF lock →
+timed stills or video → wizard via `PICKED_REF_URI` + `PICKED_DEF_URIS`).
 
 `origin/main` includes PRs #85–#96 (FAQ error map). Open follow-up: wizard
 step/overlap + step-2/3 reorder ([#97](https://github.com/semperdic/semperdic-app/pull/97)).

@@ -85,7 +85,9 @@ Send crash reports**.
 <img src="images/home.png" width="300" alt="Home screen">
 
 Home lists your analyses. Tap one to open it. Long-press for select, rename,
-delete. Pull down to sync. **+** starts a new analysis.
+delete. Pull down to sync. **+** expands to **Import** (pick existing photos or
+video) or **Record** (test shot in the phone Camera app, then a timed capture
+with focus locked from that shot).
 
 ---
 

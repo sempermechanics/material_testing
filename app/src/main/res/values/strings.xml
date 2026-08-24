@@ -184,8 +184,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Home screen -->
     <string name="home_title">Analyses</string>
     <string name="home_empty_title">No analyses yet</string>
-    <string name="home_empty_body">Pick reference image or video.</string>
+    <string name="home_empty_body">Import photos or record a new test.</string>
     <string name="home_new_analysis">New analysis</string>
+    <string name="home_fab_import">Import</string>
+    <string name="home_fab_record">Record</string>
     <string name="home_settings">Settings</string>
     <string name="home_thumb_desc">Reference image preview</string>
     <string name="home_sync_config_unavailable">Can\'t sync yet — check your connection and pull to refresh</string>
@@ -564,7 +566,44 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="coach_skip">Skip</string>
     <string name="coach_next">Next</string>
     <string name="coach_done">Got it</string>
-    <string name="coach_home_fab">Pick a reference photo or a video</string>
+    <string name="coach_home_fab">Import photos or record a new test</string>
+
+    <!-- Capture / record flow -->
+    <string name="capture_setup_title">Record test</string>
+    <string name="capture_setup_intro">Choose frame rate, duration, and resolution. A test shot in the phone Camera app checks that the speckle is sharp before recording begins.</string>
+    <string name="capture_frame_rate">Frame rate</string>
+    <string name="capture_duration">Test duration</string>
+    <string name="capture_resolution">Recording resolution</string>
+    <string name="capture_fps_fmt">%1$d fps</string>
+    <string name="capture_duration_fmt">%1$d s</string>
+    <string name="capture_estimate_fmt">≈ %1$d frames · mode: %2$s</string>
+    <string name="capture_mode_stills">Still photos, focus locked from the test shot</string>
+    <string name="capture_mode_video">One video, same locked focus, then Semper pulls frames</string>
+    <string name="capture_continue_test_shot">Continue to test shot</string>
+    <string name="capture_budget_fail_title">Not enough space or memory</string>
+    <string name="capture_budget_fail_ram">Not enough free memory for this resolution. Close other apps or choose a smaller size.</string>
+    <string name="capture_budget_fail_storage">Not enough free storage for this recording. Free space or shorten the duration.</string>
+    <string name="capture_budget_fail_both">Not enough free memory and storage for this plan. Lower the resolution or shorten the duration.</string>
+    <string name="capture_no_camera_app">No Camera app is available to take the test shot.</string>
+    <string name="capture_session_title">Recording</string>
+    <string name="capture_status_test_shot">Take a test shot of the speckle (before loading). Get it sharp, then return here.</string>
+    <string name="capture_status_checking">Checking speckle contrast…</string>
+    <string name="capture_status_locking">Locking focus from the test shot…</string>
+    <string name="capture_status_ready">Focus locked. Start the test when ready.</string>
+    <string name="capture_status_recording_stills">Capturing stills…</string>
+    <string name="capture_status_recording_video">Recording video…</string>
+    <string name="capture_status_extracting">Extracting frames…</string>
+    <string name="capture_progress_fmt">Frame %1$d of %2$d</string>
+    <string name="capture_start_recording">Start recording</string>
+    <string name="capture_speckle_fail_title">Speckle contrast is too low</string>
+    <string name="capture_speckle_fail_body">The test shot does not have enough pattern contrast for a reliable analysis. Retake the test shot with sharper focus and better lighting.</string>
+    <string name="capture_retry">Retry</string>
+    <string name="capture_af_fail_title">Could not lock focus</string>
+    <string name="capture_af_fail_body">The camera could not lock focus on the test-shot point. Retake the test shot.</string>
+    <string name="capture_permission_needed">Camera access is needed to lock focus and record the rest of the test.</string>
+    <string name="capture_cancelled">Recording cancelled.</string>
+    <string name="capture_test_shot_empty">No photo was saved. Try again.</string>
+    <string name="capture_video_extract_fail">Could not extract enough frames from the recording. Try again.</string>
     <string name="coach_analysis_ref">The reference image can be changed at any time.</string>
     <string name="coach_analysis_def">Add deformed frames next. When you pick several, you can sort by name, date, or drag.</string>
     <string name="coach_analysis_mode">Single solve or parameter sweep?</string>
