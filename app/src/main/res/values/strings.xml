@@ -273,9 +273,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="export_cloud_data_offline">Cloud sync isn\'t set up on this build, so there\'s no cloud data to download.</string>
     <!-- Diagnostics consent -->
     <string name="setting_diagnostics">Send crash reports and usage data</string>
-    <string name="setting_diagnostics_sub">Share anonymous crash diagnostics and coarse usage events — which features ran, and whether they succeeded — so we can fix problems. Off by default; your images, results, specimen names and analysis data are never sent.</string>
+    <string name="setting_diagnostics_sub">Share anonymous crash diagnostics and coarse usage events — which features ran, and whether they succeeded — so we can fix problems. Off by default; your images, results, specimen names, file paths and analysis data are never sent.</string>
     <string name="diagnostics_prompt_title">Help improve Semper?</string>
-    <string name="diagnostics_prompt_body">Semper can send anonymous crash reports when something goes wrong, and coarse usage events such as whether an analysis started, finished or failed.\n\nThis never includes your images, results, specimen names or file paths. You can change this at any time in Settings.</string>
+    <string name="diagnostics_prompt_body">Semper can send anonymous crash reports when something goes wrong, and coarse usage events such as whether an analysis started, finished or failed.\n\nThis never includes your images, results, specimen names, file paths or analysis data. You can change this at any time in Settings.</string>
     <string name="diagnostics_prompt_accept">Send reports</string>
     <string name="diagnostics_prompt_decline">Not now</string>
     <string name="delete_account">Delete my account and data</string>

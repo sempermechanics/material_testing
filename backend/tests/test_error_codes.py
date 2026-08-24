@@ -7,13 +7,14 @@ either side would compile, deploy, and quietly change what the app believes a
 409 means. These tests are that pin.
 """
 import re
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
 
 from app import errors
 
-# app/errors.py -> backend/ -> repo root
+# tests/ -> backend/ -> repo root
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CLIENT_ERRORS = (
     _REPO_ROOT
@@ -21,6 +22,7 @@ _CLIENT_ERRORS = (
 )
 
 
+@lru_cache(maxsize=None)
 def _declared_codes() -> dict[str, str]:
     """Every public `NAME = "code"` constant in app/errors.py."""
     return {
@@ -30,10 +32,15 @@ def _declared_codes() -> dict[str, str]:
     }
 
 
-def _client_codes() -> set[str]:
-    """The code strings the Kotlin client declares."""
+@lru_cache(maxsize=None)
+def _client_codes() -> frozenset[str]:
+    """The code strings the Kotlin client declares.
+
+    Same character class as test_codes_are_stable_tokens, so a code carrying a
+    digit cannot slip past test_client_invents_no_codes_of_its_own.
+    """
     source = _CLIENT_ERRORS.read_text(encoding="utf-8")
-    return set(re.findall(r'const val [A-Z_]+ = "([a-z_]+)"', source))
+    return frozenset(re.findall(r'const val [A-Z_]+ = "([a-z][a-z0-9_]*)"', source))
 
 
 def test_codes_are_stable_tokens():

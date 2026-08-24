@@ -56,9 +56,9 @@ def readyz(request: Request):
     except Exception as e:  # noqa: BLE001
         obs.log_event(
             log, logging.ERROR, "readyz_unexpected",
-            outcome="error", errorCode="readyz_failed", dependency="unknown",
+            outcome="error", errorCode=errors.READYZ_FAILED, dependency="unknown",
         )
-        raise obs.DependencyError("readyz_failed", "unknown") from e
+        raise obs.DependencyError(errors.READYZ_FAILED, "unknown") from e
     latency_ms = round((time.perf_counter() - started) * 1000, 1)
     obs.log_event(
         log, logging.INFO, "readyz_ok",

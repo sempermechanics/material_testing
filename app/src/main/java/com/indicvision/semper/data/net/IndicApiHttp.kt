@@ -7,6 +7,9 @@ import java.io.IOException
 /** Shared OkHttp response helpers for [IndicApi]. */
 internal object IndicApiHttp {
 
+    /** Defensive cap: the header is attacker-influencable in principle. */
+    private const val MAX_REQUEST_ID_LEN = 64
+
     /**
      * The backend's correlation id for this response.
      *
@@ -18,6 +21,23 @@ internal object IndicApiHttp {
      */
     fun requestIdOf(resp: Response): String? =
         resp.header("X-Request-Id")?.takeIf { it.isNotBlank() }?.take(MAX_REQUEST_ID_LEN)
+
+    /**
+     * [text] with the correlation id appended, when there is one. One
+     * implementation so a reason, an exception message and a log line cannot
+     * print the reference three different ways. See [requestIdOf].
+     */
+    fun withRef(text: String, requestId: String?): String =
+        if (requestId.isNullOrBlank()) text else "$text (ref: $requestId)"
+
+    /**
+     * The generic failure for a Semper-backend call: status, body and the
+     * correlation id that joins it to the backend access log.
+     *
+     * Reads the body, so the caller must not have consumed it.
+     */
+    fun apiException(resp: Response): IndicApi.ApiException =
+        IndicApi.ApiException(resp.code, bodyText(resp), requestIdOf(resp))
 
     fun bodyText(resp: Response): String = try {
         resp.body.string()
@@ -32,7 +52,4 @@ internal object IndicApiHttp {
         val md5 = if (obj.has("md5Checksum")) obj.optString("md5Checksum") else null
         return id to md5
     }
-
-    /** Defensive cap: the header is attacker-influencable in principle. */
-    private const val MAX_REQUEST_ID_LEN = 64
 }

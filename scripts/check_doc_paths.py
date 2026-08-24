@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 # A backticked path rooted at one of the repository's top-level directories.
@@ -40,6 +41,9 @@ _SOURCE_SUFFIXES = {
 
 # Submodule content, and paths with a placeholder segment, are not resolvable.
 _SKIP_PREFIXES = ("native/", "http://", "https://", "mailto:", "#")
+
+# Trees that are generated, vendored or not ours: skipped wherever they appear.
+_SKIP_DIRS = {"native", "build", ".git", ".gradle", ".cxx", ".venv", "node_modules", "venv"}
 _PLACEHOLDERS = ("...", "<", "*", "{", "00N")
 
 # Real paths that are absent from a fresh checkout by design. Each is either a
@@ -58,25 +62,34 @@ def _is_checkable(target: str) -> bool:
     return Path(target).suffix.lower() in _SOURCE_SUFFIXES
 
 
+@lru_cache(maxsize=None)
+def _exists(target: str) -> bool:
+    """Cached: the docs name the same source files from many pages."""
+    return Path(target).exists()
+
+
+def _skipped(target: Path, root: Path) -> bool:
+    """A reference we do not police: a pruned tree, or absent by design."""
+    if not target.is_relative_to(root):
+        return False
+    relative = target.relative_to(root)
+    return bool(_SKIP_DIRS.intersection(relative.parts)) or str(relative) in _EXPECTED_ABSENT
+
+
 def _references(doc: Path, root: Path):
-    """Yield (line number, path-relative-to-root) for every checkable reference."""
+    """Yield (line number, resolved path) for every checkable reference."""
     for number, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), 1):
         for match in _BACKTICKED.finditer(line):
             target = match.group(1).rstrip(".,;:")
-            if _is_checkable(target) and target not in _EXPECTED_ABSENT:
+            if _is_checkable(target):
                 yield number, root / target
         for match in _LINK.finditer(line):
             target = match.group(1).split("#", 1)[0]
             if not target or not _is_checkable(target):
                 continue
-            resolved = (doc.parent / target).resolve()
-            # A link into the engine submodule resolves to <root>/native/... —
-            # skip it there too, not only when it is written as a bare path.
-            if root / "native" in resolved.parents:
-                continue
-            if resolved.is_relative_to(root) and str(resolved.relative_to(root)) in _EXPECTED_ABSENT:
-                continue
-            yield number, resolved
+            # Resolved rather than joined: a link into the engine submodule is
+            # written ../../native/… and must be skipped in that form too.
+            yield number, (doc.parent / target).resolve()
 
 
 def main() -> int:
@@ -88,15 +101,15 @@ def main() -> int:
     docs = sorted(
         path
         for path in root.rglob("*.md")
-        # Submodule and dependency trees are not ours to police.
-        if "native" not in path.relative_to(root).parts
-        and "build" not in path.relative_to(root).parts
+        if not _SKIP_DIRS.intersection(path.relative_to(root).parts)
     )
 
     missing = []
     for doc in docs:
         for number, target in _references(doc, root):
-            if not target.exists():
+            if _skipped(target, root):
+                continue
+            if not _exists(str(target)):
                 relative = doc.relative_to(root)
                 try:
                     shown = target.relative_to(root)

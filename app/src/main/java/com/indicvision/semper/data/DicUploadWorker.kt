@@ -24,6 +24,7 @@ import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
 import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.net.IndicApiHttp
 import com.indicvision.semper.data.net.MAX_CHUNK_BYTES
 import com.indicvision.semper.data.net.MIN_CHUNK_BYTES
 import com.indicvision.semper.data.net.SessionCreateRequest
@@ -360,12 +361,11 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             ?: return@withContext Result.failure()
 
         // Terminal failure carrying a reason the UI can show. localId lets Home
-        // find the row for a Retry action. [requestId], when the failure came
-        // from a backend answer, is appended so the user-visible reason and the
-        // backend access line share one token to grep for — see IndicApiHttp.
+        // find the row for a Retry action; [requestId] joins it to the backend
+        // access line — see [IndicApiHttp.requestIdOf].
         fun failure(reason: String, requestId: String? = null): Result = Result.failure(
             workDataOf(
-                DicKeys.UPLOAD_FAIL_REASON to UploadWorkOutcomes.withRef(reason, requestId),
+                DicKeys.UPLOAD_FAIL_REASON to IndicApiHttp.withRef(reason, requestId),
                 DicKeys.SESSION_LOCAL_ID to localId,
             ),
         )
@@ -769,10 +769,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             runCatching { api.registerDevice(idToken) }
                 .onSuccess { TokenStore.setDeviceRegistered(applicationContext, true) }
                 .onFailure { Timber.e(it, "Re-registration failed") }
-            retryLater(
-                localId,
-                UploadWorkOutcomes.withRef("device not active — re-registered, retry upload", e.requestId),
-            )
+            retryLater(localId, "device not active — re-registered, retry upload", e.requestId)
         } catch (e: IndicApi.DeviceConflictException) {
             Timber.e("This account is bound to a different device — cannot upload")
             SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
@@ -838,18 +835,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         if (cloudId.isNotBlank()) api.deleteSession(idToken, cloudId)
                     }.onFailure { Timber.w(it, "Could not delete stale session") }
                     SessionStore.setCloudSessionId(applicationContext, localId, "")
-                    retryLater(
-                        localId,
-                        UploadWorkOutcomes.withRef("HTTP 400 stale session — ${e.detail.take(120)}", e.requestId),
-                    )
+                    retryLater(localId, "HTTP 400 stale session — ${e.detail.take(120)}", e.requestId)
                 }
                 else -> {
                     // Transient — keep the staged files so the retry resumes identically.
                     Timber.e(e, "Upload HTTP %d for %s — %s", e.code, localId, e.detail)
-                    retryLater(
-                        localId,
-                        UploadWorkOutcomes.withRef("HTTP ${e.code}: ${e.detail.take(160)}", e.requestId),
-                    )
+                    retryLater(localId, e.message.orEmpty().take(RETRY_REASON_MAX_LEN))
                 }
             }
         } catch (e: OutOfMemoryError) {
@@ -944,12 +935,15 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
      * [CrashReportingTree] mirrors WARN+). Without this, alpha only saw
      * `Worker result RETRY` with no Semper reason.
      */
-    private fun retryLater(localId: String, reason: String): Result {
-        Timber.w("Upload RETRY localId=%s — %s", localId, reason)
+    private fun retryLater(localId: String, reason: String, requestId: String? = null): Result {
+        Timber.w("Upload RETRY localId=%s — %s", localId, IndicApiHttp.withRef(reason, requestId))
         return Result.retry()
     }
 
     private companion object {
+        /** Cap on a retry reason, which is only ever logged. */
+        const val RETRY_REASON_MAX_LEN = 200
+
         /** Restore-essential archive: everything needed to rebuild a working session. */
         const val BUNDLE_NAME = "Session.zip"
 

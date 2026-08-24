@@ -1,7 +1,7 @@
 package com.indicvision.semper.cloud
 
-import com.indicvision.semper.data.UploadWorkOutcomes
 import com.indicvision.semper.data.net.ApiErrors
+import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApiHttp
 import okhttp3.Protocol
 import okhttp3.Request
@@ -39,9 +39,9 @@ class ApiErrorMappingTest {
 
     @Test
     fun `a code quoted inside a message is not that code`() {
-        // The substring match this replaced turned any 409 whose text mentioned
-        // a device conflict into DeviceConflictException, which sends the user
-        // to "back up from your other device" for an unrelated rejection.
+        // A body that merely mentions a device conflict must not read as one:
+        // that sends the user to "back up from your other device" for an
+        // unrelated rejection.
         val body = """{"detail":"session_quota_exceeded: 5/5 stored. Not a device_conflict."}"""
         assertFalse(ApiErrors.hasCode(body, ApiErrors.DEVICE_CONFLICT))
         assertTrue(ApiErrors.hasCode(body, ApiErrors.SESSION_QUOTA_EXCEEDED))
@@ -73,22 +73,18 @@ class ApiErrorMappingTest {
     fun `failure reasons carry the reference only when there is one`() {
         assertEquals(
             "Backup failed (ref: a1b2c3d4e5f6)",
-            UploadWorkOutcomes.withRef("Backup failed", "a1b2c3d4e5f6"),
+            IndicApiHttp.withRef("Backup failed", "a1b2c3d4e5f6"),
         )
-        assertEquals("Backup failed", UploadWorkOutcomes.withRef("Backup failed", null))
-        assertEquals("Backup failed", UploadWorkOutcomes.withRef("Backup failed", ""))
+        assertEquals("Backup failed", IndicApiHttp.withRef("Backup failed", null))
+        assertEquals("Backup failed", IndicApiHttp.withRef("Backup failed", ""))
     }
 
     private fun response(requestId: String?): Response =
         Response.Builder()
             .request(Request.Builder().url("https://example.invalid/v1/sessions").build())
             .protocol(Protocol.HTTP_1_1)
-            .code(HTTP_CONFLICT)
+            .code(HttpStatus.CONFLICT)
             .message("Conflict")
             .apply { requestId?.let { header("X-Request-Id", it) } }
             .build()
-
-    private companion object {
-        const val HTTP_CONFLICT = 409
-    }
 }

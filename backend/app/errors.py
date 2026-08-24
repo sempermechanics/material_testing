@@ -10,6 +10,10 @@ stops matching.
 Codes are lowercase snake_case and carry no user data — they are safe to log and
 safe to show. Anything a caller needs beyond the code (counts, sizes) goes after
 a colon, as `session_quota_exceeded` does.
+
+Not exhaustive in one respect: `validation.py` generates a `missing_<field>` /
+`invalid_<field>` family per rejected identifier, so those codes are built at
+runtime rather than named here.
 """
 from __future__ import annotations
 
@@ -52,7 +56,16 @@ RATE_LIMITED = "rate_limited"
 DRIVE_DOWNLOAD_FAILED = "drive_download_failed"
 DRIVE_META_FAILED = "drive_meta_failed"
 
-#: Codes the Android client branches on rather than merely displaying. Changing
+# Reported as `{"detail": …}` too: an unhandled exception on Cloud Run, and the
+# DependencyError codes the readiness probe and the Drive/Firestore clients
+# raise (main.dependency_error_handler returns exc.code as the detail).
+INTERNAL_ERROR = "internal_error"
+DRIVE_UNREACHABLE = "drive_unreachable"
+DRIVE_UNHEALTHY = "drive_unhealthy"
+FIRESTORE_UNREACHABLE = "firestore_unreachable"
+READYZ_FAILED = "readyz_failed"
+
+#: Codes the Android client branches on or surfaces by name. Changing
 #: one of these needs the matching edit in ApiErrors.kt in the same commit --
 #: tests/test_error_codes.py fails otherwise.
 CLIENT_BRANCHED = frozenset(

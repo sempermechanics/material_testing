@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from google.api_core.exceptions import Aborted, NotFound
 from google.cloud import firestore
 
-from . import notify
+from . import errors, notify
 from .config import settings
 from .models import DeviceReg, FileComplete, FileSpec, SessionCreate
 
@@ -75,7 +75,7 @@ def ping() -> None:
         db().collection("users").document("readyz_ping").get()
     except Exception as e:  # noqa: BLE001
         log.exception("firestore ping failed: %s", e)
-        raise DependencyError("firestore_unreachable", "firestore") from e
+        raise DependencyError(errors.FIRESTORE_UNREACHABLE, "firestore") from e
 
 
 def _now():

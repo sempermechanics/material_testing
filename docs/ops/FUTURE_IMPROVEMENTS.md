@@ -159,6 +159,37 @@ a code the client branches on is still two edits in two languages.
 the reverse) so the second edit is a build step. Only worth doing if the code
 list keeps growing; the contract test is enough while it does not.
 
+## FI-11 Three 409s that are read by status, not by code
+
+**Affects** A1, B1, C1, C2 · *accuracy, debuggability*
+
+The typed error codes landed, but three sites still decide on the HTTP status
+alone. Each is a small, well-understood change that alters user-visible routing,
+so none was taken in the pass that introduced the codes — they need a compiler
+and the unit-test tier, which the environment that found them could not run.
+
+1. **`IndicApi.me()` maps any 409 to `DeviceConflictException`.** `GET /v1/me`
+   goes through `deps.current_user`, whose only 409 is `device_in_use` — "this
+   phone belongs to another account". `device_conflict` — "this account belongs
+   to another phone" — is raised only by `POST /v1/devices/register`. The two
+   read the same on screen today because `AuthRepository` collapses them into one
+   message, but the exception name is wrong and an unrecognised future 409 is
+   silently reported as a device rebind. Branch on
+   `ApiErrors.hasCode(body, DEVICE_CONFLICT) || hasCode(body, DEVICE_IN_USE)` and
+   let anything else fall through to `ApiException`.
+2. **`DicUploadWorker` treats every 409 as a full quota.**
+   `UploadWorkOutcomes.isQuotaExhausted(code)` tests `code == CONFLICT`, so a 409
+   carrying `device_not_active` or `size_or_state_mismatch` opens the "email
+   support, you are at your limit" screen for a problem that has nothing to do
+   with the quota. Test `ApiErrors.hasCode(e.detail, SESSION_QUOTA_EXCEEDED)`
+   instead — the code arrives with a `: used/max` tail, which `hasCode` already
+   allows for.
+3. **`ApiException.detail` is misnamed.** It holds the whole response body, while
+   `ApiErrors.detailOf` defines "detail" as the parsed field — so `e.detail` in a
+   log line prints the JSON envelope. Rename it to `body` and add
+   `val detail get() = ApiErrors.detailOf(body)`. Mechanical, but it changes what
+   several existing log lines print, so it wants the test tier too.
+
 ## FI-10 Keep the workflow map honest automatically — **done 2026-08-24**
 
 **Affects** all · *debuggability*

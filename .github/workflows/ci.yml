@@ -138,6 +138,11 @@ jobs:
               - 'backend/**'
               - 'firestore.rules'
               - 'firebase-hosting/**'
+              # The client's copy of the error-code contract. Without this, a
+              # rename in ApiErrors.kt on an app-only PR skips the backend tier
+              # and test_error_codes.py never runs — which is the one thing
+              # holding the two lists together.
+              - 'app/src/main/java/com/indicvision/semper/data/net/ApiErrors.kt'
             ci_workflow:
               - '.github/workflows/ci.yml'
             android_test:

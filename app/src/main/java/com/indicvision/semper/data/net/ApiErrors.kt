@@ -19,6 +19,9 @@ object ApiErrors {
     /** The account exists but is not APPROVED (403). */
     const val NOT_APPROVED = "not_approved"
 
+    /** The caller is not an admin (403 from an admin route). */
+    const val NOT_ADMIN = "not_admin"
+
     /** This account is already bound to a different device (409). */
     const val DEVICE_CONFLICT = "device_conflict"
 
@@ -62,14 +65,18 @@ object ApiErrors {
     }
 
     /**
-     * Whether [body] reports exactly [code].
+     * Whether an already-extracted [detail] reports exactly [code].
      *
      * A trailing `: …` counts: `session_quota_exceeded` arrives as
      * "session_quota_exceeded: 5/5 analyses stored." so the caller can show the
      * numbers, and the code in front of the colon is still the whole meaning.
+     *
+     * Testing several codes against one response goes through this, so the body
+     * is parsed once rather than once per candidate.
      */
-    fun hasCode(body: String, code: String): Boolean {
-        val detail = detailOf(body)
-        return detail == code || detail.startsWith("$code:")
-    }
+    fun isCode(detail: String, code: String): Boolean =
+        detail == code || detail.startsWith("$code:")
+
+    /** [isCode] for a caller that holds the raw body rather than the detail. */
+    fun hasCode(body: String, code: String): Boolean = isCode(detailOf(body), code)
 }

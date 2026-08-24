@@ -154,7 +154,9 @@ internal class DriveTransfer(
                             val (driveId, _) = IndicApiHttp.parseDriveResult(resp.body.string())
                             return@withContext driveId to Digests.toHex(digest.digest())
                         }
-                        else -> throw IndicApi.ApiException(resp.code, resp.body.string())
+                        // Drive's resumable endpoint, not the Semper backend, so
+                        // there is no X-Request-Id to correlate with.
+                        else -> throw IndicApi.ApiException(resp.code, IndicApiHttp.bodyText(resp))
                     }
                 }
             }
@@ -423,11 +425,7 @@ internal class DriveTransfer(
                                 reportedTotal = -1L
                                 throw IOException("range_not_satisfiable; restarting $fileId")
                             }
-                            throw IndicApi.ApiException(
-                                resp.code,
-                                IndicApiHttp.bodyText(resp),
-                                IndicApiHttp.requestIdOf(resp),
-                            )
+                            throw IndicApiHttp.apiException(resp)
                         }
                         else -> {
                             val body = IndicApiHttp.bodyText(resp)
