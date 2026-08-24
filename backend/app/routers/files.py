@@ -5,7 +5,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from .. import audit, drive, firestore_repo as repo
+from .. import audit, drive, errors, firestore_repo as repo
 from .. import rate_limit
 from ..deps import verified_device
 from ..models import FileComplete
@@ -45,13 +45,13 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     # .add(), so limiting afterwards still charges a write per rejected request
     # and files a FILE_DOWNLOAD entry for a download that never happened.
     if not rate_limit.download_bucket.allow(user["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     f = repo.get_file(file_id)
     if not f or f.get("uid") != user["uid"]:
-        raise HTTPException(404, "file_not_found")
+        raise HTTPException(404, errors.FILE_NOT_FOUND)
     drive_file_id = f.get("driveFileId")
     if not drive_file_id:
-        raise HTTPException(409, "file_not_uploaded")
+        raise HTTPException(409, errors.FILE_NOT_UPLOADED)
     token = drive.access_token()
     byte_range = request.headers.get("range")
     # A restore fetches one file in many adaptive-size Range windows (see
@@ -69,9 +69,9 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
         if isinstance(e, requests.HTTPError) and e.response is not None:
             status = e.response.status_code
             if status == 416:
-                raise HTTPException(416, "range_not_satisfiable") from e
+                raise HTTPException(416, errors.RANGE_NOT_SATISFIABLE) from e
         log.error("drive download %s failed: %s", drive_file_id, e)
-        raise HTTPException(502, "drive_download_failed") from e
+        raise HTTPException(502, errors.DRIVE_DOWNLOAD_FAILED) from e
 
     # The stored name is client-supplied (validated for length only), so strip
     # anything that could break out of the quoted filename or inject a header.
@@ -102,10 +102,10 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
 def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_device)):
     user = ctx["user"]
     if not rate_limit.file_complete_bucket.allow(user["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     rec = repo.get_file(file_id)
     if not rec or rec.get("uid") != user["uid"]:
-        raise HTTPException(404, "file_not_found")
+        raise HTTPException(404, errors.FILE_NOT_FOUND)
     # Verify the upload actually landed intact before trusting this completion.
     # The client uploads straight to Drive, so ask Drive for the real size/md5
     # and reject a truncated or corrupted object. Skipped on an idempotent retry
@@ -115,16 +115,16 @@ def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_
             meta = drive.get_file_meta(drive.access_token(), body.driveFileId)
         except requests.HTTPError as e:
             log.error("drive meta for %s failed: %s", body.driveFileId, e)
-            raise HTTPException(502, "drive_meta_failed") from e
+            raise HTTPException(502, errors.DRIVE_META_FAILED) from e
         if meta["size"] != rec.get("sizeBytes"):
-            raise HTTPException(422, "size_mismatch")
+            raise HTTPException(422, errors.SIZE_MISMATCH)
         # Whenever Drive reports an md5 (always, for our binary blobs), the client
         # MUST supply a matching one. Previously a client that simply omitted md5
         # skipped the checksum entirely — a corrupt-but-right-sized upload could be
         # accepted. md5 is only skipped when Drive itself has none (Docs-native
         # types we never store).
         if meta["md5"] and body.md5 != meta["md5"]:
-            raise HTTPException(422, "checksum_mismatch")
+            raise HTTPException(422, errors.CHECKSUM_MISMATCH)
         # Bind the object to this session's Drive folder — never trust a client
         # pointer into an arbitrary shared-drive file the download proxy would
         # then stream under the SA.
@@ -132,10 +132,10 @@ def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_
         folder = (session or {}).get("driveFolderId")
         parents = meta.get("parents") or []
         if not folder or folder not in parents:
-            raise HTTPException(403, "file_not_in_session")
+            raise HTTPException(403, errors.FILE_NOT_IN_SESSION)
     outcome = repo.complete_file(file_id, user["uid"], body)
     if not outcome:
-        raise HTTPException(409, "size_or_state_mismatch")
+        raise HTTPException(409, errors.SIZE_OR_STATE_MISMATCH)
     # Only a FIRST completion advances the counter — a retried completion
     # ("already") must not double-count toward session COMPLETED.
     #

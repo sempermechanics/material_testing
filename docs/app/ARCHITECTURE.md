@@ -199,4 +199,6 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
   lives in the `native/` submodule — see [engine/ARCHITECTURE.md](../engine/ARCHITECTURE.md))
 - [Auth setup](../backend/AUTH_SETUP.md)
 - [Cloud architecture](../backend/CLOUD_ARCHITECTURE_GCP.md)
+- [Workflow index](../WORKFLOWS.md) — every flow's entry point, file chain and
+  failure surface, plus where backtracking is hard (§E)
 - [Contributing](../../CONTRIBUTING.md)

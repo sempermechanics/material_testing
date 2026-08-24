@@ -1,36 +1,19 @@
-# App workflows — the complete map
+# App manual test pass
 
-Every user-facing flow in Semper, as a tree plus a checkable test step per leaf.
-Use it two ways:
+Every user-facing flow in Semper as a checkable step. Walk the tables top to
+bottom on a debug build and tick the boxes; a full pass should never land you on
+a screen this file doesn't name.
 
-- **As a map** — the trees answer "what screens exist and how do I reach them".
-- **As a manual test script** — walk the tables top to bottom on a debug build
-  and tick the boxes. A full pass should never land you on a screen this file
-  doesn't name.
+This is the **test script**. The map — which files each flow runs through, what
+it writes, where its failures surface — is
+[../WORKFLOWS.md](../WORKFLOWS.md), whose §A ids match the section numbers here
+(§5.4 below is `A5.4` there). For the *automated* suite see
+[TESTING.md](TESTING.md); for how the code is laid out see
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
-For the *automated* suite see [TESTING.md](TESTING.md); for how the code is laid
-out see [ARCHITECTURE.md](ARCHITECTURE.md). This file covers what a human sees.
-
-## How the app is put together
-
-There is no `NavHost`, no Compose and no Fragments. Semper is **Activity-based**:
-12 activities in `app/src/main/AndroidManifest.xml`, wired with plain
-`startActivity` and `ActivityResultContracts`. Sub-flows are wizard pages inside
-one Activity, `BottomSheetDialog`s, `MaterialAlertDialog`s and `PopupMenu`s. So a
-"workflow" here is rarely a route — most of this tree lives inside four files.
-
-| Activity | Flow |
-|---|---|
-| `SplashActivity` | 0. App launch |
-| `AuthActivity` | 1. Login |
-| `PendingApprovalActivity` | 2. Pending approval |
-| `HomeActivity` | 3. Home |
-| `SettingsActivity` · `AdminActivity` | 4. Settings |
-| `StaticAnalysisActivity` | 5. Analysis (3-step wizard) |
-| `RoiDrawActivity` | 6. ROI editor |
-| `VsgLatticeActivity` | 7. Lattice |
-| `ResultViewerActivity` · `SaveExportActivity` | 8. Result viewer |
-| `SessionLimitActivity` | 9. Session limit |
+Semper is Activity-based — no NavHost, no Compose, no Fragments — so most of what
+follows happens inside four files. §11 records the paths that are gated, blocked
+or dead, and is not part of the pass.
 
 ## Legend
 
@@ -45,18 +28,6 @@ one Activity, `BottomSheetDialog`s, `MaterialAlertDialog`s and `PopupMenu`s. So 
 ## 0. App launch
 
 Decides where you land. No user input; the whole flow is a routing decision.
-
-```
-0. App launch — SplashActivity
-   ├── session restore (400 ms delayed spinner)
-   ├── no session ................................ → 1. Login
-   ├── status PENDING ............................ → 2. Pending approval
-   ├── status APPROVED ........................... → 3. Home
-   ├── offline + cached approval ................. → 3. Home, "Offline mode" toast
-   ├── quota already full ........................ → 3. Home, with 9. Session limit
-   │                                                 opening on top (Home checks, not Splash)
-   └── [debug] dev bypass ........................ → 3. Home, cloud disabled
-```
 
 **Entry:** launcher icon. **Exit:** Login, Pending approval, Home or Session limit.
 
@@ -77,24 +48,6 @@ Decides where you land. No user input; the whole flow is a routing decision.
 **One screen**, not five. The sign-in / create-account distinction is a mode
 toggle on the same layout, and forgot-password is a link that fires an email —
 neither opens a separate screen.
-
-```
-1. Login — AuthActivity
-   ├── Google SSO                        (button hidden when not configured)
-   ├── Email / password sign in
-   ├── Create account                    (same screen; sends a verification
-   │                                      email silently, never enforced)
-   ├── Email sign-in link (passwordless)
-   │   ├── request the link
-   │   ├── return via App Link deep link → /finishSignIn
-   │   └── wrong-device error path
-   ├── Forgot password (reset email; reports success even for unknown emails)
-   │   └── return via App Link deep link → /finishReset
-   │       └── set-new-password form, in-app (same Activity, reset mode)
-   ├── Generate secure password          [register]
-   └── validation: email format, password policy on register (8+, upper, lower,
-       digit, special), confirm mismatch, routing-error banner from Splash
-```
 
 **Entry:** Splash, sign-out, or the sign-in deep link. **Exit:** Home or Pending
 approval, depending on the backend's answer.
@@ -136,13 +89,6 @@ approval, depending on the backend's answer.
 The allow-list gate. Firebase says who you are; the backend says whether you're
 allowed in. A new account sits here until an admin approves it.
 
-```
-2. Pending approval — PendingApprovalActivity
-   ├── Request access (mailto to support, prefilled with account/device/build)
-   ├── Check status  (manual only — it does not poll)
-   └── Log out
-```
-
 **Entry:** Splash or Login when status is `PENDING`. **Exit:** Home on approval,
 Login on sign-out.
 
@@ -169,32 +115,6 @@ below is the user's own nudge on top of that, not the only signal.
 ## 3. Home
 
 The session list and the only entry point to a new analysis.
-
-```
-3. Home — HomeActivity
-   ├── Beta / data-use notice          (first run, non-dismissable, acked once)
-   ├── Diagnostics opt-in prompt       (first run, after the notice; default off)
-   ├── Coach mark on the FAB           (first run)
-   ├── Session list
-   │   ├── open a session ............ → 8. Result viewer, or 7. Lattice for sweeps
-   │   ├── sync badge tap ............ retry backup / open Settings
-   │   ├── "Only in cloud" row ....... "Restore this analysis?" → background restore
-   │   ├── live row progress ......... backup (prepare/upload) and restore/download
-   │   └── "session data gone" dialog  (local frames deleted, no cloud copy either)
-   ├── Selection mode (long-press)
-   │   ├── select all
-   │   ├── rename                      (only with exactly one selected)
-   │   └── delete → "Delete device" / "Delete cloud" when the row has both;
-   │                a row with only one copy goes outright
-   ├── Quota chip ...................... → 9. Session limit / 4. Settings
-   ├── Pull-to-refresh                  (deep cloud reconcile, repairs blobs)
-   ├── Empty state → "Start analysis"   (same as the FAB — no longer Settings)
-   ├── Start new analysis (FAB)
-   │   ├── quota gate .................. → 9. Session limit
-   │   └── New analysis sheet ......... → 3a. Media picker sheet
-   ├── Settings (gear)
-   └── Exit-app confirm on Back
-```
 
 **Entry:** Splash, Pending approval, the viewer's home button, sign-in.
 **Exit:** Analysis, Settings, Result viewer, Lattice, Session limit.
@@ -241,19 +161,6 @@ Not an Activity: `MediaPickerSheet`, a full-height bottom sheet titled **New
 analysis**. It replaced the old two-button Photos/Files chooser, and it is the
 same sheet the wizard's two dropzones open (§5.1), so test it once here.
 
-```
-3a. New analysis — MediaPickerSheet (bottom sheet)
-    ├── segmented tabs: Images | Files      (Images pre-checked)
-    ├── Images
-    │   ├── in-sheet 3-column gallery of the device's media
-    │   ├── video tiles carry a video badge
-    │   ├── no permission yet → empty state + "Allow access"
-    │   └── multi-select (deformed frames only) → "Use N" confirm
-    ├── Files ......................... dismisses the sheet, opens SAF
-    │                                    (image/* + video/*; the only route to DNG/RAW)
-    └── coach marks on first use       (one pair for reference, one for deformed)
-```
-
 | # | Action | Expected |
 |---|---|---|
 | [ ] 3a.1 | Tap **+** on Home | The **New analysis** sheet opens **full height**; for ~1 s the grid is dimmed behind a large centred hint ("Select the reference image"), then tiles unlock |
@@ -277,47 +184,6 @@ One scrolling screen of seven collapsible sections, all collapsed on open, plus 
 two-button footer. Long-running work here does **not** block the screen: restores,
 downloads and the two data exports run behind a **transfer banner** pinned at the
 top of Settings (§4.0).
-
-```
-4. Settings — SettingsActivity
-   ├── Account
-   │   ├── email, device ID (read-only, selectable)
-   │   └── Pending access requests      [admin] → AdminActivity
-   │       └── approve / deny a user
-   ├── Cloud backup
-   │   ├── "Save to cloud" toggle → offer to back up N local-only analyses
-   │   ├── "Wi-Fi only uploads" toggle
-   │   └── sync status line (up to date / pending)
-   ├── Analyses data management         (local ⋈ cloud, merged)
-   │   ├── open the analysis
-   │   ├── Back up now / Retry backup
-   │   ├── Download                     (any row with a cloud copy, incl. phone+cloud;
-   │   │                                 SAF destination picked first, then a worker)
-   │   ├── Restore from cloud           (background worker; only when local is missing)
-   │   └── Delete backup → cloud only / cloud + local / forever
-   │       └── 5-second Undo before the delete really fires
-   ├── Storage
-   │   ├── analyses size + cache size   (measured, refreshed on expand)
-   │   ├── Free up space                (drops local frames of backed-up analyses)
-   │   ├── Clear cache
-   │   └── Auto-free budget             (slider 0–64 GB, 0 = off; enforced at app start)
-   ├── Your data
-   │   ├── Send crash reports           (opt-in toggle; mirrors the first-run prompt.
-   │   │                                 The same flag gates product analytics — see §11)
-   │   ├── Export my data               (master ZIP → 8.5a Send to)
-   │   ├── Download my cloud account data  (server-side export of the account)
-   │   └── Delete my account and data   (backend first; local wipe only on success)
-   ├── Analysis preferences
-   │   └── Max frames per analysis      (10–150, default 50) + info dialog
-   ├── Help & support
-   │   ├── Open Manual / Report a bug / Request a feature
-   │   │     → https://sempermechanics.com/…
-   │   ├── Send feedback                (mailto, prefilled with version/device/build)
-   │   ├── support@sempermechanics.com      (selectable, copyable)
-   │   └── Email support                (mailto, prefilled with account/device/build)
-   ├── About                            (version + Privacy Policy / Terms links)
-   └── Sign out
-```
 
 **Entry:** the Home gear (also the quota chip and any sync badge).
 **Exit:** Home, Admin, a result, or Login.
@@ -399,13 +265,6 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 
 ### 4.1 Admin `[admin]`
 
-```
-4.1 Admin — AdminActivity
-    ├── list of PENDING users (email + display name)
-    ├── Approve
-    └── Deny
-```
-
 | # | Action | Expected |
 |---|---|---|
 | [ ] 4.1.1 | Open the admin list | Every user awaiting approval is listed — each one should match a mail support already received (§2.0) |
@@ -425,21 +284,6 @@ mode chosen on page 2.
 Lattice, Session limit, or back to Home.
 
 ### 5.1 Step 1 — Load frames
-
-```
-5.1 Load frames
-    ├── coach marks on first visit            (both dropzones)
-    ├── Reference image → 3a. New analysis sheet   (RAW/DNG only via Files)
-    ├── Deformed frames → 3a. New analysis sheet   (multi-select, capped)
-    ├── Video source
-    │   ├── sampling sheet: fps slider, time-segment range, live estimate
-    │   └── extraction progress
-    ├── Frame order
-    │   ├── Name ↑ / Name ↓ / Date oldest / Date newest / Manual
-    │   └── drag thumbnails to reorder (Manual)
-    ├── warnings: JPEG accuracy, low texture (SSSIG) — chip + FAQ
-    └── blocking error: frame size mismatch (chip on step 2 + FAQ)
-```
 
 | # | Action | Expected |
 |---|---|---|
@@ -475,28 +319,6 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 
 ### 5.2 Step 2 — Confirm settings
 
-```
-5.2 Confirm settings
-    ├── Analysis mode: Single setting / Parameter sweep
-    ├── Region of interest ......... → 6. ROI editor (cancel = full image)
-    ├── Advanced parameters                   [single]
-    │   ├── Paste params chip  (only when the lattice clipboard holds a set)
-    │   ├── subset size      (slider + typed field + ⓘ)
-    │   ├── step size        (title + ⓘ; short slider + typed px on the next row)
-    │   ├── overlap          (title + ⓘ on the step title row; typed ratio beside the step readout)
-    │   ├── strain window    (slider + typed field + ⓘ)
-    │   ├── interpolator: Bicubic 4×4 / Keys 6×6
-    │   └── Reset to recommended
-    ├── Sweep settings                        [sweep]
-    │   ├── subset size range
-    │   ├── strain window range
-    │   ├── step size (subset ÷ N, default 3) + overlap at the end
-    │   └── frame to sweep
-    ├── frame-size mismatch warning chip + FAQ   (when a deformed frame differs)
-    ├── coach marks on first visit  (mode toggle, ROI, visible settings card)
-    └── Compute  [single]  /  Next: Summary →  [sweep]
-```
-
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.2.1 | Arrive on step 2 | Analysis mode is at the top; there is no inputs-summary card |
@@ -530,16 +352,6 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 
 ### 5.3 Step 3 — Sweep summary `[sweep]`
 
-```
-5.3 Sweep summary
-    ├── planned lattice preview
-    ├── lattice samples: no. of subsets × no. of VSGs (1–8 each)
-    ├── plan summary, or a warning chip + FAQ for "empty plan" / "subset too big"
-    ├── Line-cut preview + X/Y axis
-    ├── coach marks on first visit  (planned lattice, line cut, Compute)
-    └── Compute
-```
-
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.3.1 | Arrive on step 3 | Toolbar reads "Step 3 of 3"; planned lattice is first, line cut below it |
@@ -554,14 +366,6 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | [ ] 5.3.16 | Read a valid plan summary | "N analyses · subset a–b px · VSG c–d px" |
 
 ### 5.4 Running
-
-```
-5.4 Running
-    ├── progress %, elapsed
-    ├── compute tiles: "# converged", "convergence"            [compute/sweep only]
-    ├── Cancel (confirm; cooperative — the engine stops mid-frame)
-    └── Back is hard-blocked, screen kept on
-```
 
 The same overlay is reused for importing frames and extracting video, but the two
 compute tiles are **hidden** there — they would only ever read zero. Import and
@@ -623,21 +427,6 @@ extraction show determinate progress instead.
 Full-screen editor over the reference image. Two edit modes crossed with two
 tools — the Crop/Erase toggle persists when you switch between Draw and Manual.
 
-```
-6. ROI editor — RoiDrawActivity
-   ├── Draw mode
-   │   ├── Rectangle / Square
-   │   └── draw, move, corner-resize (min 50 px)
-   ├── Manual mode
-   │   └── X / Y / W / H fields + Apply
-   ├── Crop ↔ Erase
-   │   └── exclusion holes / mask; multiple, individually editable
-   ├── Use full image
-   ├── Reset
-   ├── live HUD readout (W × H at (x, y))
-   └── Save ROI / Cancel
-```
-
 **Entry:** the ROI card on analysis step 2. **Exit:** back to step 2, with the
 ROI and mask, or with full-image defaults on cancel.
 
@@ -676,27 +465,6 @@ The screen is designed to be driven with one thumb: the column **scrolls**
 (lattice, then controls, then plot) while the two action buttons stay pinned at
 the bottom, and every node can be reached with the prev/next stepper without
 aiming at a small target.
-
-```
-7. Parameter sweep — VsgLatticeActivity
-   ├── coach marks                       (first visit: the lattice, then the plot)
-   ├── summary: total / solved / skipped / step denominator   (above the lattice)
-   ├── result lattice: subset across × strain window up,
-   │                   solved (filled) vs skipped (hollow ring)
-   │   ├── every solved node shares one colour; the focused one also gets a
-   │   │   selection ring (no legend row — the coach mark covers it once)
-   │   ├── a faint connector ladder joins the nodes of each subset column
-   │   ├── tap a node → focus it
-   │   └── double-tap / long-press → open that combination in the viewer
-   ├── stepper row: ‹ prev · parameter chip · next ›   (solved nodes only)
-   ├── strain plot section               (hidden until the profiles load)
-   │   ├── component spinner: Exx / Eyy / Exy   (in a glass pill with a chevron)
-   │   ├── All ↔ Node — one pill         (**All** is the default)
-   │   ├── plot: pinch-zoom, two-finger pan, double-tap to reset
-   │   ├── scrub slider under the plot   (two-way synced with the drag)
-   │   └── readout: "x=…  y=…" (Node) or "x=…  label=…" (All curves)
-   └── Save graph · View                 (pinned bottom bar)
-```
 
 **Entry:** finishing a sweep, or tapping a sweep row on Home or in Settings.
 **Exit:** Result viewer, or back to Home.
@@ -759,47 +527,6 @@ aiming at a small target.
 
 The main results browser. Reached directly for a single-setting run, or through
 the Lattice for a sweep.
-
-```
-8. Result viewer — ResultViewerActivity
-   ├── summary animation                        (the slot before frame 1)
-   │   ├── every frame of the selected field, looping, ≤10 s
-   │   └── one colour scale for the whole sequence
-   ├── field switching: U / V / Exx / Eyy / Exy
-   ├── image viewer
-   │   ├── pinch zoom (to 10×) and pan
-   │   ├── double-tap zoom / reset
-   │   ├── horizontal fling (fit-to-screen) steps frames
-   │   └── jet heatmap over the reference (fixed 0.7 alpha)
-   ├── colour scale bar (hairline over the figure)
-   │   ├── default: this frame's 2nd/98th-percentile clamp, labeled "≤ / ≥"
-   │   │   (not "Min:"/"Max:" — the true extrema can lie beyond the label;
-   │   │   the ⓘ peek sheet shows those instead, and the two are allowed to differ)
-   │   ├── tap → custom min / max
-   │   └── Auto scale (drops custom; returns to the frame's clamped bounds)
-   ├── edge chrome (auto-hides on a timer; pan / scrub / field tap / probe brings it back)
-   │   │   back · short title (field · frame) · ⓘ · Home · share
-   │   ├── ⓘ peek sheet: specimen name, max/min (with coords) + mean +
-   │   │                 settings used (+ stop reason, + line-cut on sweep)
-   │   ├── centre double-tap while hidden shows chrome; swipe down may show it
-   │   └── figure runs edge-to-edge under the status / nav bars
-   ├── field FAB (top-left pill) → popup of all five; live field checked
-   ├── frame scrubbing: prev / next + "name (i / N)"
-   │   └── type a frame number to jump straight there
-   ├── tap-to-probe
-   │   ├── short tap anywhere on the figure → nearest point reading
-   │   └── tap readout chip to dismiss
-   ├── Share (node icon)
-   │   ├── Single Field (current field + frame)
-   │   ├── All fields (5, zipped)
-   │   ├── Animations (5 GIFs, zipped)
-   │   ├── PDF report (all frames)
-   │   ├── CSV data
-   │   ├── Everything (.zip: raw photos + animations + results + CSV + PDF)
-   │   └── → Send to sheet: Save to Files / Share  (§8.5a)
-   ├── Home (chrome icon, top bar)
-   └── Back (chrome arrow, or system Back → 7. Lattice for sweeps)
-```
 
 **Entry:** a finished single-setting run, a Home or Settings row, or a Lattice
 node. **Exit:** Home, or back to the Lattice.
@@ -954,13 +681,6 @@ and the lattice's **Save graph** (§7.3.4, straight to the system chooser).
 The quota gate. Not a paywall — there is no billing anywhere in the app; the
 route past it is an email to support.
 
-```
-9. Session limit — SessionLimitActivity
-   ├── Email support (prefilled)
-   ├── Re-check limit
-   └── Back to my analyses
-```
-
 **Entry:** Home cold start, the Home FAB, the quota chip, a pre-run check, a
 sweep hitting the cap, or a background upload rejected with a quota error.
 **Exit:** Home, once the limit clears.
@@ -979,7 +699,8 @@ sweep hitting the cap, or a background upload rejected with a quota error.
 ## 10. Background work
 
 Uploads, restores, **bundle downloads** and backup deletes run in WorkManager and
-survive leaving the screen:
+survive leaving the screen. Their file chains, failure outputs and log signals
+are `B1`–`B4` in [../WORKFLOWS.md](../WORKFLOWS.md#b-app--background-and-data-workflows):
 
 | Worker | Job |
 |---|---|

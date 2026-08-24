@@ -4,7 +4,7 @@ import time
 from fastapi import APIRouter, HTTPException, Request
 
 from .. import firestore_repo as repo
-from .. import drive
+from .. import drive, errors
 from .. import observability as obs
 from .. import rate_limit
 
@@ -34,7 +34,7 @@ def healthz(request: Request):
     # Liveness only: process is up. Do not probe dependencies here — a slow
     # Firestore/Drive outage must not restart healthy instances.
     if not rate_limit.health_bucket.allow(_client_key(request)):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     return {"ok": True}
 
 
@@ -46,7 +46,7 @@ def readyz(request: Request):
     …) so load balancers and smoke checks can act without parsing messages.
     """
     if not rate_limit.health_bucket.allow(_client_key(request)):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     started = time.perf_counter()
     try:
         repo.ping()

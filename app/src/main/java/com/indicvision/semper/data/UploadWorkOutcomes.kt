@@ -18,6 +18,18 @@ internal object UploadWorkOutcomes {
     /** Hex length of a SHA-256 digest (Session.zip.sha256 sidecar). */
     const val SHA256_HEX_LEN = 64
 
+    /**
+     * [reason] with the backend's correlation id appended, when there is one.
+     *
+     * The backend stamps `X-Request-Id` on every response and logs the same
+     * value on its structured access line, so a reason that carries it turns a
+     * screenshot of a failed backup into one greppable backend log entry. The id
+     * is opaque — no account, device or session identity — so it is safe both in
+     * a message pill and in a Crashlytics breadcrumb.
+     */
+    fun withRef(reason: String, requestId: String?): String =
+        if (requestId.isNullOrBlank()) reason else "$reason (ref: $requestId)"
+
     /** Map a backend [IndicApi]-style HTTP status to a WorkManager result. */
     fun fromHttpCode(code: Int): Result = when (code) {
         // Quota full / payload too large — retrying will not help.

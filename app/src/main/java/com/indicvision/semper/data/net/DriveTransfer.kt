@@ -423,7 +423,11 @@ internal class DriveTransfer(
                                 reportedTotal = -1L
                                 throw IOException("range_not_satisfiable; restarting $fileId")
                             }
-                            throw IndicApi.ApiException(resp.code, IndicApiHttp.bodyText(resp))
+                            throw IndicApi.ApiException(
+                                resp.code,
+                                IndicApiHttp.bodyText(resp),
+                                IndicApiHttp.requestIdOf(resp),
+                            )
                         }
                         else -> {
                             val body = IndicApiHttp.bodyText(resp)
@@ -439,7 +443,7 @@ internal class DriveTransfer(
                                         if (preview.isNotBlank()) ": $preview" else "",
                                 )
                             }
-                            throw IndicApi.ApiException(resp.code, body)
+                            throw IndicApi.ApiException(resp.code, body, IndicApiHttp.requestIdOf(resp))
                         }
                     }
                 }

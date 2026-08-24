@@ -3,7 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from .. import audit, drive, firestore_repo as repo
+from .. import audit, drive, errors, firestore_repo as repo
 from .. import observability as obs
 from .. import rate_limit
 from .. import tasks
@@ -36,7 +36,7 @@ def list_sessions(
     page_size = max(1, min(page_size, 100))
     if verify:
         if not rate_limit.session_verify_bucket.allow(user["uid"]):
-            raise HTTPException(429, "rate_limited")
+            raise HTTPException(429, errors.RATE_LIMITED)
     sessions, next_token = repo.list_user_sessions(
         user["uid"], limit=page_size, page_token=page_token or None,
     )
@@ -106,10 +106,10 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     """
     user, device = ctx["user"], ctx["device"]
     if not rate_limit.erase_bucket.allow(user["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, "session_not_found")
+        raise HTTPException(404, errors.SESSION_NOT_FOUND)
 
     folder = session.get("driveFolderId")
     if folder:
@@ -149,10 +149,10 @@ def session_uploads(
     """
     user = ctx["user"]
     if not rate_limit.listing_bucket.allow(user["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, "session_not_found")
+        raise HTTPException(404, errors.SESSION_NOT_FOUND)
     page_size = max(1, min(page_size, 1000))
     uploads, next_token = repo.list_pending_uploads(
         sid, limit=page_size, page_token=page_token or None,
@@ -186,10 +186,10 @@ def list_session_files(
     restore means a manifest quietly missing entries.
     """
     if not rate_limit.listing_bucket.allow(user["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, "session_not_found")
+        raise HTTPException(404, errors.SESSION_NOT_FOUND)
     page_size = max(1, min(page_size, 1000))
     files, next_token = repo.list_session_files(
         sid, limit=page_size, page_token=page_token or None,
@@ -215,7 +215,7 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     cfg = repo.resolve_user_config(user)
 
     if not rate_limit.session_bucket.allow(user["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
 
     # Idempotent retry: same localSessionId + still in flight → return existing.
     existing = repo.find_incomplete_session(user["uid"], body.localSessionId)
@@ -230,12 +230,12 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
 
     # Quotas: one session == one analysis.
     if len(body.files) > cfg["maxFilesPerSession"]:
-        raise HTTPException(413, "too_many_files")
+        raise HTTPException(413, errors.TOO_MANY_FILES)
     used = repo.count_user_sessions(user["uid"])
     if used >= cfg["maxSessions"]:
         raise HTTPException(
             409,
-            f"session_quota_exceeded: {used}/{cfg['maxSessions']} analyses stored. "
+            f"{errors.SESSION_QUOTA_EXCEEDED}: {used}/{cfg['maxSessions']} analyses stored. "
             "Delete an older analysis to sync a new one.",
         )
 

@@ -21,6 +21,15 @@ Orphaned strings the 2026-08-18 workflow audit found are listed in
 [../app/WORKFLOWS.md](../app/WORKFLOWS.md) §11 — none of them fail a gate, so they
 are removed opportunistically rather than in a sweep.
 
+## Proposed improvements live next door
+
+Forward-looking items — the ones that came out of the 2026-08-24 workflow
+traceability pass, ranked by accuracy and privacy impact — are in
+[FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md). This file stays the record of
+what is *owed* and what is deliberately deferred. Two entries below have a
+concrete proposal there: the `ViewerSession` extras bag (FI-1) and the consent
+copy (FI-8).
+
 ## External / deferred (not blocked on code alone)
 
 | Item | Why deferred |
