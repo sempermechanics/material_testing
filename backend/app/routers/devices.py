@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException
 
-from .. import audit, errors, firestore_repo as repo
+from .. import audit, errors, firestore_repo as repo, statuses
 from .. import rate_limit
 from ..deps import current_user
 from ..models import DeviceReg
@@ -22,7 +22,8 @@ def register_device(body: DeviceReg, user=Depends(current_user)):
     # This DEVICE is already bound to a different account. Enforces one-account-
     # per-device: a second person can't sign in on someone else's phone.
     existing = repo.get_device(body.deviceId)
-    if existing and existing.get("status") == "ACTIVE" and existing.get("uid") != user["uid"]:
+    if (existing and existing.get("status") == statuses.DEVICE_ACTIVE
+            and existing.get("uid") != user["uid"]):
         audit.record(user["uid"], body.deviceId, action="DEVICE_IN_USE", outcome="DENIED",
                      detail={"owner": existing.get("uid")})
         raise HTTPException(409, errors.DEVICE_IN_USE)

@@ -5,7 +5,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from .. import audit, drive, errors, firestore_repo as repo
+from .. import audit, drive, errors, firestore_repo as repo, statuses
 from .. import rate_limit
 from ..deps import verified_device
 from ..models import FileComplete
@@ -65,10 +65,8 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     try:
         dl = drive.open_download(token, drive_file_id, byte_range=byte_range)
     except requests.RequestException as e:
-        status = 502
         if isinstance(e, requests.HTTPError) and e.response is not None:
-            status = e.response.status_code
-            if status == 416:
+            if e.response.status_code == 416:
                 raise HTTPException(416, errors.RANGE_NOT_SATISFIABLE) from e
         log.error("drive download %s failed: %s", drive_file_id, e)
         raise HTTPException(502, errors.DRIVE_DOWNLOAD_FAILED) from e
@@ -110,7 +108,7 @@ def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_
     # The client uploads straight to Drive, so ask Drive for the real size/md5
     # and reject a truncated or corrupted object. Skipped on an idempotent retry
     # (already COMPLETED), which carries no new bytes.
-    if rec.get("status") != "COMPLETED":
+    if rec.get("status") != statuses.FILE_COMPLETED:
         try:
             meta = drive.get_file_meta(drive.access_token(), body.driveFileId)
         except requests.HTTPError as e:

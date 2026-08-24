@@ -206,3 +206,154 @@ clean checkout by design (the release keystore, generated gateway spec). It foun
 four stale references on its first run, all now fixed.
 
 It deliberately does not verify prose — only that a path you are sent to exists.
+
+---
+
+## FI-12 Release logging is not consent-gated, and it carries identifiers
+
+**Priority: highest.** This is the one item here that breaks a promise the
+product makes in writing rather than merely making debugging harder.
+
+`CrashReportingTree` logs to Crashlytics *and*, since the release-logging change,
+mirrors every WARN/ERROR to logcat via `Log.println`. The Crashlytics half is
+gated: `Diagnostics.apply()` flips `isCrashlyticsCollectionEnabled` from
+`DicSettings.diagnosticsEnabled`. **The logcat half is gated by nothing** — it
+writes in release builds whether or not the user consented.
+
+That would be tolerable if the WARN/ERROR set were free of identifiers. It is
+not, and three separate changes have pushed identifiers into exactly that tier:
+
+| Where | What reaches the log |
+|---|---|
+| `DicUploadWorker` (8 sites, promoted `Timber.i` → `w`/`e`) | cloud and local session ids |
+| `DicBundleDownloadWorker`, `SettingsActivity` | the SAF `content://` destination URI — the folder *and* document name the user picked |
+| `DicBatchRunner` | `SessionStore.dirFor(...)`, an absolute path containing the session id |
+| `SessionZip` (4 sites) | `raw/<the user's own deformed-image filename>` |
+
+The `SessionZip` one is the worst of the four, because the exception it builds
+travels two ways: `crashlytics.recordException` uploads the message off-device,
+and `DicRestoreWorker` puts `e.message` into `KEY_ERROR`, which reaches the user
+as a Toast reading *"Restore failed. Session.zip entry raw/IMG_4021.tif inflate
+failed — corrupt transfer"*. A filename the user chose is thus both shown back to
+them as an error and shipped to Crashlytics.
+
+`CONTEXT.md:107` and this document's own §FI-2 both state the rule: no session
+ids, no file names, no paths. The log tier was enforcing it by accident —
+`isLoggable` dropped everything below WARN — and promoting those lines removed
+the accident without replacing it with anything.
+
+**Fix, in order of value:**
+
+1. Gate the `Log.println` mirror on `DicSettings.diagnosticsEnabled` (or on
+   `BuildConfig.DEBUG` alone, if field debugging was the intent). One condition.
+2. Drop the identifier from the eight promoted `DicUploadWorker` messages —
+   keep the promotion, which is operationally sound, and log a non-identifying
+   discriminator instead.
+3. Log the failure without the target in the four path/URI sites:
+   `Timber.e(it, "Write Session.zip to destination failed")`.
+4. Give the `SessionZip` exceptions a code-only message and keep the entry name
+   on the `cause` (it is already chained). This pairs with FI-13.
+
+**Blast radius:** small and local — one condition plus twelve message strings.
+Not applied here only because none of it can be compiled or run in the current
+environment (no Android SDK: `dl.google.com` is blocked by egress policy).
+
+---
+
+## FI-13 A retry decision keyed on an error message's wording
+
+`RestoreDownloadOutcomes.isTerminalCorruptFailure` decides whether a failed
+restore is retried forever or given up on:
+
+```kotlin
+if (error is ZipException) return true
+return error.message.orEmpty().contains("corrupt transfer", ignoreCase = true)
+```
+
+The phrase `"corrupt transfer"` is hand-typed at ten sites across `SessionZip`
+and `CloudRestore`. Reword any one of them — including while fixing FI-12, which
+touches four of the ten — and that failure silently stops being terminal and
+becomes an infinite WorkManager retry loop against a file that will never
+succeed.
+
+**Fix:** `class CorruptTransferException(message: String, cause: Throwable? = null)
+: IllegalArgumentException(message, cause)`, thrown at all ten sites;
+`isTerminalCorruptFailure` becomes an `is` check. This also removes the reason
+the message had to carry the entry name, so it should be done together with
+FI-12 item 4.
+
+**Blast radius:** ten throw sites and one predicate, all in `data/`. Behavioural
+— it changes what the retry classifier keys on — so it needs the unit tier
+(`RestoreDownloadOutcomesTest`) to run, which this environment cannot do.
+
+---
+
+## FI-14 Reuse debt in the newer workers and settings sections
+
+Found by a reuse pass over the full branch-vs-`damodar` diff. None of it is a
+defect today; all of it is the same shape — a new file written standalone rather
+than against the helper its sibling already uses, so a future fix has to be made
+twice.
+
+- **`DicBundleDownloadWorker` is a clone of `DicRestoreWorker`**: the same
+  `404 || 403 → give up` catch ladder (with raw literals, though
+  `HttpStatus.NOT_FOUND`/`FORBIDDEN` exist and the package already imports
+  them), a byte-identical `publishProgress`, and four WorkManager `Data` keys
+  re-declared verbatim — which is precisely what `DicKeys` exists to prevent
+  ("so a typo becomes a compile error instead of a silent fallback").
+- **`SettingsYourDataSection.exportCloudAccountData` and `exportMyData`** are the
+  same function twice; only the producer, two string resources and the MIME type
+  differ. The `catch (CancellationException) { remove }` in both is dead — the
+  `finally` two lines below already removes the banner.
+- **The support-mail intent is built three times** (`SettingsHelpSupportSection`
+  ×2, `PendingApprovalActivity` ×1), diagnostics body included.
+- **`.part`/`.full` sidecar names**, which are `DriveTransfer`'s privates, are
+  hand-rebuilt at five sites in `CloudRestore`; a rename there silently stops
+  five cleanup paths from cleaning up.
+- **The `tmp → renameTo → copy-fallback` promote idiom** now exists six times.
+  One `util/AtomicFiles.promote(tmp, dest)` covers all of them.
+- **`SessionZip.crc32`** is duplicated verbatim within the same object
+  (`:326` and `:429`), and the second copy is also redundant work — see FI-15.
+- **Cache filenames** (`semper-account-export.json`, `roi_mask_cache.bin`,
+  `temp_roi_ref.bin`) are spelled in both their writer and `CacheJanitor`'s
+  reclaim set; rename one and the janitor silently stops reclaiming it. The same
+  file already does this correctly for *directories*, via `EngineDebug.DIR_NAME`.
+- **`routers/sessions.py`** repeats the session-ownership guard, the page-size
+  clamp and the `page` response dict three times each; `routers/files.py` has the
+  file-doc variant of the guard twice.
+
+---
+
+## FI-15 Three efficiency defects worth fixing before they compound
+
+Quantified by an efficiency pass over the same diff. Listed together because each
+is a guard or a reordering, not a restructure.
+
+1. **One extra Firestore read on every authenticated request.**
+   `get_or_create_user` reads `auth_links/{sub}` *before* `users/{sub}`, so the
+   common path does two reads where it used to do one. Reading `users/{uid}`
+   first and consulting `auth_links` only on a miss is behaviour-identical,
+   because `users/{alias}` is never created for a linked alias. Worst on restore,
+   where every download window is two backend calls: roughly −2 reads per window.
+
+2. **Every backed-up byte is read from disk three times.** `SessionZip` reads a
+   STORED member once for the mandatory CRC pre-pass, once to copy it in, and a
+   third time in `verifyRoundTrip` → `crc32(member.file)`. That third read is
+   also tautological: it compares the *source* CRC against the *source* CRC and
+   never touches the archived bytes. Returning the CRC that `putStored` already
+   computed and comparing it to `entry.crc` keeps the guarantee and cuts prepare
+   I/O by a third — roughly 700 MB of flash reads per 60-frame backup.
+
+3. **An animator storm on the viewer's primary gesture.** `TouchImageView`
+   calls `publishMatrix()` on every raw touch sample, including pre-slop moves
+   where the matrix provably did not change, and `bumpChrome` has no
+   `chromeVisible` guard — so it cancels four `ViewPropertyAnimator`s per sample.
+   At 120–240 Hz that is ~480–960 cancels per second of panning. `setContentInsets`
+   in the same file already uses exactly the guard that is missing here.
+
+Lower-value, same pass: `DicUploadWorker`'s progress sampler writes to the
+WorkManager DB every 700 ms with no change guard (~650 of ~857 writes on a
+ten-minute backup are no-ops); `SettingsActivity` calls `listCompleted`, which
+has no cache, while `listRestorable`'s 60-second cache exists *because* "the
+settings page asks on every open"; and `session_provision` pages the session's
+file collection twice per provision.

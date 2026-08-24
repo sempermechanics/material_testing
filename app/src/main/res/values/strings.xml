@@ -353,7 +353,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_backup_failed_device">This account is backing up from another device.</string>
     <string name="cloud_backup_failed_too_large">This analysis is too large to back up.</string>
     <string name="cloud_backup_failed_oom">Not enough memory on this device to prepare the backup. Try again after closing other apps, or use a device with more RAM.</string>
-    <string name="cloud_backup_failed_provision">Cloud backup setup failed (Drive upload targets). Tap Try again, or check backend Cloud Tasks / Drive.</string>
+    <string name="cloud_backup_failed_provision">Cloud backup setup could not be completed. Tap Try again.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
     <string name="cloud_delete_backup_title">Delete from backup</string>
     <string name="cloud_delete_backup_body">Choose what to remove for this analysis.\n\nDeleting the cloud backup is permanent — the raw images, results and report are erased from the cloud and cannot be recovered.</string>
@@ -389,7 +389,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="legal_terms">Terms of Service</string>
     <!-- Public legal pages on the product site. -->
     <string name="legal_privacy_url" translatable="false">https://sempermechanics.com/privacy/</string>
-    <string name="legal_terms_url" translatable="false">https://sempermechanics.com/privacy/</string>
+    <string name="legal_terms_url" translatable="false">https://sempermechanics.com/terms/</string>
     
     <string name="advanced_parameters">Advanced parameters</string>
     

@@ -19,6 +19,7 @@ import androidx.work.workDataOf
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.analytics.SemperAnalytics
+import com.indicvision.semper.data.net.ApiErrors
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
@@ -777,7 +778,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             SemperAnalytics.event(
                 applicationContext,
                 SemperAnalytics.CLOUD_UPLOAD_FAILED,
-                mapOf("reason" to "device_conflict"),
+                mapOf("reason" to ApiErrors.DEVICE_CONFLICT),
             )
             failure(applicationContext.getString(R.string.cloud_backup_failed_device), e.requestId)
         } catch (e: IndicApi.ApiException) {

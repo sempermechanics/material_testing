@@ -3,7 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from .. import audit, drive, errors, firestore_repo as repo
+from .. import audit, drive, errors, firestore_repo as repo, statuses
 from .. import observability as obs
 from .. import rate_limit
 from .. import tasks
@@ -275,10 +275,10 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     # 600-file ceiling that cannot fit in a 60s request. Hand it to Cloud Tasks
     # and let the client poll /uploads, which it already does for resume.
     if tasks.enqueue_provision(sid):
-        repo.set_session_status(sid, "PROVISIONING")
+        repo.set_session_status(sid, statuses.SESSION_PROVISIONING)
         obs.log_event(log, logging.INFO, "session_provision_queued",
                       outcome="ok", stage="queued", count=len(body.files))
-        return {"sessionId": sid, "status": "PROVISIONING", "uploads": []}
+        return {"sessionId": sid, "status": statuses.SESSION_PROVISIONING, "uploads": []}
 
     # No queue configured (local dev, tests, or an environment that has not
     # created it): provision inline. Same outcome, slower request. Because

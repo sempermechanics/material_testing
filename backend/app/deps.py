@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from fastapi import Depends, Header, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
-from . import audit, errors, firestore_repo as repo
+from . import audit, errors, firestore_repo as repo, statuses
 from .config import settings
 from .google_auth import verify_id_token
 from .validation import require_header_identifier
@@ -21,7 +21,7 @@ log = logging.getLogger("indic.auth")
 
 _DEV_USER = {"uid": "dev-user", "email": "dev@local", "role": "admin",
              "access_status": "APPROVED", "activeDeviceId": "dev-device"}
-_DEV_DEVICE = {"deviceId": "dev-device", "uid": "dev-user", "status": "ACTIVE"}
+_DEV_DEVICE = {"deviceId": "dev-device", "uid": "dev-user", "status": statuses.DEVICE_ACTIVE}
 
 
 def _client_bearer(authorization: str, x_forwarded_authorization: str) -> str:
@@ -122,7 +122,7 @@ async def verified_device(
         raise HTTPException(400, errors.INVALID_SIGNATURE)
 
     dev = await run_in_threadpool(repo.get_device, x_device_id)
-    if not dev or dev["uid"] != user["uid"] or dev["status"] != "ACTIVE":
+    if not dev or dev["uid"] != user["uid"] or dev["status"] != statuses.DEVICE_ACTIVE:
         raise HTTPException(409, errors.DEVICE_NOT_ACTIVE)
     if not await run_in_threadpool(repo.consume_nonce, x_nonce, user["uid"], x_device_id):
         raise HTTPException(401, errors.NONCE_INVALID_OR_REPLAYED)
