@@ -103,6 +103,20 @@ class RoiDrawActivity : AppCompatActivity() {
                 val screenWidth = resources.displayMetrics.widthPixels
 
                 lifecycleScope.launch {
+                    // Prefer decoder-native dims (OpenCV applies EXIF) over intent
+                    // extras from BitmapFactory bounds, which do not. Off the main
+                    // thread: getImageDimensions decodes the whole image rather
+                    // than parsing a header, which is ~0.3s and tens of MB on a
+                    // 12MP shot.
+                    val dims = withContext(SemperNativeLib.nativeDispatcher) {
+                        runCatching { SemperNativeLib.getImageDimensions(bytes) }.getOrNull()
+                    }
+                    if (dims != null && dims.size >= 2 && dims[0] > 0 && dims[1] > 0) {
+                        realImageWidth = dims[0]
+                        realImageHeight = dims[1]
+                        overlayRoi.realImageWidth = realImageWidth
+                        overlayRoi.realImageHeight = realImageHeight
+                    }
                     val bitmap = withContext(SemperNativeLib.nativeDispatcher) {
                         SemperNativeLib.getPreviewFromBytes(bytes, screenWidth)
                     }

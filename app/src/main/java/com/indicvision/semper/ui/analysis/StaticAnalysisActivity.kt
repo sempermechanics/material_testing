@@ -33,6 +33,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.StringRes
@@ -64,6 +65,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.io.IOException
 
 /**
  * The analysis setup wizard: page 1 loads reference/deformed images (or
@@ -102,7 +104,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var ivDefIcon: ImageView
     private lateinit var tvDefMeta: TextView
     private lateinit var tvDefDropHint: TextView
-    private lateinit var jpegWarnRow: View
+    private lateinit var formatWarnRow: View
     private lateinit var rvFrameOrder: RecyclerView
     private lateinit var btnFrameOrderSort: ImageView
     private lateinit var frameOrderAdapter: FrameOrderAdapter
@@ -213,9 +215,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
         ivDefIcon = findViewById(R.id.ivDefIcon)
         tvDefMeta = findViewById(R.id.tvDefMeta)
         tvDefDropHint = findViewById(R.id.tvDefDropHint)
-        jpegWarnRow = findViewById(R.id.jpegWarnRow)
-        jpegWarnRow.findViewById<TextView>(R.id.tvWarnText).text = getString(R.string.jpeg_warning_inline)
-        jpegWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
+        formatWarnRow = findViewById(R.id.formatWarnRow)
+        // Text is set per-refresh by AnalysisWizardSlots.updateFormatChip: it
+        // names the formats actually loaded, so it cannot be fixed here.
+        formatWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
             confirmOpenFaq(getString(R.string.url_faq_jpeg))
         }
         rvFrameOrder = findViewById(R.id.rvFrameOrder)
@@ -310,7 +313,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             ivDefIcon = ivDefIcon,
             tvDefName = tvDefName,
             tvDefMeta = tvDefMeta,
-            jpegWarnRow = jpegWarnRow,
+            formatWarnRow = formatWarnRow,
             rvFrameOrder = rvFrameOrder,
             btnFrameOrderSort = btnFrameOrderSort,
             frameOrderAdapter = frameOrderAdapter,
@@ -408,31 +411,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         val roiStudioLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
-                val data = result.data
-                if (data != null) {
-                    viewModel.roiX = data.getIntExtra(DicKeys.ROI_X, 0)
-                    viewModel.roiY = data.getIntExtra(DicKeys.ROI_Y, 0)
-                    viewModel.roiW = data.getIntExtra(DicKeys.ROI_W, viewModel.realRefWidth)
-                    viewModel.roiH = data.getIntExtra(DicKeys.ROI_H, viewModel.realRefHeight)
-
-                    // Load the freeform ROI mask RoiDrawActivity wrote to disk.
-                    val maskPath = data.getStringExtra(DicKeys.MASK_FILE_PATH)
-                    if (maskPath != null) {
-                        val file = File(maskPath)
-                        if (file.exists()) {
-                            viewModel.roiMaskBytes = file.readBytes()
-                        }
-                    }
-
-                    // A selection covering the whole image counts as no custom ROI.
-                    viewModel.hasCustomRoi =
-                        !(viewModel.roiW == viewModel.realRefWidth && viewModel.roiH == viewModel.realRefHeight)
-                    wizardSlots.updateRoiSummary()
-
-                    sweepHelper.refreshLineCutPreview()
-                    checkReady()
-                    requestSubsetRecommendation()
-                }
+                result.data?.let { applyRoiResult(it) }
             } else {
                 // Cancelled editor → fall back to full-image ROI.
                 applyFullImageRoi()
@@ -472,21 +451,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnDefChange).setOnClickListener { launchDefPicker() }
 
         btnDefineRoi.setOnClickListener {
-            if (viewModel.refBytes != null) {
-                val tempFile = File(cacheDir, "temp_roi_ref.bin")
-                try {
-                    tempFile.writeBytes(viewModel.refBytes!!)
-                    val intent = Intent(this, RoiDrawActivity::class.java)
-                    intent.putExtra(DicKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
-                    intent.putExtra(DicKeys.IMAGE_WIDTH, viewModel.realRefWidth)
-                    intent.putExtra(DicKeys.IMAGE_HEIGHT, viewModel.realRefHeight)
-                    roiStudioLauncher.launch(intent)
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to write temp ROI reference file")
-                    Toast.makeText(this, R.string.failed_save_temp_file, Toast.LENGTH_SHORT).show()
-                }
-            } else {
+            val bytes = viewModel.refBytes
+            if (bytes == null) {
                 Toast.makeText(this, R.string.load_image_first, Toast.LENGTH_SHORT).show()
+            } else {
+                openRoiStudio(bytes, roiStudioLauncher)
             }
         }
 
@@ -494,6 +463,84 @@ class StaticAnalysisActivity : AppCompatActivity() {
             // A field still holding focus has not committed its typed value yet.
             commitParamFields()
             if (!viewModel.sweepMode) startBatchAnalysis()
+        }
+    }
+
+    /**
+     * Hand the reference image to [RoiDrawActivity] through a cache file.
+     *
+     * The copy runs on [Dispatchers.IO]: [bytes] is the decoded reference, tens
+     * of megabytes for a RAW frame, and writing that from the click handler
+     * froze the wizard for the length of the write.
+     */
+    private fun openRoiStudio(
+        bytes: ByteArray,
+        launcher: ActivityResultLauncher<Intent>,
+    ) {
+        val tempFile = File(cacheDir, "temp_roi_ref.bin")
+        lifecycleScope.launch {
+            val written = withContext(Dispatchers.IO) {
+                try {
+                    tempFile.writeBytes(bytes)
+                    true
+                } catch (e: IOException) {
+                    Timber.e(e, "Failed to write temp ROI reference file")
+                    false
+                }
+            }
+            if (!written) {
+                Toast.makeText(
+                    this@StaticAnalysisActivity,
+                    R.string.failed_save_temp_file,
+                    Toast.LENGTH_SHORT,
+                ).show()
+                return@launch
+            }
+            val intent = Intent(this@StaticAnalysisActivity, RoiDrawActivity::class.java)
+            intent.putExtra(DicKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
+            intent.putExtra(DicKeys.IMAGE_WIDTH, viewModel.realRefWidth)
+            intent.putExtra(DicKeys.IMAGE_HEIGHT, viewModel.realRefHeight)
+            launcher.launch(intent)
+        }
+    }
+
+    /**
+     * Adopt the ROI the studio returned.
+     *
+     * The freeform mask is read on [Dispatchers.IO] — one byte per reference
+     * pixel, so tens of megabytes on a modern sensor, and reading it inline
+     * stalled the very frame that had to draw the updated summary. Everything
+     * that depends on the mask stays after the read, in order.
+     */
+    private fun applyRoiResult(data: Intent) {
+        viewModel.roiX = data.getIntExtra(DicKeys.ROI_X, 0)
+        viewModel.roiY = data.getIntExtra(DicKeys.ROI_Y, 0)
+        viewModel.roiW = data.getIntExtra(DicKeys.ROI_W, viewModel.realRefWidth)
+        viewModel.roiH = data.getIntExtra(DicKeys.ROI_H, viewModel.realRefHeight)
+
+        // A selection covering the whole image counts as no custom ROI.
+        viewModel.hasCustomRoi =
+            !(viewModel.roiW == viewModel.realRefWidth && viewModel.roiH == viewModel.realRefHeight)
+
+        val maskPath = data.getStringExtra(DicKeys.MASK_FILE_PATH)
+        lifecycleScope.launch {
+            val mask = maskPath?.let { path ->
+                withContext(Dispatchers.IO) {
+                    File(path).takeIf(File::exists)?.let { file ->
+                        try {
+                            file.readBytes()
+                        } catch (e: IOException) {
+                            Timber.e(e, "Failed to read ROI mask")
+                            null
+                        }
+                    }
+                }
+            }
+            if (mask != null) viewModel.roiMaskBytes = mask
+            wizardSlots.updateRoiSummary()
+            sweepHelper.refreshLineCutPreview()
+            checkReady()
+            requestSubsetRecommendation()
         }
     }
 
