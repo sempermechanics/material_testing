@@ -214,6 +214,9 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     user, device = ctx["user"], ctx["device"]
     cfg = repo.resolve_user_config(user)
 
+    if not cfg["cloudBackupEnabled"]:
+        raise HTTPException(403, "feature_not_licensed")
+
     if not rate_limit.session_bucket.allow(user["uid"]):
         raise HTTPException(429, "rate_limited")
 

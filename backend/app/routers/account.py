@@ -28,7 +28,7 @@ def me(user=Depends(current_user)):
 
 @router.get("/v1/config")
 def app_config(user=Depends(current_user)):
-    """Resolved product limits for the caller (per-user override → fleet default)."""
+    """Resolved plan, entitlements, and product limits for the caller."""
     return repo.resolve_user_config(user)
 
 

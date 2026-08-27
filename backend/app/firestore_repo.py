@@ -8,6 +8,14 @@ from google.cloud import firestore
 
 from . import notify
 from .config import settings
+from .licenses import (
+    PLAN_DEMO,
+    PLAN_PROFESSIONAL,
+    PLANS,
+    generate_key,
+    key_hash,
+    key_prefix,
+)
 from .models import DeviceReg, FileComplete, FileSpec, SessionCreate
 
 log = logging.getLogger("indic.firestore")
@@ -191,11 +199,11 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
     # needs hour granularity; skip the write when nothing else changed and
     # the timestamp is still fresh.
     if not changed and not stale:
-        return {**cur, "uid": uid}
+        return ensure_demo_license({**cur, "uid": uid}, device_id)
 
     patch = {**changed, "lastSeenAt": firestore.SERVER_TIMESTAMP}
     ref.update(patch)
-    return {**cur, **patch, "uid": uid}
+    return ensure_demo_license({**cur, **patch, "uid": uid}, device_id)
 
 
 def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
@@ -239,9 +247,10 @@ def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
     _link_auth_uid(uid, uid)
     # Only ever reached once per account — every later sign-in takes the
     # snap.exists / auth_links branch above — so support gets exactly one mail per user.
+    created = {**data, "uid": uid}
     if data["access_status"] == "PENDING":
         notify.access_request(uid, data["email"], data["displayName"], provider)
-    return {**data, "uid": uid}
+    return ensure_demo_license(created, device_id)
 
 
 def list_users(
@@ -321,17 +330,58 @@ def _bool_override(user: dict, key: str):
     return raw if isinstance(raw, bool) else None
 
 
+def _stored_plan(user: dict) -> str:
+    raw = user.get("plan")
+    if isinstance(raw, str) and raw.strip().lower() in PLANS:
+        return raw.strip().lower()
+    return PLAN_DEMO
+
+
+def _license_expired(user: dict) -> bool:
+    exp = user.get("licenseExpiresAt")
+    if exp is None:
+        return False
+    if isinstance(exp, datetime) and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    try:
+        return exp <= _now()
+    except TypeError:
+        return False
+
+
+def effective_plan(user: dict) -> str:
+    """Professional until the key expires; missing/unknown/expired → demo."""
+    if _stored_plan(user) != PLAN_PROFESSIONAL:
+        return PLAN_DEMO
+    if _license_expired(user):
+        return PLAN_DEMO
+    return PLAN_PROFESSIONAL
+
+
 def resolve_user_config(user: dict) -> dict:
-    """Product limits for this account: per-user override, else fleet env default.
+    """Product limits and license entitlements for this account.
 
     Missing fields are not written at user creation so changing the env default
-    updates everyone who has not been individually overridden.
+    updates everyone who has not been individually overridden. A missing plan
+    is Demo. Professional cloud/share flags stay off when the key has expired.
     """
     dat_codec_override = _bool_override(user, "datCodecEncodingEnabled")
+    plan = effective_plan(user)
+    is_pro = plan == PLAN_PROFESSIONAL
+    if is_pro:
+        max_sessions = (
+            _positive_int_override(user, "maxSessions")
+            or _positive_int_override(user, "licenseMaxAnalyses")
+            or settings.PRO_MAX_SESSIONS_PER_USER
+        )
+    else:
+        max_sessions = settings.DEMO_MAX_ANALYSES
     return {
-        "maxSessions": (
-            _positive_int_override(user, "maxSessions") or settings.MAX_SESSIONS_PER_USER
-        ),
+        "plan": plan,
+        "licenseKind": user.get("licenseKind") or "",
+        "cloudBackupEnabled": is_pro,
+        "shareEnabled": is_pro,
+        "maxSessions": max_sessions,
         "maxFilesPerSession": (
             _positive_int_override(user, "maxFilesPerSession")
             or settings.MAX_FILES_PER_SESSION
@@ -344,7 +394,12 @@ def resolve_user_config(user: dict) -> dict:
             if dat_codec_override is not None
             else settings.DAT_CODEC_ENCODING_ENABLED
         ),
+        "licensePrefix": user.get("licensePrefix") or "",
     }
+
+
+def cloud_backup_enabled(user: dict) -> bool:
+    return bool(resolve_user_config(user)["cloudBackupEnabled"])
 
 
 #: Per-user config override fields and how to cast an incoming patch value for
@@ -356,6 +411,7 @@ _CONFIG_CASTERS = {
     "maxFilesPerSession": int,
     "maxFrames": int,
     "datCodecEncodingEnabled": bool,
+    "plan": lambda v: str(v).strip().lower(),
 }
 
 
@@ -369,6 +425,8 @@ def set_user_config(uid: str, patch: dict) -> dict | None:
     update = {
         k: _CONFIG_CASTERS[k](patch[k]) for k in allowed if k in patch and patch[k] is not None
     }
+    if "plan" in update and update["plan"] not in PLANS:
+        update.pop("plan")
     # Explicit null clears an override so the user re-inherits the fleet default.
     deletes = {k: firestore.DELETE_FIELD for k in allowed if k in patch and patch[k] is None}
     if update or deletes:
@@ -377,6 +435,550 @@ def set_user_config(uid: str, patch: dict) -> dict | None:
     for k in deletes:
         user.pop(k, None)
     return resolve_user_config(user)
+
+
+def _emails_match(left, right) -> bool:
+    a = (left or "").strip().lower()
+    b = (right or "").strip().lower()
+    return bool(a and b and a == b)
+
+
+def _email_domain(email: str) -> str:
+    email = (email or "").strip().lower()
+    return email.rsplit("@", 1)[-1] if "@" in email else ""
+
+
+def _license_public(license_id: str, data: dict) -> dict:
+    return {
+        "id": license_id,
+        "keyPrefix": data.get("keyPrefix") or "",
+        "kind": data.get("kind") or "individual",
+        "plan": data.get("plan") or PLAN_DEMO,
+        "status": data.get("status") or "unused",
+        "emailLock": data.get("emailLock") or "",
+        "deviceIdLock": data.get("deviceIdLock") or "",
+        "domainLock": data.get("domainLock") or "",
+        "adminEmails": list(data.get("adminEmails") or []),
+        "maxSeats": data.get("maxSeats"),
+        "seatsUsed": data.get("seatsUsed", 0),
+        "createdAt": data.get("createdAt"),
+        "createdByUid": data.get("createdByUid") or "",
+        "redeemedAt": data.get("redeemedAt"),
+        "redeemedByUid": data.get("redeemedByUid") or "",
+        "expiresAt": data.get("expiresAt"),
+        "maxAnalyses": data.get("maxAnalyses"),
+        "note": data.get("note") or "",
+    }
+
+
+def _write_license(
+    *,
+    plan: str,
+    email_lock: str,
+    device_id_lock: str,
+    created_by_uid: str,
+    status: str,
+    kind: str = "individual",
+    domain_lock: str = "",
+    admin_emails: list[str] | None = None,
+    max_seats: int | None = None,
+    redeemed_by_uid: str | None = None,
+    expires_at=None,
+    max_analyses: int | None = None,
+    note: str = "",
+) -> tuple[str, str, dict]:
+    """Mint a key, persist the hash, return (plaintext, license_id, stored)."""
+    key = generate_key()
+    license_id = key_hash(key)
+    stored = {
+        "keyPrefix": key_prefix(key),
+        "kind": kind,
+        "plan": plan,
+        "status": status,
+        "emailLock": (email_lock or "").strip().lower(),
+        "deviceIdLock": device_id_lock,
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "createdByUid": created_by_uid,
+        "schemaVersion": SCHEMA_VERSION,
+        "note": note or "",
+    }
+    if kind == "campus":
+        stored["domainLock"] = (domain_lock or "").strip().lower()
+        stored["adminEmails"] = [
+            (e or "").strip().lower() for e in (admin_emails or []) if (e or "").strip()
+        ]
+        if max_seats is not None:
+            stored["maxSeats"] = int(max_seats)
+        stored["seatsUsed"] = 0
+    if expires_at is not None:
+        stored["expiresAt"] = expires_at
+    if max_analyses is not None:
+        stored["maxAnalyses"] = int(max_analyses)
+    if redeemed_by_uid:
+        stored["redeemedByUid"] = redeemed_by_uid
+        stored["redeemedAt"] = firestore.SERVER_TIMESTAMP
+    db().collection("licenses").document(license_id).set(stored)
+    return key, license_id, stored
+
+
+def ensure_demo_license(user: dict, device_id: str | None) -> dict:
+    """Issue a redeemed Demo key once the account is approved, verified, and bound.
+
+    Idempotent. Professional accounts are left alone. The plaintext Demo key is
+    not returned — the user never types it; the record exists so the seat is
+    locked to this email and device.
+    """
+    uid = user.get("uid")
+    if not uid or user.get("licenseId"):
+        return user
+    if user.get("access_status") != "APPROVED":
+        return user
+    if not user.get("emailVerified"):
+        return user
+    email = (user.get("email") or "").strip().lower()
+    device = device_id or user.get("activeDeviceId") or user.get("claimedDeviceId")
+    if not email or not device:
+        return user
+    _key, license_id, stored = _write_license(
+        plan=PLAN_DEMO,
+        email_lock=email,
+        device_id_lock=device,
+        created_by_uid="system",
+        status="redeemed",
+        redeemed_by_uid=uid,
+    )
+    patch = {
+        "plan": PLAN_DEMO,
+        "licenseId": license_id,
+        "licenseKind": "individual",
+        "licensePrefix": stored["keyPrefix"],
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    db().collection("users").document(uid).update(patch)
+    return {**user, **patch}
+
+
+def create_professional_license(
+    *,
+    email_lock: str,
+    device_id_lock: str,
+    created_by_uid: str,
+    expires_at=None,
+    max_analyses: int | None = None,
+    note: str = "",
+) -> dict:
+    """Ops mint of an individual Professional key. Returns the plaintext key
+    once; only the hash is stored."""
+    key, license_id, stored = _write_license(
+        plan=PLAN_PROFESSIONAL,
+        email_lock=email_lock,
+        device_id_lock=device_id_lock,
+        created_by_uid=created_by_uid,
+        status="unused",
+        kind="individual",
+        expires_at=expires_at,
+        max_analyses=max_analyses,
+        note=note,
+    )
+    return {"key": key, "license": _license_public(license_id, stored)}
+
+
+def create_campus_license(
+    *,
+    domain_lock: str,
+    admin_emails: list[str],
+    created_by_uid: str,
+    max_seats: int | None = None,
+    expires_at=None,
+    max_analyses: int | None = None,
+    note: str = "",
+) -> dict:
+    """Ops mint of a campus/institution key. Seats are granted individually via
+    activate_license as members of `domain_lock` redeem the same key; ops never
+    pre-allocates seats. Returns the plaintext key once."""
+    key, license_id, stored = _write_license(
+        plan=PLAN_PROFESSIONAL,
+        email_lock="",
+        device_id_lock="",
+        created_by_uid=created_by_uid,
+        status="active",
+        kind="campus",
+        domain_lock=domain_lock,
+        admin_emails=admin_emails,
+        max_seats=max_seats,
+        expires_at=expires_at,
+        max_analyses=max_analyses,
+        note=note,
+    )
+    return {"key": key, "license": _license_public(license_id, stored)}
+
+
+def list_licenses(limit: int = 50, page_token: str | None = None) -> tuple[list, str | None]:
+    col = db().collection("licenses")
+    query = col.order_by("__name__").limit(limit + 1)
+    if page_token:
+        cursor = col.document(page_token).get()
+        if cursor.exists:
+            query = query.start_after(cursor)
+    docs = list(query.stream())
+    next_token = None
+    if len(docs) > limit:
+        docs = docs[:limit]
+        next_token = docs[-1].id
+    return [_license_public(d.id, d.to_dict() or {}) for d in docs], next_token
+
+
+def _seat_ref(license_id: str, uid: str):
+    return db().collection("licenses").document(license_id).collection("seats").document(uid)
+
+
+def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: dict, ref, key: str):
+    status = lic.get("status") or "unused"
+    if status == "revoked":
+        return "license_revoked", None
+    if not _emails_match(lic.get("emailLock"), email):
+        return "license_email_mismatch", None
+    if (lic.get("deviceIdLock") or "") != device_id:
+        return "license_device_mismatch", None
+    if status == "redeemed" and lic.get("redeemedByUid") != uid:
+        return "license_already_redeemed", None
+
+    plan = lic.get("plan") or PLAN_DEMO
+    if plan not in PLANS:
+        plan = PLAN_DEMO
+    license_id = ref.id
+    user_patch = {
+        "plan": plan,
+        "licenseId": license_id,
+        "licenseKind": "individual",
+        "licensePrefix": lic.get("keyPrefix") or key_prefix(key),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    if lic.get("expiresAt") is not None:
+        user_patch["licenseExpiresAt"] = lic["expiresAt"]
+    else:
+        user_patch["licenseExpiresAt"] = firestore.DELETE_FIELD
+    if lic.get("maxAnalyses"):
+        user_patch["licenseMaxAnalyses"] = int(lic["maxAnalyses"])
+    else:
+        user_patch["licenseMaxAnalyses"] = firestore.DELETE_FIELD
+
+    license_patch = {}
+    if status == "unused":
+        license_patch = {
+            "status": "redeemed",
+            "redeemedByUid": uid,
+            "redeemedAt": firestore.SERVER_TIMESTAMP,
+        }
+
+    batch = db().batch()
+    batch.update(db().collection("users").document(uid), user_patch)
+    if license_patch:
+        batch.update(ref, license_patch)
+    batch.commit()
+
+    merged = _apply_patch(user, user_patch)
+    return "", resolve_user_config(merged)
+
+
+def _activate_campus(user: dict, uid: str, email: str, device_id: str, lic: dict, ref, key: str):
+    if (lic.get("status") or "active") == "revoked":
+        return "license_revoked", None
+    domain_lock = (lic.get("domainLock") or "").strip().lower()
+    if not domain_lock or _email_domain(email) != domain_lock:
+        return "license_email_mismatch", None
+
+    license_id = ref.id
+    seat_ref = _seat_ref(license_id, uid)
+    seat_snap = seat_ref.get()
+    existing_seat = seat_snap.to_dict() if seat_snap.exists else None
+    if existing_seat and existing_seat.get("status") == "revoked":
+        # revoke_campus_seat() already freed this slot (seatsUsed decremented).
+        # A revoked seat is not a permanent ban — the same domain member can
+        # claim a fresh slot exactly like anyone else, including re-admission
+        # by IT or simply re-entering the same key. Fall through to the
+        # "no seat yet" branch so it goes through the normal maxSeats check.
+        existing_seat = None
+
+    if existing_seat:
+        if existing_seat.get("status") == "disabled":
+            return "license_seat_disabled", None
+        locked_device = existing_seat.get("deviceIdLock") or ""
+        if locked_device and locked_device != device_id:
+            return "license_device_mismatch", None
+        seat_patch = {"deviceIdLock": device_id, "updatedAt": firestore.SERVER_TIMESTAMP}
+    else:
+        max_seats = lic.get("maxSeats")
+        seats_used = int(lic.get("seatsUsed") or 0)
+        if max_seats is not None and seats_used >= int(max_seats):
+            return "license_seats_exhausted", None
+        seat_patch = None  # created fresh below
+
+    plan = PLAN_PROFESSIONAL
+    user_patch = {
+        "plan": plan,
+        "licenseId": license_id,
+        "licenseKind": "campus",
+        "licensePrefix": lic.get("keyPrefix") or key_prefix(key),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    if lic.get("expiresAt") is not None:
+        user_patch["licenseExpiresAt"] = lic["expiresAt"]
+    else:
+        user_patch["licenseExpiresAt"] = firestore.DELETE_FIELD
+    if lic.get("maxAnalyses"):
+        user_patch["licenseMaxAnalyses"] = int(lic["maxAnalyses"])
+    else:
+        user_patch["licenseMaxAnalyses"] = firestore.DELETE_FIELD
+
+    batch = db().batch()
+    batch.update(db().collection("users").document(uid), user_patch)
+    if existing_seat:
+        batch.update(seat_ref, seat_patch)
+    else:
+        batch.set(seat_ref, {
+            "uid": uid,
+            "email": email.strip().lower(),
+            "deviceIdLock": device_id,
+            "status": "active",
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+        batch.update(ref, {"seatsUsed": firestore.Increment(1)})
+    batch.commit()
+
+    merged = _apply_patch(user, user_patch)
+    return "", resolve_user_config(merged)
+
+
+def _apply_patch(user: dict, patch: dict) -> dict:
+    merged = {**user, **{k: v for k, v in patch.items() if v is not firestore.DELETE_FIELD}}
+    for k, v in patch.items():
+        if v is firestore.DELETE_FIELD:
+            merged.pop(k, None)
+    return merged
+
+
+def activate_license(uid: str, email: str, device_id: str, key: str) -> tuple[str, dict | None]:
+    """Redeem a key onto this uid. Returns (error_code, config_or_none).
+
+    Empty error_code means success. Branches on the license's `kind`:
+    - individual: single email+device lock, same behaviour as before campus
+      licensing existed. Same uid re-entering the same key is OK.
+    - campus: verified-email domain match against `domainLock`; a seat is
+      created (or re-validated) in `licenses/{id}/seats/{uid}`, capped at
+      `maxSeats` when set. Re-entry from the same device is idempotent; from a
+      different device it re-locks the seat only when no device is locked yet.
+    """
+    user = _load_user(uid)
+    if not user:
+        return "user_not_found", None
+    license_id = key_hash(key)
+    ref = db().collection("licenses").document(license_id)
+    snap = ref.get()
+    if not snap.exists:
+        return "license_not_found", None
+    lic = snap.to_dict() or {}
+    kind = lic.get("kind") or "individual"
+    if kind == "campus":
+        return _activate_campus(user, uid, email, device_id, lic, ref, key)
+    return _activate_individual(user, uid, email, device_id, lic, ref, key)
+
+
+def check_device_lock(user: dict, device_id: str) -> bool:
+    """True if `device_id` still matches this account's current entitlement.
+
+    Individual: the device that redeemed the key. Campus: the device locked to
+    this uid's seat (unset until first activation, then sticky). Demo/no
+    license: no device lock to violate.
+    """
+    license_id = user.get("licenseId")
+    if not license_id:
+        return True
+    ref = db().collection("licenses").document(license_id)
+    snap = ref.get()
+    if not snap.exists:
+        return True
+    lic = snap.to_dict() or {}
+    if (lic.get("status") or "") == "revoked":
+        return False
+    kind = lic.get("kind") or "individual"
+    if kind == "individual":
+        locked = lic.get("deviceIdLock") or ""
+        return not locked or locked == device_id
+    seat_snap = _seat_ref(license_id, user.get("uid") or "").get()
+    if not seat_snap.exists:
+        return True
+    seat = seat_snap.to_dict() or {}
+    if seat.get("status") in ("revoked", "disabled"):
+        return False
+    locked = seat.get("deviceIdLock") or ""
+    return not locked or locked == device_id
+
+
+def revalidate_device_lock(user: dict, device_id: str | None) -> dict:
+    """Re-check this account's entitlement against `device_id` on every authed
+    call that carries X-Device-Id — activation is not "trust forever". A
+    revoked license/seat, or a device that no longer matches the lock, drops
+    the account to Demo immediately rather than waiting for the next explicit
+    revoke/activate to notice. No-op (and no write) for Demo accounts, accounts
+    with no license on file, or a call with no device id to check.
+
+    This only ever *removes* entitlement in place — it never deletes or hides
+    the account's sessions/files, and re-locking to a new device happens only
+    through activate_license or a campus IT clear-device-lock action.
+    """
+    if not device_id or not user.get("licenseId"):
+        return user
+    if effective_plan(user) != PLAN_PROFESSIONAL:
+        return user
+    if check_device_lock(user, device_id):
+        return user
+    uid = user.get("uid")
+    if uid:
+        db().collection("users").document(uid).update({
+            "plan": PLAN_DEMO,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+    return {**user, "plan": PLAN_DEMO}
+
+
+def revoke_license(license_id: str, admin_uid: str) -> dict | None:
+    """Whole-key revoke. Every redeemer (individual redeemer, or every campus
+    seat holder) drops to Demo and every occupied campus seat is freed."""
+    ref = db().collection("licenses").document(license_id)
+    snap = ref.get()
+    if not snap.exists:
+        return None
+    lic = snap.to_dict() or {}
+    ref.update({
+        "status": "revoked",
+        "revokedAt": firestore.SERVER_TIMESTAMP,
+        "revokedByUid": admin_uid,
+    })
+    kind = lic.get("kind") or "individual"
+    if kind == "campus":
+        for seat_doc in ref.collection("seats").stream():
+            seat = seat_doc.to_dict() or {}
+            seat_uid = seat.get("uid") or seat_doc.id
+            _drop_user_to_demo_if_licensed(seat_uid, license_id)
+            seat_doc.reference.update({
+                "status": "revoked",
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            })
+        ref.update({"seatsUsed": 0})
+    else:
+        redeemer = lic.get("redeemedByUid")
+        if redeemer and lic.get("plan") == PLAN_PROFESSIONAL:
+            _drop_user_to_demo_if_licensed(redeemer, license_id)
+    return _license_public(license_id, {**lic, "status": "revoked"})
+
+
+def _drop_user_to_demo_if_licensed(uid: str, license_id: str) -> None:
+    """Drop a user to Demo only if they are still pointed at this exact
+    license — activation is in-place (same uid/doc, no data migration), and
+    downgrade must never delete or hide existing sessions/files, only stop
+    new analysis creation once the account is back over the Demo cap."""
+    user_ref = db().collection("users").document(uid)
+    user_snap = user_ref.get()
+    if user_snap.exists and (user_snap.to_dict() or {}).get("licenseId") == license_id:
+        user_ref.update({
+            "plan": PLAN_DEMO,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+
+
+# ---------------- campus seat administration ----------------
+# Reached only via routers/campus.py, gated on current_user + APPROVED +
+# verified email present in the license's adminEmails — deliberately NOT
+# verified_device and NOT Semper role=admin. Mint/whole-key-revoke stays on
+# the existing device-attested admin path in routers/admin.py.
+
+def is_campus_admin(license_doc: dict, email: str) -> bool:
+    admin_emails = {e.strip().lower() for e in (license_doc.get("adminEmails") or [])}
+    return bool(email) and email.strip().lower() in admin_emails
+
+
+def get_license(license_id: str) -> dict | None:
+    snap = db().collection("licenses").document(license_id).get()
+    return snap.to_dict() if snap.exists else None
+
+
+def campus_license_summary(license_id: str) -> dict | None:
+    """Public (no key plaintext) summary of one campus license, for IT
+    self-service — same redaction as the Semper-staff admin listing, scoped to
+    callers who already passed the adminEmails membership check."""
+    lic = get_license(license_id)
+    return _license_public(license_id, lic) if lic else None
+
+
+def list_campus_seats(license_id: str) -> list[dict]:
+    out = []
+    for doc in db().collection("licenses").document(license_id).collection("seats").stream():
+        s = doc.to_dict() or {}
+        out.append({
+            "uid": doc.id,
+            "email": s.get("email") or "",
+            "deviceIdLock": s.get("deviceIdLock") or "",
+            "status": s.get("status") or "active",
+            "createdAt": s.get("createdAt"),
+            "updatedAt": s.get("updatedAt"),
+        })
+    return out
+
+
+def clear_seat_device_lock(license_id: str, uid: str) -> bool:
+    """IT support action: let a seat holder re-bind to a new device (lost
+    phone, factory reset). Does not touch enable/disable status."""
+    ref = _seat_ref(license_id, uid)
+    if not ref.get().exists:
+        return False
+    ref.update({"deviceIdLock": "", "updatedAt": firestore.SERVER_TIMESTAMP})
+    return True
+
+
+def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> bool:
+    """Disable drops the seat holder to Demo but does NOT free the slot — the
+    seat still counts against maxSeats so IT can re-enable without a fresh
+    activation. Enable restores Professional in place, no data migration."""
+    ref = _seat_ref(license_id, uid)
+    snap = ref.get()
+    if not snap.exists:
+        return False
+    ref.update({
+        "status": "active" if enabled else "disabled",
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+    if not enabled:
+        _drop_user_to_demo_if_licensed(uid, license_id)
+    else:
+        seat = snap.to_dict() or {}
+        user_ref = db().collection("users").document(uid)
+        user_snap = user_ref.get()
+        if user_snap.exists and (user_snap.to_dict() or {}).get("licenseId") == license_id:
+            user_ref.update({"plan": PLAN_PROFESSIONAL, "updatedAt": firestore.SERVER_TIMESTAMP})
+        del seat
+    return True
+
+
+def revoke_campus_seat(license_id: str, uid: str) -> bool:
+    """Single-seat revoke: drops the holder to Demo and frees the slot
+    (decrements seatsUsed) so another domain member can activate."""
+    ref = _seat_ref(license_id, uid)
+    snap = ref.get()
+    if not snap.exists:
+        return False
+    already_revoked = (snap.to_dict() or {}).get("status") == "revoked"
+    ref.update({"status": "revoked", "updatedAt": firestore.SERVER_TIMESTAMP})
+    _drop_user_to_demo_if_licensed(uid, license_id)
+    if not already_revoked:
+        lic_ref = db().collection("licenses").document(license_id)
+        lic_snap = lic_ref.get()
+        if lic_snap.exists:
+            current = int((lic_snap.to_dict() or {}).get("seatsUsed") or 0)
+            if current > 0:
+                lic_ref.update({"seatsUsed": firestore.Increment(-1)})
+    return True
 
 
 # ---------------- devices ----------------
@@ -417,6 +1019,9 @@ def register_device(uid: str, body: DeviceReg) -> dict:
     batch.set(db().collection("devices").document(body.deviceId), dev)
     batch.update(user_ref, {"activeDeviceId": body.deviceId})
     batch.commit()
+    user = _load_user(uid)
+    if user:
+        ensure_demo_license(user, body.deviceId)
     return {**dev, "deviceId": body.deviceId}
 
 

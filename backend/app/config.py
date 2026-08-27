@@ -26,11 +26,17 @@ class Settings:
     # Fleet-wide defaults for product limits. Per-user overrides live on the
     # Firestore users/{uid} document (maxSessions / maxFilesPerSession /
     # maxFrames); resolve_user_config merges override → these defaults.
-    # MAX_SESSIONS_PER_USER = how many analyses a user may keep in the cloud;
+    # DEMO_MAX_ANALYSES is the Demo plan's local analysis cap. Professional
+    # cloud backups use PRO_MAX_SESSIONS_PER_USER unless a key or admin
+    # override sets a tighter ceiling. MAX_SESSIONS_PER_USER is the legacy
+    # cloud cap kept for env compatibility; Professional resolve prefers
+    # PRO_MAX_SESSIONS_PER_USER.
     # MAX_FILES_PER_SESSION bounds one analysis (150 frames x raw+dat+csv +
     # reference + report + metadata ≈ 460, so 600 gives headroom);
     # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces.
     MAX_SESSIONS_PER_USER = _env_int("MAX_SESSIONS_PER_USER", "4")
+    DEMO_MAX_ANALYSES = _env_int("DEMO_MAX_ANALYSES", "25")
+    PRO_MAX_SESSIONS_PER_USER = _env_int("PRO_MAX_SESSIONS_PER_USER", "999")
     MAX_FILES_PER_SESSION = _env_int("MAX_FILES_PER_SESSION", "600")
     MAX_FRAMES_PER_ANALYSIS = _env_int("MAX_FRAMES_PER_ANALYSIS", "150")
 
@@ -52,7 +58,7 @@ class Settings:
 
     # Comma-separated emails that are treated as admins (role=admin, always
     # approved) — they can call the /v1/admin/* endpoints. e.g.
-    # "support@sempermechanics.com,damodar@sempermechanics.com".
+    # "support@indicvision.com,damodar@indicvision.com".
     ADMIN_EMAILS = {
         e.strip().lower()
         for e in os.environ.get("ADMIN_EMAILS", "").split(",")
@@ -63,7 +69,7 @@ class Settings:
     # shows in Settings -> Help & support and on the pending-approval screen.
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@sempermechanics.com")
 
-    # Verified sender for outbound mail, e.g. "Semper <noreply@sempermechanics.com>",
+    # Verified sender for outbound mail, e.g. "Semper <noreply@indicvision.com>",
     # and the Resend API key (the one secret this service holds — set it with
     # --set-secrets, never --set-env-vars). Either one empty disables
     # notification mail entirely: nothing is sent and nothing fails.

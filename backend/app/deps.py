@@ -20,7 +20,8 @@ from . import observability as obs
 log = logging.getLogger("indic.auth")
 
 _DEV_USER = {"uid": "dev-user", "email": "dev@local", "role": "admin",
-             "access_status": "APPROVED", "activeDeviceId": "dev-device"}
+             "access_status": "APPROVED", "activeDeviceId": "dev-device",
+             "emailVerified": True, "plan": "professional"}
 _DEV_DEVICE = {"deviceId": "dev-device", "uid": "dev-user", "status": "ACTIVE"}
 
 
@@ -75,6 +76,13 @@ def current_user(
             raise HTTPException(409, "device_in_use") from exc
         if user["access_status"] != "APPROVED":
             raise HTTPException(403, "not_approved")
+        # Re-validate the license/seat device lock on every call that carries
+        # X-Device-Id — not just at activation time. A revoked key, a disabled
+        # or revoked campus seat, or a device that no longer matches the lock
+        # drops the account to Demo immediately (fails closed); it never
+        # touches the account's stored sessions/files.
+        if x_device_id:
+            user = repo.revalidate_device_lock(user, x_device_id)
     try:
         request.state.uid = user["uid"]
         obs.bind_uid(user["uid"])
@@ -126,6 +134,12 @@ async def verified_device(
         raise HTTPException(409, "device_not_active")
     if not await run_in_threadpool(repo.consume_nonce, x_nonce, user["uid"], x_device_id):
         raise HTTPException(401, "nonce_invalid_or_replayed")
+    # current_user already re-validated the lock for THIS x_device_id when it
+    # was present on the request — but device-attested routes are the ones
+    # that actually spend the entitlement (create a session, download a file),
+    # so re-check here too rather than trust a value resolved before the
+    # signature/nonce were even verified.
+    user = await run_in_threadpool(repo.revalidate_device_lock, user, x_device_id)
 
     body = await request.body()
     msg = (x_nonce + request.method + request.url.path).encode() + hashlib.sha256(body).digest()
