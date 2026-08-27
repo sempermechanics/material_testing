@@ -381,7 +381,7 @@ class VsgLatticeActivity : AppCompatActivity() {
                 subset = subsets[i],
                 step = steps[i],
                 window = windows[i],
-                vsg = VsgStudy.vsgFor(steps[i], windows[i]),
+                vsg = VsgStudy.vsgFor(windows[i]),
                 solved = solved,
                 frameIndex = if (solved) i else -1,
                 failureReason = codes.getOrNull(i)

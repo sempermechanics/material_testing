@@ -438,8 +438,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="line_cut_preview_heading">Line cut</string>
     <string name="planned_lattice_heading">Planned lattice</string>
     <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · window %5$d</string>
-    <!-- VSG is derived (= (window-1)*step + 1), never independent info: dropped
-         from this label since step and window are already both spelled out in it. -->
+    <!-- VSG is the strain window read as a diameter in pixels, so the window
+         column already carries it: never independent info in this label. -->
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d</string>
     <string name="sweep_failed">The parameter sweep could not run.</string>
     
