@@ -92,6 +92,13 @@ class _DocRef:
     def delete(self):
         self._bucket().pop(self.id, None)
 
+    def collection(self, name):
+        """Subcollection under this document (e.g. licenses/{id}/seats/{uid}),
+        stored as its own flat bucket keyed by the joined path — mirrors how
+        the real client addresses subcollections without needing a nested
+        document tree in this double."""
+        return _Collection(self._store, f"{self._collection}/{self.id}/{name}")
+
 
 class _AggResult:
     def __init__(self, value):
