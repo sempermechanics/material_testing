@@ -1,8 +1,9 @@
+from datetime import datetime
 from typing import Annotated, List, Literal, Optional
 
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
 from .validation import DeviceId, DocumentId, SessionId
 
@@ -137,3 +138,93 @@ class UserConfigPatch(BaseModel):
     maxFilesPerSession: Optional[int] = Field(default=None, gt=0)
     maxFrames: Optional[int] = Field(default=None, gt=0)
     datCodecEncodingEnabled: Optional[bool] = None
+    plan: Optional[Literal["demo", "professional"]] = None
+
+
+class LicenseActivate(BaseModel):
+    """Typed license key from Settings. Canonicalised server-side before hash."""
+    key: str = Field(min_length=8, max_length=64)
+
+
+class AdminLicenseCreate(BaseModel):
+    """Ops mint for a Professional key.
+
+    `kind="individual"` (the default, and the only shape before campus
+    licensing existed) requires both `emailLock` and `deviceIdLock` — one
+    seat, redeemed by exactly one email on exactly one device.
+
+    `kind="campus"` mints an institution key instead: no email/device lock at
+    mint time. Membership is decided per-activation by `domainLock` (a
+    verified-email domain match — see firestore_repo.activate_license), and
+    `adminEmails` names the institution IT contacts who may manage seats via
+    `backend/app/routers/campus.py` (list/clear-device/enable-disable/revoke).
+    `maxSeats` is an optional hard cap; omitted means unlimited.
+    """
+    kind: Literal["individual", "campus"] = "individual"
+    emailLock: Optional[str] = Field(default=None, min_length=3, max_length=320)
+    deviceIdLock: Optional[DeviceId] = None
+    domainLock: Optional[str] = Field(default=None, min_length=1, max_length=253)
+    adminEmails: List[str] = Field(default_factory=list, max_length=20)
+    maxSeats: Optional[int] = Field(default=None, gt=0, le=100000)
+    expiresAt: Optional[datetime] = None
+    maxAnalyses: Optional[int] = Field(default=None, gt=0)
+    note: DisplayString = ""
+
+    @field_validator("emailLock")
+    @classmethod
+    def _email_lock(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        email = value.strip().lower()
+        if "@" not in email or email.startswith("@") or email.endswith("@"):
+            raise ValueError("emailLock must be an email address")
+        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in email):
+            raise ValueError("emailLock must not contain control characters")
+        return email
+
+    @field_validator("domainLock")
+    @classmethod
+    def _domain_lock(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        domain = value.strip().lower()
+        if "@" in domain or domain.startswith(".") or domain.endswith(".") or "." not in domain:
+            raise ValueError("domainLock must be a bare domain, e.g. university.edu")
+        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in domain):
+            raise ValueError("domainLock must not contain control characters")
+        return domain
+
+    @field_validator("adminEmails")
+    @classmethod
+    def _admin_emails(cls, value: List[str]) -> List[str]:
+        out = []
+        for raw in value:
+            email = (raw or "").strip().lower()
+            if "@" not in email or email.startswith("@") or email.endswith("@"):
+                raise ValueError("adminEmails entries must be email addresses")
+            if any(ord(char) < 0x20 or ord(char) == 0x7F for char in email):
+                raise ValueError("adminEmails must not contain control characters")
+            out.append(email)
+        return out
+
+    @model_validator(mode="after")
+    def _kind_requires_matching_locks(self) -> "AdminLicenseCreate":
+        if self.kind == "individual":
+            if not self.emailLock or not self.deviceIdLock:
+                raise ValueError("individual licenses require emailLock and deviceIdLock")
+        else:  # campus
+            if not self.domainLock:
+                raise ValueError("campus licenses require domainLock")
+            if not self.adminEmails:
+                raise ValueError("campus licenses require at least one adminEmails entry")
+        return self
+
+
+class CampusSeatPatch(BaseModel):
+    """Institution IT self-service seat edit. Both fields optional; send only
+    what changes. `clearDeviceLock=true` lets a seat holder re-bind to a new
+    device (lost phone, factory reset) without a support ticket to Semper
+    staff. `enabled=false` drops the seat to Demo without freeing the slot —
+    see routers/campus.py and firestore_repo.set_seat_enabled."""
+    clearDeviceLock: Optional[bool] = None
+    enabled: Optional[bool] = None
