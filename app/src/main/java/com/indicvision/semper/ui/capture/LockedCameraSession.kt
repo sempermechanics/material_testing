@@ -57,6 +57,38 @@ class LockedCameraSession(
     private val closed = AtomicBoolean(false)
 
     /**
+     * The imaging-pipeline lockdown resolved for this camera, or null until the
+     * session opens. Held so the same plan is written to the preview request,
+     * the repeating request and every still — a still processed differently from
+     * the frames the noise floor was measured on describes a different camera.
+     */
+    private var ispPlan: CaptureIspLock.Plan? = null
+    private var characteristics: CameraCharacteristics? = null
+
+    /**
+     * What the HAL actually did with the lockdown, filled in from the first
+     * still's result. Empty until a still completes.
+     *
+     * The app must not claim a lockdown the hardware refused, and a HAL may
+     * accept a key and ignore it, so this is read back rather than assumed. The
+     * capture screen turns it into the one collapsed warning the user sees.
+     */
+    @Volatile
+    var ispReport: List<CaptureIspApply.Honoured> = emptyList()
+        private set
+
+    /**
+     * Settings this device could not give DIC what it wanted, worst first.
+     *
+     * Both halves of the failure in one list: keys the plan already knew were
+     * unavailable or only available as a fallback, and keys the HAL accepted
+     * and then ignored. The capture screen collapses it into one warning, and
+     * its size is what the noise-floor gate weighs against a failing floor.
+     */
+    val ispShortfall: List<CaptureIspLock.Key>
+        get() = CaptureIspWarning.shortfall(ispPlan, ispReport)
+
+    /**
      * Clockwise rotation applied to every frame this session writes, so the
      * PNGs come out the way the specimen was actually facing rather than the
      * way the sensor is mounted. Resolved once at open — it depends only on
@@ -344,6 +376,36 @@ class LockedCameraSession(
                 chars.get(CameraCharacteristics.SENSOR_ORIENTATION),
             )
         }.onFailure { Timber.w(it, "stream geometry unavailable") }
+        logPipelineOnce(result)
+    }
+
+    /**
+     * Records which pipeline keys the HAL honoured, from the same first still.
+     *
+     * Requesting a key and having it applied are different things: a HAL may
+     * accept `NOISE_REDUCTION_MODE = OFF` and keep denoising, and nothing in the
+     * request path would say so. The user is warned on what this reports, not on
+     * what was asked for — a warning for a key the phone did honour is as much a
+     * defect as a missing one.
+     */
+    private fun logPipelineOnce(result: TotalCaptureResult) {
+        val plan = ispPlan ?: return
+        val report = runCatching { CaptureIspApply.readBack(result, plan) }
+            .onFailure { Timber.w(it, "pipeline read-back unavailable") }
+            .getOrNull() ?: return
+        ispReport = report
+        report.forEach { entry ->
+            val state = when (entry.honoured) {
+                true -> "honoured"
+                false -> "IGNORED"
+                null -> "not reported"
+            }
+            Timber.i("isp %s: requested=%s %s", entry.key, entry.requested, state)
+        }
+        val unavailable = plan.decisions.filterNot { it.applied }
+        if (unavailable.isNotEmpty()) {
+            Timber.i("isp unsupported: %s", unavailable.joinToString { it.key.name })
+        }
     }
 
     /** Added in API 30; below that the platform has no zoom ratio to report. */
@@ -491,6 +553,11 @@ class LockedCameraSession(
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
             set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
             setAfRegion(this, chars)
+            // Applied here, before AF and AE run, so they converge through the
+            // same pipeline the stills will use. This builder is also the one
+            // that becomes the repeating request after the lock, so the preview
+            // and the run stay on one configuration.
+            ispPlan?.let { CaptureIspApply.apply(this, it, chars) }
         }
 
     @Suppress("ReturnCount")
@@ -500,6 +567,8 @@ class LockedCameraSession(
         val reader = imageReader ?: return false
         val chars = context.getSystemService(CameraManager::class.java)
             ?.getCameraCharacteristics(cameraId) ?: return false
+        characteristics = chars
+        ispPlan = CaptureIspLock.plan(CaptureIspApply.profileOf(chars))
 
         // The still ImageReader must NOT be a target of this repeating request:
         // it only has maxImages=2 and is drained solely by the brief listener
@@ -594,6 +663,12 @@ class LockedCameraSession(
         builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
         builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, lens)
         builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+        // TEMPLATE_STILL_CAPTURE re-enables the vendor's stills tuning —
+        // stabilisation, denoise, sharpening — regardless of what the preview
+        // request was set to, so the lockdown has to be written again here.
+        val chars = characteristics
+        val plan = ispPlan
+        if (chars != null && plan != null) CaptureIspApply.apply(builder, plan, chars)
         // No JPEG_QUALITY: the still path captures YUV_420_888 and encodes PNG
         // (lossless) instead of the hardware JPEG encoder.
     }
