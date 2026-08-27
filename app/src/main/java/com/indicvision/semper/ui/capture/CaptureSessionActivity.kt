@@ -27,6 +27,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
+import com.indicvision.semper.ui.analysis.NoiseFloorStats
 import com.indicvision.semper.ui.analysis.RoiDrawActivity
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.analysis.SubsetRecommender
@@ -68,6 +69,13 @@ class CaptureSessionActivity : AppCompatActivity() {
     private var focusLock: CaptureFocusLock? = null
     private var lockedSession: LockedCameraSession? = null
     private var testShotFile: File? = null
+
+    /**
+     * Cost of one still at the locked exposure and this run's resolution,
+     * from the noise burst's first frame. Zero until the burst runs, which
+     * is also why [averagingFrames] falls back to one frame without it.
+     */
+    private var measuredFrameCostMs = 0L
 
     /**
      * The noise-floor gate: the ROI carried from the speckle check, the burst
@@ -480,6 +488,7 @@ class CaptureSessionActivity : AppCompatActivity() {
      * costs would just queue captures that arrive late anyway.
      */
     private fun applyMeasuredFrameCost(perFrameMs: Long) {
+        measuredFrameCostMs = perFrameMs
         // Spread the promised frames across the whole requested duration.
         // Pacing at the raw per-frame cost instead would bunch them into the
         // start of the run — 30 frames of a 120s test crammed into the first
@@ -496,6 +505,27 @@ class CaptureSessionActivity : AppCompatActivity() {
                 durationSec,
             )
         }
+    }
+
+    /**
+     * How many stills [runStills] averages into each frame.
+     *
+     * Derived, never offered: the interval the user's rate already implies,
+     * the per-frame cost measured at the locked exposure this run will
+     * actually use, and whether the noise burst found the setup holding
+     * still. [AveragingPlan] takes no ISO or exposure input, so nothing here
+     * can buy a higher count by shortening either — see [AveragingPlan] for
+     * why that would cost more than it returns.
+     *
+     * A burst that could not judge drift confidently
+     * ([NoiseFloorStats.Outcome.INSUFFICIENT]) is treated the same as one
+     * that found drift: crediting averaging on an unconfirmed setup would
+     * understate the very floor the burst exists to report honestly.
+     */
+    private fun averagingFrames(): Int {
+        val outcome = noiseGate.floor?.verdict?.outcome
+        val steady = outcome == NoiseFloorStats.Outcome.PASS || outcome == NoiseFloorStats.Outcome.HIGH_FLOOR
+        return AveragingPlan.framesFor(frameIntervalMs, measuredFrameCostMs, steady)
     }
 
     private fun evaluateSpeckle(file: File, roi: Rect): SubsetRecommender.Result? {
@@ -654,12 +684,12 @@ class CaptureSessionActivity : AppCompatActivity() {
      * land directly in the measurement. The test shot stays what it is good
      * for: picking the contrast ROI and measuring speckle before committing.
      */
-    private suspend fun captureLockedReference(session: LockedCameraSession): Boolean {
+    private suspend fun captureLockedReference(session: LockedCameraSession, frames: Int): Boolean {
         tvStatus.setText(R.string.capture_status_reference)
         tvProgress.text = ""
         val file = File(SystemCamera.captureDir(this), CaptureWorkspace.REFERENCE_NAME)
         file.delete()
-        val ok = session.captureStill(file)
+        val ok = session.captureAveragedStill(file, frames)
         referenceFile = if (ok) file else null
         return ok
     }
@@ -669,6 +699,10 @@ class CaptureSessionActivity : AppCompatActivity() {
         val session = lockedSession ?: return
         val dir = SystemCamera.captureDir(this)
         val runner = StillSequenceRunner(intervalMs = frameIntervalMs, frameCount = frameCount)
+        // Decided once, before the first frame: the reference and every
+        // deformed frame average the same count, or the reference would
+        // carry a different noise floor than what it is compared against.
+        val frames = averagingFrames()
         var budgetExceededMidRun = false
         lifecycleScope.launch {
             // Before the first frame, not after the last: a crash or a cancel
@@ -678,7 +712,14 @@ class CaptureSessionActivity : AppCompatActivity() {
                 CaptureWorkspace.clearPreviousRun(dir)
             }
             if (cleared > 0) Timber.d("Cleared %d file(s) from a previous run", cleared)
-            if (!captureLockedReference(session)) {
+            if (frames > 1) {
+                Toast.makeText(
+                    this@CaptureSessionActivity,
+                    getString(R.string.capture_averaging_fmt, frames),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            if (!captureLockedReference(session, frames)) {
                 showRetryDialog(getText(incompleteRunMessage(session))) { startRecording() }
                 return@launch
             }
@@ -687,7 +728,7 @@ class CaptureSessionActivity : AppCompatActivity() {
                 sink = object : StillSequenceRunner.CaptureSink {
                     override suspend fun capture(index: Int): String? {
                         val file = File(dir, CaptureWorkspace.frameName(index))
-                        val ok = session.captureStill(file)
+                        val ok = session.captureAveragedStill(file, frames)
                         return if (ok) file.absolutePath else null
                     }
                 },
