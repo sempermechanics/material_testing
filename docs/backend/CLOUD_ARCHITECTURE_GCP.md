@@ -11,6 +11,7 @@ you are changing `backend/` or the sync path in `app/.../data/`.
 | Follow a request end to end | [§2 auth](#2-authentication-flow) → [§4 upload](#4-upload-sequence-5-gb-resumable-keyless) |
 | Find the code for a concept | [§7 backend map](#7-implementation-map) · [§8 Android map](#8-android-client-map) |
 | Know the data shape | [§5 Firestore](#5-firestore-schema) · [§6 Drive layout](#6-google-drive-folder-hierarchy) |
+| Understand Demo/Professional/Campus licensing | [§20 Licensing & entitlements](#20-licensing--entitlements) |
 | Fix sign-in | [AUTH_SETUP.md](AUTH_SETUP.md) |
 
 > **Status / scope.** This document specifies the **GCP-native** backend:
@@ -413,10 +414,32 @@ files/{fileId}                    (fileId = deterministic sid_role_name)
   driveFileId, driveMd5
   createdAt, updatedAt
 
+licenses/{id}                     (id = sha256(key) — the key hash IS the doc id)
+  kind: "individual" | "campus"
+  plan: "professional"            (Demo needs no license doc; see §20)
+  keyPrefix                       (first segment, e.g. "SEMP-AB12"; plaintext key never stored)
+  status: "unused" | "redeemed" | "active" | "revoked"
+                                   (individual starts "unused"; campus starts "active")
+  # individual only:
+  emailLock, deviceIdLock, redeemedByUid
+  # campus only:
+  domainLock                      (verified-email domain required to join, e.g. "campus.edu")
+  adminEmails: string[]           (verified emails allowed to manage this license's seats)
+  maxSeats: number | null         (null = unlimited)
+  seatsUsed: number               (kept in sync with the seats subcollection below)
+  expiresAt, maxAnalyses           (optional, either kind)
+  createdByUid, createdAt, updatedAt
+
+licenses/{id}/seats/{uid}         (campus only — one doc per institution member)
+  uid, email, deviceIdLock
+  status: "active" | "disabled" | "revoked"
+  createdAt, updatedAt
+
 audit_logs/{autoId}               (append-only)
   ts (Timestamp), uid, deviceId, ip, ua
   action: "LOGIN" | "DEVICE_REGISTER" | "DEVICE_REBIND" |
-          "SESSION_CREATE" | "UPLOAD_COMPLETE" | "AUTH_DENIED" | ...
+          "SESSION_CREATE" | "UPLOAD_COMPLETE" | "AUTH_DENIED" |
+          "LICENSE_ACTIVATE" | "CAMPUS_SEAT_PATCH" | "CAMPUS_SEAT_REVOKE" | ...
   target: { type, id }
   outcome: "OK" | "DENIED" | "ERROR"
   detail: map
@@ -473,7 +496,10 @@ the way it does.
 | Concern | File | Notes |
 |---|---|---|
 | FastAPI app, middleware, lifespan | [`backend/app/main.py`](../../backend/app/main.py) | App factory; includes routers below |
-| Routes by prefix | [`backend/app/routers/`](../../backend/app/routers/) | `health`, `account`, `devices`, `sessions`, `files`, `provision_tasks`, `admin` |
+| Routes by prefix | [`backend/app/routers/`](../../backend/app/routers/) | `health`, `account`, `devices`, `sessions`, `files`, `provision_tasks`, `admin`, `licenses`, `campus` |
+| License key format, hashing | [`backend/app/licenses.py`](../../backend/app/licenses.py) | `SEMP-XXXX-XXXX-XXXX-XXXX`; sha256 hash is the Firestore doc id (§20) |
+| Individual + campus license logic | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
+| Campus IT self-service routes | [`backend/app/routers/campus.py`](../../backend/app/routers/campus.py) | Token + adminEmails auth, no dashboard UI (§20) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
 | Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check, `device_or_legacy_reader` (§4) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
@@ -863,4 +889,110 @@ become direct signed URLs, eliminating the Drive download-brokering problem.
 **Design payoff:** the abstraction that makes Drive tolerable today
 (opaque upload URL + standard resumable protocol) is the *same* abstraction that
 makes the GCS migration a config flag tomorrow.
+
+---
+
+## 20. Licensing & entitlements
+
+Three plan shapes, all resolved server-side by `resolve_user_config` — the app
+never decides its own entitlement, it reads `GET /v1/config` (and the
+`activate` response) and renders around what the backend says.
+
+| Shape | How you get it | Locked to | Managed by |
+|---|---|---|---|
+| **Demo** | Default for every approved account; `ensure_demo_license` issues a Demo-plan license on first verified+device-bound login | email + device (so a Demo key can't be shared) | nobody — it's the floor |
+| **Professional, individual** | Semper staff mint a key (`POST /v1/admin/licenses`, `kind=individual`) and hand it to one person | one email + one device | Semper staff only (`admin_user` + `verified_device`) |
+| **Professional, campus/institution** | Semper staff mint a key (`kind=campus`) with a `domainLock` and a list of `adminEmails`; any verified `@domainLock` member self-activates and claims a seat | a verified-email **domain**, per-member seat locked to one device | Institution IT, self-service, via the three `/v1/campus/licenses/{id}/seats*` routes — **no dashboard UI ships**; IT drives these with their own tooling/curl |
+
+**No campus dashboard UI.** The campus seat-management routes
+(`GET`/`PATCH`/`DELETE /v1/campus/licenses/{licenseId}/seats...`, documented in
+[`gateway/openapi.yaml`](../../backend/gateway/openapi.yaml)) are the entire
+self-service surface. Building a web console for institution IT is future
+work, not part of this feature.
+
+### 20.1 Activation
+
+```mermaid
+sequenceDiagram
+    participant A as Android
+    participant R as Cloud Run
+    participant F as Firestore
+    A->>R: POST /v1/licenses/activate {key} (ID token, X-Device-Id)
+    R->>F: licenses/{sha256(key)}
+    alt kind = individual
+        R->>R: emailLock == caller email? deviceIdLock == X-Device-Id?
+        R->>F: users/{uid}.plan = professional, licenseKind = individual
+    else kind = campus
+        R->>R: verified-email domain == license.domainLock?
+        R->>F: licenses/{id}/seats/{uid} — create (maxSeats check) or re-bind device
+        R->>F: users/{uid}.plan = professional, licenseKind = campus
+    end
+    R-->>A: 200 {config} | 403/404/409 (see openapi.yaml)
+```
+
+Activation is **in-place**: same `uid`, same user doc, only plan/license
+fields change. It never migrates, copies, or touches `sessions`/`files` — a
+dedicated test (`test_activation_is_in_place_session_data_untouched` in
+`backend/tests/test_licenses.py`) asserts session docs are byte-identical
+before and after.
+
+### 20.2 Not "activate once, trust forever"
+
+Every authed request that carries `X-Device-Id` re-validates the license/seat
+device lock, not just the one that activated it —
+`deps.current_user`/`deps.verified_device` both call
+`firestore_repo.revalidate_device_lock` on every such request. If the key was
+revoked, the seat was disabled/revoked, or the device no longer matches the
+lock, the account drops to Demo **immediately**, fails closed, and — same
+guarantee as activation — never touches stored sessions/files. See
+`test_device_lock_is_revalidated_on_every_authed_call_not_just_at_activation`.
+
+### 20.3 Revoke semantics differ by scope
+
+| Action | Route | Effect |
+|---|---|---|
+| Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff, device-attested) | Individual: the redeemer drops to Demo. Campus: **every** seat drops to Demo and `seatsUsed` resets to 0. |
+| Single-seat revoke | `DELETE /v1/campus/licenses/{id}/seats/{uid}` (institution IT) | Only that member drops to Demo; **frees the slot** for another domain member (including, after re-admission, the same member re-entering the key). |
+| Disable a seat | `PATCH /v1/campus/licenses/{id}/seats/{uid}` `{"enabled": false}` (institution IT) | Drops that member to Demo but **does not free the slot** — still counts against `maxSeats`. `{"enabled": true}` restores Professional in place with no re-activation needed. |
+
+A downgrade to Demo — from any of the above, or a plan cap being exceeded —
+**never deletes or hides existing data**. It only blocks *new* cloud analysis
+creation (`POST /v1/sessions` → `403 feature_not_licensed` once
+`cloudBackupEnabled` is false). Existing sessions stay listable and
+downloadable; re-activating restores creation with zero data loss. See
+`test_downgrade_preserves_data_blocks_creation_then_reactivation_restores`.
+
+### 20.4 Campus IT auth is deliberately narrow
+
+`campus_admin_context` (`backend/app/routers/campus.py`) is a distinct auth
+tier from everything else in the app — worth naming precisely because it is
+easy to over- or under-scope:
+
+- **Not** `verified_device` — institution IT manages seats from a browser or
+  script, not from the licensed device itself.
+- **Not** Semper `role=admin` — an institution admin has zero authority
+  outside the license(s) that name their verified email in `adminEmails`.
+  Semper staff mint/revoke stays entirely on the existing
+  `admin_user` + `verified_device` path.
+- **Fails closed at every step**: unverified caller email → 403. A license id
+  that does not exist, or exists but is not `kind=campus`, or is
+  `kind=campus` but the caller's email is absent from `adminEmails` — **all
+  three return the identical `404 license_not_found`**. This is intentional:
+  a foreign institution's real license id must be indistinguishable from one
+  that doesn't exist, so probing ids learns nothing about other tenants.
+  `test_campus_it_cannot_reach_another_campus_seats` and its `PATCH`/`DELETE`
+  siblings assert this cross-tenant isolation directly.
+- **No key plaintext ever leaves mint time.** Every campus IT response
+  (`campus_license_summary`, `list_campus_seats`) is built from
+  `_license_public`, the same redaction the Semper-staff admin listing uses.
+- **Rate-limited and audited** like every other mutation: `campus_bucket` in
+  `rate_limit.py`, `CAMPUS_SEAT_PATCH`/`CAMPUS_SEAT_REVOKE` in `audit_logs`.
+
+### 20.5 Structural guard
+
+`backend/tests/test_route_authz_matrix.py` inspects every route's FastAPI
+dependency tree and asserts it maps to exactly one expected auth tier —
+`CAMPUS_ADMIN` is a tier in that matrix alongside `USER`/`ADMIN`/`DEVICE`, so a
+future change that accidentally widens (or narrows) a campus route's auth
+fails CI rather than shipping quietly.
 

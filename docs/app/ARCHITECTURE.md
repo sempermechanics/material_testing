@@ -92,6 +92,31 @@ stops returning one, so a deep refresh sees the whole account rather than the
 first page. Anything that lists cloud sessions should go through it rather than
 issuing a single request.
 
+## Licensing & entitlements
+
+The app never decides its own plan — `data/LicenseEntitlements.kt` is the one
+place that answers "am I Demo or Professional," and it reads through
+`data/net/AppRemoteConfig.kt`, which caches whatever the backend's
+`GET /v1/config` last reported (`plan`, `cloudBackupEnabled`, `shareEnabled`,
+`licensePrefix`, `licenseKind`). Fails closed: before the first successful
+fetch, and on any ambiguous value, everything reads as Demo.
+
+`IndicApi.activateLicense()` calls `POST /v1/licenses/activate` (bearer +
+`X-Device-Id`, not device-signed) to redeem a key — see
+[CLOUD_ARCHITECTURE_GCP.md §20](../backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements)
+for the backend's individual-vs-campus split. **On the Android side there is
+no distinction** between an individual key and a campus seat — both resolve
+to `plan=professional` with identical entitlements; `licenseKind` is carried
+through only for display/support (e.g. "activated via campus.edu"), not as a
+gating input anywhere in `LicenseEntitlements`.
+
+| Concern | File |
+|---|---|
+| Plan resolution / gating | `data/LicenseEntitlements.kt` |
+| Cached config, wire → prefs | `data/net/AppRemoteConfig.kt` (`AppConfigDto` in `ApiDtos.kt`) |
+| Redeem a key | `IndicApi.activateLicense()` |
+| Local analysis cap | `LicenseEntitlements.analysisCap()` — Demo 25, Professional unlimited; see [WORKFLOWS.md §9](WORKFLOWS.md#9-session-limit) |
+
 ## Storage, diagnostics and the parameter clipboard
 
 Three small subsystems added alongside the cloud work. Each is a plain object

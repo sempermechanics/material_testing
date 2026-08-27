@@ -663,3 +663,62 @@ with both ways to approve it. One mail per account, at creation — approving,
 denying or signing in again sends nothing further. If no mail arrives, check the
 `NOTIFY_FROM` / `RESEND_API_KEY` settings on the service: unconfigured, the
 backend sends nothing and says nothing, and the pending list is your only signal.
+
+## Appendix D — Licensing (Demo / Professional / Campus)
+
+Every account is **Demo** (25 saved analyses, no cloud backup/restore, no
+share) until a Professional key is activated. There is no billing anywhere in
+the product — a Professional key is issued by Semper staff or, for an
+institution, self-served by that institution's own IT once Semper staff mint
+the campus key. There is **no in-app screen to type a key in yet** in this
+release; activation goes through the backend API
+(`POST /v1/licenses/activate`) directly. See
+[CLOUD_ARCHITECTURE_GCP.md §20](backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements)
+for the full design; this appendix is the day-to-day operator/support version.
+
+**Minting a key** (Semper staff, device-attested — same admin device that
+approves/revokes accounts):
+
+- **Individual**: `POST /v1/admin/licenses` with an `emailLock` and
+  `deviceIdLock`. Locked to that one person's account and device; they
+  activate it once.
+- **Campus/institution**: `POST /v1/admin/licenses` with `kind: "campus"`, a
+  `domainLock` (the institution's email domain), the `adminEmails` of the
+  people at that institution who will manage seats, and an optional
+  `maxSeats`. Anyone at that institution with a **verified** email on the
+  domain can then activate the same key and claim a seat, up to `maxSeats`.
+
+Either way the plaintext key is only ever shown once, in the mint response —
+hand it to the individual or the institution's IT contact immediately; Semper
+does not store it anywhere retrievable afterward (only its hash).
+
+**Institution IT self-service.** Once a campus key exists, its `adminEmails`
+manage seats themselves, with no Semper staff involvement and no dashboard —
+they call three routes directly (script, curl, or their own tooling):
+
+| Need | Route |
+|---|---|
+| See who's activated, and each seat's status | `GET /v1/campus/licenses/{id}/seats` |
+| Someone lost/replaced their device | `PATCH .../seats/{uid}` `{"clearDeviceLock": true}` — lets them re-bind without a support ticket |
+| Pause someone without losing their seat (e.g. leave of absence) | `PATCH .../seats/{uid}` `{"enabled": false}`, then later `{"enabled": true}` to restore — this does **not** free the seat slot |
+| Someone leaves the institution for good | `DELETE .../seats/{uid}` — drops them to Demo and **frees the slot** for someone else |
+
+Institution IT authenticates with a normal signed-in account (their Firebase
+ID token) whose **verified** email is in that license's `adminEmails` — they
+do not need a registered/attested device for this, since they are managing
+seats from a browser or script, not from the licensed device itself. A
+license id they do not administer, or one that does not exist, both come back
+as the identical "not found" — so nothing about a foreign institution's
+licenses leaks by probing ids.
+
+**Revoking the whole key** (Semper staff, e.g. a contract ends):
+`POST /v1/admin/licenses/{id}/revoke`. For an individual key, that one person
+drops to Demo. For a campus key, **every** activated seat drops to Demo at
+once — use this for "the institution's contract ended," not for offboarding
+one member (use the IT self-service `DELETE` above for that).
+
+**Downgrading never deletes anything.** Whether a whole key is revoked, a
+single seat is revoked, or a seat is disabled, the affected account(s) simply
+stop being able to start *new* cloud analyses — everything already saved
+stays listable and restorable. Re-activating (or re-enabling) restores full
+Professional access with zero data loss.

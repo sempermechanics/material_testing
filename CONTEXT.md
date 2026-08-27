@@ -130,9 +130,37 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-08-20)
 
-`origin/main` includes PRs #85–#96 (FAQ error map). Open follow-up: wizard
-step/overlap + step-2/3 reorder ([#97](https://github.com/sempermechanics/semperdic-app/pull/97)).
-Refresh with `gh pr list --state open` — anything named here will rot.
+`origin/main` includes PRs #85–#96 (FAQ error map). Open follow-ups: wizard
+step/overlap + step-2/3 reorder ([#97](https://github.com/sempermechanics/semperdic-app/pull/97));
+campus/institution licensing on `feat/license-demo-pro` (branch pushed, PR to
+be opened — see below). Refresh with `gh pr list --state open` — anything
+named here will rot.
+
+**Licensing (`feat/license-demo-pro`, backend-complete):** extends flat
+Demo/Professional to two Professional shapes — individual (unchanged) and
+campus/institution (seat-count license gated by verified-email domain,
+self-service managed by institution IT via `backend/app/routers/campus.py`
+only, no dashboard UI). `AdminLicenseCreate.kind` discriminates
+individual/campus; campus seats live at `licenses/{id}/seats/{uid}`.
+`POST /v1/licenses/activate` branches on kind and re-validates the device
+lock on every authed call, not just at activation. Revoke semantics:
+whole-key revoke drops every seat to Demo and frees all slots; single-seat
+revoke frees only that slot; disable drops to Demo but keeps the slot held.
+Downgrade never deletes data — it only blocks new analysis creation past the
+cap, verified by a test that seeds 30 sessions, downgrades, and reactivates
+with zero data loss. Campus IT routes authenticate on
+`current_user` + APPROVED + verified email in that license's `adminEmails`
+— deliberately no device attestation and not Semper `role=admin`; Semper
+staff mint/revoke keeps the existing device-attested admin path. Backend:
+268 tests passed, 81.99% coverage. Android: only data-layer plumbing shipped
+this round (`ApiDtos`/`AppRemoteConfig`/`LicenseEntitlements.licenseKind`,
+`IndicApi.activateLicense()`, plus tests) — the UI-layer gating
+(`LicenseGate.kt`, `SettingsLicenseSection.kt`, Settings/Home/ShareCenter/
+CloudSync wiring) is **not** implemented yet and is open follow-up work.
+Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
+§20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,
+[docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md), and
+[docs/OPERATING_MANUAL.md](docs/OPERATING_MANUAL.md) Appendix D.
 
 **Merged since 2026-08-08:** lint extracts #59–#64 and #66; compile/quality #68;
 wizard slots/coach #69; `DicBatchRunner` + `DicFieldIo` #70; hashed lock /
