@@ -24,8 +24,9 @@ import timber.log.Timber
  * session actually requests (see [LockedCameraSession]); the JPEG figures
  * describe the hardware JPEG encoder, which this path does not use.
  *
- * [Info.yuvSizes] is capped at [CAPTURE_MAX_LONG_EDGE] — a DIC decision, not a
- * hardware one; see that constant.
+ * [Info.yuvSizes] keeps only 4:3-shaped sizes (see [preferFourByThree]) and is
+ * bounded by [sustainableCeiling] — DIC decisions, not hardware ones; see
+ * those.
  */
 object CameraCapabilities {
 
@@ -116,17 +117,39 @@ object CameraCapabilities {
     private const val ASPECT_EPSILON = 0.02f
 
     /**
-     * Longest edge offered for capture: 2K.
+     * The shape offered for capture: 4:3.
      *
-     * Not a hardware limit — every phone here shoots larger. It is a DIC
-     * limit. Correlation cost, RAM held per frame and PNG encode time all grow
-     * with pixel count, and the encode is what sets the sustainable rate
-     * ([CaptureFrameCost]), so a 12MP frame buys resolution the solver rarely
-     * needs at the price of the frame rate the experiment does. Capping here
-     * rather than in the picker keeps [Info.yuvSizes] and the session's own
-     * validation looking at the same list.
+     * It is the sensor's native full-array readout on essentially every
+     * phone. The other shapes a stream configuration map routinely lists
+     * alongside it — 16:9, and on some sensors a square 1:1 binned mode — are
+     * crops or a different, often pre-processed readout path, neither of
+     * which helps a correlation that wants the most complete pixel data the
+     * sensor can give it. Square is excluded by construction: nothing within
+     * [FOUR_BY_THREE_TOLERANCE] of 4:3 (≈1.333) is anywhere near 1:1.
+     */
+    private const val ASPECT_4_3 = 4f / 3f
+    private const val FOUR_BY_THREE_TOLERANCE = 0.05f
+
+    /**
+     * Longest edge every device offers regardless of memory: 2K.
+     *
+     * Not a hardware limit — every phone here shoots larger. It is the
+     * known-good DIC floor: [sustainableCeiling] only ever adds larger sizes
+     * on top of this set when the device has room for them, never removes
+     * from it, so lifting the ceiling on a capable phone cannot regress a
+     * modest one.
      */
     const val CAPTURE_MAX_LONG_EDGE = 2048
+
+    /**
+     * Share of free RAM a candidate resolution's own working buffers
+     * ([CaptureBudget.ramRequired]) may claim before it is left off the
+     * catalogue entirely. Deliberately generous — this only keeps the
+     * picker from ever *offering* a size that would almost certainly fail;
+     * [CaptureBudget.check] still gates the resolution and frame count the
+     * user actually picks against its own tighter, run-specific numbers.
+     */
+    private const val CATALOGUE_RAM_FRACTION = 0.25
     private const val MIN_USABLE_WIDTH = 640L
     private const val MIN_USABLE_HEIGHT = 480L
 
@@ -195,7 +218,8 @@ object CameraCapabilities {
             ?.let { distinctLargestFirst(it) }
             .orEmpty()
             .ifEmpty { jpeg }
-            .let { withinCaptureCeiling(it) }
+            .let { preferFourByThree(it) }
+            .let { sustainableCeiling(it, CaptureResources.availRamBytes(context)) }
 
         val previews = map.getOutputSizes(SurfaceTexture::class.java)
             ?.map { Resolution(it.width, it.height) }
@@ -227,24 +251,79 @@ object CameraCapabilities {
         if (ns <= 0L) null else res to (ns / NANOS_PER_MILLI).coerceAtLeast(1L)
     }.toMap()
 
+    /**
+     * The back camera to build the catalogue from: the longest lens among
+     * the back-facing physical cameras Camera2 lists.
+     *
+     * Out-of-plane error scales as Δz/z, so a longer focal length shrinks it
+     * proportionally for the same standoff — the same reasoning Part 4 of
+     * the precision plan applies to lens choice generally. Read purely from
+     * [CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS] on each
+     * back-facing id, never from a model or vendor name, so it lands
+     * correctly on whatever lenses this device happens to have.
+     *
+     * This is the static half of that decision only: it does not yet know
+     * whether the chosen lens can still frame the ROI at the standoff the
+     * user set up, which needs the live preview to answer and belongs with
+     * that on-device verification. Falls back to the first back-facing id
+     * when none report a focal length, and to the first id of any facing
+     * when the device reports no back camera at all — the same last-resort
+     * behaviour this function always had.
+     */
     private fun pickBackCameraId(manager: CameraManager): String? {
-        for (id in manager.cameraIdList) {
-            val facing = manager.getCameraCharacteristics(id)
-                .get(CameraCharacteristics.LENS_FACING)
-            if (facing == CameraCharacteristics.LENS_FACING_BACK) return id
+        val backIds = manager.cameraIdList.filter { id ->
+            manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) ==
+                CameraCharacteristics.LENS_FACING_BACK
         }
-        return manager.cameraIdList.firstOrNull()
+        val longestLens = backIds
+            .mapNotNull { id ->
+                manager.getCameraCharacteristics(id)
+                    .get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+                    ?.maxOrNull()
+                    ?.let { id to it }
+            }
+            .maxByOrNull { it.second }
+            ?.first
+        return longestLens ?: backIds.firstOrNull() ?: manager.cameraIdList.firstOrNull()
     }
 
     /**
-     * Sizes at or under [CAPTURE_MAX_LONG_EDGE]. If a camera reports nothing
-     * that small — no phone does, but a fixed-function sensor might — the
-     * smallest it does offer is kept, because an empty picker is worse than an
-     * over-sized frame.
+     * Keeps only 4:3-shaped sizes, falling back to the unfiltered list when a
+     * device reports nothing in that shape at all — the "last link is always
+     * today's behaviour" rule: a device with no 4:3 output still has to offer
+     * something rather than an empty catalogue.
      */
-    internal fun withinCaptureCeiling(sizes: List<Resolution>): List<Resolution> {
-        val kept = sizes.filter { maxOf(it.width, it.height) <= CAPTURE_MAX_LONG_EDGE }
-        return kept.ifEmpty { listOfNotNull(sizes.minByOrNull { it.pixels }) }
+    internal fun preferFourByThree(sizes: List<Resolution>): List<Resolution> {
+        val fourByThree = sizes.filter { kotlin.math.abs(it.aspect - ASPECT_4_3) <= FOUR_BY_THREE_TOLERANCE }
+        return fourByThree.ifEmpty { sizes }
+    }
+
+    /**
+     * [CAPTURE_MAX_LONG_EDGE] and below, always — plus whatever larger sizes
+     * this device has room for.
+     *
+     * "Room for" means a candidate's own working buffers
+     * ([CaptureBudget.ramRequired]) fit inside [CATALOGUE_RAM_FRACTION] of
+     * [availRamBytes]. A 200MP sensor and an 8MP one both end up offered the
+     * largest frame they can sustain, with no constant naming either — and a
+     * phone that cannot report free RAM ([availRamBytes] ≤ 0) gets exactly
+     * today's known-good ceiling and nothing more, since there is nothing to
+     * check the larger sizes against.
+     *
+     * If a camera reports nothing at or under the floor either — no phone
+     * does, but a fixed-function sensor might — the smallest it does offer is
+     * kept, because an empty picker is worse than an over-sized frame.
+     */
+    internal fun sustainableCeiling(sizes: List<Resolution>, availRamBytes: Long): List<Resolution> {
+        val floor = sizes.filter { maxOf(it.width, it.height) <= CAPTURE_MAX_LONG_EDGE }
+            .ifEmpty { listOfNotNull(sizes.minByOrNull { it.pixels }) }
+        if (availRamBytes <= 0L) return floor
+        val budget = (availRamBytes * CATALOGUE_RAM_FRACTION).toLong()
+        val larger = sizes.filter {
+            maxOf(it.width, it.height) > CAPTURE_MAX_LONG_EDGE &&
+                CaptureBudget.ramRequired(it.width, it.height) <= budget
+        }
+        return (floor + larger).distinct().sortedByDescending { it.pixels }
     }
 
     private fun distinctLargestFirst(sizes: List<Resolution>): List<Resolution> {

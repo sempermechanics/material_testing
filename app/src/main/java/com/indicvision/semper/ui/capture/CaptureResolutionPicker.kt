@@ -11,8 +11,8 @@ import android.widget.Spinner
  * The catalogue is [CameraCapabilities.Info.yuvSizes], not the vendor JPEG
  * sizes: the locked session captures YUV_420_888 (see [LockedCameraSession])
  * and encodes that to lossless PNG, so a JPEG-only size would name a
- * resolution the still pipeline cannot actually produce. That list is already
- * capped at [CameraCapabilities.CAPTURE_MAX_LONG_EDGE].
+ * resolution the still pipeline cannot actually produce. That list is
+ * already 4:3-only and bounded by [CameraCapabilities.sustainableCeiling].
  *
  * Resolution feeds the rate: a larger frame costs more to read out and more to
  * encode, so [onChanged] has to rebuild the offered rates, not just relabel.
