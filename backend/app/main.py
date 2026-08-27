@@ -8,7 +8,16 @@ from fastapi.responses import JSONResponse
 
 from . import observability as obs
 from .config import settings
-from .routers import account, admin, devices, files, health, provision_tasks, sessions
+from .routers import (
+    account,
+    admin,
+    devices,
+    files,
+    health,
+    licenses,
+    provision_tasks,
+    sessions,
+)
 from .routers.account import json_dumps  # noqa: F401
 from .routers.files import _is_first_byte_request, download_file  # noqa: F401
 from .routers.health import _client_key  # noqa: F401
@@ -170,6 +179,7 @@ async def dependency_error_handler(request: Request, exc: obs.DependencyError):
 app.include_router(health.router)
 app.include_router(account.router)
 app.include_router(devices.router)
+app.include_router(licenses.router)
 app.include_router(sessions.router)
 app.include_router(files.router)
 app.include_router(provision_tasks.router)

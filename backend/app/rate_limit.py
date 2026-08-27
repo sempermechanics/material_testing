@@ -74,5 +74,7 @@ export_bucket = TokenBucket(rate_per_sec=0.05, burst=2.0)
 erase_bucket = TokenBucket(rate_per_sec=0.2, burst=3.0)
 # Admin routes are trusted but unmetered — this is flood protection only.
 admin_bucket = TokenBucket(rate_per_sec=5.0, burst=20.0)
+# License key guesses must not be brute-forced.
+license_activate_bucket = TokenBucket(rate_per_sec=0.2, burst=3.0)
 # Per-session manifest/resume listings each query up to _LIST_SOFT_LIMIT docs.
 listing_bucket = TokenBucket(rate_per_sec=5.0, burst=20.0)
