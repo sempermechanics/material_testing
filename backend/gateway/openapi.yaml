@@ -236,6 +236,7 @@ paths:
         '200': { description: OK }
         '409': { description: session_quota_exceeded }
         '413': { description: too_many_files }
+        '403': { description: feature_not_licensed (Demo plan) }
         '429': { description: Rate limited }
         '401': { description: Missing or invalid device attestation }
   /v1/sessions/{sid}:
@@ -326,6 +327,7 @@ paths:
         '200': { description: OK }
         '206': { description: Partial content }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: feature_not_licensed (Demo plan) }
         '416': { description: range_not_satisfiable }
         '429': { description: Rate limited }
         '502': { description: Drive download failed }
@@ -384,3 +386,123 @@ paths:
         '400': { description: Empty patch }
         '401': { description: Missing or invalid device attestation }
         '404': { description: User not found }
+  /v1/licenses/activate:
+    post:
+      operationId: activateLicense
+      description: >
+        Redeem a license key. For an individual key, locked to this account's
+        email and device. For a campus/institution key (kind=campus), the
+        caller's verified email domain must match the license's domainLock;
+        a seat is created (or re-bound to this device) on first activation,
+        subject to maxSeats. Idempotent re-entry of the same key from the
+        already-bound uid/device succeeds without consuming a new seat.
+      responses:
+        '200': { description: OK }
+        '403': { description: "Lock mismatch, revoked, disabled seat, or domain mismatch (license_email_mismatch, license_device_mismatch, license_revoked, license_seat_disabled)" }
+        '404': { description: Unknown key }
+        '409': { description: "Already redeemed by another account, or campus seats exhausted (license_already_redeemed, license_seats_exhausted)" }
+        '429': { description: Rate limited }
+  /v1/admin/licenses:
+    get:
+      operationId: adminListLicenses
+      responses:
+        '200': { description: OK }
+    post:
+      operationId: adminCreateLicense
+      description: >
+        Device-attested, Semper-staff only. Mint a license key. `kind`
+        selects the shape: "individual" (default) locks to one email and one
+        device id, redeemed once. "campus" locks to a verified-email domain
+        (domainLock) with self-service seat management delegated to
+        adminEmails — see the /v1/campus/licenses/{licenseId}/seats routes
+        below; Semper staff never touch individual seats on a campus key.
+        The plaintext key is returned once, either way.
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '422': { description: "kind=campus missing domainLock/adminEmails, or kind=individual missing emailLock/deviceIdLock" }
+  /v1/admin/licenses/{licenseId}/revoke:
+    post:
+      operationId: adminRevokeLicense
+      description: >
+        Device-attested, Semper-staff only. Revoke a key. Individual:
+        the redeemer drops to Demo. Campus: every seat on the license drops
+        to Demo and seatsUsed resets to 0 — this is the whole-key revoke;
+        for offboarding a single institution member without affecting
+        anyone else's seat, institution IT should use
+        DELETE /v1/campus/licenses/{licenseId}/seats/{uid} instead.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '404': { description: License not found }
+  /v1/campus/licenses/{licenseId}/seats:
+    get:
+      operationId: campusListSeats
+      description: >
+        Institution self-service, no dashboard UI — driven by IT's own
+        tooling/curl. Requires an ID token (not device-attested) whose
+        *verified* email is present in this license's adminEmails; a
+        license id the caller does not administer 404s identically to one
+        that does not exist, so probing another institution's license ids
+        learns nothing. Lists every seat: uid, email, device lock, status.
+        Never returns key plaintext.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: "license_not_found (unknown, not campus, or not administered by caller)" }
+        '429': { description: Rate limited }
+  /v1/campus/licenses/{licenseId}/seats/{uid}:
+    patch:
+      operationId: campusPatchSeat
+      description: >
+        Institution self-service. clearDeviceLock=true lets a seat holder
+        re-bind to a new device without a Semper support ticket. enabled=false
+        drops the seat to Demo but does NOT free the slot (still counts
+        against maxSeats); enabled=true restores Professional in place, no
+        data migration either direction. At least one field is required.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: empty_patch }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or seat_not_found }
+        '429': { description: Rate limited }
+    delete:
+      operationId: campusRevokeSeat
+      description: >
+        Institution self-service single-seat revoke: drops the holder to
+        Demo in place (no data loss) and frees the slot so another domain
+        member can activate. Whole-key revoke stays on the Semper-staff
+        POST /v1/admin/licenses/{licenseId}/revoke path above.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or seat_not_found }
+        '429': { description: Rate limited }
