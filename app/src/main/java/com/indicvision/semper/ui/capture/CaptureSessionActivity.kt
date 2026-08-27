@@ -508,7 +508,7 @@ class CaptureSessionActivity : AppCompatActivity() {
     }
 
     /**
-     * How many stills [runStills] averages into each frame.
+     * How many stills [captureLockedReference] averages into the reference.
      *
      * Derived, never offered: the interval the user's rate already implies,
      * the per-frame cost measured at the locked exposure this run will
@@ -521,6 +521,14 @@ class CaptureSessionActivity : AppCompatActivity() {
      * ([NoiseFloorStats.Outcome.INSUFFICIENT]) is treated the same as one
      * that found drift: crediting averaging on an unconfirmed setup would
      * understate the very floor the burst exists to report honestly.
+     *
+     * Deliberately reference-only — deformed frames are always a single
+     * shot. The reference is taken before any load exists, with nothing else
+     * competing for time; a deformed frame is taken on the run's own pacing
+     * and right after a step, where a multi-shot burst would either eat into
+     * the promised interval or risk catching the specimen mid-settle rather
+     * than truly held. Averaging only where the state is most assuredly
+     * still is the robust choice, not the ambitious one.
      */
     private fun averagingFrames(): Int {
         val outcome = noiseGate.floor?.verdict?.outcome
@@ -699,9 +707,8 @@ class CaptureSessionActivity : AppCompatActivity() {
         val session = lockedSession ?: return
         val dir = SystemCamera.captureDir(this)
         val runner = StillSequenceRunner(intervalMs = frameIntervalMs, frameCount = frameCount)
-        // Decided once, before the first frame: the reference and every
-        // deformed frame average the same count, or the reference would
-        // carry a different noise floor than what it is compared against.
+        // Decided once, before the first frame: how many shots the reference
+        // averages. See [averagingFrames] for why deformed frames never do.
         val frames = averagingFrames()
         var budgetExceededMidRun = false
         lifecycleScope.launch {
@@ -728,7 +735,8 @@ class CaptureSessionActivity : AppCompatActivity() {
                 sink = object : StillSequenceRunner.CaptureSink {
                     override suspend fun capture(index: Int): String? {
                         val file = File(dir, CaptureWorkspace.frameName(index))
-                        val ok = session.captureAveragedStill(file, frames)
+                        // Never averaged — see [averagingFrames].
+                        val ok = session.captureStill(file)
                         return if (ok) file.absolutePath else null
                     }
                 },
