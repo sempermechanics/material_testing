@@ -547,7 +547,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="action_reset">Reset</string>
     <string name="use_full_image">Use full image</string>
     <string name="region_of_interest">Region of interest</string>
-    <string name="jpeg_warning_inline">JPEG detected, use lossless formats (eg. PNG, TIFF) to improve accuracy</string>
+    <string name="lossy_format_warning_fmt">%1$s detected, use lossless formats (eg. PNG, TIFF) to improve accuracy</string>
     <string name="subset_low_texture_fmt">Speckle contrast is low, consider using a large subset or selecting a small RoI</string>
     <string name="next_reason_ref">add a reference image to continue</string>
     <string name="next_reason_def">add at least one deformed frame to continue</string>
