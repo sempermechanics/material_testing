@@ -150,7 +150,7 @@ object SubsetRecommender {
      * [sizes] giving the allowed subset sizes (the slider's range).
      * Returns null when the image cannot be sampled or the ROI is too small.
      */
-    @Suppress("ReturnCount")
+    @Suppress("ReturnCount", "NestedBlockDepth")
     fun recommend(
         refBytes: ByteArray,
         imgW: Int,
