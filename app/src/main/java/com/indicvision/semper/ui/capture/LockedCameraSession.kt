@@ -89,6 +89,19 @@ class LockedCameraSession(
         get() = CaptureIspWarning.shortfall(ispPlan, ispReport)
 
     /**
+     * The frozen exposure, once AE has converged and the lock took, or null
+     * while exposure is still on auto.
+     *
+     * Public because the rate ladder has to know: a 50 ms flicker-safe exposure
+     * caps the sustainable rate at 20 fps before encoding is even considered,
+     * and offering a rate the run cannot hold is the one thing capture setup
+     * promises not to do.
+     */
+    @Volatile
+    var exposurePlan: ExposurePlan.Result? = null
+        private set
+
+    /**
      * Clockwise rotation applied to every frame this session writes, so the
      * PNGs come out the way the specimen was actually facing rather than the
      * way the sensor is mounted. Resolved once at open — it depends only on
@@ -641,21 +654,165 @@ class LockedCameraSession(
         }
         lockedLensDistance = lens
 
-        // Freeze AF only (manual lens distance) — AE/AWB/antibanding stay on
-        // the manufacturer's own continuous 3A. Locking AE/AWB across a whole
-        // sequence sounds more "consistent" but actually freezes whatever
-        // exposure duration happened to be converged upon at that instant; if
-        // the light source flickers (mains-powered lighting), that frozen
-        // duration is not guaranteed flicker-safe and stays wrong for every
-        // subsequent frame. Per-frame reconvergence uses the OEM's own tuned
-        // antibanding logic instead, and for a static scene under stable
-        // (if flickering) light it lands on essentially the same exposure
-        // each time anyway.
+        // Freeze the lens first, then let AE re-converge through that focus
+        // before freezing it too. Order matters: an exposure converged while
+        // the lens was still moving describes a different scene brightness.
         builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
         builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, lens)
         sess.setRepeatingRequest(builder.build(), null, handler)
         delay(AF_SETTLE_DELAY_MS)
+        lockExposure(sess, chars, builder)
         return true
+    }
+
+    /**
+     * Freeze AE onto an exposure that is flicker-safe by construction.
+     *
+     * Leaving AE running was the older choice here, and its reasoning was
+     * sound: freezing whatever duration AE happened to land on is *not*
+     * flicker-safe, and under mains lighting a wrong frozen duration stays
+     * wrong for every frame after it. The answer is not to leave AE free —
+     * that re-converges exposure and ISO between frames, moving both the
+     * brightness and the noise level of every image the engine correlates —
+     * but to round the frozen exposure up to a whole number of mains
+     * half-cycles, so it integrates the same total light whenever the shutter
+     * opens. [ExposurePlan] does that arithmetic.
+     *
+     * Every failure path here leaves AE running, which is exactly the old
+     * behaviour: a run with a moving exposure is far better than no run.
+     */
+    @Suppress("ReturnCount") // AE that never converged, then a device with no lock to take
+    private suspend fun lockExposure(
+        sess: CameraCaptureSession,
+        chars: CameraCharacteristics,
+        builder: CaptureRequest.Builder,
+    ) {
+        val converged = awaitAeConvergence(sess, builder)
+        if (converged == null) {
+            Timber.w("AE did not converge; leaving auto exposure running")
+            return
+        }
+        val plan = ExposurePlan.plan(converged, sensorLimitsOf(chars))
+        if (plan.lock == ExposurePlan.Lock.AUTO) {
+            Timber.i("exposure stays on auto: device offers neither manual sensor nor AE lock")
+            return
+        }
+        applyExposure(builder, plan)
+        val applied = runCatching { sess.setRepeatingRequest(builder.build(), null, handler) }
+            .onFailure { Timber.w(it, "exposure lock rejected; reverting to auto exposure") }
+            .isSuccess
+        if (!applied) {
+            // The builder was already mutated, so it has to be put back before
+            // it becomes the repeating request or feeds a still.
+            revertExposure(builder)
+            runCatching { sess.setRepeatingRequest(builder.build(), null, handler) }
+            return
+        }
+        exposurePlan = plan
+        Timber.i(
+            "exposure locked: %s %dus iso=%d mains=%s flickerSafe=%b maxFps=%.1f",
+            plan.lock,
+            plan.exposureNs / NANOS_PER_MICRO,
+            plan.sensitivity,
+            plan.mains,
+            plan.flickerSafe,
+            plan.maxFps,
+        )
+        delay(AE_SETTLE_DELAY_MS)
+    }
+
+    /**
+     * Wait for AE to settle and report what it settled on.
+     *
+     * Returns null rather than a half-converged guess when the device *does*
+     * report `CONTROL_AE_STATE` and never reaches converged — freezing an
+     * exposure AE was still walking towards would be worse than leaving it
+     * free. When the device never reports the state at all, the last observed
+     * exposure is used instead, since otherwise those devices could never lock.
+     */
+    private suspend fun awaitAeConvergence(
+        sess: CameraCaptureSession,
+        builder: CaptureRequest.Builder,
+    ): ExposurePlan.Converged? {
+        val settled = CompletableDeferred<ExposurePlan.Converged>()
+        var last: ExposurePlan.Converged? = null
+        var sawState = false
+        val issued = runCatching {
+            sess.setRepeatingRequest(
+                builder.build(),
+                object : CameraCaptureSession.CaptureCallback() {
+                    override fun onCaptureCompleted(
+                        session: CameraCaptureSession,
+                        request: CaptureRequest,
+                        result: TotalCaptureResult,
+                    ) {
+                        val exposure = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: return
+                        val iso = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: return
+                        val sample = ExposurePlan.Converged(
+                            exposureNs = exposure,
+                            sensitivity = iso,
+                            mains = ExposurePlan.mainsFromAntibanding(
+                                result.get(CaptureResult.CONTROL_AE_ANTIBANDING_MODE),
+                            ),
+                        )
+                        last = sample
+                        val state = result.get(CaptureResult.CONTROL_AE_STATE)
+                        if (state != null) sawState = true
+                        if (state == CaptureResult.CONTROL_AE_STATE_CONVERGED ||
+                            state == CaptureResult.CONTROL_AE_STATE_LOCKED ||
+                            state == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED
+                        ) {
+                            if (!settled.isCompleted) settled.complete(sample)
+                        }
+                    }
+                },
+                handler,
+            )
+        }.onFailure { Timber.w(it, "awaitAeConvergence: setRepeatingRequest threw") }.isSuccess
+        if (!issued) return null
+        val converged = withTimeoutOrNull(AE_TIMEOUT_MS) { settled.await() }
+        return converged ?: last.takeUnless { sawState }
+    }
+
+    /** The device's own exposure and ISO limits; no hardcoded values anywhere. */
+    private fun sensorLimitsOf(chars: CameraCharacteristics): ExposurePlan.SensorLimits {
+        val exposure = chars.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+        val iso = chars.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
+        val caps = chars.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
+            ?.toSet().orEmpty()
+        return ExposurePlan.SensorLimits(
+            minExposureNs = exposure?.lower ?: 0L,
+            maxExposureNs = exposure?.upper ?: Long.MAX_VALUE,
+            minSensitivity = iso?.lower ?: 1,
+            maxSensitivity = iso?.upper ?: Int.MAX_VALUE,
+            // A device advertising MANUAL_SENSOR without publishing its ranges
+            // cannot be given an exposure: there is nothing to clamp against.
+            manualSensor = CameraCharacteristics
+                .REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR in caps &&
+                exposure != null && iso != null,
+            aeLockAvailable = chars.get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true,
+        )
+    }
+
+    private fun applyExposure(builder: CaptureRequest.Builder, plan: ExposurePlan.Result) {
+        when (plan.lock) {
+            ExposurePlan.Lock.MANUAL -> {
+                builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+                builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, plan.exposureNs)
+                builder.set(CaptureRequest.SENSOR_SENSITIVITY, plan.sensitivity)
+                // Pinned so the sensor cannot stretch the gap between frames and
+                // reintroduce the variability the lock just removed.
+                builder.set(CaptureRequest.SENSOR_FRAME_DURATION, plan.frameDurationNs)
+            }
+
+            ExposurePlan.Lock.AE_LOCK -> builder.set(CaptureRequest.CONTROL_AE_LOCK, true)
+            ExposurePlan.Lock.AUTO -> Unit
+        }
+    }
+
+    private fun revertExposure(builder: CaptureRequest.Builder) {
+        builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+        builder.set(CaptureRequest.CONTROL_AE_LOCK, false)
     }
 
     private fun applyLockedControls(builder: CaptureRequest.Builder, lens: Float) {
@@ -669,6 +826,11 @@ class LockedCameraSession(
         val chars = characteristics
         val plan = ispPlan
         if (chars != null && plan != null) CaptureIspApply.apply(builder, plan, chars)
+        // Same reason: the stills template resets AE to the vendor's own, so
+        // the frozen exposure has to be written onto every still as well, or
+        // the run would be captured at a different exposure from the burst the
+        // noise floor was measured on.
+        exposurePlan?.let { applyExposure(builder, it) }
         // No JPEG_QUALITY: the still path captures YUV_420_888 and encodes PNG
         // (lossless) instead of the hardware JPEG encoder.
     }
@@ -700,6 +862,9 @@ class LockedCameraSession(
 
     companion object {
         private const val AF_TIMEOUT_MS = 4_000L
+        private const val AE_TIMEOUT_MS = 3_000L
+        private const val AE_SETTLE_DELAY_MS = 200L
+        private const val NANOS_PER_MICRO = 1_000L
         private const val CAPTURE_TIMEOUT_FACTOR = 6L
         private const val CAPTURE_TIMEOUT_MIN_MS = 8_000L
         private const val CAPTURE_TIMEOUT_MAX_MS = 60_000L
