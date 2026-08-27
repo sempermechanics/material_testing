@@ -10,7 +10,7 @@ that site. If a heading moves, update the matching `url_faq_*` string.
 
 | From | Trigger | String / surface | FAQ URL resource | Guessed heading / anchor |
 |------|---------|------------------|------------------|--------------------------|
-| Wizard step 1 | JPEG accuracy chip | `jpeg_accuracy_warning` + chip FAQ | `url_faq_jpeg` | `#jpeg-warning` |
+| Wizard step 1 | Lossy-format accuracy chip (any non-lossless frame or reference, not only JPEG) | `lossy_format_warning_fmt` + chip FAQ | `url_faq_jpeg` | `#jpeg-warning` |
 | Wizard step 1 | Low speckle / SSSIG chip | `texture_low_fmt` + chip FAQ | `url_faq_speckle` | `#speckle-contrast` |
 | Wizard step 2 | Frame-size mismatch chip | `frames_size_mismatch_fmt` + chip FAQ | `url_faq_frame_size` | `#frame-size-mismatch` |
 | Wizard step 2 | ROI smaller than subset | `roi_too_small` snackbar **Why?** | `url_faq_roi_too_small` | `#roi-too-small` |

@@ -278,13 +278,20 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
 ```
 3b. Record — CaptureSetupActivity → CaptureSessionActivity
     ├── fps (1..device max), duration, resolution (Camera2 catalogue)
-    ├── mode line: stills (locked JPEG) vs one video then extract
+    ├── mode line: stills (locked, lossless PNG) vs one video then extract,
+    │   both at the highest quality the device can deliver
     ├── RAM ≥ 1.5× and storage ≥ 1.25× before the test shot
+    ├── CAMERA permission requested up front — ACTION_IMAGE_CAPTURE rejects a
+    │   manifest-declared-but-ungranted CAMERA permission on some Android 11+
+    │   devices, so this can no longer wait until after the test shot
     ├── Test shot via manufacturer Camera app (ACTION_IMAGE_CAPTURE)
-    ├── SSSIG / low-texture gate (hard fail → Retry)
-    ├── Re-check budget from the real JPEG; request CAMERA
+    ├── ROI editor on the test shot (contrast check region)
+    ├── SSSIG / low-texture gate inside that ROI (hard fail → reselect / Retry)
+    ├── Re-check budget from the real JPEG, then a one-time PNG-encode timing
+    │   calibration that can revise the stills/video decision and fps
     ├── Lock AF (+ AE) on the test-shot focus point
-    ├── Timed stills or locked video → extract PNGs
+    ├── Timed stills (PNG, converted from the sensor's own YUV output — no
+    │   JPEG step) or locked video (max device encoder bitrate) → extract PNGs
     └── Hand-off: PICKED_REF_URI + PICKED_DEF_URIS → analysis wizard
 ```
 
@@ -292,12 +299,16 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
 |---|---|---|
 | [ ] 3b.1 | From Home FAB → **Record** | Setup screen with fps, duration, resolution, and a mode summary |
 | [ ] 3b.2 | Choose a plan that exceeds free RAM or storage | Blocking dialog; no test shot |
-| [ ] 3b.3 | Continue with a valid plan | Phone Camera app opens for one test shot |
+| [ ] 3b.3 | Continue with a valid plan | CAMERA permission prompt (first run), then the phone Camera app opens for one test shot |
 | [ ] 3b.4 | Cancel the test shot or save nothing | Retry / Cancel |
-| [ ] 3b.5 | Test shot with weak / blank pattern | Speckle-fail dialog with FAQ **Why?** |
-| [ ] 3b.6 | Good test shot | Focus locks; **Start recording** appears |
-| [ ] 3b.7 | Complete a stills run | Wizard opens with reference + deformed frames filled |
-| [ ] 3b.8 | Complete a video-mode run | Frames extracted; wizard opens the same way |
+| [ ] 3b.4b | Complete the test shot | ROI editor opens on that photo |
+| [ ] 3b.4c | Cancel the ROI editor without saving | Prompt to select an area again, retake, or cancel |
+| [ ] 3b.5 | Save an ROI on a weak / blank pattern | Speckle-fail dialog with FAQ **Why?**; can reselect area or retake |
+| [ ] 3b.5b | Save an ROI that is too small | Too-small dialog; select a larger area |
+| [ ] 3b.6 | Good test shot + ROI with enough contrast | Focus locks; **Start recording** appears |
+| [ ] 3b.6b | Cover the lens so AF never locks (real device) | AF-fail dialog, Retry test shot — never starts on a floating lens |
+| [ ] 3b.7 | Complete a stills run | Wizard opens with reference (vendor JPEG) + deformed frames (lossless PNG) filled |
+| [ ] 3b.8 | Complete a video-mode run | Frames extracted (PNG); wizard opens the same way |
 
 ---
 

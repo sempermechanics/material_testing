@@ -65,7 +65,7 @@ Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`
 | `ui/settings/` | `SettingsActivity` + `Settings*Section` |
 | `ui/home/` | Session list |
 | `ui/common/` | Insets, `MediaPickerSheet`, `CrispToast`, `TransferBannerController` |
-| `ui/capture/` | Home Record: setup, test shot, AF lock, timed capture |
+| `ui/capture/` | Home Record: setup, test shot, contrast ROI, AF lock, timed capture |
 | `data/` | Auth, session store, upload/restore/download workers, storage budget |
 | `analytics/` | `SemperAnalytics` — consent-gated events, same flag as Crashlytics |
 | `report/` | PDF / CSV / `VisualizationEngine` |
@@ -130,11 +130,58 @@ Kover `minBound` floor is 15. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-08-24)
+## Current state (2026-08-27)
 
 Home **+** expands to **Import** (existing `MediaPickerSheet`) or **Record**
-(`ui/capture/`: setup → Camera-app test shot → SSSIG gate → hardware AF lock →
-timed stills or video → wizard via `PICKED_REF_URI` + `PICKED_DEF_URIS`).
+(`ui/capture/`: setup → Camera-app test shot → contrast ROI → SSSIG gate →
+hardware AF lock → timed stills → wizard via `PICKED_REF_URI` +
+`PICKED_DEF_URIS`). Stills only — the video path is gone. Frames are lossless
+grayscale PNG written straight from the locked session's `YUV_420_888` luma
+plane (`GrayPngEncoder`), never JPEG; the reference frame stays whatever the
+vendor Camera app wrote for the test shot, resized to match by
+`CaptureFrameSizeMatcher`.
+
+The offered frame rates are a short list, not a free slider: `CaptureFrameCost`
+takes the larger of the Camera2 sensor read-out floor
+(`CameraCapabilities.sensorFloorMs`) and a real on-device PNG-encode timing
+(`CaptureCalibration`, re-measured once after the test shot), and
+`CapturePlanOptions` builds the chips from it with `ASSURANCE_MARGIN` on top so
+every rate shown is one the run will actually deliver. `StillSequenceRunner`
+schedules each frame from t0 rather than from its predecessor, so a slow frame
+cannot walk the run off the end of the test window, and `CaptureWorkspace`
+clears the previous run's frames so a shorter run cannot inherit the tail of a
+longer one.
+
+Import measures a frame the way the engine will see it: `ExifOrientedSize`
+applies the EXIF orientation tag to `BitmapFactory`'s bounds, because OpenCV's
+`imdecode` rotates and `BitmapFactory` does not. Without it one portrait photo
+picked as both reference and deformed frame reported a size mismatch against
+itself (4080×3072 vs 3072×4080).
+
+A sweep now runs its whole plan. `ConvergenceGate` is the batch path only:
+a batch's consecutive solves are successive frames, so decorrelation means
+every later frame is worse, but a sweep's are parameter combinations on one
+frame pair, ordered smallest subset first — exactly the ones most likely to
+under-converge. The gate was killing sweeps in their opening combinations.
+
+The wizard's inline format warning names whichever formats in the set are not
+lossless (`LossyFormatCheck`), reference included, instead of only saying
+"JPEG".
+
+**Security pass on this branch.** `_emails_conflict` fails closed, so a token
+with no email cannot adopt a device-bound account, and adoption additionally
+requires `email_verified`. First-sign-in profile creation uses `create()`
+rather than `set()`, so a launch race cannot reset an approved profile to
+PENDING. The device signature covers the query string when a request has one.
+`AuthActivity` checks arriving auth links against `AUTH_HOST` before handing an
+`oobCode` to Firebase — the activity is exported, so an explicit intent
+bypasses the App Link filter. The ROI mask read and the RAW reference copy in
+`StaticAnalysisActivity` moved off the main thread.
+
+The Demo/Professional plan and license-key work that was mixed into this
+working tree belongs to **`feat/license-demo-pro`** and was moved there: no
+`plan`, entitlement flags, or license fields are part of the user account
+definition on this branch.
 
 `origin/main` includes PRs #85–#96 (FAQ error map). Open follow-up: wizard
 step/overlap + step-2/3 reorder ([#97](https://github.com/semperdic/semperdic-app/pull/97)).

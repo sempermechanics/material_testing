@@ -86,8 +86,8 @@ Send crash reports**.
 
 Home lists your analyses. Tap one to open it. Long-press for select, rename,
 delete. Pull down to sync. **+** expands to **Import** (pick existing photos or
-video) or **Record** (test shot in the phone Camera app, then a timed capture
-with focus locked from that shot).
+video) or **Record** (test shot in the phone Camera app, draw the area to
+check for contrast, then a timed capture with focus locked from that shot).
 
 ---
 
