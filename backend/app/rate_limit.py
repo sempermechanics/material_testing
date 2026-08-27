@@ -78,3 +78,6 @@ admin_bucket = TokenBucket(rate_per_sec=5.0, burst=20.0)
 license_activate_bucket = TokenBucket(rate_per_sec=0.2, burst=3.0)
 # Per-session manifest/resume listings each query up to _LIST_SOFT_LIMIT docs.
 listing_bucket = TokenBucket(rate_per_sec=5.0, burst=20.0)
+# Campus IT self-service seat management. Trusted (adminEmails-gated) but not
+# device-attested, so kept tighter than the Semper-staff admin_bucket.
+campus_bucket = TokenBucket(rate_per_sec=1.0, burst=10.0)

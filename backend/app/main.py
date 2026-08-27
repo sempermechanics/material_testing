@@ -11,6 +11,7 @@ from .config import settings
 from .routers import (
     account,
     admin,
+    campus,
     devices,
     files,
     health,
@@ -184,6 +185,7 @@ app.include_router(sessions.router)
 app.include_router(files.router)
 app.include_router(provision_tasks.router)
 app.include_router(admin.router)
+app.include_router(campus.router)
 
 # Re-exports so existing tests keep `from app.main import …`.
 __all__ = [
