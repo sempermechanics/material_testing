@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.view.TextureView
 import android.view.WindowManager
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -739,6 +740,33 @@ class CaptureSessionActivity : AppCompatActivity() {
     }
 
     /**
+     * Put a second copy of the frames somewhere the user already knows how to
+     * find, then say in one line what happened.
+     *
+     * Before the size match rather than after, so what lands in the gallery is
+     * what the camera produced — the match resamples frames to the reference,
+     * which is right for the engine and wrong for an archive.
+     *
+     * Never blocks and never asks. The frames are already safe in app storage,
+     * so a copy that could not be made is worth a sentence and nothing more.
+     */
+    private suspend fun saveToGallery(reference: File) {
+        tvStatus.setText(R.string.capture_status_saving_gallery)
+        tvProgress.text = ""
+        val files = listOf(reference) + deformedPaths.map { File(it) }
+        when (val outcome = CaptureGallerySave.save(this, files)) {
+            is CaptureGallerySave.Outcome.Saved ->
+                Timber.i("gallery: saved %d of %d", outcome.saved, outcome.total)
+
+            is CaptureGallerySave.Outcome.NoRoom ->
+                Toast.makeText(this, R.string.capture_gallery_no_room, Toast.LENGTH_LONG).show()
+
+            CaptureGallerySave.Outcome.Unsupported ->
+                Timber.i("gallery: not supported on API %d", android.os.Build.VERSION.SDK_INT)
+        }
+    }
+
+    /**
      * Why a run ended short. Nothing here cancelled it unless the user left,
      * so name which of the three actually happened rather than blaming a
      * mistake they did not make.
@@ -759,6 +787,7 @@ class CaptureSessionActivity : AppCompatActivity() {
             finish()
             return
         }
+        saveToGallery(File(ref))
         // Why this has to happen at all, and why it is usually a no-op:
         // see [CaptureFrameSizeMatcher].
         tvStatus.setText(R.string.capture_status_matching_sizes)

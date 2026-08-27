@@ -652,6 +652,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_isp_warn_zoom">Zoom cannot be pinned — the phone may resample the frame between shots.</string>
     <string name="capture_isp_warn_awb">White balance will not lock — grey levels may drift between frames.</string>
     <string name="capture_isp_warn_more">%1$s Plus %2$d more.</string>
+    <!-- Measured, not asked for: the phone reports noise reduction as switched
+         off and smooths the frames anyway, which no Camera2 key exposes. Shown
+         once after the test shot, and recorded on the report. -->
+    <string name="capture_status_saving_gallery">Saving frames to your gallery…</string>
+    <string name="capture_gallery_no_room">Not enough space to copy the frames to your gallery — they are still saved in the app.</string>
     <string name="capture_denoise_warn">Phone is smoothing frames despite the settings — fine detail is lost, noise looks lower than it is.</string>
     <string name="capture_speckle_check_timeout">Checking the test shot took too long. Retake it.</string>
     <string name="coach_analysis_ref">The reference image can be changed at any time.</string>
