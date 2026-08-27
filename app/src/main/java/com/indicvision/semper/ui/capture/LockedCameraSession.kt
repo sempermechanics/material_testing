@@ -789,7 +789,8 @@ class LockedCameraSession(
             // cannot be given an exposure: there is nothing to clamp against.
             manualSensor = CameraCharacteristics
                 .REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR in caps &&
-                exposure != null && iso != null,
+                exposure != null &&
+                iso != null,
             aeLockAvailable = chars.get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true,
         )
     }
