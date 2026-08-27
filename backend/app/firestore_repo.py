@@ -3,7 +3,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from google.api_core.exceptions import Aborted, NotFound
+from google.api_core.exceptions import Aborted, AlreadyExists, NotFound
 from google.cloud import firestore
 
 from . import notify
@@ -114,9 +114,17 @@ class DeviceInUseError(Exception):
 
 
 def _emails_conflict(left, right) -> bool:
+    """True unless both sides name the same address.
+
+    Fail closed. This gates adopting a device-bound account, so a caller that
+    presents no address at all is a conflict, not a match: the old fail-open
+    form ("either side blank — no conflict") let any sign-in without an email
+    claim an account by device id alone. Two address-less identities still
+    match, which is the only case that form got right.
+    """
     a = (left or "").strip().lower()
     b = (right or "").strip().lower()
-    return bool(a and b and a != b)
+    return a != b
 
 
 def _load_user(uid: str):
@@ -214,7 +222,11 @@ def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
 
     bound = _user_for_device(device_id)
     if bound:
-        if _emails_conflict(bound.get("email"), claims.get("email")):
+        # Adopting a bound account hands over its sessions and entitlement, so
+        # the address has to be proven rather than asserted: any provider can
+        # mint a token carrying an address it never checked.
+        unproven = bool(bound.get("email")) and not claims.get("email_verified")
+        if unproven or _emails_conflict(bound.get("email"), claims.get("email")):
             raise DeviceInUseError()
         _link_auth_uid(bound["uid"], uid)
         return _touch_existing(bound, claims, device_id)
@@ -235,13 +247,24 @@ def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
         "lastSeenAt": firestore.SERVER_TIMESTAMP,
         "schemaVersion": SCHEMA_VERSION,
     }
-    ref.set(data)
+    try:
+        # create(), not set(): two first-ever requests from one account race
+        # here (the app fires /v1/me and /v1/config back to back on launch),
+        # and an unconditional set let the loser overwrite the winner — resetting
+        # an already-approved profile to PENDING and mailing support twice.
+        ref.create(data)
+    except AlreadyExists:
+        existing = _load_user(uid)
+        if existing:
+            return _touch_existing(existing, claims, device_id)
+        raise
     _link_auth_uid(uid, uid)
     # Only ever reached once per account — every later sign-in takes the
     # snap.exists / auth_links branch above — so support gets exactly one mail per user.
+    created = {**data, "uid": uid}
     if data["access_status"] == "PENDING":
         notify.access_request(uid, data["email"], data["displayName"], provider)
-    return {**data, "uid": uid}
+    return created
 
 
 def list_users(

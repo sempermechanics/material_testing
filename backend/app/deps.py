@@ -20,7 +20,8 @@ from . import observability as obs
 log = logging.getLogger("indic.auth")
 
 _DEV_USER = {"uid": "dev-user", "email": "dev@local", "role": "admin",
-             "access_status": "APPROVED", "activeDeviceId": "dev-device"}
+             "access_status": "APPROVED", "activeDeviceId": "dev-device",
+             "emailVerified": True, "plan": "professional"}
 _DEV_DEVICE = {"deviceId": "dev-device", "uid": "dev-user", "status": "ACTIVE"}
 
 
@@ -128,7 +129,15 @@ async def verified_device(
         raise HTTPException(401, "nonce_invalid_or_replayed")
 
     body = await request.body()
-    msg = (x_nonce + request.method + request.url.path).encode() + hashlib.sha256(body).digest()
+    # The query string is inside the signature whenever there is one, so a
+    # signed request cannot be replayed against the same path with the
+    # parameters swapped. Appended only when non-empty, which keeps the message
+    # byte-identical for every route today (none take query parameters) — so
+    # this cannot desynchronise from a client build that has not shipped yet.
+    target = request.url.path
+    if request.url.query:
+        target = target + "?" + request.url.query
+    msg = (x_nonce + request.method + target).encode() + hashlib.sha256(body).digest()
     try:
         pub = load_pem_public_key(dev["publicKeyPem"].encode())
         signature = base64.b64decode(x_signature, validate=True)

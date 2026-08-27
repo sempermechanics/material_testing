@@ -186,7 +186,7 @@ sequenceDiagram
     A->>R: POST /v1/challenge (ID token) 
     R->>F: store nonce (TTL 120s) bound to uid+deviceId
     R-->>A: {nonce}
-    A->>A: sig = Keystore.sign(nonce || method || path || bodySHA256)
+    A->>A: sig = Keystore.sign(nonce || method || path[?query] || bodySHA256)
     A->>R: POST /v1/sessions ... headers: X-Device-Id, X-Nonce, X-Signature
     R->>F: load devices/{deviceId}.publicKeyPem; verify sig; consume nonce
     R-->>A: 200 (or 401 bad_signature / 409 nonce_replay)
@@ -210,6 +210,14 @@ record rather than leaving it `ACTIVE` and unreachable:
 
 Admin revoke itself requires a `verified_device` caller — an admin cannot revoke
 from an unattested session.
+
+**What the signature covers.** `nonce || METHOD || path || SHA-256(body)`, with
+`?` + the query string appended to the path when the request has one. No route
+takes query parameters today, so appending only when non-empty leaves the
+message byte-identical for every current call — the client and
+`backend/app/deps.py` can therefore ship independently, and a future
+query-bearing route is covered without a flag day. A signed request cannot be
+replayed against its own path with the parameters swapped.
 
 **Latency note.** A per-request challenge round-trip doubles RTT. For hot paths
 you may fold it into a **signed-timestamp assertion** (client signs
