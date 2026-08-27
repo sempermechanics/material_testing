@@ -14,11 +14,14 @@ object CaptureBudget {
     /** Bytes per decoded ARGB pixel. */
     const val BYTES_PER_PIXEL = 4
 
-    /** Conservative still JPEG estimate before a real test shot exists. */
+    /**
+     * Conservative lossless-PNG estimate before a real frame exists. Speckle
+     * texture is high-frequency noise-like content that DEFLATE compresses
+     * poorly, so this assumes no compression rather than a JPEG-like ratio.
+     * Stills are single-channel 8-bit gray (see [GrayPngEncoder]), so that
+     * worst case is one byte per pixel, not one per colour channel.
+     */
     const val STILL_BYTES_PER_PIXEL = 1L
-
-    /** Rough H.264 bitrate floor for pre-shot video estimates (bits/s). */
-    const val VIDEO_BITRATE_BPS = 8_000_000L
 
     data class Estimate(
         val ramRequiredBytes: Long,
@@ -54,18 +57,6 @@ object CaptureBudget {
         return per * frames
     }
 
-    fun storageForVideo(
-        width: Int,
-        height: Int,
-        durationSec: Int,
-        extractFrameCount: Int,
-        bytesPerExtractedFrame: Long? = null,
-    ): Long {
-        val videoBytes = (VIDEO_BITRATE_BPS / 8L) * durationSec.coerceAtLeast(1).toLong()
-        val pngBudget = storageForStills(width, height, extractFrameCount, bytesPerExtractedFrame)
-        return videoBytes + pngBudget
-    }
-
     fun estimateStills(
         width: Int,
         height: Int,
@@ -74,23 +65,6 @@ object CaptureBudget {
     ): Estimate = Estimate(
         ramRequiredBytes = ramRequired(width, height),
         storageRequiredBytes = storageForStills(width, height, frameCount, bytesPerFrame),
-    )
-
-    fun estimateVideo(
-        width: Int,
-        height: Int,
-        durationSec: Int,
-        extractFrameCount: Int,
-        bytesPerExtractedFrame: Long? = null,
-    ): Estimate = Estimate(
-        ramRequiredBytes = ramRequired(width, height),
-        storageRequiredBytes = storageForVideo(
-            width,
-            height,
-            durationSec,
-            extractFrameCount,
-            bytesPerExtractedFrame,
-        ),
     )
 
     fun check(

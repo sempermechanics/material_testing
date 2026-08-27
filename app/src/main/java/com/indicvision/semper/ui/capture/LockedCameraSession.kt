@@ -13,16 +13,21 @@ import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
 import android.media.ImageReader
-import android.media.MediaRecorder
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.view.Surface
+import androidx.core.content.ContextCompat
+import com.indicvision.semper.BuildConfig
+import com.indicvision.semper.data.DeviceEnv
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
@@ -34,6 +39,7 @@ import kotlin.coroutines.resumeWithException
  * Camera2 session used after a passing test shot: AF once on the focus point,
  * lock lens + AE, then take timed stills or one video.
  */
+@Suppress("TooManyFunctions")
 class LockedCameraSession(
     private val context: Context,
     private val cameraId: String,
@@ -48,8 +54,70 @@ class LockedCameraSession(
     private var handler: Handler? = null
 
     private var lockedLensDistance: Float? = null
-    private var aeLocked = false
     private val closed = AtomicBoolean(false)
+
+    /**
+     * Clockwise rotation applied to every frame this session writes, so the
+     * PNGs come out the way the specimen was actually facing rather than the
+     * way the sensor is mounted. Resolved once at open — it depends only on
+     * the camera and the display, neither of which moves while the capture
+     * screen is locked to portrait. See [CaptureOrientation].
+     */
+    var frameRotationDegrees: Int = 0
+        private set
+
+    /**
+     * Size of the preview buffer, in sensor orientation. The activity needs it
+     * to letterbox the preview to the captured field of view — the preview is
+     * the framing surface, so it must show that field of view and no other.
+     */
+    var previewBufferSize: CameraCapabilities.Resolution = jpegSize
+        private set
+
+    /**
+     * Set once the platform reports the device gone (onDisconnected/onError)
+     * after it was already open. Every subsequent captureStill() would just
+     * throw "CameraDevice was already closed" — without this flag,
+     * StillSequenceRunner's "retry until success" loop spins on that
+     * exception as fast as the CPU allows, forever, with no way out and no
+     * signal to the user. [isUsable] lets the caller stop the sequence and
+     * show the existing retry/cancel dialog instead.
+     */
+    private val deviceLost = AtomicBoolean(false)
+
+    /** Guards [logGeometryOnce]; the answer cannot change within a session. */
+    private val geometryLogged = AtomicBoolean(false)
+
+    /**
+     * The still currently being waited on, or null when nothing is.
+     *
+     * A capture that times out leaves its frame in flight: the HAL can deliver
+     * it seconds later, after this frame has already been given up on. With no
+     * claim to check against, that late image was written to whichever file the
+     * listener had closed over and reported as a fresh capture, so a run could
+     * end holding a frame that was never taken when its filename says.
+     *
+     * Clearing the claim on timeout makes the arrival discardable. It does not
+     * close the window entirely — an image that lands while the *next* capture
+     * is outstanding is still claimed by it — but that is deliberate: telling
+     * the two apart needs per-frame timestamp matching, and guessing wrong
+     * there discards good frames and fails whole runs, which is far worse than
+     * one frame carrying an older exposure.
+     */
+    @Volatile
+    private var pendingStill: PendingStill? = null
+
+    private class PendingStill(val file: File, val done: CompletableDeferred<Boolean>)
+
+    /** False once the device is known gone or [close] has been called. */
+    val isUsable: Boolean get() = !closed.get() && !deviceLost.get()
+
+    /**
+     * True when the camera itself went away — disconnected or errored — as
+     * opposed to the caller closing the session. Lets the UI say which of the
+     * two happened instead of blaming the user for a cancel they did not make.
+     */
+    val deviceFailed: Boolean get() = deviceLost.get()
 
     @SuppressLint("MissingPermission")
     suspend fun openAndLock(previewSurfaceTexture: SurfaceTexture?): Boolean =
@@ -57,32 +125,103 @@ class LockedCameraSession(
             if (closed.get()) return@withContext false
             startThread()
             val mgr = context.getSystemService(CameraManager::class.java) ?: return@withContext false
+            resolveOrientation(mgr)
             device = openDevice(mgr, cameraId)
+            // YUV_420_888, not JPEG: the still path writes this (the ISP's own
+            // demosaiced/tuned output, pre-JPEG-compression) to PNG so captured
+            // deformed frames are genuinely lossless. See [captureStill].
             val reader = ImageReader.newInstance(
                 jpegSize.width,
                 jpegSize.height,
-                ImageFormat.JPEG,
-                /* maxImages = */ 2,
+                ImageFormat.YUV_420_888,
+                /* maxImages = */
+                2,
             )
             imageReader = reader
 
             val surfaces = mutableListOf<Surface>(reader.surface)
             if (previewSurfaceTexture != null) {
-                previewSurfaceTexture.setDefaultBufferSize(
-                    jpegSize.width.coerceAtMost(1280),
-                    jpegSize.height.coerceAtMost(720),
-                )
+                // Not the capture size clamped per-axis: that changes the shape
+                // of the frame, and a preview shaped differently from the
+                // capture shows the user a field of view they will not get.
+                val previewSize = CameraCapabilities.query(context)
+                    .previewSizeFor(jpegSize, PREVIEW_MAX_LONG_EDGE)
+                previewBufferSize = previewSize
+                previewSurfaceTexture.setDefaultBufferSize(previewSize.width, previewSize.height)
                 val preview = Surface(previewSurfaceTexture)
                 previewSurface = preview
                 surfaces.add(preview)
             }
 
-            session = createSession(device!!, surfaces)
+            session = createSessionWithRetry(device!!, surfaces)
             lockFocusAndExposure()
         }
 
     /**
-     * Capture one JPEG to [file]. Returns true when the file is non-empty.
+     * Writes one acquired frame's luma plane to [file], turned upright.
+     *
+     * The rotation is resolved once per session ([resolveOrientation]) rather
+     * than per frame: it cannot change while the capture screen is up, and a
+     * sequence whose frames disagreed about which way was up would be useless
+     * for correlation.
+     */
+    private fun writeStill(image: android.media.Image, file: File) {
+        val plane = image.planes[0]
+        val luma = ByteArray(plane.buffer.remaining()).also { buf -> plane.buffer.get(buf) }
+        FileOutputStream(file).use { out ->
+            GrayPngEncoder.encode(
+                out,
+                GrayPngEncoder.Luma(
+                    bytes = luma,
+                    width = image.width,
+                    height = image.height,
+                    rowStride = plane.rowStride,
+                    pixelStride = plane.pixelStride,
+                    rotationDegrees = frameRotationDegrees,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Reads the two facts that decide which way is up, once per session.
+     *
+     * Failure here is not worth aborting a capture over: a frame rotated wrong
+     * is still a frame the user can work with, whereas no frames at all is not.
+     */
+    private fun resolveOrientation(mgr: CameraManager) {
+        runCatching {
+            val chars = mgr.getCameraCharacteristics(cameraId)
+            val sensor = chars.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
+            val front = chars.get(CameraCharacteristics.LENS_FACING) ==
+                CameraCharacteristics.LENS_FACING_FRONT
+            val display = ContextCompat.getDisplayOrDefault(context).rotation
+            frameRotationDegrees = CaptureOrientation.uprightRotation(
+                sensorOrientation = sensor,
+                displayRotationDegrees = CaptureOrientation.degreesForSurfaceRotation(display),
+                frontFacing = front,
+            )
+            Timber.d(
+                "frame rotation %d deg (sensor=%d display=%d front=%b)",
+                frameRotationDegrees,
+                sensor,
+                display,
+                front,
+            )
+        }.onFailure { Timber.w(it, "orientation unavailable; writing frames unrotated") }
+    }
+
+    /**
+     * Capture one lossless grayscale PNG still to [file]. Returns true when
+     * the file is non-empty.
+     *
+     * The YUV_420_888 buffer is the ISP's fully-processed output (the same
+     * stage the hardware JPEG encoder would consume), so writing it straight
+     * to PNG keeps every manufacturer optimization while skipping the only
+     * lossy step, JPEG compression. Only the Y (luma) plane is written: it is
+     * already the luminance the DIC engine and the speckle check correlate on
+     * — both weight colour back down to gray — so the chroma planes are cost
+     * without benefit. See [GrayPngEncoder].
      */
     suspend fun captureStill(file: File): Boolean = withContext(Dispatchers.IO) {
         val sess = session ?: return@withContext false
@@ -91,90 +230,150 @@ class LockedCameraSession(
         val lens = lockedLensDistance ?: return@withContext false
 
         val ready = CompletableDeferred<Boolean>()
-        reader.setOnImageAvailableListener({
+        val issuedNs = System.nanoTime()
+        pendingStill = PendingStill(file, ready)
+        reader.setOnImageAvailableListener({ r ->
+            val claim = pendingStill
             runCatching {
-                it.acquireNextImage().use { image ->
-                    val buffer = image.planes[0].buffer
-                    val bytes = ByteArray(buffer.remaining())
-                    buffer.get(bytes)
-                    FileOutputStream(file).use { out -> out.write(bytes) }
+                val frameNs = System.nanoTime()
+                r.acquireNextImage().use { image ->
+                    if (claim == null) {
+                        Timber.w("Discarding a still that arrived after its capture timed out")
+                        return@use
+                    }
+                    writeStill(image, claim.file)
+                    // Sensor latency is a hardware floor; the encode scales with
+                    // the chosen resolution. Keeping the split visible is what
+                    // caught the colour round trip costing ~5.5s a frame.
+                    Timber.d(
+                        "still %dx%d: sensor=%dms encode=%dms",
+                        jpegSize.width,
+                        jpegSize.height,
+                        (frameNs - issuedNs) / NANOS_PER_MILLI,
+                        (System.nanoTime() - frameNs) / NANOS_PER_MILLI,
+                    )
+                    claim.done.complete(claim.file.length() > 0L)
                 }
-                ready.complete(file.exists() && file.length() > 0L)
             }.onFailure {
-                Timber.w(it, "JPEG save failed")
-                ready.complete(false)
+                Timber.w(it, "PNG save failed")
+                claim?.done?.complete(false)
             }
         }, handler)
 
-        val builder = cam.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
-            addTarget(reader.surface)
-            applyLockedControls(this, lens)
+        // A HAL-level fault (e.g. CAMERA_ERROR after the device wedges) makes
+        // createCaptureRequest/capture throw synchronously instead of failing
+        // through a callback. Left uncaught, that crashes the whole app on
+        // what should just be one failed frame.
+        val issued = runCatching {
+            val builder = cam.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
+                addTarget(reader.surface)
+                applyLockedControls(this, lens)
+            }
+            sess.capture(
+                builder.build(),
+                object : CameraCaptureSession.CaptureCallback() {
+                    override fun onCaptureFailed(
+                        session: CameraCaptureSession,
+                        request: CaptureRequest,
+                        failure: CaptureFailure,
+                    ) {
+                        ready.complete(false)
+                    }
+
+                    override fun onCaptureCompleted(
+                        session: CameraCaptureSession,
+                        request: CaptureRequest,
+                        result: TotalCaptureResult,
+                    ) {
+                        logGeometryOnce(result)
+                    }
+                },
+                handler,
+            )
+        }.onFailure { Timber.w(it, "captureStill: capture() threw") }.isSuccess
+        if (!issued) {
+            pendingStill = null
+            return@withContext false
         }
-        sess.capture(
-            builder.build(),
-            object : CameraCaptureSession.CaptureCallback() {
-                override fun onCaptureFailed(
-                    session: CameraCaptureSession,
-                    request: CaptureRequest,
-                    failure: CaptureFailure,
-                ) {
-                    ready.complete(false)
-                }
-            },
-            handler,
-        )
-        ready.await()
+        // Backgrounding the activity (e.g. to start a screen recording from
+        // Quick Settings) can make the platform silently stop delivering
+        // camera callbacks — neither onImageAvailable nor onCaptureFailed
+        // ever fires. Without a bound here that hangs this frame, and the
+        // sequence runner, forever.
+        try {
+            withTimeout(captureTimeoutMs()) { ready.await() }
+        } catch (_: TimeoutCancellationException) {
+            Timber.w("captureStill timed out waiting for camera callback")
+            false
+        } finally {
+            pendingStill = null
+        }
     }
 
     /**
-     * Record a video of [durationSec] seconds to [file] with AF still locked.
+     * One line, once per session, saying how much of the sensor this stream
+     * actually sees.
+     *
+     * A locked still at 3264×2448 was measured covering a centred 91.6% of the
+     * field of view the vendor Camera app's JPEG gets — margins symmetric to
+     * within 2px, rotation 0.01°, so a hand shift cannot explain it. The
+     * candidates (a crop region narrower than the active array, a zoom ratio
+     * above 1, distortion correction trimming the corrected frame, or simply
+     * the requested size not being the widest the stream offers) are all
+     * visible here and nowhere else, so print them rather than guess.
      */
-    suspend fun recordVideo(
-        file: File,
-        durationSec: Int,
-        videoSize: CameraCapabilities.Resolution,
-    ): Boolean = withContext(Dispatchers.IO) {
-        val sess = session
-        val cam = device
-        val lens = lockedLensDistance
-        if (sess == null || cam == null || lens == null) return@withContext false
+    private fun logGeometryOnce(result: TotalCaptureResult) {
+        if (!geometryLogged.compareAndSet(false, true)) return
+        runCatching {
+            val mgr = context.getSystemService(CameraManager::class.java) ?: return
+            val chars = mgr.getCameraCharacteristics(cameraId)
+            val widest = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                ?.getOutputSizes(ImageFormat.YUV_420_888)
+                ?.maxByOrNull { it.width.toLong() * it.height }
+            Timber.i(
+                "stream geometry: requested=%dx%d widestYuv=%s crop=%s active=%s " +
+                    "preCorrection=%s zoom=%s distortion=%s orientation=%s",
+                jpegSize.width,
+                jpegSize.height,
+                widest,
+                result.get(CaptureResult.SCALER_CROP_REGION),
+                chars.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE),
+                chars.get(CameraCharacteristics.SENSOR_INFO_PRE_CORRECTION_ACTIVE_ARRAY_SIZE),
+                zoomRatioOf(result),
+                distortionModeOf(result),
+                chars.get(CameraCharacteristics.SENSOR_ORIENTATION),
+            )
+        }.onFailure { Timber.w(it, "stream geometry unavailable") }
+    }
 
-        val recorder = MediaRecorder()
-        try {
-            recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE)
-            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            recorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-            recorder.setVideoSize(videoSize.width, videoSize.height)
-            recorder.setVideoEncodingBitRate(CaptureBudget.VIDEO_BITRATE_BPS.toInt())
-            recorder.setVideoFrameRate(30)
-            recorder.setOutputFile(file.absolutePath)
-            recorder.prepare()
-            val recorderSurface = recorder.surface
-
-            // Rebuild session with recorder surface (+ optional preview).
-            val surfaces = mutableListOf(recorderSurface)
-            previewSurface?.let { surfaces.add(it) }
-            imageReader?.let { surfaces.add(it.surface) }
-            session?.close()
-            session = createSession(cam, surfaces)
-
-            val builder = cam.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
-                addTarget(recorderSurface)
-                previewSurface?.let { addTarget(it) }
-                applyLockedControls(this, lens)
-            }
-            session!!.setRepeatingRequest(builder.build(), null, handler)
-            recorder.start()
-            kotlinx.coroutines.delay(durationSec.coerceAtLeast(1) * 1000L)
-            runCatching { recorder.stop() }
-            runCatching { recorder.reset() }
-            file.exists() && file.length() > 0L
-        } catch (e: Exception) {
-            Timber.e(e, "Video record failed")
-            false
-        } finally {
-            runCatching { recorder.release() }
+    /** Added in API 30; below that the platform has no zoom ratio to report. */
+    private fun zoomRatioOf(result: TotalCaptureResult): Float? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            result.get(CaptureResult.CONTROL_ZOOM_RATIO)
+        } else {
+            null
         }
+
+    /** Added in API 28. */
+    private fun distortionModeOf(result: TotalCaptureResult): Int? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            result.get(CaptureResult.DISTORTION_CORRECTION_MODE)
+        } else {
+            null
+        }
+
+    /**
+     * A flat timeout cannot serve every device: one still at 108MP on a slow
+     * encoder legitimately takes many seconds, and a fixed 8s ceiling would
+     * fail every frame there while being far too generous on a fast phone at
+     * low resolution. Scale it off this device's measured cost for the
+     * resolution actually in use, with a wide multiplier so only a genuine
+     * hang trips it — never merely slow hardware.
+     */
+    private fun captureTimeoutMs(): Long {
+        val expected = CaptureCalibration.estimateFrameMs(context, jpegSize.width, jpegSize.height)
+        return (expected * CAPTURE_TIMEOUT_FACTOR)
+            .coerceIn(CAPTURE_TIMEOUT_MIN_MS, CAPTURE_TIMEOUT_MAX_MS)
     }
 
     fun close() {
@@ -209,12 +408,20 @@ class LockedCameraSession(
                     }
 
                     override fun onDisconnected(camera: CameraDevice) {
+                        // Fires for the whole device lifetime, not just during
+                        // open — including mid-sequence, well after cont has
+                        // already resumed. Marking deviceLost here is what
+                        // lets captureStill()'s caller notice and stop.
+                        deviceLost.set(true)
                         camera.close()
+                        Timber.w("Camera disconnected")
                         if (cont.isActive) cont.resumeWithException(IllegalStateException("camera disconnected"))
                     }
 
                     override fun onError(camera: CameraDevice, error: Int) {
+                        deviceLost.set(true)
                         camera.close()
+                        Timber.w("Camera error %d", error)
                         if (cont.isActive) {
                             cont.resumeWithException(IllegalStateException("camera error $error"))
                         }
@@ -246,6 +453,47 @@ class LockedCameraSession(
         )
     }
 
+    /**
+     * On some hardware, reopening the camera and configuring a session right
+     * after a previous session on the same device closed (e.g. a
+     * Retry-test-shot cycle) briefly fails configuration even though the
+     * exact same surfaces succeed moments later. One short-backoff retry
+     * avoids surfacing that transient failure as a spurious "could not lock
+     * focus".
+     */
+    private suspend fun createSessionWithRetry(
+        cam: CameraDevice,
+        surfaces: List<Surface>,
+    ): CameraCaptureSession =
+        try {
+            createSession(cam, surfaces)
+        } catch (e: IllegalStateException) {
+            Timber.w(e, "Session configure failed; retrying once after a short delay")
+            delay(SESSION_RETRY_DELAY_MS)
+            createSession(cam, surfaces)
+        }
+
+    /**
+     * The auto-everything request the lock runs before it freezes anything.
+     *
+     * Targets the on-screen preview when there is one; see the note in
+     * [lockFocusAndExposure] on why the still reader must not be a repeating
+     * target unless it is the only surface there is.
+     */
+    private fun buildAfRequest(
+        cam: CameraDevice,
+        reader: ImageReader,
+        chars: CameraCharacteristics,
+    ): CaptureRequest.Builder =
+        cam.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+            addTarget(previewSurface ?: reader.surface)
+            set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+            set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
+            set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+            setAfRegion(this, chars)
+        }
+
+    @Suppress("ReturnCount")
     private suspend fun lockFocusAndExposure(): Boolean {
         val sess = session ?: return false
         val cam = device ?: return false
@@ -253,56 +501,91 @@ class LockedCameraSession(
         val chars = context.getSystemService(CameraManager::class.java)
             ?.getCameraCharacteristics(cameraId) ?: return false
 
-        val builder = cam.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
-            addTarget(reader.surface)
-            previewSurface?.let { addTarget(it) }
-            set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
-            set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
-            set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
-            setAfRegion(this, chars)
+        // The still ImageReader must NOT be a target of this repeating request:
+        // it only has maxImages=2 and is drained solely by the brief listener
+        // captureStill() attaches for each one-shot capture. Feeding it a
+        // continuous stream fills that 2-slot queue almost immediately and
+        // never empties it, which starves the camera HAL of free buffers for
+        // every subsequent request — including the still captures themselves
+        // — and makes the whole session capture nothing forever. Prefer the
+        // on-screen preview surface here; fall back to the reader only in the
+        // rare case no preview surface exists yet, so this request always has
+        // at least one target (zero targets throws).
+        val focused = CompletableDeferred<Float?>()
+        var lastDist: Float? = null
+        // A HAL-level fault can make createCaptureRequest/setRepeatingRequest/
+        // capture throw synchronously (CameraAccessException) instead of
+        // failing through a callback. Treat that the same as a normal AF-lock
+        // failure — return false and let the caller offer Retry — rather than
+        // letting it crash the app.
+        val builder = runCatching {
+            val b = buildAfRequest(cam, reader, chars)
+            sess.setRepeatingRequest(
+                b.build(),
+                object : CameraCaptureSession.CaptureCallback() {
+                    override fun onCaptureCompleted(
+                        session: CameraCaptureSession,
+                        request: CaptureRequest,
+                        result: TotalCaptureResult,
+                    ) {
+                        val state = result.get(CaptureResult.CONTROL_AF_STATE)
+                        val sampleDist = result.get(CaptureResult.LENS_FOCUS_DISTANCE)
+                        if (sampleDist != null) lastDist = sampleDist
+                        if (state == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED ||
+                            state == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED ||
+                            state == CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED
+                        ) {
+                            if (!focused.isCompleted) focused.complete(sampleDist)
+                        }
+                    }
+                },
+                handler,
+            )
+            b.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START)
+            sess.capture(b.build(), null, handler)
+            b.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE)
+            b
+        }.getOrElse {
+            Timber.w(it, "lockFocusAndExposure: initial request(s) threw")
+            return false
         }
 
-        val focused = CompletableDeferred<Float?>()
-        sess.setRepeatingRequest(
-            builder.build(),
-            object : CameraCaptureSession.CaptureCallback() {
-                override fun onCaptureCompleted(
-                    session: CameraCaptureSession,
-                    request: CaptureRequest,
-                    result: TotalCaptureResult,
-                ) {
-                    val state = result.get(CaptureResult.CONTROL_AF_STATE)
-                    if (state == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED ||
-                        state == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED ||
-                        state == CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED
-                    ) {
-                        val dist = result.get(CaptureResult.LENS_FOCUS_DISTANCE)
-                        if (!focused.isCompleted) focused.complete(dist)
-                    }
-                }
-            },
-            handler,
-        )
-
-        // Trigger AF
-        builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START)
-        sess.capture(builder.build(), null, handler)
-        builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE)
-
         val dist = withTimeoutOrNull(AF_TIMEOUT_MS) { focused.await() }
-        if (dist == null) {
+        val allowFallback = BuildConfig.DEBUG && DeviceEnv.isEmulator()
+        val lens = AfLockResolver.resolve(dist, lastDist, allowFallback)
+        if (lens == null) {
+            // Real devices: never start the sequence with a floating lens —
+            // refuse and let CaptureSessionActivity offer Retry test shot.
             Timber.w("AF lock timed out")
             return false
         }
-        lockedLensDistance = dist
+        if (dist == null) {
+            // Emulators/debug only (some HAL stacks stay in ACTIVE_SCAN and
+            // never emit FOCUSED_LOCKED): freeze the last-seen distance and
+            // continue rather than block local testing.
+            Timber.w("AF lock timed out (emulator fallback); using lens=%s", lens)
+            runCatching {
+                builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL)
+                sess.capture(builder.build(), null, handler)
+                builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE)
+            }
+        }
+        lockedLensDistance = lens
 
-        // Lock AE after it settles, then freeze AF (manual lens distance).
+        // Freeze AF only (manual lens distance) — AE/AWB/antibanding stay on
+        // the manufacturer's own continuous 3A. Locking AE/AWB across a whole
+        // sequence sounds more "consistent" but actually freezes whatever
+        // exposure duration happened to be converged upon at that instant; if
+        // the light source flickers (mains-powered lighting), that frozen
+        // duration is not guaranteed flicker-safe and stays wrong for every
+        // subsequent frame. Per-frame reconvergence uses the OEM's own tuned
+        // antibanding logic instead, and for a static scene under stable
+        // (if flickering) light it lands on essentially the same exposure
+        // each time anyway.
         builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
-        builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, dist)
-        builder.set(CaptureRequest.CONTROL_AE_LOCK, true)
+        builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, lens)
         sess.setRepeatingRequest(builder.build(), null, handler)
-        aeLocked = true
-        kotlinx.coroutines.delay(200L)
+        delay(AF_SETTLE_DELAY_MS)
         return true
     }
 
@@ -311,8 +594,8 @@ class LockedCameraSession(
         builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
         builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, lens)
         builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
-        builder.set(CaptureRequest.CONTROL_AE_LOCK, true)
-        builder.set(CaptureRequest.JPEG_QUALITY, 95.toByte())
+        // No JPEG_QUALITY: the still path captures YUV_420_888 and encodes PNG
+        // (lossless) instead of the hardware JPEG encoder.
     }
 
     private fun setAfRegion(
@@ -324,7 +607,7 @@ class LockedCameraSession(
         if (maxRegions <= 0) return
         val cx = (sensor.left + sensor.width() * focus.normX).toInt()
         val cy = (sensor.top + sensor.height() * focus.normY).toInt()
-        val half = (sensor.width() * 0.05f).toInt().coerceAtLeast(50)
+        val half = (sensor.width() * AF_REGION_FRACTION).toInt().coerceAtLeast(AF_REGION_MIN_HALF_PX)
         val left = (cx - half).coerceIn(sensor.left, sensor.right - 1)
         val top = (cy - half).coerceIn(sensor.top, sensor.bottom - 1)
         val right = (cx + half).coerceIn(left + 1, sensor.right)
@@ -340,14 +623,19 @@ class LockedCameraSession(
         builder.set(CaptureRequest.CONTROL_AE_REGIONS, arrayOf(region))
     }
 
-    private suspend fun <T> withTimeoutOrNull(ms: Long, block: suspend () -> T): T? =
-        try {
-            kotlinx.coroutines.withTimeout(ms) { block() }
-        } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
-            null
-        }
-
     companion object {
         private const val AF_TIMEOUT_MS = 4_000L
+        private const val CAPTURE_TIMEOUT_FACTOR = 6L
+        private const val CAPTURE_TIMEOUT_MIN_MS = 8_000L
+        private const val CAPTURE_TIMEOUT_MAX_MS = 60_000L
+        private const val SESSION_RETRY_DELAY_MS = 300L
+
+        /** Preview only has to be legible on a phone screen; anything larger
+         *  costs bandwidth the still stream wants. */
+        private const val PREVIEW_MAX_LONG_EDGE = 1280
+        private const val AF_SETTLE_DELAY_MS = 200L
+        private const val AF_REGION_FRACTION = 0.05f
+        private const val AF_REGION_MIN_HALF_PX = 50
+        private const val NANOS_PER_MILLI = 1_000_000L
     }
 }

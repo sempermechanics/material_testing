@@ -22,7 +22,7 @@ object DicSettings {
      * Compile-time stand-in for the deformed-frame ceiling until cloud config
      * is known. The live ceiling is the caller-supplied `remoteMaxFrames`.
      */
-    const val MAX_MAX_FRAMES = 150
+    const val MAX_MAX_FRAMES = 500
 
     private const val PREFS = "dic_settings"
     private const val KEY_SCHEMA = "schema"

@@ -1,35 +1,60 @@
 package com.indicvision.semper.ui.capture
 
-import android.app.ActivityManager
 import android.content.Intent
 import android.os.Bundle
-import android.widget.ArrayAdapter
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.slider.Slider
 import com.indicvision.semper.R
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.Insets
 
 /**
- * Collects fps / duration / resolution, runs the budget gate, then hands off
- * to [CaptureSessionActivity] for the test shot and locked recording.
+ * Collects capture rate / duration / resolution, runs the budget gate, then
+ * hands off to [CaptureSessionActivity] for the test shot and locked recording.
+ *
+ * The rate is picked from [CapturePlanOptions], not requested through a
+ * slider. A slider let the user ask for anything and had the app trim it
+ * afterwards, which put the explanation in the wrong place — after the run,
+ * about a number they had already planned around. Offering only rates the
+ * device can hold removes the trim entirely.
  */
 class CaptureSetupActivity : AppCompatActivity() {
 
     private lateinit var caps: CameraCapabilities.Info
-    private lateinit var sliderFps: Slider
-    private lateinit var sliderDuration: Slider
-    private lateinit var tvFps: TextView
-    private lateinit var tvDuration: TextView
+    private lateinit var etDuration: EditText
+    private lateinit var chipsFps: ChipGroup
     private lateinit var tvEstimate: TextView
+    private lateinit var tvAssurance: TextView
     private lateinit var tvMode: TextView
-    private lateinit var spinnerRes: Spinner
+    private lateinit var resPicker: CaptureResolutionPicker
+    private var options: List<CapturePlanOptions.Option> = emptyList()
+
+    /** Cost of one still at the current resolution, recomputed by [rebuild]. */
+    private var perFrameMs = 0L
+
+    /**
+     * Rate the user last chose. A duration or resolution change rebuilds the
+     * list, and their intent ("as fast as it goes" / "one every few seconds")
+     * should survive that rather than snapping back to a default.
+     */
+    private var preferredFps = 0f
+
+    /**
+     * Last duration that parsed. The field can legitimately hold "4:" mid-edit,
+     * and the rest of the screen should keep showing the plan for 4 minutes
+     * rather than blanking or snapping to a default on every keystroke.
+     */
+    private var durationSec = DEFAULT_DURATION_SEC
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,88 +67,113 @@ class CaptureSetupActivity : AppCompatActivity() {
             setNavigationOnClickListener { finish() }
         }
 
-        sliderFps = findViewById(R.id.sliderCaptureFps)
-        sliderDuration = findViewById(R.id.sliderCaptureDuration)
-        tvFps = findViewById(R.id.tvCaptureFps)
-        tvDuration = findViewById(R.id.tvCaptureDuration)
+        etDuration = findViewById(R.id.etCaptureDuration)
+        chipsFps = findViewById(R.id.chipsCaptureFps)
         tvEstimate = findViewById(R.id.tvCaptureEstimate)
+        tvAssurance = findViewById(R.id.tvCaptureAssurance)
         tvMode = findViewById(R.id.tvCaptureMode)
-        spinnerRes = findViewById(R.id.spinnerCaptureResolution)
 
-        sliderFps.valueFrom = 1f
-        sliderFps.valueTo = caps.maxFps.toFloat().coerceAtLeast(1f)
-        sliderFps.value = minOf(5, caps.maxFps).toFloat()
+        // A bigger frame costs more to read out and more to encode, so what
+        // this device can assure is a property of the chosen resolution, not
+        // of the device alone: a change here rebuilds the rates.
+        resPicker = CaptureResolutionPicker(
+            findViewById<Spinner>(R.id.spinnerCaptureResolution),
+            caps.yuvSizes,
+        ) { rebuild() }
 
-        val labels = caps.jpegSizes.map { it.label }
-        spinnerRes.adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_dropdown_item,
-            labels,
-        )
-
-        val refresh = {
-            refreshEstimate()
+        wireDurationField()
+        chipsFps.setOnCheckedStateChangeListener { _, checked ->
+            checked.firstOrNull()?.let { id ->
+                preferredFps = findViewById<Chip>(id).tag as? Float ?: preferredFps
+            }
+            refreshLine()
         }
-        sliderFps.addOnChangeListener { _, _, _ -> refresh() }
-        sliderDuration.addOnChangeListener { _, _, _ -> refresh() }
-        spinnerRes.setOnItemSelectedListener(object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(
-                parent: android.widget.AdapterView<*>?,
-                view: android.view.View?,
-                position: Int,
-                id: Long,
-            ) = refresh()
-
-            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
-        })
-        refresh()
+        rebuild()
 
         findViewById<MaterialButton>(R.id.btnCaptureContinue).setOnClickListener {
             onContinue()
         }
     }
 
-    private fun selectedResolution(): CameraCapabilities.Resolution =
-        caps.jpegSizes.getOrElse(spinnerRes.selectedItemPosition) { caps.jpegSizes.first() }
-
-    private fun plannedFrames(): Int {
-        val fps = sliderFps.value.toInt().coerceAtLeast(1)
-        val duration = sliderDuration.value.toInt().coerceAtLeast(1)
-        val maxFrames = DicSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
-        return (fps * duration).coerceIn(1, maxFrames)
+    /**
+     * The field drives the plan as it is typed, but is only rewritten when the
+     * user is done with it. Reformatting mid-keystroke fights the caret and
+     * makes "10:00" impossible to type — the first "1" would become "00:01".
+     */
+    private fun wireDurationField() {
+        etDuration.setText(CaptureDurationText.format(durationSec))
+        etDuration.doAfterTextChanged { text ->
+            val parsed = CaptureDurationText.parse(text) ?: return@doAfterTextChanged
+            if (parsed == durationSec) return@doAfterTextChanged
+            durationSec = parsed
+            rebuild()
+        }
+        etDuration.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) normaliseDuration() }
+        etDuration.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) normaliseDuration()
+            false
+        }
     }
 
-    private fun decision(): CapturePlanner.Decision {
-        val fps = sliderFps.value.toInt().coerceAtLeast(1)
-        return CapturePlanner.chooseMode(
-            requestedFps = fps,
-            maxDeviceFps = caps.maxFps,
-            jpegStallMs = caps.jpegStallMs,
-            canTakeStills = true,
-            // Locked Camera2 session can record; system video intent is a fallback.
-            canRecordVideo = true,
+    /** Snap the field back to canonical mm:ss inside the allowed range. */
+    private fun normaliseDuration() {
+        durationSec = CaptureDurationText.clamp(
+            CaptureDurationText.parse(etDuration.text) ?: durationSec,
         )
+        val canonical = CaptureDurationText.format(durationSec)
+        if (etDuration.text.toString() != canonical) etDuration.setText(canonical)
+        rebuild()
     }
 
-    private fun refreshEstimate() {
-        val fps = sliderFps.value.toInt()
-        val duration = sliderDuration.value.toInt()
-        tvFps.text = getString(R.string.capture_fps_fmt, fps)
-        tvDuration.text = getString(R.string.capture_duration_fmt, duration)
-        val frames = plannedFrames()
-        val d = decision()
-        val modeLabel = when (d.mode) {
-            CapturePlanner.Mode.STILLS -> getString(R.string.capture_mode_stills)
-            CapturePlanner.Mode.VIDEO -> getString(R.string.capture_mode_video)
+    private fun maxFramesSetting(): Int =
+        DicSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
+
+    /** Rebuild the offered rates for the current duration and resolution. */
+    private fun rebuild() {
+        val duration = durationSec
+        perFrameMs = CaptureFrameCost.perFrameMs(this, caps, resPicker.selected)
+        options = CapturePlanOptions.of(duration, perFrameMs, maxFramesSetting())
+        populateChips()
+        refreshLine()
+    }
+
+    private fun populateChips() {
+        chipsFps.removeAllViews()
+        // Keep the closest rate to what they had; on first open that is the
+        // top of the list, which is what most runs want.
+        val target = options.minByOrNull { kotlin.math.abs(it.fps - preferredFps) } ?: return
+        preferredFps = target.fps
+        for (option in options) {
+            val chip = Chip(this).apply {
+                text = getString(R.string.capture_fps_value_fmt, CaptureEstimateText.fps(option.fps))
+                tag = option.fps
+                isCheckable = true
+                isChecked = option.fps == target.fps
+            }
+            chipsFps.addView(chip)
         }
-        tvEstimate.text = getString(R.string.capture_estimate_fmt, frames, modeLabel)
+    }
+
+    private fun selectedOption(): CapturePlanOptions.Option? =
+        options.firstOrNull { it.fps == preferredFps } ?: options.firstOrNull()
+
+    private fun refreshLine() {
+        val option = selectedOption() ?: return
+        val modeLabel = getString(R.string.capture_mode_stills)
+        tvEstimate.text = CaptureEstimateText.line(this, option, modeLabel)
+        // One prefs read: this runs on every keystroke in the duration field.
+        val frameCap = maxFramesSetting()
+        val cappedBySetting = CapturePlanOptions.cappedByFrameSetting(
+            perFrameMs,
+            durationSec,
+            frameCap,
+        )
+        tvAssurance.text = getString(R.string.capture_fps_assured) + "\n" +
+            CaptureEstimateText.ceilingNote(this, cappedBySetting, frameCap)
         tvMode.text = modeLabel
-        // Reflect any clamp from the planner.
-        if (d.fps != fps && sliderFps.valueTo >= d.fps) {
-            // Do not fight the user mid-drag; only show mode text.
-        }
     }
 
+    @Suppress("ReturnCount")
     private fun onContinue() {
         if (!SystemCamera.canCaptureStill(this)) {
             MaterialAlertDialogBuilder(this)
@@ -132,20 +182,15 @@ class CaptureSetupActivity : AppCompatActivity() {
                 .show()
             return
         }
-        val res = selectedResolution()
-        val frames = plannedFrames()
-        val duration = sliderDuration.value.toInt().coerceAtLeast(1)
-        val d = decision()
-        val estimate = when (d.mode) {
-            CapturePlanner.Mode.STILLS -> CaptureBudget.estimateStills(res.width, res.height, frames)
-            CapturePlanner.Mode.VIDEO -> CaptureBudget.estimateVideo(
-                res.width,
-                res.height,
-                duration,
-                frames,
-            )
-        }
-        val check = CaptureBudget.check(estimate, availRam(), availStorage())
+        val option = selectedOption() ?: return
+        val res = resPicker.selected
+        val duration = durationSec
+        val estimate = CaptureBudget.estimateStills(res.width, res.height, option.frames)
+        val check = CaptureBudget.check(
+            estimate,
+            CaptureResources.availRamBytes(this),
+            CaptureResources.availStorageBytes(this),
+        )
         if (!check.ok) {
             val msg = when {
                 !check.ramOk && !check.storageOk -> R.string.capture_budget_fail_both
@@ -159,40 +204,29 @@ class CaptureSetupActivity : AppCompatActivity() {
                 .show()
             return
         }
-        if (frames < 1) return
 
         startActivity(
             Intent(this, CaptureSessionActivity::class.java).apply {
-                putExtra(EXTRA_FPS, d.fps)
                 putExtra(EXTRA_DURATION_SEC, duration)
-                putExtra(EXTRA_FRAME_COUNT, frames)
+                putExtra(EXTRA_FRAME_COUNT, option.frames)
+                putExtra(EXTRA_INTERVAL_MS, option.intervalMs)
                 putExtra(EXTRA_WIDTH, res.width)
                 putExtra(EXTRA_HEIGHT, res.height)
-                putExtra(EXTRA_MODE, d.mode.name)
                 putExtra(EXTRA_CAMERA_ID, caps.cameraId)
-                putExtra(EXTRA_JPEG_STALL_MS, caps.jpegStallMs)
             },
         )
         finish()
     }
 
-    private fun availRam(): Long {
-        val am = getSystemService(ActivityManager::class.java) ?: return 0L
-        val info = ActivityManager.MemoryInfo()
-        am.getMemoryInfo(info)
-        return info.availMem
-    }
-
-    private fun availStorage(): Long = cacheDir.usableSpace
-
     companion object {
-        const val EXTRA_FPS = "capture_fps"
         const val EXTRA_DURATION_SEC = "capture_duration_sec"
         const val EXTRA_FRAME_COUNT = "capture_frame_count"
+        const val EXTRA_INTERVAL_MS = "capture_interval_ms"
         const val EXTRA_WIDTH = "capture_width"
         const val EXTRA_HEIGHT = "capture_height"
-        const val EXTRA_MODE = "capture_mode"
         const val EXTRA_CAMERA_ID = "capture_camera_id"
-        const val EXTRA_JPEG_STALL_MS = "capture_jpeg_stall_ms"
+
+        /** Short enough to be a first run, long enough to be a real one. */
+        const val DEFAULT_DURATION_SEC = 10
     }
 }

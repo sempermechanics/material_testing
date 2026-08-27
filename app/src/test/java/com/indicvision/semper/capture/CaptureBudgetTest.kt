@@ -40,7 +40,7 @@ class CaptureBudgetTest {
 
     @Test
     fun `check passes at exact thresholds`() {
-        val est = CaptureBudget.estimateVideo(1920, 1080, 10, 50, bytesPerExtractedFrame = 500_000L)
+        val est = CaptureBudget.estimateStills(1920, 1080, 50, bytesPerFrame = 500_000L)
         val ramNeed = (est.ramRequiredBytes * CaptureBudget.RAM_FACTOR).toLong()
         val storageNeed = (est.storageRequiredBytes * CaptureBudget.STORAGE_FACTOR).toLong()
         val check = CaptureBudget.check(est, ramNeed, storageNeed)

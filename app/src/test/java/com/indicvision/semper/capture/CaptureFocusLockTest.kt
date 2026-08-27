@@ -37,6 +37,33 @@ class CaptureFocusLockTest {
     }
 
     @Test
+    fun `focus point lands on the strongest-contrast grid sample, not the ROI center`() {
+        val w = 256
+        val h = 256
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val rng = Random(7)
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                // Only the top-left quadrant carries real speckle contrast;
+                // everywhere else is flat mid-gray.
+                val strongPatch = x < w / 4 && y < h / 4
+                val v = if (strongPatch) rng.nextInt(256) else 128
+                bmp.setPixel(x, y, Color.rgb(v, v, v))
+            }
+        }
+        val out = ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.JPEG, 95, out)
+        bmp.recycle()
+
+        val rec = SubsetRecommender.recommend(out.toByteArray(), w, h, Rect(0, 0, w, h))
+        assertNotNull(rec)
+        assertTrue(
+            "expected focus in the strong-contrast quadrant, got (${rec!!.focusNormX}, ${rec.focusNormY})",
+            rec.focusNormX < 0.3f && rec.focusNormY < 0.3f,
+        )
+    }
+
+    @Test
     fun `fromExif keeps focus point when distance is missing`() {
         val file = File.createTempFile("test", ".jpg")
         file.writeBytes(syntheticJpeg(seed = 3, contrast = true).first)

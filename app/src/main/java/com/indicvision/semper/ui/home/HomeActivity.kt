@@ -51,8 +51,8 @@ import kotlinx.coroutines.withContext
 /**
  * Home: the record of every analysis done on this phone (metadata from
  * [SessionStore]; heavy files per session dir, full copies in the cloud once
- * The + button expands to Import (gallery sheet) or Record (capture setup).
- * The gear opens the behavioral settings drawer.
+ * synced). The + button expands to Import (gallery sheet) or Record (capture
+ * setup). The gear opens the behavioral settings drawer.
  */
 class HomeActivity : AppCompatActivity() {
 
@@ -605,12 +605,24 @@ class HomeActivity : AppCompatActivity() {
 
     private fun positionFabAtNineTenths() {
         val root = findViewById<View>(R.id.homeRoot)
+        // Only assign layoutParams when margins actually change. Setting them on
+        // every layout pass retriggers layout (and with the FAB menu overlay on
+        // homeRoot that becomes an infinite requestLayout loop).
         root.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
             if (fab.width == 0 || view.width == 0) return@addOnLayoutChangeListener
             val params = fab.layoutParams as CoordinatorLayout.LayoutParams
-            params.gravity = Gravity.TOP or Gravity.START
-            params.leftMargin = (view.width / 2) - fab.width / 2
-            params.topMargin = (view.height * 9 / 10) - fab.height / 2
+            val left = (view.width / 2) - fab.width / 2
+            val top = (view.height * 9 / 10) - fab.height / 2
+            val gravity = Gravity.TOP or Gravity.START
+            if (params.gravity == gravity &&
+                params.leftMargin == left &&
+                params.topMargin == top
+            ) {
+                return@addOnLayoutChangeListener
+            }
+            params.gravity = gravity
+            params.leftMargin = left
+            params.topMargin = top
             fab.layoutParams = params
         }
     }

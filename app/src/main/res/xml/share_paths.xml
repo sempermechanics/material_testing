@@ -2,4 +2,7 @@
 <paths>
     <cache-path name="share" path="share/" />
     <cache-path name="capture" path="capture/" />
+    <!-- FrameImportHelper.COMMITTED_DIR_NAME — video-extracted and imported
+         deformed frames, handed off to the wizard via content:// URIs. -->
+    <cache-path name="temp_deformed" path="temp_deformed/" />
 </paths>
