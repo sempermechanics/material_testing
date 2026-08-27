@@ -152,6 +152,59 @@ cannot walk the run off the end of the test window, and `CaptureWorkspace`
 clears the previous run's frames so a shorter run cannot inherit the tail of a
 longer one.
 
+**Precision work on this branch.** A phone shooting a *static* specimen on a
+tripod used to report Exx spanning 48 me — the vendor camera app's own
+processing, not the engine, which is bit-exact against its oracles. Two device
+runs (Samsung SM-G996U1, Pixel 6) now measure 8.7 me and 3.5 me on the same
+kind of scene, with convergence up from 72.7% to 77.3% / 94.8%. What changed:
+
+- `CaptureIspLock` freezes every ISP key the device *lists* — OIS, EIS, noise
+  reduction, edge, tonemap, shading, aberration, scene/effect, zoom and AWB —
+  and nothing it does not, so a LEGACY HAL gets the subset it honours rather
+  than a rejected request that takes the session down. Every key is read back
+  out of the `TotalCaptureResult`; what the HAL ignored is named once, effect
+  first, with a FAQ link.
+- `ExposurePlan` rounds the converged exposure **up** to a whole mains
+  half-period (10 ms at 50 Hz, 8.333 ms at 60 Hz, 50 ms when the device will
+  not say which — 50 ms is a whole number of both) and scales ISO down to
+  hold brightness. Flicker stops moving the tone between frames.
+- `NoiseFloorGate` takes up to 5 stills at the end of the test shot, on the
+  run's own settings, with the specimen mounted and nothing loaded yet. Five
+  is derived, not round: a monotone run of *k* exchangeable values has
+  probability `2/k!`, so the drift test is a coin flip at 3 and usable at 5.
+  The verdict **warns and never blocks** — `Record anyway` is the primary
+  action and the floor is stamped on the session, the PDF cover and every CSV
+  row, because an override that leaves no trace is how a bad number becomes a
+  published number.
+- **`strain_window` is a diameter in pixels**, not a multiple of the step
+  (`VsgStudy.vsgFor`). The gate quoted floors 3-5x better than the settings
+  could deliver until the device data caught it. `MAX_STRAIN_WINDOW` (101 px)
+  is now the binding limit on how small a floor can honestly be reported.
+- The subset recommendation solves against `D(eta)` measured on *this* phone
+  under *this* light instead of the 2008 paper's lab camera — but only for a
+  run this app captured, and `SubsetRecommender.thresholdFor` clamps so a
+  measurement can only ever **raise** the threshold. The Pixel reported
+  `D = 0.35` against the Samsung's 34 because a vendor denoiser was running
+  underneath the frozen pipeline; believing it would have recommended a subset
+  smaller than the paper's own default. `NoiseFloorPixels.noiseCorrelationOf`
+  catches that case directly — sensor noise is white between neighbours, a
+  denoiser is not — and warns.
+- `RigidBodyFit` reports how much of each frame's displacement was the whole
+  scene moving (both phones walked 1-2 px over 60 s, monotone, thermal). It is
+  **reported and never subtracted**: uniform translation already cancels in
+  strain, and a fit taken over the whole ROI would remove real deformation
+  along with it.
+- `CaptureGallerySave` puts a second copy of the as-captured frames in
+  `Pictures/Semper/<date>` so the raw measurement is reachable without this
+  app. It never blocks the run and skips with one line when there is no room.
+
+Still open from that work: precision-mode auto-engage and k-averaging, lifting
+the 2048 px cap, picking the longest rear lens by physical camera id (also the
+generic lever against the Pixel's multicam graph), and user-confirmed focus
+lock before the test shot. `RawRgba` closed the DNG-in-`RoiDrawActivity` gap:
+one shared helper detects a `w*h*4` blob and samples straight into a
+preview-sized bitmap, so the full-resolution allocation never happens.
+
 Import measures a frame the way the engine will see it: `ExifOrientedSize`
 applies the EXIF orientation tag to `BitmapFactory`'s bounds, because OpenCV's
 `imdecode` rotates and `BitmapFactory` does not. Without it one portrait photo

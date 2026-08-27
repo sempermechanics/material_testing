@@ -277,9 +277,9 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
 
 ```
 3b. Record — CaptureSetupActivity → CaptureSessionActivity
-    ├── fps (1..device max), duration, resolution (Camera2 catalogue)
-    ├── mode line: stills (locked, lossless PNG) vs one video then extract,
-    │   both at the highest quality the device can deliver
+    ├── fps (offered as a short assured list, not a slider), duration,
+    │   resolution (Camera2 catalogue)
+    ├── mode line: stills, locked and lossless PNG — the video path is gone
     ├── RAM ≥ 1.5× and storage ≥ 1.25× before the test shot
     ├── CAMERA permission requested up front — ACTION_IMAGE_CAPTURE rejects a
     │   manifest-declared-but-ungranted CAMERA permission on some Android 11+
@@ -288,10 +288,26 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
     ├── ROI editor on the test shot (contrast check region)
     ├── SSSIG / low-texture gate inside that ROI (hard fail → reselect / Retry)
     ├── Re-check budget from the real JPEG, then a one-time PNG-encode timing
-    │   calibration that can revise the stills/video decision and fps
+    │   calibration that can revise the offered frame rates
     ├── Lock AF (+ AE) on the test-shot focus point
+    ├── Freeze the ISP (CaptureIspLock) and read every key back out of the
+    │   TotalCaptureResult; whatever the HAL refused is collapsed into one
+    │   warning with a FAQ link
+    ├── Noise-floor burst: up to 5 stills on the run's own settings, static
+    │   scene, no load yet (NoiseFloorGate). Yields sigma_u, the strain floor
+    │   at the gauge in use, the image noise variance D(eta), the frame-to-
+    │   frame brightness scatter, and the neighbour correlation that catches a
+    │   phone smoothing underneath the lockdown
+    ├── Verdict: a floor above the limit warns and never blocks — Record
+    │   anyway stays the primary action and the floor is stamped on the
+    │   session, the PDF and the CSV. A burst that would not settle or that
+    │   drifted asks to retry instead, because there the measurement failed to
+    │   measure itself
     ├── Timed stills (PNG, converted from the sensor's own YUV output — no
-    │   JPEG step) or locked video (max device encoder bitrate) → extract PNGs
+    │   JPEG step)
+    ├── Second copy of the as-captured frames into Pictures/Semper/<date>
+    │   (CaptureGallerySave; skipped with one line when there is no room, or
+    │   below Android 10)
     └── Hand-off: PICKED_REF_URI + PICKED_DEF_URIS → analysis wizard
 ```
 
@@ -307,8 +323,13 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
 | [ ] 3b.5b | Save an ROI that is too small | Too-small dialog; select a larger area |
 | [ ] 3b.6 | Good test shot + ROI with enough contrast | Focus locks; **Start recording** appears |
 | [ ] 3b.6b | Cover the lens so AF never locks (real device) | AF-fail dialog, Retry test shot — never starts on a floating lens |
+| [ ] 3b.6c | Watch the test shot on a phone that refuses ISP keys | Exactly one warning, effect first, under 20 words, with a working FAQ link. A phone that honoured everything shows none |
+| [ ] 3b.6d | Dim the light or defocus slightly, then take a test shot | Floor verdict dialog; **Record anyway** is the primary action, **Retry test shot** beside it, **Why?** opens the noise-floor FAQ |
+| [ ] 3b.6e | Nudge the tripod during the burst | One disturbed frame does not flip a good setup into a refusal (median over 5) |
+| [ ] 3b.6f | Pass the gate on a good setup | No dialog; the measured floor is still recorded on the session |
 | [ ] 3b.7 | Complete a stills run | Wizard opens with reference (vendor JPEG) + deformed frames (lossless PNG) filled |
-| [ ] 3b.8 | Complete a video-mode run | Frames extracted (PNG); wizard opens the same way |
+| [ ] 3b.8 | Open the phone's gallery after a run | A `Semper/<date>` album holds the reference and every frame, as captured |
+| [ ] 3b.9 | Export the PDF and the CSV for that run | Cover carries **Measurement Floor** and **Frame Motion**; every CSV row carries the floor and scene-motion columns |
 
 ---
 
