@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.DialogInterface
 import android.graphics.Rect
 import android.graphics.RectF
+import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CaptureNoiseFloor
@@ -141,10 +142,24 @@ internal class NoiseFloorGateUi(
         // the report and the CSV carry it.
         if (!result.verdict.blocking && !result.verdict.floorExceeded) {
             warnAboutPipeline(session)
+            announceFloor(result)
             return true
         }
         showVerdict(session, result)
         return false
+    }
+
+    /**
+     * The one sentence a clean pass still owes the user: what this run can
+     * resolve, stated once as a fact rather than held back until it becomes
+     * a problem. [showVerdict] carries the same wording for a failing floor
+     * as a dialog to act on; a passing floor only needs a toast to note.
+     */
+    private fun announceFloor(result: NoiseFloorGate.Result) {
+        val label = NoiseFloorText.floorLabel(result.verdict.floorMicrostrain)
+        val message = activity.getString(R.string.capture_noise_floor_title, label) +
+            " " + activity.getString(R.string.capture_noise_floor_body)
+        Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
     }
 
     /**
