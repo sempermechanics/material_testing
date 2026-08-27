@@ -616,6 +616,21 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_frames_failed">The camera stopped returning frames, so recording stopped early. Frames already taken were kept.</string>
     <string name="capture_camera_lost">The camera was released to another app or shut down, so recording stopped early. Frames already taken were kept.</string>
     <string name="capture_test_shot_empty">No photo was saved. Try again.</string>
+    <!-- Imaging-pipeline refusals. Effect first, under 20 words each; the
+         mechanism lives in the FAQ the warning links to. Only one is ever
+         shown, chosen by CaptureIspWarning as the costliest refusal. -->
+    <string name="capture_isp_warn_ois">Lens stabiliser will not switch off — the image may shift between frames.</string>
+    <string name="capture_isp_warn_eis">Video stabilisation will not switch off — frames may be warped to look steady.</string>
+    <string name="capture_isp_warn_zsl">Phone merges several shots into one photo — frames may not line up.</string>
+    <string name="capture_isp_warn_denoise">Noise reduction will not switch off — it blurs the pattern the analysis measures.</string>
+    <string name="capture_isp_warn_edge">Sharpening will not switch off — it rewrites the edges the analysis measures.</string>
+    <string name="capture_isp_warn_tonemap">The phone fixes its own tone curve — brightness may shift between frames.</string>
+    <string name="capture_isp_warn_shading">Vignetting correction will not hold still — it can look like a strain gradient.</string>
+    <string name="capture_isp_warn_aberration">Colour-fringe correction will not switch off — it moves pixels slightly.</string>
+    <string name="capture_isp_warn_scene">A scene mode is active and will not switch off — it retunes the whole pipeline.</string>
+    <string name="capture_isp_warn_zoom">Zoom cannot be pinned — the phone may resample the frame between shots.</string>
+    <string name="capture_isp_warn_awb">White balance will not lock — grey levels may drift between frames.</string>
+    <string name="capture_isp_warn_more">%1$s Plus %2$d more.</string>
     <string name="capture_speckle_check_timeout">Checking the test shot took too long. Retake it.</string>
     <string name="coach_analysis_ref">The reference image can be changed at any time.</string>
     <string name="coach_analysis_def">Add deformed frames next. When you pick several, you can sort by name, date, or drag.</string>
@@ -735,6 +750,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="url_manual">https://semperdic.github.io/website/manual/</string>
     <string name="url_faq_jpeg" translatable="false">https://semperdic.github.io/website/manual/faq/#jpeg-warning</string>
     <string name="url_faq_speckle" translatable="false">https://semperdic.github.io/website/manual/faq/#speckle-contrast</string>
+    <string name="url_faq_imaging_pipeline" translatable="false">https://semperdic.github.io/website/manual/faq/#imaging-pipeline</string>
     <string name="url_faq_frame_size" translatable="false">https://semperdic.github.io/website/manual/faq/#frame-size-mismatch</string>
     <string name="url_faq_roi_too_small" translatable="false">https://semperdic.github.io/website/manual/faq/#roi-too-small</string>
     <string name="url_faq_sweep_subset_range" translatable="false">https://semperdic.github.io/website/manual/faq/#sweep-subset-range</string>
