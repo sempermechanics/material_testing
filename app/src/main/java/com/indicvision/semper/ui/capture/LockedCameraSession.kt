@@ -154,6 +154,12 @@ class LockedCameraSession(
 
     private class PendingStill(val file: File, val done: CompletableDeferred<Boolean>)
 
+    /** Same role as [pendingStill], for [captureLuma]'s raw-frame path. */
+    @Volatile
+    private var pendingLuma: PendingLuma? = null
+
+    private class PendingLuma(val done: CompletableDeferred<GrayPngEncoder.Luma?>)
+
     /** False once the device is known gone or [close] has been called. */
     val isUsable: Boolean get() = !closed.get() && !deviceLost.get()
 
@@ -211,21 +217,28 @@ class LockedCameraSession(
      * for correlation.
      */
     private fun writeStill(image: android.media.Image, file: File) {
+        FileOutputStream(file).use { out -> GrayPngEncoder.encode(out, lumaOf(image)) }
+    }
+
+    /**
+     * Copies one acquired frame's luma plane out of [image] without writing
+     * it anywhere. [image] must still be open when this is called; the
+     * returned [GrayPngEncoder.Luma] owns its own byte array and outlives it.
+     *
+     * The shared extraction [writeStill] and [captureLuma] both build on, so
+     * an averaged group and a single still read the sensor identically.
+     */
+    private fun lumaOf(image: android.media.Image): GrayPngEncoder.Luma {
         val plane = image.planes[0]
-        val luma = ByteArray(plane.buffer.remaining()).also { buf -> plane.buffer.get(buf) }
-        FileOutputStream(file).use { out ->
-            GrayPngEncoder.encode(
-                out,
-                GrayPngEncoder.Luma(
-                    bytes = luma,
-                    width = image.width,
-                    height = image.height,
-                    rowStride = plane.rowStride,
-                    pixelStride = plane.pixelStride,
-                    rotationDegrees = frameRotationDegrees,
-                ),
-            )
-        }
+        val bytes = ByteArray(plane.buffer.remaining()).also { buf -> plane.buffer.get(buf) }
+        return GrayPngEncoder.Luma(
+            bytes = bytes,
+            width = image.width,
+            height = image.height,
+            rowStride = plane.rowStride,
+            pixelStride = plane.pixelStride,
+            rotationDegrees = frameRotationDegrees,
+        )
     }
 
     /**
@@ -352,6 +365,116 @@ class LockedCameraSession(
             false
         } finally {
             pendingStill = null
+        }
+    }
+
+    /**
+     * Capture one raw luma sample, without writing it anywhere.
+     *
+     * Mirrors [captureStill]'s request/timeout machinery exactly — same
+     * template, same lock, same timeout — but hands the caller the plane
+     * instead of a file, so [captureAveragedStill] can gather several before
+     * anything is encoded. Kept separate from [captureStill] rather than
+     * unified with it: that path logs the PNG encode cost inline (the timing
+     * that once caught a 5.5s-a-frame colour round trip), and this one
+     * deliberately has no encode to measure yet.
+     */
+    private suspend fun captureLuma(): GrayPngEncoder.Luma? = withContext(Dispatchers.IO) {
+        val sess = session ?: return@withContext null
+        val reader = imageReader ?: return@withContext null
+        val cam = device ?: return@withContext null
+        val lens = lockedLensDistance ?: return@withContext null
+
+        val ready = CompletableDeferred<GrayPngEncoder.Luma?>()
+        val claim = PendingLuma(ready)
+        pendingLuma = claim
+        reader.setOnImageAvailableListener({ r ->
+            val current = pendingLuma
+            runCatching {
+                r.acquireNextImage().use { image ->
+                    if (current !== claim) {
+                        Timber.w("Discarding a raw frame that arrived after its capture timed out")
+                        return@use
+                    }
+                    current.done.complete(lumaOf(image))
+                }
+            }.onFailure {
+                Timber.w(it, "raw frame read failed")
+                ready.complete(null)
+            }
+        }, handler)
+
+        val issued = runCatching {
+            val builder = cam.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
+                addTarget(reader.surface)
+                applyLockedControls(this, lens)
+            }
+            sess.capture(
+                builder.build(),
+                object : CameraCaptureSession.CaptureCallback() {
+                    override fun onCaptureFailed(
+                        session: CameraCaptureSession,
+                        request: CaptureRequest,
+                        failure: CaptureFailure,
+                    ) {
+                        ready.complete(null)
+                    }
+
+                    override fun onCaptureCompleted(
+                        session: CameraCaptureSession,
+                        request: CaptureRequest,
+                        result: TotalCaptureResult,
+                    ) {
+                        logGeometryOnce(result)
+                    }
+                },
+                handler,
+            )
+        }.onFailure { Timber.w(it, "captureLuma: capture() threw") }.isSuccess
+        if (!issued) {
+            pendingLuma = null
+            return@withContext null
+        }
+        try {
+            withTimeout(captureTimeoutMs()) { ready.await() }
+        } catch (_: TimeoutCancellationException) {
+            Timber.w("captureLuma timed out waiting for camera callback")
+            null
+        } finally {
+            pendingLuma = null
+        }
+    }
+
+    /**
+     * Capture [frames] stills of one held state and average them into a
+     * single lossless PNG at [file]. See [AveragingPlan] for how [frames] is
+     * chosen — this only ever executes the count it is given.
+     *
+     * Never mixes group sizes: if any frame in the group fails to arrive,
+     * the whole group is abandoned and one ordinary [captureStill] is taken
+     * instead, rather than averaging whatever partial set was gathered. A
+     * state captured at k=3 sitting next to others at k=8 would carry a
+     * different noise floor with nothing in the file to say so.
+     */
+    suspend fun captureAveragedStill(file: File, frames: Int): Boolean {
+        if (frames <= 1) return captureStill(file)
+        var accumulator: LumaAccumulator? = null
+        for (i in 0 until frames) {
+            val luma = captureLuma()
+            if (luma == null) {
+                accumulator = null
+                break
+            }
+            accumulator = accumulator?.also { it.add(luma) } ?: LumaAccumulator(luma)
+        }
+        val gathered = accumulator
+        return if (gathered == null) {
+            captureStill(file)
+        } else {
+            runCatching {
+                FileOutputStream(file).use { out -> GrayPngEncoder.encode(out, gathered.average()) }
+                file.length() > 0L
+            }.onFailure { Timber.w(it, "averaged PNG save failed") }.getOrDefault(false)
         }
     }
 
