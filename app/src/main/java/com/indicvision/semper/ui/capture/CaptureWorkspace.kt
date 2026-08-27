@@ -22,7 +22,9 @@ internal object CaptureWorkspace {
     /** The locked reference every deformed frame is correlated against. */
     const val REFERENCE_NAME = "reference.png"
 
-    /** Discarded calibration frame; see CaptureSessionActivity's warm-up. */
+    /** Discarded calibration frame, written by versions before the noise-floor
+     *  burst took over the warm-up. Still swept, so an app updated mid-session
+     *  does not leave one behind for something listing the directory to read. */
     const val WARMUP_NAME = "warmup.png"
 
     /** Vendor Camera app shot used for the speckle check. Never a run output. */
@@ -31,15 +33,25 @@ internal object CaptureWorkspace {
     private const val FRAME_PREFIX = "frame_"
     private const val FRAME_FORMAT = FRAME_PREFIX + "%04d.png"
 
+    /** Static frames the noise-floor check takes before the run; see
+     *  [NoiseFloorGate]. Swept with the run output — they are a measurement,
+     *  not data, and a stale one must never be read as this run's. */
+    private const val BURST_PREFIX = "burst_"
+    private const val BURST_FORMAT = BURST_PREFIX + "%d.png"
+
     /** Deformed frame [index]'s filename. Locale-fixed: the default locale can
      *  render digits non-ASCII, which would not match [RUN_OUTPUT] and would
      *  leave the frames behind for the next run to mix in. */
     fun frameName(index: Int): String = String.format(Locale.US, FRAME_FORMAT, index)
 
+    /** Noise-floor burst frame [index]'s filename. */
+    fun burstName(index: Int): String = String.format(Locale.US, BURST_FORMAT, index)
+
     /** Derived from the names above rather than restated, so a rename cannot
      *  leave the sweep matching the old one. */
     private val RUN_OUTPUT = Regex(
         "^(" + Regex.escape(FRAME_PREFIX) + """\d+\.(png|jpg)|""" +
+            Regex.escape(BURST_PREFIX) + """\d+\.png|""" +
             Regex.escape(REFERENCE_NAME) + "|" + Regex.escape(WARMUP_NAME) + ")$",
     )
 

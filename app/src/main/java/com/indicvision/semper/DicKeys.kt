@@ -18,6 +18,14 @@ object DicKeys {
     /** Deformed-frame URI strings (capture hand-off); consumed once on wizard open. */
     const val PICKED_DEF_URIS = "PICKED_DEF_URIS"
 
+    /**
+     * The capture screen's measured strain floor as JSON, so the analysis that
+     * follows can stamp it on the session, the report and the CSV. One extra
+     * rather than six, so a field added later does not touch this boundary.
+     * Absent when the frames were imported rather than captured.
+     */
+    const val CAPTURE_NOISE_FLOOR = "CAPTURE_NOISE_FLOOR"
+
     // ── StaticAnalysisActivity  RoiDrawActivity
     const val IMAGE_FILE_PATH = "IMAGE_FILE_PATH"
     const val MASK_FILE_PATH = "MASK_FILE_PATH"

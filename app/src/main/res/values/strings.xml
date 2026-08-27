@@ -616,6 +616,27 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_frames_failed">The camera stopped returning frames, so recording stopped early. Frames already taken were kept.</string>
     <string name="capture_camera_lost">The camera was released to another app or shut down, so recording stopped early. Frames already taken were kept.</string>
     <string name="capture_test_shot_empty">No photo was saved. Try again.</string>
+    <!-- Noise-floor gate. The specimen is mounted but unloaded, so every
+         displacement measured here is error. Messages lead with the effect and
+         stay under 20 words; the mechanism lives in the FAQ. -->
+    <string name="capture_status_noise_check">Measuring the noise floor…</string>
+    <string name="capture_noise_floor_title">Floor is about %1$s</string>
+    <string name="capture_noise_floor_body">Smaller strains than this will not show. More light, or measure over a larger area.</string>
+    <string name="capture_noise_unsettled_title">Readings will not settle</string>
+    <string name="capture_noise_unsettled_body">Something moved or the light flickered between test frames. Steady the rig, then retry.</string>
+    <string name="capture_noise_drift_title">The image is drifting</string>
+    <string name="capture_noise_drift_body">The frame shifts steadily between shots. Let the rig settle for a minute, then retry.</string>
+    <!-- Floor above the limit. A strong warning, never a refusal: the wording
+         has to make the consequence unmissable in one glance, because the user
+         is trusted to overrule it and needs the real cost to do that well. The
+         same verdict is stamped on the session, the PDF and the CSV. -->
+    <string name="capture_noise_erroneous_title">Results will be unreliable</string>
+    <string name="capture_noise_erroneous_body">Floor is about %1$s. Strain smaller than that is noise, not measurement. Marked on the report.</string>
+    <!-- Same, plus settings the phone refused: two independent signals pointing
+         the same way earn a plainer sentence than either does alone. -->
+    <string name="capture_noise_erroneous_refused_body">Floor is about %1$s and %2$d settings will not apply. Strain smaller than the floor is noise. Marked on the report.</string>
+    <string name="capture_record_anyway">Record anyway</string>
+    <string name="capture_retry_test_shot">Retry test shot</string>
     <!-- Imaging-pipeline refusals. Effect first, under 20 words each; the
          mechanism lives in the FAQ the warning links to. Only one is ever
          shown, chosen by CaptureIspWarning as the costliest refusal. -->
@@ -631,6 +652,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_isp_warn_zoom">Zoom cannot be pinned — the phone may resample the frame between shots.</string>
     <string name="capture_isp_warn_awb">White balance will not lock — grey levels may drift between frames.</string>
     <string name="capture_isp_warn_more">%1$s Plus %2$d more.</string>
+    <string name="capture_denoise_warn">Phone is smoothing frames despite the settings — fine detail is lost, noise looks lower than it is.</string>
     <string name="capture_speckle_check_timeout">Checking the test shot took too long. Retake it.</string>
     <string name="coach_analysis_ref">The reference image can be changed at any time.</string>
     <string name="coach_analysis_def">Add deformed frames next. When you pick several, you can sort by name, date, or drag.</string>
@@ -750,6 +772,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="url_manual">https://semperdic.github.io/website/manual/</string>
     <string name="url_faq_jpeg" translatable="false">https://semperdic.github.io/website/manual/faq/#jpeg-warning</string>
     <string name="url_faq_speckle" translatable="false">https://semperdic.github.io/website/manual/faq/#speckle-contrast</string>
+    <string name="url_faq_noise_floor" translatable="false">https://semperdic.github.io/website/manual/faq/#noise-floor</string>
     <string name="url_faq_imaging_pipeline" translatable="false">https://semperdic.github.io/website/manual/faq/#imaging-pipeline</string>
     <string name="url_faq_frame_size" translatable="false">https://semperdic.github.io/website/manual/faq/#frame-size-mismatch</string>
     <string name="url_faq_roi_too_small" translatable="false">https://semperdic.github.io/website/manual/faq/#roi-too-small</string>

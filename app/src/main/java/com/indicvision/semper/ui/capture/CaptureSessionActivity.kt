@@ -68,6 +68,22 @@ class CaptureSessionActivity : AppCompatActivity() {
     private var lockedSession: LockedCameraSession? = null
     private var testShotFile: File? = null
 
+    /**
+     * The noise-floor gate: the ROI carried from the speckle check, the burst
+     * that measures what this setup can resolve, and the verdict the user acts
+     * on. Its callbacks are this screen's own retry, proceed and cancel paths,
+     * so the gate decides and the activity does.
+     */
+    private val noiseGate by lazy {
+        NoiseFloorGateUi(
+            activity = this,
+            onRetry = ::launchTestShot,
+            onBurstFailed = { offerRetryTestShot(getString(R.string.capture_test_shot_empty)) },
+            onProceed = ::showReady,
+            onFrameCost = ::applyMeasuredFrameCost,
+        )
+    }
+
     /** Reference taken through the locked session; see [captureLockedReference]. */
     private var referenceFile: File? = null
     private val deformedPaths = mutableListOf<String>()
@@ -341,6 +357,7 @@ class CaptureSessionActivity : AppCompatActivity() {
             }
 
             val (w, h) = imageBounds(file)
+            noiseGate.onSpeckleChecked(roi, w, h, check.subsetSize)
             val caps = CameraCapabilities.query(this@CaptureSessionActivity)
 
             // The test shot's own size is the vendor Camera app's choice, not
@@ -551,9 +568,9 @@ class CaptureSessionActivity : AppCompatActivity() {
                     return@launch
                 }
                 applyPreviewTransform(session)
-                calibrateAgainstRealCapture(session)
-                tvStatus.setText(R.string.capture_status_ready)
-                btnStart.isVisible = true
+                tvStatus.setText(R.string.capture_status_noise_check)
+                if (!noiseGate.run(session, planWidth, planHeight)) return@launch
+                showReady()
             }
         }
 
@@ -613,27 +630,10 @@ class CaptureSessionActivity : AppCompatActivity() {
         preview.setTransform(matrix)
     }
 
-    /**
-     * [measureStillStallMs] only times the PNG encode; it misses the camera
-     * round trip (request → sensor → YUV frame → write), which dominates on
-     * real hardware. Planning from encode time alone leaves fps optimistic,
-     * so every frame lands late and the run overshoots the chosen duration.
-     * Time one real still through the exact path the sequence uses and
-     * re-derive the rate from that. The warm-up frame is discarded, and
-     * taking it also primes the pipeline so frame 0 isn't the slow one.
-     */
-    private suspend fun calibrateAgainstRealCapture(session: LockedCameraSession) {
-        val warmup = File(SystemCamera.captureDir(this), CaptureWorkspace.WARMUP_NAME)
-        val startNs = System.nanoTime()
-        val ok = session.captureStill(warmup)
-        val elapsedMs = ((System.nanoTime() - startNs) / NANOS_PER_MILLI).coerceAtLeast(1L)
-        warmup.delete()
-        if (!ok) return
-        Timber.d("Warm-up still took %d ms", elapsedMs)
-        // Feeds the setup screen's frame-count offers next time, so they
-        // reflect this device rather than Camera2's unrelated JPEG stall.
-        CaptureCalibration.record(this, planWidth, planHeight, elapsedMs)
-        applyMeasuredFrameCost(elapsedMs)
+    /** The preview is the frame you will get: setup is done, recording may start. */
+    private fun showReady() {
+        tvStatus.setText(R.string.capture_status_ready)
+        btnStart.isVisible = true
     }
 
     private fun startRecording() {
@@ -782,6 +782,10 @@ class CaptureSessionActivity : AppCompatActivity() {
                     },
                 ),
             )
+            // The floor this run was captured at, so the analysis can stamp it
+            // on the session, the report and the CSV. Absent when the burst
+            // could not run at all, which is already its own failure path.
+            noiseGate.measured()?.let { putExtra(DicKeys.CAPTURE_NOISE_FLOOR, it.encode()) }
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         // Finish setup + session so Back from wizard returns to Home.
@@ -790,7 +794,6 @@ class CaptureSessionActivity : AppCompatActivity() {
     }
 
     private companion object {
-        const val NANOS_PER_MILLI = 1_000_000L
         const val MILLIS_PER_SECOND = 1_000L
 
         /** Only reached when the setup extra is missing; the setup screen owns the value. */

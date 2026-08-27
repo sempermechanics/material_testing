@@ -50,6 +50,7 @@ import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
+import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.net.AppRemoteConfig
@@ -342,6 +343,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
         intent.getStringExtra(DicKeys.PICKED_VIDEO_URI)?.let {
             intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
             handleVideo(it.toUri())
+        }
+        // The floor the capture screen measured, before the frames themselves,
+        // so a hand-off that fails on the frames still cannot leave a floor
+        // belonging to one run attached to the next.
+        intent.getStringExtra(DicKeys.CAPTURE_NOISE_FLOOR)?.let {
+            intent.removeExtra(DicKeys.CAPTURE_NOISE_FLOOR)
+            viewModel.captureFloor = CaptureNoiseFloor.decode(it)
         }
         intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
             intent.removeExtra(DicKeys.PICKED_DEF_URIS)
