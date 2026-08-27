@@ -31,7 +31,24 @@ data class AppConfigDto(
      * backend deploy this app talks to → false (fail closed, matches the
      * default already used for every field here). */
     val datCodecEncodingEnabled: Boolean = false,
+    /** `demo` or `professional`. Missing on an older backend → demo (fail closed). */
+    val plan: String = "demo",
+    val cloudBackupEnabled: Boolean = false,
+    val shareEnabled: Boolean = false,
+    val licensePrefix: String = "",
+    /** `""`, `"individual"`, or `"campus"` — display/support metadata only, not
+     * a gating input. Entitlements (cloudBackupEnabled/shareEnabled/plan) are
+     * identical for an individual and a campus seat; this field exists so
+     * Settings can show e.g. "Activated via campus.edu" and so support tickets
+     * can tell the two shapes apart. */
+    val licenseKind: String = "",
 )
+
+@Serializable
+data class LicenseActivateRequest(val key: String)
+
+@Serializable
+data class LicenseActivateResponse(val config: AppConfigDto)
 
 @Serializable
 data class DeviceRegisterRequest(

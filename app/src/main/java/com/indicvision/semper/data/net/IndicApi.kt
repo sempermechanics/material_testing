@@ -186,6 +186,33 @@ class IndicApi private constructor(context: Context) {
         }
     }
 
+    /**
+     * POST /v1/licenses/activate — redeem a license key (individual or
+     * campus/institution; the backend tells them apart by the key itself).
+     * Bearer + `X-Device-Id` like [registerDevice], **not** device-signed: the
+     * backend route is `current_user` + a plain `X-Device-Id` header, no
+     * challenge/nonce/signature. Every subsequent signed/bearer call still
+     * re-validates the resulting lock (see [AppRemoteConfig] /
+     * `revalidate_device_lock` in the backend) — this call only kicks it off.
+     *
+     * Throws [ApiException] with the backend's error code as `detail` for a
+     * mismatch/revoked/exhausted key (`license_email_mismatch`,
+     * `license_device_mismatch`, `license_revoked`, `license_seat_disabled`,
+     * `license_seats_exhausted`, `license_already_redeemed`, `license_not_found`).
+     */
+    suspend fun activateLicense(idToken: String, key: String): AppConfigDto = withContext(Dispatchers.IO) {
+        val body = LicenseActivateRequest(key = key)
+        val req = Request.Builder().url("$base/v1/licenses/activate")
+            .header("Authorization", "Bearer $idToken")
+            .header("X-Device-Id", device.getDeviceId())
+            .post(json.encodeToString(body).toRequestBody(jsonMedia)).build()
+        client.newCall(req).execute().use { resp ->
+            if (resp.code != HttpStatus.OK) throw ApiException(resp.code, IndicApiHttp.bodyText(resp))
+            val decoded: LicenseActivateResponse = json.decodeFromString(resp.body.string())
+            decoded.config
+        }
+    }
+
     // ----------------------------------------------------------- session/files
 
     /**

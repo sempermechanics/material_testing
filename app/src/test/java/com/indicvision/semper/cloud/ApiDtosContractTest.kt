@@ -1,8 +1,11 @@
 package com.indicvision.semper.cloud
 
+import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.DeviceRegisterRequest
 import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
+import com.indicvision.semper.data.net.LicenseActivateRequest
+import com.indicvision.semper.data.net.LicenseActivateResponse
 import com.indicvision.semper.data.net.ListSessionsResponse
 import com.indicvision.semper.data.net.MeResponse
 import com.indicvision.semper.data.net.SessionCreateRequest
@@ -153,6 +156,47 @@ class ApiDtosContractTest {
         )) {
             assertTrue("missing $key in $encoded", encoded.contains(key))
         }
+    }
+
+    // ---------------------------------------------------------- licensing
+
+    @Test
+    fun `config response decodes plan and licenseKind for a campus seat`() {
+        val cfg = json.decodeFromString<AppConfigDto>(
+            """
+            {"maxSessions":0,"maxFilesPerSession":0,"maxFrames":0,
+             "plan":"professional","cloudBackupEnabled":true,"shareEnabled":true,
+             "licensePrefix":"SEMP-AB12","licenseKind":"campus"}
+            """.trimIndent(),
+        )
+        assertEquals("professional", cfg.plan)
+        assertTrue(cfg.cloudBackupEnabled)
+        assertEquals("campus", cfg.licenseKind)
+    }
+
+    @Test
+    fun `config response missing licenseKind fails closed to blank not campus or individual`() {
+        // An older backend deploy this app talks to may not send licenseKind
+        // yet — must not be misread as either shape.
+        val cfg = json.decodeFromString<AppConfigDto>("""{"plan":"professional"}""")
+        assertEquals("", cfg.licenseKind)
+    }
+
+    @Test
+    fun `license activate request encodes the exact backend field name`() {
+        val encoded = json.encodeToString(LicenseActivateRequest(key = "SEMP-AAAA-BBBB-CCCC-DDDD"))
+        assertTrue(encoded.contains("\"key\""))
+        assertTrue(encoded.contains("SEMP-AAAA-BBBB-CCCC-DDDD"))
+    }
+
+    @Test
+    fun `license activate response decodes the nested config`() {
+        val resp = json.decodeFromString<LicenseActivateResponse>(
+            """{"config":{"plan":"professional","cloudBackupEnabled":true,
+                "shareEnabled":true,"licensePrefix":"SEMP-ZZ99","licenseKind":"individual"}}""",
+        )
+        assertEquals("professional", resp.config.plan)
+        assertEquals("individual", resp.config.licenseKind)
     }
 
     @Test

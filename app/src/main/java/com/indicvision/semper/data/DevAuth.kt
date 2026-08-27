@@ -1,7 +1,6 @@
 package com.indicvision.semper.data
 
 import android.content.Context
-import android.os.Build
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.AppRemoteConfig
@@ -40,7 +39,7 @@ object DevAuth {
 
     /** True when sign-in should be skipped for this run. */
     val active: Boolean by lazy {
-        BuildConfig.DEBUG && BuildConfig.DEV_AUTH_BYPASS && isEmulator()
+        BuildConfig.DEBUG && BuildConfig.DEV_AUTH_BYPASS && DeviceEnv.isEmulator()
     }
 
     /**
@@ -58,37 +57,12 @@ object DevAuth {
                 maxSessions = DEV_QUOTA_MAX,
                 maxFilesPerSession = 600,
                 maxFrames = DicSettings.MAX_MAX_FRAMES,
+                plan = "professional",
+                cloudBackupEnabled = true,
+                shareEnabled = true,
             ),
         )
         TokenStore.setSessionLimitReached(context, false)
         Timber.w("DEV AUTH BYPASS active (debug build on an emulator) — cloud is off")
     }
-
-    /**
-     * Emulator detection. Covers the Android Studio emulator (goldfish/ranchu),
-     * the older generic images, and the common third-party emulators. Physical
-     * devices report a real manufacturer/hardware and fail every branch.
-     */
-    private fun isEmulator(): Boolean {
-        val fingerprint = Build.FINGERPRINT.orEmpty()
-        val model = Build.MODEL.orEmpty()
-        val hardware = Build.HARDWARE.orEmpty().lowercase()
-        val product = Build.PRODUCT.orEmpty().lowercase()
-        val brand = Build.BRAND.orEmpty()
-        val device = Build.DEVICE.orEmpty()
-
-        return fingerprint.startsWith("generic") ||
-            fingerprint.startsWith("unknown") ||
-            fingerprint.contains("emulator", ignoreCase = true) ||
-            model.contains("google_sdk") ||
-            model.contains("Emulator") ||
-            model.contains("Android SDK built for") ||
-            hardware in EMULATOR_HARDWARE ||
-            product.contains("sdk") ||
-            product.contains("emulator") ||
-            product.contains("simulator") ||
-            (brand.startsWith("generic") && device.startsWith("generic"))
-    }
-
-    private val EMULATOR_HARDWARE = setOf("goldfish", "ranchu", "vbox86", "android_x86")
 }

@@ -15,6 +15,7 @@ import androidx.core.content.edit
  * the dependency runs one way (TokenStore → AppRemoteConfig) with no cycle. This
  * object never calls back into TokenStore.
  */
+@Suppress("TooManyFunctions")
 object AppRemoteConfig {
 
     private const val PREFS = "indic_remote_config"
@@ -22,6 +23,11 @@ object AppRemoteConfig {
     private const val K_MAX_FILES = "max_files_per_session"
     private const val K_MAX_FRAMES = "max_frames"
     private const val K_DAT_CODEC_ENCODING = "dat_codec_encoding_enabled"
+    private const val K_PLAN = "plan"
+    private const val K_CLOUD_BACKUP = "cloud_backup_enabled"
+    private const val K_SHARE = "share_enabled"
+    private const val K_LICENSE_PREFIX = "license_prefix"
+    private const val K_LICENSE_KIND = "license_kind"
     private const val K_FAIL_STREAK = "config_fail_streak"
     private const val FAIL_STREAK_HINT = 3
 
@@ -40,6 +46,11 @@ object AppRemoteConfig {
             putInt(K_MAX_FILES, config.maxFilesPerSession.coerceAtLeast(0))
             putInt(K_MAX_FRAMES, config.maxFrames.coerceAtLeast(0))
             putBoolean(K_DAT_CODEC_ENCODING, config.datCodecEncodingEnabled)
+            putString(K_PLAN, config.plan.ifBlank { "demo" })
+            putBoolean(K_CLOUD_BACKUP, config.cloudBackupEnabled)
+            putBoolean(K_SHARE, config.shareEnabled)
+            putString(K_LICENSE_PREFIX, config.licensePrefix)
+            putString(K_LICENSE_KIND, config.licenseKind)
             putInt(K_FAIL_STREAK, 0)
         }
     }
@@ -75,6 +86,20 @@ object AppRemoteConfig {
      */
     fun datCodecEncodingEnabled(context: Context): Boolean =
         prefs(context).getBoolean(K_DAT_CODEC_ENCODING, false)
+
+    fun plan(context: Context): String = prefs(context).getString(K_PLAN, "demo") ?: "demo"
+
+    fun cloudBackupEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(K_CLOUD_BACKUP, false)
+
+    fun shareEnabled(context: Context): Boolean = prefs(context).getBoolean(K_SHARE, false)
+
+    fun licensePrefix(context: Context): String =
+        prefs(context).getString(K_LICENSE_PREFIX, "") ?: ""
+
+    /** `""`, `"individual"`, or `"campus"` — display/support metadata only. */
+    fun licenseKind(context: Context): String =
+        prefs(context).getString(K_LICENSE_KIND, "") ?: ""
 
     /** Drop cached limits (sign-out). */
     fun clear(context: Context) = prefs(context).edit { clear() }
