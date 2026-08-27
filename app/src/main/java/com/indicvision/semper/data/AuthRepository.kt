@@ -23,6 +23,18 @@ import timber.log.Timber
 import java.io.IOException
 
 /**
+ * Host both Firebase auth continue links return to — the project's default
+ * hosting domain. Must be an Authorized Domain in the Firebase project and
+ * handled as an App Link by this app (see docs); keep in sync with the
+ * backend's FIREBASE_PROJECT_ID.
+ *
+ * Top-level rather than on [AuthRepository]'s private companion because
+ * `AuthActivity` checks arriving links against it, and one constant beats a
+ * second copy of the domain drifting out of step with the manifest.
+ */
+const val AUTH_HOST = "indicvision-dic-app-auth.firebaseapp.com"
+
+/**
  * Authentication + access-gate.
  *
  * Identity is federated through **Firebase Auth** — Google, email/password, or
@@ -442,13 +454,10 @@ class AuthRepository(context: Context) {
 
         const val K_PENDING_EMAIL = "pending_email"
 
-        // Where the email link returns to. Must be an Authorized Domain in the
-        // Firebase project and handled as an App Link by this app (see docs).
-        // Keep in sync with the backend's FIREBASE_PROJECT_ID — this is that
-        // project's default hosting domain.
-        const val EMAIL_LINK_CONTINUE_URL = "https://indicvision-dic-app-auth.firebaseapp.com/finishSignIn"
+        /** Email sign-in link continue URL — see [AUTH_HOST]. */
+        const val EMAIL_LINK_CONTINUE_URL = "https://$AUTH_HOST/finishSignIn"
 
         /** Password-reset App Link continue URL — keep in sync with the manifest filter. */
-        const val RESET_CONTINUE_URL = "https://indicvision-dic-app-auth.firebaseapp.com/finishReset"
+        const val RESET_CONTINUE_URL = "https://$AUTH_HOST/finishReset"
     }
 }

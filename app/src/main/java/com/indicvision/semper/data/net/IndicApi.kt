@@ -434,7 +434,15 @@ class IndicApi private constructor(context: Context) {
         }
     }
 
-    /** Signature over (nonce || METHOD || path) ++ SHA-256(body) — matches backend/app/deps.py. */
+    /**
+     * Signature over (nonce || METHOD || path) ++ SHA-256(body) — matches
+     * backend/app/deps.py.
+     *
+     * [path] is everything after the host, query string included: the backend
+     * appends `?` + query when the request has one, so a call site that signs a
+     * bare path and then fetches it with parameters would be rejected. No route
+     * takes query parameters today; this is what to keep in step when one does.
+     */
     private fun signedHeaders(
         idToken: String,
         method: String,
