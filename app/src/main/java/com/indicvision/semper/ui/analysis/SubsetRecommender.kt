@@ -6,6 +6,7 @@ import android.graphics.BitmapRegionDecoder
 import android.graphics.Rect
 import android.os.Build
 import com.indicvision.semper.SemperNativeLib
+import com.indicvision.semper.imaging.RawRgba
 import timber.log.Timber
 
 /**
@@ -44,6 +45,30 @@ object SubsetRecommender {
     /** SSSIG a subset must reach for [TARGET_SD_ERROR_PX] under [NOISE_VARIANCE]. */
     const val SSSIG_THRESHOLD = NOISE_VARIANCE / (TARGET_SD_ERROR_PX * TARGET_SD_ERROR_PX)
 
+    /**
+     * The SSSIG a subset must reach for [TARGET_SD_ERROR_PX] under a noise
+     * variance measured on this phone, under this light, instead of the paper's
+     * lab camera.
+     *
+     * **A measurement can only ever raise the threshold, never lower it.** The
+     * model behind it assumes the image noise is independent pixel to pixel,
+     * and a phone that is quietly smoothing its frames breaks that assumption
+     * in the one direction that matters: `D(η)` comes back far below the error
+     * the correlator will actually see, which would recommend a subset smaller
+     * than the paper's own default on evidence that is not real. Clamping at
+     * [NOISE_VARIANCE] makes the measurement able to fix the failure it was
+     * brought in for — a phone whose noise is *worse* than the lab camera's,
+     * where the recommended subset is too small — while being unable to cause
+     * the opposite one. See [NoiseFloorPixels.noiseCorrelationOf] for the
+     * measurement that detects the smoothing, which warns rather than steers.
+     *
+     * A non-finite or non-positive value means no measurement, and falls back.
+     */
+    fun thresholdFor(noiseVariance: Double): Double {
+        val usable = if (noiseVariance.isFinite() && noiseVariance > 0.0) noiseVariance else NOISE_VARIANCE
+        return maxOf(usable, NOISE_VARIANCE) / (TARGET_SD_ERROR_PX * TARGET_SD_ERROR_PX)
+    }
+
     /** Matches the subset slider's range/step in activity_static_analysis.xml. */
     const val MIN_SUBSET = 15
     const val MAX_SUBSET = 121
@@ -56,7 +81,7 @@ object SubsetRecommender {
     private const val LUMA_G = 0.587f
     private const val LUMA_B = 0.114f
 
-    private const val BYTES_PER_RGBA_PIXEL = 4
+    private const val BYTES_PER_RGBA_PIXEL = RawRgba.BYTES_PER_PIXEL
 
     /** ~32 MP, i.e. 128 MB as ARGB_8888 — the ceiling for a whole-image decode. */
     private const val MAX_FULL_DECODE_PIXELS = 32L * 1024 * 1024
@@ -70,6 +95,25 @@ object SubsetRecommender {
     /** True when a [side]-wide patch anchored at (x0, y0) lies inside w x h. */
     private fun patchFits(x0: Int, y0: Int, side: Int, w: Int, h: Int): Boolean =
         x0 >= 0 && y0 >= 0 && x0 + side <= w && y0 + side <= h
+
+    /**
+     * What a recommendation is solved for, as opposed to what it is solved on.
+     *
+     * The two travel together because they answer the same question — how
+     * accurate the result has to be, and at what sizes that is allowed to be
+     * bought — and a caller that sets one without thinking about the other
+     * usually meant to set both.
+     *
+     * @param sizes the allowed subset sizes, i.e. the slider's own range.
+     * @param noiseVariance `D(η)` measured on this device's own frames, when
+     *   the run captured them. See [thresholdFor] for why a measurement can
+     *   only ever make the subset larger. The default is the paper's constant,
+     *   which is what an imported analysis gets — it has no burst behind it.
+     */
+    data class Tuning(
+        val sizes: IntRange = MIN_SUBSET..MAX_SUBSET,
+        val noiseVariance: Double = NOISE_VARIANCE,
+    )
 
     /**
      * @param subsetSize the recommended (odd) subset size in pixels
@@ -149,6 +193,9 @@ object SubsetRecommender {
      * a raw RGBA buffer of `imgW * imgH * 4` bytes) sampled inside [roi], with
      * [sizes] giving the allowed subset sizes (the slider's range).
      * Returns null when the image cannot be sampled or the ROI is too small.
+     *
+     * @param tuning what the recommendation is solved for — the sizes on offer
+     *   and the noise it has to beat.
      */
     @Suppress("ReturnCount", "NestedBlockDepth")
     fun recommend(
@@ -156,10 +203,10 @@ object SubsetRecommender {
         imgW: Int,
         imgH: Int,
         roi: Rect,
-        sizes: IntRange = MIN_SUBSET..MAX_SUBSET,
+        tuning: Tuning = Tuning(),
     ): Result? {
-        val minSize = sizes.first
-        val maxSize = sizes.last
+        val minSize = tuning.sizes.first
+        val maxSize = tuning.sizes.last
         if (imgW <= 0 || imgH <= 0) return null
 
         val region = Rect(roi)
@@ -171,6 +218,7 @@ object SubsetRecommender {
         val cappedMax = minOf(maxSize, if (fits % 2 == 0) fits - 1 else fits)
         if (cappedMax < minSize) return null
 
+        val threshold = thresholdFor(tuning.noiseVariance)
         val source = patchSourceFor(refBytes, imgW, imgH) ?: return null
         try {
             val side = cappedMax + 2
@@ -188,7 +236,7 @@ object SubsetRecommender {
                     val x0 = (cx - halfPatch).coerceIn(0, imgW - side)
                     val y0 = (cy - halfPatch).coerceIn(0, imgH - side)
                     val patch = source.readGray(x0, y0, side) ?: continue
-                    val size = subsetSizeForPatch(patch, side, minSize, cappedMax)
+                    val size = subsetSizeForPatch(patch, side, minSize, cappedMax, threshold)
                     perPoint.add(size)
                     if (size < bestSize) {
                         bestSize = size
@@ -225,7 +273,7 @@ object SubsetRecommender {
     @Suppress("ReturnCount")
     private fun patchSourceFor(bytes: ByteArray, w: Int, h: Int): PatchSource? {
         // RAW/DNG frames arrive already decoded as an RGBA buffer.
-        if (bytes.size.toLong() == w.toLong() * h.toLong() * BYTES_PER_RGBA_PIXEL) {
+        if (RawRgba.matches(bytes.size.toLong(), w, h)) {
             return RgbaSource(bytes, w, h)
         }
         // Region decoding keeps full-resolution gradients without ever holding

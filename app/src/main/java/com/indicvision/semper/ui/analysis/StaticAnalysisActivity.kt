@@ -1044,7 +1044,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         // Read off the slider here: the measurement runs on the native thread,
         // which must not touch views.
-        val sizes = etSubsetSize.valueFrom.toInt()..etSubsetSize.valueTo.toInt()
+        // The noise variance is measured on this phone under this light when
+        // the run captured its own frames; an import has no burst behind it and
+        // falls back to the paper's constant.
+        val tuning = SubsetRecommender.Tuning(
+            sizes = etSubsetSize.valueFrom.toInt()..etSubsetSize.valueTo.toInt(),
+            noiseVariance = viewModel.captureFloor?.noiseVariance
+                ?: SubsetRecommender.NOISE_VARIANCE,
+        )
 
         lifecycleScope.launch(SemperNativeLib.nativeDispatcher) {
             val result = runCatching {
@@ -1053,7 +1060,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     imgW = viewModel.realRefWidth,
                     imgH = viewModel.realRefHeight,
                     roi = roi,
-                    sizes = sizes,
+                    tuning = tuning,
                 )
             }.onFailure { Timber.w(it, "Subset recommendation failed") }.getOrNull()
 
