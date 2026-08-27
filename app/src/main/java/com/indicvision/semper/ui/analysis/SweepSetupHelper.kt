@@ -20,8 +20,6 @@ import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.graphics.createBitmap
-import androidx.core.graphics.scale
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButtonToggleGroup
@@ -31,14 +29,13 @@ import com.google.android.material.slider.RangeSlider
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.imaging.BitmapDecode
+import com.indicvision.semper.imaging.RawRgba
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.nio.ByteBuffer
 import java.util.Locale
-import kotlin.math.min
 
 /**
  * Parameter-sweep setup UI for the analysis wizard (§5.4.5 parameter sweep): mode
@@ -75,7 +72,6 @@ class SweepSetupHelper(
 
         /** Longest edge of a frame thumbnail in the pick dialog. */
         private const val PREVIEW_MAX_EDGE = 480
-        private const val RGBA_BYTES_PER_PIXEL = 4
     }
 
     private lateinit var rgAnalysisMode: MaterialButtonToggleGroup
@@ -785,26 +781,10 @@ class SweepSetupHelper(
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
 
-    /** A RAW RGBA blob written at import, scaled down to preview size. */
+    /** A RAW RGBA blob written at import, sampled down to preview size. */
     private fun decodeRawRgba(bytes: ByteArray, size: Pair<Int, Int>?): Bitmap? {
-        val (w, h) = size?.takeIf {
-            bytes.size >= it.first * it.second * RGBA_BYTES_PER_PIXEL
-        } ?: return null
-        return runCatching {
-            val full = createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            full.copyPixelsFromBuffer(ByteBuffer.wrap(bytes, 0, w * h * RGBA_BYTES_PER_PIXEL))
-            val scale = min(1f, PREVIEW_MAX_EDGE.toFloat() / maxOf(w, h))
-            if (scale >= 1f) {
-                full
-            } else {
-                val scaled = full.scale(
-                    (w * scale).toInt().coerceAtLeast(1),
-                    (h * scale).toInt().coerceAtLeast(1),
-                )
-                if (scaled !== full) full.recycle()
-                scaled
-            }
-        }.getOrNull()
+        val (w, h) = size ?: return null
+        return RawRgba.preview(bytes, w, h, PREVIEW_MAX_EDGE)
     }
 
     private fun refreshSweepFrameUi() {
