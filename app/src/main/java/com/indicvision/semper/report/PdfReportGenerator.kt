@@ -13,6 +13,7 @@ import android.graphics.pdf.PdfDocument
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CaptureNoiseFloor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -174,8 +175,11 @@ object PdfReportGenerator {
         layout.drawKeyValue("Subset Size:", "${data.subsetSize} px")
         layout.drawKeyValue("Step Size:", "${data.stepSize} px")
         layout.drawKeyValue("Strain Method:", data.strainMethod)
-        layout.drawKeyValue("Strain Window:", "${data.strainWindow} subsets")
+        layout.drawKeyValue("Strain Window:", "${data.strainWindow} px")
         layout.advanceY(40f)
+
+        drawMeasurementFloor(layout, data.captureFloor)
+        drawFrameMotion(layout, data.rigidBody)
 
         layout.drawSectionHeader("Analysis Region (ROI)")
         layout.drawKeyValue("Origin (X, Y):", "(${data.roiData.startX}, ${data.roiData.startY})")
@@ -190,6 +194,73 @@ object PdfReportGenerator {
             data.deformedImageName,
         )
     }
+
+    /**
+     * What this capture could resolve, stated before any of the fields are
+     * shown.
+     *
+     * It sits on the cover rather than in an appendix because it qualifies
+     * every number in the document: a strain smaller than the floor is the
+     * camera, not the specimen, and a reader who reaches the Exx page without
+     * having seen this has already been misled. When the floor came back above
+     * the usable limit the sentence is boxed, so it cannot be skimmed past.
+     *
+     * An imported analysis has no burst behind it and says so, rather than
+     * leaving the section out — an absent section reads as a clean bill of
+     * health to anyone who does not know it can be absent.
+     */
+    private fun drawMeasurementFloor(layout: PdfLayoutEngine, floor: CaptureNoiseFloor?) {
+        layout.drawSectionHeader("Measurement Floor")
+        if (floor == null) {
+            layout.drawKeyValue("Noise Floor:", "Not measured (imported frames)")
+            layout.advanceY(40f)
+            return
+        }
+        layout.drawKeyValue("Noise Floor:", floor.detail())
+        floor.noiseDetail()?.let { layout.drawKeyValue("Image Noise:", it) }
+        floor.warning()?.let { layout.drawNotice(it) }
+        if (floor.denoised()) layout.drawNotice(DENOISED_NOTICE)
+        layout.advanceY(40f)
+    }
+
+    /**
+     * Boxed alongside the floor when the burst found the frames smoothed.
+     *
+     * Its own notice rather than a line in the table because it is the finding
+     * a reader is least equipped to arrive at alone: the camera was told to
+     * stop and reported that it had, so nothing in the capture settings, and
+     * nothing in the fields that follow, shows it happened.
+     */
+    /**
+     * What the whole scene did between the two frames, as opposed to what the
+     * specimen did.
+     *
+     * On the cover rather than buried with the field statistics because it is
+     * the one number here that points at the rig instead of at the camera or
+     * the pattern, and a reader deciding whether to trust the strain field
+     * needs to see it before the field, not after.
+     */
+    private fun drawFrameMotion(layout: PdfLayoutEngine, fit: RigidBodyFit.Fit?) {
+        layout.drawSectionHeader("Frame Motion")
+        if (fit == null) {
+            layout.drawKeyValue("Scene Movement:", "Not measured (too few points converged)")
+            layout.advanceY(40f)
+            return
+        }
+        layout.drawKeyValue("Scene Movement:", RigidBodyFit.label(fit))
+        if (fit.notable()) layout.drawNotice(MOTION_NOTICE)
+        layout.advanceY(40f)
+    }
+
+    private const val MOTION_NOTICE =
+        "The whole scene shifted between frames. Uniform motion does not change the strain field, " +
+            "but a shift that grows across a series is the mount or the camera moving, not the " +
+            "specimen — and it is reported here rather than removed, because removing it would " +
+            "take real deformation with it."
+
+    private const val DENOISED_NOTICE =
+        "The phone smoothed these frames despite being told not to. Fine detail is lost, " +
+            "and the measured image noise reads lower than the camera really is."
 
     /**
      * Pages 2+: the five field blocks, two to a page — U and V, then Exx and

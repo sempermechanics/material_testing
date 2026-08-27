@@ -109,6 +109,7 @@ object ViewerReportFactory {
                 referenceImageName = host.intent.getStringExtra(DicKeys.REF_NAME) ?: "reference.png",
                 deformedImageName = host.originalDefNames.getOrNull(frameIndex)
                     ?: "Frame_${frameIndex + 1}",
+                captureFloor = host.sessionRecord?.captureFloor,
             ),
         )
     }

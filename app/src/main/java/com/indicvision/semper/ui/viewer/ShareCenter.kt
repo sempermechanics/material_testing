@@ -22,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
@@ -450,7 +451,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             )
         }
         val f = File(shareDir(), "${s.baseName}_data.csv")
-        AnalysisCsvWriter.write(f, sweep, frames)
+        AnalysisCsvWriter.write(f, sweep, frames, s.captureFloor)
         return f
     }
 
@@ -648,6 +649,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
          * reusing the one on screen.
          */
         val buildReportAt: (Int, FloatArray) -> com.indicvision.semper.report.ReportData?,
+        /** The floor the frames were captured at; null for an imported analysis. */
+        val captureFloor: CaptureNoiseFloor? = null,
     ) {
         /** Grid pitch of frame [index] — what rendering that frame depends on. */
         fun stepAt(index: Int): Int = stepPerFrame?.getOrNull(index) ?: step

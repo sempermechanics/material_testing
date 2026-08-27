@@ -108,6 +108,13 @@ data class SessionRecord(
      * so a sweep re-run as a single (or vice-versa) stops carrying the old kind.
      */
     val renamedByUser: Boolean = false,
+
+    /**
+     * The strain floor the frames were captured at, when they came from this
+     * app's capture flow. Null for an imported analysis, which has no burst to
+     * measure — see [CaptureNoiseFloor].
+     */
+    val captureFloor: CaptureNoiseFloor? = null,
 ) {
 
     /** True when the run stopped itself before working through every frame. */

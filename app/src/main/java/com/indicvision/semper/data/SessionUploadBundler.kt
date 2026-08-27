@@ -115,7 +115,7 @@ object SessionUploadBundler {
         }
 
         val sweepImage = record.defNames.firstOrNull().orEmpty()
-        val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep) }
+        val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, record.captureFloor) }
         try {
             record.defNames.forEachIndexed { index, defName ->
                 val datFile = SessionPaths.frameDat(sessionDir, index)
@@ -316,6 +316,7 @@ object SessionUploadBundler {
                 referenceImageName = "Baseline",
                 deformedImageName = frameName,
                 drawMinMarker = false,
+                captureFloor = record.captureFloor,
             ),
         )
 

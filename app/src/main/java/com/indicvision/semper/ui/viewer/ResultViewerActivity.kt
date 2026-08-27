@@ -957,13 +957,25 @@ class ResultViewerActivity : AppCompatActivity() {
      * Falls back to the session name, then the first deformed frame, then "analysis".
      */
     private fun shareBaseName(): String {
-        val record = intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
-            ?.let { runCatching { com.indicvision.semper.data.SessionStore.get(this, it) }.getOrNull() }
+        val record = sessionRecord
         val raw = record?.refName?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }
             ?: record?.name?.takeIf { it.isNotBlank() }
             ?: originalDefNames.firstOrNull()?.substringBeforeLast('.')
             ?: "analysis"
         return raw.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_').take(60).ifBlank { "analysis" }
+    }
+
+    /**
+     * The stored record behind this viewer, or null when it was opened without
+     * one (a run still in flight, or a legacy Intent).
+     *
+     * Read once and kept: the share name, the CSV and every page of an
+     * all-frames report want the same few fields off it, and re-reading the
+     * session index per report page would be a file read per page.
+     */
+    internal val sessionRecord: com.indicvision.semper.data.SessionRecord? by lazy {
+        intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
+            ?.let { runCatching { com.indicvision.semper.data.SessionStore.get(this, it) }.getOrNull() }
     }
 
     internal fun buildShareSnapshot(): ShareCenter.Snapshot? {
@@ -990,6 +1002,7 @@ class ResultViewerActivity : AppCompatActivity() {
             summary = summary.animation,
             summaryBounds = { index -> summary.boundsFor(index) },
             buildReportAt = { index, frameData -> buildReportData(index, frameData) },
+            captureFloor = sessionRecord?.captureFloor,
         )
     }
 
