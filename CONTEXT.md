@@ -130,7 +130,7 @@ Kover `minBound` floor is 15. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-08-27)
+## Current state (2026-08-28)
 
 Home **+** expands to **Import** (existing `MediaPickerSheet`) or **Record**
 (`ui/capture/`: setup → Camera-app test shot → contrast ROI → SSSIG gate →
@@ -175,7 +175,8 @@ kind of scene, with convergence up from 72.7% to 77.3% / 94.8%. What changed:
   The verdict **warns and never blocks** — `Record anyway` is the primary
   action and the floor is stamped on the session, the PDF cover and every CSV
   row, because an override that leaves no trace is how a bad number becomes a
-  published number.
+  published number. A clean pass is also a dialog: **Continue** (not Record
+  anyway), with ⓘ for the FAQ — not **Why?**, because the number is a fact.
 - **`strain_window` is a diameter in pixels**, not a multiple of the step
   (`VsgStudy.vsgFor`). The gate quoted floors 3-5x better than the settings
   could deliver until the device data caught it. `MAX_STRAIN_WINDOW` (101 px)
@@ -198,10 +199,12 @@ kind of scene, with convergence up from 72.7% to 77.3% / 94.8%. What changed:
   `Pictures/semper/<date>-<time>` so the raw measurement is reachable without this
   app. It never blocks the run and skips with one line when there is no room.
 
-Still open from that work: precision-mode auto-engage and k-averaging, lifting
-the 2048 px cap, picking the longest rear lens by physical camera id (also the
-generic lever against the Pixel's multicam graph), and user-confirmed focus
-lock before the test shot. `RawRgba` closed the DNG-in-`RoiDrawActivity` gap:
+Shipped on this branch from that precision work: k-averaging on the reference
+only ([AveragingPlan]; no precision-mode toggle), a catalogue that can offer
+frames above 2048 px when RAM allows ([sustainableCeiling]), and picking the
+longest rear lens by physical camera id ([pickBackCameraId]). Tap-to-focus /
+user-confirmed focus before the test shot was never built and is not open work
+here. `RawRgba` closed the DNG-in-`RoiDrawActivity` gap:
 one shared helper detects a `w*h*4` blob and samples straight into a
 preview-sized bitmap, so the full-resolution allocation never happens.
 
