@@ -300,9 +300,10 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
     │   phone smoothing underneath the lockdown
     ├── Verdict: a floor above the limit warns and never blocks — Record
     │   anyway stays the primary action and the floor is stamped on the
-    │   session, the PDF and the CSV. A burst that would not settle or that
-    │   drifted asks to retry instead, because there the measurement failed to
-    │   measure itself
+    │   session, the PDF and the CSV. A passing floor is also a dialog:
+    │   **Continue** (not Record anyway), with ⓘ for the FAQ. A burst that
+    │   would not settle or that drifted asks to retry instead, because there
+    │   the measurement failed to measure itself
     ├── Timed stills (PNG, converted from the sensor's own YUV output — no
     │   JPEG step)
     ├── Second copy of the as-captured frames into Pictures/semper/<date>-<time>
@@ -326,7 +327,7 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
 | [ ] 3b.6c | Watch the test shot on a phone that refuses ISP keys | Exactly one warning, effect first, under 20 words, with a working FAQ link. A phone that honoured everything shows none |
 | [ ] 3b.6d | Dim the light or defocus slightly, then take a test shot | Floor verdict dialog; **Record anyway** is the primary action, **Retry test shot** beside it, **Why?** opens the noise-floor FAQ |
 | [ ] 3b.6e | Nudge the tripod during the burst | One disturbed frame does not flip a good setup into a refusal (median over 5) |
-| [ ] 3b.6f | Pass the gate on a good setup | No dialog; the measured floor is still recorded on the session |
+| [ ] 3b.6f | Pass the gate on a good setup | Continue dialog with floor title + body; **ⓘ** opens the FAQ without dismissing; **Continue** enables **Start recording**; measured floor is still recorded on the session; no **Why?** on pass |
 | [ ] 3b.7 | Complete a stills run | Wizard opens with reference (vendor JPEG) + deformed frames (lossless PNG) filled |
 | [ ] 3b.8 | Open the phone's gallery after a run | A `semper/<date>-<time>` folder under Pictures holds the reference and every frame, as captured |
 | [ ] 3b.9 | Export the PDF and the CSV for that run | Cover carries **Measurement Floor** and **Frame Motion**; every CSV row carries the floor and scene-motion columns |
