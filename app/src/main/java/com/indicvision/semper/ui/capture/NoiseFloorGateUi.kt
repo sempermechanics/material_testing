@@ -136,6 +136,13 @@ internal class NoiseFloorGateUi(
         // this device rather than Camera2's unrelated JPEG stall.
         CaptureCalibration.record(activity, planWidth, planHeight, result.firstFrameMs)
         onFrameCost(result.firstFrameMs)
+        // Frames that could not be correlated with each other at all are not a
+        // floor of "unknown" to pass through quietly — they are the burst
+        // producing nothing usable, same as a burst that crashed outright.
+        if (result.verdict.outcome == NoiseFloorStats.Outcome.INSUFFICIENT) {
+            onBurstFailed()
+            return false
+        }
         floor = result
         // A high floor no longer stops the run, but it must not pass unseen
         // either: it is shown, and the same verdict is stamped on the session so
