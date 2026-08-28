@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from . import errors
 from . import observability as obs
 from .config import settings
 from .routers import account, admin, devices, files, health, provision_tasks, sessions
@@ -115,11 +116,11 @@ async def access_log(request: Request, call_next):
         except obs.DependencyError:
             raise
         except Exception:
-            obs.report_exception(log, error_code="internal_error")
+            obs.report_exception(log, error_code=errors.INTERNAL_ERROR)
             # In production, never leak exception text to clients. Locally and in
             # tests, re-raise so pytest and debuggers still see the real failure.
             if settings.ON_CLOUD_RUN:
-                response = JSONResponse(status_code=500, content={"detail": "internal_error"})
+                response = JSONResponse(status_code=500, content={"detail": errors.INTERNAL_ERROR})
             else:
                 raise
         status = response.status_code

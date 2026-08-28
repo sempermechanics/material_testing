@@ -19,11 +19,13 @@ import androidx.work.workDataOf
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.analytics.SemperAnalytics
+import com.indicvision.semper.data.net.ApiErrors
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
 import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.net.IndicApiHttp
 import com.indicvision.semper.data.net.MAX_CHUNK_BYTES
 import com.indicvision.semper.data.net.MIN_CHUNK_BYTES
 import com.indicvision.semper.data.net.SessionCreateRequest
@@ -360,10 +362,11 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             ?: return@withContext Result.failure()
 
         // Terminal failure carrying a reason the UI can show. localId lets Home
-        // find the row for a Retry action.
-        fun failure(reason: String): Result = Result.failure(
+        // find the row for a Retry action; [requestId] joins it to the backend
+        // access line — see [IndicApiHttp.requestIdOf].
+        fun failure(reason: String, requestId: String? = null): Result = Result.failure(
             workDataOf(
-                DicKeys.UPLOAD_FAIL_REASON to reason,
+                DicKeys.UPLOAD_FAIL_REASON to IndicApiHttp.withRef(reason, requestId),
                 DicKeys.SESSION_LOCAL_ID to localId,
             ),
         )
@@ -767,7 +770,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             runCatching { api.registerDevice(idToken) }
                 .onSuccess { TokenStore.setDeviceRegistered(applicationContext, true) }
                 .onFailure { Timber.e(it, "Re-registration failed") }
-            retryLater(localId, "device not active — re-registered, retry upload")
+            retryLater(localId, "device not active — re-registered, retry upload", e.requestId)
         } catch (e: IndicApi.DeviceConflictException) {
             Timber.e("This account is bound to a different device — cannot upload")
             SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
@@ -775,9 +778,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             SemperAnalytics.event(
                 applicationContext,
                 SemperAnalytics.CLOUD_UPLOAD_FAILED,
-                mapOf("reason" to "device_conflict"),
+                mapOf("reason" to ApiErrors.DEVICE_CONFLICT),
             )
-            failure(applicationContext.getString(R.string.cloud_backup_failed_device))
+            failure(applicationContext.getString(R.string.cloud_backup_failed_device), e.requestId)
         } catch (e: IndicApi.ApiException) {
             when {
                 // CONFLICT = analysis quota reached, PAYLOAD_TOO_LARGE = too many files.
@@ -806,7 +809,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         Result.failure()
                     } else {
                         // Payload too large — retrying won't help; tell the user.
-                        failure(applicationContext.getString(R.string.cloud_backup_failed_too_large))
+                        failure(
+                            applicationContext.getString(R.string.cloud_backup_failed_too_large),
+                            e.requestId,
+                        )
                     }
                 }
                 // 400 = the resumable session's expected size no longer matches our
@@ -830,12 +836,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         if (cloudId.isNotBlank()) api.deleteSession(idToken, cloudId)
                     }.onFailure { Timber.w(it, "Could not delete stale session") }
                     SessionStore.setCloudSessionId(applicationContext, localId, "")
-                    retryLater(localId, "HTTP 400 stale session — ${e.detail.take(120)}")
+                    retryLater(localId, "HTTP 400 stale session — ${e.detail.take(120)}", e.requestId)
                 }
                 else -> {
                     // Transient — keep the staged files so the retry resumes identically.
                     Timber.e(e, "Upload HTTP %d for %s — %s", e.code, localId, e.detail)
-                    retryLater(localId, "HTTP ${e.code}: ${e.detail.take(160)}")
+                    retryLater(localId, e.message.orEmpty().take(RETRY_REASON_MAX_LEN))
                 }
             }
         } catch (e: OutOfMemoryError) {
@@ -930,12 +936,15 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
      * [CrashReportingTree] mirrors WARN+). Without this, alpha only saw
      * `Worker result RETRY` with no Semper reason.
      */
-    private fun retryLater(localId: String, reason: String): Result {
-        Timber.w("Upload RETRY localId=%s — %s", localId, reason)
+    private fun retryLater(localId: String, reason: String, requestId: String? = null): Result {
+        Timber.w("Upload RETRY localId=%s — %s", localId, IndicApiHttp.withRef(reason, requestId))
         return Result.retry()
     }
 
     private companion object {
+        /** Cap on a retry reason, which is only ever logged. */
+        const val RETRY_REASON_MAX_LEN = 200
+
         /** Restore-essential archive: everything needed to rebuild a working session. */
         const val BUNDLE_NAME = "Session.zip"
 

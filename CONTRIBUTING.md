@@ -158,7 +158,8 @@ parallel). Kotlin/docs-only PRs run ~10–15 min via path filters.
 | Area | Entry point |
 |---|---|
 | Android UI / sessions / viewer | [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md) |
-| Every user-facing screen and flow | [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) |
+| Every workflow and the files behind it | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) |
+| Every user-facing screen, as a manual test pass | [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) |
 | App tests (workflow chunks) | [docs/app/TESTING.md](docs/app/TESTING.md) |
 | C++ correlation engine | The `native/` submodule — the app-facing rules are in [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
 | Engine tests | [docs/engine/TESTING.md](docs/engine/TESTING.md) |

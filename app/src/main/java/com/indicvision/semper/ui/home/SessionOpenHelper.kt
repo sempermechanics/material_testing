@@ -66,8 +66,6 @@ object SessionOpenHelper {
             }
             putExtra(DicKeys.STOP_CODE, session.stopCode)
             putExtra(DicKeys.PLANNED_FRAMES, session.plannedFrameCount)
-            run {
-            }
             putExtra(DicKeys.SESSION_ID, session.id)
             putExtra(DicKeys.SESSION_LOCAL_ID, session.id)
             putExtra(DicKeys.SUBSET_SIZE, session.subset)

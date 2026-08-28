@@ -169,7 +169,10 @@ carry three actions — **Download** (SAF destination first, then a worker),
 lattice's plot toggle is an **All / Node** pill defaulting to **All**; the scrub
 readout shows x and y.
 
-Docs for all of the above: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md).
+Docs for all of the above: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) (the
+manual test pass). Every workflow — app, background and backend — mapped to its
+files, failure surfaces and tests: [docs/WORKFLOWS.md](docs/WORKFLOWS.md);
+proposals coming out of that map: [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 A single-setting run that solves zero points shows the same VSG-failure
 wording as a sweep lattice node, not the generic "No data produced" dialog.

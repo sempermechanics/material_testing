@@ -21,6 +21,15 @@ Orphaned strings the 2026-08-18 workflow audit found are listed in
 [../app/WORKFLOWS.md](../app/WORKFLOWS.md) §11 — none of them fail a gate, so they
 are removed opportunistically rather than in a sweep.
 
+## Proposed improvements live next door
+
+Forward-looking items — the ones that came out of the 2026-08-24 workflow
+traceability pass, ranked by accuracy and privacy impact — are in
+[FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md). This file stays the record of
+what is *owed* and what is deliberately deferred. Two entries below have a
+concrete proposal there: the `ViewerSession` extras bag (FI-1) and the consent
+copy (FI-8).
+
 ## External / deferred (not blocked on code alone)
 
 | Item | Why deferred |
@@ -41,15 +50,15 @@ Macrobenchmark CI (`tier-benchmark`) is emulator **smoke**: it suppresses
 (API 37 `dumpsys gfxinfo framestats` is empty). Dispatch with `run_benchmark` or
 the `benchmark` label.
 
-## User-facing copy that understates what it controls
+## User-facing consent copy (fixed 2026-08-24)
 
-**Send crash reports** (`setting_diagnostics` / `diagnostics_prompt_body`) is the
-consent gate for `analytics/SemperAnalytics` as well as Crashlytics — analysis
-started / completed / failed, the two data exports and Send feedback all check the
-same `DicSettings.diagnosticsEnabled` flag. The events are PII-free buckets and the
-[privacy policy](../legal/PRIVACY_POLICY.md) §2.4 already covers both, but the
-in-app label and the first-run prompt name only crash reporting. Fix is a copy
-change to those two strings, deliberately not bundled into a docs pass.
+**Send crash reports** understated its scope: the same flag
+(`DicSettings.diagnosticsEnabled`) gates `analytics/SemperAnalytics` as well as
+Crashlytics. The toggle now reads **Send crash reports and usage data**, and its
+subtitle and the first-run prompt name the usage events explicitly alongside what
+is never sent. `docs/legal/PRIVACY_POLICY.md` §2.4 names the new label and the
+hosted pages were regenerated. Nothing about *what* is collected changed — the
+events were, and remain, PII-free buckets.
 
 ## 2026-08-12 result-viewer / report memory & latency program
 

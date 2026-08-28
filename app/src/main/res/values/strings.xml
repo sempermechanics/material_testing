@@ -272,10 +272,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="export_cloud_data_failed">Couldn\'t download your account data. Check your connection and try again.</string>
     <string name="export_cloud_data_offline">Cloud sync isn\'t set up on this build, so there\'s no cloud data to download.</string>
     <!-- Diagnostics consent -->
-    <string name="setting_diagnostics">Send crash reports</string>
-    <string name="setting_diagnostics_sub">Share anonymous crash and error diagnostics so we can fix problems. Off by default; no analysis data or images are ever sent.</string>
+    <string name="setting_diagnostics">Send crash reports and usage data</string>
+    <string name="setting_diagnostics_sub">Share anonymous crash diagnostics and coarse usage events — which features ran, and whether they succeeded — so we can fix problems. Off by default; your images, results, specimen names, file paths and analysis data are never sent.</string>
     <string name="diagnostics_prompt_title">Help improve Semper?</string>
-    <string name="diagnostics_prompt_body">Semper can send anonymous crash reports and error diagnostics when something goes wrong.\n\nThis never includes your images, results, or specimen names. You can change this at any time in Settings.</string>
+    <string name="diagnostics_prompt_body">Semper can send anonymous crash reports when something goes wrong, and coarse usage events such as whether an analysis started, finished or failed.\n\nThis never includes your images, results, specimen names, file paths or analysis data. You can change this at any time in Settings.</string>
     <string name="diagnostics_prompt_accept">Send reports</string>
     <string name="diagnostics_prompt_decline">Not now</string>
     <string name="delete_account">Delete my account and data</string>
@@ -353,7 +353,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_backup_failed_device">This account is backing up from another device.</string>
     <string name="cloud_backup_failed_too_large">This analysis is too large to back up.</string>
     <string name="cloud_backup_failed_oom">Not enough memory on this device to prepare the backup. Try again after closing other apps, or use a device with more RAM.</string>
-    <string name="cloud_backup_failed_provision">Cloud backup setup failed (Drive upload targets). Tap Try again, or check backend Cloud Tasks / Drive.</string>
+    <string name="cloud_backup_failed_provision">Cloud backup setup could not be completed. Tap Try again.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
     <string name="cloud_delete_backup_title">Delete from backup</string>
     <string name="cloud_delete_backup_body">Choose what to remove for this analysis.\n\nDeleting the cloud backup is permanent — the raw images, results and report are erased from the cloud and cannot be recovered.</string>
@@ -389,7 +389,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="legal_terms">Terms of Service</string>
     <!-- Public legal pages on the product site. -->
     <string name="legal_privacy_url" translatable="false">https://sempermechanics.com/privacy/</string>
-    <string name="legal_terms_url" translatable="false">https://sempermechanics.com/privacy/</string>
+    <string name="legal_terms_url" translatable="false">https://sempermechanics.com/terms/</string>
     
     <string name="advanced_parameters">Advanced parameters</string>
     

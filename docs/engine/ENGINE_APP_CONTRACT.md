@@ -4,7 +4,8 @@
 
 The engine is published as [`sempermechanics/semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine)
 (C/C++ SDK + Android JNI + Python). This app links it as a **pinned git submodule** at `native/`.
-The public copy of this contract lives at `docs/CONTRACT.md` in that repo; keep the two in sync
+The public copy of this contract lives at `native/docs/CONTRACT.md` — the engine repo's own
+copy of it; keep the two in sync
 when Frozen/Stable rules change.
 
 > **The rule in one sentence:** anything in the tables marked **Frozen** or **Stable** below is

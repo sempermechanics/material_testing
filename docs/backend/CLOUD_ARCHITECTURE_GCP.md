@@ -772,14 +772,14 @@ Signing.
   `path`, `status`, `latencyMs`, `outcome`, `uid` / `deviceId` when resolved,
   `opClass` / `routeTemplate` for usage rollups, optional `fileCount` /
   `frameCount` on session create, and `errorCode` on failures
-  (`app/observability.py` + middleware). Never logs tokens/signatures/URIs.
+  (`backend/app/observability.py` + middleware). Never logs tokens/signatures/URIs.
   Structured access logs include `opClass` / `routeTemplate` for ops dashboards.
   Client 500 bodies stay opaque (`internal_error`) on
   Cloud Run.
 - **Audit trail** in Firestore `audit_logs` — the compliance record (Cloud
   Logging is the operational one).
 - **Async Resend notify** — access-request mail is enqueued off the request
-  path with Idempotency-Key + bounded retry (`app/notify.py`).
+  path with Idempotency-Key + bounded retry (`backend/app/notify.py`).
 
 ### Cloud Error Reporting and log-based alerts (operator setup)
 

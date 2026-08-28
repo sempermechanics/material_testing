@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from fastapi import Depends, Header, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
-from . import audit, firestore_repo as repo
+from . import audit, errors, firestore_repo as repo, statuses
 from .config import settings
 from .google_auth import verify_id_token
 from .validation import require_header_identifier
@@ -21,7 +21,7 @@ log = logging.getLogger("indic.auth")
 
 _DEV_USER = {"uid": "dev-user", "email": "dev@local", "role": "admin",
              "access_status": "APPROVED", "activeDeviceId": "dev-device"}
-_DEV_DEVICE = {"deviceId": "dev-device", "uid": "dev-user", "status": "ACTIVE"}
+_DEV_DEVICE = {"deviceId": "dev-device", "uid": "dev-user", "status": statuses.DEVICE_ACTIVE}
 
 
 def _client_bearer(authorization: str, x_forwarded_authorization: str) -> str:
@@ -55,26 +55,26 @@ def current_user(
         if not bearer.startswith("Bearer "):
             log.warning("no bearer token: authorization=%s x_forwarded=%s",
                         bool(authorization), bool(x_forwarded_authorization))
-            raise HTTPException(401, "missing_bearer")
+            raise HTTPException(401, errors.MISSING_BEARER)
         try:
             claims = verify_id_token(bearer[7:])
         except Exception as e:  # noqa: BLE001
             log.warning("id_token verify FAILED (x_forwarded_present=%s): %s",
                         bool(x_forwarded_authorization), e)
             audit.record(action="AUTH_DENIED", outcome="DENIED", detail={"stage": "id_token"})
-            raise HTTPException(401, "invalid_token")
+            raise HTTPException(401, errors.INVALID_TOKEN)
         try:
             require_header_identifier(
                 str(claims.get("sub", "")), name="uid", maximum=128
             )
         except HTTPException as exc:
-            raise HTTPException(401, "invalid_token") from exc
+            raise HTTPException(401, errors.INVALID_TOKEN) from exc
         try:
             user = repo.get_or_create_user(claims, device_id=x_device_id or None)
         except repo.DeviceInUseError as exc:
-            raise HTTPException(409, "device_in_use") from exc
+            raise HTTPException(409, errors.DEVICE_IN_USE) from exc
         if user["access_status"] != "APPROVED":
-            raise HTTPException(403, "not_approved")
+            raise HTTPException(403, errors.NOT_APPROVED)
     try:
         request.state.uid = user["uid"]
         obs.bind_uid(user["uid"])
@@ -93,7 +93,7 @@ def admin_user(user: dict = Depends(current_user)) -> dict:
     """
     email = (user.get("email") or "").lower()
     if user.get("role") != "admin" and email not in settings.ADMIN_EMAILS:
-        raise HTTPException(403, "not_admin")
+        raise HTTPException(403, errors.NOT_ADMIN)
     return user
 
 
@@ -119,13 +119,13 @@ async def verified_device(
         x_nonce, name="nonce", maximum=128
     )
     if not x_signature or len(x_signature) > 512:
-        raise HTTPException(400, "invalid_signature")
+        raise HTTPException(400, errors.INVALID_SIGNATURE)
 
     dev = await run_in_threadpool(repo.get_device, x_device_id)
-    if not dev or dev["uid"] != user["uid"] or dev["status"] != "ACTIVE":
-        raise HTTPException(409, "device_not_active")
+    if not dev or dev["uid"] != user["uid"] or dev["status"] != statuses.DEVICE_ACTIVE:
+        raise HTTPException(409, errors.DEVICE_NOT_ACTIVE)
     if not await run_in_threadpool(repo.consume_nonce, x_nonce, user["uid"], x_device_id):
-        raise HTTPException(401, "nonce_invalid_or_replayed")
+        raise HTTPException(401, errors.NONCE_INVALID_OR_REPLAYED)
 
     body = await request.body()
     msg = (x_nonce + request.method + request.url.path).encode() + hashlib.sha256(body).digest()
@@ -136,7 +136,7 @@ async def verified_device(
     except (binascii.Error, InvalidSignature, ValueError):
         audit.record(user["uid"], x_device_id, action="AUTH_DENIED", outcome="DENIED",
                      detail={"stage": "signature"})
-        raise HTTPException(401, "bad_signature")
+        raise HTTPException(401, errors.BAD_SIGNATURE)
     try:
         request.state.device_id = x_device_id
         obs.bind_device(x_device_id)

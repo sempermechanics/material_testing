@@ -75,6 +75,13 @@ jobs:
           python-version: '3.12'
       - run: python scripts/render_legal_pages.py --check
 
+      # The docs map hundreds of source paths (docs/WORKFLOWS.md maps every
+      # workflow to its files). A rename silently rots those references, and a
+      # map that points at a file which no longer exists is worse than no map.
+      # Skips the engine submodule, which this job does not check out.
+      - name: Docs reference files that exist
+        run: python scripts/check_doc_paths.py
+
   # ===================================================================
   # Path filters — same rules on PR and push. Prove only what the diff
   # can break. Optional full matrix via `full-ci` label or workflow_dispatch.
@@ -131,6 +138,13 @@ jobs:
               - 'backend/**'
               - 'firestore.rules'
               - 'firebase-hosting/**'
+              # The client's copies of the three wire contracts. Without these,
+              # a rename on an app-only PR skips the backend tier and the tests
+              # holding each pair of lists together never run — which is the one
+              # thing keeping them in step.
+              - 'app/src/main/java/com/indicvision/semper/data/net/ApiErrors.kt'
+              - 'app/src/main/java/com/indicvision/semper/data/net/ArtifactRoles.kt'
+              - 'app/src/main/java/com/indicvision/semper/data/UploadWorkOutcomes.kt'
             ci_workflow:
               - '.github/workflows/ci.yml'
             android_test:
