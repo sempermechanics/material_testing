@@ -10,12 +10,12 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.graphics.SurfaceTexture
-import android.net.Uri
 import android.os.Bundle
 import android.view.TextureView
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -29,8 +29,8 @@ import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.ui.analysis.NoiseFloorStats
 import com.indicvision.semper.ui.analysis.RoiDrawActivity
-import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.analysis.SubsetRecommender
+import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,10 +45,14 @@ import java.util.concurrent.TimeoutException
 
 /**
  * Test shot (Camera app) → ROI for contrast → SSSIG → focus lock →
- * locked reference → timed locked stills → wizard.
+ * locked reference → timed locked stills → setup result → wizard.
  *
  * The test shot is a check, not data: everything handed to the wizard comes
  * off the locked session. See [captureLockedReference].
+ *
+ * Setup stays under this screen so Back returns to fps / duration / resolution
+ * instead of Home. On success this finishes with [Activity.RESULT_OK] and the
+ * picked-frame extras; setup starts the wizard.
  */
 class CaptureSessionActivity : AppCompatActivity() {
 
@@ -76,6 +80,19 @@ class CaptureSessionActivity : AppCompatActivity() {
      * is also why [averagingFrames] falls back to one frame without it.
      */
     private var measuredFrameCostMs = 0L
+
+    /** True while timed stills (or the locked reference) are in flight. */
+    private var recordingActive = false
+
+    /**
+     * True after the noise-floor gate has handed off to [showReady] (or the
+     * gate was skipped). Used so a FAQ hop that kills the camera can re-lock
+     * without re-running the burst.
+     */
+    private var readyToRecord = false
+
+    /** Guards concurrent [reopenLockedPreview] calls from onResume. */
+    private var relocking = false
 
     /**
      * The noise-floor gate: the ROI carried from the speckle check, the burst
@@ -157,6 +174,10 @@ class CaptureSessionActivity : AppCompatActivity() {
         }
     }
 
+    private val backCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() = navigateBack()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_capture_session)
@@ -187,8 +208,9 @@ class CaptureSessionActivity : AppCompatActivity() {
         btnStart = findViewById(R.id.btnCaptureStart)
         preview = findViewById(R.id.capturePreview)
 
+        onBackPressedDispatcher.addCallback(this, backCallback)
         findViewById<MaterialToolbar>(R.id.toolbarCaptureSession).apply {
-            setNavigationOnClickListener { finish() }
+            setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
             setNavigationIconTint(getColor(R.color.text_on_primary))
         }
 
@@ -204,6 +226,42 @@ class CaptureSessionActivity : AppCompatActivity() {
             // IMAGE_CAPTURE crashes if CAMERA is declared but not granted (Android 11+).
             withCameraPermission { launchTestShot() }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        maybeRelockAfterBackground()
+    }
+
+    /**
+     * Back / toolbar: return to setup (canceled). During timed stills, confirm
+     * first so a mis-tap does not discard a half-finished run silently.
+     */
+    private fun navigateBack() {
+        if (!recordingActive) {
+            finish()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.capture_stop_title)
+            .setMessage(R.string.capture_stop_message)
+            .setPositiveButton(R.string.capture_stop_confirm) { _, _ -> finish() }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Opening the FAQ backgrounds this screen; the HAL often revokes the
+     * camera. If focus was already locked and the floor gate already ran (or
+     * was skipped), re-open the session without re-measuring — otherwise
+     * Continue / Start recording would fail after the browser hop.
+     */
+    private fun maybeRelockAfterBackground() {
+        if (focusLock == null || recordingActive || relocking) return
+        if (noiseGate.floor == null && !readyToRecord) return
+        val session = lockedSession
+        if (session != null && session.isUsable) return
+        withCameraPermission { reopenLockedPreview() }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -259,6 +317,7 @@ class CaptureSessionActivity : AppCompatActivity() {
     }
 
     private fun launchTestShot() {
+        readyToRecord = false
         tvStatus.setText(R.string.capture_status_test_shot)
         btnStart.isVisible = false
         val dir = SystemCamera.captureDir(this)
@@ -291,8 +350,8 @@ class CaptureSessionActivity : AppCompatActivity() {
 
     /**
      * The one shape every dead end on this screen takes: say what went wrong,
-     * offer the step again, or leave. Cancel always finishes — there is
-     * nothing to return to with a half-built plan.
+     * offer the step again, or leave. Cancel finishes back to setup so the
+     * plan (fps / duration / resolution) can still be changed.
      */
     private fun showRetryDialog(message: CharSequence, onRetry: () -> Unit) {
         MaterialAlertDialogBuilder(this)
@@ -394,16 +453,22 @@ class CaptureSessionActivity : AppCompatActivity() {
             .setPositiveButton(R.string.capture_roi_select) { _, _ -> openContrastRoi(file) }
             .setNegativeButton(R.string.capture_retry) { _, _ -> launchTestShot() }
         if (!tooSmall) {
-            dialog.setNeutralButton(R.string.action_why) { _, _ ->
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.url_faq_speckle))))
-            }
+            // Placeholder: a real listener would dismiss, and returning from the
+            // FAQ would leave no Select area / Retry.
+            dialog.setNeutralButton(R.string.action_why, null)
         } else {
             dialog.setNeutralButton(R.string.cancel) { _, _ -> finish() }
         }
         // Deferred a frame: showing a dialog synchronously right after an
         // activity-result callback returns has been unreliable in testing.
         tvStatus.post {
-            if (!isFinishing && !isDestroyed) dialog.show()
+            if (isFinishing || isDestroyed) return@post
+            val alert = dialog.show()
+            if (!tooSmall) {
+                alert.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                    FaqRedirect.confirm(this, R.string.url_faq_speckle)
+                }
+            }
         }
     }
 
@@ -582,34 +647,66 @@ class CaptureSessionActivity : AppCompatActivity() {
     }
 
     private fun ensureCameraThenLock() {
-        withCameraPermission { openLockedSession() }
+        withCameraPermission { openLockedSession(runNoiseGate = true) }
     }
 
-    private fun openLockedSession() {
+    /**
+     * Re-open a dropped camera after a FAQ / browser hop without re-running the
+     * noise-floor burst (that would re-pop the gate dialogs).
+     */
+    private fun reopenLockedPreview() {
+        if (relocking) return
+        relocking = true
+        lockedSession?.close()
+        lockedSession = null
+        openLockedSession(runNoiseGate = false) {
+            relocking = false
+        }
+    }
+
+    private fun openLockedSession(runNoiseGate: Boolean, onDone: (() -> Unit)? = null) {
         tvStatus.setText(R.string.capture_status_locking)
-        val focus = focusLock ?: return
+        val focus = focusLock ?: run {
+            onDone?.invoke()
+            return
+        }
         val jpeg = CameraCapabilities.Resolution(planWidth, planHeight)
         val session = LockedCameraSession(this, cameraId, jpeg, focus)
         lockedSession = session
 
         fun startLock(texture: SurfaceTexture?) {
             lifecycleScope.launch {
-                val ok = runCatching { session.openAndLock(texture) }.getOrDefault(false)
-                if (!ok) {
-                    session.close()
-                    lockedSession = null
-                    MaterialAlertDialogBuilder(this@CaptureSessionActivity)
-                        .setTitle(R.string.capture_af_fail_title)
-                        .setMessage(R.string.capture_af_fail_body)
-                        .setPositiveButton(R.string.capture_retry) { _, _ -> launchTestShot() }
-                        .setNegativeButton(R.string.cancel) { _, _ -> finish() }
-                        .show()
-                    return@launch
+                try {
+                    val ok = runCatching { session.openAndLock(texture) }.getOrDefault(false)
+                    if (!ok) {
+                        session.close()
+                        lockedSession = null
+                        MaterialAlertDialogBuilder(this@CaptureSessionActivity)
+                            .setTitle(R.string.capture_af_fail_title)
+                            .setMessage(R.string.capture_af_fail_body)
+                            .setPositiveButton(R.string.capture_retry) { _, _ -> launchTestShot() }
+                            .setNegativeButton(R.string.cancel) { _, _ -> finish() }
+                            .show()
+                        return@launch
+                    }
+                    applyPreviewTransform(session)
+                    if (runNoiseGate) {
+                        tvStatus.setText(R.string.capture_status_noise_check)
+                        if (!noiseGate.run(session, planWidth, planHeight)) return@launch
+                        showReady()
+                    } else if (readyToRecord) {
+                        // Gate already acted on before the camera was dropped;
+                        // restore Start recording. Leave any still-showing
+                        // dialog alone when readyToRecord is still false.
+                        showReady()
+                    } else {
+                        // Floor measured, dialog still up — keep the measuring
+                        // status until Continue / Record anyway.
+                        tvStatus.setText(R.string.capture_status_noise_check)
+                    }
+                } finally {
+                    onDone?.invoke()
                 }
-                applyPreviewTransform(session)
-                tvStatus.setText(R.string.capture_status_noise_check)
-                if (!noiseGate.run(session, planWidth, planHeight)) return@launch
-                showReady()
             }
         }
 
@@ -671,6 +768,7 @@ class CaptureSessionActivity : AppCompatActivity() {
 
     /** The preview is the frame you will get: setup is done, recording may start. */
     private fun showReady() {
+        readyToRecord = true
         tvStatus.setText(R.string.capture_status_ready)
         btnStart.isVisible = true
     }
@@ -711,80 +809,85 @@ class CaptureSessionActivity : AppCompatActivity() {
         // averages. See [averagingFrames] for why deformed frames never do.
         val frames = averagingFrames()
         var budgetExceededMidRun = false
+        recordingActive = true
         lifecycleScope.launch {
-            // Before the first frame, not after the last: a crash or a cancel
-            // must not leave one run's frames where the next run will pick
-            // them up as its own.
-            val cleared = withContext(Dispatchers.IO) {
-                CaptureWorkspace.clearPreviousRun(dir)
-            }
-            if (cleared > 0) Timber.d("Cleared %d file(s) from a previous run", cleared)
-            if (frames > 1) {
-                Toast.makeText(
-                    this@CaptureSessionActivity,
-                    getString(R.string.capture_averaging_fmt, frames),
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-            if (!captureLockedReference(session, frames)) {
-                showRetryDialog(getText(incompleteRunMessage(session))) { startRecording() }
-                return@launch
-            }
-            tvStatus.setText(R.string.capture_status_recording_stills)
-            val result = runner.run(
-                sink = object : StillSequenceRunner.CaptureSink {
-                    override suspend fun capture(index: Int): String? {
-                        val file = File(dir, CaptureWorkspace.frameName(index))
-                        // Never averaged — see [averagingFrames].
-                        val ok = session.captureStill(file)
-                        return if (ok) file.absolutePath else null
-                    }
-                },
-                onProgress = { done, total ->
-                    // PNG size is far less predictable than JPEG's — recheck
-                    // storage from the first real frame's byte size before
-                    // committing to the rest of the sequence.
-                    if (done == 1) {
-                        val remaining = total - done
-                        if (remaining > 0) {
-                            val firstBytes = File(dir, CaptureWorkspace.frameName(0)).length()
-                                .takeIf { it > 0 }
-                            val remainingEstimate = CaptureBudget.estimateStills(
-                                planWidth,
-                                planHeight,
-                                remaining,
-                                firstBytes,
-                            )
-                            val remainingCheck =
-                                CaptureBudget.check(
-                                    remainingEstimate,
-                                    CaptureResources.availRamBytes(this@CaptureSessionActivity),
-                                    CaptureResources.availStorageBytes(this@CaptureSessionActivity),
-                                )
-                            if (!remainingCheck.ok) budgetExceededMidRun = true
+            try {
+                // Before the first frame, not after the last: a crash or a cancel
+                // must not leave one run's frames where the next run will pick
+                // them up as its own.
+                val cleared = withContext(Dispatchers.IO) {
+                    CaptureWorkspace.clearPreviousRun(dir)
+                }
+                if (cleared > 0) Timber.d("Cleared %d file(s) from a previous run", cleared)
+                if (frames > 1) {
+                    Toast.makeText(
+                        this@CaptureSessionActivity,
+                        getString(R.string.capture_averaging_fmt, frames),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+                if (!captureLockedReference(session, frames)) {
+                    showRetryDialog(getText(incompleteRunMessage(session))) { startRecording() }
+                    return@launch
+                }
+                tvStatus.setText(R.string.capture_status_recording_stills)
+                val result = runner.run(
+                    sink = object : StillSequenceRunner.CaptureSink {
+                        override suspend fun capture(index: Int): String? {
+                            val file = File(dir, CaptureWorkspace.frameName(index))
+                            // Never averaged — see [averagingFrames].
+                            val ok = session.captureStill(file)
+                            return if (ok) file.absolutePath else null
                         }
-                    }
-                    runOnUiThread {
-                        tvProgress.text = getString(R.string.capture_progress_fmt, done, total)
-                    }
-                },
-                isActive = { !isFinishing && !isDestroyed && !budgetExceededMidRun && session.isUsable },
-            )
-            if (budgetExceededMidRun) {
-                MaterialAlertDialogBuilder(this@CaptureSessionActivity)
-                    .setTitle(R.string.capture_budget_fail_title)
-                    .setMessage(R.string.capture_budget_fail_storage)
-                    .setPositiveButton(R.string.cancel) { _, _ -> finish() }
-                    .show()
-                return@launch
+                    },
+                    onProgress = { done, total ->
+                        // PNG size is far less predictable than JPEG's — recheck
+                        // storage from the first real frame's byte size before
+                        // committing to the rest of the sequence.
+                        if (done == 1) {
+                            val remaining = total - done
+                            if (remaining > 0) {
+                                val firstBytes = File(dir, CaptureWorkspace.frameName(0)).length()
+                                    .takeIf { it > 0 }
+                                val remainingEstimate = CaptureBudget.estimateStills(
+                                    planWidth,
+                                    planHeight,
+                                    remaining,
+                                    firstBytes,
+                                )
+                                val remainingCheck =
+                                    CaptureBudget.check(
+                                        remainingEstimate,
+                                        CaptureResources.availRamBytes(this@CaptureSessionActivity),
+                                        CaptureResources.availStorageBytes(this@CaptureSessionActivity),
+                                    )
+                                if (!remainingCheck.ok) budgetExceededMidRun = true
+                            }
+                        }
+                        runOnUiThread {
+                            tvProgress.text = getString(R.string.capture_progress_fmt, done, total)
+                        }
+                    },
+                    isActive = { !isFinishing && !isDestroyed && !budgetExceededMidRun && session.isUsable },
+                )
+                if (budgetExceededMidRun) {
+                    MaterialAlertDialogBuilder(this@CaptureSessionActivity)
+                        .setTitle(R.string.capture_budget_fail_title)
+                        .setMessage(R.string.capture_budget_fail_storage)
+                        .setPositiveButton(R.string.cancel) { _, _ -> finish() }
+                        .show()
+                    return@launch
+                }
+                if (!result.completed || result.paths.isEmpty()) {
+                    showRetryDialog(getText(incompleteRunMessage(session))) { startRecording() }
+                    return@launch
+                }
+                deformedPaths.clear()
+                deformedPaths.addAll(result.paths)
+                handOffToWizard()
+            } finally {
+                recordingActive = false
             }
-            if (!result.completed || result.paths.isEmpty()) {
-                showRetryDialog(getText(incompleteRunMessage(session))) { startRecording() }
-                return@launch
-            }
-            deformedPaths.clear()
-            deformedPaths.addAll(result.paths)
-            handOffToWizard()
         }
     }
 
@@ -847,7 +950,9 @@ class CaptureSessionActivity : AppCompatActivity() {
                     tvProgress.text = getString(R.string.capture_progress_fmt, done, total)
                 }
             }
-        val intent = Intent(this, StaticAnalysisActivity::class.java).apply {
+        // Setup stays under us until RESULT_OK; it starts the wizard and
+        // finishes so Back from the wizard returns to Home.
+        val data = Intent().apply {
             putExtra(
                 DicKeys.PICKED_REF_URI,
                 SystemCamera.fileProviderUri(this@CaptureSessionActivity, File(ref)).toString(),
@@ -864,10 +969,8 @@ class CaptureSessionActivity : AppCompatActivity() {
             // on the session, the report and the CSV. Absent when the burst
             // could not run at all, which is already its own failure path.
             noiseGate.measured()?.let { putExtra(DicKeys.CAPTURE_NOISE_FLOOR, it.encode()) }
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        // Finish setup + session so Back from wizard returns to Home.
-        startActivity(intent)
+        setResult(Activity.RESULT_OK, data)
         finish()
     }
 

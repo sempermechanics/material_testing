@@ -23,7 +23,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:title="@string/capture_session_title"
-            app:navigationIcon="@drawable/ic_close"
+            app:navigationIcon="@drawable/ic_nav_prev"
             app:titleTextColor="@color/text_on_primary" />
 
         <TextView

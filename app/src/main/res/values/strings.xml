@@ -604,6 +604,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_status_matching_sizes">Matching frame sizes…</string>
     <string name="capture_progress_fmt">Frame %1$d of %2$d</string>
     <string name="capture_start_recording">Start recording</string>
+    <string name="capture_stop_title">Stop recording?</string>
+    <string name="capture_stop_message">Frames already taken will be discarded. You can change the plan and try again.</string>
+    <string name="capture_stop_confirm">Stop</string>
     <string name="capture_roi_needed_title">Select an area first</string>
     <string name="capture_roi_needed_body">Contrast is checked inside the region you draw. Select an area on the test shot before continuing.</string>
     <string name="capture_roi_select">Select area</string>

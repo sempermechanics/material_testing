@@ -264,6 +264,7 @@ internal class NoiseFloorGateUi(
         val label = NoiseFloorText.floorLabel(verdict.floorMicrostrain)
 
         val dialog = MaterialAlertDialogBuilder(activity)
+            .setCancelable(false)
         describe(dialog, verdict, refused, label)
         val proceed = { _: DialogInterface, _: Int ->
             // Recorded, so an export months later still says the run was
@@ -283,10 +284,14 @@ internal class NoiseFloorGateUi(
             dialog.setPositiveButton(R.string.capture_record_anyway, proceed)
             dialog.setNegativeButton(R.string.capture_retry_test_shot, retry)
         }
-        dialog.setNeutralButton(R.string.action_why) { _, _ ->
+        // Neutral placeholder: a real listener would dismiss the dialog, and
+        // returning from the FAQ would leave no Continue / Record anyway.
+        dialog.setNeutralButton(R.string.action_why, null)
+        if (activity.isFinishing || activity.isDestroyed) return
+        val alert = dialog.show()
+        alert.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
             FaqRedirect.confirm(activity, R.string.url_faq_noise_floor)
         }
-        if (!activity.isFinishing && !activity.isDestroyed) dialog.show()
     }
 
     /**

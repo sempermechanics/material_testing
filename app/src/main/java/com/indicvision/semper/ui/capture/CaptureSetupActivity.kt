@@ -1,11 +1,13 @@
 package com.indicvision.semper.ui.capture
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.Spinner
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.appbar.MaterialToolbar
@@ -13,9 +15,11 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.common.Insets
 
 /**
@@ -27,6 +31,10 @@ import com.indicvision.semper.ui.common.Insets
  * afterwards, which put the explanation in the wrong place — after the run,
  * about a number they had already planned around. Offering only rates the
  * device can hold removes the trim entirely.
+ *
+ * Setup stays on the stack until recording succeeds so Back from the session
+ * can return here to change the plan. On success this screen starts the
+ * wizard and finishes so Back from the wizard lands on Home.
  */
 class CaptureSetupActivity : AppCompatActivity() {
 
@@ -55,6 +63,26 @@ class CaptureSetupActivity : AppCompatActivity() {
      * rather than blanking or snapping to a default on every keystroke.
      */
     private var durationSec = DEFAULT_DURATION_SEC
+
+    private val captureSession = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+        val data = result.data ?: return@registerForActivityResult
+        startActivity(
+            Intent(this, StaticAnalysisActivity::class.java).apply {
+                putExtra(DicKeys.PICKED_REF_URI, data.getStringExtra(DicKeys.PICKED_REF_URI))
+                putStringArrayListExtra(
+                    DicKeys.PICKED_DEF_URIS,
+                    data.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS),
+                )
+                data.getStringExtra(DicKeys.CAPTURE_NOISE_FLOOR)?.let {
+                    putExtra(DicKeys.CAPTURE_NOISE_FLOOR, it)
+                }
+            },
+        )
+        finish()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -205,7 +233,8 @@ class CaptureSetupActivity : AppCompatActivity() {
             return
         }
 
-        startActivity(
+        // Stay alive: Back from the session returns here with the plan intact.
+        captureSession.launch(
             Intent(this, CaptureSessionActivity::class.java).apply {
                 putExtra(EXTRA_DURATION_SEC, duration)
                 putExtra(EXTRA_FRAME_COUNT, option.frames)
@@ -215,7 +244,6 @@ class CaptureSetupActivity : AppCompatActivity() {
                 putExtra(EXTRA_CAMERA_ID, caps.cameraId)
             },
         )
-        finish()
     }
 
     companion object {
