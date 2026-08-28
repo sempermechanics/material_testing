@@ -625,6 +625,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_status_noise_check">Measuring the noise floor…</string>
     <string name="capture_noise_floor_title">Floor is about %1$s</string>
     <string name="capture_noise_floor_body">Smaller strains than this will not show. More light, or measure over a larger area.</string>
+    <string name="capture_noise_continue">Continue</string>
     <string name="capture_noise_unsettled_title">Readings will not settle</string>
     <string name="capture_noise_unsettled_body">Something moved or the light flickered between test frames. Steady the rig, then retry.</string>
     <string name="capture_noise_drift_title">The image is drifting</string>
