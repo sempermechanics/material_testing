@@ -173,10 +173,13 @@ kind of scene, with convergence up from 72.7% to 77.3% / 94.8%. What changed:
   is derived, not round: a monotone run of *k* exchangeable values has
   probability `2/k!`, so the drift test is a coin flip at 3 and usable at 5.
   The verdict **warns and never blocks** — `Record anyway` is the primary
-  action and the floor is stamped on the session, the PDF cover and every CSV
-  row, because an override that leaves no trace is how a bad number becomes a
-  published number. A clean pass is also a dialog: **Continue** (not Record
-  anyway), with ⓘ for the FAQ — not **Why?**, because the number is a fact.
+  action and the floor is stamped on the session and the PDF cover, because an
+  override that leaves no trace is how a bad number becomes a published number.
+  The share CSV opens with `#` metadata and per-frame field stats, then point
+  rows with an optional recorded-session suffix (floor in mε plus scene-motion
+  columns); imports omit those trailing columns. A clean pass is also a dialog:
+  **Continue** (not Record anyway), with ⓘ for the FAQ — not **Why?**, because
+  the number is a fact.
 - **`strain_window` is a diameter in pixels**, not a multiple of the step
   (`VsgStudy.vsgFor`). The gate quoted floors 3-5x better than the settings
   could deliver until the device data caught it. `MAX_STRAIN_WINDOW` (101 px)
