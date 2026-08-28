@@ -112,7 +112,7 @@ class AnalysisViewModel : ViewModel() {
     var defFrameDates: List<Long> = emptyList()
 
     /** How the user wants deformed frames ordered (image batches only). */
-    var defOrderMode: FrameOrderMode = FrameOrderMode.PICKER
+    var defOrderMode: FrameOrderMode = FrameOrderMode.NAME
 
     /** Ascending/descending for Name and Date modes. */
     var defOrderDirection: FrameOrderDirection = FrameOrderDirection.ASCENDING
