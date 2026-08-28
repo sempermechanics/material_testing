@@ -107,7 +107,7 @@ class AnalysisWizardSlots(
      */
     fun updateFormatChip() {
         val lossy = LossyFormatCheck.lossyLabels(
-            listOf(viewModel.refName) + viewModel.defFilePaths,
+            listOf(viewModel.refName) + viewModel.defOriginalNames.ifEmpty { viewModel.defFilePaths },
         )
         formatWarnRow.isVisible = lossy.isNotEmpty()
         if (lossy.isEmpty()) return
