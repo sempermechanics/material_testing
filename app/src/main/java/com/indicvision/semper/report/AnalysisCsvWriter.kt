@@ -8,22 +8,32 @@ import java.util.Locale
 
 /**
  * The analysis CSV, shared by the share-sheet export and the cloud upload so the
- * two never drift: one file covering every frame's solved points. A sweep leads
- * each row with its settings (subset/step/strain window/VSG); an ordinary
- * analysis leads with the image name. The point columns and all number
- * formatting come from [DicResult.CsvPointFormatter].
+ * two never drift: one file covering every frame's solved points.
  *
- * Every row also carries the noise floor the frames were captured at. Repeating
- * three constant columns across ~90k rows is deliberate: the alternative is a
- * `#` preamble, which every naive reader — a spreadsheet, a plain `read_csv` —
- * silently mistakes for data or a header. A reader who filters this file down to
- * the points they care about must not be able to lose the one number that says
- * which of those strain values are real, so it travels on the row.
+ * The file opens with `#`-comment metadata (session settings, ROI, optional
+ * capture floor in millistrain, and per-frame field max/min/mean), then a blank
+ * line, then the point-data header and rows. Naive readers that treat every
+ * line as data should skip lines starting with `#` (e.g. `pandas.read_csv(...,
+ * comment='#')`).
  *
- * The writer reuses one buffer and formatter and appends straight through, so a
- * large (~10 MB, ~90k-point) export allocates almost nothing per point.
+ * Point rows always lead with `image` and the eight DIC columns
+ * (`x_px`…`znssd`). Recorded sessions append `noise_floor_mε` and three rigid-
+ * body motion columns; imports omit those trailing columns entirely.
  */
 object AnalysisCsvWriter {
+
+    /** Session-level fields written into the `#` preamble. */
+    data class Metadata(
+        val referenceName: String,
+        val strainMethod: String,
+        val imgW: Int,
+        val imgH: Int,
+        val roiX: Int,
+        val roiY: Int,
+        val roiW: Int,
+        val roiH: Int,
+        val captureFloor: CaptureNoiseFloor? = null,
+    )
 
     /** One frame: its identity columns plus a lazy provider of its decoded field. */
     class Frame(
@@ -34,73 +44,159 @@ object AnalysisCsvWriter {
         val data: () -> FloatArray?,
     )
 
-    /**
-     * The floor columns, present whether or not a floor was measured — a header
-     * that changes shape between exports is a worse problem than three empty
-     * fields, because it breaks any script written against a previous file.
-     */
-    private const val FLOOR_HEADER = "noise_floor_ue,noise_floor_vsg_px,noise_floor_exceeded"
+    private const val CSV_VERSION = 1
+    private const val POINT_HEADER_BASE = "x_px,y_px,u_px,v_px,exx,eyy,exy,znssd"
+    private const val RECORDED_SUFFIX_HEADER = "noise_floor_mε,shift_u_px,shift_v_px,shift_rot_deg"
+    private const val SWEEP_SETTINGS_HEADER = "subset_px,step_px,strain_window,vsg_px,"
 
-    /**
-     * What the whole scene did between the two frames, per frame.
-     *
-     * Repeated on every row for the same reason the floor columns are: a
-     * reader who filters this file down to a handful of interesting points
-     * must not lose the number that says whether the frame moved underneath
-     * them. See [RigidBodyFit] for why it is reported and not subtracted.
-     */
-    private const val MOTION_HEADER = "shift_u_px,shift_v_px,shift_rot_deg,nonrigid_rms_px"
+    private val FIELD_STATS = listOf(
+        "U" to DicResult.IDX_U,
+        "V" to DicResult.IDX_V,
+        "Exx" to DicResult.IDX_EXX,
+        "Eyy" to DicResult.IDX_EYY,
+        "Exy" to DicResult.IDX_EXY,
+    )
 
-    private val HEADER_SWEEP = "image,subset_px,step_px,strain_window,vsg_px," +
-        "$FLOOR_HEADER,$MOTION_HEADER," + DicResult.CSV_POINT_HEADER
-    private val HEADER_SINGLE = "image,$FLOOR_HEADER,$MOTION_HEADER," + DicResult.CSV_POINT_HEADER
-
-    fun write(out: File, sweep: Boolean, frames: List<Frame>, floor: CaptureNoiseFloor? = null) {
-        open(out, sweep, floor).use { appender ->
+    fun write(out: File, sweep: Boolean, frames: List<Frame>, metadata: Metadata) {
+        open(out, sweep, metadata).use { appender ->
+            frames.forEach { frame ->
+                frame.data()?.let { data -> appender.appendFieldStats(frame, data) }
+            }
+            appender.startPointSection()
             frames.forEach { appender.append(it) }
         }
     }
 
     /**
-     * Streaming writer so a caller that already decoded a frame's `.dat` can
-     * append CSV rows without holding every frame in memory (upload staging
-     * shares one decode pass with report bake).
+     * Streaming writer: call [Appender.appendFieldStats] per frame (or let
+     * [write] do it), then [Appender.startPointSection], then [Appender.append]
+     * for point rows.
      */
-    fun open(out: File, sweep: Boolean, floor: CaptureNoiseFloor? = null): Appender {
+    fun open(out: File, sweep: Boolean, metadata: Metadata): Appender {
         val w = out.bufferedWriter(bufferSize = DicResult.CSV_BUFFER_BYTES)
-        w.append(if (sweep) HEADER_SWEEP else HEADER_SINGLE).append('\n')
-        return Appender(w, sweep, floorColumns(floor))
+        writeGlobalPreamble(w, metadata)
+        w.append("# field_stats\n")
+        w.append("# image,subset_px,step_px,strain_window_px,field,max,min,mean,unit\n")
+        return Appender(w, sweep, metadata)
+    }
+
+    /** Millistrain floor fragment for a recorded row suffix; empty when unmeasured. */
+    internal fun floorMillistrainColumn(floor: CaptureNoiseFloor?): String {
+        if (floor == null) return ""
+        return String.format(Locale.US, "%.5f,", floor.microstrain / 1000.0)
     }
 
     /**
-     * The three floor fields as one ready-to-append fragment.
-     *
-     * An unmeasured floor writes empty fields rather than zeros: an imported
-     * analysis has no burst behind it, and a `0` there would read as a perfect
-     * camera to anyone who did not know to look for the distinction.
+     * Trailing recorded-session columns: floor (mε) plus shift_u/v and rotation.
+     * Empty when there is no capture floor (imports).
      */
-    internal fun floorColumns(floor: CaptureNoiseFloor?): String {
-        if (floor == null) return ",,,"
-        return String.format(
+    internal fun recordedSuffixColumns(floor: CaptureNoiseFloor?, fit: RigidBodyFit.Fit?): String {
+        if (floor == null) return ""
+        val floorCol = floorMillistrainColumn(floor)
+        if (fit == null) return "${floorCol},,"
+        return floorCol + String.format(
             Locale.US,
-            "%.0f,%.0f,%d,",
-            floor.microstrain,
-            floor.vsgPx,
-            if (floor.exceeded) 1 else 0,
+            "%.4f,%.4f,%.5f,",
+            fit.uPx,
+            fit.vPx,
+            fit.rotationDeg,
         )
     }
 
-    /** One open CSV file; call [append] per frame then [close]. */
+    internal fun pointHeader(sweep: Boolean, recorded: Boolean): String {
+        val base = if (sweep) {
+            "image,$SWEEP_SETTINGS_HEADER$POINT_HEADER_BASE"
+        } else {
+            "image,$POINT_HEADER_BASE"
+        }
+        return if (recorded) "$base,$RECORDED_SUFFIX_HEADER" else base
+    }
+
+    private fun writeGlobalPreamble(w: Writer, metadata: Metadata) {
+        w.append("# semper_csv_version,$CSV_VERSION\n")
+        w.append("# reference,").append(escape(metadata.referenceName)).append('\n')
+        w.append("# strain_method,").append(escape(metadata.strainMethod)).append('\n')
+        w.append("# image_width,${metadata.imgW}\n")
+        w.append("# image_height,${metadata.imgH}\n")
+        w.append("# roi_x,${metadata.roiX}\n")
+        w.append("# roi_y,${metadata.roiY}\n")
+        w.append("# roi_w,${metadata.roiW}\n")
+        w.append("# roi_h,${metadata.roiH}\n")
+        val floorLine = metadata.captureFloor?.let { floor ->
+            String.format(Locale.US, "%.5f", floor.microstrain / 1000.0)
+        }.orEmpty()
+        w.append("# noise_floor_mε,$floorLine\n")
+    }
+
+    private fun writeFieldStatsRow(
+        w: Writer,
+        frame: Frame,
+        fieldKey: String,
+        dataIndex: Int,
+        max: Float,
+        min: Float,
+        mean: Float,
+        unit: String,
+    ) {
+        w.append("# ")
+            .append(escape(frame.image)).append(',')
+            .append(frame.subset.toString()).append(',')
+            .append(frame.step.toString()).append(',')
+            .append(frame.strainWindow.toString()).append(',')
+            .append(fieldKey).append(',')
+            .append(ReportBuilder.formatMetric(max)).append(',')
+            .append(ReportBuilder.formatMetric(min)).append(',')
+            .append(ReportBuilder.formatMetric(mean)).append(',')
+            .append(unit)
+            .append('\n')
+    }
+
+    /** One open CSV file; call [appendFieldStats] / [append] then [close]. */
     class Appender internal constructor(
         private val writer: Writer,
         private val sweep: Boolean,
-        private val floorColumns: String,
+        private val metadata: Metadata,
     ) : AutoCloseable {
         private val row = StringBuffer(DicResult.CSV_ROW_CAPACITY)
         private val formatter = DicResult.CsvPointFormatter()
+        private var pointSectionStarted = false
+
+        fun appendFieldStats(frame: Frame, data: FloatArray) {
+            FIELD_STATS.forEach { (fieldKey, dataIndex) ->
+                val stats = DicResult.fieldStats(data, dataIndex) ?: return@forEach
+                val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
+                writeFieldStatsRow(
+                    writer,
+                    frame,
+                    fieldKey,
+                    dataIndex,
+                    stats[0],
+                    stats[1],
+                    stats[2],
+                    unit,
+                )
+            }
+        }
+
+        fun startPointSection() {
+            if (pointSectionStarted) return
+            writer.append('\n')
+            writer.append(
+                pointHeader(sweep, metadata.captureFloor != null),
+            ).append('\n')
+            pointSectionStarted = true
+        }
 
         fun append(frame: Frame) {
-            writeFrame(writer, frame, prefix(frame, sweep) + floorColumns, row, formatter)
+            startPointSection()
+            writeFrame(
+                writer,
+                frame,
+                prefix(frame, sweep),
+                metadata.captureFloor,
+                row,
+                formatter,
+            )
         }
 
         override fun close() {
@@ -113,17 +209,22 @@ object AnalysisCsvWriter {
         w: Writer,
         frame: Frame,
         prefix: String,
+        floor: CaptureNoiseFloor?,
         row: StringBuffer,
         formatter: DicResult.CsvPointFormatter,
     ) {
         val data = frame.data() ?: return
-        val fullPrefix = prefix + motionColumns(RigidBodyFit.fit(data))
+        val suffix = recordedSuffixColumns(floor, RigidBodyFit.fit(data))
         var i = 0
         while (i < data.size) {
             if (DicResult.isSolvedPoint(data[i + DicResult.IDX_ZNSSD])) {
                 row.setLength(0)
-                row.append(fullPrefix)
+                row.append(prefix)
                 formatter.appendPoint(row, data, i)
+                if (suffix.isNotEmpty()) {
+                    row.append(',')
+                    row.append(suffix.trimEnd(','))
+                }
                 row.append('\n')
                 w.append(row)
             }
@@ -131,31 +232,11 @@ object AnalysisCsvWriter {
         }
     }
 
-    /** The constant leading columns for one frame. */
+    /** The constant leading columns for one frame (image name or sweep settings). */
     private fun prefix(frame: Frame, sweep: Boolean): String {
         val image = escape(frame.image)
         if (!sweep) return "$image,"
-        // The strain window is a diameter in pixels, so it *is* the gauge
-        // length; see VsgStudy.vsgFor for the measurements that settled that.
-        // Kept as its own column because a reader should not have to know.
         return "$image,${frame.subset},${frame.step},${frame.strainWindow},${frame.strainWindow},"
-    }
-
-    /**
-     * The four scene-motion columns, or four empty fields when too few points
-     * converged to fit them. Empty rather than zero: zero movement is a claim,
-     * and this is the absence of one.
-     */
-    internal fun motionColumns(fit: RigidBodyFit.Fit?): String {
-        if (fit == null) return ",,,,"
-        return String.format(
-            Locale.US,
-            "%.4f,%.4f,%.5f,%.4f,",
-            fit.uPx,
-            fit.vPx,
-            fit.rotationDeg,
-            fit.residualPx,
-        )
     }
 
     /** RFC-4180 quoting, only when the value needs it (image names rarely do). */
