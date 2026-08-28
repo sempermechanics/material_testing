@@ -1,6 +1,7 @@
 package com.indicvision.semper.results
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.RigidBodyFit
 import org.junit.Assert.assertEquals
@@ -8,7 +9,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 
 /**
  * The scene-motion fit, against fields whose answer is known by construction.
@@ -135,20 +135,20 @@ class RigidBodyFitTest {
     }
 
     @Test
-    fun `an unmeasured frame writes empty motion columns, not zeros`() {
-        assertEquals(",,,,", AnalysisCsvWriter.motionColumns(null))
+    fun `an unmeasured frame writes empty motion fields in the recorded suffix`() {
+        val floor = CaptureNoiseFloor(100.0, 15.0, 0.001, 5, exceeded = false, overridden = false)
+        assertEquals("0.10000,,,", AnalysisCsvWriter.recordedSuffixColumns(floor, null))
     }
 
     @Test
-    fun `the motion columns are four fields and a trailing comma`() {
+    fun `the recorded motion suffix is three fields after the floor`() {
         val fit = requireNotNull(RigidBodyFit.fit(field { _, _ -> 1.5f to -2.25f }))
-        val columns = AnalysisCsvWriter.motionColumns(fit)
-        assertTrue(columns.endsWith(","))
-        assertEquals(4, columns.count { it == ',' })
-        val parts = columns.trimEnd(',').split(',')
-        assertEquals(1.5, parts[0].toDouble(), TOLERANCE)
-        assertEquals(-2.25, parts[1].toDouble(), TOLERANCE)
-        assertTrue(abs(parts[2].toDouble()) < TOLERANCE)
+        val floor = CaptureNoiseFloor(100.0, 15.0, 0.001, 5, exceeded = false, overridden = false)
+        val suffix = AnalysisCsvWriter.recordedSuffixColumns(floor, fit).trimEnd(',')
+        val parts = suffix.split(',')
+        assertEquals(4, parts.size)
+        assertEquals(1.5, parts[1].toDouble(), TOLERANCE)
+        assertEquals(-2.25, parts[2].toDouble(), TOLERANCE)
     }
 
     private companion object {
