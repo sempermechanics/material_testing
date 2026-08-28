@@ -4,7 +4,8 @@ import android.app.Activity
 import android.content.DialogInterface
 import android.graphics.Rect
 import android.graphics.RectF
-import android.widget.Toast
+import android.widget.ImageButton
+import android.widget.TextView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CaptureNoiseFloor
@@ -148,25 +149,35 @@ internal class NoiseFloorGateUi(
         // either: it is shown, and the same verdict is stamped on the session so
         // the report and the CSV carry it.
         if (!result.verdict.blocking && !result.verdict.floorExceeded) {
-            warnAboutPipeline(session)
-            announceFloor(result)
-            return true
+            showPassDialog(session, result)
+            return false
         }
         showVerdict(session, result)
         return false
     }
 
     /**
-     * The one sentence a clean pass still owes the user: what this run can
-     * resolve, stated once as a fact rather than held back until it becomes
-     * a problem. [showVerdict] carries the same wording for a failing floor
-     * as a dialog to act on; a passing floor only needs a toast to note.
+     * A passing floor is information, not a failure — so the FAQ is an ⓘ in
+     * the title (like wizard chips), not a **Why?** button. Continue is still
+     * required before Start recording appears.
      */
-    private fun announceFloor(result: NoiseFloorGate.Result) {
+    private fun showPassDialog(session: LockedCameraSession, result: NoiseFloorGate.Result) {
         val label = NoiseFloorText.floorLabel(result.verdict.floorMicrostrain)
-        val message = activity.getString(R.string.capture_noise_floor_title, label) +
-            " " + activity.getString(R.string.capture_noise_floor_body)
-        Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
+        val titleView = activity.layoutInflater.inflate(R.layout.dialog_noise_floor_pass_title, null)
+        titleView.findViewById<TextView>(R.id.tvNoiseFloorPassTitle).text =
+            activity.getString(R.string.capture_noise_floor_title, label)
+        titleView.findViewById<ImageButton>(R.id.btnNoiseFloorPassFaq).setOnClickListener {
+            FaqRedirect.confirm(activity, R.string.url_faq_noise_floor)
+        }
+        val dialog = MaterialAlertDialogBuilder(activity)
+            .setCustomTitle(titleView)
+            .setMessage(R.string.capture_noise_floor_body)
+            .setCancelable(false)
+            .setPositiveButton(R.string.capture_noise_continue) { _, _ ->
+                onProceed()
+                warnAboutPipeline(session)
+            }
+        if (!activity.isFinishing && !activity.isDestroyed) dialog.show()
     }
 
     /**
