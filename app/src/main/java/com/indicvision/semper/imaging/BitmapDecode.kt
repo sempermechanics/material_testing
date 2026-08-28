@@ -95,26 +95,40 @@ object BitmapDecode {
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
     }
 
-    /** Decode a file path with inSampleSize for [reqWidth]×[reqHeight]. */
+    /** Decode a file path with inSampleSize for [reqWidth]×[reqHeight].
+     *
+     * When the file is a headerless RGBA blob from a DNG/RAW import (wrongly
+     * stored as `reference.png` by older builds, or still raw on disk), pass
+     * [rawWidth]×[rawHeight] so [RawRgba] can sample a display bitmap.
+     */
     fun decodeFileForView(
         path: String,
         reqWidth: Int,
         reqHeight: Int,
         maxLongEdge: Int = VisualizationEngine.DISPLAY_MAX_EDGE,
+        rawWidth: Int = 0,
+        rawHeight: Int = 0,
     ): Bitmap? {
         val file = File(path)
-        if (!looksLikePlatformRaster(file)) return null
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(path, bounds)
-        val sample = calculateInSampleSize(
-            bounds.outWidth,
-            bounds.outHeight,
-            reqWidth,
-            reqHeight,
-            maxLongEdge,
-        )
-        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        return BitmapFactory.decodeFile(path, opts)
+        if (looksLikePlatformRaster(file)) {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(path, bounds)
+            val sample = calculateInSampleSize(
+                bounds.outWidth,
+                bounds.outHeight,
+                reqWidth,
+                reqHeight,
+                maxLongEdge,
+            )
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            return BitmapFactory.decodeFile(path, opts)
+        }
+        if (rawWidth <= 0 || rawHeight <= 0) return null
+        if (!RawRgba.matches(file.length(), rawWidth, rawHeight)) return null
+        val maxEdge = max(reqWidth, reqHeight).coerceAtLeast(1).coerceAtMost(maxLongEdge)
+        return runCatching {
+            RawRgba.preview(file.readBytes(), rawWidth, rawHeight, maxEdge)
+        }.getOrNull()
     }
 
     /** Write RGBA bytes from a RAW/DNG stream into [dest]; return width×height. */

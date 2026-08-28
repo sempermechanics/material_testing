@@ -79,4 +79,36 @@ class BitmapDecodeTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `decodeFileForView falls back only when RGBA dims match the blob`() {
+        val dir = createTempDirectory(prefix = "rgba-view-").toFile()
+        try {
+            val w = 8
+            val h = 4
+            val blob = ByteArray(w * h * 4) { i -> (i % 256).toByte() }
+            val file = File(dir, "reference.png")
+            file.writeBytes(blob)
+            assertFalse(BitmapDecode.looksLikePlatformRaster(file))
+            // Without dims the blob is not a platform raster — refuse.
+            assertTrue(
+                BitmapDecode.decodeFileForView(file.absolutePath, 8, 4, 8) == null,
+            )
+            // Wrong dims must not invent a decode.
+            assertTrue(
+                BitmapDecode.decodeFileForView(
+                    file.absolutePath,
+                    8,
+                    4,
+                    8,
+                    rawWidth = 16,
+                    rawHeight = 4,
+                ) == null,
+            )
+            // Correct dims: RawRgba.matches is the gate; bitmap alloc is Android-only.
+            assertTrue(com.indicvision.semper.imaging.RawRgba.matches(file.length(), w, h))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }
