@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.DialogInterface
 import android.graphics.Rect
 import android.graphics.RectF
+import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -163,21 +164,48 @@ internal class NoiseFloorGateUi(
      */
     private fun showPassDialog(session: LockedCameraSession, result: NoiseFloorGate.Result) {
         val label = NoiseFloorText.floorLabel(result.verdict.floorMicrostrain)
-        val titleView = activity.layoutInflater.inflate(R.layout.dialog_noise_floor_pass_title, null)
-        titleView.findViewById<TextView>(R.id.tvNoiseFloorPassTitle).text =
-            activity.getString(R.string.capture_noise_floor_title, label)
-        titleView.findViewById<ImageButton>(R.id.btnNoiseFloorPassFaq).setOnClickListener {
-            FaqRedirect.confirm(activity, R.string.url_faq_noise_floor)
-        }
         val dialog = MaterialAlertDialogBuilder(activity)
-            .setCustomTitle(titleView)
-            .setMessage(R.string.capture_noise_floor_body)
+            .setView(floorDialogContent(label, bodyRes = R.string.capture_noise_floor_body, showFaq = true))
             .setCancelable(false)
             .setPositiveButton(R.string.capture_noise_continue) { _, _ ->
                 onProceed()
                 warnAboutPipeline(session)
             }
         if (!activity.isFinishing && !activity.isDestroyed) dialog.show()
+    }
+
+    /**
+     * Large floor value with plain-language body — the number is the hero, not a
+     * cramped title line.
+     */
+    private fun floorDialogContent(
+        label: String,
+        headlineRes: Int? = null,
+        bodyRes: Int,
+        bodyArgs: Array<Any> = emptyArray(),
+        showFaq: Boolean = false,
+    ): View {
+        val view = activity.layoutInflater.inflate(R.layout.dialog_noise_floor_content, null)
+        view.findViewById<TextView>(R.id.tvNoiseFloorValue).text = label
+        val headline = view.findViewById<TextView>(R.id.tvNoiseFloorHeadline)
+        if (headlineRes != null) {
+            headline.setText(headlineRes)
+            headline.visibility = View.VISIBLE
+        }
+        val body = view.findViewById<TextView>(R.id.tvNoiseFloorBody)
+        body.text = if (bodyArgs.isEmpty()) {
+            activity.getString(bodyRes)
+        } else {
+            activity.getString(bodyRes, *bodyArgs)
+        }
+        val faq = view.findViewById<ImageButton>(R.id.btnNoiseFloorFaq)
+        faq.visibility = if (showFaq) View.VISIBLE else View.GONE
+        if (showFaq) {
+            faq.setOnClickListener {
+                FaqRedirect.confirm(activity, R.string.url_faq_noise_floor)
+            }
+        }
+        return view
     }
 
     /**
@@ -320,27 +348,31 @@ internal class NoiseFloorGateUi(
             // sentence than either does alone, since the refusals are part of
             // why the floor is where it is.
             verdict.floorExceeded && refused >= REFUSALS_WORTH_NAMING ->
-                dialog
-                    .setTitle(R.string.capture_noise_erroneous_title)
-                    .setMessage(
-                        activity.getString(
-                            R.string.capture_noise_erroneous_refused_body,
-                            label,
-                            refused,
-                        ),
-                    )
+                dialog.setView(
+                    floorDialogContent(
+                        label = label,
+                        headlineRes = R.string.capture_noise_erroneous_title,
+                        bodyRes = R.string.capture_noise_erroneous_refused_body,
+                        bodyArgs = arrayOf(refused),
+                    ),
+                )
 
             verdict.floorExceeded ->
-                dialog
-                    .setTitle(R.string.capture_noise_erroneous_title)
-                    .setMessage(
-                        activity.getString(R.string.capture_noise_erroneous_body, label),
-                    )
+                dialog.setView(
+                    floorDialogContent(
+                        label = label,
+                        headlineRes = R.string.capture_noise_erroneous_title,
+                        bodyRes = R.string.capture_noise_erroneous_body,
+                    ),
+                )
 
             else ->
-                dialog
-                    .setTitle(activity.getString(R.string.capture_noise_floor_title, label))
-                    .setMessage(R.string.capture_noise_floor_body)
+                dialog.setView(
+                    floorDialogContent(
+                        label = label,
+                        bodyRes = R.string.capture_noise_floor_body,
+                    ),
+                )
         }
     }
 
