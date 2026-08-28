@@ -623,11 +623,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_camera_lost">The camera was released to another app or shut down, so recording stopped early. Frames already taken were kept.</string>
     <string name="capture_test_shot_empty">No photo was saved. Try again.</string>
     <!-- Noise-floor gate. The specimen is mounted but unloaded, so every
-         displacement measured here is error. Messages lead with the effect and
-         stay under 20 words; the mechanism lives in the FAQ. -->
+         displacement measured here is error. The floor value is shown large in
+         the dialog; body text explains what to do without repeating the number. -->
     <string name="capture_status_noise_check">Measuring the noise floor…</string>
-    <string name="capture_noise_floor_title">Floor is about %1$s</string>
-    <string name="capture_noise_floor_body">Smaller strains than this will not show. More light, or measure over a larger area.</string>
+    <string name="capture_noise_floor_label">Measurement floor</string>
+    <string name="capture_noise_floor_body">Finer strain may not show in the results. Add light or measure over a larger area to improve.</string>
+    <string name="capture_noise_floor_readout">Measurement floor %1$s. Finer strain may not show — add light or use a larger area.</string>
     <string name="capture_noise_continue">Continue</string>
     <string name="capture_noise_unsettled_title">Readings will not settle</string>
     <string name="capture_noise_unsettled_body">Something moved or the light flickered between test frames. Steady the rig, then retry.</string>
@@ -638,10 +639,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
          is trusted to overrule it and needs the real cost to do that well. The
          same verdict is stamped on the session, the PDF and the CSV. -->
     <string name="capture_noise_erroneous_title">Results will be unreliable</string>
-    <string name="capture_noise_erroneous_body">Floor is about %1$s. Strain smaller than that is noise, not measurement. Marked on the report.</string>
+    <string name="capture_noise_erroneous_body">Strain below this level is noise, not a real measurement. This will be noted on the report.</string>
     <!-- Same, plus settings the phone refused: two independent signals pointing
          the same way earn a plainer sentence than either does alone. -->
-    <string name="capture_noise_erroneous_refused_body">Floor is about %1$s and %2$d settings will not apply. Strain smaller than the floor is noise. Marked on the report.</string>
+    <string name="capture_noise_erroneous_refused_body">%1$d camera settings could not be locked. Strain below this floor is noise, not measurement. Noted on the report.</string>
     <string name="capture_record_anyway">Record anyway</string>
     <string name="capture_retry_test_shot">Retry test shot</string>
     <!-- Imaging-pipeline refusals. Effect first, under 20 words each; the
