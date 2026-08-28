@@ -319,7 +319,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
-        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes)
+        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
         lastRefPath = refPngPath
 
         val cloudEnabled = DicSettings.saveToCloud(appContext)

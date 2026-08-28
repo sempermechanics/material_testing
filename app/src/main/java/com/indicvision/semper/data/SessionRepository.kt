@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
+import com.indicvision.semper.imaging.RawRgba
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.VisualizationEngine
 import timber.log.Timber
@@ -24,14 +25,28 @@ import java.util.Locale
 class SessionRepository {
 
     /** Writes a display-sized PNG of the reference into the session dir. */
-    fun writeReferenceCopy(sessionDir: File, refBytes: ByteArray): String {
+    fun writeReferenceCopy(
+        sessionDir: File,
+        refBytes: ByteArray,
+        width: Int = 0,
+        height: Int = 0,
+    ): String {
         val refPngFile = File(sessionDir, "reference.png")
         var refBmp: Bitmap? = null
         try {
-            refBmp = SemperNativeLib.getPreviewFromBytes(
-                refBytes,
-                VisualizationEngine.DISPLAY_MAX_EDGE,
-            ) ?: BitmapDecode.decodeByteArrayCapped(refBytes)
+            // DNG/RAW imports are stored as headerless RGBA. OpenCV and
+            // BitmapFactory cannot read them — sample into a real PNG so the
+            // viewer / Home thumb / share path can decode normally.
+            refBmp = if (width > 0 && height > 0 &&
+                RawRgba.matches(refBytes.size.toLong(), width, height)
+            ) {
+                RawRgba.preview(refBytes, width, height, VisualizationEngine.DISPLAY_MAX_EDGE)
+            } else {
+                SemperNativeLib.getPreviewFromBytes(
+                    refBytes,
+                    VisualizationEngine.DISPLAY_MAX_EDGE,
+                ) ?: BitmapDecode.decodeByteArrayCapped(refBytes)
+            }
             val bmp = refBmp
             if (bmp != null) {
                 refPngFile.outputStream().use { out ->

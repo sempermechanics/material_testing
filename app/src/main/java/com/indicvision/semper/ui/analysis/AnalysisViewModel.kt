@@ -505,7 +505,7 @@ class AnalysisViewModel : ViewModel() {
     ) {
         val roi = request.roi
         currentSessionId = newPendingSessionId()
-        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes)
+        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
         lastRefPath = refPngPath
         lastStep = result.runs.first().point.step
 
