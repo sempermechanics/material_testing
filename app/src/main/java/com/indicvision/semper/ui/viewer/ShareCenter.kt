@@ -444,14 +444,25 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val frames = s.batchFiles.mapIndexed { index, file ->
             AnalysisCsvWriter.Frame(
                 image = if (sweep) sweepImage else s.defNames.getOrNull(index) ?: "Frame_${index + 1}",
-                subset = s.subsetPerFrame?.getOrNull(index) ?: 0,
-                step = s.stepPerFrame?.getOrNull(index) ?: 0,
-                strainWindow = s.strainWindowPerFrame?.getOrNull(index) ?: 0,
+                subset = s.subsetPerFrame?.getOrNull(index) ?: s.subset,
+                step = s.stepPerFrame?.getOrNull(index) ?: s.step,
+                strainWindow = s.strainWindowPerFrame?.getOrNull(index) ?: s.strainWindow,
                 data = { DicResult.decodeDatFile(file) },
             )
         }
+        val metadata = AnalysisCsvWriter.Metadata(
+            referenceName = s.referenceName.ifBlank { s.baseName },
+            strainMethod = s.strainMethod,
+            imgW = s.imgW,
+            imgH = s.imgH,
+            roiX = s.roiX,
+            roiY = s.roiY,
+            roiW = s.roiW,
+            roiH = s.roiH,
+            captureFloor = s.captureFloor,
+        )
         val f = File(shareDir(), "${s.baseName}_data.csv")
-        AnalysisCsvWriter.write(f, sweep, frames, s.captureFloor)
+        AnalysisCsvWriter.write(f, sweep, frames, metadata)
         return f
     }
 
@@ -651,6 +662,14 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val buildReportAt: (Int, FloatArray) -> com.indicvision.semper.report.ReportData?,
         /** The floor the frames were captured at; null for an imported analysis. */
         val captureFloor: CaptureNoiseFloor? = null,
+        val referenceName: String = "",
+        val strainMethod: String = "VSG",
+        val subset: Int = 41,
+        val strainWindow: Int = 15,
+        val roiX: Int = 0,
+        val roiY: Int = 0,
+        val roiW: Int = 0,
+        val roiH: Int = 0,
     ) {
         /** Grid pitch of frame [index] — what rendering that frame depends on. */
         fun stepAt(index: Int): Int = stepPerFrame?.getOrNull(index) ?: step

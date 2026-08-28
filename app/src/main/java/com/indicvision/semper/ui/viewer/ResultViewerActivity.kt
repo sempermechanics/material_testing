@@ -1003,6 +1003,14 @@ class ResultViewerActivity : AppCompatActivity() {
             summaryBounds = { index -> summary.boundsFor(index) },
             buildReportAt = { index, frameData -> buildReportData(index, frameData) },
             captureFloor = sessionRecord?.captureFloor,
+            referenceName = intent.getStringExtra(DicKeys.REF_NAME).orEmpty(),
+            strainMethod = intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG",
+            subset = intent.getIntExtra(DicKeys.SUBSET_SIZE, 41),
+            strainWindow = intent.getIntExtra(DicKeys.STRAIN_WINDOW, 15),
+            roiX = roiX,
+            roiY = roiY,
+            roiW = roiW,
+            roiH = roiH,
         )
     }
 
