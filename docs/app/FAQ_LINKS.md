@@ -24,7 +24,8 @@ that site. If a heading moves, update the matching `url_faq_*` string.
 | Result viewer | No `.dat` batch on open | `no_batch_data` snackbar **Why?** | `url_faq_no_batch_data` | `#no-batch-data` |
 | Result viewer | OOM while loading a frame | `viewer_frame_oom` snackbar **Why?** | `url_faq_viewer_oom` | `#viewer-oom` |
 | Result viewer | Custom scale min ≥ max | `invalid_scale_inputs` snackbar **Why?** | `url_faq_custom_scale` | `#custom-scale` |
-| Capture test shot | Noise-floor verdict dialog (**Why?** neutral button) | `capture_noise_*_title` / `_body` | `url_faq_noise_floor` | `#noise-floor` |
+| Capture test shot | Noise-floor pass dialog (**ⓘ** in title) | `capture_noise_floor_*` | `url_faq_noise_floor` | `#noise-floor` |
+| Capture test shot | Noise-floor fail / drift / unsettled dialog (**Why?** neutral button) | `capture_noise_*_title` / `_body` | `url_faq_noise_floor` | `#noise-floor` |
 | Capture test shot | Settings the HAL refused, collapsed to one line | `capture_isp_warn_more` snackbar | `url_faq_imaging_pipeline` | `#imaging-pipeline` |
 | Capture test shot | Burst frames came back smoothed (neighbour correlation > 0.5) | `capture_denoise_warn` snackbar | `url_faq_imaging_pipeline` | `#imaging-pipeline` |
 | Lattice | Hollow node tap | short reason dialog **Why?** | same `url_faq_engine_*` as the node code | `#engine-*` |
