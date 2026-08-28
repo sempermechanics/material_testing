@@ -178,8 +178,9 @@ kind of scene, with convergence up from 72.7% to 77.3% / 94.8%. What changed:
   The share CSV opens with `#` metadata and per-frame field stats, then point
   rows with an optional recorded-session suffix (floor in mε plus scene-motion
   columns); imports omit those trailing columns. A clean pass is also a dialog:
-  **Continue** (not Record anyway), with ⓘ for the FAQ — not **Why?**, because
-  the number is a fact.
+  large **measurement floor** value + body, **Continue**, **ⓘ** → FAQ
+  `#noise-floor` (does not dismiss) — not **Why?**, because the number is a fact.
+  Fail / drift / unsettled use **Why?** the same way.
 - **`strain_window` is a diameter in pixels**, not a multiple of the step
   (`VsgStudy.vsgFor`). The gate quoted floors 3-5x better than the settings
   could deliver until the device data caught it. `MAX_STRAIN_WINDOW` (101 px)
@@ -264,8 +265,10 @@ multi-select stays immediate. Wizard warnings (JPEG, low speckle, frame-size
 mismatch, ROI too small, empty/too-big sweep plan) and remaining actionable
 errors (engine failure dialog **Why?** plus a lasting ⓘ on the status line,
 import / video, viewer batch/OOM/scale, lattice hollow nodes) link to FAQ
-anchors on the public site behind a leave-the-app confirm
-([docs/app/FAQ_LINKS.md](docs/app/FAQ_LINKS.md)). Frame-size copy names the
+anchors on the public site behind a leave-the-app confirm; canonical copy in
+[docs/app/FAQ.md](docs/app/FAQ.md) (`#noise-floor`, `#lighting-and-accuracy`,
+`#strain-field-stats`) with map in
+[docs/app/FAQ_LINKS.md](docs/app/FAQ_LINKS.md). Frame-size copy names the
 mismatched files. `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when
 the gallery tab needs them. Summary GIFs bake `viewer_canvas` (night `#101518`)
 into the cache filename. Launcher adaptive background is day `#F4F9FC` / night
