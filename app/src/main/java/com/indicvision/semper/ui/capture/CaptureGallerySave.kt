@@ -9,6 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Puts a run's captured frames in the phone's own gallery, beside the copy the
@@ -29,7 +32,7 @@ import java.io.File
 internal object CaptureGallerySave {
 
     /** Album the frames land in, under the phone's Pictures directory. */
-    const val ALBUM = "Semper"
+    const val ALBUM = "semper"
 
     /**
      * Free space that must remain *after* the copy.
@@ -97,9 +100,8 @@ internal object CaptureGallerySave {
      * having. The timestamp is taken once for the whole run so a save that
      * straddles a minute boundary does not split across two folders.
      */
-    private fun folderName(): String {
-        val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
-            .format(java.util.Date())
+    internal fun folderName(now: Date = Date()): String {
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(now)
         return "$ALBUM/$stamp"
     }
 

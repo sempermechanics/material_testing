@@ -6,6 +6,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 /**
  * The gallery copy is a convenience, so the only behaviour worth pinning is
@@ -39,5 +41,11 @@ class CaptureGallerySaveTest {
         assertEquals("image/png", CaptureGallerySave.mimeOf(File("reference.png")))
         assertEquals("image/jpeg", CaptureGallerySave.mimeOf(File("test.jpg")))
         assertEquals("image/jpeg", CaptureGallerySave.mimeOf(File("TEST.JPG")))
+    }
+
+    @Test
+    fun `folder name is semper slash compact date hyphen time`() {
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).parse("20260828-090800")!!
+        assertEquals("semper/20260828-090800", CaptureGallerySave.folderName(stamp))
     }
 }
