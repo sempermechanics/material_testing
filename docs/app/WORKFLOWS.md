@@ -305,7 +305,7 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
     │   measure itself
     ├── Timed stills (PNG, converted from the sensor's own YUV output — no
     │   JPEG step)
-    ├── Second copy of the as-captured frames into Pictures/Semper/<date>
+    ├── Second copy of the as-captured frames into Pictures/semper/<date>-<time>
     │   (CaptureGallerySave; skipped with one line when there is no room, or
     │   below Android 10)
     └── Hand-off: PICKED_REF_URI + PICKED_DEF_URIS → analysis wizard
@@ -328,7 +328,7 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
 | [ ] 3b.6e | Nudge the tripod during the burst | One disturbed frame does not flip a good setup into a refusal (median over 5) |
 | [ ] 3b.6f | Pass the gate on a good setup | No dialog; the measured floor is still recorded on the session |
 | [ ] 3b.7 | Complete a stills run | Wizard opens with reference (vendor JPEG) + deformed frames (lossless PNG) filled |
-| [ ] 3b.8 | Open the phone's gallery after a run | A `Semper/<date>` album holds the reference and every frame, as captured |
+| [ ] 3b.8 | Open the phone's gallery after a run | A `semper/<date>-<time>` folder under Pictures holds the reference and every frame, as captured |
 | [ ] 3b.9 | Export the PDF and the CSV for that run | Cover carries **Measurement Floor** and **Frame Motion**; every CSV row carries the floor and scene-motion columns |
 
 ---

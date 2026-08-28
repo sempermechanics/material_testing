@@ -195,7 +195,7 @@ kind of scene, with convergence up from 72.7% to 77.3% / 94.8%. What changed:
   strain, and a fit taken over the whole ROI would remove real deformation
   along with it.
 - `CaptureGallerySave` puts a second copy of the as-captured frames in
-  `Pictures/Semper/<date>` so the raw measurement is reachable without this
+  `Pictures/semper/<date>-<time>` so the raw measurement is reachable without this
   app. It never blocks the run and skips with one line when there is no room.
 
 Still open from that work: precision-mode auto-engage and k-averaging, lifting
