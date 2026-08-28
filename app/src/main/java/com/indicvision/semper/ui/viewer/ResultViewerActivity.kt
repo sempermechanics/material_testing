@@ -1093,10 +1093,7 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun floorCaption(index: Int): String {
         val floor = sessionRecord?.captureFloor
         if (!DicResult.isStrainFieldIndex(index) || floor == null) return ""
-        val sentence = floor.warning() ?: (
-            getString(R.string.capture_noise_floor_title, floor.label()) +
-                " " + getString(R.string.capture_noise_floor_body)
-            )
+        val sentence = floor.warning() ?: getString(R.string.capture_noise_floor_readout, floor.label())
         return "\n" + sentence
     }
 
