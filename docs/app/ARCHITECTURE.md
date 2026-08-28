@@ -14,8 +14,14 @@ SplashActivity
     ├─ (no session / error) → AuthActivity
     ├─ PENDING              → PendingApprovalActivity
     └─ APPROVED / offline   → HomeActivity
-                                ├─ new analysis → StaticAnalysisActivity
-                                │                    └─ ResultViewerActivity
+                                ├─ Import → StaticAnalysisActivity
+                                │              └─ ResultViewerActivity
+                                ├─ Record → CaptureSetupActivity
+                                │              └─ CaptureSessionActivity
+                                │                     (Back → setup; success →
+                                │                      setup starts wizard then
+                                │                      finishes → Home under
+                                │                      StaticAnalysisActivity)
                                 └─ open session → ResultViewerActivity
                                                      (or VsgLatticeActivity for sweeps)
 ```

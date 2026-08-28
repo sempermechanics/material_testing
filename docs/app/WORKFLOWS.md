@@ -309,28 +309,36 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
     ├── Second copy of the as-captured frames into Pictures/semper/<date>-<time>
     │   (CaptureGallerySave; skipped with one line when there is no room, or
     │   below Android 10)
-    └── Hand-off: PICKED_REF_URI + PICKED_DEF_URIS → analysis wizard
+    ├── Hand-off: RESULT_OK + PICKED_REF_URI + PICKED_DEF_URIS → setup starts
+    │   the analysis wizard and finishes (Back from wizard → Home)
+    └── Back / Cancel: setup close → Home; session Back / Cancel → setup
+        (plan kept); mid-stills Back → confirm Stop, then setup
 ```
 
 | # | Action | Expected |
 |---|---|---|
 | [ ] 3b.1 | From Home FAB → **Record** | Setup screen with fps, duration, resolution, and a mode summary |
+| [ ] 3b.1a | Press Back / close on setup | Home — Record is abandoned |
 | [ ] 3b.2 | Choose a plan that exceeds free RAM or storage | Blocking dialog; no test shot |
-| [ ] 3b.3 | Continue with a valid plan | CAMERA permission prompt (first run), then the phone Camera app opens for one test shot |
-| [ ] 3b.4 | Cancel the test shot or save nothing | Retry / Cancel |
+| [ ] 3b.3 | Continue with a valid plan | CAMERA permission prompt (first run), then the phone Camera app opens for one test shot; **setup stays under the session** |
+| [ ] 3b.3a | Press Back on the session before recording | Setup again, with the previous fps / duration / resolution still filled |
+| [ ] 3b.4 | Cancel the test shot or save nothing | Retry / Cancel (Cancel → setup) |
 | [ ] 3b.4b | Complete the test shot | ROI editor opens on that photo |
-| [ ] 3b.4c | Cancel the ROI editor without saving | Prompt to select an area again, retake, or cancel |
+| [ ] 3b.4c | Cancel the ROI editor without saving | Prompt to select an area again, retake, or cancel (Cancel → setup) |
 | [ ] 3b.5 | Save an ROI on a weak / blank pattern | Speckle-fail dialog with FAQ **Why?**; can reselect area or retake |
+| [ ] 3b.5a | Tap **Why?** on that dialog, open the FAQ, return | Same dialog still up (Select area / Retry); flow continues |
 | [ ] 3b.5b | Save an ROI that is too small | Too-small dialog; select a larger area |
 | [ ] 3b.6 | Good test shot + ROI with enough contrast | Focus locks; **Start recording** appears |
 | [ ] 3b.6b | Cover the lens so AF never locks (real device) | AF-fail dialog, Retry test shot — never starts on a floating lens |
 | [ ] 3b.6c | Watch the test shot on a phone that refuses ISP keys | Exactly one warning, effect first, under 20 words, with a working FAQ link. A phone that honoured everything shows none |
-| [ ] 3b.6d | Dim the light or defocus slightly, then take a test shot | Floor verdict dialog; **Record anyway** is the primary action, **Retry test shot** beside it, **Why?** opens the noise-floor FAQ |
+| [ ] 3b.6d | Dim the light or defocus slightly, then take a test shot | Floor verdict dialog; **Record anyway** is the primary action, **Retry test shot** beside it, **Why?** opens the noise-floor FAQ **without dismissing** the dialog |
+| [ ] 3b.6d2 | Tap **Why?** (or pass **ⓘ**), open the FAQ, return | Same dialog still up; after **Continue** / **Record anyway**, **Start recording** works (camera re-locks if the HAL dropped it; floor is not re-measured) |
 | [ ] 3b.6e | Nudge the tripod during the burst | One disturbed frame does not flip a good setup into a refusal (median over 5) |
 | [ ] 3b.6f | Pass the gate on a good setup | Continue dialog with floor title + body; **ⓘ** opens the FAQ without dismissing; **Continue** enables **Start recording**; measured floor is still recorded on the session; no **Why?** on pass |
-| [ ] 3b.7 | Complete a stills run | Wizard opens with reference (vendor JPEG) + deformed frames (lossless PNG) filled |
+| [ ] 3b.6g | Press Back while timed stills are running | **Stop recording?** confirm; confirming returns to setup (frames discarded) |
+| [ ] 3b.7 | Complete a stills run | Wizard opens with reference + deformed frames filled; Back from wizard step 1 confirms exit to Home (not setup) |
 | [ ] 3b.8 | Open the phone's gallery after a run | A `semper/<date>-<time>` folder under Pictures holds the reference and every frame, as captured |
-| [ ] 3b.9 | Export the PDF and the CSV for that run | Cover carries **Measurement Floor** and **Frame Motion**; CSV opens with `#` session metadata and per-frame field stats, then point rows (`image,x_px,…,znssd` plus floor/motion suffix columns on recorded runs only) |
+| [ ] 3b.9 | Export the PDF and the CSV for that run | Cover **Measurement Floor** is italic notes only (noise floor value plus any floor/denoise warnings; no Image Noise row, no Frame Motion block); CSV opens with `#` session metadata and per-frame field stats, then point rows (`image,x_px,…,znssd` plus floor/motion suffix columns on recorded runs only) |
 
 ---
 
