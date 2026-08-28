@@ -330,7 +330,7 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
 | [ ] 3b.6f | Pass the gate on a good setup | Continue dialog with floor title + body; **ⓘ** opens the FAQ without dismissing; **Continue** enables **Start recording**; measured floor is still recorded on the session; no **Why?** on pass |
 | [ ] 3b.7 | Complete a stills run | Wizard opens with reference (vendor JPEG) + deformed frames (lossless PNG) filled |
 | [ ] 3b.8 | Open the phone's gallery after a run | A `semper/<date>-<time>` folder under Pictures holds the reference and every frame, as captured |
-| [ ] 3b.9 | Export the PDF and the CSV for that run | Cover carries **Measurement Floor** and **Frame Motion**; every CSV row carries the floor and scene-motion columns |
+| [ ] 3b.9 | Export the PDF and the CSV for that run | Cover carries **Measurement Floor** and **Frame Motion**; CSV opens with `#` session metadata and per-frame field stats, then point rows (`image,x_px,…,znssd` plus floor/motion suffix columns on recorded runs only) |
 
 ---
 
@@ -969,7 +969,7 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.5.3a | **Animations** | Five GIFs, one per field, zipped; each loops when opened in a gallery app |
 | [ ] 8.5.3b | Same, immediately on entering the viewer | Fields not built yet are built under the progress dialog — never silently missing |
 | [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
-| [ ] 8.5.5 | **CSV data** | Header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd`; a sweep inserts four more after `image` — `subset_px,step_px,strain_window,vsg_px` |
+| [ ] 8.5.5 | **CSV data** | `#` preamble (version, reference, strain method, ROI, optional floor in mε, per-frame U/V/Exx/Eyy/Exy max/min/mean), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — recorded sessions append `noise_floor_mε,shift_u_px,shift_v_px,shift_rot_deg`; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image` |
 | [ ] 8.5.6 | **Everything (.zip)** | Raw photos, the five animations, per-frame results for all five fields, the CSV and the PDF |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
 | [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |
