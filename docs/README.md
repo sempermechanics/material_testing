@@ -83,7 +83,7 @@ in `native/docs/ARCHITECTURE.md` inside the engine submodule.
 | `VSG` / strain window | Least-squares plane fit over neighboring points that turns displacement into strain. Odd width |
 | `.dat` files | Binary results: 8 floats per point (x, y, u, v, exx, eyy, exy, znssd) |
 
-For the directory layout, see the [repository map](../README.md#repository-map)
+For the directory layout, see [Where — repository map](../README.md#where--repository-map)
 in the project README — it is maintained in one place so the two cannot drift.
 
 ## Conventions
