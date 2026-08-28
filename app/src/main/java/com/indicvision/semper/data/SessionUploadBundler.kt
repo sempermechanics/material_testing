@@ -115,7 +115,18 @@ object SessionUploadBundler {
         }
 
         val sweepImage = record.defNames.firstOrNull().orEmpty()
-        val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, record.captureFloor) }
+        val csvMetadata = AnalysisCsvWriter.Metadata(
+            referenceName = record.refName,
+            strainMethod = record.strainMethod.ifBlank { "VSG" },
+            imgW = record.imgW,
+            imgH = record.imgH,
+            roiX = record.roiX,
+            roiY = record.roiY,
+            roiW = record.roiW,
+            roiH = record.roiH,
+            captureFloor = record.captureFloor,
+        )
+        val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, csvMetadata) }
         try {
             record.defNames.forEachIndexed { index, defName ->
                 val datFile = SessionPaths.frameDat(sessionDir, index)
@@ -129,8 +140,7 @@ object SessionUploadBundler {
                     return@forEachIndexed
                 }
 
-                csvAppender?.append(
-                    AnalysisCsvWriter.Frame(
+                val frame = AnalysisCsvWriter.Frame(
                         image = if (record.isSweep) {
                             sweepImage
                         } else {
@@ -140,8 +150,9 @@ object SessionUploadBundler {
                         step = record.sweepSteps.getOrElse(index) { record.step },
                         strainWindow = record.sweepStrainWindows.getOrElse(index) { record.strainWindow },
                         data = { data },
-                    ),
-                )
+                    )
+                csvAppender?.appendFieldStats(frame, data)
+                csvAppender?.append(frame)
 
                 if (ctx == null) {
                     onFrame(index + 1, frameTotal)
