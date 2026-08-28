@@ -379,8 +379,14 @@ class ShareCenter(private val host: ResultViewerActivity) {
      */
     private fun loadCappedBase(s: Snapshot, renderW: Int, renderH: Int): Bitmap {
         s.refImagePath?.let { path ->
-            BitmapDecode.decodeFileForView(path, renderW, renderH, VisualizationEngine.REPORT_MAX_EDGE)
-                ?.let { return it }
+            BitmapDecode.decodeFileForView(
+                path,
+                renderW,
+                renderH,
+                VisualizationEngine.REPORT_MAX_EDGE,
+                rawWidth = s.imgW,
+                rawHeight = s.imgH,
+            )?.let { return it }
         }
         val display = s.baseImage ?: error("No reference image for export")
         if (display.width == renderW && display.height == renderH) return display

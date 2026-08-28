@@ -90,7 +90,13 @@ object SessionUploadBundler {
         val (baseW, baseH) =
             VisualizationEngine.cappedDims(record.imgW, record.imgH, VisualizationEngine.REPORT_MAX_EDGE)
         val baseImg: Bitmap? = if (canReport) {
-            val originalBaseImg = decodeBaseImage(refFile, rawDeformedDir, record.defNames.firstOrNull())
+            val originalBaseImg = decodeBaseImage(
+                refFile,
+                rawDeformedDir,
+                record.defNames.firstOrNull(),
+                record.imgW,
+                record.imgH,
+            )
             if (originalBaseImg == null) {
                 Timber.e("No decodable base image (reference %s) — skipping reports", refFile.absolutePath)
                 null
@@ -297,6 +303,8 @@ object SessionUploadBundler {
             coverW,
             coverH,
             VisualizationEngine.REPORT_MAX_EDGE,
+            rawWidth = record.imgW,
+            rawHeight = record.imgH,
         )
         val defImg = if (originalDefImg != null) {
             originalDefImg.scale(coverW, coverH)
@@ -356,12 +364,31 @@ object SessionUploadBundler {
      * if the reference won't decode. Decoded capped to [VisualizationEngine.REPORT_MAX_EDGE]
      * so a huge reference never lands full-res in memory.
      */
-    private fun decodeBaseImage(refFile: File, rawDeformedDir: File, defName: String?): Bitmap? {
+    private fun decodeBaseImage(
+        refFile: File,
+        rawDeformedDir: File,
+        defName: String?,
+        imgW: Int,
+        imgH: Int,
+    ): Bitmap? {
         val edge = VisualizationEngine.REPORT_MAX_EDGE
-        return BitmapDecode.decodeFileForView(refFile.absolutePath, edge, edge, edge)
-            ?: defName?.let {
-                BitmapDecode.decodeFileForView(File(rawDeformedDir, it).absolutePath, edge, edge, edge)
-            }
+        return BitmapDecode.decodeFileForView(
+            refFile.absolutePath,
+            edge,
+            edge,
+            edge,
+            rawWidth = imgW,
+            rawHeight = imgH,
+        ) ?: defName?.let {
+            BitmapDecode.decodeFileForView(
+                File(rawDeformedDir, it).absolutePath,
+                edge,
+                edge,
+                edge,
+                rawWidth = imgW,
+                rawHeight = imgH,
+            )
+        }
     }
 
     private const val ENGINE_STATS_SIZE = 16

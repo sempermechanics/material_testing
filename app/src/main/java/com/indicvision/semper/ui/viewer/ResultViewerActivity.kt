@@ -589,7 +589,13 @@ class ResultViewerActivity : AppCompatActivity() {
             val reqH = viewH.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
             refDecodeJob?.cancel()
             refDecodeJob = lifecycleScope.launch(Dispatchers.IO) {
-                val bmp = BitmapDecode.decodeFileForView(refPath, reqW, reqH)
+                val bmp = BitmapDecode.decodeFileForView(
+                    refPath,
+                    reqW,
+                    reqH,
+                    rawWidth = imgW,
+                    rawHeight = imgH,
+                )
                 withContext(Dispatchers.Main) {
                     if (isDestroyed || isFinishing) {
                         bmp?.recycle()
