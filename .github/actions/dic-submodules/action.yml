@@ -2,7 +2,7 @@ name: Fetch DIC engine submodules
 description: >
   Init the pinned semper-dic-engine submodule at native/, then its nested
   Eigen/OpenCV third_party checkouts. Host engine tests now run in
-  semperdic/semper-dic-engine; this action remains for any app job that
+  sempermechanics/semper-dic-engine; this action remains for any app job that
   needs the engine tree without a full recursive checkout.
 
 runs:

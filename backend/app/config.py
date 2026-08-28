@@ -52,7 +52,7 @@ class Settings:
 
     # Comma-separated emails that are treated as admins (role=admin, always
     # approved) — they can call the /v1/admin/* endpoints. e.g.
-    # "support@indicvision.com,damodar@indicvision.com".
+    # "support@sempermechanics.com,damodar@sempermechanics.com".
     ADMIN_EMAILS = {
         e.strip().lower()
         for e in os.environ.get("ADMIN_EMAILS", "").split(",")
@@ -61,9 +61,9 @@ class Settings:
 
     # Where "a new user is waiting for approval" mail goes. Same address the app
     # shows in Settings -> Help & support and on the pending-approval screen.
-    SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@indicvision.com")
+    SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@sempermechanics.com")
 
-    # Verified sender for outbound mail, e.g. "Semper <noreply@indicvision.com>",
+    # Verified sender for outbound mail, e.g. "Semper <noreply@sempermechanics.com>",
     # and the Resend API key (the one secret this service holds — set it with
     # --set-secrets, never --set-env-vars). Either one empty disables
     # notification mail entirely: nothing is sent and nothing fails.

@@ -37,7 +37,7 @@ mesh → RGDIC flood-fill → ICGN → VSG strain → `.dat`.
 
 ```
 app/          Android UI + JNI adapter (`app/src/main/cpp/`)
-native/       Pinned submodule: semperdic/semper-dic-engine (solver, tests, docs)
+native/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests, docs)
 backend/      FastAPI on Cloud Run — routers in backend/app/routers/
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
 docs/         Human docs. This file is the agent map.
@@ -244,7 +244,7 @@ working tree belongs to **`feat/license-demo-pro`** and was moved there: no
 definition on this branch.
 
 `origin/main` includes PRs #85–#96 (FAQ error map). Open follow-up: wizard
-step/overlap + step-2/3 reorder ([#97](https://github.com/semperdic/semperdic-app/pull/97)).
+step/overlap + step-2/3 reorder ([#97](https://github.com/sempermechanics/semperdic-app/pull/97)).
 Refresh with `gh pr list --state open` — anything named here will rot.
 
 **Merged since 2026-08-08:** lint extracts #59–#64 and #66; compile/quality #68;
@@ -264,10 +264,9 @@ and opens SAF). The reference picker opens full height and dims the grid for
 multi-select stays immediate. Wizard warnings (JPEG, low speckle, frame-size
 mismatch, ROI too small, empty/too-big sweep plan) and remaining actionable
 errors (engine failure dialog **Why?** plus a lasting ⓘ on the status line,
-import / video, viewer batch/OOM/scale, lattice hollow nodes) link to FAQ
-anchors on the public site behind a leave-the-app confirm; canonical copy in
-[docs/app/FAQ.md](docs/app/FAQ.md) (`#noise-floor`, `#lighting-and-accuracy`,
-`#strain-field-stats`) with map in
+import / video, viewer batch/OOM/scale, lattice hollow nodes) link to Troubleshooting
+sections on the public site behind a leave-the-app confirm; canonical copy in
+[docs/app/FAQ.md](docs/app/FAQ.md) with map in
 [docs/app/FAQ_LINKS.md](docs/app/FAQ_LINKS.md). Frame-size copy names the
 mismatched files. `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when
 the gallery tab needs them. Summary GIFs bake `viewer_canvas` (night `#101518`)

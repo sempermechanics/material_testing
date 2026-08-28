@@ -54,11 +54,11 @@ Archive the R8 mapping artifact before 90-day expiry (same as any beta).
 6. **Distribute publicly (manual)** — this workflow only builds a signed APK and
    a **private** GitHub Release. Customer distribution is separate:
    - Upload the APK (GitHub Release on
-     [semperdic/website](https://github.com/semperdic/website) preferred) + update
+     [sempermechanics/website](https://github.com/sempermechanics/website) preferred) + update
      `downloads/manifest.json`, push so GitHub Pages redeploys — see that repo’s
      `RELEASING.md` — and/or publish on Play Store.
-   - Announce on https://semperdic.github.io/website/ / Discussions on
-     `semperdic/website` (not this private repo).
+   - Announce on https://sempermechanics.com/ / Discussions on
+     `sempermechanics/website` (not this private repo).
 
 ## CI-based release (workflow_dispatch)
 
@@ -187,7 +187,7 @@ cd backend && pytest tests/ -q --cov=app --cov-fail-under=75     # tier 4
 ```
 
 Engine host and sanitizer suites are not part of this repo's gate — they run in
-`semperdic/semper-dic-engine` against the commit this repo pins.
+`sempermechanics/semper-dic-engine` against the commit this repo pins.
 
 ## After the release
 
@@ -201,7 +201,7 @@ Engine host and sanitizer suites are not part of this repo's gate — they run i
 - Paste the GitHub Release changelog into Play / website **What’s new** when
   publishing that channel.
 - Open a milestone for the next version and triage incoming beta feedback
-  (Discussions on `semperdic/website`, support mail, in-app Send feedback)
+  (Discussions on `sempermechanics/website`, support mail, in-app Send feedback)
   into issues against it.
 - **Follow up:** when a reported item ships, reply on the thread or mail and
   close/check the milestone item so reporters know it landed.

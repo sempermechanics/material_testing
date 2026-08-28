@@ -1,6 +1,6 @@
 # Semper — Digital Image Correlation on Android
 
-[![CI](https://github.com/semperdic/semperdic-app/actions/workflows/ci.yml/badge.svg)](https://github.com/semperdic/semperdic-app/actions/workflows/ci.yml)
+[![CI](https://github.com/sempermechanics/semperdic-app/actions/workflows/ci.yml/badge.svg)](https://github.com/sempermechanics/semperdic-app/actions/workflows/ci.yml)
 
 Semper measures **how objects deform** — from nothing but photographs.
 Paint a random speckle pattern on a specimen, photograph it before and during
@@ -32,7 +32,7 @@ cloud for authenticated testers.
 ## Quick start
 
 ```bash
-git clone https://github.com/semperdic/semperdic-app
+git clone https://github.com/sempermechanics/semperdic-app
 cd semperdic-app
 git submodule update --init --recursive   # engine + its Eigen/OpenCV sources (large, one-time)
 # Optional: drop unused OpenCV doc/samples/data/apps (keeps modules + hal for Carotene)
@@ -113,7 +113,7 @@ Change the value and yours is kept — Reset returns to the suggestion.
 ## Repository map
 
 **The C++ engine is not in this repository.** It lives in
-[`semperdic/semper-dic-engine`](https://github.com/semperdic/semper-dic-engine)
+[`sempermechanics/semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine)
 and is linked here as a pinned git submodule at `native/`, which is why the clone
 above needs `--recursive`. This repo pins an engine commit; the engine's own CI
 proves that commit.

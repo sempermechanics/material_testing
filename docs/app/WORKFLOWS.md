@@ -381,10 +381,10 @@ top of Settings (§4.0).
    ├── Analysis preferences
    │   └── Max frames per analysis      (10–150, default 50) + info dialog
    ├── Help & support
-   │   ├── Open Manual / Ask the community / Report a bug / Request a feature
-   │   │     → https://semperdic.github.io/website/…
+   │   ├── Open Manual / Report a bug / Request a feature
+   │   │     → https://sempermechanics.com/…
    │   ├── Send feedback                (mailto, prefilled with version/device/build)
-   │   ├── support@indicvision.com      (selectable, copyable)
+   │   ├── support@sempermechanics.com      (selectable, copyable)
    │   └── Email support                (mailto, prefilled with account/device/build)
    ├── About                            (version + Privacy Policy / Terms links)
    └── Sign out
@@ -459,7 +459,7 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 | [ ] 4.23 | Drag the **Max frames** slider | Value label tracks in steps of 10 from 10 up to the ceiling. 150 is the compile-time fallback; the live ceiling comes from remote config, so a backend can lower it |
 | [ ] 4.24 | Tap the ⓘ next to it | Explains the cost of more frames |
 | [ ] 4.25 | Set it to 20, then import 40 frames in an analysis | Only the first 20 are kept, with a "capped" toast |
-| [ ] 4.26 | Expand **Help & support** | Six actions: **Open Manual**, Ask the community, Report a bug, Request a feature, **Send feedback**, Email support — plus the support address, selectable and copyable |
+| [ ] 4.26 | Expand **Help & support** | Five actions: **Open Manual**, Report a bug, Request a feature, **Send feedback**, Email support — plus the support address, selectable and copyable |
 | [ ] 4.26a | Tap **Open Manual** | The hosted manual opens in a browser |
 | [ ] 4.26b | Tap **Send feedback** | Mail app opens to support@, subject "Semper feedback (v… / …)", body carrying app version, device model, Android level and build type — no account address needed |
 | [ ] 4.27 | Tap **Email support** | Mail app opens to support@, subject "Semper support request", body carrying account, device ID, app version and device model |

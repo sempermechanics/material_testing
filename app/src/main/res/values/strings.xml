@@ -389,9 +389,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="about_message">Semper v%1$s (%2$d)\n\nPrivacy Policy and Terms of Service are available from the links below.</string>
     <string name="legal_privacy">Privacy Policy</string>
     <string name="legal_terms">Terms of Service</string>
-    <!-- Public Hosting URLs for legal pages (firebase-hosting/public/{privacy,terms}/). -->
-    <string name="legal_privacy_url" translatable="false">https://indicvision-dic-app-auth.firebaseapp.com/privacy/</string>
-    <string name="legal_terms_url" translatable="false">https://indicvision-dic-app-auth.firebaseapp.com/terms/</string>
+    <!-- Public legal pages on the product site. -->
+    <string name="legal_privacy_url" translatable="false">https://sempermechanics.com/privacy/</string>
+    <string name="legal_terms_url" translatable="false">https://sempermechanics.com/privacy/</string>
     
     <string name="advanced_parameters">Advanced parameters</string>
     
@@ -770,42 +770,41 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="admin_approved_toast">Approved %1$s</string>
     <string name="admin_denied_toast">Denied %1$s</string>
     <string name="admin_action_error">Action failed: %1$s</string>
-    <string name="support_email">support@indicvision.com</string>
+    <string name="support_email">support@sempermechanics.com</string>
     <string name="request_access_subject">Semper access request</string>
 
     <!-- Settings: help & support -->
     <string name="help_support_section">Help &amp; support</string>
-    <string name="help_support_hint">Read the Manual for how-to. Questions, bugs, and feature requests go to the Semper community. Use email for account or private matters.</string>
+    <string name="help_support_hint">Read the Manual for how-to. Report bugs and request features on the website. Use email for account or private matters.</string>
     <string name="help_support_manual_action">Open Manual</string>
     <string name="help_support_community_action">Ask the community</string>
     <string name="help_support_bug_action">Report a bug</string>
     <string name="help_support_feature_action">Request a feature</string>
     <string name="help_support_email_action">Email support</string>
     <string name="help_support_subject">Semper support request</string>
-    <string name="url_manual">https://semperdic.github.io/website/manual/</string>
-    <string name="url_faq_jpeg" translatable="false">https://semperdic.github.io/website/manual/faq/#jpeg-warning</string>
-    <string name="url_faq_speckle" translatable="false">https://semperdic.github.io/website/manual/faq/#speckle-contrast</string>
-    <string name="url_faq_noise_floor" translatable="false">https://semperdic.github.io/website/manual/faq/#noise-floor</string>
-    <string name="url_faq_imaging_pipeline" translatable="false">https://semperdic.github.io/website/manual/faq/#imaging-pipeline</string>
-    <string name="url_faq_frame_size" translatable="false">https://semperdic.github.io/website/manual/faq/#frame-size-mismatch</string>
-    <string name="url_faq_roi_too_small" translatable="false">https://semperdic.github.io/website/manual/faq/#roi-too-small</string>
-    <string name="url_faq_sweep_subset_range" translatable="false">https://semperdic.github.io/website/manual/faq/#sweep-subset-range</string>
-    <string name="url_faq_sweep_empty_plan" translatable="false">https://semperdic.github.io/website/manual/faq/#sweep-empty-plan</string>
-    <string name="url_faq_engine_features" translatable="false">https://semperdic.github.io/website/manual/faq/#engine-features</string>
-    <string name="url_faq_engine_roi" translatable="false">https://semperdic.github.io/website/manual/faq/#engine-roi</string>
-    <string name="url_faq_engine_init" translatable="false">https://semperdic.github.io/website/manual/faq/#engine-init</string>
-    <string name="url_faq_engine_convergence" translatable="false">https://semperdic.github.io/website/manual/faq/#engine-convergence</string>
-    <string name="url_faq_engine_vsg" translatable="false">https://semperdic.github.io/website/manual/faq/#engine-vsg</string>
-    <string name="url_faq_import_reference" translatable="false">https://semperdic.github.io/website/manual/faq/#import-reference</string>
-    <string name="url_faq_import_deformed" translatable="false">https://semperdic.github.io/website/manual/faq/#import-deformed</string>
-    <string name="url_faq_video_read" translatable="false">https://semperdic.github.io/website/manual/faq/#video-read</string>
-    <string name="url_faq_video_extract" translatable="false">https://semperdic.github.io/website/manual/faq/#video-extract</string>
-    <string name="url_faq_no_batch_data" translatable="false">https://semperdic.github.io/website/manual/faq/#no-batch-data</string>
-    <string name="url_faq_viewer_oom" translatable="false">https://semperdic.github.io/website/manual/faq/#viewer-oom</string>
-    <string name="url_faq_custom_scale" translatable="false">https://semperdic.github.io/website/manual/faq/#custom-scale</string>
-    <string name="url_community">https://semperdic.github.io/website/community/</string>
-    <string name="url_report_bug">https://semperdic.github.io/website/bugs/</string>
-    <string name="url_request_feature">https://semperdic.github.io/website/features/</string>
+    <string name="url_manual">https://sempermechanics.com/manual/</string>
+    <string name="url_faq_jpeg" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
+    <string name="url_faq_speckle" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
+    <string name="url_faq_noise_floor" translatable="false">https://sempermechanics.com/support/troubleshooting/#setup</string>
+    <string name="url_faq_imaging_pipeline" translatable="false">https://sempermechanics.com/support/troubleshooting/#setup</string>
+    <string name="url_faq_frame_size" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
+    <string name="url_faq_roi_too_small" translatable="false">https://sempermechanics.com/support/troubleshooting/#setup</string>
+    <string name="url_faq_sweep_subset_range" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
+    <string name="url_faq_sweep_empty_plan" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
+    <string name="url_faq_engine_features" translatable="false">https://sempermechanics.com/support/troubleshooting/#during-a-run</string>
+    <string name="url_faq_engine_roi" translatable="false">https://sempermechanics.com/support/troubleshooting/#during-a-run</string>
+    <string name="url_faq_engine_init" translatable="false">https://sempermechanics.com/support/troubleshooting/#during-a-run</string>
+    <string name="url_faq_engine_convergence" translatable="false">https://sempermechanics.com/support/troubleshooting/#during-a-run</string>
+    <string name="url_faq_engine_vsg" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
+    <string name="url_faq_import_reference" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
+    <string name="url_faq_import_deformed" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
+    <string name="url_faq_video_read" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
+    <string name="url_faq_video_extract" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
+    <string name="url_faq_no_batch_data" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
+    <string name="url_faq_viewer_oom" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
+    <string name="url_faq_custom_scale" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
+    <string name="url_report_bug">https://sempermechanics.com/support/</string>
+    <string name="url_request_feature">https://sempermechanics.com/support/</string>
 
     <!-- First-login beta / data-use declaration (shown once per account on Home) -->
     <string name="beta_notice_title">Beta notice</string>
@@ -816,11 +815,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="limit_title">Analysis limit reached</string>
     <string name="limit_body">You\'ve reached the maximum number of saved analyses on your account. New cloud analyses are blocked until the limit is raised.\n\nPlease email %1$s to request a higher limit. You can also delete an existing analysis, then tap Re-check limit.</string>
     
-    <string name="limit_email_support">Email support@indicvision.com</string>
+    <string name="limit_email_support">Email support@sempermechanics.com</string>
     <string name="limit_recheck">Re-check limit</string>
     <string name="limit_back">Back to my analyses</string>
     <string name="limit_subject">Semper — request higher analysis limit</string>
-    <string name="limit_still_full">Still at the limit. Delete an analysis or email support@indicvision.com.</string>
+    <string name="limit_still_full">Still at the limit. Delete an analysis or email support@sempermechanics.com.</string>
     <string name="limit_cleared">You\'re under the limit again.</string>
     <string name="request_access_none">No email app found. Please email %1$s to request access.</string>
     <string name="dot_separator">" · "</string>

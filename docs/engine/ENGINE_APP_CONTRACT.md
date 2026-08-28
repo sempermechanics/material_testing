@@ -2,7 +2,7 @@
 
 **Audience:** maintainers of this private app and reviewers of engine bumps.
 
-The engine is published as [`semperdic/semper-dic-engine`](https://github.com/semperdic/semper-dic-engine)
+The engine is published as [`sempermechanics/semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine)
 (C/C++ SDK + Android JNI + Python). This app links it as a **pinned git submodule** at `native/`.
 The public copy of this contract lives at `docs/CONTRACT.md` in that repo; keep the two in sync
 when Frozen/Stable rules change.
@@ -212,7 +212,7 @@ its order; change the meaning of a metrics slot; change a return-code value or m
 
 ## A.6 How improvements reach the app
 
-1. **Land** the change in [`semperdic/semper-dic-engine`](https://github.com/semperdic/semper-dic-engine)
+1. **Land** the change in [`sempermechanics/semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine)
    behind the same public signatures (or additively). Update `SEMPER_VERSION` per the semver rules
    in [A.1](#a1-stability-tiers).
 2. **Tag** a release. This app bumps its **pinned `native/` submodule tag**, a maintainer reviews

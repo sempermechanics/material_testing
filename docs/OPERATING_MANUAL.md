@@ -567,10 +567,10 @@ tap **Re-check**.
 **Help & support** is the last section, and it now opens the **Manual** directly
 as well. **Send feedback** is for "this could be better" — it opens a mail with
 your app version and phone model and nothing else. Prefer the
-[Manual](https://semperdic.github.io/website/manual/) for how-to, and the
-[community](https://semperdic.github.io/website/community/) for questions, bugs,
-and feature requests (GitHub login required to post). The section also shows
-`support@indicvision.com` — selectable, so you can copy it if this device has no
+[Manual](https://sempermechanics.com/manual/) for how-to. Report bugs and
+request features from **Settings → Help & support** (opens the Support page).
+The section also shows
+`support@sempermechanics.com` — selectable, so you can copy it if this device has no
 mail app — and **Email support**, which opens a mail already carrying your
 account, device ID, app version and phone model for private or account issues.
 Write above that block; leave it in place.
@@ -605,7 +605,7 @@ Write above that block; leave it in place.
 | Phone out of space | **Settings → Storage → Free up space**, and consider setting an auto-free budget |
 | Still pending approval | Tap **Check status** — it never polls |
 | Sign-in refused after signing up | Open the verification link in your email, then try again |
-| Nothing here matches | **Settings → Help & support** — ask the community at [semperdic.github.io/website](https://semperdic.github.io/website/support/), or **Email support** (the mail carries your account, device and build) |
+| Nothing here matches | **Settings → Help & support** — [Support](https://sempermechanics.com/support/) or **Email support** (the mail carries your account, device and build) |
 
 ---
 
@@ -659,7 +659,7 @@ Admin accounts get **Settings → Account → Pending access requests**: everyon
 waiting, with **Approve** and **Deny**. Approved users get in when they next tap
 **Check status** — they are not notified, so tell them.
 
-You do not have to watch that list. The backend emails `support@indicvision.com`
+You do not have to watch that list. The backend emails `support@sempermechanics.com`
 the moment an account is created pending, naming the account and its user id,
 with both ways to approve it. One mail per account, at creation — approving,
 denying or signing in again sends nothing further. If no mail arrives, check the
