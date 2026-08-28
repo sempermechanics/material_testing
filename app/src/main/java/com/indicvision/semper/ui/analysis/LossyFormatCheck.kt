@@ -17,7 +17,11 @@ package com.indicvision.semper.ui.analysis
  */
 internal object LossyFormatCheck {
 
-    private val LOSSLESS = setOf("png", "tif", "tiff", "bmp", "pgm", "ppm", "pnm", "dat")
+    private val LOSSLESS = setOf(
+        "png", "tif", "tiff", "bmp", "pgm", "ppm", "pnm", "dat",
+        // Sensor RAW: imported as lossless intensity for correlation (see RawRgba).
+        "dng", "raw",
+    )
 
     /**
      * Distinct upper-case labels ("JPEG", "WEBP") for every non-lossless file

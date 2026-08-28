@@ -10,7 +10,17 @@ class LossyFormatCheckTest {
     fun `says nothing about a fully lossless set`() {
         assertEquals(
             emptyList<String>(),
-            LossyFormatCheck.lossyLabels(listOf("ref.png", "/a/frame_0001.PNG", "b.tiff", "c.bmp")),
+            LossyFormatCheck.lossyLabels(
+                listOf("ref.png", "/a/frame_0001.PNG", "b.tiff", "c.bmp", "shot.dng", "x.RAW"),
+            ),
+        )
+    }
+
+    @Test
+    fun `treats DNG and RAW as lossless`() {
+        assertEquals(
+            emptyList<String>(),
+            LossyFormatCheck.lossyLabels(listOf("specimen.dng", "0000_shot.RAW", "frame.png")),
         )
     }
 
