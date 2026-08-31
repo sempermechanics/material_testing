@@ -67,13 +67,7 @@ object RestoreDownloadOutcomes {
         return haveBytes == target
     }
 
-    /**
-     * Corrupt Session.zip / attestation failures must not WorkManager-retry:
-     * re-downloading the same Drive object will fail the same way forever.
-     */
-    fun isTerminalCorruptFailure(error: Throwable): Boolean {
-        if (error is ZipException) return true
-        val msg = error.message.orEmpty()
-        return msg.contains("corrupt transfer", ignoreCase = true)
-    }
+    /** Zip or attestation failure — do not WorkManager-retry. */
+    fun isTerminalCorruptFailure(error: Throwable): Boolean =
+        error is ZipException || error is CorruptTransferException
 }

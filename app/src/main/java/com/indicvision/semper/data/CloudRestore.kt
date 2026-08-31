@@ -322,26 +322,7 @@ object CloudRestore {
                 onProgress(have.coerceAtMost(total), total)
             },
         )
-        require(expected <= 0L || dest.length() == expected) {
-            "Downloaded Session.zip size ${dest.length()} != declared $expected — corrupt transfer"
-        }
-        val expectedSha = bundleEntry.sha256?.lowercase()?.takeIf { it.length == 64 }
-            ?: error("Session.zip missing sha256 attestation — corrupt transfer")
-        val gotSha = Digests.sha256Hex(dest)
-        require(gotSha == expectedSha) {
-            "Session.zip sha256 mismatch (got $gotSha, expected $expectedSha) — corrupt transfer"
-        }
-        val magic = dest.inputStream().use { stream ->
-            ByteArray(ZIP_MAGIC.size).also { buf ->
-                require(stream.read(buf) >= ZIP_MAGIC.size) {
-                    "Session.zip too small (${dest.length()} B) — corrupt transfer"
-                }
-            }
-        }
-        require(magic.contentEquals(ZIP_MAGIC)) {
-            "Session.zip is not a zip (magic=${magic.toList()}) — corrupt transfer"
-        }
-
+        verifySessionZip(dest, expected, bundleEntry.sha256)
         // Since the payload was split, Session.zip alone is no longer the whole
         // analysis. "Save to Files" is the deliverables use case, so pull Extras.zip
         // too and hand over one merged archive — the same single file as before.
@@ -363,10 +344,10 @@ object CloudRestore {
             val expected = extrasEntry.sizeBytes.takeIf { it > 0L } ?: -1L
             api.downloadFile(token, extrasEntry.fileId, extrasTmp, expectedBytes = expected)
             val expectedSha = extrasEntry.sha256?.lowercase()?.takeIf { it.length == 64 }
-                ?: error("Extras.zip missing sha256 attestation — corrupt transfer")
+                ?: throw CorruptTransferException("extras_zip_sha256_missing")
             val gotSha = Digests.sha256Hex(extrasTmp)
-            require(gotSha == expectedSha) {
-                "Extras.zip sha256 mismatch (got $gotSha, expected $expectedSha) — corrupt transfer"
+            if (gotSha != expectedSha) {
+                throw CorruptTransferException("session_zip_sha256_mismatch")
             }
             SessionZip.merge(listOf(dest, extrasTmp), dest)
         } finally {
@@ -452,35 +433,85 @@ object CloudRestore {
                 allowOverLimit = true, // already counted in the cloud quota
             ),
         ) { "Could not update the restored session index" }
-        logRestoreSaving(localId, sessionId, outcome, metaEntry.sizeBytes, files)
+        logRestoreSaving(outcome, metaEntry.sizeBytes, files)
         // The listing excludes backups already on this device, so it changed.
         invalidateRestorableCache()
         localId
     }
 
-    /**
-     * Log bytes actually pulled vs the whole backup — the difference is the deformed
-     * originals + deliverables a restore no longer downloads. Reads straight out of
-     * logcat, so a live restore confirms the saving without extra instrumentation.
-     */
+    /** Log restore completion; structured line is PII-free, Timber line is coarse totals only. */
     private fun logRestoreSaving(
-        localId: String,
-        sessionId: String,
         outcome: BundleOutcome,
         metaBytes: Long,
         files: List<CloudFileDto>,
     ) {
         val downloaded = metaBytes.coerceAtLeast(0L) + outcome.bytesDownloaded
         val backupTotal = files.sumOf { it.sizeBytes.coerceAtLeast(0L) }
+        TransferLog.phase(
+            TransferLog.PhaseFields(
+                phase = "restore",
+                outcome = "complete",
+                bytes = downloaded,
+                count = files.size,
+                stage = outcome.mode,
+            ),
+        )
         Timber.i(
-            "Restored analysis %s from cloud session %s (%s): downloaded %d of %d backup bytes (%d files)",
-            localId,
-            sessionId,
+            "Restore complete (%s): %d of %d backup bytes (%d files)",
             outcome.mode,
             downloaded,
             backupTotal,
             files.size,
         )
+    }
+
+    private fun verifySessionZip(
+        file: File,
+        expectedSize: Long,
+        sha256: String?,
+        requireEntries: Boolean = false,
+    ) {
+        val err = checkZipSize(file, expectedSize)
+            ?: checkZipSha256(file, sha256)
+            ?: checkZipMagic(file)
+            ?: if (requireEntries) checkZipEntries(file) else null
+        if (err != null) throw err
+    }
+
+    private fun checkZipSize(file: File, expectedSize: Long): CorruptTransferException? {
+        if (expectedSize > 0L && file.length() != expectedSize) {
+            return CorruptTransferException("session_zip_size_mismatch")
+        }
+        return null
+    }
+
+    private fun checkZipSha256(file: File, sha256: String?): CorruptTransferException? {
+        val expectedSha = sha256?.lowercase()?.takeIf { it.length == 64 }
+        return when {
+            expectedSha == null -> CorruptTransferException("session_zip_sha256_missing")
+            Digests.sha256Hex(file) != expectedSha -> CorruptTransferException("session_zip_sha256_mismatch")
+            else -> null
+        }
+    }
+
+    private fun checkZipMagic(file: File): CorruptTransferException? {
+        val magic = ByteArray(ZIP_MAGIC.size)
+        val read = file.inputStream().use { it.read(magic) }
+        return when {
+            read < ZIP_MAGIC.size -> CorruptTransferException("session_zip_too_small")
+            !magic.contentEquals(ZIP_MAGIC) -> CorruptTransferException("session_zip_bad_magic")
+            else -> null
+        }
+    }
+
+    private fun checkZipEntries(file: File): CorruptTransferException? {
+        return try {
+            java.util.zip.ZipFile(file).use { zf ->
+                if (zf.size() <= 0) CorruptTransferException("session_zip_no_entries") else null
+            }
+        } catch (e: java.util.zip.ZipException) {
+            CorruptTransferException("session_zip_unreadable", e)
+        }
     }
 
     /** Remove an interrupted restore's files while retaining its cloud-only index row. */
@@ -550,8 +581,8 @@ object CloudRestore {
             )
             onProgress(0L, plan.cut)
             fetch.api.downloadRange(fetch.token, fetch.entry.fileId, prefixTmp, rangeStart = 0L, length = plan.cut)
-            require(prefixTmp.length() == plan.cut) {
-                "Prefix download is ${prefixTmp.length()} B, expected ${plan.cut} — corrupt transfer"
+            if (prefixTmp.length() != plan.cut) {
+                throw CorruptTransferException("prefix_size_mismatch")
             }
             onProgress(plan.cut, plan.cut)
             val ref = unpackPrefix(prefixTmp, fetch.layout, plan.crcByName)
@@ -674,7 +705,9 @@ object CloudRestore {
     ): File {
         val role = entryName.substringBefore('/', missingDelimiterValue = "")
         val name = entryName.substringAfter('/', missingDelimiterValue = "")
-        require(role.isNotEmpty() && name.isNotEmpty()) { "Unexpected entry $entryName — corrupt transfer" }
+        if (role.isEmpty() || name.isEmpty()) {
+            throw CorruptTransferException("unexpected_zip_entry")
+        }
         val dest = destFor(role, name, layout)
         dest.parentFile?.mkdirs()
         val crc = CRC32()
@@ -687,15 +720,15 @@ object CloudRestore {
                 n = input.read(buffer)
             }
         }
-        require(expectedCrc == null || crc.value == expectedCrc) {
-            "CRC mismatch for $entryName — corrupt transfer"
+        if (expectedCrc != null && crc.value != expectedCrc) {
+            throw CorruptTransferException("entry_crc_mismatch")
         }
         return dest
     }
 
     private fun requirePrefixComplete(restored: Int, expected: Int) {
-        require(restored == expected) {
-            "Prefix held $restored entries, expected $expected — corrupt transfer"
+        if (restored != expected) {
+            throw CorruptTransferException("prefix_entry_count")
         }
     }
 
@@ -724,37 +757,7 @@ object CloudRestore {
                     onProgress(have.coerceAtMost(total), total)
                 },
             )
-            require(expected <= 0L || zipTmp.length() == expected) {
-                "Downloaded Session.zip size ${zipTmp.length()} != declared $expected — corrupt transfer"
-            }
-            val expectedSha = bundleEntry.sha256?.lowercase()?.takeIf { it.length == 64 }
-                ?: error("Session.zip missing sha256 attestation — corrupt transfer")
-            val gotSha = Digests.sha256Hex(zipTmp)
-            require(gotSha == expectedSha) {
-                "Session.zip sha256 mismatch (got $gotSha, expected $expectedSha) — corrupt transfer"
-            }
-            val magic = zipTmp.inputStream().use { stream ->
-                ByteArray(ZIP_MAGIC.size).also { buf ->
-                    require(stream.read(buf) >= ZIP_MAGIC.size) {
-                        "Session.zip too small (${zipTmp.length()} B) — corrupt transfer"
-                    }
-                }
-            }
-            require(magic.contentEquals(ZIP_MAGIC)) {
-                "Session.zip is not a zip (magic=${magic.toList()}) — corrupt transfer"
-            }
-            // Central directory check before inflate — catches truncated archives
-            // that still start with local PK headers.
-            try {
-                java.util.zip.ZipFile(zipTmp).use { zf ->
-                    require(zf.size() > 0) { "Session.zip has no entries — corrupt transfer" }
-                }
-            } catch (e: java.util.zip.ZipException) {
-                throw IllegalArgumentException(
-                    "Session.zip central directory unreadable — corrupt transfer",
-                    e,
-                )
-            }
+            verifySessionZip(zipTmp, expected, bundleEntry.sha256, requireEntries = true)
             // Download bytes are done; hold 100% through unpack so the row
             // doesn't look stuck again during inflate.
             onProgress(totalForUi, totalForUi)
@@ -862,6 +865,8 @@ object CloudRestore {
         val now = System.currentTimeMillis()
         val sweep = engine.optJSONObject("sweep")
         val skipped = sweep?.optJSONObject("skipped")
+        val skipNodes = SkippedNode.fromMetadata(skipped)
+        val legacySkip = SkippedNode.toLegacyLists(skipNodes)
         return SessionRecord(
             id = target.localId,
             name = target.existing?.name?.takeIf { it.isNotBlank() }
@@ -897,10 +902,11 @@ object CloudRestore {
             sweepStrainWindows = intList(sweep?.optJSONArray("strainWindows")),
             sweepLabels = stringList(sweep?.optJSONArray("labels")),
             lineCutHorizontal = sweep?.optBoolean("lineCutHorizontal", true) ?: true,
-            sweepSkipSubsets = intList(skipped?.optJSONArray("subsets")),
-            sweepSkipSteps = intList(skipped?.optJSONArray("steps")),
-            sweepSkipStrainWindows = intList(skipped?.optJSONArray("strainWindows")),
-            sweepSkipCodes = intList(skipped?.optJSONArray("codes")),
+            sweepSkipSubsets = legacySkip.subsets,
+            sweepSkipSteps = legacySkip.steps,
+            sweepSkipStrainWindows = legacySkip.strainWindows,
+            sweepSkipCodes = legacySkip.codes,
+            sweepSkippedNodes = skipNodes,
             renamedByUser = target.existing?.renamedByUser ?: false,
         )
     }
