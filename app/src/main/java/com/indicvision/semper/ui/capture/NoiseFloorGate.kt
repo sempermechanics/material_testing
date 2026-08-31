@@ -76,7 +76,7 @@ object NoiseFloorGate {
         }
         val firstMs = ((System.nanoTime() - startNs) / NANOS_PER_MILLI).coerceAtLeast(1L)
 
-        // The ceiling is five frames; a slow phone gets fewer, and the tests in
+        // The ceiling is six frames; a slow phone gets fewer, and the tests in
         // [NoiseFloorStats] degrade in a documented order rather than linearly.
         val wanted = NoiseFloorStats.frameCountFor(firstMs)
         val files = mutableListOf(first)

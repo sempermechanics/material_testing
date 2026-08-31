@@ -226,7 +226,7 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
     ├── Freeze the ISP (CaptureIspLock) and read every key back out of the
     │   TotalCaptureResult; whatever the HAL refused is collapsed into one
     │   warning with a FAQ link
-    ├── Noise-floor burst: up to 5 stills on the run's own settings, static
+    ├── Noise-floor burst: up to 6 stills on the run's own settings, static
     │   scene, no load yet (NoiseFloorGate). Yields sigma_u, the strain floor
     │   at the gauge in use, the image noise variance D(eta), the frame-to-
     │   frame brightness scatter, and the neighbour correlation that catches a

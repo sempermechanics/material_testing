@@ -21,17 +21,27 @@ import kotlin.math.sqrt
  * "what is the noise of this setup". So the count is set by breakdown and
  * false-alarm rates, not by `1/√n`:
  *
+ * **Frames and estimates are not the same number**, and conflating them is how
+ * the drift threshold was wrong for its first several device runs. *n* frames
+ * give *n − 1* estimates, because every sample is one frame correlated against
+ * the reference and the reference is itself one of the *n*. Every row below is
+ * quoted in frames, with the estimate count it yields in brackets:
+ *
  * | Test | Needs | Why |
  * |---|---|---|
- * | Median — one bad frame must not decide | 3 frames, 4+ safe | the median's breakdown is half the samples |
- * | Spread — settling, or intermittent? | 4 frames | 2 estimates give a difference, not a scatter |
- * | Drift vs noise | 5 frames | a monotone run of *k* values happens by
+ * | Median — one bad frame must not decide | 3 frames (2), 4+ safe | the median's breakdown is half the samples |
+ * | Spread — settling, or intermittent? | 4 frames (3) | 2 estimates give a difference, not a scatter |
+ * | Drift vs noise | 6 frames (5) | a monotone run of *k* **estimates** happens by
  *   chance with probability `2/k!`: 33% at k=3, 8.3% at k=4, 1.7% at k=5 |
  *
- * Below five frames the drift verdict is not trustworthy enough to show anyone,
- * and drift is the one finding with a *different* answer from noise — wait or
- * re-mount, versus more light or a larger area. Above five, the false-alarm rate
- * keeps falling but nothing the user sees changes, so the extra seconds buy a
+ * The drift row is the binding one and the reason [MAX_FRAMES] is six rather
+ * than five. Five frames yield only four estimates, which is the `k=4` row —
+ * one refused run in twelve on a rig that was perfectly steady. Since
+ * [Outcome.DRIFTING] *blocks*, that is not a rate a user should meet: drift is
+ * the one finding whose answer differs from noise — wait or re-mount, versus
+ * more light or a larger area — so asserting it wrongly sends someone to
+ * re-level a tripod that was already level. Above six the false-alarm rate keeps
+ * falling but nothing the user sees changes, so the extra seconds would buy a
  * better number for a decision already made.
  */
 object NoiseFloorStats {
@@ -322,6 +332,11 @@ object NoiseFloorStats {
      * True when [values] rise or fall throughout — the signature of drift rather
      * than noise. Strict, because a single repeat is enough to make a run
      * ordinary; see the `2/k!` reasoning on [NoiseFloorStats].
+     *
+     * [values] are *estimates*, not frames, so the guard is
+     * `FRAMES_FOR_DRIFT - 1`: six frames yield the five estimates that put the
+     * false-alarm rate at 1.7%. Anything shorter returns false and the burst
+     * reports drift as possible rather than asserting it.
      */
     internal fun isMonotone(values: List<Double>): Boolean {
         if (values.size < FRAMES_FOR_DRIFT - 1) return false
@@ -387,8 +402,8 @@ object NoiseFloorStats {
     /** 1 mε — below this the run would not show the strain being applied. */
     const val DEFAULT_LIMIT_MICROSTRAIN = 1_000.0
 
-    /** Five frames: where the drift test becomes reliable. See the class note. */
-    const val MAX_FRAMES = 5
+    /** Six frames (five estimates): where the drift test becomes reliable. */
+    const val MAX_FRAMES = 6
 
     /** Two frames still yields one estimate, which reports but never blocks. */
     const val MIN_FRAMES = 2
@@ -399,20 +414,40 @@ object NoiseFloorStats {
     /** Four frames (three estimates) is the floor for judging spread. */
     const val FRAMES_FOR_SPREAD = 4
 
-    /** Five frames: a monotone run is then 1.7% likely from noise alone. */
-    const val FRAMES_FOR_DRIFT = 5
+    /**
+     * Six frames — five estimates — is where a monotone run drops to 1.7%
+     * likely from noise alone.
+     *
+     * Was five, which is five *frames* and therefore only four estimates: the
+     * 8.3% row, one false refusal in twelve. The count here is in frames
+     * because that is what the burst captures and what [Verdict.frameCount]
+     * carries; [isMonotone] converts. Doubling as the "full confidence" rung
+     * of [effectiveLimit] is deliberate — six frames is [MAX_FRAMES], so the
+     * complete burst gets the full limit and a burst shortened by a slow phone
+     * gets a margin.
+     */
+    const val FRAMES_FOR_DRIFT = 6
 
     /**
      * A robust scatter above this fraction of the median means no tight cluster
      * of agreeing estimates exists, so no single number describes the setup.
-     * Comfortably above what one disturbed frame in a burst of five produces.
+     * Comfortably above what one disturbed frame in a full burst produces.
      */
     private const val SPREAD_LIMIT = 0.5
     private const val SHORT_BURST_MARGIN = 1.25
     private const val SHORTEST_BURST_MARGIN = 1.5
 
-    /** A test shot may spend this long on the burst and still feel like one. */
-    private const val FRAME_BUDGET_MS = 2_500L
+    /**
+     * A test shot may spend this long on the burst and still feel like one.
+     *
+     * Three seconds rather than two and a half because [MAX_FRAMES] is now six:
+     * measured first-still cost across both test devices ran 277-551 ms, so a
+     * 2500 ms budget would have handed six frames to only the faster half of
+     * those bursts and left the rest unable to assert drift at all. Spending
+     * the extra half second buys the same verdict on every phone, which is
+     * worth more than the half second.
+     */
+    private const val FRAME_BUDGET_MS = 3_000L
 
     private const val SQRT_2 = 1.4142135623730951
     private const val MICRO = 1_000_000.0

@@ -79,7 +79,7 @@ comparison by themselves.
 
 ## Measurement floor
 
-Before recording, the app takes a short **static burst** (2–5 stills) of the
+Before recording, the app takes a short **static burst** (2–6 stills) of the
 unloaded scene and converts displacement scatter to strain at a **15 px** gauge:
 
 ```
@@ -88,6 +88,13 @@ unloaded scene and converts displacement scatter to strain at a **15 px** gauge:
 
 - **Gate:** about **1 mε**. Above it, the dialog warns strongly but still allows
   **Record anyway**. The floor is stamped on the PDF, CSV, and session.
+- **Six is the full burst, and the number comes from the drift test.** *n* frames
+  give *n − 1* pairwise estimates, and a monotone run of *k* estimates happens by
+  chance with probability `2/k!` — 8.3% at *k*=4, 1.7% at *k*=5. Since a drift
+  verdict *blocks* the run, it is asserted only at five estimates, which is six
+  frames. A burst shortened by a slow phone still reports its floor; it just
+  reports drift as possible rather than asserting it, and is held to a wider
+  margin before it refuses.
 - The floor is **not** the heatmap max. It is one number for the whole setup.
 - The burst frames are deleted; exported PNGs come from the later recording pass.
   The stamped CSV/PDF value is authoritative for what the run was captured at.

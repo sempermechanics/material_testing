@@ -107,26 +107,45 @@ class NoiseFloorStatsTest {
 
     @Test
     fun `a monotone series reports drift`() {
-        val drifting = listOf(0.1, 0.2, 0.3, 0.4).map { quiet(drift = it) }
+        // Five estimates, so six frames: the first count at which a monotone run
+        // is only 1.7 percent likely from noise alone.
+        val drifting = listOf(0.1, 0.2, 0.3, 0.4, 0.5).map { quiet(drift = it) }
         val verdict = NoiseFloorStats.evaluate(drifting, vsg)
         assertEquals(Outcome.DRIFTING, verdict.outcome)
         assertTrue(verdict.canAssertDrift)
-        assertEquals(0.4, verdict.driftPx, 1e-9)
+        assertEquals(0.5, verdict.driftPx, 1e-9)
     }
 
     @Test
     fun `the same values out of order are not drift`() {
         // Identical magnitudes, shuffled: same noise, no trend. If this reported
         // drift the test would be measuring nothing but the values themselves.
-        val shuffled = listOf(0.3, 0.1, 0.4, 0.2).map { quiet(drift = it) }
+        val shuffled = listOf(0.3, 0.1, 0.5, 0.2, 0.4).map { quiet(drift = it) }
         val verdict = NoiseFloorStats.evaluate(shuffled, vsg)
         assertEquals(Outcome.PASS, verdict.outcome)
     }
 
     @Test
+    fun `drift is not asserted on a five-frame burst`() {
+        // The regression this pins. Five frames yield four estimates, and a
+        // monotone run of four happens 8.3 percent of the time from noise alone
+        // -- one refused run in twelve on a rig that was perfectly steady. The
+        // gate blocks on DRIFTING, so the threshold counts estimates, not
+        // frames: this must report PASS, not a refusal.
+        val verdict = NoiseFloorStats.evaluate(
+            listOf(0.1, 0.2, 0.3, 0.4).map { quiet(drift = it) },
+            vsg,
+        )
+        assertEquals(5, verdict.frameCount)
+        assertFalse(verdict.canAssertDrift)
+        assertEquals(Outcome.PASS, verdict.outcome)
+        assertFalse(verdict.blocking)
+    }
+
+    @Test
     fun `drift is not asserted on a four-frame burst`() {
-        // Three estimates: a monotone run of four values happens 8 percent of the
-        // time from noise alone, which is too often to tell a user about.
+        // Three estimates: a monotone run of three happens a third of the time
+        // from noise alone, which is not a finding at all.
         val verdict = NoiseFloorStats.evaluate(
             listOf(0.1, 0.2, 0.3).map { quiet(drift = it) },
             vsg,
@@ -162,10 +181,11 @@ class NoiseFloorStatsTest {
         val marginal = NoiseFloorStats.microstrainFor(0.08, vsg)
         assertTrue(marginal > NoiseFloorStats.DEFAULT_LIMIT_MICROSTRAIN)
         assertEquals(Outcome.PASS, NoiseFloorStats.evaluate(burst(0.08, 0.08), vsg).outcome)
-        // The same floor on a full burst is called out.
+        // The same floor on a full burst -- six frames, five estimates -- is
+        // called out, because there is now the confidence to call it.
         assertEquals(
             Outcome.HIGH_FLOOR,
-            NoiseFloorStats.evaluate(burst(0.08, 0.08, 0.08, 0.08), vsg).outcome,
+            NoiseFloorStats.evaluate(burst(0.08, 0.08, 0.08, 0.08, 0.08), vsg).outcome,
         )
     }
 
@@ -186,7 +206,7 @@ class NoiseFloorStatsTest {
         // 1/sqrt(k) assumes independence between frames. Drift is not
         // independent and does not average down, so crediting it here would be
         // the optimistic lie this check exists to prevent.
-        val drifting = listOf(0.1, 0.2, 0.3, 0.4).map { quiet(sigma = 0.4, drift = it) }
+        val drifting = listOf(0.1, 0.2, 0.3, 0.4, 0.5).map { quiet(sigma = 0.4, drift = it) }
         val verdict = NoiseFloorStats.evaluate(drifting, vsg, averagingK = 16)
         assertFalse(verdict.averagingCredited)
         assertEquals(0.4, verdict.sigmaPx, 1e-9)
@@ -238,7 +258,7 @@ class NoiseFloorStatsTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `a fast phone takes the full five frames`() {
+    fun `a fast phone takes the full six frames`() {
         assertEquals(NoiseFloorStats.MAX_FRAMES, NoiseFloorStats.frameCountFor(perFrameCostMs = 120))
     }
 
