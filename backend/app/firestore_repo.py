@@ -208,17 +208,17 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
 
 def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
     uid = claims["sub"]
+    ref = db().collection("users").document(uid)
+    snap = ref.get()
+    if snap.exists:
+        return _touch_existing({**snap.to_dict(), "uid": uid}, claims, device_id)
+
     link = db().collection("auth_links").document(uid).get()
     if link.exists:
         canonical = (link.to_dict() or {}).get("uid")
         existing = _load_user(canonical) if canonical else None
         if existing:
             return _touch_existing(existing, claims, device_id)
-
-    ref = db().collection("users").document(uid)
-    snap = ref.get()
-    if snap.exists:
-        return _touch_existing({**snap.to_dict(), "uid": uid}, claims, device_id)
 
     bound = _user_for_device(device_id)
     if bound:
