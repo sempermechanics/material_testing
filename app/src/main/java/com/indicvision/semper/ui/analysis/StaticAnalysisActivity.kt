@@ -53,7 +53,9 @@ import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
+import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.ui.capture.CaptureSetupActivity
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
@@ -146,6 +148,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private var isProcessing = false
     private var importJob: Job? = null
 
+    private data class CancelRunConfig(
+        @StringRes val titleRes: Int,
+        @StringRes val bodyRes: Int,
+        val onConfirm: () -> Unit,
+    )
+
+    private var cancelRun: CancelRunConfig? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_static_analysis)
@@ -156,29 +166,24 @@ class StaticAnalysisActivity : AppCompatActivity() {
         findViewById<ViewStub>(R.id.stubStepSettings).inflate()
         findViewById<ViewStub>(R.id.stubStepSweep).inflate()
         coach = CoachMarkController(this)
-        // --- BACK BUTTON INTERCEPTOR (SAFETY LOCK) ---
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
                     if (isProcessing) {
-                        // Block the back button completely if the C++ engine is running
-                        Toast.makeText(
-                            this@StaticAnalysisActivity,
-                            R.string.analysis_running_back_blocked,
-                            Toast.LENGTH_SHORT,
-                        ).show()
+                        if (cancelRun != null) {
+                            showCancelRunDialog()
+                        } else {
+                            Toast.makeText(
+                                this@StaticAnalysisActivity,
+                                R.string.analysis_running_back_blocked,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
                     } else if (viewModel.wizardStep > 1) {
                         goToStep(viewModel.wizardStep - 1, animate = true)
                     } else if (viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty()) {
-                        MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                            .setTitle(R.string.exit_analysis_title)
-                            .setMessage(R.string.exit_analysis_message)
-                            .setPositiveButton(R.string.exit) { _, _ ->
-                                finish()
-                            }
-                            .setNegativeButton(R.string.cancel, null)
-                            .show()
+                        showLeaveAnalysisDialog()
                     } else {
                         finish()
                     }
@@ -356,6 +361,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (list.isNotEmpty()) {
                 onDeformedPicked(list.map { it.toUri() })
             }
+        }
+        if (intent.hasExtra(DicKeys.LAUNCHED_FROM_CAPTURE)) {
+            viewModel.launchedFromCapture = intent.getBooleanExtra(DicKeys.LAUNCHED_FROM_CAPTURE, false)
+            intent.removeExtra(DicKeys.LAUNCHED_FROM_CAPTURE)
         }
 
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
@@ -989,7 +998,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val limit = 3
         if (names.size <= limit) return names.joinToString(", ")
         val head = names.take(limit).joinToString(", ")
-        return getString(R.string.frames_size_mismatch_and_more_fmt, head, names.size - limit)
+        return resources.getQuantityString(
+            R.plurals.frames_size_mismatch_and_more_fmt,
+            names.size - limit,
+            head,
+            names.size - limit,
+        )
     }
 
     /** Drop a previous run's ❌ / success line when the user changes inputs. */
@@ -1460,13 +1474,20 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED) return
             // Route to lattice with all-failed nodes so the user can tap each for details.
             viewModel.sweepPlan = emptyList()
-            viewModel.sweepSkipped = sweepHelper.currentPlan()
-            viewModel.sweepSkippedCodes = viewModel.sweepSkipped.map { outcome.engineErrorCode }
+            val plan = sweepHelper.currentPlan()
+            viewModel.sweepSkippedNodes = plan.map { point ->
+                SkippedNode(
+                    subset = point.subset,
+                    step = point.step,
+                    strainWindow = point.strainWindow,
+                    code = outcome.engineErrorCode,
+                )
+            }
             viewModel.lastBatchDirPath = outcome.batchDirPath
             openResultViewer(sweep = true)
             return
         }
-        val skipped = viewModel.sweepSkipped.size
+        val skipped = viewModel.sweepSkippedNodes.size
         if (skipped > 0) {
             // Partial sweeps are still worth browsing; say what was dropped.
             Toast.makeText(
@@ -1531,19 +1552,45 @@ class StaticAnalysisActivity : AppCompatActivity() {
         bodyRes: Int = R.string.cancel_run_body,
         onConfirm: () -> Unit,
     ) {
+        cancelRun = CancelRunConfig(titleRes, bodyRes, onConfirm)
         findViewById<View>(R.id.btnRunCancel).apply {
             isEnabled = true
-            setOnClickListener {
-                MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                    .setTitle(titleRes)
-                    .setMessage(bodyRes)
-                    .setPositiveButton(R.string.action_cancel) { _, _ ->
-                        onConfirm()
-                        isEnabled = false
-                    }
-                    .setNegativeButton(R.string.keep_running, null)
-                    .show()
+            setOnClickListener { showCancelRunDialog() }
+        }
+    }
+
+    private fun showCancelRunDialog() {
+        val config = cancelRun ?: return
+        MaterialAlertDialogBuilder(this)
+            .setTitle(config.titleRes)
+            .setMessage(config.bodyRes)
+            .setPositiveButton(R.string.action_cancel) { _, _ ->
+                config.onConfirm()
+                findViewById<View>(R.id.btnRunCancel).isEnabled = false
             }
+            .setNegativeButton(R.string.keep_running, null)
+            .show()
+    }
+
+    private fun showLeaveAnalysisDialog() {
+        if (viewModel.launchedFromCapture) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.analysis_recapture_title)
+                .setMessage(R.string.analysis_recapture_message)
+                .setPositiveButton(R.string.analysis_recapture_confirm) { _, _ ->
+                    startActivity(Intent(this, CaptureSetupActivity::class.java))
+                    finish()
+                }
+                .setNegativeButton(R.string.exit) { _, _ -> finish() }
+                .setNeutralButton(R.string.cancel, null)
+                .show()
+        } else {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.exit_analysis_title)
+                .setMessage(R.string.exit_analysis_message)
+                .setPositiveButton(R.string.exit) { _, _ -> finish() }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
         }
     }
 
@@ -1555,6 +1602,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun clearCancelButton() {
+        cancelRun = null
         findViewById<View>(R.id.btnRunCancel).apply {
             isEnabled = false
             setOnClickListener(null)

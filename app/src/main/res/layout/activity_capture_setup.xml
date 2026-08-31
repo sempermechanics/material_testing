@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
@@ -51,7 +52,6 @@
                 android:layout_width="96dp"
                 android:layout_height="wrap_content"
                 android:autofillHints=""
-                android:contentDescription="@string/capture_duration_hint"
                 android:digits="0123456789:"
                 android:gravity="center"
                 android:hint="@string/capture_duration_hint"
@@ -61,7 +61,8 @@
                 android:maxLength="5"
                 android:maxLines="1"
                 android:textColor="@color/sky_primary"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                tools:ignore="LabelFor" />
         </LinearLayout>
 
         <TextView

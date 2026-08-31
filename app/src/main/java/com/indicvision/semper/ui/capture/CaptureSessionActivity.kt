@@ -1,4 +1,4 @@
-@file:Suppress("TooManyFunctions", "LongMethod")
+@file:Suppress("TooManyFunctions", "LongMethod", "LargeClass")
 
 package com.indicvision.semper.ui.capture
 
@@ -27,6 +27,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.ui.analysis.NoiseFloorStats
 import com.indicvision.semper.ui.analysis.RoiDrawActivity
 import com.indicvision.semper.ui.analysis.SubsetRecommender
@@ -91,15 +92,11 @@ class CaptureSessionActivity : AppCompatActivity() {
      */
     private var readyToRecord = false
 
-    /** Guards concurrent [reopenLockedPreview] calls from onResume. */
+    /** Vendor-camera test shot through speckle check, before [focusLock] is set. */
+    private var awaitingTestShot = false
+
     private var relocking = false
 
-    /**
-     * The noise-floor gate: the ROI carried from the speckle check, the burst
-     * that measures what this setup can resolve, and the verdict the user acts
-     * on. Its callbacks are this screen's own retry, proceed and cancel paths,
-     * so the gate decides and the activity does.
-     */
     private val noiseGate by lazy {
         NoiseFloorGateUi(
             activity = this,
@@ -217,6 +214,9 @@ class CaptureSessionActivity : AppCompatActivity() {
         btnStart.setOnClickListener { startRecording() }
 
         val restored = restoreFrom(savedInstanceState)
+        if (!restored) {
+            awaitingTestShot = savedInstanceState?.getBoolean(STATE_AWAITING_TEST_SHOT, false) ?: false
+        }
         if (restored) {
             // Process death after a passing test shot: the focus point and
             // the file it came from are still on disk — re-lock directly
@@ -233,21 +233,41 @@ class CaptureSessionActivity : AppCompatActivity() {
         maybeRelockAfterBackground()
     }
 
-    /**
-     * Back / toolbar: return to setup (canceled). During timed stills, confirm
-     * first so a mis-tap does not discard a half-finished run silently.
-     */
+    /** Back: confirm while recording or after setup work; otherwise pop to setup. */
     private fun navigateBack() {
-        if (!recordingActive) {
-            finish()
+        if (recordingActive) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.capture_stop_title)
+                .setMessage(R.string.capture_stop_message)
+                .setPositiveButton(R.string.capture_stop_confirm) { _, _ -> finish() }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
             return
         }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.capture_stop_title)
-            .setMessage(R.string.capture_stop_message)
-            .setPositiveButton(R.string.capture_stop_confirm) { _, _ -> finish() }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+        if (hasSetupProgress()) {
+            showLeaveSetupDialog()
+            return
+        }
+        finish()
+    }
+
+    private fun hasSetupProgress(): Boolean =
+        awaitingTestShot || focusLock != null || readyToRecord || noiseGate.measured() != null
+
+    private fun showLeaveSetupDialog(
+        message: CharSequence = getText(R.string.capture_leave_setup_message),
+        onRetry: (() -> Unit)? = null,
+    ) {
+        val builder = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.capture_leave_setup_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.capture_leave_setup_confirm) { _, _ -> finish() }
+        if (onRetry != null) {
+            builder.setNegativeButton(R.string.capture_retry) { _, _ -> onRetry() }
+        } else {
+            builder.setNegativeButton(R.string.cancel, null)
+        }
+        builder.show()
     }
 
     /**
@@ -256,6 +276,7 @@ class CaptureSessionActivity : AppCompatActivity() {
      * was skipped), re-open the session without re-measuring — otherwise
      * Continue / Start recording would fail after the browser hop.
      */
+    @Suppress("ReturnCount")
     private fun maybeRelockAfterBackground() {
         if (focusLock == null || recordingActive || relocking) return
         if (noiseGate.floor == null && !readyToRecord) return
@@ -273,6 +294,11 @@ class CaptureSessionActivity : AppCompatActivity() {
         outState.putString(STATE_CAMERA_ID, cameraId)
         outState.putLong(STATE_INTERVAL_MS, frameIntervalMs)
         outState.putString(STATE_REFERENCE_PATH, referenceFile?.absolutePath)
+        outState.putLong(STATE_MEASURED_FRAME_COST_MS, measuredFrameCostMs)
+        outState.putBoolean(STATE_READY_TO_RECORD, readyToRecord)
+        outState.putBoolean(STATE_AWAITING_TEST_SHOT, awaitingTestShot)
+        outState.putBoolean(STATE_FLOOR_OVERRIDDEN, noiseGate.overridden)
+        noiseGate.measured()?.let { outState.putString(STATE_NOISE_FLOOR, it.encode()) }
     }
 
     /** True when a resumable [CaptureFocusLock] and its source file survived. */
@@ -296,6 +322,15 @@ class CaptureSessionActivity : AppCompatActivity() {
         referenceFile = bundle.getString(STATE_REFERENCE_PATH)
             ?.let { File(it) }
             ?.takeIf { it.exists() && it.length() > 0L }
+        measuredFrameCostMs = bundle.getLong(STATE_MEASURED_FRAME_COST_MS, measuredFrameCostMs)
+        readyToRecord = bundle.getBoolean(STATE_READY_TO_RECORD, readyToRecord)
+        awaitingTestShot = false
+        CaptureNoiseFloor.decode(bundle.getString(STATE_NOISE_FLOOR))?.let { saved ->
+            noiseGate.restorePersistedFloor(
+                saved,
+                bundle.getBoolean(STATE_FLOOR_OVERRIDDEN, noiseGate.overridden),
+            )
+        }
         return true
     }
 
@@ -318,6 +353,10 @@ class CaptureSessionActivity : AppCompatActivity() {
 
     private fun launchTestShot() {
         readyToRecord = false
+        awaitingTestShot = true
+        focusLock = null
+        lockedSession?.close()
+        lockedSession = null
         tvStatus.setText(R.string.capture_status_test_shot)
         btnStart.isVisible = false
         val dir = SystemCamera.captureDir(this)
@@ -346,13 +385,10 @@ class CaptureSessionActivity : AppCompatActivity() {
         }
     }
 
-    private fun offerRetryTestShot(message: String) = showRetryDialog(message) { launchTestShot() }
+    private fun offerRetryTestShot(message: String) =
+        showLeaveSetupDialog(message) { launchTestShot() }
 
-    /**
-     * The one shape every dead end on this screen takes: say what went wrong,
-     * offer the step again, or leave. Cancel finishes back to setup so the
-     * plan (fps / duration / resolution) can still be changed.
-     */
+    /** Mid-recording retry; finishing drops frames already captured. */
     private fun showRetryDialog(message: CharSequence, onRetry: () -> Unit) {
         MaterialAlertDialogBuilder(this)
             .setMessage(message)
@@ -369,7 +405,7 @@ class CaptureSessionActivity : AppCompatActivity() {
                 testShotFile?.let { openContrastRoi(it) } ?: launchTestShot()
             }
             .setNeutralButton(R.string.capture_retry) { _, _ -> launchTestShot() }
-            .setNegativeButton(R.string.cancel) { _, _ -> finish() }
+            .setNegativeButton(R.string.capture_leave_setup_confirm) { _, _ -> finish() }
             .show()
     }
 
@@ -412,7 +448,14 @@ class CaptureSessionActivity : AppCompatActivity() {
     private fun onContrastRoiReady(file: File, roi: Rect) {
         tvStatus.setText(R.string.capture_status_checking)
         lifecycleScope.launch {
-            val outcome = withContext(Dispatchers.IO) { evaluateSpeckleBounded(file, roi) }
+            val loaded = withContext(Dispatchers.IO) {
+                val bytes = file.readBytes()
+                SpeckleLoad(
+                    bounds = BitmapDecode.storedBounds(bytes),
+                    outcome = evaluateSpeckleBounded(bytes, roi),
+                )
+            }
+            val outcome = loaded.outcome
             if (outcome == SpeckleOutcome.TimedOut) {
                 offerRetryTestShot(getString(R.string.capture_speckle_check_timeout))
                 return@launch
@@ -423,7 +466,7 @@ class CaptureSessionActivity : AppCompatActivity() {
                 return@launch
             }
 
-            val (w, h) = imageBounds(file)
+            val (w, h) = loaded.bounds ?: (1 to 1)
             noiseGate.onSpeckleChecked(roi, w, h, check.subsetSize)
             val caps = CameraCapabilities.query(this@CaptureSessionActivity)
 
@@ -434,6 +477,7 @@ class CaptureSessionActivity : AppCompatActivity() {
             if (!checkBudgetOrShowDialog(planWidth, planHeight)) return@launch
 
             focusLock = CaptureFocusLock.fromExif(file, check.focusNormX, check.focusNormY, w, h)
+            awaitingTestShot = false
             // Software PNG encode has no Camera2-reported stall (unlike JPEG),
             // so pacing is measured on a real locked still once the session is
             // up — see [calibrateAgainstRealCapture] — not guessed from here.
@@ -590,8 +634,7 @@ class CaptureSessionActivity : AppCompatActivity() {
         return AveragingPlan.framesFor(frameIntervalMs, measuredFrameCostMs, steady)
     }
 
-    private fun evaluateSpeckle(file: File, roi: Rect): SubsetRecommender.Result? {
-        val bytes = file.readBytes()
+    private fun evaluateSpeckle(bytes: ByteArray, roi: Rect): SubsetRecommender.Result? {
         val (w, h) = BitmapDecode.storedBounds(bytes) ?: return null
         return SubsetRecommender.recommend(
             refBytes = bytes,
@@ -606,6 +649,11 @@ class CaptureSessionActivity : AppCompatActivity() {
         data object TimedOut : SpeckleOutcome
     }
 
+    private data class SpeckleLoad(
+        val bounds: Pair<Int, Int>?,
+        val outcome: SpeckleOutcome,
+    )
+
     /**
      * [SubsetRecommender.recommend] ultimately calls into `BitmapRegionDecoder`,
      * a native codec call observed to hang indefinitely on some device/emulator
@@ -617,8 +665,8 @@ class CaptureSessionActivity : AppCompatActivity() {
      * the stuck thread (leaked, harmless) and lets the UI recover instead of
      * freezing forever.
      */
-    private fun evaluateSpeckleBounded(file: File, roi: Rect): SpeckleOutcome {
-        val future = speckleCheckExecutor.submit<SubsetRecommender.Result?> { evaluateSpeckle(file, roi) }
+    private fun evaluateSpeckleBounded(bytes: ByteArray, roi: Rect): SpeckleOutcome {
+        val future = speckleCheckExecutor.submit<SubsetRecommender.Result?> { evaluateSpeckle(bytes, roi) }
         return try {
             SpeckleOutcome.Done(future.get(SPECKLE_CHECK_TIMEOUT_MS, TimeUnit.MILLISECONDS))
         } catch (_: TimeoutException) {
@@ -807,7 +855,7 @@ class CaptureSessionActivity : AppCompatActivity() {
                 if (frames > 1) {
                     Toast.makeText(
                         this@CaptureSessionActivity,
-                        getString(R.string.capture_averaging_fmt, frames),
+                        resources.getQuantityString(R.plurals.capture_averaging_fmt, frames, frames),
                         Toast.LENGTH_LONG,
                     ).show()
                 }
@@ -849,9 +897,7 @@ class CaptureSessionActivity : AppCompatActivity() {
                                 if (!remainingCheck.ok) budgetExceededMidRun = true
                             }
                         }
-                        runOnUiThread {
-                            tvProgress.text = getString(R.string.capture_progress_fmt, done, total)
-                        }
+                        tvProgress.text = getString(R.string.capture_progress_fmt, done, total)
                     },
                     isActive = { !isFinishing && !isDestroyed && !budgetExceededMidRun && session.isUsable },
                 )
@@ -978,5 +1024,10 @@ class CaptureSessionActivity : AppCompatActivity() {
         const val STATE_CAMERA_ID = "capture_camera_id_state"
         const val STATE_INTERVAL_MS = "capture_interval_ms_state"
         const val STATE_REFERENCE_PATH = "capture_reference_path"
+        const val STATE_MEASURED_FRAME_COST_MS = "capture_measured_frame_cost_ms"
+        const val STATE_READY_TO_RECORD = "capture_ready_to_record"
+        const val STATE_AWAITING_TEST_SHOT = "capture_awaiting_test_shot"
+        const val STATE_NOISE_FLOOR = "capture_noise_floor_state"
+        const val STATE_FLOOR_OVERRIDDEN = "capture_floor_overridden"
     }
 }

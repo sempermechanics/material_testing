@@ -79,6 +79,7 @@ class CaptureSetupActivity : AppCompatActivity() {
                 data.getStringExtra(DicKeys.CAPTURE_NOISE_FLOOR)?.let {
                     putExtra(DicKeys.CAPTURE_NOISE_FLOOR, it)
                 }
+                putExtra(DicKeys.LAUNCHED_FROM_CAPTURE, true)
             },
         )
         finish()
@@ -196,8 +197,11 @@ class CaptureSetupActivity : AppCompatActivity() {
             durationSec,
             frameCap,
         )
-        tvAssurance.text = getString(R.string.capture_fps_assured) + "\n" +
-            CaptureEstimateText.ceilingNote(this, cappedBySetting, frameCap)
+        tvAssurance.text = getString(
+            R.string.capture_fps_assured_with_ceiling,
+            getString(R.string.capture_fps_assured),
+            CaptureEstimateText.ceilingNote(this, cappedBySetting, frameCap),
+        )
         tvMode.text = modeLabel
     }
 

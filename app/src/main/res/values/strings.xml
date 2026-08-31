@@ -60,6 +60,9 @@
     <string name="exit_indic_message">Are you sure you want to exit the app?</string>
     <string name="exit_analysis_title">Exit analysis?</string>
     <string name="exit_analysis_message">Are you sure you want to leave? All uncalculated setup and ROI definitions will be lost.</string>
+    <string name="analysis_recapture_title">Leave analysis?</string>
+    <string name="analysis_recapture_message">You can re-record with a different plan, exit to Home, or stay and keep editing.</string>
+    <string name="analysis_recapture_confirm">Re-record</string>
     <string name="no_images_selected">No images selected</string>
     <string name="failed_save_temp_file">Failed to save temporary file</string>
     <string name="load_image_first">Load an image first.</string>
@@ -463,6 +466,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_reason_decode">Image could not be decoded</string>
     <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
     <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
+    <string name="sweep_reason_unknown">Unknown engine error (code %1$d)</string>
     <string name="sweep_node_title_fmt">S%1$d · St%2$d · W%3$d</string>
     <string name="sweep_node_skipped">This combination was skipped</string>
     <!-- Which frame a failure happened on; prefixes the reason above. -->
@@ -577,8 +581,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_duration_range">Between 00:01 and 10:00</string>
     <string name="capture_fps_label">Capture rate</string>
     <string name="capture_fps_value_fmt">%1$s fps</string>
-    <string name="capture_estimate_fmt">%1$s fps · %2$d frames, one every %3$s · mode: %4$s</string>
+    <plurals name="capture_estimate_fmt">
+        <item quantity="one">%1$s fps · %2$d frame, one every %3$s · mode: %4$s</item>
+        <item quantity="other">%1$s fps · %2$d frames, one every %3$s · mode: %4$s</item>
+    </plurals>
     <string name="capture_fps_assured">Every rate offered is one this camera can hold for the whole run at this resolution, with headroom to spare. You get what you pick.</string>
+    <string name="capture_fps_assured_with_ceiling">%1$s\n%2$s</string>
     <string name="capture_fps_ceiling_camera">For a faster rate, choose a smaller resolution — the sensor and the encoder both slow down as the frame grows.</string>
     <string name="capture_fps_ceiling_setting_fmt">Your Max frames setting (%1$d) is holding the top of this list down, not the camera. Raise it in Settings, or shorten the run.</string>
     <string name="capture_interval_sec_fmt">%1$.1f s</string>
@@ -600,13 +608,19 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_status_recording_stills">Capturing stills…</string>
     <!-- Precision mode engages itself; this is the one line that says so.
          Reference only, see CaptureSessionActivity.averagingFrames. -->
-    <string name="capture_averaging_fmt">Averaging %1$d shots for a cleaner reference.</string>
+    <plurals name="capture_averaging_fmt">
+        <item quantity="one">Averaging %1$d shot for a cleaner reference.</item>
+        <item quantity="other">Averaging %1$d shots for a cleaner reference.</item>
+    </plurals>
     <string name="capture_status_matching_sizes">Matching frame sizes…</string>
     <string name="capture_progress_fmt">Frame %1$d of %2$d</string>
     <string name="capture_start_recording">Start recording</string>
     <string name="capture_stop_title">Stop recording?</string>
     <string name="capture_stop_message">Frames already taken will be discarded. You can change the plan and try again.</string>
     <string name="capture_stop_confirm">Stop</string>
+    <string name="capture_leave_setup_title">Go back?</string>
+    <string name="capture_leave_setup_message">Test-shot progress will be lost. You can change duration, frame rate, or resolution on the plan screen.</string>
+    <string name="capture_leave_setup_confirm">Back</string>
     <string name="capture_roi_needed_title">Select an area first</string>
     <string name="capture_roi_needed_body">Contrast is checked inside the region you draw. Select an area on the test shot before continuing.</string>
     <string name="capture_roi_select">Select area</string>
@@ -642,7 +656,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_noise_erroneous_body">Strain below this level is noise, not a real measurement. This will be noted on the report.</string>
     <!-- Same, plus settings the phone refused: two independent signals pointing
          the same way earn a plainer sentence than either does alone. -->
-    <string name="capture_noise_erroneous_refused_body">%1$d camera settings could not be locked. Strain below this floor is noise, not measurement. Noted on the report.</string>
+    <plurals name="capture_noise_erroneous_refused_body">
+        <item quantity="one">%1$d camera setting could not be locked. Strain below this floor is noise, not measurement. Noted on the report.</item>
+        <item quantity="other">%1$d camera settings could not be locked. Strain below this floor is noise, not measurement. Noted on the report.</item>
+    </plurals>
     <string name="capture_record_anyway">Record anyway</string>
     <string name="capture_retry_test_shot">Retry test shot</string>
     <!-- Imaging-pipeline refusals. Effect first, under 20 words each; the
@@ -659,7 +676,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_isp_warn_scene">A scene mode is active and will not switch off — it retunes the whole pipeline.</string>
     <string name="capture_isp_warn_zoom">Zoom cannot be pinned — the phone may resample the frame between shots.</string>
     <string name="capture_isp_warn_awb">White balance will not lock — grey levels may drift between frames.</string>
-    <string name="capture_isp_warn_more">%1$s Plus %2$d more.</string>
+    <plurals name="capture_isp_warn_more">
+        <item quantity="one">%1$s Plus %2$d more.</item>
+        <item quantity="other">%1$s Plus %2$d more.</item>
+    </plurals>
     <!-- Measured, not asked for: the phone reports noise reduction as switched
          off and smooths the frames anyway, which no Camera2 key exposes. Shown
          once after the test shot, and recorded on the report. -->
@@ -915,7 +935,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">The image resolution isn\'t matching to the reference (%1$d × %2$d): %3$s</item>
         <item quantity="other">The image resolution isn\'t matching to the reference (%1$d × %2$d): %3$s</item>
     </plurals>
-    <string name="frames_size_mismatch_and_more_fmt">%1$s, and %2$d more</string>
+    <plurals name="frames_size_mismatch_and_more_fmt">
+        <item quantity="one">%1$s, and %2$d more</item>
+        <item quantity="other">%1$s, and %2$d more</item>
+    </plurals>
     <plurals name="sweep_plan_grid_fmt">
         <item quantity="one">1 analyses · subset 1–1 px · window 1–1</item>
         <item quantity="other">%1$d analyses · subset %2$d–%3$d px · window %4$d–%5$d</item>
