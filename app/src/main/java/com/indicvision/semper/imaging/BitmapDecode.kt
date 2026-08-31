@@ -1,6 +1,6 @@
 // Bitmap decode/sample math: literal max-edge and sample-step constants read
-// clearest inline, so MagicNumber is suppressed for this whole file.
-@file:Suppress("MagicNumber")
+// clearest inline; helpers share one object so size/arity rules stay local.
+@file:Suppress("MagicNumber", "LongParameterList", "TooManyFunctions", "ReturnCount")
 
 package com.indicvision.semper.imaging
 

@@ -16,8 +16,9 @@ internal object CaptureEstimateText {
     private const val MILLIS_PER_SECOND = 1_000
 
     fun line(context: Context, option: CapturePlanOptions.Option, modeLabel: String): String =
-        context.getString(
-            R.string.capture_estimate_fmt,
+        context.resources.getQuantityString(
+            R.plurals.capture_estimate_fmt,
+            option.frames,
             fps(option.fps),
             option.frames,
             spacing(context, option.intervalMs),

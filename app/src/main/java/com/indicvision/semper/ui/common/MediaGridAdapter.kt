@@ -1,5 +1,4 @@
 @file:Suppress("MagicNumber")
-@file:SuppressLint("NotifyDataSetChanged")
 
 package com.indicvision.semper.ui.common
 
@@ -29,9 +28,15 @@ class MediaGridAdapter(
     private val executor = Executors.newFixedThreadPool(2)
     private val main = Handler(Looper.getMainLooper())
 
+    fun indexOf(uri: android.net.Uri): Int = items.indexOfFirst { it.uri == uri }
+
     fun submit(newItems: List<MediaStoreBrowser.Item>) {
         items = newItems
-        notifyDataSetChanged()
+        @SuppressLint("NotifyDataSetChanged")
+        fun notifyAllChanged() {
+            notifyDataSetChanged()
+        }
+        notifyAllChanged()
     }
 
     fun shutdown() {

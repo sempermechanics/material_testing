@@ -26,8 +26,8 @@ object MediaStoreBrowser {
     fun permissions(sdk: Int, includeVideo: Boolean): Array<String> =
         if (sdk >= SDK_READ_MEDIA) {
             buildList {
-                add(android.Manifest.permission.READ_MEDIA_IMAGES)
-                if (includeVideo) add(android.Manifest.permission.READ_MEDIA_VIDEO)
+                add("android.permission.READ_MEDIA_IMAGES")
+                if (includeVideo) add("android.permission.READ_MEDIA_VIDEO")
             }.toTypedArray()
         } else {
             arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
@@ -35,7 +35,7 @@ object MediaStoreBrowser {
 
     fun hasReadAccess(context: Context): Boolean {
         val perm = if (Build.VERSION.SDK_INT >= SDK_READ_MEDIA) {
-            android.Manifest.permission.READ_MEDIA_IMAGES
+            "android.permission.READ_MEDIA_IMAGES"
         } else {
             android.Manifest.permission.READ_EXTERNAL_STORAGE
         }

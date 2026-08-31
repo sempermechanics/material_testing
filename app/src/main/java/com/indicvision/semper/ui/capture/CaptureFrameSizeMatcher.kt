@@ -2,6 +2,7 @@ package com.indicvision.semper.ui.capture
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.core.graphics.scale
 import com.indicvision.semper.imaging.ImageEncode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -90,7 +91,7 @@ internal object CaptureFrameSizeMatcher {
             val matched = if (cropped.width == refW && cropped.height == refH) {
                 cropped
             } else {
-                Bitmap.createScaledBitmap(cropped, refW, refH, true)
+                cropped.scale(refW, refH)
             }
             try {
                 File(path).outputStream().use { out ->

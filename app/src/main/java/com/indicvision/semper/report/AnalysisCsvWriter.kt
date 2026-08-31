@@ -1,3 +1,6 @@
+// CSV row writers take many columns by design; return-count guards stay local.
+@file:Suppress("LongParameterList", "TooManyFunctions", "ReturnCount")
+
 package com.indicvision.semper.report
 
 import com.indicvision.semper.DicResult
@@ -45,6 +48,7 @@ object AnalysisCsvWriter {
     )
 
     private const val CSV_VERSION = 1
+    private const val MILLISTRAIN_DIVISOR = 1000.0
     private const val POINT_HEADER_BASE = "x_px,y_px,u_px,v_px,exx,eyy,exy,znssd"
     private const val RECORDED_SUFFIX_HEADER = "noise_floor_mε,shift_u_px,shift_v_px,shift_rot_deg"
     private const val SWEEP_SETTINGS_HEADER = "subset_px,step_px,strain_window,vsg_px,"
@@ -86,7 +90,8 @@ object AnalysisCsvWriter {
         return String.format(Locale.US, "%.5f,", millistrainOf(floor))
     }
 
-    private fun millistrainOf(floor: CaptureNoiseFloor): Double = floor.microstrain / 1000.0
+    private fun millistrainOf(floor: CaptureNoiseFloor): Double =
+        floor.microstrain / MILLISTRAIN_DIVISOR
 
     /**
      * Trailing recorded-session columns: floor (mε) plus shift_u/v and rotation.
@@ -134,7 +139,6 @@ object AnalysisCsvWriter {
         w: Writer,
         frame: Frame,
         fieldKey: String,
-        dataIndex: Int,
         max: Float,
         min: Float,
         mean: Float,
@@ -171,7 +175,6 @@ object AnalysisCsvWriter {
                     writer,
                     frame,
                     fieldKey,
-                    dataIndex,
                     stats[0],
                     stats[1],
                     stats[2],
