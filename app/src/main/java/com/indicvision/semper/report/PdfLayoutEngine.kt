@@ -67,6 +67,7 @@ class PdfLayoutEngine(
         textSize = 40f
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
     }
+
     /** Quiet cover notes (noise floor / caveats) — smaller than body, italic. */
     private val italicNotePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = colorText

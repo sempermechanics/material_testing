@@ -100,7 +100,7 @@ data class SkippedNode(
                         jsonIntList(it.optJSONArray("codes")),
                     )
                 }
-                .orEmpty()
+                    .orEmpty()
         }
 
         fun toMetadataJsonArray(nodes: List<SkippedNode>): JSONArray {

@@ -1,8 +1,8 @@
 package com.indicvision.semper.data
 
 import com.indicvision.semper.ui.analysis.NoiseFloorStats
-import com.indicvision.semper.ui.capture.toCaptureNoiseFloor
 import com.indicvision.semper.ui.capture.NoiseFloorGate
+import com.indicvision.semper.ui.capture.toCaptureNoiseFloor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull

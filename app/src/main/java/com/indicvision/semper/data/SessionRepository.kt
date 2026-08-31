@@ -37,7 +37,8 @@ class SessionRepository {
             // DNG/RAW imports are stored as headerless RGBA. OpenCV and
             // BitmapFactory cannot read them — sample into a real PNG so the
             // viewer / Home thumb / share path can decode normally.
-            refBmp = if (width > 0 && height > 0 &&
+            refBmp = if (width > 0 &&
+                height > 0 &&
                 RawRgba.matches(refBytes.size.toLong(), width, height)
             ) {
                 RawRgba.preview(refBytes, width, height, VisualizationEngine.DISPLAY_MAX_EDGE)

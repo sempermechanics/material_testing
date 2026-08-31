@@ -100,7 +100,7 @@ object AnalysisCsvWriter {
     internal fun recordedSuffixColumns(floor: CaptureNoiseFloor?, fit: RigidBodyFit.Fit?): String {
         if (floor == null) return ""
         val floorCol = floorMillistrainColumn(floor)
-        if (fit == null) return "${floorCol},,"
+        if (fit == null) return "$floorCol,,"
         return floorCol + String.format(
             Locale.US,
             "%.4f,%.4f,%.5f,",

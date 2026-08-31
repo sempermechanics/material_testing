@@ -6,7 +6,6 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
-import com.indicvision.semper.imaging.BitmapDecode
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.graphics.SurfaceTexture
@@ -28,6 +27,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CaptureNoiseFloor
+import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.ui.analysis.NoiseFloorStats
 import com.indicvision.semper.ui.analysis.RoiDrawActivity
 import com.indicvision.semper.ui.analysis.SubsetRecommender

@@ -147,16 +147,16 @@ object SessionUploadBundler {
                 }
 
                 val frame = AnalysisCsvWriter.Frame(
-                        image = if (record.isSweep) {
-                            sweepImage
-                        } else {
-                            record.defNames.getOrElse(index) { "Frame_${index + 1}" }
-                        },
-                        subset = record.sweepSubsets.getOrElse(index) { record.subset },
-                        step = record.sweepSteps.getOrElse(index) { record.step },
-                        strainWindow = record.sweepStrainWindows.getOrElse(index) { record.strainWindow },
-                        data = { data },
-                    )
+                    image = if (record.isSweep) {
+                        sweepImage
+                    } else {
+                        record.defNames.getOrElse(index) { "Frame_${index + 1}" }
+                    },
+                    subset = record.sweepSubsets.getOrElse(index) { record.subset },
+                    step = record.sweepSteps.getOrElse(index) { record.step },
+                    strainWindow = record.sweepStrainWindows.getOrElse(index) { record.strainWindow },
+                    data = { data },
+                )
                 csvAppender?.appendFieldStats(frame, data)
                 csvAppender?.append(frame)
 
