@@ -74,6 +74,12 @@ class CaptureSessionActivity : AppCompatActivity() {
     private lateinit var loupe: FocusLoupe
 
     /**
+     * Watches for the rig being re-aimed between the floor being measured and
+     * the run starting. See [onFramingChanged] for what that costs if missed.
+     */
+    private val framingSensor by lazy { FramingSensor(this, ::onFramingChanged) }
+
+    /**
      * The buffer / view / upright-fraction geometry, from
      * [applyPreviewTransform]. Null until the preview has a size and a session.
      *
@@ -374,6 +380,7 @@ class CaptureSessionActivity : AppCompatActivity() {
     override fun onDestroy() {
         lockedSession?.close()
         lockedSession = null
+        framingSensor.stop()
         loupe.release()
         super.onDestroy()
     }
@@ -392,6 +399,9 @@ class CaptureSessionActivity : AppCompatActivity() {
     private fun launchTestShot() {
         readyToRecord = false
         awaitingTestShot = true
+        // A new test shot is a new framing by definition; the next showReady
+        // holds whatever the rig is pointing at then.
+        framingSensor.stop()
         focusLock = null
         lockedSession?.close()
         lockedSession = null
@@ -996,9 +1006,39 @@ class CaptureSessionActivity : AppCompatActivity() {
         readyToRecord = true
         tvStatus.setText(R.string.capture_status_ready)
         btnStart.isVisible = true
+        // From here the focus and the floor describe one particular framing, and
+        // nothing downstream re-checks either.
+        framingSensor.holdCurrentFraming()
+    }
+
+    /**
+     * The rig was re-aimed while the run was waiting to start, so the two things
+     * measured before it — the frozen focus distance and the noise floor — now
+     * describe a scene that is no longer in front of the camera. Neither is
+     * re-checked anywhere downstream, so the only honest move is to stop and
+     * measure again.
+     *
+     * Start is withdrawn *and* the status line says why, so a dismissed dialog
+     * leaves a screen that explains itself rather than a missing button. The
+     * retake is the primary action; leaving is the other one.
+     */
+    private fun onFramingChanged() {
+        if (recordingActive || isFinishing || isDestroyed) return
+        readyToRecord = false
+        btnStart.isVisible = false
+        tvStatus.setText(R.string.capture_status_framing_changed)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.capture_framing_changed_title)
+            .setMessage(R.string.capture_framing_changed_body)
+            .setPositiveButton(R.string.capture_framing_changed_retry) { _, _ -> launchTestShot() }
+            .setNegativeButton(R.string.capture_leave_setup_confirm) { _, _ -> finish() }
+            .show()
     }
 
     private fun startRecording() {
+        // The framing is now whatever the run is measuring; from here a movement
+        // is the experiment, not a re-frame, and Part 1's drift test owns it.
+        framingSensor.stop()
         btnStart.isVisible = false
         runStills()
     }

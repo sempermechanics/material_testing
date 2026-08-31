@@ -604,6 +604,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_status_checking">Checking speckle contrast…</string>
     <string name="capture_status_locking">Locking focus from the test shot…</string>
     <string name="capture_status_ready">Focus locked. This preview is the frame you will get — line the specimen up against it, then start.</string>
+    <!-- Consequence first and under 20 words, like the hardware-refusal
+         warnings: what is stale is the point, not that a sensor noticed. -->
+    <string name="capture_framing_changed_title">The camera moved</string>
+    <string name="capture_framing_changed_body">Focus and the measured floor describe the old framing. Take a new test shot before recording.</string>
+    <string name="capture_framing_changed_retry">Retake test shot</string>
+    <string name="capture_status_framing_changed">The camera moved — take a new test shot before recording.</string>
     <!-- Focus confirmation. The one step in the flow where the person is
          better than the app: autofocus is weakest on fine repeating texture,
          which is exactly what a speckle pattern is, and only the user can see
