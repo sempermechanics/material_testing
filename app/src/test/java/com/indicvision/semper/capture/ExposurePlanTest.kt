@@ -209,8 +209,53 @@ class ExposurePlanTest {
         assertEquals(Mains.UNKNOWN, ExposurePlan.mainsFromAntibanding(null))
     }
 
+    // ------------------------------------------------------------------
+    // Over-exposure when ISO cannot absorb the whole exposure increase
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `iso absorbing the exposure increase is not over-exposure`() {
+        // 12 ms at ISO 400 rounds to 20 ms, so ISO wants 240 — well above the
+        // sensor's base of 50, and the frame stays as bright as AE metered it.
+        val result = ExposurePlan.plan(
+            ExposurePlan.Converged(exposureNs = 12_000_000L, sensitivity = 400, mains = Mains.HZ_50),
+            limits(),
+        )
+        assertEquals(240, result.sensitivity)
+        assertEquals(1.0, result.overExposureFactor, FACTOR_TOLERANCE)
+        assertFalse(result.overExposed)
+    }
+
+    @Test
+    fun `iso clamped at base reports how much brighter the frames will be`() {
+        // 12 ms at ISO 60 rounds to 20 ms, so ISO wants 36 — below this
+        // sensor's base of 50. The extra light has nowhere to go and stays in
+        // the frame, which a clipped speckle dot cannot be recovered from.
+        val result = ExposurePlan.plan(
+            ExposurePlan.Converged(exposureNs = 12_000_000L, sensitivity = 60, mains = Mains.HZ_50),
+            limits(),
+        )
+        assertEquals(50, result.sensitivity)
+        assertTrue(result.overExposed)
+        assertEquals(50.0 / 36.0, result.overExposureFactor, FACTOR_TOLERANCE)
+    }
+
+    @Test
+    fun `a downward iso clamp is not reported as over-exposure`() {
+        // Under-exposure costs signal-to-noise; it never destroys a gradient,
+        // so it is not the thing this factor exists to warn about.
+        val result = ExposurePlan.plan(
+            ExposurePlan.Converged(exposureNs = 1_000_000L, sensitivity = 3200, mains = Mains.HZ_50),
+            limits().copy(maxSensitivity = 100),
+        )
+        assertEquals(100, result.sensitivity)
+        assertFalse(result.overExposed)
+        assertEquals(1.0, result.overExposureFactor, FACTOR_TOLERANCE)
+    }
+
     private companion object {
         const val FPS_AT_50MS = 20.0
         const val FPS_TOLERANCE = 0.01
+        const val FACTOR_TOLERANCE = 0.01
     }
 }

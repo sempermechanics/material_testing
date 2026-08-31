@@ -32,6 +32,7 @@ import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -461,11 +462,31 @@ class LockedCameraSession(
         var accumulator: LumaAccumulator? = null
         for (i in 0 until frames) {
             val luma = captureLuma()
-            if (luma == null) {
+            val acc = accumulator
+            // A frame that never arrived and a frame whose geometry does not
+            // match the group abandon it the same way. Neither may throw into
+            // the run loop: StillSequenceRunner reads a false return as "retry
+            // this frame" and an exception as nothing at all, so a single odd
+            // frame from a vendor HAL would end the run instead of costing one
+            // group its averaging.
+            val ok = when {
+                luma == null -> false
+                acc == null -> runCatching { accumulator = LumaAccumulator(luma) }
+                    .onFailure { Timber.w(it, "averaged still: first frame unusable") }
+                    .isSuccess
+
+                acc.accepts(luma) -> {
+                    acc.add(luma)
+                    true
+                }
+
+                else -> false
+            }
+            if (!ok) {
+                Timber.w("averaged still: group abandoned at frame %d; taking one still", i)
                 accumulator = null
                 break
             }
-            accumulator = accumulator?.also { it.add(luma) } ?: LumaAccumulator(luma)
         }
         val gathered = accumulator
         return if (gathered == null) {
@@ -719,7 +740,13 @@ class LockedCameraSession(
         // rare case no preview surface exists yet, so this request always has
         // at least one target (zero targets throws).
         val focused = CompletableDeferred<Float?>()
-        var lastDist: Float? = null
+        // Written on the camera handler thread, read on this one after the
+        // timeout below. withTimeoutOrNull only publishes writes when the
+        // deferred *completes*, so on the timeout path — the one path that
+        // actually reads this — a plain var carries no happens-before edge and
+        // can still read null. That would refuse a focus lock the HAL had
+        // already reported.
+        val lastDist = AtomicReference<Float?>(null)
         // A HAL-level fault can make createCaptureRequest/setRepeatingRequest/
         // capture throw synchronously (CameraAccessException) instead of
         // failing through a callback. Treat that the same as a normal AF-lock
@@ -737,7 +764,7 @@ class LockedCameraSession(
                     ) {
                         val state = result.get(CaptureResult.CONTROL_AF_STATE)
                         val sampleDist = result.get(CaptureResult.LENS_FOCUS_DISTANCE)
-                        if (sampleDist != null) lastDist = sampleDist
+                        if (sampleDist != null) lastDist.set(sampleDist)
                         if (state == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED ||
                             state == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED ||
                             state == CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED
@@ -759,7 +786,7 @@ class LockedCameraSession(
 
         val dist = withTimeoutOrNull(AF_TIMEOUT_MS) { focused.await() }
         val allowFallback = BuildConfig.DEBUG && DeviceEnv.isEmulator()
-        val lens = AfLockResolver.resolve(dist, lastDist, allowFallback)
+        val lens = AfLockResolver.resolve(dist, lastDist.get(), allowFallback)
         if (lens == null) {
             // Real devices: never start the sequence with a floating lens —
             // refuse and let CaptureSessionActivity offer Retry test shot.
@@ -815,11 +842,13 @@ class LockedCameraSession(
         val converged = awaitAeConvergence(sess, builder)
         if (converged == null) {
             Timber.w("AE did not converge; leaving auto exposure running")
+            dropAeCallback(sess, builder)
             return
         }
         val plan = ExposurePlan.plan(converged, sensorLimitsOf(chars))
         if (plan.lock == ExposurePlan.Lock.AUTO) {
             Timber.i("exposure stays on auto: device offers neither manual sensor nor AE lock")
+            dropAeCallback(sess, builder)
             return
         }
         applyExposure(builder, plan)
@@ -835,14 +864,25 @@ class LockedCameraSession(
         }
         exposurePlan = plan
         Timber.i(
-            "exposure locked: %s %dus iso=%d mains=%s flickerSafe=%b maxFps=%.1f",
+            "exposure locked: %s %dus iso=%d mains=%s flickerSafe=%b maxFps=%.1f overExp=%.2fx",
             plan.lock,
             plan.exposureNs / NANOS_PER_MICRO,
             plan.sensitivity,
             plan.mains,
             plan.flickerSafe,
             plan.maxFps,
+            plan.overExposureFactor,
         )
+        if (plan.overExposed) {
+            // ISO was already at base and could not absorb the whole exposure
+            // increase, so the frames will be brighter than AE chose. Named on
+            // its own line because a clipped speckle dot has no gradient left
+            // to correlate, and nothing downstream can recover that.
+            Timber.w(
+                "exposure: iso clamped at base, frames %.2fx brighter than metered",
+                plan.overExposureFactor,
+            )
+        }
         delay(AE_SETTLE_DELAY_MS)
     }
 
@@ -860,8 +900,13 @@ class LockedCameraSession(
         builder: CaptureRequest.Builder,
     ): ExposurePlan.Converged? {
         val settled = CompletableDeferred<ExposurePlan.Converged>()
-        var last: ExposurePlan.Converged? = null
-        var sawState = false
+        // Both are written on the camera handler thread and read below, after a
+        // timeout that establishes no happens-before edge of its own. A stale
+        // null here reads as "AE never converged", which silently leaves the
+        // exposure on auto — and it would do so precisely on the devices that
+        // never report CONTROL_AE_STATE, which are the reason [last] exists.
+        val last = AtomicReference<ExposurePlan.Converged?>(null)
+        val sawState = AtomicBoolean(false)
         val issued = runCatching {
             sess.setRepeatingRequest(
                 builder.build(),
@@ -880,9 +925,9 @@ class LockedCameraSession(
                                 result.get(CaptureResult.CONTROL_AE_ANTIBANDING_MODE),
                             ),
                         )
-                        last = sample
+                        last.set(sample)
                         val state = result.get(CaptureResult.CONTROL_AE_STATE)
-                        if (state != null) sawState = true
+                        if (state != null) sawState.set(true)
                         if (state == CaptureResult.CONTROL_AE_STATE_CONVERGED ||
                             state == CaptureResult.CONTROL_AE_STATE_LOCKED ||
                             state == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED
@@ -896,7 +941,7 @@ class LockedCameraSession(
         }.onFailure { Timber.w(it, "awaitAeConvergence: setRepeatingRequest threw") }.isSuccess
         if (!issued) return null
         val converged = withTimeoutOrNull(AE_TIMEOUT_MS) { settled.await() }
-        return converged ?: last.takeUnless { sawState }
+        return converged ?: last.get().takeUnless { sawState.get() }
     }
 
     /** The device's own exposure and ISO limits; no hardcoded values anywhere. */
@@ -936,9 +981,33 @@ class LockedCameraSession(
         }
     }
 
+    /**
+     * Put the repeating request back without [awaitAeConvergence]'s callback.
+     *
+     * That callback samples exposure, ISO and antibanding out of every result
+     * and builds an [ExposurePlan.Converged] for each one. Useful for the few
+     * frames it takes AE to settle; pure waste for the rest of the session,
+     * which is what it costs on the paths that give up on locking and return.
+     */
+    private fun dropAeCallback(sess: CameraCaptureSession, builder: CaptureRequest.Builder) {
+        runCatching { sess.setRepeatingRequest(builder.build(), null, handler) }
+            .onFailure { Timber.w(it, "could not clear the AE convergence callback") }
+    }
+
+    /**
+     * Undo every key [applyExposure] writes, not just the mode.
+     *
+     * `CONTROL_AE_MODE_ON` makes the camera ignore the exposure time and
+     * sensitivity, so leaving those behind is harmless — but
+     * `SENSOR_FRAME_DURATION` is not covered by that rule, and a 50 ms floor
+     * surviving the revert would cap the preview at 20 fps on a device that
+     * just *rejected* the lock. Zero is what the template carries: no
+     * application-imposed minimum, the device picks.
+     */
     private fun revertExposure(builder: CaptureRequest.Builder) {
         builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
         builder.set(CaptureRequest.CONTROL_AE_LOCK, false)
+        builder.set(CaptureRequest.SENSOR_FRAME_DURATION, 0L)
     }
 
     private fun applyLockedControls(builder: CaptureRequest.Builder, lens: Float) {

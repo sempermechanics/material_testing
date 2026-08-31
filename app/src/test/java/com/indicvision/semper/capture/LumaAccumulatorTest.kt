@@ -3,7 +3,9 @@ package com.indicvision.semper.capture
 import com.indicvision.semper.ui.capture.GrayPngEncoder
 import com.indicvision.semper.ui.capture.LumaAccumulator
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LumaAccumulatorTest {
@@ -74,5 +76,38 @@ class LumaAccumulatorTest {
         assertThrows(IllegalArgumentException::class.java) {
             acc.add(luma(byteArrayOf(1, 2, 3, 4, 5, 6), 3, 2))
         }
+    }
+
+    // The capture path asks before it commits, so a frame the accumulator
+    // cannot take costs one group its averaging rather than ending the run.
+    // See LockedCameraSession.captureAveragedStill.
+
+    @Test
+    fun `accepts a matching sample`() {
+        val acc = LumaAccumulator(luma(byteArrayOf(1, 2, 3, 4), 2, 2))
+        assertTrue(acc.accepts(luma(byteArrayOf(5, 6, 7, 8), 2, 2)))
+    }
+
+    @Test
+    fun `does not accept a sample of a different size`() {
+        val acc = LumaAccumulator(luma(byteArrayOf(1, 2, 3, 4), 2, 2))
+        assertFalse(acc.accepts(luma(byteArrayOf(1, 2, 3, 4, 5, 6), 3, 2)))
+    }
+
+    @Test
+    fun `does not accept a buffer too short for its own strides`() {
+        val acc = LumaAccumulator(luma(byteArrayOf(1, 2, 3, 4), 2, 2))
+        // Right width and height, but a stride that walks off the end: the
+        // shape a vendor plane can take that would otherwise throw
+        // ArrayIndexOutOfBounds out of the middle of a capture loop.
+        assertFalse(acc.accepts(luma(byteArrayOf(1, 2, 3, 4), w = 2, h = 2, rowStride = 8)))
+    }
+
+    @Test
+    fun `accepts is what add enforces, so a rejected sample always throws`() {
+        val acc = LumaAccumulator(luma(byteArrayOf(1, 2, 3, 4), 2, 2))
+        val short = luma(byteArrayOf(1, 2, 3, 4), w = 2, h = 2, rowStride = 8)
+        assertFalse(acc.accepts(short))
+        assertThrows(IllegalArgumentException::class.java) { acc.add(short) }
     }
 }

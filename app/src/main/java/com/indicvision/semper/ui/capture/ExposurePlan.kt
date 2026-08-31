@@ -74,10 +74,33 @@ object ExposurePlan {
         val lock: Lock,
         val mains: Mains,
         val flickerSafe: Boolean,
+        /**
+         * How much brighter than AE chose this plan will expose: 1.0 when ISO
+         * absorbed the whole exposure increase, higher when it could not.
+         *
+         * Growing the exposure onto the flicker grid is paid for by dividing
+         * ISO by the same factor — until ISO hits base, after which there is
+         * nothing left to pay with and the frame simply gets brighter. That is
+         * usually the right trade, but only usually: the claim that "an
+         * over-bright frame still correlates" holds for bright and fails for
+         * **clipped**, and a clipped pixel has no gradient at all, which is the
+         * one thing correlation cannot recover from. Speckle is high-contrast
+         * by design, so its white dots are the first thing to go.
+         *
+         * Reported rather than acted on, because how much headroom the scene
+         * actually has is not knowable from the exposure numbers alone — the
+         * burst measures the consequence directly. Neither test device reached
+         * it (ISO 81/73/50/44 all scaled cleanly), so this is a latent case
+         * being made visible, not a live one being papered over.
+         */
+        val overExposureFactor: Double = 1.0,
     ) {
         /** Ceiling on frame rate implied by the exposure alone, frames/second. */
         val maxFps: Double
             get() = if (frameDurationNs <= 0L) 0.0 else NANOS_PER_SECOND.toDouble() / frameDurationNs
+
+        /** True when ISO could not absorb the whole exposure increase. */
+        val overExposed: Boolean get() = overExposureFactor > 1.0 + OVER_EXPOSURE_EPSILON
     }
 
     /**
@@ -112,8 +135,10 @@ object ExposurePlan {
 
         // Brightness is exposure × gain, so growing the exposure by a factor
         // means dividing ISO by the same factor. Clamping ISO can leave the
-        // frame brighter than AE chose; that is the right trade, because an
-        // over-bright frame still correlates while a flickering one does not.
+        // frame brighter than AE chose; that is usually the right trade,
+        // because a flickering frame is worse than a bright one — but how much
+        // brighter is not free information, so it is measured and reported
+        // rather than assumed harmless. See [Result.overExposureFactor].
         val ratio = if (converged.exposureNs > 0L) {
             exposure.toDouble() / converged.exposureNs.toDouble()
         } else {
@@ -121,6 +146,15 @@ object ExposurePlan {
         }
         val scaled = if (ratio > 0.0) (converged.sensitivity / ratio).toInt() else converged.sensitivity
         val sensitivity = scaled.coerceIn(limits.minSensitivity, limits.maxSensitivity)
+        // Only a clamp *upward* over-exposes: ISO wanted to go lower than the
+        // sensor allows, so the extra light stays in the frame. A downward
+        // clamp (scaled above maxSensitivity) under-exposes instead, which
+        // costs signal-to-noise but never destroys a gradient.
+        val overExposure = if (scaled in 1 until sensitivity) {
+            sensitivity.toDouble() / scaled.toDouble()
+        } else {
+            1.0
+        }
 
         return Result(
             exposureNs = exposure,
@@ -133,6 +167,7 @@ object ExposurePlan {
             // Only a whole number of half-cycles is safe. Clamping to the
             // device's range can land off that grid, and then it is not.
             flickerSafe = exposure == target && isMultipleOf(exposure, period),
+            overExposureFactor = overExposure,
         )
     }
 
@@ -184,6 +219,9 @@ object ExposurePlan {
 
     /** 50 ms — a whole number of half-cycles on both 50 Hz and 60 Hz. */
     const val BOTH_SAFE_EXPOSURE_NS = 50_000_000L
+
+    /** Integer ISO division leaves a fraction of a percent; not over-exposure. */
+    private const val OVER_EXPOSURE_EPSILON = 0.01
 
     private const val FLICKER_TOLERANCE_NS = 50_000L
     private const val NANOS_PER_SECOND = 1_000_000_000L

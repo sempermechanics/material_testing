@@ -10,9 +10,14 @@ package com.indicvision.semper.ui.capture
  *
  * Accumulation happens in sensor space, before rotation, straight off each
  * sample's own row and pixel stride — never assuming a tightly-packed
- * buffer, because a Camera2 plane is not guaranteed to be one. Every sample
- * must share the same width, height, row stride and pixel stride, which they
- * do here because they all come from one locked session's [android.media.ImageReader].
+ * buffer, because a Camera2 plane is not guaranteed to be one. Strides may
+ * therefore differ between samples; only width and height must match, and
+ * they do here because every sample comes from one locked session's
+ * [android.media.ImageReader].
+ *
+ * A sample that does not match is a caller error, not a recoverable one — see
+ * [accepts], which is how the capture path asks *before* committing, so a
+ * surprise from a vendor HAL costs one group rather than the whole run.
  *
  * Pure JVM: no Android or Camera2 types, so it is unit-testable directly.
  */
@@ -27,10 +32,30 @@ internal class LumaAccumulator(first: GrayPngEncoder.Luma) {
         add(first)
     }
 
+    /**
+     * Whether [luma] can be added: same frame size, and a buffer long enough
+     * for its own declared strides.
+     *
+     * Asked by the capture path before every [add], because the alternative —
+     * letting [add] throw out of a capture loop — turns one odd frame from a
+     * vendor HAL into an abandoned run. Here the group falls back to a single
+     * still and the run continues, which is what the averaging contract
+     * promises.
+     */
+    fun accepts(luma: GrayPngEncoder.Luma): Boolean =
+        luma.width == width &&
+            luma.height == height &&
+            (width == 0 || height == 0 || lastIndexOf(luma) < luma.bytes.size)
+
+    /** Buffer index of the bottom-right pixel under [luma]'s own strides. */
+    private fun lastIndexOf(luma: GrayPngEncoder.Luma): Long =
+        (height - 1).toLong() * luma.rowStride + (width - 1).toLong() * luma.pixelStride
+
     /** Adds one more sample of the same scene. Must match the first sample's size. */
     fun add(luma: GrayPngEncoder.Luma) {
-        require(luma.width == width && luma.height == height) {
-            "luma size ${luma.width}x${luma.height} does not match ${width}x$height"
+        require(accepts(luma)) {
+            "luma ${luma.width}x${luma.height} stride=${luma.rowStride}/${luma.pixelStride} " +
+                "bytes=${luma.bytes.size} does not fit ${width}x$height"
         }
         var i = 0
         for (y in 0 until height) {
