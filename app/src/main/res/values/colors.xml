@@ -46,7 +46,6 @@
          puck fill + 1dp rim + a text halo — never from a solid plate.
          Light theme keeps a white-translucent frost with dark ink; night flips to the
          original #52FFFFFF-on-dark treatment. -->
-    <color name="viewer_immersive_canvas">#0B1220</color>   <!-- unused: canvas stays theme-adaptive -->
     <color name="viewer_glass_fill">#B8FFFFFF</color>       <!-- ~72% white frost under dark ink -->
     <color name="viewer_glass_stroke">#33152430</color>     <!-- rim that defines the puck on a light canvas -->
     <color name="viewer_glass_pill">#8CFFFFFF</color>       <!-- ~55% white unchecked field pill -->
@@ -71,20 +70,14 @@
     <color name="viewer_pill_on_text">#FFFFFFFF</color>
 
     <color name="viewer_peek_scrim">#FFFFFFFF</color>       <!-- peek sheet surface -->
-    <color name="viewer_peek_divider">#1F152430</color>
     <color name="viewer_peek_handle">#40152430</color>
     <color name="viewer_peek_text">#152430</color>
-    <color name="viewer_peek_muted">#5B6B7A</color>
-    <color name="viewer_peek_accent">#0288D1</color>
 
     <!-- Dark mode is force-dark (render-time inversion of this palette), which
          never touches window/system-bar colors — these two aliases carry the
          night variant instead (see values-night/colors.xml). -->
     <color name="bar_system">@color/surface_muted</color>
     <color name="splash_bg">@color/surface_muted</color>
-
-    <!-- Brand plate behind the S / wordmark: sky in light, black in night. -->
-    <color name="brand_plate">@color/sky_primary</color>
 
     <color name="viewer_chrome_text">@color/text_primary</color>
     <color name="viewer_chrome_muted">@color/text_secondary</color>

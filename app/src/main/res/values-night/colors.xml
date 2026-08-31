@@ -10,7 +10,6 @@
     <!-- Splash/auth set forceDarkAllowed=false on the wordmark, so ink must
          invert here; cyan stays the light-theme value. -->
     <color name="wordmark_ink">#E9E9E7</color>
-    <color name="brand_plate">#000000</color>
     <color name="viewer_canvas">#101518</color>
     <color name="viewer_chrome_text">#FFFFFFFF</color>
     <color name="viewer_chrome_muted">#B0B8C0</color>
@@ -32,11 +31,8 @@
     <color name="viewer_pill_on_text">#FF111111</color>
 
     <color name="viewer_peek_scrim">#F2121212</color>       <!-- dark glass peek sheet -->
-    <color name="viewer_peek_divider">#33FFFFFF</color>
     <color name="viewer_peek_handle">#66FFFFFF</color>
     <color name="viewer_peek_text">#FFFFFFFF</color>
-    <color name="viewer_peek_muted">#B3B3B3</color>
-    <color name="viewer_peek_accent">#FF7DD3FC</color>      <!-- soft sky on dark -->
 
     <color name="toast_crisp_bg">#F0FFFFFF</color>
     <color name="toast_crisp_prominent_bg">#FFFFFFFF</color>
@@ -48,7 +44,7 @@
     <color name="viewer_plot_ink">@color/viewer_chrome_muted</color>
     <color name="viewer_plot_ink_strong">@color/viewer_chrome_text</color>
     <color name="viewer_plot_muted">#7E8B99</color>           <!-- desaturated neutral, visible on dark -->
-    <color name="viewer_plot_node_solved">#7DD3FC</color>     <!-- viewer_peek_accent's soft sky on dark -->
+    <color name="viewer_plot_node_solved">#7DD3FC</color>     <!-- soft sky on dark -->
     <color name="viewer_plot_node_skipped">#FF6F68</color>    <!-- lightened danger red for dark-bg contrast -->
     <color name="viewer_plot_connector">#263241</color>
 
