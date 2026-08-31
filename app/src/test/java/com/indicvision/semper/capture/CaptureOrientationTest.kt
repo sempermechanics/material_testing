@@ -79,6 +79,61 @@ class CaptureOrientationTest {
     }
 
     @Test
+    fun `a quarter turn takes a point across the corner, not along the edge`() {
+        // Top-left of the upright picture. Turned 90 clockwise it has to become
+        // the top-right corner, not stay put and not go to the bottom-left.
+        val (x, y) = CaptureOrientation.rotatePoint(0f, 0f, 90)
+        assertEquals(1f, x, EPS)
+        assertEquals(0f, y, EPS)
+    }
+
+    @Test
+    fun `the centre is the one point a turn cannot move`() {
+        for (degrees in intArrayOf(0, 90, 180, 270)) {
+            val (x, y) = CaptureOrientation.rotatePoint(0.5f, 0.5f, degrees)
+            assertEquals("$degrees moved the centre in x", 0.5f, x, EPS)
+            assertEquals("$degrees moved the centre in y", 0.5f, y, EPS)
+        }
+    }
+
+    @Test
+    fun `turning back by the same amount is what makes the metering fix correct`() {
+        // The whole point of the AF-region fix: an upright fraction turned into
+        // the sensor's frame and back has to be the fraction it started as. If
+        // this ever fails, the camera focuses somewhere the user did not pick,
+        // on coordinates the HAL will happily accept.
+        for (degrees in intArrayOf(0, 90, 180, 270)) {
+            val (sx, sy) = CaptureOrientation.rotatePoint(0.2f, 0.7f, -degrees)
+            val (ux, uy) = CaptureOrientation.rotatePoint(sx, sy, degrees)
+            assertEquals("$degrees did not round-trip x", 0.2f, ux, EPS)
+            assertEquals("$degrees did not round-trip y", 0.7f, uy, EPS)
+        }
+    }
+
+    @Test
+    fun `a point turn agrees with the corner mapping the burst roi uses`() {
+        // rotateNorm is written against these three mappings, hand-checked on
+        // device against the logged norms. Pinned here because the two now
+        // share one implementation and a silent disagreement would put the
+        // measured floor and the focus point in different frames.
+        assertPoint(0.3f, 0.8f, 90, expectX = 0.2f, expectY = 0.3f)
+        assertPoint(0.3f, 0.8f, 180, expectX = 0.7f, expectY = 0.2f)
+        assertPoint(0.3f, 0.8f, 270, expectX = 0.8f, expectY = 0.7f)
+    }
+
+    @Test
+    fun `a nonsense angle rounds before it turns a point`() {
+        assertPoint(0.25f, 0.6f, 89, expectX = 0.4f, expectY = 0.25f)
+        assertPoint(0.25f, 0.6f, 350, expectX = 0.25f, expectY = 0.6f)
+    }
+
+    private fun assertPoint(x: Float, y: Float, degrees: Int, expectX: Float, expectY: Float) {
+        val (gotX, gotY) = CaptureOrientation.rotatePoint(x, y, degrees)
+        assertEquals("$degrees x", expectX, gotX, EPS)
+        assertEquals("$degrees y", expectY, gotY, EPS)
+    }
+
+    @Test
     fun `the preview fits inside the view rather than filling it`() {
         // 4:3 buffer turned upright inside a tall portrait view: it has to be
         // width-limited, with bars top and bottom, so nothing is hidden.

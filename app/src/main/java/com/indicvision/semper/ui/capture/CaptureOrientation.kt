@@ -67,6 +67,30 @@ internal object CaptureOrientation {
     }
 
     /**
+     * Turn a normalised point clockwise by [degrees] inside the unit square.
+     *
+     * The one place the sensor's frame and the user's frame have to be
+     * reconciled for a *point* rather than a whole buffer. Metering rectangles
+     * are addressed in the sensor's active array, which is never rotated, while
+     * everything the user picked — a focus tap on the preview, the speckle
+     * check's strongest sample — is expressed against the upright picture. A
+     * point handed across that boundary unturned lands a quarter turn away on
+     * real pixels, so nothing fails and nothing is logged: the camera simply
+     * focuses somewhere the user did not choose.
+     *
+     * [uprightRotation]'s answer takes a sensor point to an upright one; pass
+     * its negation to go the other way. Anything that is not a quarter turn is
+     * returned untouched, since there is no sensible partial answer.
+     */
+    fun rotatePoint(normX: Float, normY: Float, degrees: Int): Pair<Float, Float> =
+        when (quarterTurn(degrees)) {
+            ROTATE_90 -> (1f - normY) to normX
+            ROTATE_180 -> (1f - normX) to (1f - normY)
+            ROTATE_270 -> normY to (1f - normX)
+            else -> normX to normY
+        }
+
+    /**
      * Largest scale at which the rotated buffer fits *entirely* inside a view
      * of [viewW] × [viewH].
      *

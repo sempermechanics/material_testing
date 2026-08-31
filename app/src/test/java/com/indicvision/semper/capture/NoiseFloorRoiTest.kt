@@ -79,8 +79,13 @@ class NoiseFloorRoiTest {
 
     @Test
     fun `no turn leaves the rect alone`() {
+        // The values, not the identity: rotateNorm goes through
+        // CaptureOrientation.rotatePoint now, so a zero turn maps both corners
+        // and rebuilds the rect rather than handing the argument back. Nothing
+        // downstream aliases the result, and pinning the object would only
+        // forbid that sharing.
         val roi = RectF(0.1f, 0.2f, 0.3f, 0.5f)
-        assertSame(roi, NoiseFloorGate.rotateNorm(roi, 0))
+        assertRect(roi, NoiseFloorGate.rotateNorm(roi, 0))
     }
 
     @Test

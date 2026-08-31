@@ -244,25 +244,20 @@ object NoiseFloorGate {
     /**
      * Turn a normalised rect clockwise inside the unit square.
      *
-     * A quarter turn swaps the axes, so it is written as the corner mapping
-     * rather than as a matrix: `(x, y) -> (1 - y, x)` for 90 degrees, applied
-     * to both corners and re-normalised into a rect. Anything that is not a
-     * quarter turn is returned untouched, since there is no sensible partial
-     * answer and a tilted rect is not a rect.
+     * A quarter turn swaps the axes, so this is the corner mapping rather than
+     * a matrix: both corners go through [CaptureOrientation.rotatePoint] and
+     * are re-normalised into a rect, because a turned rect's corners are no
+     * longer in min/max order. The point mapping is shared with the metering
+     * regions rather than written twice — the two disagreeing about which way
+     * a quarter turn goes is exactly the bug neither would report.
+     *
+     * Anything that is not a quarter turn is returned untouched, since there is
+     * no sensible partial answer and a tilted rect is not a rect.
      */
-    internal fun rotateNorm(roiNorm: RectF, degrees: Int): RectF = when (
-        CaptureOrientation.quarterTurn(degrees)
-    ) {
-        CaptureOrientation.ROTATE_90 ->
-            RectF(1f - roiNorm.bottom, roiNorm.left, 1f - roiNorm.top, roiNorm.right)
-
-        CaptureOrientation.ROTATE_180 ->
-            RectF(1f - roiNorm.right, 1f - roiNorm.bottom, 1f - roiNorm.left, 1f - roiNorm.top)
-
-        CaptureOrientation.ROTATE_270 ->
-            RectF(roiNorm.top, 1f - roiNorm.right, roiNorm.bottom, 1f - roiNorm.left)
-
-        else -> roiNorm
+    internal fun rotateNorm(roiNorm: RectF, degrees: Int): RectF {
+        val (x0, y0) = CaptureOrientation.rotatePoint(roiNorm.left, roiNorm.top, degrees)
+        val (x1, y1) = CaptureOrientation.rotatePoint(roiNorm.right, roiNorm.bottom, degrees)
+        return RectF(minOf(x0, x1), minOf(y0, y1), maxOf(x0, x1), maxOf(y0, y1))
     }
 
     /**

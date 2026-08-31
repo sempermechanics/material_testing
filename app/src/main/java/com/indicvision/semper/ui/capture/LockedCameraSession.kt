@@ -1030,6 +1030,22 @@ class LockedCameraSession(
         // (lossless) instead of the hardware JPEG encoder.
     }
 
+    /**
+     * Point the AF and AE metering at the spot the user is actually looking at.
+     *
+     * [focus] is normalised against the **upright** picture — that is what a
+     * focus tap on the preview means, and what the speckle check's strongest
+     * sample means. `SENSOR_INFO_ACTIVE_ARRAY_SIZE` is the sensor's own array,
+     * which is never turned. On any phone whose sensor is mounted a quarter
+     * turn from portrait — which is almost all of them — using the fraction
+     * unturned puts the metering rectangle somewhere else entirely, and it
+     * lands on real coordinates, so the HAL accepts it and nothing is logged.
+     * The camera just focuses on a part of the scene nobody chose.
+     *
+     * [frameRotationDegrees] is the turn that makes a sensor buffer upright, so
+     * its negation is the one that takes an upright fraction back to the
+     * sensor.
+     */
     private fun setAfRegion(
         builder: CaptureRequest.Builder,
         chars: CameraCharacteristics,
@@ -1037,8 +1053,13 @@ class LockedCameraSession(
         val sensor = chars.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE) ?: return
         val maxRegions = chars.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF) ?: 0
         if (maxRegions <= 0) return
-        val cx = (sensor.left + sensor.width() * focus.normX).toInt()
-        val cy = (sensor.top + sensor.height() * focus.normY).toInt()
+        val (sensorNormX, sensorNormY) = CaptureOrientation.rotatePoint(
+            focus.normX,
+            focus.normY,
+            -frameRotationDegrees,
+        )
+        val cx = (sensor.left + sensor.width() * sensorNormX).toInt()
+        val cy = (sensor.top + sensor.height() * sensorNormY).toInt()
         val half = (sensor.width() * AF_REGION_FRACTION).toInt().coerceAtLeast(AF_REGION_MIN_HALF_PX)
         val left = (cx - half).coerceIn(sensor.left, sensor.right - 1)
         val top = (cy - half).coerceIn(sensor.top, sensor.bottom - 1)
@@ -1053,6 +1074,15 @@ class LockedCameraSession(
         )
         builder.set(CaptureRequest.CONTROL_AF_REGIONS, arrayOf(region))
         builder.set(CaptureRequest.CONTROL_AE_REGIONS, arrayOf(region))
+        Timber.i(
+            "af region: upright %.3f,%.3f -> sensor %.3f,%.3f (turn %d) = %s",
+            focus.normX,
+            focus.normY,
+            sensorNormX,
+            sensorNormY,
+            frameRotationDegrees,
+            region,
+        )
     }
 
     companion object {
