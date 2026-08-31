@@ -89,6 +89,11 @@ class IndicApi private constructor(context: Context) {
     class DeviceConflictException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_CONFLICT)
 
     /**
+     * This device is already bound to a different account (409 from `GET /v1/me`).
+     */
+    class DeviceInUseException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_IN_USE)
+
+    /**
      * The backend has no ACTIVE device record for us — the record was revoked or
      * deleted server-side while we still believed we were registered. Callers
      * should re-register and retry rather than give up.
@@ -108,6 +113,7 @@ class IndicApi private constructor(context: Context) {
         if (code == HttpStatus.CONFLICT) {
             val detail = ApiErrors.detailOf(body)
             if (ApiErrors.isCode(detail, ApiErrors.DEVICE_NOT_ACTIVE)) throw DeviceNotActiveException(requestId)
+            if (ApiErrors.isCode(detail, ApiErrors.DEVICE_IN_USE)) throw DeviceInUseException(requestId)
             if (ApiErrors.isCode(detail, ApiErrors.DEVICE_CONFLICT)) throw DeviceConflictException(requestId)
         }
         throw ApiException(code, body, requestId)
@@ -151,7 +157,7 @@ class IndicApi private constructor(context: Context) {
         json.decodeFromString(
             authedGet(idToken, "$base/v1/me") { code, body, ref ->
                 if (code == HttpStatus.FORBIDDEN) throw NotApprovedException()
-                if (code == HttpStatus.CONFLICT) throw DeviceConflictException(ref)
+                if (code == HttpStatus.CONFLICT) throwForMeConflict(body, ref)
                 throw ApiException(code, body, ref)
             },
         )
@@ -547,6 +553,13 @@ class IndicApi private constructor(context: Context) {
          * Process-wide client. Shares OkHttp pools and DeviceKeyManager; call sites
          * must not construct [IndicApi] directly.
          */
+        /** Maps a 409 from `GET /v1/me` to the most specific device-binding exception. */
+        internal fun throwForMeConflict(body: String, requestId: String?): Nothing {
+            if (ApiErrors.hasCode(body, ApiErrors.DEVICE_IN_USE)) throw DeviceInUseException(requestId)
+            if (ApiErrors.hasCode(body, ApiErrors.DEVICE_CONFLICT)) throw DeviceConflictException(requestId)
+            throw ApiException(HttpStatus.CONFLICT, body, requestId)
+        }
+
         fun get(context: Context): IndicApi {
             val existing = instance
             if (existing != null) return existing

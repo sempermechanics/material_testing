@@ -230,7 +230,7 @@ internal class NoiseFloorGateUi(
      */
     private fun denoiseWarned(result: NoiseFloorGate.Result): Boolean {
         val correlation = result.verdict.noiseCorrelation
-        val smoothed = correlation.isFinite() && correlation > CaptureNoiseFloor.DENOISE_CORRELATION
+        val smoothed = CaptureNoiseFloor.denoisedByCorrelation(correlation)
         if (smoothed && !warned) {
             warned = true
             Timber.w("pipeline: frames are smoothed, neighbour correlation %.3f", correlation)

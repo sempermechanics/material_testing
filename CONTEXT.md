@@ -130,7 +130,11 @@ Kover `minBound` floor is 15. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-08-28)
+## Current state (2026-08-31)
+
+Open maintenance items from the capture-branch review are tracked in
+[docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md) (2026-08-31 register); FI-11
+API routing items 1–2 are closed.
 
 Home **+** expands to **Import** (existing `MediaPickerSheet`) or **Record**
 (`ui/capture/`: setup → Camera-app test shot → contrast ROI → SSSIG gate →

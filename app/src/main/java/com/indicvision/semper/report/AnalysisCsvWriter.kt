@@ -83,8 +83,10 @@ object AnalysisCsvWriter {
     /** Millistrain floor fragment for a recorded row suffix; empty when unmeasured. */
     internal fun floorMillistrainColumn(floor: CaptureNoiseFloor?): String {
         if (floor == null) return ""
-        return String.format(Locale.US, "%.5f,", floor.microstrain / 1000.0)
+        return String.format(Locale.US, "%.5f,", millistrainOf(floor))
     }
+
+    private fun millistrainOf(floor: CaptureNoiseFloor): Double = floor.microstrain / 1000.0
 
     /**
      * Trailing recorded-session columns: floor (mε) plus shift_u/v and rotation.
@@ -123,7 +125,7 @@ object AnalysisCsvWriter {
         w.append("# roi_w,${metadata.roiW}\n")
         w.append("# roi_h,${metadata.roiH}\n")
         val floorLine = metadata.captureFloor?.let { floor ->
-            String.format(Locale.US, "%.5f", floor.microstrain / 1000.0)
+            String.format(Locale.US, "%.5f", millistrainOf(floor))
         }.orEmpty()
         w.append("# noise_floor_mε,$floorLine\n")
     }

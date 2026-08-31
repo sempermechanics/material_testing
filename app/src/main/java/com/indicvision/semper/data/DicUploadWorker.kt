@@ -794,14 +794,14 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         applicationContext,
                         SemperAnalytics.CLOUD_UPLOAD_FAILED,
                         mapOf(
-                            "reason" to if (UploadWorkOutcomes.isQuotaExhausted(e.code)) {
+                            "reason" to if (UploadWorkOutcomes.isQuotaExhausted(e.code, e.detail)) {
                                 "quota"
                             } else {
                                 "payload"
                             },
                         ),
                     )
-                    if (UploadWorkOutcomes.isQuotaExhausted(e.code)) {
+                    if (UploadWorkOutcomes.isQuotaExhausted(e.code, e.detail)) {
                         // Quota full has its own persistent "email support" screen —
                         // surface it there, not via a transient Home snackbar.
                         TokenStore.setSessionLimitReached(applicationContext, true)

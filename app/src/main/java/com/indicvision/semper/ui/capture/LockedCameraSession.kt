@@ -584,6 +584,8 @@ class LockedCameraSession(
         device = null
         imageReader = null
         previewSurface = null
+        pendingStill = null
+        pendingLuma = null
         thread?.quitSafely()
         thread = null
         handler = null

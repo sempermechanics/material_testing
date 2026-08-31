@@ -220,16 +220,7 @@ class CaptureSetupActivity : AppCompatActivity() {
             CaptureResources.availStorageBytes(this),
         )
         if (!check.ok) {
-            val msg = when {
-                !check.ramOk && !check.storageOk -> R.string.capture_budget_fail_both
-                !check.ramOk -> R.string.capture_budget_fail_ram
-                else -> R.string.capture_budget_fail_storage
-            }
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.capture_budget_fail_title)
-                .setMessage(msg)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
+            CaptureBudgetUi.showFailDialog(this, check)
             return
         }
 

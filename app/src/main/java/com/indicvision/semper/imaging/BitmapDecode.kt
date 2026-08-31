@@ -78,6 +78,22 @@ object BitmapDecode {
         return inSampleSize.coerceAtLeast(1)
     }
 
+    /** Width×height from a file header only; null when nothing decodable. */
+    fun storedBounds(path: String): Pair<Int, Int>? {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, opts)
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) return null
+        return opts.outWidth to opts.outHeight
+    }
+
+    /** Width×height from encoded bytes; null when nothing decodable. */
+    fun storedBounds(bytes: ByteArray): Pair<Int, Int>? {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) return null
+        return opts.outWidth to opts.outHeight
+    }
+
     /** Decode [bytes] with an inSampleSize that keeps the long edge ≤ [maxLongEdge]. */
     fun decodeByteArrayCapped(
         bytes: ByteArray,

@@ -66,8 +66,7 @@ data class CaptureNoiseFloor(
      * so NaN reads as false here: the user is told nothing rather than told
      * something reassuring.
      */
-    fun denoised(): Boolean =
-        noiseCorrelation.isFinite() && noiseCorrelation > DENOISE_CORRELATION
+    fun denoised(): Boolean = denoisedByCorrelation(noiseCorrelation)
 
     /** The floor with the evidence behind it, for a report line. */
     fun detail(): String = String.format(
@@ -128,6 +127,10 @@ data class CaptureNoiseFloor(
          * so a threshold set a little wrong here costs a warning, never a run.
          */
         const val DENOISE_CORRELATION = 0.5
+
+        /** Shared denoise verdict from a neighbour-correlation measurement. */
+        fun denoisedByCorrelation(correlation: Double): Boolean =
+            correlation.isFinite() && correlation > DENOISE_CORRELATION
 
         /**
          * Recover a floor from [encode]'s output.

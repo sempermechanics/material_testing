@@ -579,6 +579,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun handleReferenceImage(uri: Uri) {
+        viewModel.captureFloor = null
         val name = getFileName(uri)
         val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
 

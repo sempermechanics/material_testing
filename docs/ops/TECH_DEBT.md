@@ -30,6 +30,67 @@ what is *owed* and what is deliberately deferred. Two entries below have a
 concrete proposal there: the `ViewerSession` extras bag (FI-1) and the consent
 copy (FI-8).
 
+## 2026-08-31 capture-branch review (PR #101)
+
+Three parallel agents (reuse, quality, efficiency) reviewed
+`origin/main...HEAD` (~136 files). Findings below were recorded **before** the
+Phase 4 fix pass; rows marked **Fixed 2026-08-31** moved there after tests.
+
+### Fixed on capture branch (shipped before this pass)
+
+| Item | Evidence |
+|------|----------|
+| Auth fail-closed adoption + profile `create()` race | `firestore_repo.py`, `test_firestore_repo.py` |
+| Auth deep-link host check | `AuthActivity.kt` |
+| ROI mask / RAW copy off main thread | `StaticAnalysisActivity.kt` |
+| Error-code contract pin (FI-9 partial) | `test_error_codes.py`, `ApiErrors.kt` |
+| Capture JVM test suite | `app/src/test/.../capture/*`, `NoiseFloor*`, `AnalysisCsv*` |
+| Docs: FAQ, lighting report, workflow index | `docs/app/FAQ.md`, `NOISE_FLOOR_STRAIN_ACCURACY.md`, `docs/WORKFLOWS.md` |
+| Native engine pin | tag **v0.2.1** (`074602a`) |
+
+### Fixed in maintenance pass (2026-08-31)
+
+| ID | Item |
+|----|------|
+| TD-1 | FI-11: `UploadWorkOutcomes.isQuotaExhausted` checks `SESSION_QUOTA_EXCEEDED` in body |
+| TD-2 | FI-11: `IndicApi.me()` branches on `DEVICE_IN_USE` / `DEVICE_CONFLICT`; added `DeviceInUseException` |
+| TD-8 | Budget-fail dialog extracted to `CaptureBudgetUi` |
+| TD-9 | Denoise threshold shared via `CaptureNoiseFloor.denoisedByCorrelation` |
+| TD-10 | Millistrain conversion centralized in `AnalysisCsvWriter` |
+| TD-11 | `captureFloor` cleared when reference swapped via import |
+| TD-12 | `LockedCameraSession.close()` clears pending still/luma claims |
+| TD-13 | `applySupportedResolution` no longer overwrites intent `cameraId` |
+| TD-14 | JPEG bounds decode consolidated in `BitmapDecode.storedBounds` |
+
+### Open register (prioritized)
+
+Priority = (Impact + Risk) × (6 − Effort).
+
+| ID | Category | Item | I | R | E | P | Status |
+|----|----------|------|---|---|---|---|--------|
+| TD-3 | Architecture | `ViewerSession` extras bag (FI-1) | 4 | 4 | 5 | **8** | Deferred |
+| TD-4 | Code | Capture orchestrators ~1k lines | 3 | 2 | 4 | **10** | Deferred |
+| TD-5 | Test | No capture instrumented/E2E | 3 | 3 | 4 | **12** | Deferred |
+| TD-6 | Code | FI-11 `ApiException.detail` rename | 2 | 2 | 3 | **8** | Deferred |
+| TD-7 | Test | Kover floor raise | 2 | 2 | 3 | **8** | Deferred |
+| TD-15 | Quality | `CaptureSessionActivity` process death omits noise-floor / ready state | 3 | 3 | 4 | **9** | Deferred |
+| TD-16 | Efficiency | Test-shot path re-reads/re-decodes same JPEG | 3 | 2 | 3 | **12** | Deferred |
+| TD-17 | Efficiency | `ShareCenter` reference decoded 5× per field in ZIP export | 3 | 2 | 4 | **9** | Deferred |
+| TD-18 | Efficiency | `GrayPngEncoder` full-buffer + `toByteArray()` on hot path | 3 | 2 | 4 | **9** | Deferred |
+| TD-19 | Efficiency | Redundant `runOnUiThread` in `StillSequenceRunner` progress | 2 | 1 | 1 | **10** | Deferred |
+| TD-20 | Reuse | `LockedCameraSession` duplicate `captureStill` / `captureLuma` bodies | 2 | 2 | 4 | **8** | Deferred |
+| TD-21 | Efficiency | ImageReader listener re-registered every capture | 2 | 2 | 3 | **8** | Deferred |
+| TD-22 | Reuse | `NoiseFloorGateUi` manual `CaptureNoiseFloor` field mapping | 2 | 1 | 3 | **6** | Deferred |
+
+### Review summary (2026-08-31)
+
+- **Reuse agent:** 6 actionable findings (2 fixed, 4 deferred).
+- **Quality agent:** 7 actionable findings (4 fixed, 3 deferred).
+- **Efficiency agent:** 8 actionable findings (2 fixed, 6 deferred).
+- **False positives skipped:** splitting orchestrators without a concrete bug;
+  `@file:Suppress` on capture activities without a proposed extract; streaming
+  PNG encode (larger refactor).
+
 ## External / deferred (not blocked on code alone)
 
 | Item | Why deferred |

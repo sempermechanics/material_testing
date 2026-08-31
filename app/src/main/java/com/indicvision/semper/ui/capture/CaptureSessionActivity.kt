@@ -6,7 +6,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
+import com.indicvision.semper.imaging.BitmapDecode
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.graphics.SurfaceTexture
@@ -405,9 +405,8 @@ class CaptureSessionActivity : AppCompatActivity() {
     /** Pixel size of [file] from its header alone, clamped so callers can
      *  divide by it. (1, 1) means nothing decodable was there. */
     private fun imageBounds(file: File): Pair<Int, Int> {
-        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.absolutePath, opts)
-        return opts.outWidth.coerceAtLeast(1) to opts.outHeight.coerceAtLeast(1)
+        val bounds = BitmapDecode.storedBounds(file.absolutePath)
+        return bounds ?: (1 to 1)
     }
 
     private fun onContrastRoiReady(file: File, roi: Rect) {
@@ -486,16 +485,7 @@ class CaptureSessionActivity : AppCompatActivity() {
             CaptureResources.availStorageBytes(this),
         )
         if (budget.ok) return true
-        val msg = when {
-            !budget.ramOk && !budget.storageOk -> R.string.capture_budget_fail_both
-            !budget.ramOk -> R.string.capture_budget_fail_ram
-            else -> R.string.capture_budget_fail_storage
-        }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.capture_budget_fail_title)
-            .setMessage(msg)
-            .setPositiveButton(R.string.cancel) { _, _ -> finish() }
-            .show()
+        CaptureBudgetUi.showFailDialog(this, budget, R.string.cancel) { finish() }
         return false
     }
 
@@ -533,7 +523,6 @@ class CaptureSessionActivity : AppCompatActivity() {
         }
         planWidth = matched?.width ?: planWidth
         planHeight = matched?.height ?: planHeight
-        cameraId = caps.cameraId
     }
 
     /**
@@ -603,11 +592,7 @@ class CaptureSessionActivity : AppCompatActivity() {
 
     private fun evaluateSpeckle(file: File, roi: Rect): SubsetRecommender.Result? {
         val bytes = file.readBytes()
-        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-        val w = opts.outWidth
-        val h = opts.outHeight
-        if (w <= 0 || h <= 0) return null
+        val (w, h) = BitmapDecode.storedBounds(bytes) ?: return null
         return SubsetRecommender.recommend(
             refBytes = bytes,
             imgW = w,

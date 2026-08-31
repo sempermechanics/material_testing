@@ -401,13 +401,9 @@ class AuthRepository(context: Context) {
             TokenStore.setStatus(appContext, AccessStatus.PENDING)
             Result.success(AccessStatus.PENDING)
         } catch (e: IndicApi.DeviceConflictException) {
-            Result.failure(
-                Exception(
-                    "This device is already linked to another account, or this account to " +
-                        "another device. Sign in with that account, or ask an admin to reset the binding.",
-                    e,
-                ),
-            )
+            deviceBindingFailure(e)
+        } catch (e: IndicApi.DeviceInUseException) {
+            deviceBindingFailure(e)
         } catch (e: IndicApi.ApiException) {
             if (e.code == HTTP_UNAUTHORIZED) {
                 // Gateway/backend rejected the Firebase ID token (wrong audience,
@@ -445,6 +441,15 @@ class AuthRepository(context: Context) {
         } else {
             Result.failure(Exception("Could not verify account. Check your connection and sign in again."))
         }
+
+    private fun deviceBindingFailure(cause: IOException): Result<String> =
+        Result.failure(
+            Exception(
+                "This device is already linked to another account, or this account to " +
+                    "another device. Sign in with that account, or ask an admin to reset the binding.",
+                cause,
+            ),
+        )
 
     private companion object {
         /** HTTP 401 from the backend: the session token is no longer valid. */

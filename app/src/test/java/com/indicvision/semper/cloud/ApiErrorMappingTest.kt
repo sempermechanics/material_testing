@@ -2,6 +2,7 @@ package com.indicvision.semper.cloud
 
 import com.indicvision.semper.data.net.ApiErrors
 import com.indicvision.semper.data.net.HttpStatus
+import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.IndicApiHttp
 import okhttp3.Protocol
 import okhttp3.Request
@@ -9,6 +10,7 @@ import okhttp3.Response
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -77,6 +79,24 @@ class ApiErrorMappingTest {
         )
         assertEquals("Backup failed", IndicApiHttp.withRef("Backup failed", null))
         assertEquals("Backup failed", IndicApiHttp.withRef("Backup failed", ""))
+    }
+
+    @Test
+    fun `me conflict maps device in use and device conflict distinctly`() {
+        val inUseBody = """{"detail":"device_in_use"}"""
+        val conflictBody = """{"detail":"device_conflict"}"""
+        val quotaBody = """{"detail":"session_quota_exceeded: 5/5"}"""
+
+        assertThrows(IndicApi.DeviceInUseException::class.java) {
+            IndicApi.throwForMeConflict(inUseBody, "req-1")
+        }
+        assertThrows(IndicApi.DeviceConflictException::class.java) {
+            IndicApi.throwForMeConflict(conflictBody, "req-2")
+        }
+        val quota = assertThrows(IndicApi.ApiException::class.java) {
+            IndicApi.throwForMeConflict(quotaBody, "req-3")
+        }
+        assertEquals(HttpStatus.CONFLICT, quota.code)
     }
 
     private fun response(requestId: String?): Response =

@@ -1,6 +1,7 @@
 package com.indicvision.semper.data
 
 import androidx.work.ListenableWorker.Result
+import com.indicvision.semper.data.net.ApiErrors
 import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.util.Digests
 import java.io.File
@@ -28,8 +29,11 @@ internal object UploadWorkOutcomes {
         else -> Result.retry()
     }
 
-    /** Whether HTTP [code] means the account analysis quota is full. */
-    fun isQuotaExhausted(code: Int): Boolean = code == HttpStatus.CONFLICT
+    /** Whether HTTP [code] and [body] mean the account analysis quota is full. */
+    fun isQuotaExhausted(code: Int, body: String? = null): Boolean =
+        code == HttpStatus.CONFLICT &&
+            body != null &&
+            ApiErrors.hasCode(body, ApiErrors.SESSION_QUOTA_EXCEEDED)
 
     /** Whether retrying cannot help (quota or payload size). */
     fun isTerminalClientError(code: Int): Boolean =

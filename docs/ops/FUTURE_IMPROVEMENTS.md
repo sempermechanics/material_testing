@@ -163,27 +163,17 @@ list keeps growing; the contract test is enough while it does not.
 
 **Affects** A1, B1, C1, C2 · *accuracy, debuggability*
 
-The typed error codes landed, but three sites still decide on the HTTP status
-alone. Each is a small, well-understood change that alters user-visible routing,
-so none was taken in the pass that introduced the codes — they need a compiler
-and the unit-test tier, which the environment that found them could not run.
+The typed error codes landed, but three sites still decided on the HTTP status
+alone. Items 1–2 are **done** (2026-08-31 maintenance pass on PR #101); item 3
+remains open — see [TECH_DEBT.md](TECH_DEBT.md) TD-6.
 
-1. **`IndicApi.me()` maps any 409 to `DeviceConflictException`.** `GET /v1/me`
-   goes through `deps.current_user`, whose only 409 is `device_in_use` — "this
-   phone belongs to another account". `device_conflict` — "this account belongs
-   to another phone" — is raised only by `POST /v1/devices/register`. The two
-   read the same on screen today because `AuthRepository` collapses them into one
-   message, but the exception name is wrong and an unrecognised future 409 is
-   silently reported as a device rebind. Branch on
-   `ApiErrors.hasCode(body, DEVICE_CONFLICT) || hasCode(body, DEVICE_IN_USE)` and
-   let anything else fall through to `ApiException`.
-2. **`DicUploadWorker` treats every 409 as a full quota.**
-   `UploadWorkOutcomes.isQuotaExhausted(code)` tests `code == CONFLICT`, so a 409
-   carrying `device_not_active` or `size_or_state_mismatch` opens the "email
-   support, you are at your limit" screen for a problem that has nothing to do
-   with the quota. Test `ApiErrors.hasCode(e.detail, SESSION_QUOTA_EXCEEDED)`
-   instead — the code arrives with a `: used/max` tail, which `hasCode` already
-   allows for.
+1. **`IndicApi.me()` maps any 409 to `DeviceConflictException`.** — **done
+   2026-08-31.** `GET /v1/me` now branches on `DEVICE_IN_USE` vs
+   `DEVICE_CONFLICT` via `throwForMeConflict`; added `DeviceInUseException`.
+2. **`DicUploadWorker` treats every 409 as a full quota.** — **done
+   2026-08-31.** `UploadWorkOutcomes.isQuotaExhausted(code, body)` tests
+   `ApiErrors.hasCode(body, SESSION_QUOTA_EXCEEDED)`; `device_not_active` and
+   other 409s no longer open the quota screen.
 3. **`ApiException.detail` is misnamed.** It holds the whole response body, while
    `ApiErrors.detailOf` defines "detail" as the parsed field — so `e.detail` in a
    log line prints the JSON envelope. Rename it to `body` and add
