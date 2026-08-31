@@ -49,8 +49,9 @@ import java.util.zip.ZipOutputStream
  * The Results share sheet (wireframe 08). One scope rule: photos share the
  * current frame; the PDF and CSV cover the whole analysis; the ZIP bundles
  * everything. Fast single-photo export still generates into `cacheDir/share`
- * then offers Save/Share. Slow exports (PDF, ZIP, all-fields, animations, CSV)
- * pick a Save-to-Files destination first, then write there.
+ * then offers Save/Share. Slow exports (PDF, ZIP, all-fields, field GIFs, CSV)
+ * pick a Save-to-Files destination first, then write there. Field GIFs are
+ * single-setting only; a parameter sweep hides that row.
  */
 class ShareCenter(private val host: ResultViewerActivity) {
 
@@ -102,9 +103,15 @@ class ShareCenter(private val host: ResultViewerActivity) {
             sheet.dismiss()
             offerSlowExport(KIND_PHOTOS, "application/zip", photosZipName(), R.string.share_generating)
         }
-        v.findViewById<View>(R.id.rowShareAnimations).setOnClickListener {
-            sheet.dismiss()
-            offerSlowExport(KIND_GIFS, "application/zip", animationsZipName(), R.string.share_generating_gif)
+        // Parameter sweeps are not a time series — no summary GIF and no Animations row.
+        val animationsRow = v.findViewById<View>(R.id.rowShareAnimations)
+        if (s.stepPerFrame != null) {
+            animationsRow.visibility = View.GONE
+        } else {
+            animationsRow.setOnClickListener {
+                sheet.dismiss()
+                offerSlowExport(KIND_GIFS, "application/zip", animationsZipName(), R.string.share_generating_gif)
+            }
         }
         v.findViewById<View>(R.id.rowSharePdf).setOnClickListener {
             sheet.dismiss()
@@ -159,7 +166,10 @@ class ShareCenter(private val host: ResultViewerActivity) {
         KIND_ZIP -> listOf(everythingZip(report)) to "application/zip"
         KIND_CSV -> listOf(batchCsv()) to "text/csv"
         KIND_PHOTOS -> allFieldPhotos() to "image/png"
-        KIND_GIFS -> fieldAnimations() to "image/gif"
+        KIND_GIFS -> {
+            check(requireSnapshot().stepPerFrame == null) { "Animations are not offered for sweeps" }
+            fieldAnimations() to "image/gif"
+        }
         else -> error("Unknown share kind $kind")
     }
 
@@ -557,7 +567,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * ├── {base}_report.pdf                    (root)
      * └── photos_{ts}/
      *     ├── raw photos/                      reference + deformed originals
-     *     ├── animations/                      U, V, Exx, Eyy, Exy as looping GIFs
+     *     ├── animations/                      U..Exy GIFs (single-setting only)
      *     └── results/<NNN_frame>/             U, V, Exx, Eyy, Exy per frame
      * ```
      */
@@ -567,7 +577,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         // per-frame result images the last 40%.
         val pdf = allFramesPdf { pct, label -> report(pct * 60 / 100, label) }
         val csv = batchCsv()
-        val animations = fieldAnimations()
+        val animations = if (s.stepPerFrame != null) emptyList() else fieldAnimations()
         report(62, "Bundling files…")
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val f = File(shareDir(), "${s.baseName}_everything_$ts.zip")
@@ -699,7 +709,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val baseImage: Bitmap?,
         val refImagePath: String?,
         val defImagePaths: List<String>,
-        /** The viewer's animation builder, so a share reuses what it already rendered. */
+        /** Single-setting overview builder; null on a parameter sweep. */
         val summary: SummaryAnimation?,
         /** Whole-sequence colour bounds of a field, or null if it has no data. */
         val summaryBounds: (Int) -> Pair<Float, Float>?,
