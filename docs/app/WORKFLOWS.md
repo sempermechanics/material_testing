@@ -226,6 +226,12 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
     ├── Freeze the ISP (CaptureIspLock) and read every key back out of the
     │   TotalCaptureResult; whatever the HAL refused is collapsed into one
     │   warning with a FAQ link
+    ├── Confirm focus: the locked preview holds with a ring on the focus point,
+    │   a magnified unfiltered crop of it, and a sharpness reading given only
+    │   as a percentage of the sharpest point tried. A tap anywhere re-locks
+    │   there (AE re-meters with it); a refused tap restores the previous point.
+    │   Nothing is measured until the user accepts — it sits after the lock,
+    │   not before the test shot, because the vendor Camera app runs its own AF
     ├── Noise-floor burst: up to 6 stills on the run's own settings, static
     │   scene, no load yet (NoiseFloorGate). Yields sigma_u, the strain floor
     │   at the gauge in use, the image noise variance D(eta), the frame-to-
@@ -237,6 +243,10 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
     │   **Continue** (not Record anyway), with ⓘ for the FAQ. A burst that
     │   would not settle or that drifted asks to retry instead, because there
     │   the measurement failed to measure itself
+    ├── Framing hold: from **Start recording** onward the gravity direction is
+    │   held, and a sustained re-aim withdraws Start — the frozen focus and the
+    │   measured floor both describe the old framing and nothing downstream
+    │   re-checks either (FramingWatch; released once recording begins)
     ├── Timed stills (PNG, converted from the sensor's own YUV output — no
     │   JPEG step)
     ├── Second copy of the as-captured frames into Pictures/semper/<date>-<time>
@@ -261,12 +271,17 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
 | [ ] 3b.5 | Save an ROI on a weak / blank pattern | Speckle-fail dialog with FAQ **Why?**; can reselect area or retake |
 | [ ] 3b.5a | Tap **Why?** on that dialog, open the FAQ, return | Same dialog still up (Select area / Retry); flow continues |
 | [ ] 3b.5b | Save an ROI that is too small | Too-small dialog; select a larger area |
-| [ ] 3b.6 | Good test shot + ROI with enough contrast | Focus locks; **Start recording** appears |
+| [ ] 3b.6 | Good test shot + ROI with enough contrast | Focus locks and the preview holds at **Focus looks sharp** with a ring, a magnified crop and a sharpness reading — the burst does not run until it is tapped |
+| [ ] 3b.6a1 | Tap elsewhere on the preview during that step | The ring and the loupe move there and the lens re-locks; a tap on a letterbox bar does nothing |
+| [ ] 3b.6a2 | Tap a spot the lens cannot focus on | One short message, and the **previous** focus point is still locked — a refused tap never costs the lock that worked |
+| [ ] 3b.6a3 | Compare a sharp point against a soft one | The reading is always a percentage *of the sharpest so far*, never a verdict that a point is sharp enough |
 | [ ] 3b.6b | Cover the lens so AF never locks (real device) | AF-fail dialog, Retry test shot — never starts on a floating lens |
 | [ ] 3b.6c | Watch the test shot on a phone that refuses ISP keys | Exactly one warning, effect first, under 20 words, with a working FAQ link. A phone that honoured everything shows none |
 | [ ] 3b.6d | Dim the light or defocus slightly, then take a test shot | Floor verdict dialog; **Record anyway** is the primary action, **Retry test shot** beside it, **Why?** opens the noise-floor FAQ **without dismissing** the dialog |
 | [ ] 3b.6d2 | Tap **Why?** (or pass **ⓘ**), open the FAQ, return | Same dialog still up; after **Continue** / **Record anyway**, **Start recording** works (camera re-locks if the HAL dropped it; floor is not re-measured) |
-| [ ] 3b.6e | Nudge the tripod during the burst | One disturbed frame does not flip a good setup into a refusal (median over 5) |
+| [ ] 3b.6e | Nudge the tripod during the burst | One disturbed frame does not flip a good setup into a refusal (median over 5 estimates) |
+| [ ] 3b.6e2 | Knock the tripod once with **Start recording** showing | Nothing happens — a knock is an acceleration, not a new framing |
+| [ ] 3b.6e3 | Re-aim the rig a few degrees with **Start recording** showing | **The camera moved**, Start withdrawn, **Retake test shot** as the primary action and the status line saying the same; recording cannot proceed on the stale floor |
 | [ ] 3b.6f | Pass the gate on a good setup | Dialog shows large **measurement floor** value (e.g. **402 µε**), body text, **ⓘ** → `#noise-floor` without dismiss; **Continue** enables **Start recording**; floor recorded on session |
 | [ ] 3b.6g | Press Back while timed stills are running | **Stop recording?** confirm; confirming returns to setup (frames discarded) |
 | [ ] 3b.7 | Complete a stills run | Wizard opens with reference + deformed frames filled; Back from wizard step 1 confirms exit to Home (not setup) |

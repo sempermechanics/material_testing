@@ -133,7 +133,7 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-08-31)
+## Current state (2026-09-01)
 
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
@@ -146,12 +146,14 @@ deliberate targetSdk PR.
 
 Home **+** expands to **Import** (existing `MediaPickerSheet`) or **Record**
 (`ui/capture/`: setup → Camera-app test shot → contrast ROI → SSSIG gate →
-hardware AF lock → timed stills → wizard via `PICKED_REF_URI` +
-`PICKED_DEF_URIS`). Stills only — the video path is gone. Frames are lossless
-grayscale PNG written straight from the locked session's `YUV_420_888` luma
-plane (`GrayPngEncoder`), never JPEG; the reference frame stays whatever the
-vendor Camera app wrote for the test shot, resized to match by
-`CaptureFrameSizeMatcher`.
+hardware AF lock → user-confirmed focus → noise-floor burst → timed stills →
+wizard via `PICKED_REF_URI` + `PICKED_DEF_URIS`). Stills only — the video path
+is gone. Frames are lossless grayscale PNG written straight from the locked
+session's `YUV_420_888` luma plane (`GrayPngEncoder`), never JPEG. The reference
+is taken through the locked session too (`captureLockedReference`), at the run's
+own resolution under the same frozen focus and exposure; the vendor Camera app's
+test shot is only the fallback when that capture failed, and
+`CaptureFrameSizeMatcher` is what makes the fallback usable.
 
 The offered frame rates are a short list, not a free slider: `CaptureFrameCost`
 takes the larger of the Camera2 sensor read-out floor
@@ -180,10 +182,11 @@ kind of scene, with convergence up from 72.7% to 77.3% / 94.8%. What changed:
   half-period (10 ms at 50 Hz, 8.333 ms at 60 Hz, 50 ms when the device will
   not say which — 50 ms is a whole number of both) and scales ISO down to
   hold brightness. Flicker stops moving the tone between frames.
-- `NoiseFloorGate` takes up to 5 stills at the end of the test shot, on the
-  run's own settings, with the specimen mounted and nothing loaded yet. Five
-  is derived, not round: a monotone run of *k* exchangeable values has
-  probability `2/k!`, so the drift test is a coin flip at 3 and usable at 5.
+- `NoiseFloorGate` takes up to 6 stills at the end of the test shot, on the
+  run's own settings, with the specimen mounted and nothing loaded yet. Six
+  is derived, not round: *n* frames give *n − 1* pairwise estimates, and a
+  monotone run of *k* exchangeable estimates has probability `2/k!`, so the
+  drift test is a coin flip at 3 estimates and usable at 5 — which is 6 frames.
   The verdict **warns and never blocks** — `Record anyway` is the primary
   action and the floor is stamped on the session and the PDF cover, because an
   override that leaves no trace is how a bad number becomes a published number.
@@ -218,9 +221,28 @@ kind of scene, with convergence up from 72.7% to 77.3% / 94.8%. What changed:
 Shipped on this branch from that precision work: k-averaging on the reference
 only ([AveragingPlan]; no precision-mode toggle), a catalogue that can offer
 frames above 2048 px when RAM allows ([sustainableCeiling]), and picking the
-longest rear lens by physical camera id ([pickBackCameraId]). Tap-to-focus /
-user-confirmed focus before the test shot was never built and is not open work
-here. `RawRgba` closed the DNG-in-`RoiDrawActivity` gap:
+longest rear lens by physical camera id ([pickBackCameraId]).
+
+**Focus is confirmed by the user before anything is measured.** The lock now
+stops at the live preview: a ring marks the focus point, a magnified unfiltered
+crop of it sits beside a sharpness reading, a tap anywhere re-locks there, and
+the burst does not run until the user accepts. Autofocus is weakest on fine
+repeating texture and a speckle pattern is nothing else, so the point the
+speckle check picked was a guess — and a soft reference sets a floor nothing
+downstream recovers, since defocus blurs the very gradients the correlation is
+built on. The step sits **after** the lock, not before the test shot as first
+sketched: the test shot is a vendor-camera-app intent that runs its own AF, so
+there is no lock to carry into it, and only the locked preview shows the run's
+own frame. It moves earlier when the test shot moves onto the locked session.
+Supporting pieces: `PreviewMap` owns the buffer / view / upright-fraction
+geometry as one invertible map (a tap and the ring it draws must be exact
+inverses); `FocusSharpness` is mean squared gradient over variance, so the
+reading tracks SSSIG and a dim patch does not read as a soft one; and
+`FramingWatch` holds the gravity direction from **Start recording** onward and
+withdraws Start on a sustained re-aim, because the frozen focus and the measured
+floor both describe the framing they were taken in and nothing re-checks either.
+
+`RawRgba` closed the DNG-in-`RoiDrawActivity` gap:
 one shared helper detects a `w*h*4` blob and samples straight into a
 preview-sized bitmap, so the full-resolution allocation never happens.
 
