@@ -6,11 +6,13 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Matrix
+import android.graphics.PointF
 import android.graphics.Rect
 import android.graphics.SurfaceTexture
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.TextureView
+import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
@@ -33,6 +35,7 @@ import com.indicvision.semper.ui.analysis.RoiDrawActivity
 import com.indicvision.semper.ui.analysis.SubsetRecommender
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,7 +63,26 @@ class CaptureSessionActivity : AppCompatActivity() {
     private lateinit var tvStatus: TextView
     private lateinit var tvProgress: TextView
     private lateinit var btnStart: MaterialButton
+    private lateinit var btnFocusConfirm: MaterialButton
+    private lateinit var focusMarker: View
     private lateinit var preview: TextureView
+
+    /**
+     * The buffer / view / upright-fraction geometry, from
+     * [applyPreviewTransform]. Null until the preview has a size and a session.
+     *
+     * The [TextureView] transform alone is no use for reading a tap back out —
+     * it is this map composed with an undo of the view's own stretch. Keeping
+     * the un-composed map means a focus tap inverts through exactly the picture
+     * the user is looking at.
+     */
+    private var previewMap: PreviewMap? = null
+
+    /** Completed when the user accepts the focus the lock landed on. */
+    private var focusAccepted: CompletableDeferred<Unit>? = null
+
+    /** True while a tap is being turned into a new lock; further taps wait. */
+    private var refocusing = false
 
     /** Gap between frame starts. The only thing calibration is allowed to move:
      *  [frameCount] was promised on the setup screen and is never reduced. */
@@ -203,7 +225,10 @@ class CaptureSessionActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tvCaptureStatus)
         tvProgress = findViewById(R.id.tvCaptureProgress)
         btnStart = findViewById(R.id.btnCaptureStart)
+        btnFocusConfirm = findViewById(R.id.btnCaptureFocusConfirm)
+        focusMarker = findViewById(R.id.captureFocusMarker)
         preview = findViewById(R.id.capturePreview)
+        installFocusTapListener()
 
         onBackPressedDispatcher.addCallback(this, backCallback)
         findViewById<MaterialToolbar>(R.id.toolbarCaptureSession).apply {
@@ -212,6 +237,7 @@ class CaptureSessionActivity : AppCompatActivity() {
         }
 
         btnStart.setOnClickListener { startRecording() }
+        btnFocusConfirm.setOnClickListener { focusAccepted?.complete(Unit) }
 
         val restored = restoreFrom(savedInstanceState)
         if (!restored) {
@@ -724,6 +750,12 @@ class CaptureSessionActivity : AppCompatActivity() {
                     }
                     applyPreviewTransform(session)
                     if (runNoiseGate) {
+                        // Focus first, and confirmed by the person who can see
+                        // the screen: everything after this — the burst, the
+                        // floor it reports, the run the floor describes — is
+                        // measured through whatever focus is standing here.
+                        if (!confirmFocus(session)) return@launch
+                        focusLock = session.focus
                         tvStatus.setText(R.string.capture_status_noise_check)
                         if (!noiseGate.run(session, planWidth, planHeight)) return@launch
                         showReady()
@@ -753,8 +785,13 @@ class CaptureSessionActivity : AppCompatActivity() {
 
                 override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
                     // The letterboxing is computed from the view's size, so it
-                    // has to be redone when that changes.
-                    lockedSession?.let { applyPreviewTransform(it) }
+                    // has to be redone when that changes — and the focus ring
+                    // is placed through that same map, so it moves with it or
+                    // it points at the wrong pixel.
+                    lockedSession?.let {
+                        applyPreviewTransform(it)
+                        if (focusAccepted != null && !refocusing) showFocusMarker(it.focus)
+                    }
                 }
                 override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean = true
                 override fun onSurfaceTextureUpdated(st: SurfaceTexture) = Unit
@@ -775,28 +812,136 @@ class CaptureSessionActivity : AppCompatActivity() {
      * The transform is composed on top of the default buffer-to-view stretch,
      * so it starts by undoing it: back into buffer pixels, rotate about the
      * centre, scale to fit, then centre in the view.
+     *
+     * Everything after that undo *is* the buffer-to-view map, and a focus tap
+     * has to invert it, so the whole fit lives in [PreviewMap] rather than
+     * being derived once for the picture and again for the tap.
      */
     private fun applyPreviewTransform(session: LockedCameraSession) {
-        val viewW = preview.width
-        val viewH = preview.height
         val buffer = session.previewBufferSize
-        if (minOf(viewW, viewH, buffer.width, buffer.height) <= 0) return
-        val rotation = session.frameRotationDegrees
-        val scale = CaptureOrientation.previewFitScale(
-            viewW = viewW,
-            viewH = viewH,
+        val map = PreviewMap.of(
+            viewW = preview.width,
+            viewH = preview.height,
             bufW = buffer.width,
             bufH = buffer.height,
-            rotationDegrees = rotation,
-        )
-        val matrix = Matrix().apply {
-            postScale(buffer.width.toFloat() / viewW, buffer.height.toFloat() / viewH)
-            postTranslate(-buffer.width / 2f, -buffer.height / 2f)
-            postRotate(rotation.toFloat())
-            postScale(scale, scale)
-            postTranslate(viewW / 2f, viewH / 2f)
+            rotationDegrees = session.frameRotationDegrees,
+        ) ?: return
+        previewMap = map
+        preview.setTransform(map.textureTransform)
+    }
+
+    /**
+     * Hold the flow at the locked preview until the user says the focus is
+     * sharp, letting them move it anywhere in the frame first.
+     *
+     * This is the one decision in the whole capture path that is genuinely
+     * better made by a person. Autofocus is weakest on fine repeating texture,
+     * and a speckle pattern is nothing but fine repeating texture, so the point
+     * the speckle check picked is a starting guess rather than an answer. A
+     * soft reference frame sets a floor nothing downstream can recover: defocus
+     * blurs the intensity gradients the whole correlation is built on, and in
+     * the result it is indistinguishable from a bad pattern.
+     *
+     * It sits here, after the lock and before the burst, because that is where
+     * the preview finally shows the run's own frame — same lens, same size,
+     * same frozen exposure, same pipeline lockdown. Confirming earlier would
+     * confirm a different camera. It cannot sit before the *test shot*, as
+     * originally sketched, while the test shot is taken by the vendor camera
+     * app: that app runs its own autofocus and there is no lock to carry into
+     * it.
+     *
+     * @return false when the session died while waiting, in which case the
+     *   caller must not go on to measure anything.
+     */
+    private suspend fun confirmFocus(session: LockedCameraSession): Boolean {
+        val accepted = CompletableDeferred<Unit>()
+        focusAccepted = accepted
+        tvStatus.setText(R.string.capture_status_confirm_focus)
+        btnStart.isVisible = false
+        btnFocusConfirm.isVisible = true
+        showFocusMarker(session.focus)
+        try {
+            accepted.await()
+        } finally {
+            focusAccepted = null
+            btnFocusConfirm.isVisible = false
+            focusMarker.isVisible = false
         }
-        preview.setTransform(matrix)
+        return session.isUsable
+    }
+
+    /**
+     * A tap on the preview moves the focus point, once the confirm step is up.
+     *
+     * Installed for the life of the screen and gated on [focusAccepted] rather
+     * than attached and detached, so there is no window where a tap lands on a
+     * listener that is being swapped. Taps outside the confirm step, on the
+     * letterbox bars, or while a previous tap is still being locked are
+     * ignored — quietly, because a focus tap that does nothing is a normal
+     * thing for a camera to do and a message for each one would be noise.
+     */
+    private fun installFocusTapListener() {
+        preview.setOnTouchListener { view, event ->
+            if (event.actionMasked == MotionEvent.ACTION_UP) {
+                view.performClick()
+                onPreviewTapped(event.x, event.y)
+            }
+            true
+        }
+    }
+
+    private fun onPreviewTapped(viewX: Float, viewY: Float) {
+        val confirming = focusAccepted != null && !refocusing
+        val session = lockedSession?.takeIf { confirming && it.isUsable } ?: return
+        val point = previewMap?.uprightPointAt(viewX, viewY) ?: return
+        refocusTo(session, point)
+    }
+
+    private fun refocusTo(session: LockedCameraSession, point: PointF) {
+        refocusing = true
+        btnFocusConfirm.isEnabled = false
+        focusMarker.isVisible = false
+        tvStatus.setText(R.string.capture_status_refocusing)
+        lifecycleScope.launch {
+            val locked = runCatching { session.refocusAt(point.x, point.y) }.getOrDefault(false)
+            refocusing = false
+            btnFocusConfirm.isEnabled = true
+            if (!session.isUsable) {
+                // Neither the new point nor the old one would lock, so there is
+                // no focus left to confirm. Same path a failed initial lock
+                // takes: offer a fresh test shot rather than measure through a
+                // floating lens.
+                focusAccepted?.complete(Unit)
+                offerRetryTestShot(getString(R.string.capture_af_fail_body))
+                return@launch
+            }
+            if (!locked) {
+                Toast.makeText(
+                    this@CaptureSessionActivity,
+                    R.string.capture_refocus_failed,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            tvStatus.setText(R.string.capture_status_confirm_focus)
+            showFocusMarker(session.focus)
+        }
+    }
+
+    /** Put the ring on the point [lock] is aimed at, or hide it if there is no map yet. */
+    private fun showFocusMarker(lock: CaptureFocusLock) {
+        val point = previewMap?.viewPointOf(lock.normX, lock.normY)
+        if (point == null) {
+            focusMarker.isVisible = false
+            return
+        }
+        // The ring's own size from resources, not its measured width: the first
+        // call lands before the marker has ever been laid out, and a measured
+        // zero would centre the ring's corner on the focus point instead of
+        // its middle — a marker that quietly points a ring-radius away.
+        val half = resources.getDimension(R.dimen.capture_focus_marker_size) / 2f
+        focusMarker.translationX = point.x - half
+        focusMarker.translationY = point.y - half
+        focusMarker.isVisible = true
     }
 
     /** The preview is the frame you will get: setup is done, recording may start. */

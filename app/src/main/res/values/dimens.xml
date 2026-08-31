@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The focus ring on the capture preview. Read in code as well as in the
+         layout: the ring is centred on the focus point by translation, and
+         measuring it instead would race the first layout pass, which puts the
+         ring's corner on the point rather than its middle. -->
+    <dimen name="capture_focus_marker_size">72dp</dimen>
+</resources>

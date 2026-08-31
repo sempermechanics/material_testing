@@ -45,8 +45,19 @@ class LockedCameraSession(
     private val context: Context,
     private val cameraId: String,
     private val jpegSize: CameraCapabilities.Resolution,
-    private val focus: CaptureFocusLock,
+    focus: CaptureFocusLock,
 ) {
+    /**
+     * Where the lock is aimed, in fractions of the upright picture.
+     *
+     * A `var` because the user is allowed to move it: [refocusAt] is the one
+     * writer, and the capture screen reads it back afterwards so the point that
+     * was actually confirmed — not the speckle check's opening guess — is what
+     * survives process death and describes the run.
+     */
+    var focus: CaptureFocusLock = focus
+        private set
+
     private var device: CameraDevice? = null
     private var session: CameraCaptureSession? = null
     private var imageReader: ImageReader? = null
@@ -718,6 +729,48 @@ class LockedCameraSession(
             // and the run stay on one configuration.
             ispPlan?.let { CaptureIspApply.apply(this, it, chars) }
         }
+
+    /**
+     * Re-run the whole lock aimed at a new point, chosen by the user.
+     *
+     * Focus is the one setting a person is reliably better at than the app:
+     * autofocus works worst on fine repeating texture, which is exactly what a
+     * speckle pattern is, and only the user can see whether the result is
+     * sharp. So the opening point is a guess from the speckle check and this is
+     * how it gets corrected.
+     *
+     * It is a full re-lock, not a nudge. [lockFocusAndExposure] builds a fresh
+     * auto-everything request each time, so AE re-meters through the new region
+     * and the exposure is re-frozen against it — which is right, because a
+     * different part of the specimen can be a different brightness, and a floor
+     * measured at one exposure does not describe a run at another.
+     *
+     * **A refused tap must not cost the lock that already worked.** A failed
+     * attempt leaves the repeating request on auto with the lens floating, so
+     * the previous point is restored and re-locked. Only if that also fails is
+     * the session genuinely broken, and the caller is told so it can offer a
+     * retry rather than start a run through a floating lens.
+     *
+     * @return true when the new point is locked; false when the tap was
+     *   refused and the previous lock was put back, or when nothing could be
+     *   locked at all — [isUsable] separates the two.
+     */
+    suspend fun refocusAt(normX: Float, normY: Float): Boolean {
+        val previous = focus
+        focus = previous.copy(
+            normX = normX.coerceIn(0f, 1f),
+            normY = normY.coerceIn(0f, 1f),
+        )
+        if (withContext(Dispatchers.IO) { lockFocusAndExposure() }) return true
+
+        Timber.w("refocus: %.3f,%.3f refused; restoring the previous point", normX, normY)
+        focus = previous
+        if (!withContext(Dispatchers.IO) { lockFocusAndExposure() }) {
+            Timber.w("refocus: the previous point would not lock either")
+            close()
+        }
+        return false
+    }
 
     @Suppress("ReturnCount")
     private suspend fun lockFocusAndExposure(): Boolean {

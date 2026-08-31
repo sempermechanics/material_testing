@@ -10,6 +10,17 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Positioned in code by translationX/Y, so its layout position is only
+         the origin the translation is measured from. -->
+    <View
+        android:id="@+id/captureFocusMarker"
+        android:layout_width="@dimen/capture_focus_marker_size"
+        android:layout_height="@dimen/capture_focus_marker_size"
+        android:layout_gravity="top|start"
+        android:background="@drawable/focus_ring"
+        android:contentDescription="@string/capture_focus_marker"
+        android:visibility="gone" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -51,5 +62,15 @@
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="32dp"
         android:text="@string/capture_start_recording"
+        android:visibility="gone" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnCaptureFocusConfirm"
+        style="@style/Widget.Semper.Button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:text="@string/capture_focus_confirm"
         android:visibility="gone" />
 </FrameLayout>

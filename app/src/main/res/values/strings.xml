@@ -604,6 +604,16 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_status_checking">Checking speckle contrast…</string>
     <string name="capture_status_locking">Locking focus from the test shot…</string>
     <string name="capture_status_ready">Focus locked. This preview is the frame you will get — line the specimen up against it, then start.</string>
+    <!-- Focus confirmation. The one step in the flow where the person is
+         better than the app: autofocus is weakest on fine repeating texture,
+         which is exactly what a speckle pattern is, and only the user can see
+         whether the result is sharp. Everything measured afterwards — the
+         noise floor, the run — is measured through this focus. -->
+    <string name="capture_status_confirm_focus">Focus is locked here. Check the speckle looks sharp — tap anywhere to focus there instead.</string>
+    <string name="capture_status_refocusing">Focusing…</string>
+    <string name="capture_focus_confirm">Focus looks sharp</string>
+    <string name="capture_focus_marker">Focus point</string>
+    <string name="capture_refocus_failed">Could not focus there. The previous focus point is still locked.</string>
     <string name="capture_status_reference">Capturing reference frame…</string>
     <string name="capture_status_recording_stills">Capturing stills…</string>
     <!-- Precision mode engages itself; this is the one line that says so.
