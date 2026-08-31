@@ -4,8 +4,8 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.graphics.RectF
-import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.SemperNativeLib
+import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.ui.analysis.NoiseFloorProbe
 import com.indicvision.semper.ui.analysis.NoiseFloorStats
 import com.indicvision.semper.ui.analysis.SubsetRecommender
@@ -218,10 +218,11 @@ object NoiseFloorGate {
      * its buffers upright, so a ROI still in sensor coordinates needs exactly
      * it to catch up.
      *
-     * Both device runs on file (Samsung 3024x4032 -> 1440x1920, Pixel
-     * 3072x4080 -> 1440x1920) agree already, so this is a guard against
-     * regression and against the vendor apps not yet seen, not a correction
-     * for today's phones.
+     * This is a live correction, not a dormant guard: on the Pixel 6 the
+     * branch below fires on every burst, because its vendor camera app hands
+     * back a landscape test shot while the locked session's frames are
+     * portrait. The Samsung agrees without it. Both were verified against the
+     * logged norms.
      */
     internal fun uprightRoi(
         roiNorm: RectF,

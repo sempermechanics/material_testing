@@ -337,6 +337,15 @@ object NoiseFloorStats {
      * brightness across the burst is the light or the camera — which makes this
      * the direct empirical test of whether the flicker-safe exposure held,
      * rather than an assumption that it did.
+     *
+     * A full span, deliberately, where every other statistic in this class is a
+     * median or a MAD. Those are robust because they estimate a *level* that one
+     * disturbed frame must not move. Flicker is not a level — it is an
+     * oscillation, and its whole signature lives in the extremes, so a robust
+     * estimator here would suppress precisely the thing being measured. The
+     * usual objection does not apply either: this number is reported and logged,
+     * never gated on, so a frame that was genuinely disturbed costs a log line
+     * rather than a refused run.
      */
     @Suppress("ReturnCount") // too few frames, then a level no ratio can divide by
     internal fun brightnessScatter(levels: List<Double>): Double {

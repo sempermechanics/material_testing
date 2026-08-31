@@ -118,12 +118,19 @@ internal object CaptureGallerySave {
         }
         val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
             ?: return@runCatching false
-        resolver.openOutputStream(uri).use { out ->
-            if (out == null) {
-                resolver.delete(uri, null, null)
-                return@runCatching false
+        val written = runCatching {
+            resolver.openOutputStream(uri).use { out ->
+                checkNotNull(out) { "no output stream" }
+                file.inputStream().use { it.copyTo(out) }
             }
-            file.inputStream().use { it.copyTo(out) }
+        }.isSuccess
+        if (!written) {
+            // A row left at IS_PENDING = 1 is invisible in the gallery but still
+            // holds whatever bytes reached it. A write that failed takes its own
+            // row with it rather than leaving the user a week of dead space they
+            // cannot see to delete.
+            runCatching { resolver.delete(uri, null, null) }
+            return@runCatching false
         }
         resolver.update(
             uri,
