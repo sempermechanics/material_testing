@@ -12,6 +12,7 @@ import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.indicvision.semper.analytics.SemperAnalytics
+import com.indicvision.semper.data.net.ApiErrors
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
@@ -413,7 +414,7 @@ class AuthRepository(context: Context) {
                 // expired, or malformed). Surface a short server hint when present
                 // so "Session expired" is not the only clue for a misconfigured
                 // FIREBASE_PROJECT_ID / API Gateway JWT audience.
-                val hint = e.detail.trim().lineSequence().firstOrNull().orEmpty()
+                val hint = ApiErrors.detailOf(e.detail).lineSequence().firstOrNull().orEmpty()
                     .take(API_ERROR_HINT_MAX_CHARS)
                     .ifBlank { null }
                 val message = if (hint != null) {

@@ -10,6 +10,7 @@ import time
 import requests
 from requests.adapters import HTTPAdapter
 
+from . import errors
 from .config import settings
 from .google_auth import drive_access_token
 
@@ -323,9 +324,9 @@ def ping(timeout_s: float = 5.0) -> None:
             timeout=timeout_s,
         )
     except Exception as e:  # noqa: BLE001
-        raise DependencyError("drive_unreachable", "drive") from e
+        raise DependencyError(errors.DRIVE_UNREACHABLE, "drive") from e
     if r.status_code >= 400:
-        raise DependencyError("drive_unhealthy", "drive")
+        raise DependencyError(errors.DRIVE_UNHEALTHY, "drive")
 
 
 def delete_file(token: str, file_id: str) -> None:

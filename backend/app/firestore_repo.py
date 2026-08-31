@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from google.api_core.exceptions import Aborted, AlreadyExists, NotFound
 from google.cloud import firestore
 
-from . import notify
+from . import errors, notify, statuses
 from .config import settings
 from .models import DeviceReg, FileComplete, FileSpec, SessionCreate
 
@@ -75,7 +75,7 @@ def ping() -> None:
         db().collection("users").document("readyz_ping").get()
     except Exception as e:  # noqa: BLE001
         log.exception("firestore ping failed: %s", e)
-        raise DependencyError("firestore_unreachable", "firestore") from e
+        raise DependencyError(errors.FIRESTORE_UNREACHABLE, "firestore") from e
 
 
 def _now():
@@ -152,7 +152,7 @@ def _user_for_device(device_id: str | None):
     if not device_id:
         return None
     dev = get_device(device_id)
-    if dev and dev.get("status") == "ACTIVE":
+    if dev and dev.get("status") == statuses.DEVICE_ACTIVE:
         found = _load_user(dev["uid"])
         if found:
             return found
@@ -185,7 +185,7 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
         changed["role"] = "admin"
     # A previously-PENDING user who has since verified a domain email (or been
     # made admin) is auto-approved on this sign-in.
-    if cur.get("access_status") == "PENDING" and _auto_approved(claims):
+    if cur.get("access_status") == statuses.ACCESS_PENDING and _auto_approved(claims):
         changed["access_status"] = "APPROVED"
     if device_id and not cur.get("claimedDeviceId"):
         changed["claimedDeviceId"] = device_id
@@ -239,7 +239,8 @@ def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
         "signInProvider": provider,
         "displayName": claims.get("name"),
         "role": "admin" if _is_admin_email(claims) else "user",
-        "access_status": "APPROVED" if _auto_approved(claims) else "PENDING",
+        "access_status": (statuses.ACCESS_APPROVED if _auto_approved(claims)
+                          else statuses.ACCESS_PENDING),
         "activeDeviceId": None,
         "claimedDeviceId": device_id,
         "linkedAuthUids": [],
@@ -262,7 +263,7 @@ def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
     # Only ever reached once per account — every later sign-in takes the
     # snap.exists / auth_links branch above — so support gets exactly one mail per user.
     created = {**data, "uid": uid}
-    if data["access_status"] == "PENDING":
+    if data["access_status"] == statuses.ACCESS_PENDING:
         notify.access_request(uid, data["email"], data["displayName"], provider)
     return created
 
@@ -317,7 +318,7 @@ def set_user_status(uid: str, status: str) -> bool:
         batch.update(ref, {"activeDeviceId": firestore.DELETE_FIELD})
         for dev in db().collection("devices").where("uid", "==", uid).stream():
             batch.update(dev.reference, {
-                "status": "REVOKED",
+                "status": statuses.DEVICE_REVOKED,
                 "revokedAt": firestore.SERVER_TIMESTAMP,
             })
     batch.commit()
@@ -417,7 +418,7 @@ def register_device(uid: str, body: DeviceReg) -> dict:
     dev = {
         "uid": uid,
         "publicKeyPem": body.publicKeyPem,
-        "status": "ACTIVE",
+        "status": statuses.DEVICE_ACTIVE,
         "model": body.model,
         "osVersion": body.osVersion,
         "appVersion": body.appVersion,
@@ -629,7 +630,7 @@ def list_pending_uploads(
     for d in docs:
         f = d.to_dict()
         url = f.get("uploadUrl")
-        if f.get("status") == "COMPLETED" or not url:
+        if f.get("status") == statuses.FILE_COMPLETED or not url:
             continue
         out.append({
             "fileId": d.id,
@@ -671,7 +672,7 @@ def set_session_status(sid: str, status: str, error_code: str | None = None) -> 
     patch = {"status": status, "updatedAt": firestore.SERVER_TIMESTAMP}
     if error_code:
         patch["provisionError"] = error_code
-    elif status != "PROVISION_FAILED":
+    elif status != statuses.SESSION_PROVISION_FAILED:
         patch["provisionError"] = firestore.DELETE_FIELD
     try:
         db().collection("sessions").document(sid).update(patch)
@@ -693,7 +694,7 @@ def iter_unprovisioned_files(sid: str):
             return
         for d in docs:
             f = d.to_dict()
-            if f.get("status") == "COMPLETED" or f.get("uploadUrl"):
+            if f.get("status") == statuses.FILE_COMPLETED or f.get("uploadUrl"):
                 continue
             yield {
                 "fileId": d.id,
@@ -807,7 +808,7 @@ def count_user_sessions(uid: str) -> int:
 #: Session states that still expect more bytes. PROVISIONING is included so a
 #: retried POST /v1/sessions joins the session whose upload targets are still
 #: being opened, instead of minting a duplicate alongside it.
-IN_FLIGHT_STATUSES = ("PROVISIONING", "UPLOADING")
+IN_FLIGHT_STATUSES = statuses.IN_FLIGHT_SESSION_STATUSES
 
 
 def find_incomplete_session(uid: str, local_session_id: str):
@@ -852,7 +853,7 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate):
             "localSessionId": body.localSessionId,
             # Reserved, but no upload targets yet. set_session_status moves it to
             # PROVISIONING → UPLOADING (or PROVISION_FAILED).
-            "status": "PROVISIONING",
+            "status": statuses.SESSION_PROVISIONING,
             "driveFolderId": None,
             "totalBytes": sum(f.bytes for f in body.files),
             "fileCount": len(body.files),
@@ -880,7 +881,7 @@ def _file_doc(sid: str, uid: str, f: FileSpec, upload_url: str | None) -> dict:
         "name": f.name,
         "sizeBytes": f.bytes,
         "sha256": f.sha256,
-        "status": "PENDING",
+        "status": statuses.FILE_PENDING,
         "uploadUrl": upload_url,
         "driveFileId": None,
         "driveMd5": None,
@@ -931,12 +932,12 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
         d = snap.to_dict()
         if d["uid"] != uid or d["sizeBytes"] != body.bytes:
             return ""
-        if d.get("status") == "COMPLETED":
+        if d.get("status") == statuses.FILE_COMPLETED:
             return "already"
         tx.update(
             ref,
             {
-                "status": "COMPLETED",
+                "status": statuses.FILE_COMPLETED,
                 "driveFileId": body.driveFileId,
                 "driveMd5": body.md5,
                 "uploadUrl": firestore.DELETE_FIELD,  # capability no longer needed
@@ -956,7 +957,8 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
         # it stops the caller bumping the session counter a second time.
         snap = ref.get()
         current = snap.to_dict() if snap.exists else None
-        if current and current.get("uid") == uid and current.get("status") == "COMPLETED":
+        if (current and current.get("uid") == uid
+                and current.get("status") == statuses.FILE_COMPLETED):
             return "already"
         return ""
 
@@ -998,9 +1000,9 @@ def bump_session_progress(sid: str):
     after = ref.get().to_dict() or {}
     if (
         int(after.get("completedCount", 0)) >= int(after.get("fileCount", 0))
-        and after.get("status") != "COMPLETED"
+        and after.get("status") != statuses.SESSION_COMPLETED
     ):
         ref.update({
-            "status": "COMPLETED",
+            "status": statuses.SESSION_COMPLETED,
             "completedAt": firestore.SERVER_TIMESTAMP,
         })

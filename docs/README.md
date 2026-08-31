@@ -9,7 +9,9 @@ build it. This page routes you to the rest.
 |---|---|
 | Understand DIC itself before touching anything | [DIC in five minutes](#dic-in-five-minutes) below |
 | Change the Android UI / understand app flow | [app/ARCHITECTURE.md](app/ARCHITECTURE.md) |
-| Walk every user flow, or run a manual test pass | [app/WORKFLOWS.md](app/WORKFLOWS.md) |
+| Find the files behind any flow — app, background or backend | [WORKFLOWS.md](WORKFLOWS.md) |
+| Backtrack a symptom to its code | [WORKFLOWS.md §E](WORKFLOWS.md#e-backtracking) |
+| Run a manual test pass over every screen | [app/WORKFLOWS.md](app/WORKFLOWS.md) |
 | See which errors open public Troubleshooting | [app/FAQ_LINKS.md](app/FAQ_LINKS.md) · canonical text [app/FAQ.md](app/FAQ.md) |
 | Operate the app to analyse a DIC image set | [OPERATING_MANUAL.md](OPERATING_MANUAL.md) |
 | Understand lighting / measurement-floor accuracy | [app/NOISE_FLOOR_STRAIN_ACCURACY.md](app/NOISE_FLOOR_STRAIN_ACCURACY.md) · short FAQ [app/FAQ.md — lighting-and-accuracy](app/FAQ.md#lighting-and-accuracy) |
@@ -25,6 +27,7 @@ build it. This page routes you to the rest.
 | Map GitHub Environments / secrets / main hygiene | [ops/ENVIRONMENTS.md](ops/ENVIRONMENTS.md) |
 | Production launch checklist | [ops/PRODUCTION_READINESS_GATE.md](ops/PRODUCTION_READINESS_GATE.md) |
 | Tech-debt status / deferred gates | [ops/TECH_DEBT.md](ops/TECH_DEBT.md) |
+| Pick up a proposed improvement | [ops/FUTURE_IMPROVEMENTS.md](ops/FUTURE_IMPROVEMENTS.md) |
 | Work on the cloud backend | [backend/CLOUD_ARCHITECTURE_GCP.md](backend/CLOUD_ARCHITECTURE_GCP.md) |
 | Deploy the backend myself | [backend/BACKEND_SETUP_GCP.md](backend/BACKEND_SETUP_GCP.md) (CLI) or [BACKEND_SETUP_CONSOLE.md](backend/BACKEND_SETUP_CONSOLE.md) (browser) |
 | Fix sign-in / set up auth | [backend/AUTH_SETUP.md](backend/AUTH_SETUP.md) |

@@ -52,7 +52,7 @@
 </ul>
 <h3>2.4 Diagnostics (Firebase Crashlytics and Analytics) — opt-in</h3>
 <ul>
-<li><strong>Off by default, and nothing is collected until you agree.</strong> Collection is disabled in the app manifest; the app asks once on first launch and you can change the answer at any time in <strong>Settings → Your data → Send crash reports</strong>. Declining, or switching it off later, also deletes any report still queued on the device.</li>
+<li><strong>Off by default, and nothing is collected until you agree.</strong> Collection is disabled in the app manifest; the app asks once on first launch and you can change the answer at any time in <strong>Settings → Your data → Send crash reports and usage data</strong>. Declining, or switching it off later, also deletes any report still queued on the device.</li>
 <li>When enabled: crash reports and non-fatal diagnostics from the Android app, including device/app version metadata as provided by the Crashlytics SDK, plus coarse product usage events (for example sign-in outcome, analysis started / completed with duration and frame-count buckets, cloud upload/restore outcomes, export, feedback opened). Event parameters are enums and buckets only — not emails, session ids, specimen names, or file contents. R8 mapping files are retained by operators for deobfuscation and are not published.</li>
 <li>Diagnostics never include your images, measurement results, specimen names, or file contents.</li>
 </ul>
