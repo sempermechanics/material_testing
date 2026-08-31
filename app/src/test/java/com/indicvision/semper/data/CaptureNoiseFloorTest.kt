@@ -1,5 +1,8 @@
 package com.indicvision.semper.data
 
+import com.indicvision.semper.ui.analysis.NoiseFloorStats
+import com.indicvision.semper.ui.capture.toCaptureNoiseFloor
+import com.indicvision.semper.ui.capture.NoiseFloorGate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -60,6 +63,31 @@ class CaptureNoiseFloorTest {
     fun `a run recorded past the floor says so, so an export cannot hide it`() {
         val warning = floor(overridden = true).warning()
         assertTrue(warning!!.startsWith("Recorded past"))
+    }
+
+    @Test
+    fun `gate result maps into persisted floor metadata`() {
+        val sample = NoiseFloorStats.PairSample(
+            sigmaU = 0.7,
+            sigmaV = 0.7,
+            meanU = 0.0,
+            meanV = 0.0,
+            noiseVariance = 4.0,
+            meanIntensity = 128.0,
+        )
+        val verdict = NoiseFloorStats.evaluate(List(4) { sample }, vsgPx = 100.0)
+        val result = NoiseFloorGate.Result(
+            verdict = verdict,
+            vsgPx = 100.0,
+            framesCaptured = verdict.frameCount,
+            firstFrameMs = 120L,
+        )
+        val floor = result.toCaptureNoiseFloor(overridden = true)
+        assertEquals(verdict.floorMicrostrain, floor.microstrain, 0.0)
+        assertEquals(100.0, floor.vsgPx, 0.0)
+        assertEquals(verdict.frameCount, floor.frames)
+        assertEquals(verdict.floorExceeded, floor.exceeded)
+        assertTrue(floor.overridden)
     }
 
     @Test

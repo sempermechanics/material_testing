@@ -1,5 +1,6 @@
 package com.indicvision.semper.ui.capture
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.DialogInterface
 import android.graphics.Rect
@@ -27,6 +28,7 @@ import timber.log.Timber
  * The activity keeps everything that needs the camera; this keeps everything
  * that needs the verdict.
  */
+@Suppress("TooManyFunctions")
 internal class NoiseFloorGateUi(
     private val activity: Activity,
     /** Take the test shot again; the same path the speckle check's retry uses. */
@@ -65,27 +67,21 @@ internal class NoiseFloorGateUi(
     var overridden = false
         private set
 
-    /**
-     * The measurement in the form the session, the report and the CSV keep, or
-     * null when no burst produced one.
-     *
-     * Deliberately not the [NoiseFloorGate.Result] itself: that carries the
-     * pacing measurement and the raw pair samples, which belong to this screen
-     * and to nothing downstream of it.
-     */
+    /** Persisted floor for session/report, or null before a burst completes. */
+    @Suppress("ReturnCount")
     fun measured(): CaptureNoiseFloor? {
+        restoredFloor?.let { return it }
         val result = floor ?: return null
-        return CaptureNoiseFloor(
-            microstrain = result.verdict.floorMicrostrain,
-            vsgPx = result.vsgPx,
-            sigmaPx = result.verdict.sigmaPx,
-            frames = result.verdict.frameCount,
-            exceeded = result.verdict.floorExceeded,
-            overridden = overridden,
-            noiseVariance = result.verdict.noiseVariance,
-            noiseCorrelation = result.verdict.noiseCorrelation,
-        )
+        return result.toCaptureNoiseFloor(overridden)
     }
+
+    /** Restore a floor measured before process death without re-running the burst. */
+    fun restorePersistedFloor(saved: CaptureNoiseFloor, wasOverridden: Boolean) {
+        restoredFloor = saved
+        overridden = wasOverridden
+    }
+
+    private var restoredFloor: CaptureNoiseFloor? = null
 
     /** Called with the speckle check's result, which is where the ROI comes from. */
     fun onSpeckleChecked(roi: Rect, imageWidth: Int, imageHeight: Int, subsetSize: Int) {
@@ -165,7 +161,13 @@ internal class NoiseFloorGateUi(
     private fun showPassDialog(session: LockedCameraSession, result: NoiseFloorGate.Result) {
         val label = NoiseFloorText.floorLabel(result.verdict.floorMicrostrain)
         val dialog = MaterialAlertDialogBuilder(activity)
-            .setView(floorDialogContent(label, bodyRes = R.string.capture_noise_floor_body, showFaq = true))
+            .setView(
+                floorDialogContent(
+                    label,
+                    body = activity.getText(R.string.capture_noise_floor_body),
+                    showFaq = true,
+                ),
+            )
             .setCancelable(false)
             .setPositiveButton(R.string.capture_noise_continue) { _, _ ->
                 onProceed()
@@ -181,10 +183,10 @@ internal class NoiseFloorGateUi(
     private fun floorDialogContent(
         label: String,
         headlineRes: Int? = null,
-        bodyRes: Int,
-        bodyArgs: Array<Any> = emptyArray(),
+        body: CharSequence,
         showFaq: Boolean = false,
     ): View {
+        @SuppressLint("InflateParams")
         val view = activity.layoutInflater.inflate(R.layout.dialog_noise_floor_content, null)
         view.findViewById<TextView>(R.id.tvNoiseFloorValue).text = label
         val headline = view.findViewById<TextView>(R.id.tvNoiseFloorHeadline)
@@ -192,12 +194,8 @@ internal class NoiseFloorGateUi(
             headline.setText(headlineRes)
             headline.visibility = View.VISIBLE
         }
-        val body = view.findViewById<TextView>(R.id.tvNoiseFloorBody)
-        body.text = if (bodyArgs.isEmpty()) {
-            activity.getString(bodyRes)
-        } else {
-            activity.getString(bodyRes, *bodyArgs)
-        }
+        val bodyView = view.findViewById<TextView>(R.id.tvNoiseFloorBody)
+        bodyView.text = body
         val faq = view.findViewById<ImageButton>(R.id.btnNoiseFloorFaq)
         faq.visibility = if (showFaq) View.VISIBLE else View.GONE
         if (showFaq) {
@@ -259,7 +257,12 @@ internal class NoiseFloorGateUi(
         warned = true
         val effect = activity.getString(CaptureIspWarning.effectOf(worst))
         val message = if (shortfall.size > 1) {
-            activity.getString(R.string.capture_isp_warn_more, effect, shortfall.size - 1)
+            activity.resources.getQuantityString(
+                R.plurals.capture_isp_warn_more,
+                shortfall.size - 1,
+                effect,
+                shortfall.size - 1,
+            )
         } else {
             effect
         }
@@ -352,8 +355,11 @@ internal class NoiseFloorGateUi(
                     floorDialogContent(
                         label = label,
                         headlineRes = R.string.capture_noise_erroneous_title,
-                        bodyRes = R.string.capture_noise_erroneous_refused_body,
-                        bodyArgs = arrayOf(refused),
+                        body = activity.resources.getQuantityString(
+                            R.plurals.capture_noise_erroneous_refused_body,
+                            refused,
+                            refused,
+                        ),
                     ),
                 )
 
@@ -362,7 +368,7 @@ internal class NoiseFloorGateUi(
                     floorDialogContent(
                         label = label,
                         headlineRes = R.string.capture_noise_erroneous_title,
-                        bodyRes = R.string.capture_noise_erroneous_body,
+                        body = activity.getText(R.string.capture_noise_erroneous_body),
                     ),
                 )
 
@@ -370,7 +376,7 @@ internal class NoiseFloorGateUi(
                 dialog.setView(
                     floorDialogContent(
                         label = label,
-                        bodyRes = R.string.capture_noise_floor_body,
+                        body = activity.getText(R.string.capture_noise_floor_body),
                     ),
                 )
         }

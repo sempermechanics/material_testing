@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.graphics.RectF
+import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.ui.analysis.NoiseFloorProbe
 import com.indicvision.semper.ui.analysis.NoiseFloorStats
@@ -312,3 +313,16 @@ object NoiseFloorGate {
 
     private const val NANOS_PER_MILLI = 1_000_000L
 }
+
+/** Maps a burst measurement into the persisted session metadata shape. */
+internal fun NoiseFloorGate.Result.toCaptureNoiseFloor(overridden: Boolean): CaptureNoiseFloor =
+    CaptureNoiseFloor(
+        microstrain = verdict.floorMicrostrain,
+        vsgPx = vsgPx,
+        sigmaPx = verdict.sigmaPx,
+        frames = verdict.frameCount,
+        exceeded = verdict.floorExceeded,
+        overridden = overridden,
+        noiseVariance = verdict.noiseVariance,
+        noiseCorrelation = verdict.noiseCorrelation,
+    )
