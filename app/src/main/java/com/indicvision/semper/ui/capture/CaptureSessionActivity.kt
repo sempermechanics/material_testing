@@ -3,6 +3,7 @@
 package com.indicvision.semper.ui.capture
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -37,6 +38,8 @@ import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -66,6 +69,9 @@ class CaptureSessionActivity : AppCompatActivity() {
     private lateinit var btnFocusConfirm: MaterialButton
     private lateinit var focusMarker: View
     private lateinit var preview: TextureView
+
+    /** Magnified crop and sharpness reading at the focus point; see [FocusLoupe]. */
+    private lateinit var loupe: FocusLoupe
 
     /**
      * The buffer / view / upright-fraction geometry, from
@@ -228,6 +234,11 @@ class CaptureSessionActivity : AppCompatActivity() {
         btnFocusConfirm = findViewById(R.id.btnCaptureFocusConfirm)
         focusMarker = findViewById(R.id.captureFocusMarker)
         preview = findViewById(R.id.capturePreview)
+        loupe = FocusLoupe(
+            preview = preview,
+            loupe = findViewById(R.id.captureFocusLoupe),
+            reading = findViewById(R.id.tvCaptureFocusSharpness),
+        )
         installFocusTapListener()
 
         onBackPressedDispatcher.addCallback(this, backCallback)
@@ -363,6 +374,7 @@ class CaptureSessionActivity : AppCompatActivity() {
     override fun onDestroy() {
         lockedSession?.close()
         lockedSession = null
+        loupe.release()
         super.onDestroy()
     }
 
@@ -860,14 +872,41 @@ class CaptureSessionActivity : AppCompatActivity() {
         btnStart.isVisible = false
         btnFocusConfirm.isVisible = true
         showFocusMarker(session.focus)
+        loupe.reset()
+        val sampler = startLoupeSampler(session)
         try {
             accepted.await()
         } finally {
+            sampler.cancel()
             focusAccepted = null
             btnFocusConfirm.isVisible = false
             focusMarker.isVisible = false
+            loupe.hide()
         }
         return session.isUsable
+    }
+
+    /**
+     * Keeps the magnified view and the sharpness reading live while the confirm
+     * step is up, and stops the moment it closes.
+     *
+     * Polled rather than driven by [TextureView.SurfaceTextureListener]'s
+     * per-frame callback: reading the preview back costs a full view-sized copy,
+     * and doing that at the preview's own rate would compete with the camera for
+     * the exact frames the user is trying to judge. A few times a second is
+     * enough to feel live against a static specimen on a tripod, which is the
+     * only thing this is ever pointed at.
+     *
+     * Samples are skipped mid-re-lock: the lens is moving and [focus] still
+     * holds the old point, so a reading taken then describes neither.
+     */
+    private fun startLoupeSampler(session: LockedCameraSession) = lifecycleScope.launch {
+        while (isActive) {
+            if (!refocusing) {
+                loupe.update(previewMap?.viewPointOf(session.focus.normX, session.focus.normY))
+            }
+            delay(LOUPE_SAMPLE_MS)
+        }
     }
 
     /**
@@ -879,7 +918,15 @@ class CaptureSessionActivity : AppCompatActivity() {
      * letterbox bars, or while a previous tap is still being locked are
      * ignored — quietly, because a focus tap that does nothing is a normal
      * thing for a camera to do and a message for each one would be noise.
+     *
+     * Lint's `ClickableViewAccessibility` wants the *view class* to override
+     * `performClick`, which is not available for a framework [TextureView]. The
+     * mitigation it exists to enforce is done here instead: every tap calls
+     * `performClick`, so an accessibility service still sees a click. There is
+     * no click listener to route it to because a focus tap is defined by where
+     * it landed, and a click carries no position.
      */
+    @SuppressLint("ClickableViewAccessibility")
     private fun installFocusTapListener() {
         preview.setOnTouchListener { view, event ->
             if (event.actionMasked == MotionEvent.ACTION_UP) {
@@ -1157,6 +1204,9 @@ class CaptureSessionActivity : AppCompatActivity() {
         const val DEFAULT_DURATION_SEC = CaptureSetupActivity.DEFAULT_DURATION_SEC
         const val DEFAULT_FRAME_COUNT = 10
         const val SPECKLE_CHECK_TIMEOUT_MS = 8_000L
+
+        /** Gap between loupe samples. See [startLoupeSampler] for why it is polled. */
+        const val LOUPE_SAMPLE_MS = 300L
         val speckleCheckExecutor: ExecutorService = Executors.newCachedThreadPool { r ->
             Thread(r, "SpeckleCheck").apply { isDaemon = true }
         }

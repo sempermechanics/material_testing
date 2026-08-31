@@ -614,6 +614,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="capture_focus_confirm">Focus looks sharp</string>
     <string name="capture_focus_marker">Focus point</string>
     <string name="capture_refocus_failed">Could not focus there. The previous focus point is still locked.</string>
+    <string name="capture_focus_loupe">Magnified view of the focus point</string>
+    <!-- Both worded as comparisons, never as verdicts: the sharpness measure has
+         no absolute scale, so the app can honestly say this point is softer than
+         another one tried and cannot say any point is sharp enough. -->
+    <string name="capture_focus_sharpest_yet">Sharpest so far</string>
+    <string name="capture_focus_sharpness_fmt">%1$d%% of sharpest so far</string>
     <string name="capture_status_reference">Capturing reference frame…</string>
     <string name="capture_status_recording_stills">Capturing stills…</string>
     <!-- Precision mode engages itself; this is the one line that says so.

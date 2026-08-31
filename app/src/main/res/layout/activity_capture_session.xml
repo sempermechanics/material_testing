@@ -21,6 +21,40 @@
         android:contentDescription="@string/capture_focus_marker"
         android:visibility="gone" />
 
+    <!-- Not clickable, and neither is its container, so a tap here still falls
+         through to the preview underneath and moves the focus point. -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="16dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/captureFocusLoupe"
+            android:layout_width="@dimen/capture_focus_loupe_size"
+            android:layout_height="@dimen/capture_focus_loupe_size"
+            android:contentDescription="@string/capture_focus_loupe"
+            android:foreground="@drawable/focus_loupe_border"
+            android:scaleType="fitXY"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvCaptureFocusSharpness"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="#99000000"
+            android:paddingLeft="6dp"
+            android:paddingTop="2dp"
+            android:paddingRight="6dp"
+            android:paddingBottom="2dp"
+            android:textColor="@color/text_on_primary"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
