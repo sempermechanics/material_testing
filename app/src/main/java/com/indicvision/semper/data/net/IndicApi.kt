@@ -75,9 +75,12 @@ class IndicApi private constructor(context: Context) {
      */
     class ApiException(
         val code: Int,
-        val detail: String,
+        val body: String,
         val requestId: String? = null,
-    ) : IOException(IndicApiHttp.withRef("HTTP $code: $detail", requestId))
+    ) : IOException(IndicApiHttp.withRef("HTTP $code: $body", requestId)) {
+
+        val parsedDetail: String get() = ApiErrors.detailOf(body)
+    }
 
     class NotApprovedException : IOException(ApiErrors.NOT_APPROVED)
 
@@ -555,9 +558,12 @@ class IndicApi private constructor(context: Context) {
          */
         /** Maps a 409 from `GET /v1/me` to the most specific device-binding exception. */
         internal fun throwForMeConflict(body: String, requestId: String?): Nothing {
-            if (ApiErrors.hasCode(body, ApiErrors.DEVICE_IN_USE)) throw DeviceInUseException(requestId)
-            if (ApiErrors.hasCode(body, ApiErrors.DEVICE_CONFLICT)) throw DeviceConflictException(requestId)
-            throw ApiException(HttpStatus.CONFLICT, body, requestId)
+            val err: Throwable = when {
+                ApiErrors.hasCode(body, ApiErrors.DEVICE_IN_USE) -> DeviceInUseException(requestId)
+                ApiErrors.hasCode(body, ApiErrors.DEVICE_CONFLICT) -> DeviceConflictException(requestId)
+                else -> ApiException(HttpStatus.CONFLICT, body, requestId)
+            }
+            throw err
         }
 
         fun get(context: Context): IndicApi {

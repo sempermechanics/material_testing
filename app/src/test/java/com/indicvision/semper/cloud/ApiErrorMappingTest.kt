@@ -99,6 +99,17 @@ class ApiErrorMappingTest {
         assertEquals(HttpStatus.CONFLICT, quota.code)
     }
 
+    @Test
+    fun `ApiException parsedDetail reads the envelope detail`() {
+        val ex = IndicApi.ApiException(
+            HttpStatus.CONFLICT,
+            """{"detail":"session_quota_exceeded: 5/5"}""",
+            "req-9",
+        )
+        assertEquals("session_quota_exceeded: 5/5", ex.parsedDetail)
+        assertEquals("""{"detail":"session_quota_exceeded: 5/5"}""", ex.body)
+    }
+
     private fun response(requestId: String?): Response =
         Response.Builder()
             .request(Request.Builder().url("https://example.invalid/v1/sessions").build())
