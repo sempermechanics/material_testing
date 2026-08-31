@@ -2,13 +2,15 @@
 
 How to get displacement and strain fields out of a DIC image set, using the app.
 
-<!-- **For:** a graduate researcher who knows DIC basics — subsets, correlation,
-strain fields — and has not used this app.
-
-**Not covered:** speckle patterning, lighting, cameras, rigs, calibration and
-how to choose test parameters. Those are experiment questions. Use *A Good
+Lighting, rig stability, and the measurement floor — why they dominate strain
+noise on a static check — are covered in
+[app/NOISE_FLOOR_STRAIN_ACCURACY.md](app/NOISE_FLOOR_STRAIN_ACCURACY.md). For
+broader DIC practice (speckle paint, cameras, calibration), see *A Good
 Practices Guide for Digital Image Correlation* (iDICs). This manual starts once
-you have images. -->
+you have images.
+
+<!-- **For:** a graduate researcher who knows DIC basics — subsets, correlation,
+strain fields — and has not used this app. -->
 
 | | |
 |---|---|

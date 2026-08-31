@@ -186,6 +186,9 @@ with subset**. Always compare at the **same subset** to isolate lighting.
 Device-to-device differences were **secondary** to lighting and burst stability in
 this study.
 
+Full protocol, fixed-subset tables, and setup checklist:
+[NOISE_FLOOR_STRAIN_ACCURACY.md](NOISE_FLOOR_STRAIN_ACCURACY.md).
+
 ---
 
 ## strain-field-stats {#strain-field-stats}

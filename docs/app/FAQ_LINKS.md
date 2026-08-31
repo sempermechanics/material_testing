@@ -47,6 +47,6 @@ Measurement floor dialog strings (`capture_noise_floor_*`):
 - **Fail:** title `capture_noise_erroneous_title`, body `capture_noise_erroneous_body` (floor value in layout, not repeated in body)
 - **Viewer:** `capture_noise_floor_readout` under strain colour bar
 
-Deep dives in repo (not linked from app): `.hitl-pull/NOISE_FLOOR_GUIDE.md`,
-`.hitl-pull/ROI_METHODOLOGY.md`, lighting sweep reports under
-`.hitl-pull/pixel-noisetest-report/`.
+Deep dive in repo (not linked from app):
+[NOISE_FLOOR_STRAIN_ACCURACY.md](NOISE_FLOOR_STRAIN_ACCURACY.md) (canonical lighting /
+setup report).

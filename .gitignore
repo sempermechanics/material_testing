@@ -36,6 +36,7 @@ app/src/main/cpp/third_party/*
 .artifacts/
 .vscode/*
 .cursor/
+.hitl-pull/*
 
 # === Kotlin compiler session data ===
 .kotlin/
