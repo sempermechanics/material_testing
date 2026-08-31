@@ -11,11 +11,11 @@ import org.junit.Test
 class EngineFailureTest {
 
     @Test
-    fun `zero and unknown codes land on the strain-window reason`() {
+    fun `zero lands on strain window reason positive unknown on unknown code`() {
         assertEquals(R.string.sweep_reason_vsg, EngineFailure.reasonRes(0))
         assertEquals(R.string.sweep_reason_vsg, EngineFailure.shortReasonRes(0))
-        assertEquals(R.string.sweep_reason_vsg, EngineFailure.reasonRes(42))
-        assertEquals(R.string.sweep_reason_vsg, EngineFailure.shortReasonRes(42))
+        assertEquals(R.string.sweep_fail_unknown, EngineFailure.reasonRes(42))
+        assertEquals(R.string.sweep_reason_unknown, EngineFailure.shortReasonRes(42))
     }
 
     @Test
@@ -73,6 +73,6 @@ class EngineFailureTest {
             EngineFailure.faqUrlRes(AnalysisRunCodes.ERROR_LOW_CONVERGENCE),
         )
         assertEquals(R.string.url_faq_engine_vsg, EngineFailure.faqUrlRes(0))
-        assertEquals(R.string.url_faq_engine_vsg, EngineFailure.faqUrlRes(99))
+        assertEquals(R.string.url_faq_engine_vsg, EngineFailure.faqUrlRes(42))
     }
 }
