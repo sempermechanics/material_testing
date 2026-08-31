@@ -120,11 +120,14 @@ restores, `DicBundleDownloadWorker` downloads and backup deletes are WorkManager
 Empty `app/lint-baseline.xml` and `app/detekt-baseline.xml`. Prefer a targeted
 `@file:Suppress` or an extract over stuffing a baseline.
 
-Open lint warnings (leave them): `OldTargetApi` (`compileSdk` 37 / `targetSdk` 36),
-`TooManyViews` on `activity_settings.xml`. Do not bump `targetSdk` or turn on
-`warningsAsErrors` in a drive-by.
+`OldTargetApi` is disabled in `app/build.gradle.kts` until a deliberate
+`targetSdk` 36→37 bump. Capture keeps portrait via `tools:ignore` on
+`CaptureSessionActivity`. Do not re-enable those or turn on `warningsAsErrors`
+in a drive-by. Settings / wizard settings XML stay under `TooManyViews` by
+inflating through `SettingsScrollContentView` /
+`WizardStepSettingsContentView`.
 
-Kover `minBound` floor is 15. Macrobenchmark CI is emulator **smoke**
+Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 (`suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`), API 34, no numeric thresholds.
 
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
@@ -132,9 +135,14 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-08-31)
 
-Open maintenance items from the capture-branch review are tracked in
-[docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md) (2026-08-31 register); FI-11
-API routing items 1–2 are closed.
+Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
+[docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
+
+Lint and detekt burn-down on this branch: empty baselines still; `:app:detekt`
+and `:app:lintDebug` report zero findings. Settings / wizard settings content
+inflates through `SettingsScrollContentView` /
+`WizardStepSettingsContentView`. `OldTargetApi` stays disabled until a
+deliberate targetSdk PR.
 
 Home **+** expands to **Import** (existing `MediaPickerSheet`) or **Record**
 (`ui/capture/`: setup → Camera-app test shot → contrast ROI → SSSIG gate →

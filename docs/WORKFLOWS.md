@@ -518,23 +518,16 @@ sites), `VsgLatticeActivity` (~16), `ViewerSettingsSheet` (~12) and
 a default, so the same session can render differently depending on how it was
 opened, with nothing in the log. → **FI-1**
 
-**E2.2 The two biggest data paths are the least instrumented.**
-`DicUploadWorker.doWork` is ~970 lines with ~38 log lines; `CloudRestore` is ~960
-lines with 5. Both are single cohesive flows on purpose, so the fix is not to
-split them — it is that a failure inside them cannot be located without a
-debugger. → **FI-2**
+**E2.2 Upload/restore instrumentation.** *(Fixed 2026-08-31 — `TransferLog` JSON phase lines.)*
 
-**E2.3 Sweep failure provenance rides on four parallel arrays.**
-`SWEEP_SKIP_SUBSETS` / `_STEPS` / `_STRAIN_WINS` / `_CODES` are index-aligned
-`IntArray`s. Nothing checks that they are the same length or in the same order,
-and the failure mode is a lattice node explaining itself with another node's
-reason. → **FI-3**
+**E2.3 Sweep skip provenance.** *(Fixed 2026-08-31 — `SkippedNode` / `SWEEP_SKIPPED`; legacy arrays read as fallback.)*
 
-**E2.4 An unknown engine code reads as a known failure.**
-`EngineFailure.cause` maps `0` and everything unrecognised to the VSG /
-strain-window case. That is a good guess for a real zero-point solve and a bad
-one for a code we have never seen — the user is told to change the strain window
-for a failure nobody has diagnosed. → **FI-4**
+**E2.4 An unknown engine code reads as a known failure.** *(Fixed 2026-08-31 —
+`EngineFailure.Cause.UNKNOWN` for unrecognised positive codes.)* `EngineFailure.cause`
+used to map `0` and everything unrecognised to the VSG / strain-window case. That
+is a good guess for a real zero-point solve and a bad one for a code we have never
+seen — the user was told to change the strain window for a failure nobody had
+diagnosed.
 
 **E2.5 On-screen copy has no id.**
 Finding the code behind a message means guessing its wording well enough to grep

@@ -5,17 +5,21 @@ Baselines stay empty: `app/lint-baseline.xml` and `app/detekt-baseline.xml`.
 
 **Still open warnings** (do not baseline, do not `warningsAsErrors` until decided):
 
-- `OldTargetApi` — `compileSdk` 37 vs `targetSdk` 36. Inventory only; do not bump
-  `targetSdk` in a drive-by.
-- `TooManyViews` on `activity_settings.xml`.
+- `OldTargetApi` — disabled in `app/build.gradle.kts` lint config until a
+  deliberate `targetSdk` 36→37 bump PR. Do not re-enable casually.
+- Capture `screenOrientation="portrait"` keeps `tools:ignore` for
+  `LockedOrientationActivity` / `DiscouragedApi` (camera UX).
 
 Inherent size/complexity in a few UI orchestration files uses targeted
 `@file:Suppress` — prefer extracting over widening those lists.
 Catalog version-availability lint IDs are disabled; bump deps in deliberate PRs.
 
-`UnclosedTrace`, `PluralsCandidate`, and `UseKtx` from the 2026-08-16 pass are
-fixed (#59 / #60). The architecture extracts that had missed `main` (#65 / #67,
-re-landed as #69 / #70) are on `origin/main` as of 2026-08-16.
+`UnclosedTrace`, `PluralsCandidate`, `UseKtx`, `TooManyViews` on
+`activity_settings` / `wizard_step_settings`, and the 2026-08 lint warning
+set are fixed (content extracted behind `SettingsScrollContentView` /
+`WizardStepSettingsContentView`). The architecture extracts that had missed
+`main` (#65 / #67, re-landed as #69 / #70) are on `origin/main` as of
+2026-08-16.
 
 Orphaned strings the 2026-08-18 workflow audit found are listed in
 [../app/WORKFLOWS.md](../app/WORKFLOWS.md) §11 — none of them fail a gate, so they
@@ -23,80 +27,27 @@ are removed opportunistically rather than in a sweep.
 
 ## Proposed improvements live next door
 
-Forward-looking items — the ones that came out of the 2026-08-24 workflow
-traceability pass, ranked by accuracy and privacy impact — are in
-[FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md). This file stays the record of
-what is *owed* and what is deliberately deferred. Two entries below have a
-concrete proposal there: the `ViewerSession` extras bag (FI-1) and the consent
-copy (FI-8).
+Forward-looking items are in [FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md).
+This file stays the record of what is *owed* and what is deliberately deferred.
 
-## 2026-08-31 capture-branch review (PR #101)
-
-Three parallel agents (reuse, quality, efficiency) reviewed
-`origin/main...HEAD` (~136 files). Findings below were recorded **before** the
-Phase 4 fix pass; rows marked **Fixed 2026-08-31** moved there after tests.
-
-### Fixed on capture branch (shipped before this pass)
-
-| Item | Evidence |
-|------|----------|
-| Auth fail-closed adoption + profile `create()` race | `firestore_repo.py`, `test_firestore_repo.py` |
-| Auth deep-link host check | `AuthActivity.kt` |
-| ROI mask / RAW copy off main thread | `StaticAnalysisActivity.kt` |
-| Error-code contract pin (FI-9 partial) | `test_error_codes.py`, `ApiErrors.kt` |
-| Capture JVM test suite | `app/src/test/.../capture/*`, `NoiseFloor*`, `AnalysisCsv*` |
-| Docs: FAQ, lighting report, workflow index | `docs/app/FAQ.md`, `NOISE_FLOOR_STRAIN_ACCURACY.md`, `docs/WORKFLOWS.md` |
-| Native engine pin | tag **v0.2.1** (`074602a`) |
-
-### Fixed in maintenance pass (2026-08-31)
-
-| ID | Item |
-|----|------|
-| TD-1 | FI-11: `UploadWorkOutcomes.isQuotaExhausted` checks `SESSION_QUOTA_EXCEEDED` in body |
-| TD-2 | FI-11: `IndicApi.me()` branches on `DEVICE_IN_USE` / `DEVICE_CONFLICT`; added `DeviceInUseException` |
-| TD-8 | Budget-fail dialog extracted to `CaptureBudgetUi` |
-| TD-9 | Denoise threshold shared via `CaptureNoiseFloor.denoisedByCorrelation` |
-| TD-10 | Millistrain conversion centralized in `AnalysisCsvWriter` |
-| TD-11 | `captureFloor` cleared when reference swapped via import |
-| TD-12 | `LockedCameraSession.close()` clears pending still/luma claims |
-| TD-13 | `applySupportedResolution` no longer overwrites intent `cameraId` |
-| TD-14 | JPEG bounds decode consolidated in `BitmapDecode.storedBounds` |
-
-### Open register (prioritized)
+## Open register
 
 Priority = (Impact + Risk) × (6 − Effort).
 
 | ID | Category | Item | I | R | E | P | Status |
 |----|----------|------|---|---|---|---|--------|
 | TD-3 | Architecture | `ViewerSession` extras bag (FI-1) | 4 | 4 | 5 | **8** | Deferred |
-| TD-4 | Code | Capture orchestrators ~1k lines | 3 | 2 | 4 | **10** | Deferred |
-| TD-5 | Test | No capture instrumented/E2E | 3 | 3 | 4 | **12** | Deferred |
-| TD-6 | Code | FI-11 `ApiException.detail` rename | 2 | 2 | 3 | **8** | Deferred |
-| TD-7 | Test | Kover floor raise | 2 | 2 | 3 | **8** | Deferred |
-| TD-15 | Quality | `CaptureSessionActivity` process death omits noise-floor / ready state | 3 | 3 | 4 | **9** | Deferred |
-| TD-16 | Efficiency | Test-shot path re-reads/re-decodes same JPEG | 3 | 2 | 3 | **12** | Deferred |
-| TD-17 | Efficiency | `ShareCenter` reference decoded 5× per field in ZIP export | 3 | 2 | 4 | **9** | Deferred |
+| TD-4 | Code | Capture orchestrators ~1k lines | 3 | 2 | 4 | **10** | Deferred — audited 2026-08-31, no repro |
+| TD-5 | Test | No capture instrumented/E2E | 3 | 3 | 4 | **12** | Deferred — no `androidTest` capture fixtures in CI |
 | TD-18 | Efficiency | `GrayPngEncoder` full-buffer + `toByteArray()` on hot path | 3 | 2 | 4 | **9** | Deferred |
-| TD-19 | Efficiency | Redundant `runOnUiThread` in `StillSequenceRunner` progress | 2 | 1 | 1 | **10** | Deferred |
-| TD-20 | Reuse | `LockedCameraSession` duplicate `captureStill` / `captureLuma` bodies | 2 | 2 | 4 | **8** | Deferred |
-| TD-21 | Efficiency | ImageReader listener re-registered every capture | 2 | 2 | 3 | **8** | Deferred |
-| TD-22 | Reuse | `NoiseFloorGateUi` manual `CaptureNoiseFloor` field mapping | 2 | 1 | 3 | **6** | Deferred |
-
-### Review summary (2026-08-31)
-
-- **Reuse agent:** 6 actionable findings (2 fixed, 4 deferred).
-- **Quality agent:** 7 actionable findings (4 fixed, 3 deferred).
-- **Efficiency agent:** 8 actionable findings (2 fixed, 6 deferred).
-- **False positives skipped:** splitting orchestrators without a concrete bug;
-  `@file:Suppress` on capture activities without a proposed extract; streaming
-  PNG encode (larger refactor).
+| TD-20 | Reuse | `LockedCameraSession` duplicate `captureStill` / `captureLuma` bodies | 2 | 2 | 4 | **8** | Deferred — audited 2026-08-31, no repro |
+| TD-21 | Efficiency | ImageReader listener re-registered every capture | 2 | 2 | 3 | **8** | Deferred — audited 2026-08-31, no repro |
 
 ## External / deferred (not blocked on code alone)
 
 | Item | Why deferred |
 |------|----------------|
 | Auth-gated UI E2E | Needs Firebase secrets / fixtures in CI |
-| Kover `minBound` raise | Floor is 15; measure stable % on CI first (local AGP 9 often reports no coverage) |
 | `ViewerSession` extras bag | `DicKeys` packed in two places (`SessionOpenHelper.intentFor`, `AnalysisNavHelper.openResults`); grill before deepening |
 | firebase-admin / hashed lock | Lock is regenerated from txt on each bump (`pip-compile --generate-hashes` on Python 3.12). Direct-dep versions in the lock must match `requirements.txt`. |
 
@@ -179,5 +130,6 @@ The branch was already strong; findings and fixes were small:
 ## History
 
 Earlier burn-down (CI path filters, Hilt removal, engine Path A–C split, OkHttp 5,
-FastAPI train, Analysis helpers, Kover floor 15, UseKtx/Plurals/Overdraw, etc.)
-is in git history — do not re-open closed items without new evidence.
+FastAPI train, Analysis helpers, Kover floor 15→27, UseKtx/Plurals/Overdraw, capture
+maintenance pass on PR #101, etc.) is in git history — do not re-open closed items
+without new evidence.

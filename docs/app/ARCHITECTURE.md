@@ -42,9 +42,9 @@ Intent extras shared across Activities live in
 |---|---|
 | `ui/auth/` | Splash, sign-in, pending approval, Google / AccessRouter helpers |
 | `ui/home/` | Session list, selection, open-session intents |
-| `ui/analysis/` | Setup wizard (ViewStub steps 2/3; `AnalysisWizardSlots` / `AnalysisWizardCoach`; `goToStep` on the activity), ROI, VSG sweep, `DicBatchRunner` + `DicFieldIo`, import/overlay helpers, ViewModel |
+| `ui/analysis/` | Setup wizard (ViewStub steps 2/3; `AnalysisWizardSlots` / `AnalysisWizardCoach`; `goToStep` on the activity; step-settings body via `WizardStepSettingsContentView`), ROI, VSG sweep, `DicBatchRunner` + `DicFieldIo`, import/overlay helpers, ViewModel |
 | `ui/viewer/` | Heatmaps, tap-to-probe, report factory, the ⓘ details sheet, `ViewerFieldPills` |
-| `ui/settings/` | Settings screen; account/storage/prefs/your-data/help live in `Settings*Section`; restore/download/delete stay on `SettingsActivity` |
+| `ui/settings/` | Settings screen; scroll body inflates via `SettingsScrollContentView`; account/storage/prefs/your-data/help live in `Settings*Section`; restore/download/delete stay on `SettingsActivity` |
 | `ui/admin/` | Admin screen — approve/revoke users via `/v1/admin/*` |
 | `ui/limit/` | Session-quota screen |
 | `ui/common/` | Insets, motion, `MediaPickerSheet` (Import / wizard dropzones), `CrispToast`, `TransferBannerController` |
