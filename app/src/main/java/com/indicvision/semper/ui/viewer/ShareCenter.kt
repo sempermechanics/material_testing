@@ -330,7 +330,9 @@ class ShareCenter(private val host: ResultViewerActivity) {
         dataIndex: Int,
         typeString: String,
         frameIndex: Int,
+        baseCache: MutableMap<Pair<Int, Int>, Bitmap>? = null,
     ): Bitmap {
+        // Optional cache: multi-field export reuses one decoded reference bitmap.
         val s = requireSnapshot()
         val renderScale = VisualizationEngine.cappedRenderScale(s.imgW, s.imgH, VisualizationEngine.REPORT_MAX_EDGE)
         val renderW = (s.imgW * renderScale).toInt().coerceAtLeast(1)
@@ -346,7 +348,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             null,
             maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
         )
-        val base = loadCappedBase(s, renderW, renderH)
+        val base = loadCappedBase(s, renderW, renderH, baseCache)
         val out = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         canvas.drawBitmap(base, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
@@ -360,7 +362,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             imageName = sourceImageName(s, frameIndex),
         )
         heatmap.recycle()
-        if (base !== s.baseImage) base.recycle()
+        if (baseCache == null && base !== s.baseImage) base.recycle()
         return out
     }
 
@@ -377,7 +379,14 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * draws into — prefer the on-disk reference (inSampleSize-decoded) over the
      * viewer's display bitmap so export quality doesn't depend on viewer scale.
      */
-    private fun loadCappedBase(s: Snapshot, renderW: Int, renderH: Int): Bitmap {
+    private fun loadCappedBase(
+        s: Snapshot,
+        renderW: Int,
+        renderH: Int,
+        cache: MutableMap<Pair<Int, Int>, Bitmap>? = null,
+    ): Bitmap {
+        val key = renderW to renderH
+        cache?.get(key)?.let { return it }
         s.refImagePath?.let { path ->
             BitmapDecode.decodeFileForView(
                 path,
@@ -386,11 +395,26 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 VisualizationEngine.REPORT_MAX_EDGE,
                 rawWidth = s.imgW,
                 rawHeight = s.imgH,
-            )?.let { return it }
+            )?.let { decoded ->
+                cache?.put(key, decoded)
+                return decoded
+            }
         }
         val display = s.baseImage ?: error("No reference image for export")
-        if (display.width == renderW && display.height == renderH) return display
-        return display.scale(renderW, renderH)
+        val scaled = if (display.width == renderW && display.height == renderH) {
+            display
+        } else {
+            display.scale(renderW, renderH)
+        }
+        if (scaled !== display) cache?.put(key, scaled)
+        return scaled
+    }
+
+    private fun recycleBaseCache(cache: MutableMap<Pair<Int, Int>, Bitmap>, s: Snapshot) {
+        cache.values.forEach { bmp ->
+            if (bmp !== s.baseImage) bmp.recycle()
+        }
+        cache.clear()
     }
 
     private fun writePng(bmp: Bitmap, name: String): File {
@@ -410,11 +434,16 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     private fun allFieldPhotos(): List<File> {
         val s = requireSnapshot()
-        return FIELDS.map { (label, idx) ->
-            writePng(
-                renderAnnotated(s.data, idx, label, s.frameIndex),
-                "${s.baseName}_${label}_frame${s.frameIndex + 1}.png",
-            )
+        val baseCache = mutableMapOf<Pair<Int, Int>, Bitmap>()
+        return try {
+            FIELDS.map { (label, idx) ->
+                writePng(
+                    renderAnnotated(s.data, idx, label, s.frameIndex, baseCache),
+                    "${s.baseName}_${label}_frame${s.frameIndex + 1}.png",
+                )
+            }
+        } finally {
+            recycleBaseCache(baseCache, s)
         }
     }
 
@@ -610,19 +639,34 @@ class ShareCenter(private val host: ResultViewerActivity) {
             val prefix = (index + 1).toString().padStart(3, '0')
             val frameName = s.defNames.getOrNull(index)?.substringBeforeLast('.') ?: "Frame_${index + 1}"
             val folder = "photos_$ts/results/${prefix}_$frameName"
-            for ((label, idx) in FIELDS) {
-                var bmp: Bitmap? = null
-                try {
-                    bmp = renderAnnotated(data, idx, label, index)
-                    zip.putNextEntry(ZipEntry("$folder/$label.png"))
-                    bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, zip)
-                    zip.closeEntry()
-                } catch (e: Exception) {
-                    // One unrenderable field shouldn't abort the whole export.
-                    Timber.w(e, "Skipping %s of frame %d in ZIP export", label, index + 1)
-                } finally {
-                    bmp?.recycle()
-                }
+            val baseCache = mutableMapOf<Pair<Int, Int>, Bitmap>()
+            try {
+                addFrameResultImages(zip, data, index, folder, baseCache)
+            } finally {
+                recycleBaseCache(baseCache, s)
+            }
+        }
+    }
+
+    private fun addFrameResultImages(
+        zip: ZipOutputStream,
+        data: FloatArray,
+        index: Int,
+        folder: String,
+        baseCache: MutableMap<Pair<Int, Int>, Bitmap>,
+    ) {
+        for ((label, idx) in FIELDS) {
+            var bmp: Bitmap? = null
+            try {
+                bmp = renderAnnotated(data, idx, label, index, baseCache)
+                zip.putNextEntry(ZipEntry("$folder/$label.png"))
+                bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, zip)
+                zip.closeEntry()
+            } catch (e: Exception) {
+                // One unrenderable field shouldn't abort the whole export.
+                Timber.w(e, "Skipping %s of frame %d in ZIP export", label, index + 1)
+            } finally {
+                bmp?.recycle()
             }
         }
     }

@@ -424,6 +424,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Glass-pill popup listing every field; the live field is checked. */
     private fun showFieldPopup(anchor: View) {
+        @SuppressLint("InflateParams")
         val popupView = layoutInflater.inflate(R.layout.popup_field_options, null)
         val window = PopupWindow(
             popupView,
@@ -472,6 +473,11 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Bring edge chrome back, then schedule auto-hide. */
     internal fun bumpChrome() {
+        if (chromeVisible) {
+            chromeTop.removeCallbacks(hideChromeRunnable)
+            chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
+            return
+        }
         fadeChrome(visible = true)
         chromeTop.removeCallbacks(hideChromeRunnable)
         chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
