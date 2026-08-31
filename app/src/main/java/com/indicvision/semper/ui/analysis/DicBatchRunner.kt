@@ -294,7 +294,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 summaryFieldIndices,
                 perFrameSummaryRanges,
             )
-        }.onFailure { Timber.w(it, "Could not persist summary field ranges for %s", batchDir) }
+        }.onFailure { Timber.w(it, "Could not persist summary field ranges") }
     }
 
     // Images an earlier run left behind that this one no longer has. This is

@@ -35,6 +35,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CoachPrefs
@@ -161,14 +162,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             DicKeys.SWEEP_STRAIN_WINS,
             solved = true,
         )
-        val skippedCodes = intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_CODES) ?: IntArray(0)
-        val skipped = nodesFrom(
-            DicKeys.SWEEP_SKIP_SUBSETS,
-            DicKeys.SWEEP_SKIP_STEPS,
-            DicKeys.SWEEP_SKIP_STRAIN_WINS,
-            solved = false,
-            codes = skippedCodes,
-        )
+        val skipped = skippedNodesFromIntent(intent)
         val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.window }))
         solvedNodes = nodes.filter { it.solved }
         // Frame-index lookup, so per-frame loops don't scan solvedNodes (was O(F²)).
@@ -363,6 +357,28 @@ class VsgLatticeActivity : AppCompatActivity() {
             reason,
             faqRes,
         )
+    }
+
+    private fun skippedNodesFromIntent(intent: Intent): List<VsgLatticeView.Node> {
+        val nodes = SkippedNode.decodeFromExtras(
+            intent.getStringExtra(DicKeys.SWEEP_SKIPPED),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_SUBSETS),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_STEPS),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_CODES),
+        )
+        return nodes.map { node ->
+            VsgLatticeView.Node(
+                subset = node.subset,
+                step = node.step,
+                window = node.strainWindow,
+                vsg = VsgStudy.vsgFor(node.strainWindow),
+                solved = false,
+                frameIndex = -1,
+                failureReason = getString(EngineFailure.shortReasonRes(node.code)),
+                failureCode = node.code,
+            )
+        }
     }
 
     private fun nodesFrom(

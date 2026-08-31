@@ -92,6 +92,9 @@ data class SessionRecord(
      */
     val sweepSkipCodes: List<Int> = emptyList(),
 
+    /** Typed skips; legacy parallel lists remain for old on-disk JSON. */
+    val sweepSkippedNodes: List<SkippedNode> = emptyList(),
+
     /**
      * Why a run ended before it finished, as an engine/run code, or 0 when it
      * ran to completion. Kept with the analysis because a short run otherwise
@@ -124,11 +127,26 @@ data class SessionRecord(
     val isSweep: Boolean get() = sweepSteps.isNotEmpty()
 
     /** Planned combinations that never produced a frame. */
-    val sweepSkipCount: Int get() = minOf(
-        sweepSkipSubsets.size,
-        sweepSkipSteps.size,
-        sweepSkipStrainWindows.size,
-    )
+    val sweepSkipCount: Int
+        get() {
+            if (sweepSkippedNodes.isNotEmpty()) return sweepSkippedNodes.size
+            return minOf(
+                sweepSkipSubsets.size,
+                sweepSkipSteps.size,
+                sweepSkipStrainWindows.size,
+            )
+        }
+
+    /** Typed [sweepSkippedNodes] first; else legacy parallel lists on disk. */
+    fun resolvedSkipNodes(): List<SkippedNode> {
+        if (sweepSkippedNodes.isNotEmpty()) return sweepSkippedNodes
+        return SkippedNode.fromLegacyArrays(
+            sweepSkipSubsets,
+            sweepSkipSteps,
+            sweepSkipStrainWindows,
+            sweepSkipCodes,
+        )
+    }
 
     @Serializable
     enum class SyncState {
