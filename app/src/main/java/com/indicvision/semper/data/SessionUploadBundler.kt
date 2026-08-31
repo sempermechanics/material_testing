@@ -200,10 +200,14 @@ object SessionUploadBundler {
             scratch?.delete()
             baseImg?.recycle()
         }
-        // The per-field looping GIFs the share sheet builds — added to the backup so
-        // a restored/downloaded session has the animations too. Memory-bounded
-        // (640 px, one frame at a time), so no OOM risk like the report render.
-        val animations = if (canReport) stageAnimations(context, record, sessionDir, processedDir) else 0
+        // Per-field looping GIFs for single-setting backups only. Sweeps are
+        // parameter combinations, not a time series — no animations folder.
+        val animations =
+            if (canReport && !record.isSweep) {
+                stageAnimations(context, record, sessionDir, processedDir)
+            } else {
+                0
+            }
         if (writeReports) {
             Timber.i(
                 "Staged %d frame reports, %d processed images, %d animations",
