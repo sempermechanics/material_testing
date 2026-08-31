@@ -275,6 +275,7 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = intent.getIntExtra(DicKeys.START_FRAME, 0)
             // Otherwise the summary is what the viewer opens on — it answers
             // "what happened across the test" before any single frame does.
+            // Sweeps never use the summary slot (combinations are not a time series).
             showingSummary = !intent.hasExtra(DicKeys.START_FRAME)
         }
 
@@ -286,6 +287,8 @@ class ResultViewerActivity : AppCompatActivity() {
         sweepSteps = intent.getIntArrayExtra(DicKeys.SWEEP_STEPS)
         sweepStrainWins = intent.getIntArrayExtra(DicKeys.SWEEP_STRAIN_WINS)
         lineCutHorizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
+        // Sweep extras are available now; drop any restored summary flag.
+        if (isSweep) showingSummary = false
 
         roiX = intent.getIntExtra(DicKeys.ROI_X, 0)
         roiY = intent.getIntExtra(DicKeys.ROI_Y, 0)
@@ -337,11 +340,12 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
             tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
             loadFrameData(currentFrameIndex)
-            // Whole-sequence ranges still feed the summary GIF / share animations.
-            if (batchFiles.size > 1) summary.start()
-            if (showingSummary) {
+            // Summary GIF / share animations are single-setting only.
+            if (!isSweep && batchFiles.size > 1) summary.start()
+            if (showingSummary && !isSweep) {
                 enterSummary()
             } else {
+                showingSummary = false
                 updateNavButtons()
                 bumpChrome()
             }
@@ -535,7 +539,7 @@ class ResultViewerActivity : AppCompatActivity() {
         }
         when {
             showingSummary -> Unit
-            currentFrameIndex == 0 -> enterSummary()
+            currentFrameIndex == 0 -> if (!isSweep) enterSummary()
             else -> {
                 currentFrameIndex--
                 updateNavButtons()
@@ -994,6 +998,7 @@ class ResultViewerActivity : AppCompatActivity() {
         val data = rawData ?: return null
         // Snapshot can open with ref path alone while display decode is still in flight.
         val base = cachedBaseImage
+        val summaryHelper = summary
         return ShareCenter.Snapshot(
             data = data,
             batchFiles = batchFiles,
@@ -1011,8 +1016,8 @@ class ResultViewerActivity : AppCompatActivity() {
             baseImage = base,
             refImagePath = refImagePath,
             defImagePaths = defImagePaths,
-            summary = summary.animation,
-            summaryBounds = { index -> summary.boundsFor(index) },
+            summary = if (isSweep) null else summaryHelper.animation,
+            summaryBounds = { index -> if (isSweep) null else summaryHelper.boundsFor(index) },
             buildReportAt = { index, frameData -> buildReportData(index, frameData) },
             captureFloor = sessionRecord?.captureFloor,
             referenceName = intent.getStringExtra(DicKeys.REF_NAME).orEmpty(),
@@ -1104,7 +1109,9 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     private fun updateNavButtons() {
-        btnPrevFrame.isEnabled = !showingSummary && batchFiles.isNotEmpty()
+        // Sweep: no summary slot, so Prev is inert on the first combination.
+        btnPrevFrame.isEnabled =
+            !showingSummary && batchFiles.isNotEmpty() && (currentFrameIndex > 0 || !isSweep)
         btnNextFrame.isEnabled = showingSummary || currentFrameIndex < batchFiles.size - 1
 
         btnPrevFrame.alpha = if (btnPrevFrame.isEnabled) 1.0f else 0.5f
@@ -1125,6 +1132,7 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     private fun enterSummary() {
+        if (isSweep) return
         showingSummary = true
         inspect.dismissProbe()
         summary.show()
