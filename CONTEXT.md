@@ -282,7 +282,8 @@ sections on the public site behind a leave-the-app confirm; canonical copy in
 [docs/app/FAQ_LINKS.md](docs/app/FAQ_LINKS.md). Frame-size copy names the
 mismatched files. `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` are requested when
 the gallery tab needs them. Summary GIFs bake `viewer_canvas` (night `#101518`)
-into the cache filename. Launcher adaptive background is day `#F4F9FC` / night
+into the cache filename. Summary overview and the Animations share target are
+single-setting only; a parameter sweep has neither. Launcher adaptive background is day `#F4F9FC` / night
 `#101518`; night inverts the S on splash (`windowSplashScreenAnimatedIcon`).
 
 Viewer chrome is inset-aware glass: heatmap rest-fit contains the ROI or

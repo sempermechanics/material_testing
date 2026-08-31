@@ -660,6 +660,8 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2.4 | Reach the first frame | **Prev** goes back to the summary, not nowhere |
 | [ ] 8.2.5 | Tap Next rapidly | Keeps up without stuttering or showing a stale frame |
 | [ ] 8.2.6 | Scrub through a sweep | Each frame is a different combination; the settings sheet follows it |
+| [ ] 8.2.6a | On a sweep, **Prev** on the first combination | Stays on that combination (no overview slot) |
+| [ ] 8.2.6b | Open Share on a sweep | No **Animations** row; **Everything** has no `animations/` folder |
 | [ ] 8.2.7 | Rotate the device | The same frame and field stay on screen |
 | [ ] 8.2.8 | Type a frame number and press Go | Jumps straight there; the field has no underline under it |
 | [ ] 8.2.9 | Type `0`, a number past the end, or letters | Nothing moves and the current number comes back |
@@ -669,7 +671,10 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2.13 | Open a session with no `.dat` frames | Snackbar `no_batch_data` with **Why?** → FAQ |
 | [ ] 8.2.14 | Force a frame OOM (huge session, low memory) | Snackbar with **Why?** → viewer-oom FAQ |
 
-### 8.2a Summary animation
+### 8.2a Summary animation `[single]`
+
+Single-setting analyses only (not parameter sweeps — those open from the lattice
+onto a combination, with no summary slot and no Animations share target).
 
 | # | Action | Expected |
 |---|---|---|
@@ -684,7 +689,6 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2a.7 | Set a custom scale for one field | Only that field's animation rebuilds |
 | [ ] 8.2a.8 | Tap **Next** on the summary, then **Prev** on frame 1 | Leaves to frame 1 and comes back |
 | [ ] 8.2a.9 | Step into the frames while it is still building | The viewer stays responsive throughout |
-| [ ] 8.2a.10 | Open a sweep node from the Lattice | Lands on that node, not on the summary |
 | [ ] 8.2a.11 | Run on Android 8 | The first frame with a note that animation needs Android 9; sharing still works |
 
 ### 8.3 Tap to probe
@@ -727,11 +731,11 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.5.1 | Tap Share | Sheet with six targets, captioned positionally — "frame N of M shown · photos share the current frame". It no longer names the frame; the frame's own name is on the **Single Field** row's sub-line |
 | [ ] 8.5.2 | **Single Field** | One annotated PNG of the field and frame on screen |
 | [ ] 8.5.3 | **All fields** | Five PNGs for the current frame, zipped for hand-off. The row's sub-line and each PNG's stamp name the **source image**; the file names still come from the analysis name |
-| [ ] 8.5.3a | **Animations** | Five GIFs, one per field, zipped; each loops when opened in a gallery app |
-| [ ] 8.5.3b | Same, immediately on entering the viewer | Fields not built yet are built under the progress dialog — never silently missing |
+| [ ] 8.5.3a | **Animations** `[single]` | Five GIFs, one per field, zipped; each loops when opened in a gallery app. Row is absent on a parameter sweep |
+| [ ] 8.5.3b | Same, immediately on entering the viewer `[single]` | Fields not built yet are built under the progress dialog — never silently missing |
 | [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
 | [ ] 8.5.5 | **CSV data** | `#` preamble (version, reference, strain method, ROI, optional floor in mε, per-frame U/V/Exx/Eyy/Exy max/min/mean), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — recorded sessions append `noise_floor_mε,shift_u_px,shift_v_px,shift_rot_deg`; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image` |
-| [ ] 8.5.6 | **Everything (.zip)** | Raw photos, the five animations, per-frame results for all five fields, the CSV and the PDF |
+| [ ] 8.5.6 | **Everything (.zip)** | Raw photos, per-frame results for all five fields, the CSV and the PDF; single-setting also includes the five field GIFs under `animations/` |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
 | [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |
 | [ ] 8.5.8a | Dismiss that dialog with Back, or by tapping outside | The export keeps running behind a **transfer banner** at the top of the viewer, with its own progress, Cancel and ‹ › paging — the same strip Settings uses (§4.0) |

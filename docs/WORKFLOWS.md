@@ -223,7 +223,7 @@ exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFL
 |---|---|
 | Entry | `ui/viewer/ResultViewerActivity` (+ `ResultViewerViewModel`) |
 | Reads | `.dat` frames via `DicResult.decodeDatFile` (memory-mapped) and `data/DatCodec` |
-| Renders | `report/VisualizationEngine` heatmaps, `ui/viewer/HeatmapFit` rest-fit, `TouchImageView` zoom/pan, `ViewerFieldPills`, `ScrubFrameCache` look-ahead, `ViewerSummaryHelper` + `SummaryAnimation` + `report/GifEncoder` for the summary GIF |
+| Renders | `report/VisualizationEngine` heatmaps, `ui/viewer/HeatmapFit` rest-fit, `TouchImageView` zoom/pan, `ViewerFieldPills`, `ScrubFrameCache` look-ahead; single-setting only: `ViewerSummaryHelper` + `SummaryAnimation` + `report/GifEncoder` |
 | Probe | `ViewerInspectHelper` + `PointSpatialIndex` (built lazily on first tap) + `InspectOverlayView` |
 | Details | `ViewerSettingsSheet` (ⓘ), fed from the same `DicKeys` extras |
 | Exports | `ShareCenter` → `ViewerReportFactory` / `report/ReportBuilder` / `PdfReportGenerator` / `AnalysisCsvWriter` / `data/SessionEverythingExporter` → `SendToSheet` → `SaveExportActivity` (SAF) |

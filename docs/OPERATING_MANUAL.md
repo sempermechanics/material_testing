@@ -414,8 +414,8 @@ which is why the hairline reads "≤" and "≥" rather than "Min"/"Max" — a ha
 outliers must not flatten the whole map. The ⓘ sheet still gives you the true
 extrema, and the two are allowed to disagree. Tap the bar to set fixed min/max
 (remembered per field). **Auto scale** drops a custom override and returns to the
-clamped bounds. The
-summary GIF and share field-animations still use a whole-sequence scale so the
+clamped bounds. On a single-setting analysis the
+summary GIF and share field GIFs still use a whole-sequence scale so the
 loop stays comparable.
 
 **Tap to probe.** There is no Inspect / X,Y / Max-Min row. A short tap on the
@@ -426,17 +426,18 @@ slop pans (or flings to the next frame when unzoomed); pinch still zooms. Tap
 the readout chip to dismiss. Switching field or frame keeps the probe at the
 same image location and updates the value.
 
-**The summary comes first.** The viewer opens on a looping animation of the
-whole sequence in the current field — every frame, never longer than 10 seconds,
-about 300 ms a frame until the frame count forces it faster. The GIF is framed
-on the same coloured region the live view rest-fits to (your ROI, or the
+**The summary comes first** on a single-setting analysis. The viewer opens on a
+looping field overview of the whole sequence — every frame, never longer than
+10 seconds, about 300 ms a frame until the frame count forces it faster. It is
+framed on the same coloured region the live view rest-fits to (your ROI, or the
 accepted points), scaled to fill — not a letterboxed full photo. While it builds
 you get a progress readout and a **Cancel**. **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
-field. Field pills stay available while the GIF plays.
+field. Field pills stay available while it plays. A parameter sweep opens from
+the lattice onto one combination instead; there is no overview slot.
 
-(Animation playback needs Android 9 or newer. Below that you get the first frame
-and a note; the GIFs still export.)
+(Playback needs Android 9 or newer. Below that you get the first frame
+and a note; single-setting field GIFs still export.)
 
 **Frames.** Prev / Next step through; the counter shows the filename and
 `(i / N)`. Type a number in the small field under it and press Go to jump
@@ -474,13 +475,14 @@ at the top, with its own progress and a Cancel.
 |---|---|
 | Single Field | One PNG: current field and frame, annotated, composited to a 1280 px long edge |
 | All fields | Five PNGs for this frame, zipped; the sheet and each stamp name the source image |
-| Animations | Five looping GIFs — one per field, every frame, each on its own whole-sequence scale — zipped |
+| Animations | Single-setting only: five looping field GIFs on one whole-sequence scale, zipped |
 | PDF report | Every frame, plus a telemetry page |
 | CSV data | `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — a sweep adds `subset_px, step_px, strain_window, vsg_px` |
-| Everything (.zip) | Raw photos + animations + all fields + CSV + PDF |
+| Everything (.zip) | Raw photos + all fields + CSV + PDF; single-setting also includes the field GIFs |
 
-The animations are shared as a set, not one at a time — they are only comparable
-because they share a scale, and the set is what carries that.
+On a single-setting analysis the field GIFs are shared as a set, not one at a
+time — they are only comparable because they share a scale, and the set is what
+carries that.
 
 Build on the **CSV**. Coordinates are image pixels, displacements pixels,
 strains scientific notation. `znssd` is the match residual — filter on it to drop
@@ -596,9 +598,9 @@ Write above that block; leave it in place.
 | Only the first N frames | *Max frames* capped it |
 | Frames in the wrong order | Sort on step 1, then re-run |
 | Run vanished | The app was killed. No resume — run it again in the foreground |
-| Frames look incomparable | Auto colour scale. Fix the bounds, or use the summary animation — it already puts them on one |
+| Frames look incomparable | Auto colour scale. Fix the bounds, or on a single-setting run use the summary overview — it already puts them on one |
 | Summary still says "Rendering" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
-| Summary shows one frame, not a loop | Android 8 or older. The exported GIFs still animate |
+| Summary shows one frame, not a loop | Android 8 or older. Single-setting field GIFs still export |
 | Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
 | Badge stuck on Pending | Offline, Wi-Fi-only, or backup off |
 | Badge shows Failed | Tap it — the dialog names why (device conflict, too large, ran out of memory) and offers **Try again** |
