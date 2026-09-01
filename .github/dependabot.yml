@@ -1,6 +1,13 @@
 version: 2
 updates:
   # Backend Python deps (pinned in backend/requirements*.txt).
+  #
+  # Dependabot bumps requirements.txt only. It cannot regenerate the hashed
+  # requirements.lock the deploy image installs, so every backend PR here lands
+  # the two files out of step and CI tier 4 fails on the version diff. Fix it by
+  # running the "Backend lock" workflow against the Dependabot branch, which
+  # compiles on Linux / Python 3.12 and pushes the lock to that PR.
+  # See .github/workflows/backend-lock.yml and docs/ops/RELEASING.md.
   - package-ecosystem: pip
     directory: /backend
     target-branch: main
