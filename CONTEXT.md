@@ -277,9 +277,21 @@ working tree belongs to **`feat/license-demo-pro`** and was moved there: no
 `plan`, entitlement flags, or license fields are part of the user account
 definition on this branch.
 
-`origin/main` includes PRs #85–#96 (FAQ error map). Open follow-up: wizard
-step/overlap + step-2/3 reorder ([#97](https://github.com/sempermechanics/semperdic-app/pull/97)).
+`origin/main` includes PRs #85–#96 (FAQ error map), the Dependabot batch
+#102–#104, and #93 (Tier 3 microbenchmark skip + hashed lock). Open follow-up:
+wizard step/overlap + step-2/3 reorder
+([#97](https://github.com/sempermechanics/semperdic-app/pull/97)).
 Refresh with `gh pr list --state open` — anything named here will rot.
+
+**Backend lock regeneration is a CI workflow now, not a local chore**
+([#105](https://github.com/sempermechanics/semperdic-app/pull/105)). Dependabot
+bumps `backend/requirements.txt` and cannot produce the hashed
+`requirements.lock`, so every backend bump used to land Tier 4 red — #103 left
+`main` red for exactly that reason. `.github/workflows/backend-lock.yml`
+compiles on Linux / Python 3.12, verifies on any PR touching either file
+(attaching the regenerated lock as an artifact), and pushes on
+`workflow_dispatch` against a chosen branch. See
+[docs/ops/CI.md](docs/ops/CI.md) § Dependabot cheap path.
 
 **Merged since 2026-08-08:** lint extracts #59–#64 and #66; compile/quality #68;
 wizard slots/coach #69; `DicBatchRunner` + `DicFieldIo` #70; hashed lock /
@@ -290,7 +302,8 @@ picker #79; share caption / PDF thread #80; viewer Tufte restyle #81; FAB Files
 launcher icon contrast #85; viewer field FAB + vertical colour rail #86;
 media-picker grid seam #87; wizard Paste params row #88; wizard warning FAQs
 #91; engine failure reason #92; viewer probe / rest-fit #94; lattice Y readout /
-mismatch names / picker dim #95.
+mismatch names / picker dim #95; Tier 3 microbenchmark skip #93; Dependabot
+actions / backend / gradle #102–#104.
 
 New analysis picks media in-sheet (Images gallery; **Files** dismisses the sheet
 and opens SAF). The reference picker opens full height and dims the grid for
