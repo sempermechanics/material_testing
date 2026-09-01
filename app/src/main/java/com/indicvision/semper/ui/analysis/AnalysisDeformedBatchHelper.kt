@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.ui.common.FaqRedirect
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -60,7 +61,7 @@ object AnalysisDeformedBatchHelper {
                     )
                 }
 
-                // Import starts in PICKER order — skip EXIF/MediaStore date probes
+                // Import starts in name order — skip EXIF/MediaStore date probes
                 // here (they opened every URI before any copy and left the overlay
                 // stuck at 0% on large PLC picks). Dates resolve when the user
                 // sorts by date.
@@ -105,15 +106,32 @@ object AnalysisDeformedBatchHelper {
                 // ViewModel paths even if lifecycle cancellation lands now.
                 withContext(NonCancellable + Dispatchers.Main) {
                     viewModel.clearPreviousResults()
-                    viewModel.defOrderMode = FrameOrderMode.PICKER
                     viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
                     if (batch != null) {
-                        viewModel.defFilePaths = batch.filePaths
-                        viewModel.defOriginalNames = batch.originalNames
-                        viewModel.defFrameSizes = batch.frameSizes
-                        viewModel.defFrameDates = frameDates.orEmpty()
+                        val dates = frameDates.orEmpty()
+                        val ordered = FrameOrderHelper.reorder(
+                            paths = batch.filePaths,
+                            names = batch.originalNames,
+                            dates = dates,
+                            sizes = batch.frameSizes,
+                            mode = FrameOrderMode.NAME,
+                            direction = FrameOrderDirection.ASCENDING,
+                        )
+                        val (paths, sizes) = withContext(Dispatchers.IO) {
+                            FrameOrderHelper.reprefixTempFiles(
+                                ordered.paths,
+                                ordered.names,
+                                ordered.sizes,
+                            )
+                        }
+                        viewModel.defFilePaths = paths
+                        viewModel.defOriginalNames = ordered.names
+                        viewModel.defFrameDates = ordered.dates
+                        viewModel.defFrameSizes = sizes
                         viewModel.defFromVideo = batch.fromVideo
+                        viewModel.defOrderMode = FrameOrderMode.NAME
                     } else {
+                        viewModel.defOrderMode = FrameOrderMode.NAME
                         viewModel.defFilePaths = emptyList()
                         viewModel.defOriginalNames = emptyList()
                         viewModel.defFrameSizes = emptyMap()
@@ -128,11 +146,11 @@ object AnalysisDeformedBatchHelper {
             } catch (e: Exception) {
                 Timber.e(e, "Error handling batch")
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(
+                    FaqRedirect.snackbar(
                         activity,
                         activity.getString(R.string.error_loading_images, e.message),
-                        Toast.LENGTH_LONG,
-                    ).show()
+                        R.string.url_faq_import_deformed,
+                    )
                 }
             } finally {
                 withContext(NonCancellable + Dispatchers.Main) {

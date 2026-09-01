@@ -33,15 +33,16 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.ParamClipboard
+import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.CrispToast
+import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.Dispatchers
@@ -161,14 +162,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             DicKeys.SWEEP_STRAIN_WINS,
             solved = true,
         )
-        val skippedCodes = intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_CODES) ?: IntArray(0)
-        val skipped = nodesFrom(
-            DicKeys.SWEEP_SKIP_SUBSETS,
-            DicKeys.SWEEP_SKIP_STEPS,
-            DicKeys.SWEEP_SKIP_STRAIN_WINS,
-            solved = false,
-            codes = skippedCodes,
-        )
+        val skipped = skippedNodesFromIntent(intent)
         val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.window }))
         solvedNodes = nodes.filter { it.solved }
         // Frame-index lookup, so per-frame loops don't scan solvedNodes (was O(F²)).
@@ -267,14 +261,17 @@ class VsgLatticeActivity : AppCompatActivity() {
     }
 
     /**
-     * Scrub readout: x only. y is already at the scrub point on the plot itself
-     * (the dot + value label VsgPlotView draws there), and params are already on
-     * [chipSelectedParams] -- showing either again here would be the same fact
-     * twice, ~2dp apart, at two different precisions.
+     * Scrub readout: x plus the unmuted series' y values (one series → `y=…`,
+     * several → each `label=value`).
      */
     private fun scrubReadout(x: Float, samples: List<VsgPlotView.Sample>): CharSequence {
         if (x.isNaN() || samples.isEmpty()) return ""
-        return getString(R.string.vsg_lattice_scrub_x_fmt, x)
+        return if (samples.size == 1) {
+            getString(R.string.vsg_lattice_scrub_xy_fmt, x, samples[0].value)
+        } else {
+            val ys = samples.joinToString("  ") { "${it.label}=${"%.4g".format(it.value)}" }
+            getString(R.string.vsg_lattice_scrub_x_multi_fmt, x, ys)
+        }
     }
 
     private fun maybeCoachTheGraph() {
@@ -322,8 +319,14 @@ class VsgLatticeActivity : AppCompatActivity() {
         val summary = findViewById<TextView>(R.id.tvLatticeSummary)
         if (solvedCount == 0) {
             summary.text = getString(R.string.vsg_lattice_all_failed)
+            summary.isClickable = true
+            summary.setOnClickListener {
+                FaqRedirect.confirm(this, R.string.url_faq_engine_vsg)
+            }
             return
         }
+        summary.isClickable = false
+        summary.setOnClickListener(null)
         summary.text = if (stepDenom > 0) {
             resources.getQuantityString(
                 R.plurals.vsg_lattice_summary_fmt,
@@ -346,13 +349,36 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private fun showSkipReason(node: VsgLatticeView.Node) {
         val reason = node.failureReason.ifEmpty { getString(R.string.sweep_node_skipped) }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(
-                getString(R.string.sweep_node_title_fmt, node.subset, node.step, node.window),
+        val faqRes = node.failureCode?.let { EngineFailure.faqUrlRes(it) }
+            ?: R.string.url_faq_engine_vsg
+        FaqRedirect.errorDialog(
+            this,
+            getString(R.string.sweep_node_title_fmt, node.subset, node.step, node.window),
+            reason,
+            faqRes,
+        )
+    }
+
+    private fun skippedNodesFromIntent(intent: Intent): List<VsgLatticeView.Node> {
+        val nodes = SkippedNode.decodeFromExtras(
+            intent.getStringExtra(DicKeys.SWEEP_SKIPPED),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_SUBSETS),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_STEPS),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_CODES),
+        )
+        return nodes.map { node ->
+            VsgLatticeView.Node(
+                subset = node.subset,
+                step = node.step,
+                window = node.strainWindow,
+                vsg = VsgStudy.vsgFor(node.strainWindow),
+                solved = false,
+                frameIndex = -1,
+                failureReason = getString(EngineFailure.shortReasonRes(node.code)),
+                failureCode = node.code,
             )
-            .setMessage(reason)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
+        }
     }
 
     private fun nodesFrom(
@@ -371,12 +397,13 @@ class VsgLatticeActivity : AppCompatActivity() {
                 subset = subsets[i],
                 step = steps[i],
                 window = windows[i],
-                vsg = VsgStudy.vsgFor(steps[i], windows[i]),
+                vsg = VsgStudy.vsgFor(windows[i]),
                 solved = solved,
                 frameIndex = if (solved) i else -1,
                 failureReason = codes.getOrNull(i)
                     ?.let { code -> getString(EngineFailure.shortReasonRes(code)) }
                     .orEmpty(),
+                failureCode = codes.getOrNull(i),
             )
         }
     }

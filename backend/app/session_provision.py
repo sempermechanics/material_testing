@@ -2,7 +2,7 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from . import drive, firestore_repo as repo
+from . import drive, firestore_repo as repo, statuses
 from . import observability as obs
 from .config import settings
 
@@ -84,7 +84,8 @@ def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
         else:
             # A retry is coming. Keep the session so the task can resume, and
             # mark it so a polling client stops waiting and rebuilds instead.
-            repo.set_session_status(sid, "PROVISION_FAILED", error_code="drive_provision_failed")
+            repo.set_session_status(sid, statuses.SESSION_PROVISION_FAILED,
+                                    error_code="drive_provision_failed")
         raise
 
     repo.set_session_status(sid, "UPLOADING")

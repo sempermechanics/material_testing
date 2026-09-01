@@ -68,6 +68,8 @@ class VsgLatticeView @JvmOverloads constructor(
         val solved: Boolean,
         val frameIndex: Int = -1,
         val failureReason: String = "",
+        /** Native / run code when [solved] is false; drives the FAQ Why? hop. */
+        val failureCode: Int? = null,
     )
 
     /** Invoked when a solved node is tapped. */

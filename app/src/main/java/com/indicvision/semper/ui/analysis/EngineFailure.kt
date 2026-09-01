@@ -3,15 +3,7 @@ package com.indicvision.semper.ui.analysis
 import androidx.annotation.StringRes
 import com.indicvision.semper.R
 
-/**
- * Why the engine produced nothing, as a string resource.
- *
- * The codes are the same for a single analysis, a batch and a sweep, and they
- * surface in three places — the failure dialog, the sweep summary and the
- * lattice's per-node reason. One mapping, resolved wherever there is a Context
- * to translate with, so a reason can never read differently depending on which
- * screen showed it.
- */
+/** Maps engine error codes to the same user-facing strings on every screen. */
 object EngineFailure {
 
     /** AKAZE could not match the pair. */
@@ -29,6 +21,7 @@ object EngineFailure {
         INIT,
         CONVERGENCE,
         VSG,
+        UNKNOWN,
     }
 
     private fun cause(engineErrorCode: Int): Cause = when (engineErrorCode) {
@@ -36,43 +29,40 @@ object EngineFailure {
         ENGINE_ERROR_ROI -> Cause.ROI
         ENGINE_ERROR_INIT -> Cause.INIT
         AnalysisRunCodes.ERROR_LOW_CONVERGENCE -> Cause.CONVERGENCE
+        0 -> Cause.VSG
+        in 1..Int.MAX_VALUE -> Cause.UNKNOWN
         else -> Cause.VSG
     }
 
-    /**
-     * The full explanation for [engineErrorCode] — what to change and why.
-     * Callers may still pass the raw code as a format argument; known causes
-     * ignore it. Zero and unrecognised codes land on the strain-window case,
-     * matching [shortReasonRes].
-     */
+    /** Full explanation for dialogs. */
     @StringRes
     fun reasonRes(engineErrorCode: Int): Int = when (cause(engineErrorCode)) {
         Cause.FEATURES -> R.string.sweep_fail_features
         Cause.ROI -> R.string.sweep_fail_roi
         Cause.INIT -> R.string.sweep_fail_init
         Cause.CONVERGENCE -> R.string.error_low_convergence
+        Cause.UNKNOWN -> R.string.sweep_fail_unknown
         Cause.VSG -> R.string.sweep_reason_vsg
     }
 
-    /**
-     * A one-line label for the same failure, in the terms the measurement is
-     * discussed in rather than the engine's — decorrelation, a subset that will
-     * not fit, a strain window nothing survived.
-     *
-     * This is what a lattice node shows: at a glance across a grid of them, the
-     * pattern of *which* combinations failed is the information, and a paragraph
-     * per node buries it. The full text stays for the dialog.
-     *
-     * Zero and unrecognised codes land on the strain-window case deliberately: a
-     * combination that returns no points has almost always asked for a window the
-     * ROI cannot support at that step.
-     */
+    /** One-line label for lattice nodes. Code 0 → strain window; unknown positive → [Cause.UNKNOWN]. */
     @StringRes
     fun shortReasonRes(engineErrorCode: Int): Int = when (cause(engineErrorCode)) {
         Cause.FEATURES -> R.string.sweep_reason_decorrelated
         Cause.ROI -> R.string.sweep_reason_subset_too_big
         Cause.INIT -> R.string.sweep_reason_decode
         Cause.CONVERGENCE -> R.string.sweep_reason_low_convergence
+        Cause.UNKNOWN -> R.string.sweep_reason_unknown
         Cause.VSG -> R.string.sweep_reason_vsg
+    }
+
+    @StringRes
+    fun faqUrlRes(engineErrorCode: Int): Int = when (cause(engineErrorCode)) {
+        Cause.FEATURES -> R.string.url_faq_engine_features
+        Cause.ROI -> R.string.url_faq_engine_roi
+        Cause.INIT -> R.string.url_faq_engine_init
+        Cause.CONVERGENCE -> R.string.url_faq_engine_convergence
+        Cause.UNKNOWN -> R.string.url_faq_engine_vsg
+        Cause.VSG -> R.string.url_faq_engine_vsg
     }
 }

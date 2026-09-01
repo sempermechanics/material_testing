@@ -294,7 +294,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 summaryFieldIndices,
                 perFrameSummaryRanges,
             )
-        }.onFailure { Timber.w(it, "Could not persist summary field ranges for %s", batchDir) }
+        }.onFailure { Timber.w(it, "Could not persist summary field ranges") }
     }
 
     // Images an earlier run left behind that this one no longer has. This is
@@ -319,7 +319,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
-        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes)
+        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
         lastRefPath = refPngPath
 
         val cloudEnabled = DicSettings.saveToCloud(appContext)
@@ -350,6 +350,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 frameCount = solvedFrames,
                 stopCode = engineErrorCode.also { lastStopCode = it },
                 plannedFrameCount = plannedFrames.also { lastPlannedFrames = it },
+                captureFloor = captureFloor,
                 // The names actually on disk in raw_deformed/ — reopening a
                 // session, exporting and cloud upload resolve images by these.
                 defNames = persistedRawNames.mapIndexed { i, persisted ->

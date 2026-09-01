@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.imaging.BitmapDecode
+import com.indicvision.semper.imaging.ExifOrientedSize
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -131,13 +132,21 @@ object FrameImportHelper {
     /**
      * Bounds-only decode when possible; JNI on file bytes if BitmapFactory
      * cannot read the container (rare formats the native stack still accepts).
+     *
+     * The bounds path is corrected for EXIF orientation and the JNI path is
+     * not, on purpose: OpenCV already rotates in `imdecode`, BitmapFactory
+     * never does. Both must land on the size the *engine* will see, because
+     * this is the number the reference-match check compares against a
+     * reference measured through OpenCV. Skipping the correction made a
+     * portrait phone photo picked as both reference and deformed frame report
+     * a size mismatch against itself. See [ExifOrientedSize].
      */
     private suspend fun probeImageSize(file: File): Pair<Int, Int>? {
         currentCoroutineContext().ensureActive()
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, opts)
         if (opts.outWidth > 0 && opts.outHeight > 0) {
-            return opts.outWidth to opts.outHeight
+            return ExifOrientedSize.applyTo(file, opts.outWidth, opts.outHeight)
         }
         return withContext(SemperNativeLib.nativeDispatcher) {
             currentCoroutineContext().ensureActive()

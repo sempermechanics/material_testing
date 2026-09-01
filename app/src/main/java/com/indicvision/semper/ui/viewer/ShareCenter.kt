@@ -22,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
@@ -48,8 +49,9 @@ import java.util.zip.ZipOutputStream
  * The Results share sheet (wireframe 08). One scope rule: photos share the
  * current frame; the PDF and CSV cover the whole analysis; the ZIP bundles
  * everything. Fast single-photo export still generates into `cacheDir/share`
- * then offers Save/Share. Slow exports (PDF, ZIP, all-fields, animations, CSV)
- * pick a Save-to-Files destination first, then write there.
+ * then offers Save/Share. Slow exports (PDF, ZIP, all-fields, field GIFs, CSV)
+ * pick a Save-to-Files destination first, then write there. Field GIFs are
+ * single-setting only; a parameter sweep hides that row.
  */
 class ShareCenter(private val host: ResultViewerActivity) {
 
@@ -101,9 +103,15 @@ class ShareCenter(private val host: ResultViewerActivity) {
             sheet.dismiss()
             offerSlowExport(KIND_PHOTOS, "application/zip", photosZipName(), R.string.share_generating)
         }
-        v.findViewById<View>(R.id.rowShareAnimations).setOnClickListener {
-            sheet.dismiss()
-            offerSlowExport(KIND_GIFS, "application/zip", animationsZipName(), R.string.share_generating_gif)
+        // Parameter sweeps are not a time series — no summary GIF and no Animations row.
+        val animationsRow = v.findViewById<View>(R.id.rowShareAnimations)
+        if (s.stepPerFrame != null) {
+            animationsRow.visibility = View.GONE
+        } else {
+            animationsRow.setOnClickListener {
+                sheet.dismiss()
+                offerSlowExport(KIND_GIFS, "application/zip", animationsZipName(), R.string.share_generating_gif)
+            }
         }
         v.findViewById<View>(R.id.rowSharePdf).setOnClickListener {
             sheet.dismiss()
@@ -158,7 +166,10 @@ class ShareCenter(private val host: ResultViewerActivity) {
         KIND_ZIP -> listOf(everythingZip(report)) to "application/zip"
         KIND_CSV -> listOf(batchCsv()) to "text/csv"
         KIND_PHOTOS -> allFieldPhotos() to "image/png"
-        KIND_GIFS -> fieldAnimations() to "image/gif"
+        KIND_GIFS -> {
+            check(requireSnapshot().stepPerFrame == null) { "Animations are not offered for sweeps" }
+            fieldAnimations() to "image/gif"
+        }
         else -> error("Unknown share kind $kind")
     }
 
@@ -329,7 +340,9 @@ class ShareCenter(private val host: ResultViewerActivity) {
         dataIndex: Int,
         typeString: String,
         frameIndex: Int,
+        baseCache: MutableMap<Pair<Int, Int>, Bitmap>? = null,
     ): Bitmap {
+        // Optional cache: multi-field export reuses one decoded reference bitmap.
         val s = requireSnapshot()
         val renderScale = VisualizationEngine.cappedRenderScale(s.imgW, s.imgH, VisualizationEngine.REPORT_MAX_EDGE)
         val renderW = (s.imgW * renderScale).toInt().coerceAtLeast(1)
@@ -345,7 +358,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             null,
             maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
         )
-        val base = loadCappedBase(s, renderW, renderH)
+        val base = loadCappedBase(s, renderW, renderH, baseCache)
         val out = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         canvas.drawBitmap(base, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
@@ -359,7 +372,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             imageName = sourceImageName(s, frameIndex),
         )
         heatmap.recycle()
-        if (base !== s.baseImage) base.recycle()
+        if (baseCache == null && base !== s.baseImage) base.recycle()
         return out
     }
 
@@ -376,14 +389,42 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * draws into — prefer the on-disk reference (inSampleSize-decoded) over the
      * viewer's display bitmap so export quality doesn't depend on viewer scale.
      */
-    private fun loadCappedBase(s: Snapshot, renderW: Int, renderH: Int): Bitmap {
+    private fun loadCappedBase(
+        s: Snapshot,
+        renderW: Int,
+        renderH: Int,
+        cache: MutableMap<Pair<Int, Int>, Bitmap>? = null,
+    ): Bitmap {
+        val key = renderW to renderH
+        cache?.get(key)?.let { return it }
         s.refImagePath?.let { path ->
-            BitmapDecode.decodeFileForView(path, renderW, renderH, VisualizationEngine.REPORT_MAX_EDGE)
-                ?.let { return it }
+            BitmapDecode.decodeFileForView(
+                path,
+                renderW,
+                renderH,
+                VisualizationEngine.REPORT_MAX_EDGE,
+                rawWidth = s.imgW,
+                rawHeight = s.imgH,
+            )?.let { decoded ->
+                cache?.put(key, decoded)
+                return decoded
+            }
         }
         val display = s.baseImage ?: error("No reference image for export")
-        if (display.width == renderW && display.height == renderH) return display
-        return display.scale(renderW, renderH)
+        val scaled = if (display.width == renderW && display.height == renderH) {
+            display
+        } else {
+            display.scale(renderW, renderH)
+        }
+        if (scaled !== display) cache?.put(key, scaled)
+        return scaled
+    }
+
+    private fun recycleBaseCache(cache: MutableMap<Pair<Int, Int>, Bitmap>, s: Snapshot) {
+        cache.values.forEach { bmp ->
+            if (bmp !== s.baseImage) bmp.recycle()
+        }
+        cache.clear()
     }
 
     private fun writePng(bmp: Bitmap, name: String): File {
@@ -403,11 +444,16 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     private fun allFieldPhotos(): List<File> {
         val s = requireSnapshot()
-        return FIELDS.map { (label, idx) ->
-            writePng(
-                renderAnnotated(s.data, idx, label, s.frameIndex),
-                "${s.baseName}_${label}_frame${s.frameIndex + 1}.png",
-            )
+        val baseCache = mutableMapOf<Pair<Int, Int>, Bitmap>()
+        return try {
+            FIELDS.map { (label, idx) ->
+                writePng(
+                    renderAnnotated(s.data, idx, label, s.frameIndex, baseCache),
+                    "${s.baseName}_${label}_frame${s.frameIndex + 1}.png",
+                )
+            }
+        } finally {
+            recycleBaseCache(baseCache, s)
         }
     }
 
@@ -443,14 +489,25 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val frames = s.batchFiles.mapIndexed { index, file ->
             AnalysisCsvWriter.Frame(
                 image = if (sweep) sweepImage else s.defNames.getOrNull(index) ?: "Frame_${index + 1}",
-                subset = s.subsetPerFrame?.getOrNull(index) ?: 0,
-                step = s.stepPerFrame?.getOrNull(index) ?: 0,
-                strainWindow = s.strainWindowPerFrame?.getOrNull(index) ?: 0,
+                subset = s.subsetPerFrame?.getOrNull(index) ?: s.subset,
+                step = s.stepPerFrame?.getOrNull(index) ?: s.step,
+                strainWindow = s.strainWindowPerFrame?.getOrNull(index) ?: s.strainWindow,
                 data = { DicResult.decodeDatFile(file) },
             )
         }
+        val metadata = AnalysisCsvWriter.Metadata(
+            referenceName = s.referenceName.ifBlank { s.baseName },
+            strainMethod = s.strainMethod,
+            imgW = s.imgW,
+            imgH = s.imgH,
+            roiX = s.roiX,
+            roiY = s.roiY,
+            roiW = s.roiW,
+            roiH = s.roiH,
+            captureFloor = s.captureFloor,
+        )
         val f = File(shareDir(), "${s.baseName}_data.csv")
-        AnalysisCsvWriter.write(f, sweep, frames)
+        AnalysisCsvWriter.write(f, sweep, frames, metadata)
         return f
     }
 
@@ -510,7 +567,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
      * ├── {base}_report.pdf                    (root)
      * └── photos_{ts}/
      *     ├── raw photos/                      reference + deformed originals
-     *     ├── animations/                      U, V, Exx, Eyy, Exy as looping GIFs
+     *     ├── animations/                      U..Exy GIFs (single-setting only)
      *     └── results/<NNN_frame>/             U, V, Exx, Eyy, Exy per frame
      * ```
      */
@@ -520,7 +577,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         // per-frame result images the last 40%.
         val pdf = allFramesPdf { pct, label -> report(pct * 60 / 100, label) }
         val csv = batchCsv()
-        val animations = fieldAnimations()
+        val animations = if (s.stepPerFrame != null) emptyList() else fieldAnimations()
         report(62, "Bundling files…")
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val f = File(shareDir(), "${s.baseName}_everything_$ts.zip")
@@ -592,19 +649,34 @@ class ShareCenter(private val host: ResultViewerActivity) {
             val prefix = (index + 1).toString().padStart(3, '0')
             val frameName = s.defNames.getOrNull(index)?.substringBeforeLast('.') ?: "Frame_${index + 1}"
             val folder = "photos_$ts/results/${prefix}_$frameName"
-            for ((label, idx) in FIELDS) {
-                var bmp: Bitmap? = null
-                try {
-                    bmp = renderAnnotated(data, idx, label, index)
-                    zip.putNextEntry(ZipEntry("$folder/$label.png"))
-                    bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, zip)
-                    zip.closeEntry()
-                } catch (e: Exception) {
-                    // One unrenderable field shouldn't abort the whole export.
-                    Timber.w(e, "Skipping %s of frame %d in ZIP export", label, index + 1)
-                } finally {
-                    bmp?.recycle()
-                }
+            val baseCache = mutableMapOf<Pair<Int, Int>, Bitmap>()
+            try {
+                addFrameResultImages(zip, data, index, folder, baseCache)
+            } finally {
+                recycleBaseCache(baseCache, s)
+            }
+        }
+    }
+
+    private fun addFrameResultImages(
+        zip: ZipOutputStream,
+        data: FloatArray,
+        index: Int,
+        folder: String,
+        baseCache: MutableMap<Pair<Int, Int>, Bitmap>,
+    ) {
+        for ((label, idx) in FIELDS) {
+            var bmp: Bitmap? = null
+            try {
+                bmp = renderAnnotated(data, idx, label, index, baseCache)
+                zip.putNextEntry(ZipEntry("$folder/$label.png"))
+                bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, zip)
+                zip.closeEntry()
+            } catch (e: Exception) {
+                // One unrenderable field shouldn't abort the whole export.
+                Timber.w(e, "Skipping %s of frame %d in ZIP export", label, index + 1)
+            } finally {
+                bmp?.recycle()
             }
         }
     }
@@ -637,7 +709,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val baseImage: Bitmap?,
         val refImagePath: String?,
         val defImagePaths: List<String>,
-        /** The viewer's animation builder, so a share reuses what it already rendered. */
+        /** Single-setting overview builder; null on a parameter sweep. */
         val summary: SummaryAnimation?,
         /** Whole-sequence colour bounds of a field, or null if it has no data. */
         val summaryBounds: (Int) -> Pair<Float, Float>?,
@@ -648,6 +720,16 @@ class ShareCenter(private val host: ResultViewerActivity) {
          * reusing the one on screen.
          */
         val buildReportAt: (Int, FloatArray) -> com.indicvision.semper.report.ReportData?,
+        /** The floor the frames were captured at; null for an imported analysis. */
+        val captureFloor: CaptureNoiseFloor? = null,
+        val referenceName: String = "",
+        val strainMethod: String = "VSG",
+        val subset: Int = 41,
+        val strainWindow: Int = 15,
+        val roiX: Int = 0,
+        val roiY: Int = 0,
+        val roiW: Int = 0,
+        val roiH: Int = 0,
     ) {
         /** Grid pitch of frame [index] — what rendering that frame depends on. */
         fun stepAt(index: Int): Int = stepPerFrame?.getOrNull(index) ?: step

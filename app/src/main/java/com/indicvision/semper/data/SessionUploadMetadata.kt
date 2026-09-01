@@ -146,10 +146,7 @@ object SessionUploadMetadata {
                     .put(
                         "skipped",
                         JSONObject()
-                            .put("subsets", JSONArray(record.sweepSkipSubsets))
-                            .put("steps", JSONArray(record.sweepSkipSteps))
-                            .put("strainWindows", JSONArray(record.sweepSkipStrainWindows))
-                            .put("codes", JSONArray(record.sweepSkipCodes)),
+                            .put("nodes", SkippedNode.toMetadataJsonArray(record.resolvedSkipNodes())),
                     ),
             )
         }

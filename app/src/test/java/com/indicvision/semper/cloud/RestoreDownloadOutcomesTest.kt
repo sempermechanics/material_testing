@@ -1,5 +1,6 @@
 package com.indicvision.semper.cloud
 
+import com.indicvision.semper.data.CorruptTransferException
 import com.indicvision.semper.data.RestoreDownloadOutcomes
 import com.indicvision.semper.data.net.HttpStatus
 import org.junit.Assert.assertEquals
@@ -83,7 +84,7 @@ class RestoreDownloadOutcomesTest {
     }
 
     @Test
-    fun `ZipException and corrupt-transfer messages are terminal`() {
+    fun `ZipException and CorruptTransferException are terminal`() {
         assertTrue(
             RestoreDownloadOutcomes.isTerminalCorruptFailure(
                 java.util.zip.ZipException("invalid distance too far back"),
@@ -91,7 +92,7 @@ class RestoreDownloadOutcomesTest {
         )
         assertTrue(
             RestoreDownloadOutcomes.isTerminalCorruptFailure(
-                IllegalStateException("Session.zip sha256 mismatch — corrupt transfer"),
+                CorruptTransferException("session_zip_sha256_mismatch"),
             ),
         )
         assertFalse(

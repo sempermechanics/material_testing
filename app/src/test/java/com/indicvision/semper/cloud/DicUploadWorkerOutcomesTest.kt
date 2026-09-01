@@ -7,18 +7,31 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.File
 import kotlin.io.path.createTempDirectory
 
 /**
  * Pins [DicUploadWorker] quota / fail / retry seams without WorkManager.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class DicUploadWorkerOutcomesTest {
 
     @Test
     fun `quota exhausted fails permanently`() {
+        val quotaBody = """{"detail":"session_quota_exceeded: 5/5 analyses stored."}"""
         assertEquals(ListenableWorker.Result.failure(), UploadWorkOutcomes.fromHttpCode(409))
-        assertTrue(UploadWorkOutcomes.isQuotaExhausted(409))
+        assertTrue(UploadWorkOutcomes.isQuotaExhausted(409, quotaBody))
+        assertFalse(UploadWorkOutcomes.isQuotaExhausted(409))
+        assertFalse(
+            UploadWorkOutcomes.isQuotaExhausted(
+                409,
+                """{"detail":"device_not_active"}""",
+            ),
+        )
         assertFalse(UploadWorkOutcomes.isQuotaExhausted(413))
         assertEquals(ListenableWorker.Result.failure(), UploadWorkOutcomes.fromHttpCode(413))
     }

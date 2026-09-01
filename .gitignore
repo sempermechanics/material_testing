@@ -36,11 +36,16 @@ app/src/main/cpp/third_party/*
 .artifacts/
 .vscode/*
 .cursor/
+.hitl-pull/*
 
 # === Kotlin compiler session data ===
 .kotlin/
 __pycache__/
 *.pyc
+
+# === Python virtualenv (BACKEND_SETUP_GCP.md tells contributors to make one here) ===
+.venv/
+venv/
 
 # === Python test / coverage artifacts ===
 .coverage

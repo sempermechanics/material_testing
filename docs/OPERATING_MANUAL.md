@@ -2,13 +2,15 @@
 
 How to get displacement and strain fields out of a DIC image set, using the app.
 
-<!-- **For:** a graduate researcher who knows DIC basics — subsets, correlation,
-strain fields — and has not used this app.
-
-**Not covered:** speckle patterning, lighting, cameras, rigs, calibration and
-how to choose test parameters. Those are experiment questions. Use *A Good
+Lighting, rig stability, and the measurement floor — why they dominate strain
+noise on a static check — are covered in
+[app/NOISE_FLOOR_STRAIN_ACCURACY.md](app/NOISE_FLOOR_STRAIN_ACCURACY.md). For
+broader DIC practice (speckle paint, cameras, calibration), see *A Good
 Practices Guide for Digital Image Correlation* (iDICs). This manual starts once
-you have images. -->
+you have images.
+
+<!-- **For:** a graduate researcher who knows DIC basics — subsets, correlation,
+strain fields — and has not used this app. -->
 
 | | |
 |---|---|
@@ -85,7 +87,9 @@ Send crash reports**.
 <img src="images/home.png" width="300" alt="Home screen">
 
 Home lists your analyses. Tap one to open it. Long-press for select, rename,
-delete. Pull down to sync. **+** starts a new analysis.
+delete. Pull down to sync. **+** expands to **Import** (pick existing photos or
+video) or **Record** (test shot in the phone Camera app, draw the area to
+check for contrast, then a timed capture with focus locked from that shot).
 
 ---
 
@@ -124,11 +128,13 @@ Tap each dropzone and pick your images:
 
 <img src="images/new-analysis-source.png" width="300" alt="The New analysis sheet">
 
-The **New analysis** sheet opens on an **Images** tab — your device's gallery,
-three columns, inside the sheet, with videos badged. Tapping the **Files** tab
-hands you to the system file browser instead; that is still the only route to RAW
-and DNG. Picking deformed frames is multi-select: tap the tiles you want and
-confirm with **Use N**. Select-all lives in the three-dot menu.
+The **New analysis** sheet opens full height on an **Images** tab — your device's
+gallery, three columns, with videos badged so you can tell them apart. For about
+1 second the grid is dimmed behind a large centred hint so you read "Select
+the reference image" before tiles unlock. Tapping the **Files** tab hands you to the
+system file browser instead; that is still the only route to RAW and DNG. Picking
+deformed frames is multi-select: tap the tiles you want and confirm with
+**Use N**. Select-all lives in the three-dot menu.
 
 The sheet asks for media permission the first time the Images tab needs it:
 
@@ -159,17 +165,19 @@ deformed frame the control is hidden.
 
 <img src="images/step2-parameters.png" width="300" alt="Step 2 parameters">
 
-Three decisions:
+Three decisions, in this order:
 
-- **Region of interest** — defaults to the full image. **Edit** opens the editor
-  ([§6](#6-region-of-interest)).
 - **Single setting** or **Parameter sweep** — Single solves every frame once. A
   parameter sweep solves one frame many times ([§7](#7-parameter-sweeps)).
-- **Advanced parameters** — [§5](#5-parameters). If you copied a set of
-  parameters from a sweep lattice, a **Paste params** chip appears here and fills
-  all three in one tap.
+- **Region of interest** — defaults to the full image. **Edit** opens the editor
+  ([§6](#6-region-of-interest)).
+- **Parameters** — in Single, the advanced set ([§5](#5-parameters)). In Sweep,
+  the subset range, strain-window range, and step as subset ÷ N (default 3),
+  with overlap shown at the end of that row.
+  If you copied a set of parameters from a sweep lattice, a **Paste params**
+  chip appears in Single and fills subset, step and strain window in one tap.
 
-Then **Compute**.
+Then **Compute** (Single) or **Next: Summary →** (Sweep).
 
 ### While it runs
 
@@ -218,12 +226,14 @@ new one.
 
 ## 5. Parameters
 
-Single mode only. Slider or typed field, each with an ⓘ.
+Single mode only. Slider or typed field, each with an ⓘ. Step and overlap
+share a title row; the overlap ratio sits beside the step readout.
 
 | Parameter | Range | Reset to |
 |---|---|---|
 | Subset size | 15–121, odd | Recommended |
-| Step size | 1–30 | 5 |
+| Step size | 1–`min(30, subset/2)` | 5 |
+| Subset overlap | 0.50–0.99 (`1 − step / subset`) | Follows step |
 | Strain window | 5–101, odd | 15 |
 | Kernel | 4×4 Bicubic / 6×6 Keys | 4×4 Bicubic |
 
@@ -238,6 +248,11 @@ for 0.007 px accuracy, sampled on a 4×4 grid and taken as the median.
 
 It is a starting point. Touch the slider and it stops tracking the image.
 **Reset** brings it back.
+
+**Subset overlap** is how much neighbouring windows cover each other after a
+step: `overlap = 1 − step / subset`. The two controls stay in sync. The iDICs
+Good Practices Guide keeps overlap at least 0.5 and strictly below 1.0;
+typical values are about 0.50–0.75.
 
 ### Strain window and VSG
 
@@ -296,17 +311,20 @@ Good Practices Guide asks for (Tip 5.4).
 
 A sweep uses **one** deformed frame.
 
-### Setting it up (step 3)
+### Setting it up (step 2, then step 3)
 
-<img src="images/step3-sweep.png" width="300" alt="Sweep setup, step 3">
+Sweep parameters live on step 2. Step 3 is the summary: planned lattice, then
+the line cut, then **Compute**.
+
+<img src="images/step3-sweep.png" width="300" alt="Sweep summary, step 3">
 
 | Control | Range |
 |---|---|
-| Subset range | 15–121, odd |
-| Strain window range | 5–101, odd — min and max, the sweep's y axis |
-| Step denominator | 2–9 — step is `subset ÷ n`, never below 1 px |
-| Samples | 1–8 per axis |
-| Frame to sweep | radio list + number + preview |
+| Subset range | 15–121, odd (step 2) |
+| Strain window range | 5–101, odd — min and max, the sweep's y axis (step 2) |
+| Step size | subset ÷ N, N 2–9, default 3. Overlap on the same row is `1 − 1/N`. Pixel step is `round(subset / N)` (step 2) |
+| Frame to sweep | radio list + number + preview (step 2) |
+| Samples | 1–8 per axis (step 3, lattice gear) |
 
 Runtime is the product of the two sample counts. 8 × 8 is 64 solves. Start at
 3 × 3.
@@ -355,8 +373,8 @@ the coach mark on first visit is what names the axes.
 - **Drag across the plot** — a guide follows your finger, a dot marks the curve
   and the value is printed beside it. The **slider** under the plot does the same
   thing and stays in sync with the drag, which is easier one-handed.
-- The readout reads `x=…` only. The y value is printed on the plot at the scrub
-  point, and the parameters are already on the chip above.
+- The readout under the plot shows `x=…  y=…` for one unmuted curve, or `x=…`
+  plus each `label=value` when **All** is showing several series.
 - **Pinch to zoom**, **two-finger drag** to pan, **double-tap** to reset. The
   zoom survives stepping to another node; changing component resets it, because
   Exx, Eyy and Exy differ in magnitude.
@@ -396,27 +414,30 @@ which is why the hairline reads "≤" and "≥" rather than "Min"/"Max" — a ha
 outliers must not flatten the whole map. The ⓘ sheet still gives you the true
 extrema, and the two are allowed to disagree. Tap the bar to set fixed min/max
 (remembered per field). **Auto scale** drops a custom override and returns to the
-clamped bounds. The
-summary GIF and share field-animations still use a whole-sequence scale so the
+clamped bounds. On a single-setting analysis the
+summary GIF and share field GIFs still use a whole-sequence scale so the
 loop stays comparable.
 
 **Tap to probe.** There is no Inspect / X,Y / Max-Min row. A short tap on the
-heatmap — anywhere but the middle of the screen, which is reserved for showing
-and hiding chrome — places a crosshair and a plain-text reading at the nearest
-correlated point. Drag past the touch slop pans (or flings to the next frame when
-unzoomed); pinch still zooms. Tap the same point again, or the readout, to
-dismiss. Switching field or frame keeps the probe at the same image location and
-updates the value.
+heatmap — including the centre — places a crosshair and a plain-text reading at
+the nearest correlated point. The bars hide on an idle timer, not from a tap;
+a centre double-tap brings them back when they have faded. Drag past the touch
+slop pans (or flings to the next frame when unzoomed); pinch still zooms. Tap
+the readout chip to dismiss. Switching field or frame keeps the probe at the
+same image location and updates the value.
 
-**The summary comes first.** The viewer opens on a looping animation of the
-whole sequence in the current field — every frame, never longer than 10 seconds,
-about 300 ms a frame until the frame count forces it faster. While it builds you
-get a progress readout and a **Cancel**. **Next** enters the
+**The summary comes first** on a single-setting analysis. The viewer opens on a
+looping field overview of the whole sequence — every frame, never longer than
+10 seconds, about 300 ms a frame until the frame count forces it faster. It is
+framed on the same coloured region the live view rest-fits to (your ROI, or the
+accepted points), scaled to fill — not a letterboxed full photo. While it builds
+you get a progress readout and a **Cancel**. **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
-field. Field pills stay available while the GIF plays.
+field. Field pills stay available while it plays. A parameter sweep opens from
+the lattice onto one combination instead; there is no overview slot.
 
-(Animation playback needs Android 9 or newer. Below that you get the first frame
-and a note; the GIFs still export.)
+(Playback needs Android 9 or newer. Below that you get the first frame
+and a note; single-setting field GIFs still export.)
 
 **Frames.** Prev / Next step through; the counter shows the filename and
 `(i / N)`. Type a number in the small field under it and press Go to jump
@@ -454,13 +475,14 @@ at the top, with its own progress and a Cancel.
 |---|---|
 | Single Field | One PNG: current field and frame, annotated, composited to a 1280 px long edge |
 | All fields | Five PNGs for this frame, zipped; the sheet and each stamp name the source image |
-| Animations | Five looping GIFs — one per field, every frame, each on its own whole-sequence scale — zipped |
+| Animations | Single-setting only: five looping field GIFs on one whole-sequence scale, zipped |
 | PDF report | Every frame, plus a telemetry page |
 | CSV data | `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — a sweep adds `subset_px, step_px, strain_window, vsg_px` |
-| Everything (.zip) | Raw photos + animations + all fields + CSV + PDF |
+| Everything (.zip) | Raw photos + all fields + CSV + PDF; single-setting also includes the field GIFs |
 
-The animations are shared as a set, not one at a time — they are only comparable
-because they share a scale, and the set is what carries that.
+On a single-setting analysis the field GIFs are shared as a set, not one at a
+time — they are only comparable because they share a scale, and the set is what
+carries that.
 
 Build on the **CSV**. Coordinates are image pixels, displacements pixels,
 strains scientific notation. `znssd` is the match residual — filter on it to drop
@@ -549,10 +571,10 @@ tap **Re-check**.
 **Help & support** is the last section, and it now opens the **Manual** directly
 as well. **Send feedback** is for "this could be better" — it opens a mail with
 your app version and phone model and nothing else. Prefer the
-[Manual](https://semperdic.github.io/website/manual/) for how-to, and the
-[community](https://semperdic.github.io/website/community/) for questions, bugs,
-and feature requests (GitHub login required to post). The section also shows
-`support@indicvision.com` — selectable, so you can copy it if this device has no
+[Manual](https://sempermechanics.com/manual/) for how-to. Report bugs and
+request features from **Settings → Help & support** (opens the Support page).
+The section also shows
+`support@sempermechanics.com` — selectable, so you can copy it if this device has no
 mail app — and **Email support**, which opens a mail already carrying your
 account, device ID, app version and phone model for private or account issues.
 Write above that block; leave it in place.
@@ -576,9 +598,9 @@ Write above that block; leave it in place.
 | Only the first N frames | *Max frames* capped it |
 | Frames in the wrong order | Sort on step 1, then re-run |
 | Run vanished | The app was killed. No resume — run it again in the foreground |
-| Frames look incomparable | Auto colour scale. Fix the bounds, or use the summary animation — it already puts them on one |
+| Frames look incomparable | Auto colour scale. Fix the bounds, or on a single-setting run use the summary overview — it already puts them on one |
 | Summary still says "Rendering" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
-| Summary shows one frame, not a loop | Android 8 or older. The exported GIFs still animate |
+| Summary shows one frame, not a loop | Android 8 or older. Single-setting field GIFs still export |
 | Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
 | Badge stuck on Pending | Offline, Wi-Fi-only, or backup off |
 | Badge shows Failed | Tap it — the dialog names why (device conflict, too large, ran out of memory) and offers **Try again** |
@@ -587,7 +609,7 @@ Write above that block; leave it in place.
 | Phone out of space | **Settings → Storage → Free up space**, and consider setting an auto-free budget |
 | Still pending approval | Tap **Check status** — it never polls |
 | Sign-in refused after signing up | Open the verification link in your email, then try again |
-| Nothing here matches | **Settings → Help & support** — ask the community at [semperdic.github.io/website](https://semperdic.github.io/website/support/), or **Email support** (the mail carries your account, device and build) |
+| Nothing here matches | **Settings → Help & support** — [Support](https://sempermechanics.com/support/) or **Email support** (the mail carries your account, device and build) |
 
 ---
 
@@ -641,7 +663,7 @@ Admin accounts get **Settings → Account → Pending access requests**: everyon
 waiting, with **Approve** and **Deny**. Approved users get in when they next tap
 **Check status** — they are not notified, so tell them.
 
-You do not have to watch that list. The backend emails `support@indicvision.com`
+You do not have to watch that list. The backend emails `support@sempermechanics.com`
 the moment an account is created pending, naming the account and its user id,
 with both ways to approve it. One mail per account, at creation — approving,
 denying or signing in again sends nothing further. If no mail arrives, check the

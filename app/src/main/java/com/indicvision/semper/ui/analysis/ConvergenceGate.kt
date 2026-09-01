@@ -9,9 +9,10 @@ package com.indicvision.semper.ui.analysis
  * will be no better, and finishing the run only spends minutes producing fields
  * nobody should trust.
  *
- * Shared by the batch path and the sweep so the two cannot drift apart: the same
- * rule, counted the same way, whether the consecutive solves are successive
- * frames or successive parameter combinations.
+ * The batch path only. A sweep runs its whole plan: its consecutive solves are
+ * parameter combinations on one frame pair, not successive frames, so "the next
+ * one will be no better" does not follow — and the plan starts at the smallest
+ * subset, the one most likely to under-converge. See [VsgStudyRunner.run].
  */
 class ConvergenceGate(
     private val minPercent: Float = AnalysisViewModel.MIN_CONVERGENCE_PERCENT,

@@ -20,34 +20,54 @@ class VsgStudyTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `vsg follows the strain window relation`() {
-        assertEquals((15 - 1) * 5 + 1, VsgStudy.vsgFor(5, 15))
-        assertEquals(71, VsgStudy.Point(41, 5, 15).vsg)
+    fun `the gauge length is the strain window in pixels, whatever the step`() {
+        // The engine walks a circle of diameter strainWindow in physical
+        // pixels, so the step changes how many points fall inside it and not
+        // how big it is. Asserted at two very different steps because the old
+        // expression multiplied by the step and agreed with this only at 1.
+        assertEquals(15, VsgStudy.vsgFor(15))
+        assertEquals(15, VsgStudy.Point(41, 5, 15).vsg)
+        assertEquals(15, VsgStudy.Point(41, 20, 15).vsg)
     }
 
     // ------------------------------------------------------------------
-    // Step size (a single fixed fraction of the subset)
+    // Step size from subset overlap
     // ------------------------------------------------------------------
 
     @Test
-    fun `step size is the subset over the chosen denominator`() {
-        assertEquals(20, VsgStudy.stepSizeFor(40, 2)) // subset/2
-        assertEquals(13, VsgStudy.stepSizeFor(40, 3)) // subset/3, rounded
-        assertEquals(8, VsgStudy.stepSizeFor(40, 5)) // subset/5
+    fun `step size follows one minus overlap times subset`() {
+        assertEquals(20, VsgStudy.stepSizeFor(40, 0.5))
+        assertEquals(8, VsgStudy.stepSizeFor(40, 0.8))
+        assertEquals(13, VsgStudy.stepSizeFor(40, 2.0 / 3.0))
     }
 
     @Test
-    fun `step denominator is clamped to the slider range`() {
-        assertEquals(VsgStudy.stepSizeFor(41, VsgStudy.STEP_DENOM_MAX), VsgStudy.stepSizeFor(41, 99))
-        assertEquals(VsgStudy.stepSizeFor(41, VsgStudy.STEP_DENOM_MIN), VsgStudy.stepSizeFor(41, 1))
+    fun `overlap is clamped into the good-practice band`() {
+        assertEquals(VsgStudy.stepSizeFor(41, VsgStudy.MAX_OVERLAP), VsgStudy.stepSizeFor(41, 1.5))
+        assertEquals(VsgStudy.stepSizeFor(41, VsgStudy.MIN_OVERLAP), VsgStudy.stepSizeFor(41, 0.0))
+    }
+
+    @Test
+    fun `overlap for a step round-trips through stepSizeFor`() {
+        val subset = 41
+        val step = 5
+        val overlap = VsgStudy.overlapFor(subset, step)
+        assertEquals(step, VsgStudy.stepSizeFor(subset, overlap))
+        assertTrue(overlap in VsgStudy.MIN_OVERLAP..VsgStudy.MAX_OVERLAP)
+        assertTrue(overlap < 1.0)
     }
 
     @Test
     fun `step stays inside the engine's step range`() {
+        val overlaps = listOf(0.5, 0.6, 0.7, 0.8, 0.9, 0.99)
         for (subset in SubsetRecommender.MIN_SUBSET..SubsetRecommender.MAX_SUBSET step 2) {
-            for (d in VsgStudy.STEP_DENOM_MIN..VsgStudy.STEP_DENOM_MAX) {
-                val step = VsgStudy.stepSizeFor(subset, d)
-                assertTrue("step $step out of range: $subset ÷ $d", step in VsgStudy.MIN_STEP..VsgStudy.MAX_STEP)
+            for (overlap in overlaps) {
+                val step = VsgStudy.stepSizeFor(subset, overlap)
+                assertTrue(
+                    "step $step out of range: subset $subset overlap $overlap",
+                    step in VsgStudy.MIN_STEP..VsgStudy.maxStepFor(subset),
+                )
+                assertTrue(VsgStudy.overlapFor(subset, step) >= VsgStudy.MIN_OVERLAP - 1e-9)
             }
         }
     }
@@ -100,7 +120,7 @@ class VsgStudyTest {
         strainWinMin: Int = VsgStudy.MIN_STRAIN_WINDOW,
         strainWinMax: Int = 51,
         strainWinSamples: Int = 3,
-        stepDenominator: Int = 4,
+        overlap: Double = 0.75,
     ) = VsgStudy.plan(
         subsetMin,
         subsetMax,
@@ -108,7 +128,7 @@ class VsgStudyTest {
         strainWinMin,
         strainWinMax,
         strainWinSamples,
-        stepDenominator,
+        overlap,
     )
 
     @Test
@@ -128,9 +148,9 @@ class VsgStudyTest {
             subsetMax = 41,
             subsetSamples = 1,
             strainWinMax = VsgStudy.MAX_STRAIN_WINDOW,
-            stepDenominator = 3,
+            overlap = 2.0 / 3.0,
         )
-        assertEquals(setOf(VsgStudy.stepSizeFor(41, 3)), p.map { it.step }.toSet())
+        assertEquals(setOf(VsgStudy.stepSizeFor(41, 2.0 / 3.0)), p.map { it.step }.toSet())
     }
 
     @Test
@@ -144,7 +164,7 @@ class VsgStudyTest {
         val p = plan(
             subsetSamples = 1,
             strainWinSamples = 1,
-            stepDenominator = 2,
+            overlap = 0.5,
             strainWinMax = VsgStudy.MAX_STRAIN_WINDOW,
         )
         assertEquals(1, p.size)
@@ -211,10 +231,8 @@ class VsgStudyTest {
     @Test
     fun `windowForVsg inverts vsgFor`() {
         // A VSG that is exactly reachable maps back to its own window.
-        val step = 8
         val window = 15
-        val vsg = VsgStudy.vsgFor(step, window) // (15-1)*8+1 = 113
-        assertEquals(window, VsgStudy.windowForVsg(step, vsg))
+        assertEquals(window, VsgStudy.windowForVsg(VsgStudy.vsgFor(window)))
     }
 
     @Test
@@ -223,12 +241,12 @@ class VsgStudyTest {
         // ranges for every combination of inputs the UI can produce. The whole
         // grid is built flat, then walked once, so nothing is deeply nested.
         val samples = (VsgStudy.MIN_SAMPLES..VsgStudy.MAX_SAMPLES).toList()
-        val depths = (VsgStudy.STEP_DENOM_MIN..VsgStudy.STEP_DENOM_MAX).toList()
+        val overlaps = listOf(0.5, 0.6, 0.7, 0.8, 0.9, 0.99)
         val cases = (SubsetRecommender.MIN_SUBSET..SubsetRecommender.MAX_SUBSET step 8)
             .flatMap { min -> listOf(0, 8, 40, 60).map { min to (min + it) } }
             .flatMap { range -> samples.map { range to it } }
             .flatMap { (range, x) -> samples.map { Triple(range, x, it) } }
-            .flatMap { (range, x, y) -> depths.map { listOf(3, 15, 51).map { sw -> Case6(range, x, y, it, sw) } } }
+            .flatMap { (range, x, y) -> overlaps.map { listOf(3, 15, 51).map { sw -> Case6(range, x, y, it, sw) } } }
             .flatten()
 
         cases.forEach { c ->
@@ -239,13 +257,19 @@ class VsgStudyTest {
                 VsgStudy.MIN_STRAIN_WINDOW,
                 c.strainWinMax,
                 c.y,
-                c.depth,
+                c.overlap,
             )
             assertEquals("duplicates for $c", p.size, p.distinct().size)
         }
     }
 
-    private data class Case6(val range: Pair<Int, Int>, val x: Int, val y: Int, val depth: Int, val strainWinMax: Int)
+    private data class Case6(
+        val range: Pair<Int, Int>,
+        val x: Int,
+        val y: Int,
+        val overlap: Double,
+        val strainWinMax: Int,
+    )
 
     // ------------------------------------------------------------------
     // Field measurements

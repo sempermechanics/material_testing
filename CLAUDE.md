@@ -11,7 +11,7 @@ Windows: `gradlew.bat`. Quote `-Pandroid.testInstrumentationRunnerArguments…` 
 |---------|------|
 | `./gradlew ciReleaseGate` | Spotless, detekt, lintDebug, unit tests, R8, assembleRelease |
 | `./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug` | Tier 1 without R8 |
-| `./gradlew :app:koverLog` | Coverage log (floor 15; do not raise casually) |
+| `./gradlew :app:koverLog` | Coverage log (floor 27; do not raise casually) |
 | `./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 "-Pandroid.testInstrumentationRunnerArguments.notPackage=com.indicvision.semper.benchmark"` | Emulator instrumented; exclude benchmark package on debug |
 | `cd backend && python -m pytest tests/ -q --cov=app --cov-fail-under=75` | Backend (install lock + `requirements-test.txt`) |
 | `python scripts/render_legal_pages.py --check` | Hosted legal pages match `docs/legal/` |

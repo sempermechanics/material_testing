@@ -1,18 +1,21 @@
 # App test suite — workflow chunks
 
 Tests are organized into chunks that mirror the user journey through the app.
-Each chunk owns one layer; no duplicate assertions across chunks.
+Each chunk owns one layer; no duplicate assertions across chunks. Each workflow
+in [../WORKFLOWS.md](../WORKFLOWS.md) names the tests that pin it, so the two
+files answer opposite questions: "what covers this flow?" there, "what does this
+chunk own?" here.
 
 ## Chunk map
 
 | Chunk | User journey | JVM tests (`app/src/test`) | Instrumented (`androidTest`) |
 |-------|--------------|---------------------------|------------------------------|
 | **auth** | Splash → Auth / Pending / Home, re-auth, password rules | `auth/AccessRouterTest`, `ReauthFlowTest`, `PasswordPolicyTest` | `auth/FirebaseAuthIntegrationTest` |
-| **analysis** | Import → ROI → batch / parameter sweep | `analysis/VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `BitmapDecodeTest` | — |
+| **analysis** | Import → ROI → batch / parameter sweep; capture planner / budget | `analysis/VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `BitmapDecodeTest`; `capture/CapturePlanOptionsTest`, `CaptureFrameCostTest`, `CaptureBudgetTest`, `StillSequenceRunnerTest`, `CaptureWorkspaceTest`, `GrayPngEncoderTest`, `CaptureFocusLockTest` | — |
 | **session** | Session store durability, disk footprint, failure provenance | `session/SessionStoreAtomicTest`, `LocalStorageFootprintTest`, `FailureProvenanceTest` | — |
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `ReportBuilderMeanStdParityTest`, `GifEncoderTest`, `SummaryAnimationTest` | — |
 | **viewer** | Result viewer controls, frame cache bounds | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest` | — |
-| **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest` | — |
+| **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest` | — |
 | **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `DicSettingsMigrateTest` | — |
 | **analytics** | Consent-gated Firebase Analytics events | `analytics/SemperAnalyticsTest` | — |
 | **upgrade** | Prefs / session index forward compatibility | (covered in settings + session) | `upgrade/PrefsUpgradeSmokeTest` |

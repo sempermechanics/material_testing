@@ -1,6 +1,7 @@
 package com.indicvision.semper.session
 
 import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.ui.analysis.AnalysisRunCodes
 import com.indicvision.semper.ui.analysis.EngineFailure
 import org.junit.Assert.assertEquals
@@ -9,26 +10,26 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * What an analysis remembers about going wrong.
- *
- * The point of storing these on the record rather than passing them around is
- * that the answer to "why is this one short?" has to survive leaving the screen,
- * a restart, and a cloud round-trip. These pin the shape that makes that work.
- */
+/** Failure and sweep-skip fields on [SessionRecord] survive restart and cloud restore. */
 class FailureProvenanceTest {
 
-    private fun record(
-        stopCode: Int = 0,
-        frameCount: Int = 10,
-        plannedFrameCount: Int = 0,
-        skipCodes: List<Int> = emptyList(),
-    ) = SessionRecord(
+    private data class RecordArgs(
+        val stopCode: Int = 0,
+        val frameCount: Int = 10,
+        val plannedFrameCount: Int = 0,
+        val skipSubsets: List<Int> = emptyList(),
+        val skipSteps: List<Int> = emptyList(),
+        val skipWindows: List<Int> = emptyList(),
+        val skipCodes: List<Int> = emptyList(),
+        val skipNodes: List<SkippedNode> = emptyList(),
+    )
+
+    private fun record(args: RecordArgs = RecordArgs()) = SessionRecord(
         id = "s1",
         name = "run",
         createdAt = 0L,
         updatedAt = 0L,
-        frameCount = frameCount,
+        frameCount = args.frameCount,
         subset = 41,
         step = 5,
         strainWindow = 15,
@@ -41,9 +42,13 @@ class FailureProvenanceTest {
         refPath = "ref.png",
         refName = "ref.png",
         sessionDir = "/dir",
-        stopCode = stopCode,
-        plannedFrameCount = plannedFrameCount,
-        sweepSkipCodes = skipCodes,
+        stopCode = args.stopCode,
+        plannedFrameCount = args.plannedFrameCount,
+        sweepSkipSubsets = args.skipSubsets,
+        sweepSkipSteps = args.skipSteps,
+        sweepSkipStrainWindows = args.skipWindows,
+        sweepSkipCodes = args.skipCodes,
+        sweepSkippedNodes = args.skipNodes,
     )
 
     @Test
@@ -54,53 +59,60 @@ class FailureProvenanceTest {
     @Test
     fun `a run that stopped carries why, and what it had planned`() {
         val r = record(
-            stopCode = AnalysisRunCodes.ERROR_LOW_CONVERGENCE,
-            frameCount = 39,
-            plannedFrameCount = 50,
+            RecordArgs(
+                stopCode = AnalysisRunCodes.ERROR_LOW_CONVERGENCE,
+                frameCount = 39,
+                plannedFrameCount = 50,
+            ),
         )
 
         assertTrue(r.stoppedEarly)
-        // 39 solved out of 50 planned is the distinction the Home row draws.
         assertEquals(39, r.frameCount)
         assertEquals(50, r.plannedFrameCount)
     }
 
     @Test
     fun `the stored code resolves to a reason the user can read`() {
-        val r = record(stopCode = AnalysisRunCodes.ERROR_LOW_CONVERGENCE)
+        val r = record(RecordArgs(stopCode = AnalysisRunCodes.ERROR_LOW_CONVERGENCE))
 
-        // A resource id, not built text: the record outlives any one locale.
         assertTrue(EngineFailure.shortReasonRes(r.stopCode) != 0)
         assertNotEquals(
-            "a stopped run must not read as the generic case",
             EngineFailure.shortReasonRes(0),
             EngineFailure.shortReasonRes(r.stopCode),
         )
     }
 
     @Test
-    fun `skip codes stay aligned with the combinations they explain`() {
-        val r = record(
-            skipCodes = listOf(
-                EngineFailure.ENGINE_ERROR_FEATURES,
-                EngineFailure.ENGINE_ERROR_ROI,
+    fun `skip provenance stays aligned for typed nodes and legacy lists`() {
+        val typed = listOf(
+            SkippedNode(41, 5, 15, EngineFailure.ENGINE_ERROR_FEATURES),
+            SkippedNode(33, 3, 11, EngineFailure.ENGINE_ERROR_ROI),
+        )
+        assertEquals(typed, record(RecordArgs(skipNodes = typed)).resolvedSkipNodes())
+
+        val legacy = record(
+            RecordArgs(
+                skipSubsets = listOf(41, 33),
+                skipSteps = listOf(5, 3),
+                skipWindows = listOf(15, 11),
+                skipCodes = listOf(
+                    EngineFailure.ENGINE_ERROR_FEATURES,
+                    EngineFailure.ENGINE_ERROR_ROI,
+                ),
             ),
         )
-
-        assertEquals(2, r.sweepSkipCodes.size)
+        assertEquals(2, legacy.resolvedSkipNodes().size)
         assertNotEquals(
-            "decorrelation and an oversized subset must not read the same",
-            EngineFailure.shortReasonRes(r.sweepSkipCodes[0]),
-            EngineFailure.shortReasonRes(r.sweepSkipCodes[1]),
+            EngineFailure.shortReasonRes(legacy.resolvedSkipNodes()[0].code),
+            EngineFailure.shortReasonRes(legacy.resolvedSkipNodes()[1].code),
         )
     }
 
     @Test
     fun `records written before these fields existed still load`() {
-        // Defaults matter: the store deserialises older JSON without them.
-        val old = record(stopCode = 0, plannedFrameCount = 0)
+        val old = record(RecordArgs(stopCode = 0, plannedFrameCount = 0))
 
         assertFalse(old.stoppedEarly)
-        assertTrue(old.sweepSkipCodes.isEmpty())
+        assertTrue(old.resolvedSkipNodes().isEmpty())
     }
 }

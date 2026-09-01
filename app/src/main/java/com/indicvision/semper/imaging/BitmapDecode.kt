@@ -1,6 +1,6 @@
 // Bitmap decode/sample math: literal max-edge and sample-step constants read
-// clearest inline, so MagicNumber is suppressed for this whole file.
-@file:Suppress("MagicNumber")
+// clearest inline; helpers share one object so size/arity rules stay local.
+@file:Suppress("MagicNumber", "LongParameterList", "TooManyFunctions", "ReturnCount")
 
 package com.indicvision.semper.imaging
 
@@ -78,6 +78,22 @@ object BitmapDecode {
         return inSampleSize.coerceAtLeast(1)
     }
 
+    /** Width×height from a file header only; null when nothing decodable. */
+    fun storedBounds(path: String): Pair<Int, Int>? {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, opts)
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) return null
+        return opts.outWidth to opts.outHeight
+    }
+
+    /** Width×height from encoded bytes; null when nothing decodable. */
+    fun storedBounds(bytes: ByteArray): Pair<Int, Int>? {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) return null
+        return opts.outWidth to opts.outHeight
+    }
+
     /** Decode [bytes] with an inSampleSize that keeps the long edge ≤ [maxLongEdge]. */
     fun decodeByteArrayCapped(
         bytes: ByteArray,
@@ -95,26 +111,40 @@ object BitmapDecode {
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
     }
 
-    /** Decode a file path with inSampleSize for [reqWidth]×[reqHeight]. */
+    /** Decode a file path with inSampleSize for [reqWidth]×[reqHeight].
+     *
+     * When the file is a headerless RGBA blob from a DNG/RAW import (wrongly
+     * stored as `reference.png` by older builds, or still raw on disk), pass
+     * [rawWidth]×[rawHeight] so [RawRgba] can sample a display bitmap.
+     */
     fun decodeFileForView(
         path: String,
         reqWidth: Int,
         reqHeight: Int,
         maxLongEdge: Int = VisualizationEngine.DISPLAY_MAX_EDGE,
+        rawWidth: Int = 0,
+        rawHeight: Int = 0,
     ): Bitmap? {
         val file = File(path)
-        if (!looksLikePlatformRaster(file)) return null
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(path, bounds)
-        val sample = calculateInSampleSize(
-            bounds.outWidth,
-            bounds.outHeight,
-            reqWidth,
-            reqHeight,
-            maxLongEdge,
-        )
-        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        return BitmapFactory.decodeFile(path, opts)
+        if (looksLikePlatformRaster(file)) {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(path, bounds)
+            val sample = calculateInSampleSize(
+                bounds.outWidth,
+                bounds.outHeight,
+                reqWidth,
+                reqHeight,
+                maxLongEdge,
+            )
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            return BitmapFactory.decodeFile(path, opts)
+        }
+        if (rawWidth <= 0 || rawHeight <= 0) return null
+        if (!RawRgba.matches(file.length(), rawWidth, rawHeight)) return null
+        val maxEdge = max(reqWidth, reqHeight).coerceAtLeast(1).coerceAtMost(maxLongEdge)
+        return runCatching {
+            RawRgba.preview(file.readBytes(), rawWidth, rawHeight, maxEdge)
+        }.getOrNull()
     }
 
     /** Write RGBA bytes from a RAW/DNG stream into [dest]; return width×height. */

@@ -90,6 +90,16 @@ passwordless **link** flow is affected (the link opens in a browser and can't
 complete). Email/password reset links are read by the user in the browser and
 do **not** depend on this App Link.
 
+**The `intent-filter` is not the security boundary.** `AuthActivity` is
+`exported`, so any installed app can start it with an *explicit* intent and any
+`data` URI it likes — explicit starts never consult the filter, and `autoVerify`
+constrains only implicit matching. `AuthActivity.isTrustedAuthLink` therefore
+re-checks scheme and host against `AUTH_HOST` before it touches `intent.data`,
+and both the sign-in-link and password-reset handlers go through it. Change the
+domain in `AUTH_HOST` (one constant, in
+[AuthRepository.kt](../../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt))
+and the manifest filter together, or tapped links stop being recognised.
+
 ## 2. Backend — which project's tokens to accept
 
 The Cloud Run service verifies that a token's audience is a Firebase project

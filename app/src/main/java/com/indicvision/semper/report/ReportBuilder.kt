@@ -19,6 +19,7 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.data.DicUploadWorker
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -63,6 +64,8 @@ object ReportBuilder {
         val deformedImageName: String,
         /** At 940e57d cloud worker PDFs drew MAX only; viewer PDFs drew MAX+MIN. */
         val drawMinMarker: Boolean = true,
+        /** The floor the frames were captured at; null for an imported analysis. */
+        val captureFloor: CaptureNoiseFloor? = null,
     )
 
     fun appBuildLabel(): String {
@@ -350,6 +353,8 @@ object ReportBuilder {
             solverPathMap = createBitmap(1, 1, Bitmap.Config.ARGB_8888),
             globalAvgZnssd = computeGlobalAvgZnssd(data),
             appBuild = appBuildLabel(),
+            captureFloor = params.captureFloor,
+            rigidBody = RigidBodyFit.fit(data),
         )
     }
 

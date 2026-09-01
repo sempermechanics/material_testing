@@ -34,7 +34,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -50,7 +49,7 @@ import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
 import com.indicvision.semper.report.VisualizationEngine
-import com.indicvision.semper.ui.common.CrispToast
+import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -276,6 +275,7 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = intent.getIntExtra(DicKeys.START_FRAME, 0)
             // Otherwise the summary is what the viewer opens on — it answers
             // "what happened across the test" before any single frame does.
+            // Sweeps never use the summary slot (combinations are not a time series).
             showingSummary = !intent.hasExtra(DicKeys.START_FRAME)
         }
 
@@ -287,6 +287,8 @@ class ResultViewerActivity : AppCompatActivity() {
         sweepSteps = intent.getIntArrayExtra(DicKeys.SWEEP_STEPS)
         sweepStrainWins = intent.getIntArrayExtra(DicKeys.SWEEP_STRAIN_WINS)
         lineCutHorizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
+        // Sweep extras are available now; drop any restored summary flag.
+        if (isSweep) showingSummary = false
 
         roiX = intent.getIntExtra(DicKeys.ROI_X, 0)
         roiY = intent.getIntExtra(DicKeys.ROI_Y, 0)
@@ -305,6 +307,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // True sensor dims stay on the intent for math / probe / export; the
         // on-screen bitmap is decoded off-main at ImageView scale.
         imgMain.setTrueImageDimensions(imgW, imgH)
+        updateHeatmapFitBounds(data = null)
         if (refPath != null) {
             decodeReferenceForDisplay(refPath)
         }
@@ -337,17 +340,18 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
             tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
             loadFrameData(currentFrameIndex)
-            // Whole-sequence ranges still feed the summary GIF / share animations.
-            if (batchFiles.size > 1) summary.start()
-            if (showingSummary) {
+            // Summary GIF / share animations are single-setting only.
+            if (!isSweep && batchFiles.size > 1) summary.start()
+            if (showingSummary && !isSweep) {
                 enterSummary()
             } else {
+                showingSummary = false
                 updateNavButtons()
                 bumpChrome()
             }
         } else {
             showingSummary = false
-            CrispToast.show(this, getString(R.string.no_batch_data), long = true)
+            FaqRedirect.snackbar(this, R.string.no_batch_data, R.string.url_faq_no_batch_data)
         }
 
         btnPrevFrame.setOnClickListener {
@@ -367,9 +371,10 @@ class ResultViewerActivity : AppCompatActivity() {
             bumpChrome()
         }
 
-        // Field FAB: shows the current field, tap opens a glass-pill popup of the
-        // other four. The live field comes back from the ViewModel after a
-        // rotation, so re-derive the label or it disagrees with the heatmap.
+        // Field FAB: shows the current field, tap opens a glass-pill popup of all
+        // five with the live field checked. The live field comes back from the
+        // ViewModel after a rotation, so re-derive the label or it disagrees
+        // with the heatmap.
         btnFieldFab.text = ViewerFieldPills.BY_ID[ViewerFieldPills.idFor(currentDataIndex)]?.first ?: "U"
         btnFieldFab.setOnClickListener {
             bumpChrome()
@@ -398,11 +403,12 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     /**
-     * Measures the chrome bars once they've laid out and feeds their sizes to
-     * [imgMain] as content insets, so the heatmap's fit-to-screen view frames
-     * itself between the bars instead of running underneath them. The inset
-     * values only change on a real layout event (initial layout, rotation) —
-     * [fadeChrome] toggles VISIBLE/INVISIBLE, never GONE, so a bar keeps its
+     * Measures the top bar and scrub bar once they've laid out and feeds those
+     * sizes to [imgMain] as content insets, so the heatmap's fit-to-screen view
+     * fills the space between them (full width). The colour scale is a sibling
+     * overlay on the right — it may cover the image; it is not a reserved inset.
+     * Inset values only change on a real layout event (initial layout, rotation)
+     * — [fadeChrome] toggles VISIBLE/INVISIBLE, never GONE, so a bar keeps its
      * laid-out size while faded and the safe area stays stable through the
      * auto-hide animation.
      */
@@ -412,17 +418,17 @@ class ResultViewerActivity : AppCompatActivity() {
                 override fun onGlobalLayout() {
                     val top = chromeTop.height
                     val bottom = layoutScrubber.height
-                    val right = layoutColorScale.width
                     if (top > 0 && bottom > 0) {
-                        imgMain.setContentInsets(top = top, bottom = bottom, right = right)
+                        imgMain.setContentInsets(top = top, bottom = bottom)
                     }
                 }
             },
         )
     }
 
-    /** Glass-pill popup listing the fields other than the one currently shown. */
+    /** Glass-pill popup listing every field; the live field is checked. */
     private fun showFieldPopup(anchor: View) {
+        @SuppressLint("InflateParams")
         val popupView = layoutInflater.inflate(R.layout.popup_field_options, null)
         val window = PopupWindow(
             popupView,
@@ -434,12 +440,14 @@ class ResultViewerActivity : AppCompatActivity() {
         ViewerFieldPills.BY_ID.forEach { (id, pair) ->
             val (label, index) = pair
             val button = popupView.findViewById<MaterialButton>(id)
-            if (index == currentDataIndex) {
-                button.visibility = View.GONE
-                return@forEach
-            }
             button.text = label
+            button.isCheckable = true
+            button.isChecked = index == currentDataIndex
             button.setOnClickListener {
+                if (index == currentDataIndex) {
+                    window.dismiss()
+                    return@setOnClickListener
+                }
                 currentTypeString = label
                 currentDataIndex = index
                 btnFieldFab.text = label
@@ -469,6 +477,11 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Bring edge chrome back, then schedule auto-hide. */
     internal fun bumpChrome() {
+        if (chromeVisible) {
+            chromeTop.removeCallbacks(hideChromeRunnable)
+            chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
+            return
+        }
         fadeChrome(visible = true)
         chromeTop.removeCallbacks(hideChromeRunnable)
         chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
@@ -479,8 +492,14 @@ class ResultViewerActivity : AppCompatActivity() {
         fadeChrome(visible = false)
     }
 
-    internal fun toggleChrome() {
-        if (chromeVisible) hideChrome() else bumpChrome()
+    /**
+     * Centre double-tap while chrome is hidden: show the bars. Returns true when
+     * consumed so zoom does not also run.
+     */
+    internal fun showChromeIfHidden(): Boolean {
+        if (chromeVisible) return false
+        bumpChrome()
+        return true
     }
 
     private fun fadeChrome(visible: Boolean) {
@@ -520,7 +539,7 @@ class ResultViewerActivity : AppCompatActivity() {
         }
         when {
             showingSummary -> Unit
-            currentFrameIndex == 0 -> enterSummary()
+            currentFrameIndex == 0 -> if (!isSweep) enterSummary()
             else -> {
                 currentFrameIndex--
                 updateNavButtons()
@@ -580,7 +599,13 @@ class ResultViewerActivity : AppCompatActivity() {
             val reqH = viewH.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
             refDecodeJob?.cancel()
             refDecodeJob = lifecycleScope.launch(Dispatchers.IO) {
-                val bmp = BitmapDecode.decodeFileForView(refPath, reqW, reqH)
+                val bmp = BitmapDecode.decodeFileForView(
+                    refPath,
+                    reqW,
+                    reqH,
+                    rawWidth = imgW,
+                    rawHeight = imgH,
+                )
                 withContext(Dispatchers.Main) {
                     if (isDestroyed || isFinishing) {
                         bmp?.recycle()
@@ -654,7 +679,11 @@ class ResultViewerActivity : AppCompatActivity() {
                 Timber.e(e, "OOM loading frame $index")
                 scrubCache.clear()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@ResultViewerActivity, R.string.viewer_frame_oom, Toast.LENGTH_LONG).show()
+                    FaqRedirect.snackbar(
+                        this@ResultViewerActivity,
+                        R.string.viewer_frame_oom,
+                        R.string.url_faq_viewer_oom,
+                    )
                 }
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "Failed to load frame $index")
@@ -750,6 +779,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // probe nearest-point taps, and findNearestDataPoint builds it lazily
         // for the new frame. Scrubbing large frames no longer pays for an unused index.
         inspect.clearSpatialIndex()
+        updateHeatmapFitBounds(data)
         val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
         if (!showingSummary) {
             tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
@@ -761,6 +791,39 @@ class ResultViewerActivity : AppCompatActivity() {
         if (inspect.lastClosestIdx != -1) {
             inspect.refreshCrosshairs()
         }
+    }
+
+    /**
+     * Rest-fit the coloured region: custom ROI if set, else accepted-point
+     * bounds for this frame, else the full specimen.
+     */
+    private fun updateHeatmapFitBounds(data: FloatArray?) {
+        if (imgW <= 0 || imgH <= 0) return
+        val box = HeatmapFit.resolve(
+            imgW,
+            imgH,
+            roiX,
+            roiY,
+            roiW,
+            roiH,
+            accepted = data?.let { DicResult.acceptedPointsBounds(it) },
+        )
+        imgMain.setFitBounds(box[0], box[1], box[2], box[3])
+    }
+
+    /**
+     * Same rest-fit box the summary GIF should fill. Custom ROI when set;
+     * otherwise null so [SummaryAnimation] discovers accepted points from the
+     * first readable frame.
+     */
+    internal fun summaryFitBounds(): FloatArray? {
+        if (!HeatmapFit.isCustomRoi(imgW, imgH, roiX, roiY, roiW, roiH)) return null
+        return floatArrayOf(
+            roiX.toFloat(),
+            roiY.toFloat(),
+            (roiX + roiW).toFloat(),
+            (roiY + roiH).toFloat(),
+        )
     }
 
     private fun showCustomScaleDialog() {
@@ -795,7 +858,11 @@ class ResultViewerActivity : AppCompatActivity() {
                     updateVisualization(currentDataIndex)
                     summary.onScaleChanged(currentDataIndex)
                 } else {
-                    Toast.makeText(this, R.string.invalid_scale_inputs, Toast.LENGTH_LONG).show()
+                    FaqRedirect.snackbar(
+                        this,
+                        R.string.invalid_scale_inputs,
+                        R.string.url_faq_custom_scale,
+                    )
                 }
             }
             .setNeutralButton(R.string.auto_scale) { _, _ ->
@@ -906,8 +973,7 @@ class ResultViewerActivity : AppCompatActivity() {
      * Falls back to the session name, then the first deformed frame, then "analysis".
      */
     private fun shareBaseName(): String {
-        val record = intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
-            ?.let { runCatching { com.indicvision.semper.data.SessionStore.get(this, it) }.getOrNull() }
+        val record = sessionRecord
         val raw = record?.refName?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }
             ?: record?.name?.takeIf { it.isNotBlank() }
             ?: originalDefNames.firstOrNull()?.substringBeforeLast('.')
@@ -915,10 +981,24 @@ class ResultViewerActivity : AppCompatActivity() {
         return raw.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_').take(60).ifBlank { "analysis" }
     }
 
+    /**
+     * The stored record behind this viewer, or null when it was opened without
+     * one (a run still in flight, or a legacy Intent).
+     *
+     * Read once and kept: the share name, the CSV and every page of an
+     * all-frames report want the same few fields off it, and re-reading the
+     * session index per report page would be a file read per page.
+     */
+    internal val sessionRecord: com.indicvision.semper.data.SessionRecord? by lazy {
+        intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
+            ?.let { runCatching { com.indicvision.semper.data.SessionStore.get(this, it) }.getOrNull() }
+    }
+
     internal fun buildShareSnapshot(): ShareCenter.Snapshot? {
         val data = rawData ?: return null
         // Snapshot can open with ref path alone while display decode is still in flight.
         val base = cachedBaseImage
+        val summaryHelper = summary
         return ShareCenter.Snapshot(
             data = data,
             batchFiles = batchFiles,
@@ -936,9 +1016,18 @@ class ResultViewerActivity : AppCompatActivity() {
             baseImage = base,
             refImagePath = refImagePath,
             defImagePaths = defImagePaths,
-            summary = summary.animation,
-            summaryBounds = { index -> summary.boundsFor(index) },
+            summary = if (isSweep) null else summaryHelper.animation,
+            summaryBounds = { index -> if (isSweep) null else summaryHelper.boundsFor(index) },
             buildReportAt = { index, frameData -> buildReportData(index, frameData) },
+            captureFloor = sessionRecord?.captureFloor,
+            referenceName = intent.getStringExtra(DicKeys.REF_NAME).orEmpty(),
+            strainMethod = intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG",
+            subset = intent.getIntExtra(DicKeys.SUBSET_SIZE, 41),
+            strainWindow = intent.getIntExtra(DicKeys.STRAIN_WINDOW, 15),
+            roiX = roiX,
+            roiY = roiY,
+            roiW = roiW,
+            roiH = roiH,
         )
     }
 
@@ -998,11 +1087,33 @@ class ResultViewerActivity : AppCompatActivity() {
         } else {
             getString(R.string.viewer_stats_plain_fmt, maxText, minText, meanText, unit)
         }
+        detailStats += floorCaption(index)
         tvStatsCaption.text = detailStats
     }
 
+    /**
+     * The strain floor this session was captured at, appended beside the
+     * result it qualifies — never shown alone, and never for a displacement
+     * (px) field, since the floor is quoted in strain and only means
+     * something next to a strain number.
+     *
+     * Reuses [CaptureNoiseFloor.warning] for an exceeded floor (the same
+     * sentence the report carries) and the capture screen's own floor
+     * wording otherwise, so the number reads the same wherever it appears.
+     */
+    private fun floorCaption(index: Int): String {
+        val floor = sessionRecord?.captureFloor
+        if (!DicResult.isStrainFieldIndex(index) || floor == null) return ""
+        val sentence = floor.warning() ?: getString(R.string.capture_noise_floor_readout, floor.label())
+        return "\n" + sentence
+    }
+
     private fun updateNavButtons() {
-        btnPrevFrame.isEnabled = !showingSummary && batchFiles.isNotEmpty()
+        // Sweep: no summary slot, so Prev is inert on the first combination.
+        btnPrevFrame.isEnabled =
+            !showingSummary &&
+            batchFiles.isNotEmpty() &&
+            (currentFrameIndex > 0 || !isSweep)
         btnNextFrame.isEnabled = showingSummary || currentFrameIndex < batchFiles.size - 1
 
         btnPrevFrame.alpha = if (btnPrevFrame.isEnabled) 1.0f else 0.5f
@@ -1017,12 +1128,13 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun wireSummaryGestures() {
         val gif = findViewById<TouchImageView>(R.id.imgSummary)
         gif.onScrubListener = { stepFrame(it) }
-        gif.onCenterTapListener = { toggleChrome() }
-        gif.onChromeSwipeListener = { show -> if (show) bumpChrome() else hideChrome() }
+        gif.onCenterDoubleTapShowChrome = { showChromeIfHidden() }
+        gif.onChromeSwipeListener = { show -> if (show) bumpChrome() }
         gif.onTapListener = { _, _ -> bumpChrome() }
     }
 
     private fun enterSummary() {
+        if (isSweep) return
         showingSummary = true
         inspect.dismissProbe()
         summary.show()
@@ -1124,7 +1236,7 @@ class ResultViewerActivity : AppCompatActivity() {
         synchronized(fieldMetricsCache) { fieldMetricsCache[key]?.let { return it } }
         val stats = DicResult.fieldStats(data, dataIndex)
         val needed = data.size / DicResult.STRIDE
-        var scratch = fieldMetricsScratch.get()
+        var scratch = fieldMetricsScratch.get() ?: FloatArray(0)
         if (scratch.size < needed) {
             scratch = FloatArray(needed)
             fieldMetricsScratch.set(scratch)

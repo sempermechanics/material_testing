@@ -67,6 +67,15 @@
             android:clipToPadding="false"
             tools:listitem="@layout/item_media_tile" />
 
+        <View
+            android:id="@+id/mediaPickScrim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#80000000"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone" />
+
         <LinearLayout
             android:id="@+id/mediaEmpty"
             android:layout_width="match_parent"

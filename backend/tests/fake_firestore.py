@@ -6,7 +6,7 @@ batches, and a pass-through transaction. Install it with `install(monkeypatch)`.
 """
 from datetime import datetime, timezone
 
-from google.api_core.exceptions import NotFound
+from google.api_core.exceptions import AlreadyExists, NotFound
 
 
 class _Sentinel:
@@ -71,6 +71,13 @@ class _DocRef:
         return _Snapshot(self.id, data, self)
 
     def set(self, data):
+        self._bucket()[self.id] = _resolve(data)
+
+    def create(self, data):
+        # Real Firestore raises AlreadyExists; get_or_create_user catches it to
+        # settle a first-sign-in race, so the double has to raise it too.
+        if self.id in self._bucket():
+            raise AlreadyExists(f"document {self._collection}/{self.id} exists")
         self._bucket()[self.id] = _resolve(data)
 
     def update(self, patch):

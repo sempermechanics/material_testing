@@ -5,28 +5,49 @@ Baselines stay empty: `app/lint-baseline.xml` and `app/detekt-baseline.xml`.
 
 **Still open warnings** (do not baseline, do not `warningsAsErrors` until decided):
 
-- `OldTargetApi` — `compileSdk` 37 vs `targetSdk` 36. Inventory only; do not bump
-  `targetSdk` in a drive-by.
-- `TooManyViews` on `activity_settings.xml`.
+- `OldTargetApi` — disabled in `app/build.gradle.kts` lint config until a
+  deliberate `targetSdk` 36→37 bump PR. Do not re-enable casually.
+- Capture `screenOrientation="portrait"` keeps `tools:ignore` for
+  `LockedOrientationActivity` / `DiscouragedApi` (camera UX).
 
 Inherent size/complexity in a few UI orchestration files uses targeted
 `@file:Suppress` — prefer extracting over widening those lists.
 Catalog version-availability lint IDs are disabled; bump deps in deliberate PRs.
 
-`UnclosedTrace`, `PluralsCandidate`, and `UseKtx` from the 2026-08-16 pass are
-fixed (#59 / #60). The architecture extracts that had missed `main` (#65 / #67,
-re-landed as #69 / #70) are on `origin/main` as of 2026-08-16.
+`UnclosedTrace`, `PluralsCandidate`, `UseKtx`, `TooManyViews` on
+`activity_settings` / `wizard_step_settings`, and the 2026-08 lint warning
+set are fixed (content extracted behind `SettingsScrollContentView` /
+`WizardStepSettingsContentView`). The architecture extracts that had missed
+`main` (#65 / #67, re-landed as #69 / #70) are on `origin/main` as of
+2026-08-16.
 
 Orphaned strings the 2026-08-18 workflow audit found are listed in
 [../app/WORKFLOWS.md](../app/WORKFLOWS.md) §11 — none of them fail a gate, so they
 are removed opportunistically rather than in a sweep.
+
+## Proposed improvements live next door
+
+Forward-looking items are in [FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md).
+This file stays the record of what is *owed* and what is deliberately deferred.
+
+## Open register
+
+Priority = (Impact + Risk) × (6 − Effort).
+
+| ID | Category | Item | I | R | E | P | Status |
+|----|----------|------|---|---|---|---|--------|
+| TD-3 | Architecture | `ViewerSession` extras bag (FI-1) | 4 | 4 | 5 | **8** | Deferred |
+| TD-4 | Code | Capture orchestrators ~1k lines | 3 | 2 | 4 | **10** | Deferred — audited 2026-08-31, no repro |
+| TD-5 | Test | No capture instrumented/E2E | 3 | 3 | 4 | **12** | Deferred — no `androidTest` capture fixtures in CI |
+| TD-18 | Efficiency | `GrayPngEncoder` full-buffer + `toByteArray()` on hot path | 3 | 2 | 4 | **9** | Deferred |
+| TD-20 | Reuse | `LockedCameraSession` duplicate `captureStill` / `captureLuma` bodies | 2 | 2 | 4 | **8** | Deferred — audited 2026-08-31, no repro |
+| TD-21 | Efficiency | ImageReader listener re-registered every capture | 2 | 2 | 3 | **8** | Deferred — audited 2026-08-31, no repro |
 
 ## External / deferred (not blocked on code alone)
 
 | Item | Why deferred |
 |------|----------------|
 | Auth-gated UI E2E | Needs Firebase secrets / fixtures in CI |
-| Kover `minBound` raise | Floor is 15; measure stable % on CI first (local AGP 9 often reports no coverage) |
 | `ViewerSession` extras bag | `DicKeys` packed in two places (`SessionOpenHelper.intentFor`, `AnalysisNavHelper.openResults`); grill before deepening |
 | firebase-admin / hashed lock | Lock is regenerated from txt on each bump (`pip-compile --generate-hashes` on Python 3.12). Direct-dep versions in the lock must match `requirements.txt`. |
 
@@ -41,15 +62,15 @@ Macrobenchmark CI (`tier-benchmark`) is emulator **smoke**: it suppresses
 (API 37 `dumpsys gfxinfo framestats` is empty). Dispatch with `run_benchmark` or
 the `benchmark` label.
 
-## User-facing copy that understates what it controls
+## User-facing consent copy (fixed 2026-08-24)
 
-**Send crash reports** (`setting_diagnostics` / `diagnostics_prompt_body`) is the
-consent gate for `analytics/SemperAnalytics` as well as Crashlytics — analysis
-started / completed / failed, the two data exports and Send feedback all check the
-same `DicSettings.diagnosticsEnabled` flag. The events are PII-free buckets and the
-[privacy policy](../legal/PRIVACY_POLICY.md) §2.4 already covers both, but the
-in-app label and the first-run prompt name only crash reporting. Fix is a copy
-change to those two strings, deliberately not bundled into a docs pass.
+**Send crash reports** understated its scope: the same flag
+(`DicSettings.diagnosticsEnabled`) gates `analytics/SemperAnalytics` as well as
+Crashlytics. The toggle now reads **Send crash reports and usage data**, and its
+subtitle and the first-run prompt name the usage events explicitly alongside what
+is never sent. `docs/legal/PRIVACY_POLICY.md` §2.4 names the new label and the
+hosted pages were regenerated. Nothing about *what* is collected changed — the
+events were, and remain, PII-free buckets.
 
 ## 2026-08-12 result-viewer / report memory & latency program
 
@@ -109,5 +130,6 @@ The branch was already strong; findings and fixes were small:
 ## History
 
 Earlier burn-down (CI path filters, Hilt removal, engine Path A–C split, OkHttp 5,
-FastAPI train, Analysis helpers, Kover floor 15, UseKtx/Plurals/Overdraw, etc.)
-is in git history — do not re-open closed items without new evidence.
+FastAPI train, Analysis helpers, Kover floor 15→27, UseKtx/Plurals/Overdraw, capture
+maintenance pass on PR #101, etc.) is in git history — do not re-open closed items
+without new evidence.

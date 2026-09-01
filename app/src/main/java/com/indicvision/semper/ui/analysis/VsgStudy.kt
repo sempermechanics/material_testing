@@ -25,7 +25,10 @@ import kotlin.math.roundToInt
  *  - subset sizes are the odd values across the requested range;
  *  - step size is an integer between 1/6 and 1/3 of each subset, the usual
  *    overlap band — below 1/6 neighbouring subsets are so redundant that the
- *    extra runtime buys nothing, above 1/3 the field is under-sampled;
+ *    extra runtime buys nothing, above 1/3 the field is under-sampled.
+ *    The sweep asks for that fraction as `subset ÷ N`; single analysis asks
+ *    for a pixel step plus the linked overlap `1 − step/subset`;
+ *  - the strain window then follows from the VSG relation below.
  *  - the strain window then follows from the VSG relation below.
  *
  * Every surviving combination is solved in its own right and lands in the
@@ -36,18 +39,47 @@ import kotlin.math.roundToInt
 object VsgStudy {
 
     /**
-     * VSG footprint of a (step, strain window) pair, in pixels.
+     * VSG footprint of a strain window, in pixels — which is the strain window
+     * itself, because the engine reads that parameter as a **diameter in
+     * pixels** rather than as a count of data points.
      *
-     * Note this is the form requested for this app — the guide's own expression
-     * carries the subset size rather than the 1 px here, i.e.
-     * `(strainWindow - 1) * step + subset`, which reports a footprint larger by
-     * `subset - 1`. Both orderings of the sweep are identical; only the printed
-     * number differs. Everything downstream goes through this one function.
+     * The engine takes `radius = strain_window / 2` and tests each neighbour's
+     * distance from the centre in physical pixels, so the footprint the strain
+     * fit averages over is a circle of that diameter no matter how the grid is
+     * spaced. Step decides how many points land inside the circle; it does not
+     * change the circle. That is also DICe's convention for the same parameter.
+     *
+     * This previously returned `(strainWindow - 1) * step + 1`, the iDICs
+     * guide's expression for a window counted in **data points**. Applied to a
+     * window already given in pixels it multiplies the reported gauge by
+     * roughly the step size, and since the strain floor goes as `1 / L_vsg`,
+     * every quoted floor came out that many times better than the settings
+     * could deliver.
+     *
+     * Two device runs settled it rather than the argument doing so. Solving
+     * `L = sqrt(2) * sigma_u / sigma_e` from each run's own measured
+     * displacement jitter and strain scatter, on a static specimen over 60
+     * frames:
+     *
+     * | device | step | measured `L` | this function | old expression |
+     * |--------|------|--------------|---------------|----------------|
+     * | Samsung SM-G996U1 | 3 | 13.4 px | 15 px | 43 px |
+     * | Pixel 6 | 5 | 10.6 px | 15 px | 71 px |
+     *
+     * Both land just under the nominal window, which is what the engine's 90%
+     * support rule predicts — the outer ring of the circle is not always
+     * filled, so the effective gauge is slightly smaller than the diameter
+     * asked for. Neither is near the old expression at either step.
      */
-    fun vsgFor(step: Int, strainWindow: Int): Int = (strainWindow - 1) * step + 1
+    fun vsgFor(strainWindow: Int): Int = strainWindow
 
     /** Strain window is odd and matches the range of the settings slider. */
     const val MIN_STRAIN_WINDOW = 5
+
+    /** The settings slider's own starting value (`activity` layout `etStrainWindow`).
+     *  Capture-time estimates of the strain floor quote it, because it is what a
+     *  single analysis will actually run at unless the user changes it. */
+    const val DEFAULT_STRAIN_WINDOW = 15
     const val MAX_STRAIN_WINDOW = 101
 
     /** Step size range of the settings slider. */
@@ -66,14 +98,25 @@ object VsgStudy {
     const val MAX_SUBSET_SPAN = 200
 
     /**
-     * Step fraction. The sweep uses a single step size, `subset / denominator`,
-     * where the user picks the denominator with a slider — `1/2` (half the
-     * subset, the coarsest) down to `1/6` (the finest). The step is fixed for
-     * the whole sweep, so it is not an axis of the grid.
+     * Step fraction for a sweep. One denominator for every subset:
+     * `step = round(subset / N)`. The user picks N — `2` (half the subset,
+     * the coarsest) through `9` (the finest).
      */
     const val STEP_DENOM_MIN = 2
     const val STEP_DENOM_MAX = 9
     const val DEFAULT_STEP_DENOM = 3
+
+    /**
+     * Overlap after a step stride: `1 − step/subset`. Single analysis links
+     * pixel step to this ratio. The iDICs guide keeps this at least half
+     * (step ≤ subset/2) and strictly below 1.0 (step ≥ 1 px). Typical
+     * practice is about 0.50–0.75.
+     */
+    const val MIN_OVERLAP = 0.5
+
+    /** Inclusive slider ceiling; overlap never reaches 1.0 because step ≥ 1. */
+    const val MAX_OVERLAP = 0.99
+    const val DEFAULT_OVERLAP = 0.8
 
     /** Samples the user may take along each axis (subset, VSG). */
     const val MIN_SAMPLES = 1
@@ -103,32 +146,76 @@ object VsgStudy {
         val strainWindow: Int,
     ) {
         /** Footprint the strain calculation averages over, in pixels. */
-        val vsg: Int get() = vsgFor(step, strainWindow)
+        val vsg: Int get() = vsgFor(strainWindow)
     }
 
-    /** The single step size for [subset] at the chosen [denominator]: `subset/D`, in pixels. */
+    /** The single step size for [subset] at the chosen [denominator]: `subset/N`, in pixels. */
     fun stepSizeFor(subset: Int, denominator: Int): Int {
         val d = denominator.coerceIn(STEP_DENOM_MIN, STEP_DENOM_MAX)
         return (subset.toDouble() / d).roundToInt().coerceIn(MIN_STEP, MAX_STEP)
     }
 
-    /** The strain window whose VSG is nearest [vsg] at [step]; odd and in range. */
-    fun windowForVsg(step: Int, vsg: Int): Int {
-        val raw = ((vsg - 1).toDouble() / step).roundToInt() + 1
-        return raw.coerceIn(MIN_STRAIN_WINDOW, MAX_STRAIN_WINDOW) or 1
+    /** Largest step that still keeps overlap ≥ [MIN_OVERLAP] and within [MAX_STEP]. */
+    fun maxStepFor(subset: Int): Int {
+        val half = (subset * (1.0 - MIN_OVERLAP)).toInt().coerceAtLeast(MIN_STEP)
+        return minOf(MAX_STEP, half)
     }
 
-    /** Smallest VSG reachable for [subset]: its finest step, narrowest window. */
-    fun minVsg(subset: Int): Int =
-        vsgFor(stepSizeFor(subset, STEP_DENOM_MAX), MIN_STRAIN_WINDOW)
+    fun clampOverlap(overlap: Double): Double = overlap.coerceIn(MIN_OVERLAP, MAX_OVERLAP)
 
-    /** Largest VSG reachable for [subset]: its coarsest step, widest window. */
-    fun maxVsg(subset: Int): Int =
-        vsgFor(stepSizeFor(subset, STEP_DENOM_MIN), MAX_STRAIN_WINDOW)
+    /** Overlap implied by [step] on [subset], clamped into the good-practice band. */
+    fun overlapFor(subset: Int, step: Int): Double {
+        if (subset <= 0) return DEFAULT_OVERLAP
+        val s = step.coerceIn(MIN_STEP, maxStepFor(subset))
+        return clampOverlap(1.0 - s.toDouble() / subset)
+    }
+
+    /** Overlap implied by sweep denominator N: `1 − 1/N`. */
+    fun overlapForDenominator(denominator: Int): Double {
+        val d = denominator.coerceIn(STEP_DENOM_MIN, STEP_DENOM_MAX)
+        return clampOverlap(1.0 - 1.0 / d)
+    }
+
+    /** Sweep denominator nearest [overlap]: `round(1 / (1 − overlap))`. */
+    fun denominatorForOverlap(overlap: Double): Int {
+        val o = clampOverlap(overlap)
+        val denom = (1.0 / (1.0 - o)).roundToInt()
+        return denom.coerceIn(STEP_DENOM_MIN, STEP_DENOM_MAX)
+    }
+
+    /** Pixel step for [subset] at the chosen [overlap]. */
+    fun stepSizeFor(subset: Int, overlap: Double): Int {
+        val o = clampOverlap(overlap)
+        return (subset * (1.0 - o)).roundToInt().coerceIn(MIN_STEP, maxStepFor(subset))
+    }
+
+    /**
+     * The strain window whose VSG is nearest [vsg]; odd and in range.
+     *
+     * The inverse of [vsgFor], which is now the identity, so this is only the
+     * snap to what the engine accepts. Kept as a named function because the
+     * sweep's y-axis is a VSG axis and reads better saying so.
+     */
+    fun windowForVsg(vsg: Int): Int = vsg.coerceIn(MIN_STRAIN_WINDOW, MAX_STRAIN_WINDOW) or 1
+
+    /** Smallest VSG the engine will accept, in pixels. */
+    fun minVsg(): Int = MIN_STRAIN_WINDOW
+
+    /**
+     * Largest VSG the engine will accept, in pixels.
+     *
+     * This is the binding limit on strain resolution, and it is worth naming as
+     * such: the floor goes as `sqrt(2) * sigma_u / L_vsg`, so at 101 px even a
+     * displacement noise of 0.006 px — better than the two test devices reach —
+     * cannot report below about 90 microstrain. A floor in the single
+     * microstrain range needs a gauge in the hundreds to thousands of pixels,
+     * which is a decision about this ceiling and not about the camera.
+     */
+    fun maxVsg(): Int = MAX_STRAIN_WINDOW
 
     /** Default VSG ceiling offered for [subset], inside the reachable range. */
     fun defaultVsgMax(subset: Int): Int =
-        (DEFAULT_VSG_MAX_FACTOR * subset).coerceIn(minVsg(subset), maxVsg(subset))
+        (DEFAULT_VSG_MAX_FACTOR * subset).coerceIn(minVsg(), maxVsg())
 
     /**
      * The odd subset sizes between [subsetMin] and [subsetMax] inclusive. Both
@@ -187,6 +274,26 @@ object VsgStudy {
         }
         return out.sortedWith(compareBy({ it.subset }, { it.vsg }, { it.step }))
     }
+
+    /** Same grid as [plan], with step taken from [overlap] via [denominatorForOverlap]. */
+    @Suppress("LongParameterList") // overlap overload of the sweep planner
+    fun plan(
+        subsetMin: Int,
+        subsetMax: Int,
+        subsetSamples: Int,
+        strainWinMin: Int,
+        strainWinMax: Int,
+        strainWinSamples: Int,
+        overlap: Double,
+    ): List<Point> = plan(
+        subsetMin,
+        subsetMax,
+        subsetSamples,
+        strainWinMin,
+        strainWinMax,
+        strainWinSamples,
+        denominatorForOverlap(overlap),
+    )
 
     /** [count] items of [items], evenly spaced, both ends included. */
     private fun <T> sampleEvenly(items: List<T>, count: Int): List<T> = when {

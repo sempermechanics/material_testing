@@ -23,6 +23,7 @@ import android.view.ViewConfiguration
 import androidx.appcompat.widget.AppCompatImageView
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.min
 
 class TouchImageView @JvmOverloads constructor(
     context: Context,
@@ -33,7 +34,12 @@ class TouchImageView @JvmOverloads constructor(
     private var mode = 0 // 0: None, 1: Drag, 2: Zoom
     private var last = PointF()
     private var start = PointF()
+
+    /** Pinch floor: full specimen contained in the chrome-safe box. */
     private var minScale = 1f
+
+    /** Rest pose: heatmap / ROI contained in the chrome-safe box. */
+    private var restScale = 1f
     private var maxScale = 10f
     private var currentScale = 1f
     private var m: FloatArray = FloatArray(9)
@@ -54,6 +60,15 @@ class TouchImageView @JvmOverloads constructor(
     private var trueImageWidth = 0f
     private var trueImageHeight = 0f
 
+    /**
+     * Image-pixel rectangle that rest-fit centres in the safe box (ROI or accepted
+     * points). Empty / unset means the full specimen.
+     */
+    private var fitLeft = 0f
+    private var fitTop = 0f
+    private var fitRight = 0f
+    private var fitBottom = 0f
+
     /** Maps display-bitmap pixels → true image space when the decode is downsampled. */
     private var contentScaleX = 1f
     private var contentScaleY = 1f
@@ -66,10 +81,13 @@ class TouchImageView @JvmOverloads constructor(
     /** Horizontal fling while fit-to-screen: −1 previous frame, +1 next. */
     var onScrubListener: ((delta: Int) -> Unit)? = null
 
-    /** Center-third tap: hide/show chrome. */
-    var onCenterTapListener: (() -> Unit)? = null
+    /**
+     * Centre double-tap while chrome is hidden. Return true if the host showed
+     * chrome (and zoom should not run); false to keep the usual zoom toggle.
+     */
+    var onCenterDoubleTapShowChrome: (() -> Boolean)? = null
 
-    /** Vertical swipe at 1×: true = show chrome, false = hide. */
+    /** Vertical swipe at 1×: true = show chrome. Hide is timer-only. */
     var onChromeSwipeListener: ((show: Boolean) -> Unit)? = null
 
     init {
@@ -137,14 +155,15 @@ class TouchImageView @JvmOverloads constructor(
     }
 
     private fun maybeFitSwipe(curr: PointF) {
-        if (!isAtFitScale() || !dragArmed || mScaleDetector.isInProgress) return
+        if (!isAtRestScale() || !dragArmed || mScaleDetector.isInProgress) return
         val dx = curr.x - start.x
         val dy = curr.y - start.y
         if (hypot(dx, dy) < SWIPE_DISTANCE) return
         if (abs(dx) > abs(dy)) {
             onScrubListener?.invoke(if (dx < 0f) 1 else -1)
-        } else {
-            onChromeSwipeListener?.invoke(dy > 0f)
+        } else if (dy > 0f) {
+            // Swipe down may show chrome; hide is timer-only.
+            onChromeSwipeListener?.invoke(true)
         }
     }
 
@@ -152,6 +171,12 @@ class TouchImageView @JvmOverloads constructor(
     fun setTrueImageDimensions(width: Int, height: Int) {
         trueImageWidth = width.toFloat()
         trueImageHeight = height.toFloat()
+        if (fitRight <= fitLeft || fitBottom <= fitTop) {
+            fitLeft = 0f
+            fitTop = 0f
+            fitRight = trueImageWidth
+            fitBottom = trueImageHeight
+        }
         val bm = (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
         updateContentScale(bm)
         post {
@@ -160,12 +185,35 @@ class TouchImageView @JvmOverloads constructor(
     }
 
     /**
+     * Image-pixel rectangle to contain at rest (ROI or accepted-point bounds).
+     * Logical coordinates stay the full specimen; this only changes rest zoom.
+     */
+    fun setFitBounds(left: Float, top: Float, right: Float, bottom: Float) {
+        val l = left.coerceIn(0f, trueImageWidth.coerceAtLeast(0f))
+        val t = top.coerceIn(0f, trueImageHeight.coerceAtLeast(0f))
+        val r = right.coerceIn(l, trueImageWidth.coerceAtLeast(l))
+        val b = bottom.coerceIn(t, trueImageHeight.coerceAtLeast(t))
+        if (l == fitLeft && t == fitTop && r == fitRight && b == fitBottom) return
+        val wasAtRest = isAtRestScale()
+        fitLeft = l
+        fitTop = t
+        fitRight = r
+        fitBottom = b
+        if (wasAtRest) {
+            fitToScreen()
+        } else {
+            recomputeScaleLimits()
+            limitPan()
+            publishMatrix()
+        }
+    }
+
+    /**
      * Chrome-reserved space (in view pixels) the fit/pan math should treat as
-     * off-limits — e.g. the top bar, bottom scrubber, right colour rail — so the
-     * image sits framed by chrome instead of running underneath it. Re-fits only
-     * if currently at fit scale (a zoomed-in user isn't yanked); otherwise just
-     * refreshes the pan clamp so an already-zoomed view snaps back into the new
-     * safe area if it now falls outside it.
+     * off-limits — e.g. the top bar and bottom scrubber — so the image sits
+     * framed by those bars. Optional left/right insets stay available; the
+     * colour scale is a fixed overlay, not an inset. Re-fits only if currently
+     * at rest scale; otherwise refreshes the pan clamp.
      */
     fun setContentInsets(top: Int, bottom: Int, left: Int = 0, right: Int = 0) {
         if (top == contentInsetTop &&
@@ -175,12 +223,12 @@ class TouchImageView @JvmOverloads constructor(
         ) {
             return
         }
-        val wasAtFit = isAtFitScale()
+        val wasAtRest = isAtRestScale()
         contentInsetTop = top
         contentInsetBottom = bottom
         contentInsetLeft = left
         contentInsetRight = right
-        if (wasAtFit) {
+        if (wasAtRest) {
             fitToScreen()
         } else {
             limitPan()
@@ -205,38 +253,66 @@ class TouchImageView @JvmOverloads constructor(
         fitToScreen()
     }
 
-    private fun fitToScreen() {
-        if (trueImageWidth <= 0f || trueImageHeight <= 0f || viewWidth <= 0 || viewHeight <= 0) return
-
+    private fun safeViewRect(): RectF? {
+        if (viewWidth <= 0 || viewHeight <= 0) return null
         val safeLeft = contentInsetLeft.toFloat()
         val safeTop = contentInsetTop.toFloat()
         val safeRight = (viewWidth - contentInsetRight).toFloat()
         val safeBottom = (viewHeight - contentInsetBottom).toFloat()
-        // Degenerate mid-layout, before the chrome bars have their real size yet.
-        if (safeRight <= safeLeft || safeBottom <= safeTop) return
+        return if (safeRight > safeLeft && safeBottom > safeTop) {
+            RectF(safeLeft, safeTop, safeRight, safeBottom)
+        } else {
+            null
+        }
+    }
 
-        val drawableRect = RectF(0f, 0f, trueImageWidth, trueImageHeight)
-        val viewRect = RectF(safeLeft, safeTop, safeRight, safeBottom)
+    private fun containScale(src: RectF, dst: RectF): Float {
+        val sw = src.width()
+        val sh = src.height()
+        if (sw <= 0f || sh <= 0f) return 1f
+        return min(dst.width() / sw, dst.height() / sh)
+    }
 
-        matrix.setRectToRect(drawableRect, viewRect, Matrix.ScaleToFit.CENTER)
+    private fun recomputeScaleLimits() {
+        val viewRect = safeViewRect() ?: return
+        if (trueImageWidth <= 0f || trueImageHeight <= 0f) return
+        val full = RectF(0f, 0f, trueImageWidth, trueImageHeight)
+        val fit = fitRect()
+        minScale = containScale(full, viewRect)
+        restScale = containScale(fit, viewRect).coerceAtLeast(minScale)
+    }
 
+    private fun fitRect(): RectF {
+        if (fitRight > fitLeft && fitBottom > fitTop) {
+            return RectF(fitLeft, fitTop, fitRight, fitBottom)
+        }
+        return RectF(0f, 0f, trueImageWidth, trueImageHeight)
+    }
+
+    /** Rest pose: contain the heatmap/ROI rect in the chrome-safe box. */
+    private fun fitToScreen() {
+        if (trueImageWidth <= 0f || trueImageHeight <= 0f) return
+        val viewRect = safeViewRect() ?: return
+        recomputeScaleLimits()
+
+        val fit = fitRect()
+        matrix.setRectToRect(fit, viewRect, Matrix.ScaleToFit.CENTER)
         matrix.getValues(m)
-        val baseScale = m[Matrix.MSCALE_X]
-
-        minScale = baseScale
-        currentScale = baseScale
+        currentScale = m[Matrix.MSCALE_X]
+        // Keep currentScale aligned with restScale after setRectToRect rounding.
+        restScale = currentScale.coerceAtLeast(minScale)
 
         publishMatrix()
     }
 
-    private fun isAtFitScale(): Boolean = currentScale <= minScale * 1.02f
+    private fun isAtRestScale(): Boolean = currentScale <= restScale * 1.02f && currentScale >= restScale * 0.98f
 
     private fun toggleZoom(focusX: Float, focusY: Float) {
-        if (!isAtFitScale()) {
+        if (!isAtRestScale()) {
             fitToScreen()
             return
         }
-        val target = (minScale * 2f).coerceAtMost(maxScale)
+        val target = (restScale * 2f).coerceAtMost(maxScale)
         val factor = target / currentScale
         currentScale = target
         matrix.postScale(factor, factor, focusX, focusY)
@@ -246,15 +322,14 @@ class TouchImageView @JvmOverloads constructor(
 
     private inner class GestureListener : GestureDetector.SimpleOnGestureListener() {
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-            if (isCenterTap(e.x, e.y) && onCenterTapListener != null) {
-                onCenterTapListener?.invoke()
-                return true
-            }
             onTapListener?.invoke(e.x, e.y)
             return true
         }
 
         override fun onDoubleTap(e: MotionEvent): Boolean {
+            if (isCenterTap(e.x, e.y) && onCenterDoubleTapShowChrome?.invoke() == true) {
+                return true
+            }
             toggleZoom(e.x, e.y)
             return true
         }
@@ -265,7 +340,7 @@ class TouchImageView @JvmOverloads constructor(
             velocityX: Float,
             velocityY: Float,
         ): Boolean {
-            val accept = isAtFitScale() &&
+            val accept = isAtRestScale() &&
                 abs(velocityX) >= abs(velocityY) &&
                 abs(velocityX) >= FLING_MIN_VELOCITY
             if (accept) {

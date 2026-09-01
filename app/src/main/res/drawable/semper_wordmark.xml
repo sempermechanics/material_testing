@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="220dp"
-    android:height="53dp"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:width="200dp"
+    android:height="48dp"
     android:viewportWidth="994"
-    android:viewportHeight="240">
+    android:viewportHeight="240"
+    tools:ignore="VectorPath">
     <path
         android:fillColor="@color/wordmark_ink"
         android:fillType="evenOdd"

@@ -249,6 +249,8 @@ class SessionListAdapter(
                         THUMB_EDGE,
                         THUMB_EDGE,
                         THUMB_EDGE,
+                        rawWidth = r.imgW,
+                        rawHeight = r.imgH,
                     )
                     mainHandler.post {
                         if (holder.thumb.tag != path) {

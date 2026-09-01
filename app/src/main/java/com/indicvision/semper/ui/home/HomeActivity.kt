@@ -36,6 +36,7 @@ import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
+import com.indicvision.semper.ui.capture.CaptureSetupActivity
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
@@ -50,9 +51,8 @@ import kotlinx.coroutines.withContext
 /**
  * Home: the record of every analysis done on this phone (metadata from
  * [SessionStore]; heavy files per session dir, full copies in the cloud once
- * synced). The + button is the single entry point for a new analysis — it
- * opens the system media picker, and the selection type (image vs video)
- * decides the next screen. The gear opens the behavioral settings drawer.
+ * synced). The + button expands to Import (gallery sheet) or Record (capture
+ * setup). The gear opens the behavioral settings drawer.
  */
 class HomeActivity : AppCompatActivity() {
 
@@ -143,6 +143,14 @@ class HomeActivity : AppCompatActivity() {
 
         fab = findViewById(R.id.fabNewAnalysis)
         positionFabAtNineTenths()
+        val fabMenu = HomeFabMenu(
+            activity = this,
+            fab = fab,
+            onImport = { showSourceChooser() },
+            onRecord = {
+                startActivity(Intent(this, CaptureSetupActivity::class.java))
+            },
+        )
         fab.setOnClickListener {
             // At the account's analysis limit, block new work behind the persistent
             // limit screen (email support) instead of letting it fail on upload.
@@ -150,7 +158,7 @@ class HomeActivity : AppCompatActivity() {
                 openSessionLimitScreen()
                 return@setOnClickListener
             }
-            showSourceChooser()
+            fabMenu.toggle()
         }
         findViewById<ImageButton>(R.id.btnHomeSettings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -597,12 +605,24 @@ class HomeActivity : AppCompatActivity() {
 
     private fun positionFabAtNineTenths() {
         val root = findViewById<View>(R.id.homeRoot)
+        // Only assign layoutParams when margins actually change. Setting them on
+        // every layout pass retriggers layout (and with the FAB menu overlay on
+        // homeRoot that becomes an infinite requestLayout loop).
         root.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
             if (fab.width == 0 || view.width == 0) return@addOnLayoutChangeListener
             val params = fab.layoutParams as CoordinatorLayout.LayoutParams
-            params.gravity = Gravity.TOP or Gravity.START
-            params.leftMargin = (view.width / 2) - fab.width / 2
-            params.topMargin = (view.height * 9 / 10) - fab.height / 2
+            val left = (view.width / 2) - fab.width / 2
+            val top = (view.height * 9 / 10) - fab.height / 2
+            val gravity = Gravity.TOP or Gravity.START
+            if (params.gravity == gravity &&
+                params.leftMargin == left &&
+                params.topMargin == top
+            ) {
+                return@addOnLayoutChangeListener
+            }
+            params.gravity = gravity
+            params.leftMargin = left
+            params.topMargin = top
             fab.layoutParams = params
         }
     }

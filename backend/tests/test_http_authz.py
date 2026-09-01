@@ -109,18 +109,18 @@ async def test_cross_user_session_is_404(secure, client, monkeypatch):
 async def test_admin_mutation_requires_device_attestation(secure, client, monkeypatch):
     monkeypatch.setattr(
         deps, "verify_id_token",
-        lambda _t: {"sub": "admin-1", "email": "admin@indicvision.com", "email_verified": True},
+        lambda _t: {"sub": "admin-1", "email": "admin@sempermechanics.com", "email_verified": True},
     )
     monkeypatch.setattr(
         repo, "get_or_create_user",
         lambda claims, device_id=None: {
-            "uid": "admin-1", "email": "admin@indicvision.com",
+            "uid": "admin-1", "email": "admin@sempermechanics.com",
             "role": "admin", "access_status": "APPROVED", "activeDeviceId": "adev",
         },
     )
     secure._data["users"] = {
         "admin-1": {
-            "email": "admin@indicvision.com", "role": "admin", "access_status": "APPROVED",
+            "email": "admin@sempermechanics.com", "role": "admin", "access_status": "APPROVED",
         },
         "target": {"email": "t@e.com", "role": "user", "access_status": "PENDING"},
     }
@@ -138,18 +138,18 @@ async def test_admin_mutation_with_valid_device_attestation(secure, client, monk
     priv, pem = _pem_and_priv()
     monkeypatch.setattr(
         deps, "verify_id_token",
-        lambda _t: {"sub": "admin-1", "email": "admin@indicvision.com", "email_verified": True},
+        lambda _t: {"sub": "admin-1", "email": "admin@sempermechanics.com", "email_verified": True},
     )
     monkeypatch.setattr(
         repo, "get_or_create_user",
         lambda claims, device_id=None: {
-            "uid": "admin-1", "email": "admin@indicvision.com",
+            "uid": "admin-1", "email": "admin@sempermechanics.com",
             "role": "admin", "access_status": "APPROVED", "activeDeviceId": "adev",
         },
     )
     secure._data["users"] = {
         "admin-1": {
-            "email": "admin@indicvision.com", "role": "admin", "access_status": "APPROVED",
+            "email": "admin@sempermechanics.com", "role": "admin", "access_status": "APPROVED",
         },
         "target": {"email": "t@e.com", "role": "user", "access_status": "PENDING"},
     }

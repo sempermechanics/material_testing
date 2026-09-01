@@ -54,6 +54,7 @@ class DicBundleDownloadWorker(
                 SemperAnalytics.EXPORT_STARTED,
                 mapOf("kind" to "bundle_download"),
             )
+            TransferLog.phase(TransferLog.PhaseFields("bundle_download", "start"))
             staged = downloadOrPack(cloudSessionId, displayName, localSessionId)
             if (!staged.exists() || staged.length() <= 0L) {
                 SemperAnalytics.event(
@@ -78,13 +79,22 @@ class DicBundleDownloadWorker(
                 SemperAnalytics.EXPORT_COMPLETED,
                 mapOf("kind" to "bundle_download"),
             )
+            TransferLog.phase(TransferLog.PhaseFields("bundle_download", "complete"))
             Result.success(workDataOf(CloudRestore.KEY_CLOUD_SESSION_ID to cloudSessionId))
         } catch (e: CancellationException) {
             deleteDestDocument(destUri)
             throw e
         } catch (e: IndicApi.ApiException) {
             if (e.code == 404 || e.code == 403) {
-                Timber.e(e, "Bundle download of %s rejected — giving up", cloudSessionId)
+                Timber.e(e, "Bundle download rejected — giving up")
+                TransferLog.phase(
+                    TransferLog.PhaseFields(
+                        phase = "bundle_download",
+                        outcome = "rejected",
+                        httpStatus = e.code,
+                        requestId = e.requestId,
+                    ),
+                )
                 SemperAnalytics.event(
                     applicationContext,
                     SemperAnalytics.EXPORT_FAILED,
@@ -93,13 +103,22 @@ class DicBundleDownloadWorker(
                 deleteDestDocument(destUri)
                 Result.failure(workDataOf(KEY_ERROR to (e.message ?: "rejected")))
             } else {
-                Timber.w(e, "Bundle download of %s failed; will retry", cloudSessionId)
+                Timber.w(e, "Bundle download failed; will retry")
+                TransferLog.phase(
+                    TransferLog.PhaseFields(
+                        phase = "bundle_download",
+                        outcome = "retry",
+                        httpStatus = e.code,
+                        requestId = e.requestId,
+                    ),
+                )
                 releaseGrant = false
                 Result.retry()
             }
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             if (RestoreDownloadOutcomes.isTerminalCorruptFailure(e)) {
-                Timber.e(e, "Bundle download of %s corrupt — giving up", cloudSessionId)
+                Timber.e(e, "Bundle download corrupt — giving up")
+                TransferLog.phase(TransferLog.PhaseFields("bundle_download", "corrupt"))
                 SemperAnalytics.event(
                     applicationContext,
                     SemperAnalytics.EXPORT_FAILED,
@@ -108,7 +127,8 @@ class DicBundleDownloadWorker(
                 deleteDestDocument(destUri)
                 Result.failure(workDataOf(KEY_ERROR to (e.message ?: e.javaClass.simpleName)))
             } else {
-                Timber.w(e, "Bundle download of %s failed; will retry", cloudSessionId)
+                Timber.w(e, "Bundle download failed; will retry")
+                TransferLog.phase(TransferLog.PhaseFields("bundle_download", "retry"))
                 releaseGrant = false
                 Result.retry()
             }
@@ -142,7 +162,7 @@ class DicBundleDownloadWorker(
             if (RestoreDownloadOutcomes.isTerminalCorruptFailure(e)) throw e
             val packed = packLocalFallback(localSessionId)
             if (packed != null) {
-                Timber.i(e, "Cloud zip unavailable; packed local session %s", localSessionId)
+                Timber.i(e, "Cloud zip unavailable; packed local session fallback")
                 return packed
             }
             throw e
@@ -163,13 +183,13 @@ class DicBundleDownloadWorker(
                 file.inputStream().use { it.copyTo(out) }
             } ?: 0L
             copied > 0L
-        }.onFailure { Timber.e(it, "Write Session.zip to %s failed", destUri) }
+        }.onFailure { Timber.e(it, "Write Session.zip to destination failed") }
             .getOrDefault(false)
 
     private fun deleteDestDocument(destUri: Uri) {
         runCatching {
             DocumentsContract.deleteDocument(applicationContext.contentResolver, destUri)
-        }.onFailure { Timber.w(it, "Could not delete empty dest %s", destUri) }
+        }.onFailure { Timber.w(it, "Could not delete empty destination document") }
     }
 
     private fun releaseDestGrant(destUri: Uri) {
@@ -178,7 +198,7 @@ class DicBundleDownloadWorker(
                 destUri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
-        }.onFailure { Timber.w(it, "Could not release URI grant %s", destUri) }
+        }.onFailure { Timber.w(it, "Could not release destination URI grant") }
     }
 
     private suspend fun publishProgress(done: Long, total: Long) {

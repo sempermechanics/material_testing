@@ -43,7 +43,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 | `ci-ok` | Single required status check — every job above passed or was skipped | — | seconds |
 
 **There is no tier 2 here any more.** Host C++ builds, the DICe comparisons and
-the ASan/UBSan and TSan suites moved to `semperdic/semper-dic-engine` along with
+the ASan/UBSan and TSan suites moved to `sempermechanics/semper-dic-engine` along with
 the engine sources. This repo only proves the pinned submodule still *links*:
 arm64 in tier 5, x86_64 on the emulator in tier 3. `ci-ok` prints a reminder of
 where the engine suites live.
@@ -162,7 +162,7 @@ gitleaks detect --config .gitleaks.toml                                     # se
 ```
 
 The engine's own suites are not reproducible from this repo — run them in
-`semperdic/semper-dic-engine`, or from the submodule as described in
+`sempermechanics/semper-dic-engine`, or from the submodule as described in
 [docs/engine/TESTING.md](../engine/TESTING.md).
 
 ## Manual release
