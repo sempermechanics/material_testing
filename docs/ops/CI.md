@@ -127,6 +127,14 @@ Never Tier 3 / Tier 5 for Dependabot. Path filters use an explicit
 `base: pull_request.base.sha` so Dependabot's 403 on the PR Files API does not
 fail open into a full matrix.
 
+**A `dependabot/pip/…` PR always lands Tier 4 red, and that is expected.**
+Dependabot bumps `backend/requirements.txt` and cannot regenerate the hashed
+`requirements.lock`, so tier 4's *Verify the hashed lock* step reports a version
+diff. Fix it before merging by running
+[`Backend lock`](../../.github/workflows/backend-lock.yml) against the Dependabot
+branch — it compiles on Linux / Python 3.12 and pushes the lock to that PR. See
+[RELEASING.md](RELEASING.md) § Bumping backend dependencies.
+
 `secret-scan` and `legal-pages` are absent from the tables on purpose: they
 carry no path filter and run on every event.
 

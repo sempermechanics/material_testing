@@ -1,0 +1,127 @@
+# Regenerates backend/requirements.lock in the one environment it is valid in.
+#
+# The deploy image installs the lock with --require-hashes, and CI tier 4 proves
+# every direct pin in requirements.txt matches it. Nothing regenerates the lock
+# when the txt moves, so the two drift apart: Dependabot bumps requirements.txt
+# and cannot produce a hashed lock, and tier 4 then fails with a version diff
+# that says what is wrong but not what to run.
+#
+# This workflow is that missing step. It compiles on **Linux, Python 3.12** —
+# the pair RELEASING.md specifies — because a lock compiled anywhere else is
+# wrong in ways that only surface later: uvicorn[standard] pulls uvloop on Linux
+# and omits it on Windows (adding colorama instead), and the marker set differs
+# between 3.12 and 3.13. A Windows-compiled lock installs fine locally and fails
+# --require-hashes in CI.
+#
+#   pull_request       verify only, read-only token. Fails when the lock is stale
+#                      and uploads the regenerated file, so fixing it is a
+#                      download rather than a local Python 3.12 install.
+#   workflow_dispatch  compiles and pushes the lock to the chosen branch. Point
+#                      it at a Dependabot branch to fix that PR in place; this is
+#                      the case the workflow exists for.
+name: Backend lock
+
+on:
+  pull_request:
+    paths:
+      - backend/requirements.txt
+      - backend/requirements.lock
+      - .github/workflows/backend-lock.yml
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to regenerate the lock on and push to
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-lock-${{ github.event.inputs.branch || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Read-only path. Never pushes, so a Dependabot PR cannot cause a write.
+  verify:
+    name: Lock matches requirements.txt
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install pip-tools
+        run: pip install pip-tools
+
+      # The command RELEASING.md documents, verbatim. If this file has to grow
+      # flags, change the doc in the same edit — a lock nobody can reproduce by
+      # hand is how the current drift went unnoticed.
+      - name: Compile the lock
+        working-directory: backend
+        run: pip-compile --generate-hashes --output-file=requirements.lock requirements.txt
+
+      # Ordered before the staleness check so the artifact is always there when
+      # that check fails. Deliberately not `if: always()` — if pip-compile itself
+      # failed this would upload the committed lock under a name that promises a
+      # regenerated one.
+      - name: Upload the regenerated lock
+        uses: actions/upload-artifact@v7
+        with:
+          name: requirements-lock
+          path: backend/requirements.lock
+          if-no-files-found: error
+
+      - name: Fail if the committed lock is stale
+        run: |
+          if ! git diff --quiet -- backend/requirements.lock; then
+            echo "::error::backend/requirements.lock does not match requirements.txt."
+            echo "Download the 'requirements-lock' artifact from this run and commit it,"
+            echo "or run the 'Backend lock' workflow with this branch to push it for you."
+            git --no-pager diff --stat -- backend/requirements.lock
+            exit 1
+          fi
+          echo "requirements.lock is up to date."
+
+  # Write path, only ever reachable from a deliberate manual dispatch.
+  regenerate:
+    name: Regenerate and push
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install pip-tools
+        run: pip install pip-tools
+
+      - name: Compile the lock
+        working-directory: backend
+        run: pip-compile --generate-hashes --output-file=requirements.lock requirements.txt
+
+      - name: Commit and push if it changed
+        run: |
+          if git diff --quiet -- backend/requirements.lock; then
+            echo "requirements.lock already matches requirements.txt; nothing to push."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/requirements.lock
+          git commit -m "chore(backend): regenerate the hashed lock on Python 3.12
+
+          Compiled on Linux / Python 3.12 per docs/ops/RELEASING.md, so the
+          markers and the uvicorn[standard] extras match the deploy runtime.
+
+          Generated by the Backend lock workflow."
+          git push origin HEAD:${{ inputs.branch }}
