@@ -3,11 +3,11 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.test) apply false
     alias(libs.plugins.kotlin.serialization) apply false
-    id("com.diffplug.spotless") version "8.9.0"
+    id("com.diffplug.spotless") version "8.10.1"
     id("com.google.gms.google-services") version "4.5.0" apply false
     // Required by the Crashlytics SDK: injects the build-ID resource the SDK reads
     // at startup. Without it the SDK throws at Firebase init and crashes the app.
-    id("com.google.firebase.crashlytics") version "3.0.7" apply false
+    id("com.google.firebase.crashlytics") version "3.0.8" apply false
 }
 
 tasks.register("ciReleaseGate") {
