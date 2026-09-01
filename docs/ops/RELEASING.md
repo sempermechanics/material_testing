@@ -160,6 +160,8 @@ cd backend
 # 1. Edit requirements.txt (the direct dependency you actually want to move).
 # 2. Regenerate the hashed lock from it on Python 3.12 (CI and Cloud Run runtime).
 #    Do not compile the lock on 3.13 — the header and markers must match runtime.
+#    Compile on Linux: uvicorn[standard] pulls uvloop there; a Windows lock omits
+#    it and `--require-hashes` then fails in CI.
 pip install pip-tools
 pip-compile --generate-hashes --output-file requirements.lock requirements.txt
 ```

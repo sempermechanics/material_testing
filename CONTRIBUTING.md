@@ -97,7 +97,7 @@ rm -rf app/.cxx app/build
 ./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.viewer.*"
 
 # Emulator smoke (needs an x86_64 emulator running)
-./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64
+./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 "-Pandroid.testInstrumentationRunnerArguments.notPackage=com.indicvision.semper.benchmark"
 
 # Performance benchmarks — not part of the push gate; they need a device and are
 # label-gated in CI. See docs/app/TESTING.md#performance-benchmarks before running.
