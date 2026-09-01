@@ -1111,7 +1111,9 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun updateNavButtons() {
         // Sweep: no summary slot, so Prev is inert on the first combination.
         btnPrevFrame.isEnabled =
-            !showingSummary && batchFiles.isNotEmpty() && (currentFrameIndex > 0 || !isSweep)
+            !showingSummary &&
+            batchFiles.isNotEmpty() &&
+            (currentFrameIndex > 0 || !isSweep)
         btnNextFrame.isEnabled = showingSummary || currentFrameIndex < batchFiles.size - 1
 
         btnPrevFrame.alpha = if (btnPrevFrame.isEnabled) 1.0f else 0.5f
