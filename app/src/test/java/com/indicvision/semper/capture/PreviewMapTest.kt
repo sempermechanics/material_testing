@@ -7,6 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * The focus tap is the one place a coordinate error costs a run without
@@ -14,6 +15,7 @@ import org.robolectric.RobolectricTestRunner
  * the camera focuses somewhere the user did not tap and nothing reports it.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class PreviewMapTest {
 
     private companion object {

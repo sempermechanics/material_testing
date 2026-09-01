@@ -9,6 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * The coordinate carry between the speckle check and the noise-floor burst.
@@ -20,6 +21,7 @@ import org.robolectric.RobolectricTestRunner
  * which is precisely the class of defect the burst exists to avoid.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class NoiseFloorGateTest {
 
     @Test
