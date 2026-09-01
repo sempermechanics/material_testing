@@ -651,6 +651,18 @@ jobs:
           arch: x86_64
           script: ./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
 
+      # Numbers are smoke on an emulator, not a regression gate (see
+      # docs/app/TESTING.md), but leaving them uncaptured means every run answers
+      # only pass/fail. Keep the raw *-benchmarkData.json/.perfetto-trace files so
+      # a real regression is at least visible by hand until thresholds exist.
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macrobenchmark-results
+          path: benchmark/build/outputs/connected_android_test_additional_output/**
+          if-no-files-found: warn
+
   # ===================================================================
   # ci-ok — single required status check
   # ===================================================================
