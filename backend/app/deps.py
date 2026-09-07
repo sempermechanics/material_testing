@@ -78,7 +78,7 @@ def current_user(
             raise HTTPException(403, "not_approved")
         # Re-validate the license/seat device lock on every call that carries
         # X-Device-Id — not just at activation time. A revoked key, a disabled
-        # or revoked campus seat, or a device that no longer matches the lock
+        # or revoked institution seat, or a device that no longer matches the lock
         # drops the account to Demo immediately (fails closed); it never
         # touches the account's stored sessions/files.
         if x_device_id:

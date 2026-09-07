@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from .. import audit, firestore_repo as repo
 from .. import rate_limit
 from ..deps import admin_user, verified_device
+from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
 from ..models import AdminLicenseCreate, UserConfigPatch
 from ..validation import AccessStatus, DocumentId, PageToken, Uid
 
@@ -104,18 +105,19 @@ def admin_create_license(
     ctx=Depends(verified_device),
     admin=Depends(admin_user),
 ):
-    """Mint a Professional key. `kind=individual` (default) locks one email and
-    one device, plaintext once. `kind=campus` mints an institution key instead
-    — no email/device lock at mint time; membership is decided per-activation
-    by `domainLock`, and `adminEmails` names the IT contacts who self-serve
-    seat management via /v1/campus/licenses/{id}/seats (see routers/campus.py).
+    """Mint a licensed key. `kind=individual` (default) locks one email and
+    one device, plaintext once. `kind=institution` mints an institution key
+    instead — no email/device lock at mint time; membership is decided
+    per-activation by `domainLock`, and `adminEmails` names the IT contacts
+    who self-serve seat management via
+    /v1/institutions/licenses/{id}/seats (see routers/institutions.py).
     Only Semper staff (this device-attested admin path) may mint or whole-key
-    revoke; campus IT never reaches this route.
+    revoke; institution IT never reaches this route.
     """
     if not rate_limit.admin_bucket.allow(admin["uid"]):
         raise HTTPException(429, "rate_limited")
-    if body.kind == "campus":
-        minted = repo.create_campus_license(
+    if body.kind == KIND_INSTITUTION:
+        minted = repo.create_institution_license(
             domain_lock=body.domainLock,
             admin_emails=body.adminEmails,
             created_by_uid=admin["uid"],
@@ -127,11 +129,11 @@ def admin_create_license(
         audit.record(
             admin["uid"], action="ADMIN_LICENSE_MINT",
             target={"type": "license", "id": minted["license"]["id"]},
-            detail={"kind": "campus", "domainLock": body.domainLock,
+            detail={"kind": KIND_INSTITUTION, "domainLock": body.domainLock,
                     "adminEmails": body.adminEmails, "maxSeats": body.maxSeats},
         )
         return minted
-    minted = repo.create_professional_license(
+    minted = repo.create_individual_license(
         email_lock=body.emailLock,
         device_id_lock=body.deviceIdLock,
         created_by_uid=admin["uid"],
@@ -142,7 +144,7 @@ def admin_create_license(
     audit.record(
         admin["uid"], action="ADMIN_LICENSE_MINT",
         target={"type": "license", "id": minted["license"]["id"]},
-        detail={"kind": "individual", "emailLock": body.emailLock,
+        detail={"kind": KIND_INDIVIDUAL, "emailLock": body.emailLock,
                 "deviceIdLock": body.deviceIdLock},
     )
     return minted

@@ -26,17 +26,22 @@ class Settings:
     # Fleet-wide defaults for product limits. Per-user overrides live on the
     # Firestore users/{uid} document (maxSessions / maxFilesPerSession /
     # maxFrames); resolve_user_config merges override → these defaults.
-    # DEMO_MAX_ANALYSES is the Demo plan's local analysis cap. Professional
-    # cloud backups use PRO_MAX_SESSIONS_PER_USER unless a key or admin
+    # DEMO_MAX_ANALYSES is the demo mode's local analysis cap. Licensed cloud
+    # backups use LICENSED_MAX_SESSIONS_PER_USER unless a key or admin
     # override sets a tighter ceiling. MAX_SESSIONS_PER_USER is the legacy
-    # cloud cap kept for env compatibility; Professional resolve prefers
-    # PRO_MAX_SESSIONS_PER_USER.
+    # cloud cap kept for env compatibility; the licensed resolve prefers
+    # LICENSED_MAX_SESSIONS_PER_USER.
     # MAX_FILES_PER_SESSION bounds one analysis (150 frames x raw+dat+csv +
     # reference + report + metadata ≈ 460, so 600 gives headroom);
     # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces.
     MAX_SESSIONS_PER_USER = _env_int("MAX_SESSIONS_PER_USER", "4")
     DEMO_MAX_ANALYSES = _env_int("DEMO_MAX_ANALYSES", "25")
-    PRO_MAX_SESSIONS_PER_USER = _env_int("PRO_MAX_SESSIONS_PER_USER", "999")
+    # Deployed services still set PRO_MAX_SESSIONS_PER_USER; it is read as the
+    # default so the rename does not require a coordinated env change.
+    LICENSED_MAX_SESSIONS_PER_USER = _env_int(
+        "LICENSED_MAX_SESSIONS_PER_USER",
+        os.environ.get("PRO_MAX_SESSIONS_PER_USER", "999"),
+    )
     MAX_FILES_PER_SESSION = _env_int("MAX_FILES_PER_SESSION", "600")
     MAX_FRAMES_PER_ANALYSIS = _env_int("MAX_FRAMES_PER_ANALYSIS", "150")
 

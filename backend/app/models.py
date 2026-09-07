@@ -138,6 +138,9 @@ class UserConfigPatch(BaseModel):
     maxFilesPerSession: Optional[int] = Field(default=None, gt=0)
     maxFrames: Optional[int] = Field(default=None, gt=0)
     datCodecEncodingEnabled: Optional[bool] = None
+    #: `plan` is the pre-rename spelling; both are accepted and fold onto
+    #: `mode` in firestore_repo.set_user_config. Send one, not both.
+    mode: Optional[Literal["demo", "licensed"]] = None
     plan: Optional[Literal["demo", "professional"]] = None
 
 
@@ -147,20 +150,24 @@ class LicenseActivate(BaseModel):
 
 
 class AdminLicenseCreate(BaseModel):
-    """Ops mint for a Professional key.
+    """Ops mint for a licensed key.
 
-    `kind="individual"` (the default, and the only shape before campus
+    `kind="individual"` (the default, and the only shape before institution
     licensing existed) requires both `emailLock` and `deviceIdLock` — one
     seat, redeemed by exactly one email on exactly one device.
 
-    `kind="campus"` mints an institution key instead: no email/device lock at
-    mint time. Membership is decided per-activation by `domainLock` (a
+    `kind="institution"` mints an institution key instead: no email/device
+    lock at mint time. Membership is decided per-activation by `domainLock` (a
     verified-email domain match — see firestore_repo.activate_license), and
     `adminEmails` names the institution IT contacts who may manage seats via
-    `backend/app/routers/campus.py` (list/clear-device/enable-disable/revoke).
-    `maxSeats` is an optional hard cap; omitted means unlimited.
+    `backend/app/routers/institutions.py`
+    (list/clear-device/enable-disable/revoke). `maxSeats` is an optional hard
+    cap; omitted means unlimited.
+
+    `"campus"` is the pre-rename spelling and is still accepted on the wire;
+    it is normalised to `"institution"` before validation.
     """
-    kind: Literal["individual", "campus"] = "individual"
+    kind: Literal["individual", "institution"] = "individual"
     emailLock: Optional[str] = Field(default=None, min_length=3, max_length=320)
     deviceIdLock: Optional[DeviceId] = None
     domainLock: Optional[str] = Field(default=None, min_length=1, max_length=253)
@@ -169,6 +176,12 @@ class AdminLicenseCreate(BaseModel):
     expiresAt: Optional[datetime] = None
     maxAnalyses: Optional[int] = Field(default=None, gt=0)
     note: DisplayString = ""
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _kind_alias(cls, value):
+        """Accept the pre-rename `campus` spelling from older ops tooling."""
+        return "institution" if value == "campus" else value
 
     @field_validator("emailLock")
     @classmethod
@@ -212,19 +225,19 @@ class AdminLicenseCreate(BaseModel):
         if self.kind == "individual":
             if not self.emailLock or not self.deviceIdLock:
                 raise ValueError("individual licenses require emailLock and deviceIdLock")
-        else:  # campus
+        else:  # institution
             if not self.domainLock:
-                raise ValueError("campus licenses require domainLock")
+                raise ValueError("institution licenses require domainLock")
             if not self.adminEmails:
-                raise ValueError("campus licenses require at least one adminEmails entry")
+                raise ValueError("institution licenses require at least one adminEmails entry")
         return self
 
 
-class CampusSeatPatch(BaseModel):
+class InstitutionSeatPatch(BaseModel):
     """Institution IT self-service seat edit. Both fields optional; send only
     what changes. `clearDeviceLock=true` lets a seat holder re-bind to a new
     device (lost phone, factory reset) without a support ticket to Semper
     staff. `enabled=false` drops the seat to Demo without freeing the slot —
-    see routers/campus.py and firestore_repo.set_seat_enabled."""
+    see routers/institutions.py and firestore_repo.set_seat_enabled."""
     clearDeviceLock: Optional[bool] = None
     enabled: Optional[bool] = None

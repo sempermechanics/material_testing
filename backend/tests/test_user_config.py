@@ -16,16 +16,17 @@ def store(monkeypatch):
 def _limit_env(monkeypatch):
     monkeypatch.setattr(settings, "MAX_SESSIONS_PER_USER", 4)
     monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
-    monkeypatch.setattr(settings, "PRO_MAX_SESSIONS_PER_USER", 999)
+    monkeypatch.setattr(settings, "LICENSED_MAX_SESSIONS_PER_USER", 999)
     monkeypatch.setattr(settings, "MAX_FILES_PER_SESSION", 600)
     monkeypatch.setattr(settings, "MAX_FRAMES_PER_ANALYSIS", 150)
     monkeypatch.setattr(settings, "DAT_CODEC_ENCODING_ENABLED", False)
 
 
-def test_resolve_uses_demo_defaults_when_no_plan(store, monkeypatch):
+def test_resolve_uses_demo_defaults_when_no_mode(store, monkeypatch):
     _limit_env(monkeypatch)
     cfg = repo.resolve_user_config({"uid": "u1"})
     assert cfg == {
+        "mode": "demo",
         "plan": "demo",
         "licenseKind": "",
         "cloudBackupEnabled": False,
@@ -57,6 +58,7 @@ def test_resolve_prefers_positive_user_overrides_on_professional(store, monkeypa
         "datCodecEncodingEnabled": True,
     })
     assert cfg == {
+        "mode": "licensed",
         "plan": "professional",
         "licenseKind": "",
         "cloudBackupEnabled": True,
@@ -156,7 +158,7 @@ async def test_config_endpoint_returns_dev_professional(client):
     assert body["plan"] == "professional"
     assert body["cloudBackupEnabled"] is True
     assert body["shareEnabled"] is True
-    assert body["maxSessions"] == settings.PRO_MAX_SESSIONS_PER_USER
+    assert body["maxSessions"] == settings.LICENSED_MAX_SESSIONS_PER_USER
     assert body["maxFilesPerSession"] == settings.MAX_FILES_PER_SESSION
     assert body["maxFrames"] == settings.MAX_FRAMES_PER_ANALYSIS
     assert body["datCodecEncodingEnabled"] == settings.DAT_CODEC_ENCODING_ENABLED
@@ -215,3 +217,39 @@ async def test_list_sessions_quota_uses_resolved_max(client, monkeypatch):
     resp = await client.get("/v1/sessions")
     assert resp.status_code == 200
     assert resp.json()["quota"] == {"used": 0, "max": 7}
+
+
+def test_resolve_reads_the_pre_rename_plan_field(store, monkeypatch):
+    """A user document migration 002 has not reached yet still resolves.
+
+    Written before the rename, it carries `plan` and no `mode`. Reading it as
+    demo would silently strip a paying account's entitlements.
+    """
+    _limit_env(monkeypatch)
+    cfg = repo.resolve_user_config({"uid": "u1", "plan": "professional"})
+    assert cfg["mode"] == "licensed"
+    assert cfg["cloudBackupEnabled"] is True
+
+
+def test_resolve_prefers_mode_over_a_stale_plan_mirror(store, monkeypatch):
+    """`mode` wins when the two disagree — it is the field migration 002 writes."""
+    _limit_env(monkeypatch)
+    cfg = repo.resolve_user_config({"uid": "u1", "mode": "demo", "plan": "professional"})
+    assert cfg["mode"] == "demo"
+    assert cfg["plan"] == "demo"
+    assert cfg["cloudBackupEnabled"] is False
+
+
+def test_config_response_always_carries_both_mode_and_plan(store, monkeypatch):
+    """An installed app decodes `plan` and fails closed to Demo without it.
+
+    Dropping the mirror from this response demotes the whole fleet, so both
+    keys are asserted together and must always agree.
+    """
+    _limit_env(monkeypatch)
+    for user, mode, plan in [
+        ({"uid": "u1"}, "demo", "demo"),
+        ({"uid": "u1", "mode": "licensed"}, "licensed", "professional"),
+    ]:
+        cfg = repo.resolve_user_config(user)
+        assert (cfg["mode"], cfg["plan"]) == (mode, plan)

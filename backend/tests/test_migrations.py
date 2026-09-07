@@ -143,3 +143,62 @@ def test_multiple_collections_are_all_walked(client, monkeypatch):
     )
     assert totals["scanned"] == 4
     assert client._data["sessions"]["s1"]["schemaVersion"] == 1
+
+
+# ------------------------------------------------ 002 rename transform
+# Exercised directly: the runner's own behaviour is covered above, what
+# matters here is that the transform produces the right fields.
+
+def _rename():
+    import importlib
+
+    return importlib.import_module("migrations.002_rename_campus_to_institution")
+
+
+def test_002_renames_a_pre_rename_licensed_user():
+    m = _rename()
+    out = m.transform({"plan": "professional", "licenseKind": "campus"})
+    assert out == {"mode": "licensed", "licenseKind": "institution"}
+
+
+def test_002_renames_a_pre_rename_institution_license():
+    m = _rename()
+    out = m.transform({"plan": "professional", "kind": "campus"})
+    assert out == {"mode": "licensed", "kind": "institution"}
+
+
+def test_002_keeps_the_plan_mirror_rather_than_deleting_it():
+    """Deleting `plan` would demote every installed app to Demo.
+
+    An app build that predates the rename reads `plan` and fails closed when
+    it is missing, so the mirror survives this migration by design.
+    """
+    m = _rename()
+    out = m.transform({"plan": "professional", "kind": "campus"})
+    assert "plan" not in out          # already correct, so not rewritten
+    out2 = m.transform({"mode": "licensed", "kind": "campus"})
+    assert out2["plan"] == "professional"   # missing mirror is restored
+
+
+def test_002_prefers_mode_over_a_stale_plan_mirror():
+    m = _rename()
+    out = m.transform({"mode": "demo", "plan": "professional"})
+    assert out == {"plan": "demo"}
+
+
+def test_002_leaves_an_already_migrated_document_alone():
+    m = _rename()
+    assert m.transform({"mode": "licensed", "plan": "professional",
+                        "kind": "institution"}) is None
+
+
+def test_002_ignores_a_document_with_no_licensing_fields():
+    m = _rename()
+    assert m.transform({"email": "a@b.com", "access_status": "APPROVED"}) is None
+
+
+def test_002_walks_licenses_which_migration_001_never_did():
+    """001's collection list omits `licenses`, so license documents have never
+    been through the chain. 002 is what brings them in."""
+    m = _rename()
+    assert "licenses" in m.collections

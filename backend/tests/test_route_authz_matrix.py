@@ -25,7 +25,7 @@ from app import audit, deps, drive, firestore_repo as repo
 from app.config import settings
 from app.deps import admin_user, current_user, device_or_legacy_reader, verified_device
 from app.main import app
-from app.routers.campus import campus_admin_context
+from app.routers.institutions import institution_admin_context
 from app.tasks import tasks_caller
 
 NONE, USER, ADMIN, DEVICE, DEVICE_ADMIN = "none", "user", "admin", "device", "device+admin"
@@ -37,11 +37,11 @@ TASK = "cloud-task"
 # window). Recorded explicitly so the compatibility gap is visible in the table
 # rather than masquerading as a plain USER or DEVICE route. Delete with the flag.
 DEVICE_MIGRATING = "device-migrating"
-# Campus IT self-service: current_user (ID token, APPROVED) + a verified email
+# Institution IT self-service: current_user (ID token, APPROVED) + a verified email
 # present in that specific license's adminEmails — checked inside
-# campus_admin_context, not via admin_user or verified_device. Deliberately
+# institution_admin_context, not via admin_user or verified_device. Deliberately
 # distinct from ADMIN/DEVICE_ADMIN: no Semper role=admin, no device attestation.
-CAMPUS_ADMIN = "campus-admin"
+INSTITUTION_ADMIN = "institution-admin"
 
 # (method, path) -> required tier. Keep in sync deliberately, not automatically:
 # the point is that a human decides.
@@ -69,9 +69,15 @@ EXPECTED = {
     ("POST", "/v1/admin/licenses"): DEVICE_ADMIN,
     ("POST", "/v1/admin/licenses/{license_id}/revoke"): DEVICE_ADMIN,
     ("POST", "/v1/licenses/activate"): USER,
-    ("GET", "/v1/campus/licenses/{license_id}/seats"): CAMPUS_ADMIN,
-    ("PATCH", "/v1/campus/licenses/{license_id}/seats/{uid}"): CAMPUS_ADMIN,
-    ("DELETE", "/v1/campus/licenses/{license_id}/seats/{uid}"): CAMPUS_ADMIN,
+    ("GET", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
+    ("PATCH", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
+    ("DELETE", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
+    # Pre-rename aliases of the three routes above. Same handler, same tier —
+    # declared explicitly so a deprecation that drops them has to come through
+    # this table, and so an alias can never quietly gain a weaker tier.
+    ("GET", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
+    ("PATCH", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
+    ("DELETE", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
     ("POST", "/v1/tasks/provision-session"): TASK,
 }
 
@@ -91,8 +97,8 @@ def _tier(route) -> str:
     # it never appears in the flattened deps — detect the wrapper itself.
     if device_or_legacy_reader in calls:
         return DEVICE_MIGRATING
-    if campus_admin_context in calls:
-        return CAMPUS_ADMIN
+    if institution_admin_context in calls:
+        return INSTITUTION_ADMIN
     has_device = verified_device in calls
     has_admin = admin_user in calls
     if has_device and has_admin:
@@ -270,20 +276,20 @@ async def test_non_admin_is_refused_every_admin_route(attacker, client, method, 
     assert attacker._data["users"][VICTIM]["access_status"] == "PENDING"
 
 
-# ---------------------------------------------------------- campus IT routes
+# ---------------------------------------------------------- institution IT routes
 #
 # Token + APPROVED + verified email in that license's adminEmails — no device
 # attestation, no Semper role=admin. Cross-tenant isolation is the critical
-# property: campus A's IT contact must not learn anything about campus B's
+# property: institution A's IT contact must not learn anything about institution B's
 # seats, not even that the license id exists.
 
-CAMPUS_A = "license-campus-a"
-CAMPUS_B = "license-campus-b"
+INSTITUTION_A = "license-institution-a"
+INSTITUTION_B = "license-institution-b"
 
 
 @pytest.fixture
-def campus_it(monkeypatch):
-    """An APPROVED, verified-email user who is IT for CAMPUS_A only."""
+def institution_it(monkeypatch):
+    """An APPROVED, verified-email user who is IT for INSTITUTION_A only."""
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", False)
     monkeypatch.setattr(audit, "record", lambda *a, **k: None)
@@ -292,26 +298,26 @@ def campus_it(monkeypatch):
     uid = "it-admin-a"
     monkeypatch.setattr(deps, "verify_id_token", lambda _t: {"sub": uid})
     profile = {
-        "uid": uid, "email": "it@campus-a.edu", "role": "user",
+        "uid": uid, "email": "it@university-a.edu", "role": "user",
         "access_status": "APPROVED", "emailVerified": True,
     }
     monkeypatch.setattr(repo, "get_or_create_user", lambda claims, device_id=None: dict(profile))
 
     store._data["licenses"] = {
-        CAMPUS_A: {
-            "kind": "campus", "plan": "professional", "status": "active",
-            "domainLock": "campus-a.edu", "adminEmails": ["it@campus-a.edu"],
+        INSTITUTION_A: {
+            "kind": "institution", "plan": "professional", "status": "active",
+            "domainLock": "university-a.edu", "adminEmails": ["it@university-a.edu"],
             "keyPrefix": "SEMP-AAAA", "seatsUsed": 1,
         },
-        CAMPUS_B: {
-            "kind": "campus", "plan": "professional", "status": "active",
-            "domainLock": "campus-b.edu", "adminEmails": ["it@campus-b.edu"],
+        INSTITUTION_B: {
+            "kind": "institution", "plan": "professional", "status": "active",
+            "domainLock": "university-b.edu", "adminEmails": ["it@university-b.edu"],
             "keyPrefix": "SEMP-BBBB", "seatsUsed": 1,
         },
     }
-    store._data[f"licenses/{CAMPUS_B}/seats"] = {
+    store._data[f"licenses/{INSTITUTION_B}/seats"] = {
         "student-b": {
-            "uid": "student-b", "email": "student@campus-b.edu",
+            "uid": "student-b", "email": "student@university-b.edu",
             "deviceIdLock": "dev-b", "status": "active",
         },
     }
@@ -319,56 +325,56 @@ def campus_it(monkeypatch):
     return store
 
 
-async def test_campus_it_cannot_reach_another_campus_seats(campus_it, client):
-    r = await client.get(f"/v1/campus/licenses/{CAMPUS_B}/seats", headers=campus_it.bearer)
+async def test_institution_it_cannot_reach_another_institutions_seats(institution_it, client):
+    r = await client.get(f"/v1/institutions/licenses/{INSTITUTION_B}/seats", headers=institution_it.bearer)
     assert r.status_code == 404, r.text
     assert r.json()["detail"] == "license_not_found"
-    # Nothing about campus B's roster was disclosed, and nothing was touched.
-    assert campus_it._data[f"licenses/{CAMPUS_B}/seats"]["student-b"]["status"] == "active"
+    # Nothing about institution B's roster was disclosed, and nothing was touched.
+    assert institution_it._data[f"licenses/{INSTITUTION_B}/seats"]["student-b"]["status"] == "active"
 
 
-async def test_campus_it_cannot_patch_another_campus_seat(campus_it, client):
+async def test_institution_it_cannot_patch_another_institutions_seat(institution_it, client):
     r = await client.patch(
-        f"/v1/campus/licenses/{CAMPUS_B}/seats/student-b",
+        f"/v1/institutions/licenses/{INSTITUTION_B}/seats/student-b",
         json={"enabled": False},
-        headers=campus_it.bearer,
+        headers=institution_it.bearer,
     )
     assert r.status_code == 404, r.text
-    assert campus_it._data[f"licenses/{CAMPUS_B}/seats"]["student-b"]["status"] == "active"
+    assert institution_it._data[f"licenses/{INSTITUTION_B}/seats"]["student-b"]["status"] == "active"
 
 
-async def test_campus_it_cannot_revoke_another_campus_seat(campus_it, client):
+async def test_institution_it_cannot_revoke_another_institutions_seat(institution_it, client):
     r = await client.delete(
-        f"/v1/campus/licenses/{CAMPUS_B}/seats/student-b", headers=campus_it.bearer,
+        f"/v1/institutions/licenses/{INSTITUTION_B}/seats/student-b", headers=institution_it.bearer,
     )
     assert r.status_code == 404, r.text
-    assert campus_it._data[f"licenses/{CAMPUS_B}/seats"]["student-b"]["status"] == "active"
+    assert institution_it._data[f"licenses/{INSTITUTION_B}/seats"]["student-b"]["status"] == "active"
 
 
-async def test_campus_it_can_manage_its_own_campus_seats(campus_it, client):
-    campus_it._data[f"licenses/{CAMPUS_A}/seats"] = {
+async def test_institution_it_can_manage_its_own_institutions_seats(institution_it, client):
+    institution_it._data[f"licenses/{INSTITUTION_A}/seats"] = {
         "student-a": {
-            "uid": "student-a", "email": "student@campus-a.edu",
+            "uid": "student-a", "email": "student@university-a.edu",
             "deviceIdLock": "dev-a", "status": "active",
         },
     }
-    r = await client.get(f"/v1/campus/licenses/{CAMPUS_A}/seats", headers=campus_it.bearer)
+    r = await client.get(f"/v1/institutions/licenses/{INSTITUTION_A}/seats", headers=institution_it.bearer)
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["seats"][0]["uid"] == "student-a"
     assert "key" not in body["license"]  # never leaks plaintext or the raw hash-keyed record
 
 
-async def test_campus_route_rejects_a_bare_token_from_a_non_member(campus_it, client):
+async def test_institution_route_rejects_a_bare_token_from_a_non_member(institution_it, client):
     """A verified, approved caller who is simply not on adminEmails for ANY
-    license must not learn that CAMPUS_A even exists."""
+    license must not learn that INSTITUTION_A even exists."""
     monkeypatch_email = {"uid": "it-admin-a", "email": "outsider@example.com",
                           "role": "user", "access_status": "APPROVED", "emailVerified": True}
     import app.firestore_repo as repo_mod
     orig = repo_mod.get_or_create_user
     repo_mod.get_or_create_user = lambda claims, device_id=None: dict(monkeypatch_email)
     try:
-        r = await client.get(f"/v1/campus/licenses/{CAMPUS_A}/seats", headers=campus_it.bearer)
+        r = await client.get(f"/v1/institutions/licenses/{INSTITUTION_A}/seats", headers=institution_it.bearer)
         assert r.status_code == 404
     finally:
         repo_mod.get_or_create_user = orig
