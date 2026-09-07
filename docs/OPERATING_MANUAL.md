@@ -664,13 +664,13 @@ denying or signing in again sends nothing further. If no mail arrives, check the
 `NOTIFY_FROM` / `RESEND_API_KEY` settings on the service: unconfigured, the
 backend sends nothing and says nothing, and the pending list is your only signal.
 
-## Appendix D — Licensing (Demo / Professional / Campus)
+## Appendix D — Licensing (demo / individual / institution)
 
 Every account is **Demo** (25 saved analyses, no cloud backup/restore, no
-share) until a Professional key is activated. There is no billing anywhere in
-the product — a Professional key is issued by Semper staff or, for an
+share) until a licensed key is activated. There is no billing anywhere in
+the product — a licensed key is issued by Semper staff or, for an
 institution, self-served by that institution's own IT once Semper staff mint
-the campus key. There is **no in-app screen to type a key in yet** in this
+the institution key. There is **no in-app screen to type a key in yet** in this
 release; activation goes through the backend API
 (`POST /v1/licenses/activate`) directly. See
 [CLOUD_ARCHITECTURE_GCP.md §20](backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements)
@@ -682,7 +682,7 @@ approves/revokes accounts):
 - **Individual**: `POST /v1/admin/licenses` with an `emailLock` and
   `deviceIdLock`. Locked to that one person's account and device; they
   activate it once.
-- **Campus/institution**: `POST /v1/admin/licenses` with `kind: "campus"`, a
+- **Institution**: `POST /v1/admin/licenses` with `kind: "institution"`, a
   `domainLock` (the institution's email domain), the `adminEmails` of the
   people at that institution who will manage seats, and an optional
   `maxSeats`. Anyone at that institution with a **verified** email on the
@@ -692,13 +692,13 @@ Either way the plaintext key is only ever shown once, in the mint response —
 hand it to the individual or the institution's IT contact immediately; Semper
 does not store it anywhere retrievable afterward (only its hash).
 
-**Institution IT self-service.** Once a campus key exists, its `adminEmails`
+**Institution IT self-service.** Once a institution key exists, its `adminEmails`
 manage seats themselves, with no Semper staff involvement and no dashboard —
 they call three routes directly (script, curl, or their own tooling):
 
 | Need | Route |
 |---|---|
-| See who's activated, and each seat's status | `GET /v1/campus/licenses/{id}/seats` |
+| See who's activated, and each seat's status | `GET /v1/institutions/licenses/{id}/seats` |
 | Someone lost/replaced their device | `PATCH .../seats/{uid}` `{"clearDeviceLock": true}` — lets them re-bind without a support ticket |
 | Pause someone without losing their seat (e.g. leave of absence) | `PATCH .../seats/{uid}` `{"enabled": false}`, then later `{"enabled": true}` to restore — this does **not** free the seat slot |
 | Someone leaves the institution for good | `DELETE .../seats/{uid}` — drops them to Demo and **frees the slot** for someone else |
@@ -713,7 +713,7 @@ licenses leaks by probing ids.
 
 **Revoking the whole key** (Semper staff, e.g. a contract ends):
 `POST /v1/admin/licenses/{id}/revoke`. For an individual key, that one person
-drops to Demo. For a campus key, **every** activated seat drops to Demo at
+drops to Demo. For a institution key, **every** activated seat drops to Demo at
 once — use this for "the institution's contract ended," not for offboarding
 one member (use the IT self-service `DELETE` above for that).
 
@@ -721,4 +721,4 @@ one member (use the IT self-service `DELETE` above for that).
 single seat is revoked, or a seat is disabled, the affected account(s) simply
 stop being able to start *new* cloud analyses — everything already saved
 stays listable and restorable. Re-activating (or re-enabling) restores full
-Professional access with zero data loss.
+licensed access with zero data loss.

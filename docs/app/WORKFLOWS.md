@@ -982,9 +982,9 @@ sweep hitting the cap, or a background upload rejected with a quota error.
   saved analyses, this screen included.
 - **Professional — individual key**: no local analysis cap
   (`analysisCap()` returns unlimited); Semper staff mint and hand over the key.
-- **Professional — campus/institution seat**: identical entitlement to an
-  individual key (uncapped) — a campus seat and an individual key resolve to
-  the exact same `plan=professional` on device. What differs is only how the
+- **Professional — institution seat**: identical entitlement to an
+  individual key (uncapped) — a institution seat and an individual key resolve to
+  the exact same `mode=licensed` on device. What differs is only how the
   seat is administered: institution IT self-service via backend routes (see
   §20.4 of the doc above), not Semper staff, and not through this app.
 
@@ -993,7 +993,7 @@ shape (`POST /v1/licenses/activate`) and `IndicApi.activateLicense()` calls
 it, but there is no Settings screen wired to type a key in yet — activation
 today is exercised through the API directly (or a future
 `SettingsLicenseSection`). This screen's behavior for a Professional account
-is unaffected either way: once `GET /v1/config` reports `plan=professional`,
+is unaffected either way: once `GET /v1/config` reports `mode=licensed`,
 the cap simply doesn't apply and 9.1 never triggers.
 
 ---

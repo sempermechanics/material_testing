@@ -26,7 +26,6 @@ MODES = frozenset({MODE_DEMO, MODE_LICENSED})
 #: `licensed` denote the same state.
 LEGACY_PLAN_DEMO = "demo"
 LEGACY_PLAN_PROFESSIONAL = "professional"
-LEGACY_PLANS = frozenset({LEGACY_PLAN_DEMO, LEGACY_PLAN_PROFESSIONAL})
 
 KIND_INDIVIDUAL = "individual"
 KIND_INSTITUTION = "institution"

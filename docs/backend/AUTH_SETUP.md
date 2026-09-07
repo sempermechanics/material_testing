@@ -127,6 +127,24 @@ self-approve into a privileged domain.
 > code read used to sit in `config.py`; it has been removed, so don't go
 > looking for it.
 
+### 3.1 The four authorization tiers
+
+`role` on the user document is only ever `user` or `admin`. Authority beyond
+that is not a stored claim — it is derived per-request, so there is no role to
+leak or escalate into:
+
+| Tier | Dependency | How it is decided |
+|---|---|---|
+| **User** | `current_user` | Verified ID token, `access_status == APPROVED`. Also re-checks the license/device lock on every call carrying `X-Device-Id` (see CLOUD_ARCHITECTURE_GCP §20.2). |
+| **Admin** (Semper staff) | `admin_user` | `role == "admin"` or a verified email in `ADMIN_EMAILS`. Token only — enough for read-only admin screens. |
+| **Device-attested admin** | `verified_device` + `admin_user` | Every *mutating* admin route: approve, revoke, config patch, license mint, whole-key revoke. |
+| **Institution admin** | `institution_admin_context` | **Not** a role and **not** `ADMIN_EMAILS`. An APPROVED user whose *verified* email appears in one specific license's `adminEmails`. Authority is scoped to that license alone; a license the caller does not administer 404s identically to one that does not exist. Deliberately not device-attested — IT manages seats from a browser or curl, not the licensed device. |
+
+The tiers are asserted structurally in
+`backend/tests/test_route_authz_matrix.py`, which walks every route's
+dependency tree — a route that gains or loses auth fails CI rather than
+shipping quietly.
+
 ## 4. App config — local.properties
 
 ```properties

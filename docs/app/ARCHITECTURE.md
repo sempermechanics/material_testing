@@ -95,7 +95,7 @@ issuing a single request.
 ## Licensing & entitlements
 
 The app never decides its own plan — `data/LicenseEntitlements.kt` is the one
-place that answers "am I Demo or Professional," and it reads through
+place that answers "am I demo or licensed," and it reads through
 `data/net/AppRemoteConfig.kt`, which caches whatever the backend's
 `GET /v1/config` last reported (`plan`, `cloudBackupEnabled`, `shareEnabled`,
 `licensePrefix`, `licenseKind`). Fails closed: before the first successful
@@ -104,10 +104,10 @@ fetch, and on any ambiguous value, everything reads as Demo.
 `IndicApi.activateLicense()` calls `POST /v1/licenses/activate` (bearer +
 `X-Device-Id`, not device-signed) to redeem a key — see
 [CLOUD_ARCHITECTURE_GCP.md §20](../backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements)
-for the backend's individual-vs-campus split. **On the Android side there is
-no distinction** between an individual key and a campus seat — both resolve
-to `plan=professional` with identical entitlements; `licenseKind` is carried
-through only for display/support (e.g. "activated via campus.edu"), not as a
+for the backend's individual-vs-institution split. **On the Android side there is
+no distinction** between an individual key and a institution seat — both resolve
+to `mode=licensed` with identical entitlements; `licenseKind` is carried
+through only for display/support (e.g. "activated via university.edu"), not as a
 gating input anywhere in `LicenseEntitlements`.
 
 | Concern | File |
@@ -115,7 +115,7 @@ gating input anywhere in `LicenseEntitlements`.
 | Plan resolution / gating | `data/LicenseEntitlements.kt` |
 | Cached config, wire → prefs | `data/net/AppRemoteConfig.kt` (`AppConfigDto` in `ApiDtos.kt`) |
 | Redeem a key | `IndicApi.activateLicense()` |
-| Local analysis cap | `LicenseEntitlements.analysisCap()` — Demo 25, Professional unlimited; see [WORKFLOWS.md §9](WORKFLOWS.md#9-session-limit) |
+| Local analysis cap | `LicenseEntitlements.analysisCap()` — demo 25, licensed unlimited; see [WORKFLOWS.md §9](WORKFLOWS.md#9-session-limit) |
 
 ## Storage, diagnostics and the parameter clipboard
 
