@@ -31,16 +31,25 @@ data class AppConfigDto(
      * backend deploy this app talks to → false (fail closed, matches the
      * default already used for every field here). */
     val datCodecEncodingEnabled: Boolean = false,
-    /** `demo` or `professional`. Missing on an older backend → demo (fail closed). */
+    /** `demo` or `licensed`. Empty on a backend deploy predating the
+     * plan→mode rename; [AppRemoteConfig] falls back to [plan] in that case,
+     * so a blank here is "not told", not "demo". */
+    val mode: String = "",
+    /** Pre-rename spelling of [mode]: `demo` or `professional`. Still sent by
+     * the backend alongside `mode` for builds that predate the rename, and
+     * still read here as the fallback when `mode` is absent. Missing from both
+     * → demo (fail closed). */
     val plan: String = "demo",
     val cloudBackupEnabled: Boolean = false,
     val shareEnabled: Boolean = false,
     val licensePrefix: String = "",
-    /** `""`, `"individual"`, or `"campus"` — display/support metadata only, not
-     * a gating input. Entitlements (cloudBackupEnabled/shareEnabled/plan) are
-     * identical for an individual and a campus seat; this field exists so
-     * Settings can show e.g. "Activated via campus.edu" and so support tickets
-     * can tell the two shapes apart. */
+    /** `""`, `"individual"`, or `"institution"` — display/support metadata
+     * only, not a gating input. Entitlements (cloudBackupEnabled/shareEnabled/
+     * mode) are identical for an individual and an institution seat; this
+     * field exists so Settings can show e.g. "Activated via university.edu"
+     * and so support tickets can tell the two shapes apart. A backend
+     * predating the rename sends `"campus"`; [LicenseEntitlements] normalises
+     * it. */
     val licenseKind: String = "",
 )
 

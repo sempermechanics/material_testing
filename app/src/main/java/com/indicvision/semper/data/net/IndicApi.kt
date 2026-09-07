@@ -188,7 +188,7 @@ class IndicApi private constructor(context: Context) {
 
     /**
      * POST /v1/licenses/activate — redeem a license key (individual or
-     * campus/institution; the backend tells them apart by the key itself).
+     * institution; the backend tells them apart by the key itself).
      * Bearer + `X-Device-Id` like [registerDevice], **not** device-signed: the
      * backend route is `current_user` + a plain `X-Device-Id` header, no
      * challenge/nonce/signature. Every subsequent signed/bearer call still

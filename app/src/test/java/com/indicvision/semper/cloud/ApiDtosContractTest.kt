@@ -161,17 +161,37 @@ class ApiDtosContractTest {
     // ---------------------------------------------------------- licensing
 
     @Test
-    fun `config response decodes plan and licenseKind for a campus seat`() {
+    fun `config response decodes mode and licenseKind for an institution seat`() {
         val cfg = json.decodeFromString<AppConfigDto>(
             """
             {"maxSessions":0,"maxFilesPerSession":0,"maxFrames":0,
-             "plan":"professional","cloudBackupEnabled":true,"shareEnabled":true,
-             "licensePrefix":"SEMP-AB12","licenseKind":"campus"}
+             "mode":"licensed","plan":"professional","cloudBackupEnabled":true,
+             "shareEnabled":true,"licensePrefix":"SEMP-AB12",
+             "licenseKind":"institution"}
             """.trimIndent(),
         )
+        assertEquals("licensed", cfg.mode)
         assertEquals("professional", cfg.plan)
         assertTrue(cfg.cloudBackupEnabled)
-        assertEquals("campus", cfg.licenseKind)
+        assertEquals("institution", cfg.licenseKind)
+    }
+
+    @Test
+    fun `config response missing mode still decodes the plan mirror`() {
+        // A backend deploy predating the plan->mode rename sends only `plan`.
+        // `mode` decodes blank, which AppRemoteConfig reads as "not told" and
+        // resolves from the mirror — not as demo.
+        val cfg = json.decodeFromString<AppConfigDto>("""{"plan":"professional"}""")
+        assertEquals("", cfg.mode)
+        assertEquals("professional", cfg.plan)
+    }
+
+    @Test
+    fun `config response missing plan mirror still decodes mode`() {
+        // The mirror is dropped once the fleet has moved; `mode` alone must
+        // keep decoding, and the mirror's own default must not contradict it.
+        val cfg = json.decodeFromString<AppConfigDto>("""{"mode":"licensed"}""")
+        assertEquals("licensed", cfg.mode)
     }
 
     @Test
@@ -192,9 +212,10 @@ class ApiDtosContractTest {
     @Test
     fun `license activate response decodes the nested config`() {
         val resp = json.decodeFromString<LicenseActivateResponse>(
-            """{"config":{"plan":"professional","cloudBackupEnabled":true,
+            """{"config":{"mode":"licensed","plan":"professional","cloudBackupEnabled":true,
                 "shareEnabled":true,"licensePrefix":"SEMP-ZZ99","licenseKind":"individual"}}""",
         )
+        assertEquals("licensed", resp.config.mode)
         assertEquals("professional", resp.config.plan)
         assertEquals("individual", resp.config.licenseKind)
     }
