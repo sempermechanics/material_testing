@@ -34,6 +34,15 @@
         { "fieldPath": "sessionId", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
+    },
+    {
+      "//": "find_user_by_email — institution IT adds a roster member by email, and seats are keyed by uid. Single equality, which Firestore can serve from automatic single-field indexes; declared anyway so every query in firestore_repo.py has an entry here.",
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "email", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

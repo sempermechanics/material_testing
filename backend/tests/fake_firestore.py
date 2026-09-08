@@ -4,6 +4,7 @@ Enough of the client surface for firestore_repo.py to run in tests without a
 live backend: documents, `.set/.update/.get/.delete`, `==` queries, `.count()`,
 batches, and a pass-through transaction. Install it with `install(monkeypatch)`.
 """
+import operator
 from datetime import datetime, timezone
 
 from google.api_core.exceptions import NotFound
@@ -114,11 +115,23 @@ class _Query:
         self._order_by = order_by
         self._start_after = start_after
 
+    #: Positional `.where(field, op, value)` only — the production code uses
+    #: that legacy signature rather than FieldFilter precisely so this double
+    #: can implement it.
+    _OPS = {
+        "==": operator.eq,
+        "!=": operator.ne,
+        "<": operator.lt,
+        "<=": operator.le,
+        ">": operator.gt,
+        ">=": operator.ge,
+    }
+
     def where(self, field, op, value):
-        assert op == "==", f"fake store only supports '==', got {op!r}"
+        assert op in self._OPS, f"fake store does not support {op!r}"
         return _Query(
             self._store, self._collection,
-            self._filters + [(field, value)], self._limit,
+            self._filters + [(field, op, value)], self._limit,
             self._order_by, self._start_after,
         )
 
@@ -140,11 +153,27 @@ class _Query:
             self._order_by, snapshot_or_doc,
         )
 
+    @classmethod
+    def _passes(cls, data, field, op, value) -> bool:
+        """One filter clause.
+
+        A document missing the field never matches an inequality, matching
+        Firestore: a field that is absent is not indexed, so such documents
+        are simply not in the result set. Getting this wrong would make an
+        expired-lease sweep also pick up seats that hold no lease at all.
+        """
+        if field not in data:
+            return op == "!=" if "!" in op else False
+        try:
+            return cls._OPS[op](data[field], value)
+        except TypeError:
+            return False  # mismatched types are never comparable in Firestore
+
     def _matching(self):
         bucket = self._store._data.get(self._collection, {})
         rows = []
         for doc_id, data in bucket.items():
-            if all(data.get(f) == v for f, v in self._filters):
+            if all(self._passes(data, f, op, v) for f, op, v in self._filters):
                 rows.append(_Snapshot(doc_id, data, _DocRef(self._store, self._collection, doc_id)))
         if self._order_by == "__name__" or self._order_by is None:
             rows.sort(key=lambda snap: snap.id)

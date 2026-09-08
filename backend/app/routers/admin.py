@@ -122,6 +122,7 @@ def admin_create_license(
             admin_emails=body.adminEmails,
             created_by_uid=admin["uid"],
             max_seats=body.maxSeats,
+            seating=body.seating,
             expires_at=body.expiresAt,
             max_analyses=body.maxAnalyses,
             note=body.note,
@@ -130,7 +131,8 @@ def admin_create_license(
             admin["uid"], action="ADMIN_LICENSE_MINT",
             target={"type": "license", "id": minted["license"]["id"]},
             detail={"kind": KIND_INSTITUTION, "domainLock": body.domainLock,
-                    "adminEmails": body.adminEmails, "maxSeats": body.maxSeats},
+                    "adminEmails": body.adminEmails, "maxSeats": body.maxSeats,
+                    "seating": body.seating},
         )
         return minted
     minted = repo.create_individual_license(

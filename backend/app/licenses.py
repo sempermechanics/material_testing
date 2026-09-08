@@ -13,6 +13,12 @@ or timed. A timed license stops granting use at `expiresAt` plus `graceDays`;
 entitlements are unchanged during grace, so a renewal that lands late does not
 interrupt work. A perpetual one never stops.
 
+`seating` is orthogonal to both, and applies to institution licenses. An
+`assigned` license entitles every member of its roster. A `floating` one
+separates the roster from the count: any member may use the license, but only
+`maxSeats` hold a live lease at a time, and a member without one is demo
+rather than blocked.
+
 The wire keeps BOTH names for now. An installed app decodes `plan` and fails
 closed to Demo when it is absent (see LicenseEntitlements on Android), so
 dropping `plan` from a response would silently demote every user in the fleet.
@@ -48,6 +54,17 @@ LEGACY_KIND_CAMPUS = "campus"
 DURATION_PERPETUAL = "perpetual"
 DURATION_TIMED = "timed"
 DURATIONS = frozenset({DURATION_PERPETUAL, DURATION_TIMED})
+
+#: How an institution license allocates its seats. Orthogonal to `duration`.
+#:   assigned — a seat is claimed once and held until IT removes it. Every
+#:              member on the roster is entitled, so roster size IS the count.
+#:   floating — the roster and the slot count are separate: any member may
+#:              use the license, but only `maxSeats` hold a live lease at
+#:              once. A member without a lease is demo, not blocked.
+#: An individual license is always `assigned` — one person, one seat.
+SEATING_ASSIGNED = "assigned"
+SEATING_FLOATING = "floating"
+SEATINGS = frozenset({SEATING_ASSIGNED, SEATING_FLOATING})
 
 
 def legacy_plan(mode: str) -> str:
@@ -87,6 +104,17 @@ def normalize_duration(raw, *, has_expiry: bool) -> str:
     if value in DURATIONS:
         return value
     return DURATION_TIMED if has_expiry else DURATION_PERPETUAL
+
+
+def normalize_seating(raw) -> str:
+    """Coerce a stored `seating`. Unknown or absent → assigned.
+
+    Every license minted before floating existed allocated permanently held
+    seats, which is exactly `assigned` — so the default is not a guess, it is
+    what those documents already mean. No migration needed.
+    """
+    value = raw.strip().lower() if isinstance(raw, str) else ""
+    return value if value in SEATINGS else SEATING_ASSIGNED
 
 
 def as_utc(value):

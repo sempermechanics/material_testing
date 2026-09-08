@@ -386,6 +386,35 @@ paths:
         '400': { description: Empty patch }
         '401': { description: Missing or invalid device attestation }
         '404': { description: User not found }
+  /v1/licenses/checkout:
+    post:
+      operationId: checkoutLease
+      description: >
+        Take or renew a floating seat on an institution license. Re-calling
+        this IS the heartbeat — renewing an existing lease extends it without
+        consuming a second slot, so there is no separate heartbeat route. The
+        response carries leaseExpiresAt and leaseHeartbeatMinutes so the client
+        knows when to call again. 409 no_floating_seat means the pool is
+        currently full; the caller stays eligible and in demo mode, and may
+        retry. Requires X-Device-Id.
+      responses:
+        '200': { description: OK }
+        '403': { description: "Not on the roster, revoked, or the license expired (not_eligible, license_revoked, license_expired)" }
+        '404': { description: "No license attached to this account" }
+        '409': { description: "Pool full, or the license is not floating (no_floating_seat, seating_not_floating)" }
+        '429': { description: Rate limited }
+  /v1/licenses/release:
+    post:
+      operationId: releaseLease
+      description: >
+        Give a floating seat back so another roster member can take it.
+        Idempotent — releasing a lease that already lapsed frees nothing and
+        still succeeds.
+      responses:
+        '200': { description: OK }
+        '403': { description: not_eligible }
+        '404': { description: "No license attached to this account" }
+        '429': { description: Rate limited }
   /v1/licenses/activate:
     post:
       operationId: activateLicense
@@ -471,6 +500,20 @@ paths:
   # Cloud Run URL, which nothing can reach. Same backend, same auth, same
   # handler. Delete this block and the FastAPI aliases together.
   /v1/campus/licenses/{licenseId}/seats:
+    post:
+      operationId: campusAddSeat
+      description: Deprecated alias of POST /v1/institutions/licenses/{licenseId}/seats.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or user_not_found }
+        '409': { description: license_seats_exhausted or license_seat_disabled }
+        '429': { description: Rate limited }
     get:
       operationId: campusListSeats
       description: Deprecated alias of GET /v1/institutions/licenses/{licenseId}/seats.
@@ -521,6 +564,26 @@ paths:
         '404': { description: license_not_found or seat_not_found }
         '429': { description: Rate limited }
   /v1/institutions/licenses/{licenseId}/seats:
+    post:
+      operationId: institutionAddSeat
+      description: >
+        Put someone on this license's roster, by email. They must already have
+        an account — demo is open to everyone, so "sign in once, then I'll add
+        you" is the flow, and 404 user_not_found means exactly that. On an
+        assigned license this entitles them immediately; on a floating one it
+        makes them eligible and consumes no slot, since a slot is taken by
+        checking out a lease.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: "license_not_found, or that email has no account yet (user_not_found)" }
+        '409': { description: "Roster full, or that seat is on hold (license_seats_exhausted, license_seat_disabled)" }
+        '429': { description: Rate limited }
     get:
       operationId: institutionListSeats
       description: >

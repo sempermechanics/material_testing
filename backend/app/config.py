@@ -52,6 +52,18 @@ class Settings:
     # firestore_repo._grace_days. Otherwise deploying a grace default would
     # retroactively reinstate every account that expired within the window.
     LICENSE_GRACE_DAYS_DEFAULT = _env_int("LICENSE_GRACE_DAYS_DEFAULT", "14")
+
+    # How long a floating-seat lease lasts before it stops entitling anyone,
+    # and how often the app should renew it. A lease must outlive a working
+    # session comfortably — losing a seat because of a tunnel or a lunch break
+    # would be worse than a crashed client parking one — so the window is long
+    # and the heartbeat is what actually keeps it alive.
+    #
+    # A crashed or uninstalled client therefore holds its slot for up to
+    # LICENSE_LEASE_HOURS. That only costs anything on a pool that is full, and
+    # the expiry sweep reclaims it without anyone intervening.
+    LICENSE_LEASE_HOURS = _env_int("LICENSE_LEASE_HOURS", "8")
+    LICENSE_LEASE_HEARTBEAT_MINUTES = _env_int("LICENSE_LEASE_HEARTBEAT_MINUTES", "30")
     MAX_FILES_PER_SESSION = _env_int("MAX_FILES_PER_SESSION", "600")
     MAX_FRAMES_PER_ANALYSIS = _env_int("MAX_FRAMES_PER_ANALYSIS", "150")
 

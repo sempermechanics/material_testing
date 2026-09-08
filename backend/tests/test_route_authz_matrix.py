@@ -70,12 +70,19 @@ EXPECTED = {
     ("PATCH", "/v1/admin/licenses/{license_id}"): DEVICE_ADMIN,
     ("POST", "/v1/admin/licenses/{license_id}/revoke"): DEVICE_ADMIN,
     ("POST", "/v1/licenses/activate"): USER,
+    # Lease routes are USER, not INSTITUTION_ADMIN: the member takes their own
+    # seat. Eligibility is the seat document, checked inside the transaction —
+    # a caller with no seat gets `not_eligible`, so a bare token buys nothing.
+    ("POST", "/v1/licenses/checkout"): USER,
+    ("POST", "/v1/licenses/release"): USER,
+    ("POST", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("GET", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("PATCH", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
     ("DELETE", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
     # Pre-rename aliases of the three routes above. Same handler, same tier —
     # declared explicitly so a deprecation that drops them has to come through
     # this table, and so an alias can never quietly gain a weaker tier.
+    ("POST", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("GET", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("PATCH", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
     ("DELETE", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,

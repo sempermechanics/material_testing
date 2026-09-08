@@ -11,6 +11,8 @@ from .config import settings
 from .licenses import (
     DURATION_PERPETUAL,
     DURATION_TIMED,
+    SEATING_ASSIGNED,
+    SEATING_FLOATING,
     KIND_INDIVIDUAL,
     KIND_INSTITUTION,
     MODE_DEMO,
@@ -25,6 +27,7 @@ from .licenses import (
     normalize_duration,
     normalize_kind,
     normalize_mode,
+    normalize_seating,
 )
 from .models import DeviceReg, FileComplete, FileSpec, SessionCreate
 
@@ -52,6 +55,11 @@ _LIST_SOFT_LIMIT = 2000
 # window) in quick succession, so an unconditional write here was dozens of
 # Firestore writes to record a timestamp nobody reads at finer resolution.
 _LAST_SEEN_THROTTLE = timedelta(hours=1)
+
+#: How many expired leases one checkout reclaims. A pool cannot have more live
+#: leases than maxSeats, so this only ever has to clear the backlog of one
+#: quiet period; anything left is picked up by the next claim.
+_LEASE_SWEEP_LIMIT = 50
 
 
 def _lost_to_contention(exc: BaseException) -> bool:
@@ -398,16 +406,48 @@ def _expiry_state(user: dict) -> tuple[bool, bool, object]:
         return False, False, ends
 
 
+def _lease_live(user: dict) -> bool:
+    """Whether this account holds an unexpired floating-seat lease.
+
+    Reads the mirror on the user document, not the seat — that is what keeps
+    `effective_mode` a pure function and the hot read path free of Firestore.
+    The mirror is written by checkout and cleared by release, so the worst
+    staleness is one lease length, and an expired lease reads as expired here
+    whether or not anything has released it yet.
+
+    Fails CLOSED, unlike `_expiry_state`. A missing or malformed lease is "no
+    seat", because on a floating license the absence of a lease is the normal
+    state — most of the roster holds none at any moment — so treating an
+    unreadable one as live would hand out the pool for free.
+    """
+    ends = as_utc(user.get("leaseExpiresAt"))
+    if ends is None:
+        return False
+    try:
+        return ends > _now()
+    except TypeError:
+        return False
+
+
 def effective_mode(user: dict) -> str:
     """Licensed until the key expires past grace; anything else → demo.
 
     Grace is inside the licensed branch on purpose: an account in grace keeps
     every entitlement it had. Only the warning changes.
+
+    A floating seat adds one more condition: the member is entitled only while
+    holding a live lease. Without one they are demo — not blocked, not
+    revoked. That is the whole point of a pool; being between leases is the
+    ordinary state for most of the roster.
     """
     if _stored_mode(user) != MODE_LICENSED:
         return MODE_DEMO
     entitlement_over, _in_grace, _ends = _expiry_state(user)
-    return MODE_DEMO if entitlement_over else MODE_LICENSED
+    if entitlement_over:
+        return MODE_DEMO
+    if normalize_seating(user.get("licenseSeating")) == SEATING_FLOATING:
+        return MODE_LICENSED if _lease_live(user) else MODE_DEMO
+    return MODE_LICENSED
 
 
 def resolve_user_config(user: dict) -> dict:
@@ -445,6 +485,12 @@ def resolve_user_config(user: dict) -> dict:
         "licenseExpiresAt": summary["expiresAt"],
         "licenseGraceEndsAt": summary["graceEndsAt"],
         "inGrace": summary["inGrace"],
+        # `floating` tells the app it must hold a lease, and when to renew it.
+        # A demo mode with seating=floating means "no seat right now", which
+        # the app presents as a checkout prompt rather than a dead end.
+        "licenseSeating": summary["seating"],
+        "leaseExpiresAt": summary["leaseExpiresAt"],
+        "leaseHeartbeatMinutes": settings.LICENSE_LEASE_HEARTBEAT_MINUTES,
         "cloudBackupEnabled": is_licensed,
         "shareEnabled": is_licensed,
         "maxSessions": max_sessions,
@@ -483,6 +529,10 @@ def license_summary(user: dict) -> dict:
         "expiresAt": expiry,
         "graceEndsAt": ends,
         "inGrace": in_grace,
+        "seating": normalize_seating(user.get("licenseSeating")),
+        # Null on an assigned seat, which never needs one. On a floating seat
+        # this is what the app renews before it lapses.
+        "leaseExpiresAt": as_utc(user.get("leaseExpiresAt")),
     }
 
 
@@ -572,7 +622,12 @@ def _license_public(license_id: str, data: dict) -> dict:
         "domainLock": data.get("domainLock") or "",
         "adminEmails": list(data.get("adminEmails") or []),
         "maxSeats": data.get("maxSeats"),
+        "seating": normalize_seating(data.get("seating")),
+        # seatsUsed counts the roster; leasesActive counts who is using it
+        # right now. On an assigned license they are the same number, so only
+        # the first is meaningful.
         "seatsUsed": data.get("seatsUsed", 0),
+        "leasesActive": data.get("leasesActive", 0),
         "createdAt": data.get("createdAt"),
         "createdByUid": data.get("createdByUid") or "",
         "redeemedAt": data.get("redeemedAt"),
@@ -602,6 +657,7 @@ def _write_license(
     domain_lock: str = "",
     admin_emails: list[str] | None = None,
     max_seats: int | None = None,
+    seating: str = SEATING_ASSIGNED,
     redeemed_by_uid: str | None = None,
     expires_at=None,
     grace_days: int | None = None,
@@ -638,6 +694,8 @@ def _write_license(
         if max_seats is not None:
             stored["maxSeats"] = int(max_seats)
         stored["seatsUsed"] = 0
+        stored["seating"] = normalize_seating(seating)
+        stored["leasesActive"] = 0
     if expires_at is not None:
         stored["expiresAt"] = expires_at
         stored["duration"] = DURATION_TIMED
@@ -729,6 +787,7 @@ def create_institution_license(
     admin_emails: list[str],
     created_by_uid: str,
     max_seats: int | None = None,
+    seating: str = SEATING_ASSIGNED,
     expires_at=None,
     max_analyses: int | None = None,
     note: str = "",
@@ -746,6 +805,7 @@ def create_institution_license(
         domain_lock=domain_lock,
         admin_emails=admin_emails,
         max_seats=max_seats,
+        seating=seating,
         expires_at=expires_at,
         max_analyses=max_analyses,
         note=note,
@@ -798,6 +858,10 @@ def _license_mirror_patch(lic: dict) -> dict:
         "licenseDuration": normalize_duration(
             lic.get("duration"), has_expiry=expires_at is not None,
         ),
+        # Not the lease itself — only whether this license needs one. The lease
+        # is written by checkout and cleared by release, and re-stamping it
+        # here would hand a seat back to someone who had released it.
+        "licenseSeating": normalize_seating(lic.get("seating")),
         "licenseMaxAnalyses": int(max_analyses) if max_analyses else firestore.DELETE_FIELD,
     }
 
@@ -842,6 +906,286 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
     return "", resolve_user_config(merged)
 
 
+# ---------------- floating-seat leases ----------------
+# A floating license separates the roster from the count: every member may use
+# the license, but only `maxSeats` hold a live lease at once. The lease lives
+# on the seat document — `check_device_lock` already reads that document on
+# every institution request, so consulting it costs nothing extra — and its
+# expiry is mirrored onto the user so `effective_mode` stays a pure function.
+
+def _lease_clear_patch() -> dict:
+    """Seat fields that record no lease. Written on release and on revoke."""
+    return {
+        "leaseExpiresAt": firestore.DELETE_FIELD,
+        "leaseDeviceId": firestore.DELETE_FIELD,
+        "lastHeartbeatAt": firestore.DELETE_FIELD,
+    }
+
+
+def _seat_lease_live(seat: dict) -> bool:
+    """Whether this seat document holds an unexpired lease.
+
+    Fails closed, like `_lease_live`: an unreadable lease frees the slot
+    rather than parking it.
+    """
+    ends = as_utc(seat.get("leaseExpiresAt"))
+    if ends is None:
+        return False
+    try:
+        return ends > _now()
+    except TypeError:
+        return False
+
+
+def _sweep_expired_leases(lic_ref, now) -> int:
+    """Release leases that ran out without anyone calling release.
+
+    `leasesActive` drifts upward every time an app is killed, uninstalled or
+    simply goes offline mid-lease, so the counter alone cannot be trusted to
+    say whether the pool is full. This reconciles it before a claim reads it.
+
+    A single-field inequality on one subcollection, so no composite index is
+    needed. Positional `.where(field, op, value)` deliberately — the fake store
+    used by the unit tests implements only that form, not `FieldFilter`.
+
+    Deliberately outside the claim transaction: a transaction may not run a
+    query, and sweeping first is safe because releasing a genuinely expired
+    lease is correct regardless of who wins the claim that follows.
+    """
+    expired = list(
+        lic_ref.collection("seats")
+        .where("leaseExpiresAt", "<=", now)
+        .limit(_LEASE_SWEEP_LIMIT)
+        .stream()
+    )
+    if not expired:
+        return 0
+    batch = db().batch()
+    for doc in expired:
+        batch.update(doc.reference, {
+            **_lease_clear_patch(),
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+    batch.update(lic_ref, {"leasesActive": firestore.Increment(-len(expired))})
+    batch.commit()
+    log.info("Reclaimed %d expired lease(s) on license %s", len(expired), lic_ref.id)
+    return len(expired)
+
+
+def checkout_lease(user: dict, device_id: str) -> tuple[str, dict | None]:
+    """Claim or extend a floating-seat lease. Returns (error_code, config).
+
+    Re-checkout IS the heartbeat — extending an existing lease takes the same
+    path and must not consume a second slot. There is deliberately no separate
+    heartbeat route and no audit write here: the app calls this every half
+    hour, and both `FILE_DOWNLOAD` and `_LAST_SEEN_THROTTLE` record what
+    writing per request on a hot path costs.
+    """
+    uid = user.get("uid") or ""
+    license_id = user.get("licenseId")
+    if not license_id:
+        return "no_license", None
+    lic = get_license(license_id)
+    if not lic:
+        return "license_not_found", None
+    if normalize_seating(lic.get("seating")) != SEATING_FLOATING:
+        # An assigned seat is always entitled; there is nothing to check out,
+        # and pretending otherwise would let a client invent a lease field.
+        return "seating_not_floating", None
+    if (lic.get("status") or "active") == "revoked":
+        return "license_revoked", None
+    if _license_past_grace(lic):
+        return "license_expired", None
+
+    lic_ref = db().collection("licenses").document(license_id)
+    now = _now()
+    _sweep_expired_leases(lic_ref, now)
+    expires_at = now + timedelta(hours=settings.LICENSE_LEASE_HOURS)
+
+    seat_ref = _seat_ref(license_id, uid)
+    user_ref = db().collection("users").document(uid)
+    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
+
+    @firestore.transactional
+    def _checkout(tx) -> str:
+        lic_snap = lic_ref.get(transaction=tx)
+        seat_snap = seat_ref.get(transaction=tx)
+        if not seat_snap.exists:
+            # Not on the roster. Institution IT adds members; there is no
+            # self-service path onto a floating license.
+            return "not_eligible"
+        seat = seat_snap.to_dict() or {}
+        if seat.get("status") in ("revoked", "disabled"):
+            return "not_eligible"
+
+        renewing = _seat_lease_live(seat)
+        if not renewing:
+            max_seats = (lic_snap.to_dict() or {}).get("maxSeats") if lic_snap.exists else None
+            active = int((lic_snap.to_dict() or {}).get("leasesActive") or 0)
+            if max_seats is not None and active >= int(max_seats):
+                return "no_floating_seat"
+
+        tx.update(seat_ref, {
+            "leaseExpiresAt": expires_at,
+            "leaseDeviceId": device_id,
+            "lastHeartbeatAt": now,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+        if not renewing:
+            tx.update(lic_ref, {"leasesActive": firestore.Increment(1)})
+        tx.update(user_ref, {
+            "leaseExpiresAt": expires_at,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+        return ""
+
+    try:
+        err = _checkout(transaction)
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        # Fail closed: granting a lease we could not commit is what would
+        # overfill the pool. The client retries and wins as soon as there
+        # is room.
+        return "no_floating_seat", None
+    if err:
+        return err, None
+    return "", resolve_user_config({**user, "leaseExpiresAt": expires_at})
+
+
+def release_lease(user: dict) -> tuple[str, dict | None]:
+    """Give a floating slot back. Idempotent — releasing twice frees one slot.
+
+    The user's mirror is cleared in the same commit, so the account resolves
+    demo from the next request rather than staying licensed until the lease
+    would have expired on its own.
+    """
+    uid = user.get("uid") or ""
+    license_id = user.get("licenseId")
+    if not license_id:
+        return "no_license", None
+
+    lic_ref = db().collection("licenses").document(license_id)
+    seat_ref = _seat_ref(license_id, uid)
+    user_ref = db().collection("users").document(uid)
+    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
+
+    @firestore.transactional
+    def _release(tx) -> str:
+        seat_snap = seat_ref.get(transaction=tx)
+        if not seat_snap.exists:
+            return "not_eligible"
+        held = _seat_lease_live(seat_snap.to_dict() or {})
+        tx.update(seat_ref, {
+            **_lease_clear_patch(),
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+        if held:
+            # Only decrement for a lease that was actually counted. A second
+            # release, or one after expiry, must not push the pool negative.
+            tx.update(lic_ref, {"leasesActive": firestore.Increment(-1)})
+        tx.update(user_ref, {
+            "leaseExpiresAt": firestore.DELETE_FIELD,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+        return ""
+
+    try:
+        err = _release(transaction)
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        # Releasing is idempotent, so a lost race means someone else already
+        # did it. Answer from the current state rather than reporting failure.
+        err = "" if seat_ref.get().exists else "not_eligible"
+    if err:
+        return err, None
+    merged = {k: v for k, v in user.items() if k != "leaseExpiresAt"}
+    return "", resolve_user_config(merged)
+
+
+def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch: dict) -> str:
+    """Take a seat on the roster, atomically. Returns an error code, or "".
+
+    This was a read-then-`WriteBatch` — atomic for its writes, but carrying no
+    reads and no preconditions, so two members activating at once on a pool of
+    ten both saw nine free and the count landed at eleven. A batch is not a
+    transaction. With a floating pool the count is the actual boundary rather
+    than a soft allocation, so the whole claim now reads and writes under one.
+
+    Every read happens before every write, as Firestore requires. The seat
+    validation lives inside for the same reason as the count: it is decided
+    from data read in the transaction.
+    """
+    lic_ref = db().collection("licenses").document(license_id)
+    seat_ref = _seat_ref(license_id, uid)
+    user_ref = db().collection("users").document(uid)
+    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
+
+    @firestore.transactional
+    def _claim(tx) -> str:
+        lic_snap = lic_ref.get(transaction=tx)
+        seat_snap = seat_ref.get(transaction=tx)
+        if not lic_snap.exists:
+            return "license_not_found"
+        lic = lic_snap.to_dict() or {}
+        if (lic.get("status") or "active") == "revoked":
+            return "license_revoked"
+
+        seat = seat_snap.to_dict() if seat_snap.exists else None
+        if seat and seat.get("status") == "revoked":
+            # revoke_institution_seat() already freed this slot. A revoked seat
+            # is not a permanent ban — the holder may be re-admitted and takes
+            # a fresh slot through the normal maxSeats check below.
+            seat = None
+
+        if seat:
+            if seat.get("status") == "disabled":
+                return "license_seat_disabled"
+            locked_device = seat.get("deviceIdLock") or ""
+            if device_id and locked_device and locked_device != device_id:
+                return "license_device_mismatch"
+            seat_patch = {"updatedAt": firestore.SERVER_TIMESTAMP}
+            if device_id:
+                # Only when a device actually redeemed. IT adding a member
+                # passes no device, and must not wipe the lock of someone who
+                # already has one.
+                seat_patch["deviceIdLock"] = device_id
+            tx.update(seat_ref, seat_patch)
+        else:
+            # `maxSeats` caps the ROSTER on an assigned license, where holding
+            # a seat is holding the entitlement. On a floating one it caps
+            # concurrent LEASES instead — a fifty-person lab sharing ten slots
+            # is the whole point, so the roster is deliberately uncapped and
+            # the check moves to checkout_lease.
+            max_seats = lic.get("maxSeats")
+            seats_used = int(lic.get("seatsUsed") or 0)
+            floating = normalize_seating(lic.get("seating")) == SEATING_FLOATING
+            if not floating and max_seats is not None and seats_used >= int(max_seats):
+                return "license_seats_exhausted"
+            tx.set(seat_ref, {
+                "uid": uid,
+                "email": (email or "").strip().lower(),
+                "deviceIdLock": device_id,
+                "status": "active",
+                "createdAt": firestore.SERVER_TIMESTAMP,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            })
+            tx.update(lic_ref, {"seatsUsed": firestore.Increment(1)})
+        tx.update(user_ref, user_patch)
+        return ""
+
+    try:
+        return _claim(transaction)
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        # Fail closed. Handing out a seat we could not commit is the one
+        # outcome that breaks the cap; a caller who lost the race just tries
+        # again, and on a pool with room they win immediately.
+        return "license_seats_exhausted"
+
+
 def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic: dict, ref, key: str):
     if (lic.get("status") or "active") == "revoked":
         return "license_revoked", None
@@ -850,31 +1194,6 @@ def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic:
         return "license_email_mismatch", None
 
     license_id = ref.id
-    seat_ref = _seat_ref(license_id, uid)
-    seat_snap = seat_ref.get()
-    existing_seat = seat_snap.to_dict() if seat_snap.exists else None
-    if existing_seat and existing_seat.get("status") == "revoked":
-        # revoke_institution_seat() already freed this slot (seatsUsed decremented).
-        # A revoked seat is not a permanent ban — the same domain member can
-        # claim a fresh slot exactly like anyone else, including re-admission
-        # by IT or simply re-entering the same key. Fall through to the
-        # "no seat yet" branch so it goes through the normal maxSeats check.
-        existing_seat = None
-
-    if existing_seat:
-        if existing_seat.get("status") == "disabled":
-            return "license_seat_disabled", None
-        locked_device = existing_seat.get("deviceIdLock") or ""
-        if locked_device and locked_device != device_id:
-            return "license_device_mismatch", None
-        seat_patch = {"deviceIdLock": device_id, "updatedAt": firestore.SERVER_TIMESTAMP}
-    else:
-        max_seats = lic.get("maxSeats")
-        seats_used = int(lic.get("seatsUsed") or 0)
-        if max_seats is not None and seats_used >= int(max_seats):
-            return "license_seats_exhausted", None
-        seat_patch = None  # created fresh below
-
     user_patch = {
         **_mode_patch(MODE_LICENSED),
         "licenseId": license_id,
@@ -884,21 +1203,9 @@ def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic:
     }
     user_patch.update(_license_mirror_patch(lic))
 
-    batch = db().batch()
-    batch.update(db().collection("users").document(uid), user_patch)
-    if existing_seat:
-        batch.update(seat_ref, seat_patch)
-    else:
-        batch.set(seat_ref, {
-            "uid": uid,
-            "email": email.strip().lower(),
-            "deviceIdLock": device_id,
-            "status": "active",
-            "createdAt": firestore.SERVER_TIMESTAMP,
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        })
-        batch.update(ref, {"seatsUsed": firestore.Increment(1)})
-    batch.commit()
+    err = claim_seat(license_id, uid, email, device_id, user_patch)
+    if err:
+        return err, None
 
     merged = _apply_patch(user, user_patch)
     return "", resolve_user_config(merged)
@@ -1148,6 +1455,64 @@ def get_license(license_id: str) -> dict | None:
     return snap.to_dict() if snap.exists else None
 
 
+def find_user_by_email(email: str) -> dict | None:
+    """The account holding this email, or None. Used to add a roster member.
+
+    Institution IT works from an email address, but seats are keyed by uid —
+    they have to be, since that is what every entitlement check has in hand.
+    Demo is open to everyone, so requiring the person to have signed in once
+    is not a barrier: it is the same step that gave them demo in the first
+    place, and it means no invite records, no email-keyed documents and no
+    second identity space to keep consistent.
+    """
+    wanted = (email or "").strip().lower()
+    if not wanted:
+        return None
+    q = db().collection("users").where("email", "==", wanted).limit(1)
+    for d in q.stream():
+        return {**d.to_dict(), "uid": d.id}
+    return None
+
+
+def add_institution_member(license_id: str, email: str) -> tuple[str, dict | None]:
+    """Put someone on an institution license's roster. Returns (error, seat).
+
+    On an assigned license this entitles them immediately. On a floating one
+    it makes them eligible; they still check out a lease to work, and adding
+    a member therefore consumes no slot.
+
+    Idempotent for an active seat, and re-adding someone previously revoked
+    gives them a fresh slot. A *disabled* seat is refused with
+    `license_seat_disabled` — disable is a deliberate hold that IT lifts with
+    `enabled=true`, and silently undoing it here would make the two routes
+    fight over the same state.
+    """
+    lic = get_license(license_id)
+    if not lic:
+        return "license_not_found", None
+    user = find_user_by_email(email)
+    if not user:
+        return "user_not_found", None
+    uid = user["uid"]
+
+    user_patch = {
+        **_mode_patch(MODE_LICENSED),
+        "licenseId": license_id,
+        "licenseKind": KIND_INSTITUTION,
+        "licensePrefix": lic.get("keyPrefix") or "",
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    user_patch.update(_license_mirror_patch(lic))
+
+    # No device lock: IT adds a member before that member has picked a device,
+    # and the lock is set the first time they actually use the license.
+    err = claim_seat(license_id, uid, user.get("email") or email, "", user_patch)
+    if err:
+        return err, None
+    seats = list_institution_seats(license_id)
+    return "", next((s for s in seats if s["uid"] == uid), None)
+
+
 def institution_license_summary(license_id: str) -> dict | None:
     """Public (no key plaintext) summary of one institution license, for IT
     self-service — same redaction as the Semper-staff admin listing, scoped to
@@ -1210,22 +1575,55 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> bool:
 
 def revoke_institution_seat(license_id: str, uid: str) -> bool:
     """Single-seat revoke: drops the holder to Demo and frees the slot
-    (decrements seatsUsed) so another domain member can activate."""
-    ref = _seat_ref(license_id, uid)
-    snap = ref.get()
-    if not snap.exists:
-        return False
-    already_revoked = (snap.to_dict() or {}).get("status") == "revoked"
-    ref.update({"status": "revoked", "updatedAt": firestore.SERVER_TIMESTAMP})
-    _drop_user_to_demo_if_licensed(uid, license_id)
-    if not already_revoked:
-        lic_ref = db().collection("licenses").document(license_id)
-        lic_snap = lic_ref.get()
-        if lic_snap.exists:
-            current = int((lic_snap.to_dict() or {}).get("seatsUsed") or 0)
-            if current > 0:
-                lic_ref.update({"seatsUsed": firestore.Increment(-1)})
-    return True
+    (decrements seatsUsed) so another roster member can take it.
+
+    Transactional for the same reason `claim_seat` is, and against the mirror
+    image of its race: two concurrent revokes of one seat both read a status
+    that is not yet "revoked", both decrement, and the pool undercounts by one
+    forever. A releasable lease is dropped in the same commit — a revoked seat
+    must not keep occupying a floating slot.
+    """
+    lic_ref = db().collection("licenses").document(license_id)
+    seat_ref = _seat_ref(license_id, uid)
+    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
+
+    @firestore.transactional
+    def _revoke(tx) -> bool:
+        seat_snap = seat_ref.get(transaction=tx)
+        if not seat_snap.exists:
+            return False
+        seat = seat_snap.to_dict() or {}
+        if seat.get("status") == "revoked":
+            return True  # idempotent: already revoked, counters already settled
+        lic_snap = lic_ref.get(transaction=tx)
+        seats_used = int((lic_snap.to_dict() or {}).get("seatsUsed") or 0) if lic_snap.exists else 0
+        held_lease = _seat_lease_live(seat)
+
+        tx.update(seat_ref, {
+            "status": "revoked",
+            **_lease_clear_patch(),
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+        counters = {}
+        if seats_used > 0:
+            counters["seatsUsed"] = firestore.Increment(-1)
+        if held_lease:
+            counters["leasesActive"] = firestore.Increment(-1)
+        if counters and lic_snap.exists:
+            tx.update(lic_ref, counters)
+        return True
+
+    try:
+        revoked = _revoke(transaction)
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        # The other writer won and did the same thing. Re-read to answer
+        # precisely rather than reporting a failure that did not happen.
+        revoked = seat_ref.get().exists
+    if revoked:
+        _drop_user_to_demo_if_licensed(uid, license_id)
+    return revoked
 
 
 # ---------------- devices ----------------

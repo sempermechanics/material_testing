@@ -177,6 +177,10 @@ class AdminLicenseCreate(BaseModel):
     domainLock: Optional[str] = Field(default=None, min_length=1, max_length=253)
     adminEmails: List[str] = Field(default_factory=list, max_length=20)
     maxSeats: Optional[int] = Field(default=None, gt=0, le=100000)
+    #: Institution licenses only. `assigned` (the default) entitles every
+    #: member of the roster. `floating` entitles only the `maxSeats` members
+    #: holding a live lease; the rest are demo until one frees up.
+    seating: Literal["assigned", "floating"] = "assigned"
     expiresAt: Optional[datetime] = None
     #: Days after `expiresAt` that entitlement continues, unchanged, so a
     #: renewal in flight does not interrupt work. Omitted uses the fleet
@@ -268,6 +272,13 @@ class AdminLicenseCreate(BaseModel):
                 raise ValueError("institution licenses require domainLock")
             if not self.adminEmails:
                 raise ValueError("institution licenses require at least one adminEmails entry")
+        if self.seating == "floating":
+            if self.kind != "institution":
+                raise ValueError('only institution licenses may be floating')
+            if self.maxSeats is None:
+                # A floating pool with no cap is an assigned license with extra
+                # steps: nobody would ever be refused a lease.
+                raise ValueError("floating licenses require maxSeats")
         return self
 
 
@@ -279,6 +290,30 @@ class InstitutionSeatPatch(BaseModel):
     see routers/institutions.py and firestore_repo.set_seat_enabled."""
     clearDeviceLock: Optional[bool] = None
     enabled: Optional[bool] = None
+
+
+class InstitutionSeatAdd(BaseModel):
+    """Institution IT adding a member to the roster, by email.
+
+    The person must already have an account — everyone can sign up and use
+    demo, so "sign in once, then I'll add you" is the flow rather than an
+    invite system. Adding by email keeps IT working from the address they
+    already have; the backend resolves it to a uid.
+
+    On a floating license this grants eligibility, not a slot: the member
+    still checks out a lease when they want to work.
+    """
+    email: str = Field(min_length=3, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, value: str) -> str:
+        email = value.strip().lower()
+        if "@" not in email or email.startswith("@") or email.endswith("@"):
+            raise ValueError("email must be an email address")
+        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in email):
+            raise ValueError("email must not contain control characters")
+        return email
 
 
 class AdminLicenseUpdate(BaseModel):
