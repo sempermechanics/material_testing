@@ -2,6 +2,7 @@ package com.indicvision.semper.data.net
 
 import android.content.Context
 import androidx.core.content.edit
+import java.time.Instant
 
 /**
  * Cached product limits from [GET /v1/config](IndicApi.getConfig).
@@ -30,6 +31,16 @@ object AppRemoteConfig {
     private const val K_LICENSE_KIND = "license_kind"
     private const val K_FAIL_STREAK = "config_fail_streak"
     private const val FAIL_STREAK_HINT = 3
+    private const val K_LICENSE_DURATION = "license_duration"
+    private const val K_LICENSE_EXPIRES_AT = "license_expires_at"
+    private const val K_IN_GRACE = "license_in_grace"
+
+    /**
+     * When [apply] last stored a response. Without it the cache has no age:
+     * "the license expired" and "we have not asked in three weeks" look
+     * identical, and only the first of those should ever produce a warning.
+     */
+    private const val K_FETCHED_AT = "fetched_at"
 
     private const val MODE_DEMO = "demo"
     private const val MODE_LICENSED = "licensed"
@@ -43,6 +54,12 @@ object AppRemoteConfig {
     /** Pre-rename value of `"institution"`, still sent by an older backend. */
     private const val LEGACY_KIND_CAMPUS = "campus"
 
+    const val DURATION_PERPETUAL = "perpetual"
+    const val DURATION_TIMED = "timed"
+
+    /** No expiry on file — a perpetual license, or nothing fetched yet. */
+    const val NO_INSTANT = 0L
+
     private fun normalizeKind(raw: String): String =
         if (raw == LEGACY_KIND_CAMPUS) "institution" else raw
 
@@ -55,7 +72,7 @@ object AppRemoteConfig {
      * against [maxSessions], so storing the ceiling here is all that is needed —
      * no write back into TokenStore, no [localSessionCount] to fold in.
      */
-    fun apply(context: Context, config: AppConfigDto) {
+    fun apply(context: Context, config: AppConfigDto, now: Long = System.currentTimeMillis()) {
         prefs(context).edit {
             putInt(K_MAX_SESSIONS, config.maxSessions.coerceAtLeast(0))
             putInt(K_MAX_FILES, config.maxFilesPerSession.coerceAtLeast(0))
@@ -66,8 +83,30 @@ object AppRemoteConfig {
             putBoolean(K_SHARE, config.shareEnabled)
             putString(K_LICENSE_PREFIX, config.licensePrefix)
             putString(K_LICENSE_KIND, normalizeKind(config.licenseKind))
+            putString(K_LICENSE_DURATION, resolveDuration(config))
+            putLong(K_LICENSE_EXPIRES_AT, parseInstant(config.licenseExpiresAt))
+            putBoolean(K_IN_GRACE, config.inGrace)
+            putLong(K_FETCHED_AT, now)
             putInt(K_FAIL_STREAK, 0)
         }
+    }
+
+    /**
+     * Epoch millis for an ISO-8601 instant, or [NO_INSTANT] when absent or
+     * unparseable. Unparseable is treated as absent rather than as an expiry
+     * at the epoch, which would read as expired forever.
+     */
+    private fun parseInstant(raw: String?): Long {
+        if (raw.isNullOrBlank()) return NO_INSTANT
+        return runCatching { Instant.parse(raw).toEpochMilli() }.getOrDefault(NO_INSTANT)
+    }
+
+    /** `timed` only when the backend said so, or when an expiry actually arrived. */
+    private fun resolveDuration(config: AppConfigDto): String = when {
+        config.licenseDuration == DURATION_TIMED -> DURATION_TIMED
+        config.licenseDuration == DURATION_PERPETUAL -> DURATION_PERPETUAL
+        !config.licenseExpiresAt.isNullOrBlank() -> DURATION_TIMED
+        else -> DURATION_PERPETUAL
     }
 
     /** Record a failed /v1/config fetch (uploads stay gated until config lands). */
@@ -146,6 +185,42 @@ object AppRemoteConfig {
     /** `""`, `"individual"`, or `"institution"` — display/support metadata only. */
     fun licenseKind(context: Context): String =
         prefs(context).getString(K_LICENSE_KIND, "") ?: ""
+
+    /** Epoch millis of the last successful fetch, or 0 if there has never been one. */
+    fun fetchedAtMillis(context: Context): Long = prefs(context).getLong(K_FETCHED_AT, 0L)
+
+    /**
+     * Whether the cache is older than [maxAgeMillis].
+     *
+     * `now` is a parameter with a production default, matching
+     * `CacheJanitor.isReclaimable` and `SessionRepository.defaultSessionName`
+     * — the app has no clock abstraction and this is not the place to invent
+     * one. A cache that has never been written is stale.
+     *
+     * The `in 0 until` guard is `CloudSync`'s: a stored time in the future
+     * (NTP correction, the user changing the date) reads as stale rather than
+     * fresh forever.
+     */
+    fun isStale(
+        context: Context,
+        maxAgeMillis: Long,
+        now: Long = System.currentTimeMillis(),
+    ): Boolean {
+        val fetchedAt = fetchedAtMillis(context)
+        if (fetchedAt <= 0L) return true
+        return (now - fetchedAt) !in 0 until maxAgeMillis
+    }
+
+    /** `perpetual` or `timed`; perpetual until a response says otherwise. */
+    fun licenseDuration(context: Context): String =
+        prefs(context).getString(K_LICENSE_DURATION, DURATION_PERPETUAL) ?: DURATION_PERPETUAL
+
+    /** Epoch millis the license expires, or [NO_INSTANT] when perpetual. */
+    fun licenseExpiresAtMillis(context: Context): Long =
+        prefs(context).getLong(K_LICENSE_EXPIRES_AT, NO_INSTANT)
+
+    /** Past expiry but still fully entitled — warn, do not gate. */
+    fun inGrace(context: Context): Boolean = prefs(context).getBoolean(K_IN_GRACE, false)
 
     /** Drop cached limits (sign-out). */
     fun clear(context: Context) = prefs(context).edit { clear() }

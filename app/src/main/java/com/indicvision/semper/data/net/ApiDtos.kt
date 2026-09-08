@@ -51,6 +51,19 @@ data class AppConfigDto(
      * predating the rename sends `"campus"`; [LicenseEntitlements] normalises
      * it. */
     val licenseKind: String = "",
+    /** `perpetual` or `timed`. Empty on a backend predating duration; the
+     * cache infers it from whether an expiry arrived. */
+    val licenseDuration: String = "",
+    /** ISO-8601 instant the license stops, or null when perpetual. Advisory —
+     * the app warns from it but never gates on it, because a cached date can
+     * be arbitrarily stale and a renewal may have landed while offline. */
+    val licenseExpiresAt: String? = null,
+    /** ISO-8601 instant entitlement actually ends: expiry plus the grace
+     * window. Null when perpetual. */
+    val licenseGraceEndsAt: String? = null,
+    /** Past expiry but still fully entitled. Nothing is withdrawn — this only
+     * says a renewal is overdue. */
+    val inGrace: Boolean = false,
 )
 
 @Serializable

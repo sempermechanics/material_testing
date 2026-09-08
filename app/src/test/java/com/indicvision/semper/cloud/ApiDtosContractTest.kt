@@ -15,6 +15,7 @@ import com.indicvision.semper.data.net.SessionUploadsResponse
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -200,6 +201,33 @@ class ApiDtosContractTest {
         // yet — must not be misread as either shape.
         val cfg = json.decodeFromString<AppConfigDto>("""{"plan":"professional"}""")
         assertEquals("", cfg.licenseKind)
+    }
+
+    @Test
+    fun `config response decodes the license duration and grace fields`() {
+        val cfg = json.decodeFromString<AppConfigDto>(
+            """
+            {"mode":"licensed","licenseDuration":"timed",
+             "licenseExpiresAt":"2027-03-01T00:00:00Z",
+             "licenseGraceEndsAt":"2027-03-15T00:00:00Z","inGrace":true}
+            """.trimIndent(),
+        )
+        assertEquals("timed", cfg.licenseDuration)
+        assertEquals("2027-03-01T00:00:00Z", cfg.licenseExpiresAt)
+        assertEquals("2027-03-15T00:00:00Z", cfg.licenseGraceEndsAt)
+        assertTrue(cfg.inGrace)
+    }
+
+    @Test
+    fun `config response without duration fields decodes as a perpetual license`() {
+        // A backend deploy predating duration sends none of them. Null expiry
+        // and inGrace=false is exactly "nothing to warn about", which is the
+        // right reading — not "expired at the epoch".
+        val cfg = json.decodeFromString<AppConfigDto>("""{"mode":"licensed"}""")
+        assertEquals("", cfg.licenseDuration)
+        assertNull(cfg.licenseExpiresAt)
+        assertNull(cfg.licenseGraceEndsAt)
+        assertFalse(cfg.inGrace)
     }
 
     @Test

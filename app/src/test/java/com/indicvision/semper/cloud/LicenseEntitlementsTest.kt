@@ -8,12 +8,14 @@ import com.indicvision.semper.data.net.AppRemoteConfig
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.Instant
 
 /**
  * [LicenseEntitlements] is the single place the app asks "am I Demo or
@@ -180,6 +182,117 @@ class LicenseEntitlementsTest {
 
         assertEquals(LicenseEntitlements.MODE_LICENSED, LicenseEntitlements.mode(ctx))
         assertTrue(LicenseEntitlements.isLicensed(ctx))
+    }
+
+    // ---- license duration, grace, and cache staleness ----
+
+    private val day = 24L * 60 * 60 * 1000
+
+    private fun applyLicensed(expiresAt: String?, inGrace: Boolean = false, now: Long) {
+        AppRemoteConfig.apply(
+            ctx,
+            AppConfigDto(
+                mode = "licensed",
+                licenseDuration = if (expiresAt == null) "perpetual" else "timed",
+                licenseExpiresAt = expiresAt,
+                inGrace = inGrace,
+            ),
+            now = now,
+        )
+    }
+
+    @Test
+    fun `a perpetual license never produces an expiry notice`() {
+        val now = 1_000_000_000_000L
+        applyLicensed(expiresAt = null, now = now)
+        assertNull(LicenseEntitlements.daysUntilExpiry(ctx, now))
+        assertNull(LicenseEntitlements.expiryNoticeDays(ctx, now))
+    }
+
+    @Test
+    fun `no notice until the license is inside the warning window`() {
+        val now = 1_000_000_000_000L
+        applyLicensed(Instant.ofEpochMilli(now + 30 * day).toString(), now = now)
+        assertEquals(30L, LicenseEntitlements.daysUntilExpiry(ctx, now))
+        assertNull("30 days out is not yet worth interrupting for",
+            LicenseEntitlements.expiryNoticeDays(ctx, now))
+    }
+
+    @Test
+    fun `a notice appears inside the warning window`() {
+        val now = 1_000_000_000_000L
+        applyLicensed(Instant.ofEpochMilli(now + 9 * day).toString(), now = now)
+        assertEquals(9L, LicenseEntitlements.expiryNoticeDays(ctx, now))
+    }
+
+    @Test
+    fun `grace notices regardless of how far past expiry it is`() {
+        val now = 1_000_000_000_000L
+        applyLicensed(Instant.ofEpochMilli(now - 3 * day).toString(), inGrace = true, now = now)
+        assertTrue(LicenseEntitlements.inGrace(ctx))
+        // Still fully entitled — grace withdraws nothing.
+        assertTrue(LicenseEntitlements.isLicensed(ctx))
+        assertEquals(-3L, LicenseEntitlements.expiryNoticeDays(ctx, now))
+    }
+
+    @Test
+    fun `a stale cache suppresses the notice entirely`() {
+        // A renewal may have landed while the device was offline. Warning from
+        // a weeks-old cache would be a false alarm the user cannot act on.
+        val fetchedAt = 1_000_000_000_000L
+        applyLicensed(Instant.ofEpochMilli(fetchedAt + 2 * day).toString(), now = fetchedAt)
+        val muchLater = fetchedAt + 30 * day
+        assertTrue(AppRemoteConfig.isStale(ctx, LicenseEntitlements.STALE_CACHE_MS, muchLater))
+        assertNull(LicenseEntitlements.expiryNoticeDays(ctx, muchLater))
+    }
+
+    @Test
+    fun `a demo account never gets an expiry notice`() {
+        val now = 1_000_000_000_000L
+        AppRemoteConfig.apply(
+            ctx,
+            AppConfigDto(mode = "demo", licenseExpiresAt = Instant.ofEpochMilli(now).toString()),
+            now = now,
+        )
+        assertNull(LicenseEntitlements.expiryNoticeDays(ctx, now))
+    }
+
+    @Test
+    fun `an unparseable expiry is treated as absent, not as expired at the epoch`() {
+        val now = 1_000_000_000_000L
+        AppRemoteConfig.apply(
+            ctx,
+            AppConfigDto(mode = "licensed", licenseDuration = "timed", licenseExpiresAt = "not-a-date"),
+            now = now,
+        )
+        assertNull(LicenseEntitlements.expiryNoticeDays(ctx, now))
+    }
+
+    @Test
+    fun `the dev-auth bypass licenses without an expiry, so it never warns`() {
+        // DevAuth.install seeds mode=licensed with no expiry. A banner firing
+        // on every emulator launch would be noise nobody can act on.
+        val now = 1_000_000_000_000L
+        AppRemoteConfig.apply(
+            ctx,
+            AppConfigDto(mode = "licensed", cloudBackupEnabled = true, shareEnabled = true),
+            now = now,
+        )
+        assertNull(LicenseEntitlements.expiryNoticeDays(ctx, now))
+    }
+
+    @Test
+    fun `a never-fetched cache is stale`() {
+        assertTrue(AppRemoteConfig.isStale(ctx, LicenseEntitlements.STALE_CACHE_MS, 1L))
+    }
+
+    @Test
+    fun `a fetched-at in the future reads as stale, not fresh forever`() {
+        // NTP correction or the user changing the date. CloudSync guards its
+        // reconcile throttle the same way.
+        val fetchedAt = 1_000_000_000_000L
+        applyLicensed(expiresAt = null, now = fetchedAt)
+        assertTrue(AppRemoteConfig.isStale(ctx, LicenseEntitlements.STALE_CACHE_MS, fetchedAt - day))
     }
 
     @Test

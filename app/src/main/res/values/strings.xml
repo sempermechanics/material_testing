@@ -717,6 +717,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="limit_subject">Semper — request higher analysis limit</string>
     <string name="limit_still_full">Still at the limit. Delete an analysis or email support@sempermechanics.com.</string>
     <string name="limit_cleared">You\'re under the limit again.</string>
+
+    <!-- License expiry notice on Home. Advisory only — nothing is withdrawn
+         while the renewal is outstanding. -->
+    <string name="license_expiring_today">License expires today — email %1$s to renew</string>
+    <string name="license_grace">License expired — still working, email %1$s to renew</string>
     <string name="request_access_none">No email app found. Please email %1$s to request access.</string>
     <string name="dot_separator">" · "</string>
     <string name="error_email_invalid">That does not look like an email address</string>
@@ -795,6 +800,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">1 subset</item>
         <item quantity="other">%1$d subsets</item>
     </plurals>
+    <plurals name="license_expiring_fmt">
+        <item quantity="one">License expires tomorrow</item>
+        <item quantity="other">License expires in %1$d days</item>
+    </plurals>
+
     <plurals name="home_quota_fmt">
         <item quantity="one">1 / 1 analyses used</item>
         <item quantity="other">%1$d / %2$d analyses used</item>

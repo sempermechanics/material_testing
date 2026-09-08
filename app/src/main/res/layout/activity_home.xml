@@ -48,6 +48,22 @@
                     android:textSize="11sp"
                     android:visibility="gone"
                     tools:text="2 / 4 analyses used" />
+
+                <!-- License expiry / grace notice. Separate from tvHomeQuota
+                     because a licensed account always has a known quota, so it
+                     would never reach that view's unknown-quota hint branch. -->
+                <TextView
+                    android:id="@+id/tvHomeLicense"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:background="@drawable/bg_warn_chip"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="3dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:visibility="gone"
+                    tools:text="License expires in 9 days" />
             </LinearLayout>
 
             <ImageButton
