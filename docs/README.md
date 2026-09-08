@@ -28,6 +28,7 @@ build it. This page routes you to the rest.
 | Deploy the backend myself | [backend/BACKEND_SETUP_GCP.md](backend/BACKEND_SETUP_GCP.md) (CLI) or [BACKEND_SETUP_CONSOLE.md](backend/BACKEND_SETUP_CONSOLE.md) (browser) |
 | Fix sign-in / set up auth | [backend/AUTH_SETUP.md](backend/AUTH_SETUP.md) |
 | Understand licensing, seats and entitlements | [backend/CLOUD_ARCHITECTURE_GCP.md §20](backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements) (design) · [OPERATING_MANUAL.md Appendix D](OPERATING_MANUAL.md) (mint / revoke / seat support) |
+| Use or deploy the web consoles | [backend/CLOUD_ARCHITECTURE_GCP.md §20.8](backend/CLOUD_ARCHITECTURE_GCP.md#208-the-consoles-and-what-a-browser-may-do) · [firebase-hosting/public/console/README.md](../firebase-hosting/public/console/README.md) |
 | Change the Firestore schema | [backend/FIRESTORE_SCHEMA_RUNBOOK.md](backend/FIRESTORE_SCHEMA_RUNBOOK.md) |
 
 Nothing in `backend/` is needed to build, run, or contribute to the app — the

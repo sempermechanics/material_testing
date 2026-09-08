@@ -1308,3 +1308,35 @@ def test_floating_requires_max_seats_at_mint():
             kind="individual", emailLock="a@b.com", deviceIdLock="device-0001",
             seating="floating",
         )
+
+
+def test_the_seat_listing_shows_who_holds_a_lease(store):
+    """The roster view is what institution IT uses to see current usage, so
+    "eligible" and "using a seat right now" have to be distinguishable."""
+    _roster(store, "u1", "u2")
+    minted = _mint_floating(max_seats=2)
+    license_id = minted["license"]["id"]
+    repo.add_institution_member(license_id, "u1@university.edu")
+    repo.add_institution_member(license_id, "u2@university.edu")
+    repo.checkout_lease({**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
+
+    seats = {s["uid"]: s for s in repo.list_institution_seats(license_id)}
+    assert seats["u1"]["leaseExpiresAt"] is not None
+    assert seats["u1"]["lastHeartbeatAt"] is not None
+    assert seats["u2"]["leaseExpiresAt"] is None, "eligible, but holding nothing"
+
+
+def test_the_license_summary_reports_pool_usage(store):
+    """The console shows `leasesActive/maxSeats in use` beside the roster size;
+    both numbers have to reach it."""
+    _roster(store, "u1")
+    minted = _mint_floating(max_seats=3)
+    license_id = minted["license"]["id"]
+    repo.add_institution_member(license_id, "u1@university.edu")
+    repo.checkout_lease({**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
+
+    summary = repo.institution_license_summary(license_id)
+    assert summary["seating"] == "floating"
+    assert summary["maxSeats"] == 3
+    assert summary["leasesActive"] == 1
+    assert summary["seatsUsed"] == 1

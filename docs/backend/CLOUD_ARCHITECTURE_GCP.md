@@ -14,6 +14,7 @@ you are changing `backend/` or the sync path in `app/.../data/`.
 | Understand demo / individual / institution licensing | [§20 Licensing & entitlements](#20-licensing--entitlements) |
 | Renew or extend a license, or reason about expiry | [§20.6 Duration, grace, and renewal](#206-duration-grace-and-renewal) |
 | Understand shared/concurrent institution seats | [§20.7 Floating seats](#207-floating-seats) |
+| Use or deploy the web consoles | [§20.8 The consoles](#208-the-consoles-and-what-a-browser-may-do) |
 | Fix sign-in | [AUTH_SETUP.md](AUTH_SETUP.md) |
 
 > **Status / scope.** This document specifies the **GCP-native** backend:
@@ -946,7 +947,9 @@ see [§20.7](#207-floating-seats).
 | **Licensed, individual** | Semper staff mint a key (`POST /v1/admin/licenses`, `kind=individual`) and hand it to one person | one email + one device | Semper staff only (`admin_user` + `verified_device`) |
 | **Licensed, institution** | Semper staff mint a key (`kind=institution`) with a `domainLock` and a list of `adminEmails`; any verified `@domainLock` member self-activates and claims a seat | a verified-email **domain**, per-member seat locked to one device | Institution IT, self-service, via the three `/v1/institutions/licenses/{id}/seats*` routes — **no dashboard UI ships**; IT drives these with their own tooling/curl |
 
-**No institution dashboard UI.** The institution seat-management routes
+**Institution IT has a console** at `/console/institution` (§20.8); the routes
+below remain the whole API surface behind it, and are equally usable from a
+script. The institution seat-management routes
 (`GET`/`PATCH`/`DELETE /v1/institutions/licenses/{licenseId}/seats...`, documented in
 [`gateway/openapi.yaml`](../../backend/gateway/openapi.yaml)) are the entire
 self-service surface. Building a web console for institution IT is future
@@ -1247,7 +1250,42 @@ timestamp says so.
 > `tests/test_firestore_emulator_integration.py`; `bump_session_progress`
 > records the same lesson.
 
-### 20.8 Structural guard
+### 20.8 The consoles, and what a browser may do
+
+Two static pages on the existing auth Hosting site
+(`firebase-hosting/public/console/`). No build step, no framework, no
+`package.json` — the site is served as files, and a toolchain for two pages
+would cost more than it saves.
+
+| Path | Who | What it can do |
+|---|---|---|
+| `/console/institution` | IT named in a licence's `adminEmails` | **Everything**: add/remove roster members, see who holds a seat, hold a member, clear a device lock |
+| `/console/operator` | Semper staff | **Read-only**: look up licences and pending accounts |
+
+**The operator console is read-only because of §3, not an oversight.** Every
+mutating `/v1/admin/*` route requires `verified_device` — an ECDSA signature
+from a device keypair registered in Firestore — and a browser cannot produce
+one. That is the control's whole purpose: a stolen session cookie or ID token
+must not be able to mint a licence, revoke a key or approve an account. Making
+those reachable from a browser means deleting that guarantee, so minting,
+renewing, revoking and approving stay on the phone admin screen and the staff
+CLI.
+
+The institution console has no such limit because `institution_admin_context`
+is token-only **by design** (§20.4) — written for IT working from a browser or
+curl, not from the licensed device. That decision is what makes this half
+buildable at all.
+
+**CSP is relaxed for `/console/**` alone.** Every other page — the legal pages,
+the auth continue-URLs — keeps the strict `default-src 'self'`. Only
+`connect-src` is widened, for the API and Firebase Auth's token endpoints;
+`script-src` is **not**, because the Firebase SDK is served from Hosting's own
+`/__/firebase/` namespace, which is same-origin. `__API_ORIGIN__` and
+`__API_BASE_URL__` are substituted at deploy exactly as
+`gateway/openapi.yaml` substitutes `__CLOUD_RUN_URL__`; no live hostname is
+committed. See `firebase-hosting/public/console/README.md`.
+
+### 20.9 Structural guard
 
 `backend/tests/test_route_authz_matrix.py` inspects every route's FastAPI
 dependency tree and asserts it maps to exactly one expected auth tier —

@@ -1530,6 +1530,11 @@ def list_institution_seats(license_id: str) -> list[dict]:
             "email": s.get("email") or "",
             "deviceIdLock": s.get("deviceIdLock") or "",
             "status": s.get("status") or "active",
+            # The lease is the point of the floating roster view: without it
+            # IT cannot see who is actually using a seat right now, only who
+            # is allowed to. Null on an assigned licence, which has no leases.
+            "leaseExpiresAt": s.get("leaseExpiresAt"),
+            "lastHeartbeatAt": s.get("lastHeartbeatAt"),
             "createdAt": s.get("createdAt"),
             "updatedAt": s.get("updatedAt"),
         })

@@ -152,7 +152,7 @@ with zero data loss. Institution IT routes authenticate on
 `current_user` + APPROVED + verified email in that license's `adminEmails`
 — deliberately no device attestation and not Semper `role=admin`; Semper
 staff mint/revoke keeps the existing device-attested admin path. Backend:
-322 tests passed, 82.72% coverage. Android: only data-layer plumbing shipped
+324 tests passed, 82.72% coverage. Android: only data-layer plumbing shipped
 this round (`ApiDtos`/`AppRemoteConfig`/`LicenseEntitlements.licenseKind`,
 `IndicApi.activateLicense()`, plus tests) — the UI-layer gating
 (`LicenseGate.kt`, `SettingsLicenseSection.kt`, Settings/Home/ShareCenter/
@@ -205,6 +205,20 @@ unaudited. **This also fixed a pre-existing race**: seat claim was a
 read-then-`WriteBatch`, so two concurrent activations could push a pool past
 `maxSeats`; claim/revoke/checkout/release now run under real transactions that
 fail closed. Android demo gating is the next PR.
+
+**Android seat gate + web consoles (same branch):** `seatRequiredToStart` is a
+**parallel** predicate to the quota gate — an institution member is licensed,
+so `isSessionLimitReached` is false for them by definition and they would sail
+past every existing check. It gates the Home FAB and both compute paths;
+`wouldCreateNewSession()` guards it, so a run in flight never aborts.
+`SeatRequiredActivity` is one button that asks again, not an email-support
+screen: seats free themselves.
+Two static consoles under `firebase-hosting/public/console/` (no build step).
+`/console/institution` is fully functional because `institution_admin_context`
+is token-only by design. `/console/operator` is **read-only** — every mutating
+`/v1/admin/*` route needs `verified_device`, which a browser cannot produce,
+and that is the control working rather than a gap. CSP is widened for
+`/console/**` alone, `connect-src` only.
 
 Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
 §20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,

@@ -767,6 +767,16 @@ them to sign in, then add them. On an assigned key they are licensed
 immediately; on a floating one they become eligible and take a seat when they
 work.
 
+**The seats console.** Institution IT can do all of the below from
+`/console/institution` on the Semper auth site instead of curl — sign in with
+the address named in `adminEmails`, paste the licence id, and the roster,
+who currently holds a seat, and the add/hold/remove actions are all there. The
+routes below are what it calls, and stay equally usable from a script.
+
+Semper staff have `/console/operator`, which is **read-only**: minting,
+renewing, revoking and approving all need a device-attested session, which a
+browser cannot produce. Those stay on the phone admin screen.
+
 **Institution IT self-service.** Once an institution key exists, its `adminEmails`
 manage seats themselves, with no Semper staff involvement and no dashboard —
 they call three routes directly (script, curl, or their own tooling):

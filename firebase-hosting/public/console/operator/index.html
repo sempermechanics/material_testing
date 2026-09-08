@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Licences · Semper DIC</title>
+  <link rel="stylesheet" href="../console.css" />
+</head>
+<body>
+  <header>
+    <span class="brand">Semper&nbsp;DIC</span>
+    <h1>Operator</h1>
+    <span class="spacer"></span>
+    <span id="who" class="muted"></span>
+    <button id="signIn">Sign in with Google</button>
+    <button id="signOut" class="secondary" hidden>Sign out</button>
+  </header>
+
+  <main>
+    <div id="app" hidden>
+      <div class="note">
+        <strong>Read-only.</strong>
+        Minting, renewing and revoking a licence, and approving or suspending an
+        account, all require a <em>device-attested</em> staff session — an ECDSA
+        signature from a registered device key, which a browser has no way to
+        produce. That is deliberate: it means a stolen session cookie or ID
+        token cannot issue licences. Those operations stay on the phone admin
+        screen and the staff CLI; this page is for looking things up.
+      </div>
+
+      <section class="card">
+        <div class="row">
+          <h2 style="margin:0">Licences</h2>
+          <span class="spacer"></span>
+          <button id="reload" class="secondary">Refresh</button>
+        </div>
+        <p id="status" class="muted"></p>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Key</th><th>Kind</th><th>Seats</th><th>Term</th>
+                <th>Status</th><th>Institution</th>
+              </tr>
+            </thead>
+            <tbody id="licenceRows"></tbody>
+          </table>
+        </div>
+        <p class="muted" id="licencePaging"></p>
+      </section>
+
+      <section class="card">
+        <div class="row">
+          <h2 style="margin:0">Accounts awaiting approval</h2>
+          <span class="spacer"></span>
+          <button id="reloadUsers" class="secondary">Refresh</button>
+        </div>
+        <p class="muted">
+          Approve or suspend from the phone admin screen — see the note above.
+        </p>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr><th>Account</th><th>Name</th><th>Device</th></tr>
+            </thead>
+            <tbody id="userRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <p id="signedOut" class="muted">
+      Sign in with a Semper staff account to view licences and accounts.
+    </p>
+  </main>
+
+  <script type="module">
+    import { requireSignIn, api, setStatus, esc, when } from "../auth.js";
+
+    const $ = (id) => document.getElementById(id);
+
+    requireSignIn(() => {
+      $("signedOut").hidden = true;
+      loadLicences();
+      loadUsers();
+    });
+    $("reload").addEventListener("click", loadLicences);
+    $("reloadUsers").addEventListener("click", loadUsers);
+
+    async function loadLicences() {
+      setStatus("Loading…");
+      try {
+        const data = await api("/v1/admin/licenses?limit=50");
+        $("licenceRows").innerHTML = data.licenses.map(licenceRow).join("");
+        const page = data.page || {};
+        $("licencePaging").textContent = page.hasMore
+          ? `Showing the first ${page.count}. More exist — narrow by hand for now.`
+          : `${page.count} licence(s).`;
+        setStatus("");
+      } catch (e) {
+        // Anyone signed in can reach this page; only staff get past the API.
+        setStatus(
+          e.message === "not_admin"
+            ? "That account is not a Semper operator."
+            : `Could not load licences: ${e.message}`,
+          true,
+        );
+      }
+    }
+
+    function licenceRow(lic) {
+      const floating = lic.seating === "floating";
+      const cap = lic.maxSeats == null ? "∞" : lic.maxSeats;
+      // The two counts mean different things, and conflating them is the
+      // easiest mistake to make when reading this table: on a floating licence
+      // maxSeats caps concurrent use, not roster size.
+      const seats = lic.kind !== "institution"
+        ? "1"
+        : floating
+          ? `${lic.leasesActive ?? 0}/${cap} in use · ${lic.seatsUsed ?? 0} on roster`
+          : `${lic.seatsUsed ?? 0}/${cap}`;
+      const term = lic.duration === "timed"
+        ? `until ${esc(when(lic.expiresAt))}${lic.graceDays ? ` +${lic.graceDays}d grace` : ""}`
+        : "perpetual";
+      const statusClass = lic.status === "revoked" ? "off" : "ok";
+      return `
+        <tr>
+          <td>${esc(lic.keyPrefix || lic.id.slice(0, 10))}</td>
+          <td>${esc(lic.kind)}${floating ? " · shared" : ""}</td>
+          <td>${seats}</td>
+          <td>${term}</td>
+          <td><span class="pill ${statusClass}">${esc(lic.status)}</span></td>
+          <td class="muted">${esc(lic.domainLock || lic.emailLock || "—")}</td>
+        </tr>`;
+    }
+
+    async function loadUsers() {
+      try {
+        const data = await api("/v1/admin/users?status=PENDING&limit=50");
+        const rows = data.users || [];
+        $("userRows").innerHTML = rows.length
+          ? rows.map((u) => `
+              <tr>
+                <td>${esc(u.email || u.uid)}</td>
+                <td>${esc(u.displayName || "—")}</td>
+                <td class="muted">${u.activeDeviceId ? esc(u.activeDeviceId.slice(0, 10)) + "…" : "—"}</td>
+              </tr>`).join("")
+          : '<tr><td colspan="3" class="muted">Nobody waiting.</td></tr>';
+      } catch (e) {
+        $("userRows").innerHTML =
+          `<tr><td colspan="3" class="err">Could not load: ${esc(e.message)}</td></tr>`;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Seats · Semper DIC</title>
+  <link rel="stylesheet" href="../console.css" />
+</head>
+<body>
+  <header>
+    <span class="brand">Semper&nbsp;DIC</span>
+    <h1>Institution seats</h1>
+    <span class="spacer"></span>
+    <span id="who" class="muted"></span>
+    <button id="signIn">Sign in with Google</button>
+    <button id="signOut" class="secondary" hidden>Sign out</button>
+  </header>
+
+  <main>
+    <div id="app" hidden>
+      <section class="card">
+        <h2>Licence</h2>
+        <p class="muted">
+          Paste the licence id your Semper contact gave you. You can only open
+          licences that name your address as an administrator.
+        </p>
+        <div class="row">
+          <input id="licenseId" size="44" placeholder="licence id"
+                 autocomplete="off" spellcheck="false" />
+          <button id="load">Open</button>
+        </div>
+        <p id="status" class="muted"></p>
+        <div id="summary"></div>
+      </section>
+
+      <section class="card" id="rosterCard" hidden>
+        <h2>Roster</h2>
+        <p class="muted" id="rosterHelp"></p>
+        <div class="row" style="margin-bottom:1rem">
+          <input id="addEmail" size="32" type="email" placeholder="name@institution.edu"
+                 autocomplete="off" />
+          <button id="add">Add member</button>
+        </div>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Member</th><th>Status</th><th>Seat</th><th>Device</th>
+                <th class="actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <p id="signedOut" class="muted">Sign in to manage your institution's seats.</p>
+  </main>
+
+  <script type="module">
+    import { requireSignIn, api, setStatus, esc, when } from "../auth.js";
+
+    let licenseId = "";
+
+    const $ = (id) => document.getElementById(id);
+
+    requireSignIn(() => {
+      $("signedOut").hidden = true;
+      // Deep-link support: ?license=... so IT can bookmark their own licence
+      // rather than pasting the id every time.
+      const fromUrl = new URLSearchParams(location.search).get("license");
+      if (fromUrl) {
+        $("licenseId").value = fromUrl;
+        load();
+      }
+    });
+
+    $("load").addEventListener("click", load);
+    $("licenseId").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+    $("add").addEventListener("click", addMember);
+    $("addEmail").addEventListener("keydown", (e) => { if (e.key === "Enter") addMember(); });
+
+    async function load() {
+      licenseId = $("licenseId").value.trim();
+      if (!licenseId) return;
+      setStatus("Loading…");
+      try {
+        const data = await api(`/v1/institutions/licenses/${encodeURIComponent(licenseId)}/seats`);
+        render(data);
+        setStatus("");
+      } catch (e) {
+        $("rosterCard").hidden = true;
+        $("summary").innerHTML = "";
+        // The backend answers 404 identically for a licence that does not
+        // exist and one you do not administer, so that probing ids tells you
+        // nothing about other institutions. Say so rather than implying the id
+        // was simply mistyped.
+        setStatus(
+          e.message === "license_not_found"
+            ? "No licence with that id that you administer."
+            : `Could not load: ${e.message}`,
+          true,
+        );
+      }
+    }
+
+    function render(data) {
+      const lic = data.license || {};
+      const floating = lic.seating === "floating";
+      const cap = lic.maxSeats == null ? "unlimited" : lic.maxSeats;
+      const inUse = floating ? (lic.leasesActive ?? 0) : (lic.seatsUsed ?? 0);
+
+      $("summary").innerHTML = `
+        <p>
+          <span class="pill">${esc(lic.keyPrefix || "licence")}</span>
+          <span class="pill">${floating ? "shared seats" : "one seat each"}</span>
+          <span class="pill ${lic.status === "revoked" ? "off" : "ok"}">${esc(lic.status || "")}</span>
+          ${lic.expiresAt ? `<span class="pill warn">expires ${esc(when(lic.expiresAt))}</span>` : ""}
+        </p>
+        <p class="muted">
+          ${floating
+            ? `<strong>${inUse} of ${cap}</strong> seats in use right now, across
+               ${data.seats.length} people on the roster.`
+            : `<strong>${inUse} of ${cap}</strong> seats taken.`}
+        </p>`;
+
+      $("rosterHelp").textContent = floating
+        ? "Everyone here may use Semper, but only the number of seats above at " +
+          "the same time. Someone without a seat keeps their saved work and " +
+          "gets one as soon as a colleague finishes."
+        : "Everyone here is licensed. Removing someone frees their seat for " +
+          "another member.";
+
+      $("rows").innerHTML = data.seats.map(seatRow).join("");
+      $("rosterCard").hidden = false;
+      for (const el of document.querySelectorAll("[data-act]")) {
+        el.addEventListener("click", () => act(el.dataset.act, el.dataset.uid));
+      }
+    }
+
+    function seatRow(seat) {
+      const holds = seat.leaseExpiresAt && new Date(seat.leaseExpiresAt) > new Date();
+      const status = {
+        active: '<span class="pill ok">active</span>',
+        disabled: '<span class="pill warn">on hold</span>',
+        revoked: '<span class="pill off">removed</span>',
+      }[seat.status] || esc(seat.status);
+      return `
+        <tr>
+          <td>${esc(seat.email || seat.uid)}</td>
+          <td>${status}</td>
+          <td>${holds ? `<span class="pill ok">until ${esc(when(seat.leaseExpiresAt))}</span>`
+                       : '<span class="pill off">—</span>'}</td>
+          <td class="muted">${seat.deviceIdLock ? esc(seat.deviceIdLock.slice(0, 10)) + "…" : "not yet"}</td>
+          <td class="actions">
+            ${seat.deviceIdLock
+              ? `<button class="secondary" data-act="clear" data-uid="${esc(seat.uid)}">New device</button>`
+              : ""}
+            ${seat.status === "active"
+              ? `<button class="secondary" data-act="hold" data-uid="${esc(seat.uid)}">Hold</button>`
+              : `<button class="secondary" data-act="unhold" data-uid="${esc(seat.uid)}">Resume</button>`}
+            <button class="danger" data-act="remove" data-uid="${esc(seat.uid)}">Remove</button>
+          </td>
+        </tr>`;
+    }
+
+    async function addMember() {
+      const email = $("addEmail").value.trim();
+      if (!email) return;
+      setStatus("Adding…");
+      try {
+        await api(`/v1/institutions/licenses/${encodeURIComponent(licenseId)}/seats`, {
+          method: "POST",
+          body: JSON.stringify({ email }),
+        });
+        $("addEmail").value = "";
+        await load();
+      } catch (e) {
+        // The one error worth explaining rather than echoing: it means the
+        // person has never opened Semper, not that the address is wrong.
+        setStatus(
+          e.message === "user_not_found"
+            ? `${email} has not signed in to Semper yet. Ask them to sign in once — ` +
+              "it is free — then add them again."
+            : `Could not add ${email}: ${e.message}`,
+          true,
+        );
+      }
+    }
+
+    const ACTIONS = {
+      clear: { method: "PATCH", body: { clearDeviceLock: true }, verb: "Unlocking" },
+      hold: { method: "PATCH", body: { enabled: false }, verb: "Holding" },
+      unhold: { method: "PATCH", body: { enabled: true }, verb: "Resuming" },
+      remove: { method: "DELETE", verb: "Removing" },
+    };
+
+    async function act(action, uid) {
+      const spec = ACTIONS[action];
+      if (action === "remove" && !confirm("Remove this member? Their saved analyses stay untouched.")) {
+        return;
+      }
+      setStatus(`${spec.verb}…`);
+      try {
+        await api(
+          `/v1/institutions/licenses/${encodeURIComponent(licenseId)}/seats/${encodeURIComponent(uid)}`,
+          { method: spec.method, ...(spec.body ? { body: JSON.stringify(spec.body) } : {}) },
+        );
+        await load();
+      } catch (e) {
+        setStatus(`Could not complete that: ${e.message}`, true);
+      }
+    }
+  </script>
+</body>
+</html>
