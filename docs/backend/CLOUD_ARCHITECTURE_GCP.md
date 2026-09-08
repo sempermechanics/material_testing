@@ -13,6 +13,7 @@ you are changing `backend/` or the sync path in `app/.../data/`.
 | Know the data shape | [§5 Firestore](#5-firestore-schema) · [§6 Drive layout](#6-google-drive-folder-hierarchy) |
 | Understand demo / individual / institution licensing | [§20 Licensing & entitlements](#20-licensing--entitlements) |
 | Renew or extend a license, or reason about expiry | [§20.6 Duration, grace, and renewal](#206-duration-grace-and-renewal) |
+| Understand shared/concurrent institution seats | [§20.7 Floating seats](#207-floating-seats) |
 | Fix sign-in | [AUTH_SETUP.md](AUTH_SETUP.md) |
 
 > **Status / scope.** This document specifies the **GCP-native** backend:
@@ -386,6 +387,10 @@ users/{uid}                       (uid = Google 'sub')
   mode: "licensed" | "demo"       (`plan` mirror kept for older clients; §20.5)
   licenseId, licenseKind, licensePrefix
   licenseDuration: "perpetual" | "timed"
+  licenseSeating: "assigned" | "floating"
+  leaseExpiresAt                  (floating only; written by checkout, cleared
+                                   by release. Mirrored here so effective_mode
+                                   stays a pure function — §20.7)
   licenseExpiresAt                (Timestamp; absent when perpetual)
   licenseGraceDays: number        (absent reads as ZERO, not the fleet default; §20.6)
   licenseMaxAnalyses: number      (optional per-license cloud cap)
@@ -436,8 +441,14 @@ licenses/{id}                     (id = sha256(key) — the key hash IS the doc 
   # institution only:
   domainLock                      (verified-email domain required to join, e.g. "university.edu")
   adminEmails: string[]           (verified emails allowed to manage this license's seats)
-  maxSeats: number | null         (null = unlimited)
-  seatsUsed: number               (kept in sync with the seats subcollection below)
+  seating: "assigned" | "floating"   (absent reads as assigned; §20.7)
+  maxSeats: number | null         (assigned: caps the ROSTER. floating: caps
+                                   CONCURRENT LEASES, and the roster is
+                                   deliberately uncapped. null = unlimited,
+                                   which floating rejects at mint.)
+  seatsUsed: number               (roster size; kept in sync with the seats
+                                   subcollection below)
+  leasesActive: number            (floating only — who is using it right now)
   # duration is orthogonal to kind — either kind may be either shape.
   duration: "perpetual" | "timed"
   expiresAt                       (Timestamp; required when timed, absent when perpetual)
@@ -448,9 +459,14 @@ licenses/{id}                     (id = sha256(key) — the key hash IS the doc 
   createdByUid, createdAt, updatedAt
   updatedByUid, updatedAt         (set by the renewal route)
 
-licenses/{id}/seats/{uid}         (institution only — one doc per institution member)
+licenses/{id}/seats/{uid}         (institution only — one doc per roster member)
   uid, email, deviceIdLock
   status: "active" | "disabled" | "revoked"
+  # floating only — the lease. Absent means "holds no seat right now", which
+  # for most of a floating roster is the normal state.
+  leaseExpiresAt                  (Timestamp; compared to now, never trusted
+                                   to have been cleaned up — §20.7)
+  leaseDeviceId, lastHeartbeatAt
   createdAt, updatedAt
 
 audit_logs/{autoId}               (append-only)
@@ -516,6 +532,7 @@ the way it does.
 | FastAPI app, middleware, lifespan | [`backend/app/main.py`](../../backend/app/main.py) | App factory; includes routers below |
 | Routes by prefix | [`backend/app/routers/`](../../backend/app/routers/) | `health`, `account`, `devices`, `sessions`, `files`, `provision_tasks`, `admin`, `licenses`, `institutions` |
 | License key format, hashing, `mode`/`kind` vocabulary | [`backend/app/licenses.py`](../../backend/app/licenses.py) | `SEMP-XXXX-XXXX-XXXX-XXXX`; sha256 hash is the Firestore doc id; `normalize_mode` / `normalize_kind` / `legacy_plan` (§20.5) |
+| Floating seats, leases, pool accounting | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `checkout_lease`, `release_lease`, `claim_seat`, `_sweep_expired_leases` (§20.7) |
 | Duration, grace, renewal fan-out | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
 | Individual + institution license logic | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
 | Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth, no dashboard UI; also serves the `/v1/campus/*` aliases (§20.4, §20.5) |
@@ -919,6 +936,9 @@ never decides its own entitlement, it reads `GET /v1/config` (and the
 
 Each shape is independently perpetual or timed, and a timed one keeps working
 through a grace window after its expiry — see [§20.6](#206-duration-grace-and-renewal).
+An institution license is additionally assigned or floating: floating shares a
+fixed number of concurrent seats across a larger roster —
+see [§20.7](#207-floating-seats).
 
 | Shape | How you get it | Locked to | Managed by |
 |---|---|---|---|
@@ -1122,7 +1142,112 @@ remains the only thing that changes what the app will do. The client suppresses
 the notice entirely once its cached config is over a week old, which is what
 the fetched-at timestamp added alongside this exists to make possible.
 
-### 20.7 Structural guard
+### 20.7 Floating seats
+
+`seating` is orthogonal to `kind` and `duration`, and applies to institution
+licenses.
+
+| | Roster | `maxSeats` caps | A member holds entitlement |
+|---|---|---|---|
+| **assigned** | every member is entitled | the **roster** | always |
+| **floating** | every member is eligible | **concurrent leases** | only while holding a live lease |
+
+Floating exists for the shape assigned cannot express: fifty people in a
+teaching lab sharing ten slots. So the floating roster is deliberately
+**uncapped** — capping it would make the license assigned with extra steps —
+and a member between leases is **demo**, which is the ordinary state for most
+of the roster at any moment, not a failure and not a revocation.
+
+`assigned` is the default, and it is what every license minted before this
+already meant, so **no migration ships with this**: an absent `seating` reads
+as assigned because that is what those documents say.
+
+#### The lease is on the seat document
+
+Not in a `leases` collection, as first sketched. `check_device_lock` already
+reads `licenses/{id}/seats/{uid}` on every institution request, and license
+terms are already mirrored onto the user so `effective_mode` and
+`resolve_user_config` touch no Firestore at all (§20.6). A separate collection
+would have bought a composite index and a per-request query on paths including
+`GET /v1/files/{id}/content` — which the client hits **once per range window**
+of a download. On the seat document it costs nothing extra.
+
+Lease expiry is mirrored onto the user as `leaseExpiresAt` and compared to
+`now`, exactly as `licenseExpiresAt` is. So a lapsed lease resolves demo
+whether or not anything has released it, and `effective_mode` stays a pure
+function of the user document.
+
+`_lease_live` fails **closed**, unlike `_expiry_state`. An unreadable license
+expiry keeps a paying customer working; an unreadable lease frees the slot,
+because on a floating pool "no lease" is the common case and treating an
+unparseable one as live would hand out the pool for free.
+
+#### Joining: sign up for demo, IT promotes you
+
+`POST /v1/institutions/licenses/{id}/seats` takes an **email**. There is no key
+to type and no invite system: demo is open to everyone, so "sign in once, then
+I'll add you" is the flow, and `404 user_not_found` means exactly that. The
+backend resolves the email to a uid — seats have to be uid-keyed, since that is
+what every entitlement check has in hand — which avoids email-keyed documents,
+pending invites and a second identity space to keep consistent.
+
+Adding a member consumes **no floating slot**. A slot is taken by checking out
+a lease.
+
+#### Checkout, and why there is no heartbeat route
+
+`POST /v1/licenses/checkout` claims or extends. Re-calling it **is** the
+heartbeat: renewing an existing lease must not consume a second slot, which is
+the same code path, so a separate route would only be a way to get that wrong.
+It is deliberately **unaudited** — a client calls it every half hour per active
+user, and both `FILE_DOWNLOAD` and `lastSeenAt` record what an unconditional
+write on that kind of path costs. `POST /v1/licenses/release` is audited; it is
+a discrete act, not a heartbeat.
+
+`409 no_floating_seat` is the pool being full, not a problem with the account:
+the member stays eligible and in demo, and the app offers to retry.
+
+Defaults: an 8-hour lease renewed every 30 minutes
+(`LICENSE_LEASE_HOURS`, `LICENSE_LEASE_HEARTBEAT_MINUTES`). Long enough that a
+tunnel or a lunch break never costs someone their seat — which would be worse
+than a crashed client parking one — and the heartbeat is what actually keeps it
+alive. A client that dies holds its slot for up to the lease length, which
+costs nothing unless the pool is full, and the sweep reclaims it with nobody
+intervening.
+
+#### Counters, and the race this fixed
+
+Seat claim used to be a read followed by a `WriteBatch`. A batch is atomic for
+its writes but carries no reads and no preconditions, so two members activating
+at once on a pool of ten both saw nine free and the count landed at **eleven**;
+revoke had the mirror-image undercount. Tolerable while a seat was a soft
+allocation — a pool makes the count the actual boundary.
+
+Claim, revoke, checkout and release now run under real transactions on the
+`consume_nonce` shape: every read before every write, `_TX_ATTEMPTS`, and
+**failing closed** on contention, because granting a seat that could not be
+committed is the one outcome that breaks the cap.
+
+`leasesActive` still drifts upward whenever an app is killed, uninstalled or
+goes offline mid-lease, so the counter alone cannot say whether the pool is
+full. `_sweep_expired_leases` reconciles it before a claim reads it: a
+single-field inequality on one subcollection, so no composite index. It runs
+outside the transaction because a transaction may not query, and that is safe —
+releasing a genuinely expired lease is correct regardless of who wins the claim
+that follows.
+
+**TTL is not involved.** As the `challenges` precedent already states in
+`firestore.indexes.json`, Firestore TTL is storage hygiene with up to a day of
+lag; it can never be what frees a seat. An expired lease is expired because the
+timestamp says so.
+
+> The fake Firestore used by the unit tests applies transactions immediately
+> with no isolation, so the over-claim race is **invisible** there — it gained
+> inequality operators for the sweep, not isolation. Race coverage belongs in
+> `tests/test_firestore_emulator_integration.py`; `bump_session_progress`
+> records the same lesson.
+
+### 20.8 Structural guard
 
 `backend/tests/test_route_authz_matrix.py` inspects every route's FastAPI
 dependency tree and asserts it maps to exactly one expected auth tier —

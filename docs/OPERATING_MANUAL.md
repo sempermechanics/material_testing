@@ -736,6 +736,37 @@ Either way the plaintext key is only ever shown once, in the mint response —
 hand it to the individual or the institution's IT contact immediately; Semper
 does not store it anywhere retrievable afterward (only its hash).
 
+**Assigned or floating seats.** An institution key is one or the other, set by
+`seating` at mint:
+
+- `seating: "assigned"` (the default) — every member of the roster is
+  licensed, and `maxSeats` caps how many members there can be.
+- `seating: "floating"` — every member is *eligible*, but `maxSeats` caps how
+  many are licensed **at the same time**. The roster itself is uncapped, which
+  is the point: fifty people in a lab can share ten seats. `maxSeats` is
+  required for floating; an uncapped pool would never refuse anyone.
+
+A floating member without a seat is in Demo, not blocked or removed. Their app
+takes a seat when they start work and gives it back when they finish; a seat
+also frees itself if their device goes quiet for 8 hours. If someone reports
+being in Demo unexpectedly on a floating key, the pool being full is the first
+thing to check — `GET .../seats` shows the roster, and the license summary
+shows how many seats are in use.
+
+**Adding people to an institution key.** IT adds members by email:
+
+```
+POST /v1/institutions/licenses/{licenseId}/seats
+{"email": "student@university.edu"}
+```
+
+There is **no key for members to type**. The person must have signed in to
+Semper at least once — everyone can sign up and use Demo, so this is the same
+step that gave them Demo — and `404 user_not_found` means exactly that: ask
+them to sign in, then add them. On an assigned key they are licensed
+immediately; on a floating one they become eligible and take a seat when they
+work.
+
 **Institution IT self-service.** Once an institution key exists, its `adminEmails`
 manage seats themselves, with no Semper staff involvement and no dashboard —
 they call three routes directly (script, curl, or their own tooling):

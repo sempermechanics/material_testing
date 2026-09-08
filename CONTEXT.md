@@ -152,7 +152,7 @@ with zero data loss. Institution IT routes authenticate on
 `current_user` + APPROVED + verified email in that license's `adminEmails`
 — deliberately no device attestation and not Semper `role=admin`; Semper
 staff mint/revoke keeps the existing device-attested admin path. Backend:
-301 tests passed, 82.72% coverage. Android: only data-layer plumbing shipped
+322 tests passed, 82.72% coverage. Android: only data-layer plumbing shipped
 this round (`ApiDtos`/`AppRemoteConfig`/`LicenseEntitlements.licenseKind`,
 `IndicApi.activateLicense()`, plus tests) — the UI-layer gating
 (`LicenseGate.kt`, `SettingsLicenseSection.kt`, Settings/Home/ShareCenter/
@@ -188,6 +188,23 @@ is now refused (`license_expired`, 403) instead of silently landing the user on
 Demo. `/v1/me` carries a license summary; the app shows a Home notice inside 14
 days of expiry or during grace, suppressed when its cached config is over a
 week old — advisory only, `mode` is still the only gate.
+
+**Floating seats (same branch, backend only):** `seating: assigned | floating`
+splits the roster from the count. A floating license's `maxSeats` caps
+*concurrent* leases while the roster stays uncapped — fifty people sharing ten
+slots — and a member between leases is demo, the ordinary state rather than a
+failure. `assigned` is the default and is what every existing license already
+means, so again **no migration**. The lease lives on the seat document, not a
+`leases` collection: `check_device_lock` already reads that document every
+institution request, and its expiry is mirrored onto the user so
+`effective_mode` stays free of Firestore. Joining changed shape — IT adds
+members by email via `POST /v1/institutions/licenses/{id}/seats`, no key
+typing; the person just has to have signed in once for demo.
+Re-checkout is the heartbeat (8h lease, 30min renew) and is deliberately
+unaudited. **This also fixed a pre-existing race**: seat claim was a
+read-then-`WriteBatch`, so two concurrent activations could push a pool past
+`maxSeats`; claim/revoke/checkout/release now run under real transactions that
+fail closed. Android demo gating is the next PR.
 
 Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
 §20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,
