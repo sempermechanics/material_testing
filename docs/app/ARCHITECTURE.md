@@ -115,6 +115,7 @@ gating input anywhere in `LicenseEntitlements`.
 | Plan resolution / gating | `data/LicenseEntitlements.kt` |
 | Cached config, wire → prefs | `data/net/AppRemoteConfig.kt` (`AppConfigDto` in `ApiDtos.kt`) |
 | Redeem a key | `IndicApi.activateLicense()` |
+| Expiry notice | `LicenseEntitlements.expiryNoticeDays()` — advisory only; suppressed on a cache older than a week. `mode` stays the only gate. See [WORKFLOWS.md §9.3](WORKFLOWS.md#9-session-limit) |
 | Local analysis cap | `LicenseEntitlements.analysisCap()` — demo 25, licensed unlimited; see [WORKFLOWS.md §9](WORKFLOWS.md#9-session-limit) |
 
 ## Storage, diagnostics and the parameter clipboard

@@ -996,6 +996,21 @@ today is exercised through the API directly (or a future
 is unaffected either way: once `GET /v1/config` reports `mode=licensed`,
 the cap simply doesn't apply and 9.1 never triggers.
 
+**9.3 License expiry notice (Home).** Separate from this screen, and not a
+gate. A licensed account whose key expires within 14 days — or which is past
+expiry but still inside its grace window — shows a small chip under the Home
+title: "License expires in N days", or "License expired — still working, email
+support to renew". Nothing is withdrawn while it shows; during grace the
+account keeps cloud backup, share and the uncapped analysis count, and the only
+thing that ever changes entitlement is the backend flipping `mode` to `demo`
+once grace ends (at which point 9.1 applies exactly as it does for any Demo
+account).
+
+The chip is suppressed when the cached config is more than a week old. A
+renewal may have landed while the device was offline, and warning from a stale
+cache would be a false alarm the user cannot act on. A perpetual license never
+shows it.
+
 ---
 
 ## 10. Background work

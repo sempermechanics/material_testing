@@ -688,11 +688,55 @@ approves/revokes accounts):
   `maxSeats`. Anyone at that institution with a **verified** email on the
   domain can then activate the same key and claim a seat, up to `maxSeats`.
 
+**Perpetual or timed.** Either kind of key is one or the other, set by
+`duration` at mint:
+
+- `duration: "perpetual"` (the default) — never expires. Do **not** send
+  `expiresAt`; the request is rejected if you do, so a perpetual key cannot
+  silently acquire an expiry.
+- `duration: "timed"` — requires a future `expiresAt`. Add `graceDays` to say
+  how long it keeps working past that date (omitted uses the fleet default of
+  14; `0` is a hard cliff).
+
+`supportUntil` may be set on either and is recorded for support's benefit
+only — it never stops anyone using the product.
+
+**What grace means.** During grace the account keeps *everything*: cloud
+backup, share, the uncapped analysis count. The user sees a notice on Home
+saying a renewal is overdue, and nothing else changes. It exists so a renewal
+being processed does not interrupt someone mid-project. Entitlement stops at
+`expiresAt + graceDays`, at which point the account drops to Demo — which, as
+always, never deletes anything.
+
+**Renewing a key** (Semper staff, device-attested):
+
+```
+PATCH /v1/admin/licenses/{licenseId}
+{"expiresAt": "2027-06-01T00:00:00Z", "graceDays": 30}
+```
+
+This extends the key **in place**. Everyone already on it — the individual
+holder, or every non-revoked institution seat — is re-entitled without issuing
+a new key or asking anyone to re-activate. Send only the fields that change;
+`maxSeats`, `maxAnalyses`, `supportUntil` and `note` can be edited the same
+way. What you cannot change is who the key is *for*: `kind` and the
+email/device/domain locks are fixed at mint, and a key that needs different
+locks is a new key.
+
+Renewing is also the fix when someone reports being dropped to Demo
+unexpectedly — check the key's `expiresAt` in `GET /v1/admin/licenses` first;
+an account past `expiresAt + graceDays` is the expected outcome, not a bug.
+
+**A key past its grace window will not activate.** `POST /v1/licenses/activate`
+returns `403 license_expired` rather than appearing to succeed and leaving the
+user on Demo. Renew it first, then have them activate. A key still *inside*
+grace activates normally.
+
 Either way the plaintext key is only ever shown once, in the mint response —
 hand it to the individual or the institution's IT contact immediately; Semper
 does not store it anywhere retrievable afterward (only its hash).
 
-**Institution IT self-service.** Once a institution key exists, its `adminEmails`
+**Institution IT self-service.** Once an institution key exists, its `adminEmails`
 manage seats themselves, with no Semper staff involvement and no dashboard —
 they call three routes directly (script, curl, or their own tooling):
 

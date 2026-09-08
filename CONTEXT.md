@@ -152,7 +152,7 @@ with zero data loss. Institution IT routes authenticate on
 `current_user` + APPROVED + verified email in that license's `adminEmails`
 — deliberately no device attestation and not Semper `role=admin`; Semper
 staff mint/revoke keeps the existing device-attested admin path. Backend:
-281 tests passed, 82.33% coverage. Android: only data-layer plumbing shipped
+301 tests passed, 82.72% coverage. Android: only data-layer plumbing shipped
 this round (`ApiDtos`/`AppRemoteConfig`/`LicenseEntitlements.licenseKind`,
 `IndicApi.activateLicense()`, plus tests) — the UI-layer gating
 (`LicenseGate.kt`, `SettingsLicenseSection.kt`, Settings/Home/ShareCenter/
@@ -171,6 +171,23 @@ the old pref key on upgrade, and `AdminLicenseCreate` still accepts
 `kind="campus"`. Retirement order and rationale: CLOUD_ARCHITECTURE_GCP §20.5.
 Licenses are **still keyed by the sha256 of their key**; moving to opaque ids
 is deferred to the change that needs it (a license with no key at all).
+
+**Duration & grace (same branch):** a license is explicitly `perpetual` or
+`timed`, validated at mint so neither shape happens by accident. A timed one
+keeps **full** entitlements for `graceDays` past `expiresAt` — grace is inside
+the licensed branch, not a reduced tier — so a renewal in flight does not
+interrupt work. A license already stored with no `graceDays` reads as ZERO, not
+the fleet default, or deploying this would have reinstated everyone who expired
+inside the window. `duration` absent is inferred from `expiresAt`, so no
+migration was needed and `SCHEMA_VERSION` stays 2.
+`PATCH /v1/admin/licenses/{id}` renews in place and **fans the new terms out**
+to the individual redeemer or every non-revoked seat — the terms are mirrored
+onto each user at activation to keep `resolve_user_config` free of Firestore
+reads, so editing the license alone reaches nobody. Activating a key past grace
+is now refused (`license_expired`, 403) instead of silently landing the user on
+Demo. `/v1/me` carries a license summary; the app shows a Home notice inside 14
+days of expiry or during grace, suppressed when its cached config is over a
+week old — advisory only, `mode` is still the only gate.
 
 Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
 §20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,

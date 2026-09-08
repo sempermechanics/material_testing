@@ -12,6 +12,7 @@ you are changing `backend/` or the sync path in `app/.../data/`.
 | Find the code for a concept | [§7 backend map](#7-implementation-map) · [§8 Android map](#8-android-client-map) |
 | Know the data shape | [§5 Firestore](#5-firestore-schema) · [§6 Drive layout](#6-google-drive-folder-hierarchy) |
 | Understand demo / individual / institution licensing | [§20 Licensing & entitlements](#20-licensing--entitlements) |
+| Renew or extend a license, or reason about expiry | [§20.6 Duration, grace, and renewal](#206-duration-grace-and-renewal) |
 | Fix sign-in | [AUTH_SETUP.md](AUTH_SETUP.md) |
 
 > **Status / scope.** This document specifies the **GCP-native** backend:
@@ -379,6 +380,15 @@ users/{uid}                       (uid = Google 'sub')
   activeDeviceId: string | null
   driveFolderId                   (…/user/{uid} folder)
   maxSessions, maxFilesPerSession, maxFrames   (optional per-user quota overrides)
+  # License terms, mirrored from licenses/{id} at activation so the read path
+  # needs no second lookup. A snapshot: PATCH /v1/admin/licenses/{id} fans new
+  # values back out here (§20.6). Absent entirely until a license attaches.
+  mode: "licensed" | "demo"       (`plan` mirror kept for older clients; §20.5)
+  licenseId, licenseKind, licensePrefix
+  licenseDuration: "perpetual" | "timed"
+  licenseExpiresAt                (Timestamp; absent when perpetual)
+  licenseGraceDays: number        (absent reads as ZERO, not the fleet default; §20.6)
+  licenseMaxAnalyses: number      (optional per-license cloud cap)
   schemaVersion                   (stamped by backend/scripts/migrate_schema.py)
   createdAt, updatedAt, lastSeenAt (Timestamp)
 
@@ -428,8 +438,15 @@ licenses/{id}                     (id = sha256(key) — the key hash IS the doc 
   adminEmails: string[]           (verified emails allowed to manage this license's seats)
   maxSeats: number | null         (null = unlimited)
   seatsUsed: number               (kept in sync with the seats subcollection below)
-  expiresAt, maxAnalyses           (optional, either kind)
+  # duration is orthogonal to kind — either kind may be either shape.
+  duration: "perpetual" | "timed"
+  expiresAt                       (Timestamp; required when timed, absent when perpetual)
+  graceDays: number               (entitlement continues UNCHANGED this long past
+                                   expiresAt; 0 is a hard cliff. §20.6)
+  supportUntil                    (Timestamp, optional; informational — never gates)
+  maxAnalyses                      (optional, either kind)
   createdByUid, createdAt, updatedAt
+  updatedByUid, updatedAt         (set by the renewal route)
 
 licenses/{id}/seats/{uid}         (institution only — one doc per institution member)
   uid, email, deviceIdLock
@@ -499,6 +516,7 @@ the way it does.
 | FastAPI app, middleware, lifespan | [`backend/app/main.py`](../../backend/app/main.py) | App factory; includes routers below |
 | Routes by prefix | [`backend/app/routers/`](../../backend/app/routers/) | `health`, `account`, `devices`, `sessions`, `files`, `provision_tasks`, `admin`, `licenses`, `institutions` |
 | License key format, hashing, `mode`/`kind` vocabulary | [`backend/app/licenses.py`](../../backend/app/licenses.py) | `SEMP-XXXX-XXXX-XXXX-XXXX`; sha256 hash is the Firestore doc id; `normalize_mode` / `normalize_kind` / `legacy_plan` (§20.5) |
+| Duration, grace, renewal fan-out | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
 | Individual + institution license logic | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
 | Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth, no dashboard UI; also serves the `/v1/campus/*` aliases (§20.4, §20.5) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
@@ -899,6 +917,9 @@ Three shapes, all resolved server-side by `resolve_user_config` — the app
 never decides its own entitlement, it reads `GET /v1/config` (and the
 `activate` response) and renders around what the backend says.
 
+Each shape is independently perpetual or timed, and a timed one keeps working
+through a grace window after its expiry — see [§20.6](#206-duration-grace-and-renewal).
+
 | Shape | How you get it | Locked to | Managed by |
 |---|---|---|---|
 | **Demo** | Default for every approved account; `ensure_demo_license` issues a Demo-plan license on first verified+device-bound login | email + device (so a Demo key can't be shared) | nobody — it's the floor |
@@ -1027,7 +1048,81 @@ key at all*. That re-keying is not migration 002: the runner hands `transform`
 only a document body and `batch.update` cannot re-key a document, so it needs a
 bespoke copy/delete script that also rewrites every `users.licenseId`.
 
-### 20.6 Structural guard
+### 20.6 Duration, grace, and renewal
+
+`duration` is orthogonal to `kind`: an individual or an institution license may
+be either shape.
+
+| Shape | Behaviour |
+|---|---|
+| **perpetual** | Never stops granting use. May carry `supportUntil`, which is informational — a perpetual license whose support has lapsed still grants full use, and nothing reads that field to gate anything. |
+| **timed** | Stops at `expiresAt` **plus `graceDays`**. Validated at mint: timed requires a future `expiresAt`, perpetual must not carry one, so neither shape can be created by accident. |
+
+**Grace withdraws nothing.** It sits inside the licensed branch of
+`effective_mode`, not beside it as a reduced tier. The point is that a renewal
+in flight does not interrupt work, so cloud backup, share and the uncapped
+analysis count all continue; the only change is `inGrace: true` on
+`/v1/config` and `/v1/me`, which the app renders as a notice on Home. A
+`graceDays` of 0 is a hard cliff, which is what the behaviour was before this
+existed.
+
+**A license already in Firestore with no `graceDays` reads as zero**, not as
+`LICENSE_GRACE_DAYS_DEFAULT`. That default is stamped onto a license at mint.
+Applying it at read time instead would have retroactively reinstated every
+account that expired inside the window the moment the feature deployed.
+
+`duration` absent on an older license is inferred from whether an `expiresAt`
+exists — the same distinction the field makes explicit, so the inference is
+lossless. That is why this needed no migration and `SCHEMA_VERSION` stayed at 2.
+
+#### Renewal fans out
+
+`PATCH /v1/admin/licenses/{id}` (device-attested staff, same tier as mint and
+revoke) changes terms in place. Before it existed a timed license could only be
+replaced — a new key, and every holder re-activating.
+
+It cannot be a simple document write. License terms are **mirrored onto each
+user at activation** (`_license_mirror_patch`) precisely so `effective_mode`
+and `resolve_user_config` stay pure functions of the user document, with no
+Firestore read on paths that run per session and per file. The cost of that is
+that editing the license alone reaches nobody. So `update_license` writes the
+document and then re-stamps every current holder: the individual redeemer, or
+every non-revoked institution seat.
+
+- **Revoked seats are skipped.** They hold no entitlement to refresh, and
+  re-stamping one would resurrect a removed member on the next resolve.
+- **A holder who moved to another license is skipped**, guarded on `licenseId`
+  — the same guard `_drop_user_to_demo_if_licensed` uses.
+- The fan-out is bounded by `seatsUsed`, and renewal is rare. That is what
+  makes it the right side of the trade against a per-request read.
+
+Terms only: `kind`, the email/device/domain locks and the key itself are fixed
+at mint. Changing *who* a license is for under existing holders is a different
+operation with different consequences.
+
+Audited as `ADMIN_LICENSE_EXTEND`. Declared in `gateway/openapi.yaml` as well
+as FastAPI — ESPv2 rejects any path absent from the gateway spec.
+
+#### Activating an expired key is refused
+
+`activate_license` returns `license_expired` (403) once a key is past
+`expiresAt + graceDays`. It used to "succeed": the past expiry was mirrored
+onto the user, `effective_mode` immediately resolved demo, and the caller got
+`err == ""` with a demo config and no explanation. A key still *inside* its
+grace window activates normally and lands the redeemer in grace — grace is
+entitlement, not a warning state.
+
+#### The app warns, it does not gate
+
+`/v1/me` and `/v1/config` carry `licenseExpiresAt`, `licenseGraceEndsAt` and
+`inGrace`. The app shows a Home notice inside 14 days of expiry, or whenever in
+grace, and **never gates on those values**: a cached date can be arbitrarily
+stale, and a renewal may have landed while the device was offline. `mode`
+remains the only thing that changes what the app will do. The client suppresses
+the notice entirely once its cached config is over a week old, which is what
+the fetched-at timestamp added alongside this exists to make possible.
+
+### 20.7 Structural guard
 
 `backend/tests/test_route_authz_matrix.py` inspects every route's FastAPI
 dependency tree and asserts it maps to exactly one expected auth tier —
