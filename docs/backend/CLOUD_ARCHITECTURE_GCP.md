@@ -190,7 +190,7 @@ sequenceDiagram
     A->>R: POST /v1/challenge (ID token) 
     R->>F: store nonce (TTL 120s) bound to uid+deviceId
     R-->>A: {nonce}
-    A->>A: sig = Keystore.sign(nonce || method || path || bodySHA256)
+    A->>A: sig = Keystore.sign(nonce || method || path[?query] || bodySHA256)
     A->>R: POST /v1/sessions ... headers: X-Device-Id, X-Nonce, X-Signature
     R->>F: load devices/{deviceId}.publicKeyPem; verify sig; consume nonce
     R-->>A: 200 (or 401 bad_signature / 409 nonce_replay)
@@ -214,6 +214,14 @@ record rather than leaving it `ACTIVE` and unreachable:
 
 Admin revoke itself requires a `verified_device` caller — an admin cannot revoke
 from an unattested session.
+
+**What the signature covers.** `nonce || METHOD || path || SHA-256(body)`, with
+`?` + the query string appended to the path when the request has one. No route
+takes query parameters today, so appending only when non-empty leaves the
+message byte-identical for every current call — the client and
+`backend/app/deps.py` can therefore ship independently, and a future
+query-bearing route is covered without a flag day. A signed request cannot be
+replayed against its own path with the parameters swapped.
 
 **Latency note.** A per-request challenge round-trip doubles RTT. For hot paths
 you may fold it into a **signed-timestamp assertion** (client signs
@@ -835,14 +843,14 @@ Signing.
   `path`, `status`, `latencyMs`, `outcome`, `uid` / `deviceId` when resolved,
   `opClass` / `routeTemplate` for usage rollups, optional `fileCount` /
   `frameCount` on session create, and `errorCode` on failures
-  (`app/observability.py` + middleware). Never logs tokens/signatures/URIs.
+  (`backend/app/observability.py` + middleware). Never logs tokens/signatures/URIs.
   Structured access logs include `opClass` / `routeTemplate` for ops dashboards.
   Client 500 bodies stay opaque (`internal_error`) on
   Cloud Run.
 - **Audit trail** in Firestore `audit_logs` — the compliance record (Cloud
   Logging is the operational one).
 - **Async Resend notify** — access-request mail is enqueued off the request
-  path with Idempotency-Key + bounded retry (`app/notify.py`).
+  path with Idempotency-Key + bounded retry (`backend/app/notify.py`).
 
 ### Cloud Error Reporting and log-based alerts (operator setup)
 

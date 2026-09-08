@@ -33,6 +33,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.StringRes
@@ -49,9 +50,12 @@ import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
+import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
+import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.ui.capture.CaptureSetupActivity
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
@@ -64,6 +68,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.io.IOException
 
 /**
  * The analysis setup wizard: page 1 loads reference/deformed images (or
@@ -102,7 +107,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var ivDefIcon: ImageView
     private lateinit var tvDefMeta: TextView
     private lateinit var tvDefDropHint: TextView
-    private lateinit var jpegWarnRow: View
+    private lateinit var formatWarnRow: View
     private lateinit var rvFrameOrder: RecyclerView
     private lateinit var btnFrameOrderSort: ImageView
     private lateinit var frameOrderAdapter: FrameOrderAdapter
@@ -143,6 +148,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private var isProcessing = false
     private var importJob: Job? = null
 
+    private data class CancelRunConfig(
+        @StringRes val titleRes: Int,
+        @StringRes val bodyRes: Int,
+        val onConfirm: () -> Unit,
+    )
+
+    private var cancelRun: CancelRunConfig? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_static_analysis)
@@ -153,29 +166,24 @@ class StaticAnalysisActivity : AppCompatActivity() {
         findViewById<ViewStub>(R.id.stubStepSettings).inflate()
         findViewById<ViewStub>(R.id.stubStepSweep).inflate()
         coach = CoachMarkController(this)
-        // --- BACK BUTTON INTERCEPTOR (SAFETY LOCK) ---
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
                     if (isProcessing) {
-                        // Block the back button completely if the C++ engine is running
-                        Toast.makeText(
-                            this@StaticAnalysisActivity,
-                            R.string.analysis_running_back_blocked,
-                            Toast.LENGTH_SHORT,
-                        ).show()
+                        if (cancelRun != null) {
+                            showCancelRunDialog()
+                        } else {
+                            Toast.makeText(
+                                this@StaticAnalysisActivity,
+                                R.string.analysis_running_back_blocked,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
                     } else if (viewModel.wizardStep > 1) {
                         goToStep(viewModel.wizardStep - 1, animate = true)
                     } else if (viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty()) {
-                        MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                            .setTitle(R.string.exit_analysis_title)
-                            .setMessage(R.string.exit_analysis_message)
-                            .setPositiveButton(R.string.exit) { _, _ ->
-                                finish()
-                            }
-                            .setNegativeButton(R.string.cancel, null)
-                            .show()
+                        showLeaveAnalysisDialog()
                     } else {
                         finish()
                     }
@@ -213,9 +221,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
         ivDefIcon = findViewById(R.id.ivDefIcon)
         tvDefMeta = findViewById(R.id.tvDefMeta)
         tvDefDropHint = findViewById(R.id.tvDefDropHint)
-        jpegWarnRow = findViewById(R.id.jpegWarnRow)
-        jpegWarnRow.findViewById<TextView>(R.id.tvWarnText).text = getString(R.string.jpeg_warning_inline)
-        jpegWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
+        formatWarnRow = findViewById(R.id.formatWarnRow)
+        // Text is set per-refresh by AnalysisWizardSlots.updateFormatChip: it
+        // names the formats actually loaded, so it cannot be fixed here.
+        formatWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
             confirmOpenFaq(getString(R.string.url_faq_jpeg))
         }
         rvFrameOrder = findViewById(R.id.rvFrameOrder)
@@ -310,7 +319,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             ivDefIcon = ivDefIcon,
             tvDefName = tvDefName,
             tvDefMeta = tvDefMeta,
-            jpegWarnRow = jpegWarnRow,
+            formatWarnRow = formatWarnRow,
             rvFrameOrder = rvFrameOrder,
             btnFrameOrderSort = btnFrameOrderSort,
             frameOrderAdapter = frameOrderAdapter,
@@ -339,6 +348,23 @@ class StaticAnalysisActivity : AppCompatActivity() {
         intent.getStringExtra(DicKeys.PICKED_VIDEO_URI)?.let {
             intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
             handleVideo(it.toUri())
+        }
+        // The floor the capture screen measured, before the frames themselves,
+        // so a hand-off that fails on the frames still cannot leave a floor
+        // belonging to one run attached to the next.
+        intent.getStringExtra(DicKeys.CAPTURE_NOISE_FLOOR)?.let {
+            intent.removeExtra(DicKeys.CAPTURE_NOISE_FLOOR)
+            viewModel.captureFloor = CaptureNoiseFloor.decode(it)
+        }
+        intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
+            intent.removeExtra(DicKeys.PICKED_DEF_URIS)
+            if (list.isNotEmpty()) {
+                onDeformedPicked(list.map { it.toUri() })
+            }
+        }
+        if (intent.hasExtra(DicKeys.LAUNCHED_FROM_CAPTURE)) {
+            viewModel.launchedFromCapture = intent.getBooleanExtra(DicKeys.LAUNCHED_FROM_CAPTURE, false)
+            intent.removeExtra(DicKeys.LAUNCHED_FROM_CAPTURE)
         }
 
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
@@ -402,31 +428,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         val roiStudioLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
-                val data = result.data
-                if (data != null) {
-                    viewModel.roiX = data.getIntExtra(DicKeys.ROI_X, 0)
-                    viewModel.roiY = data.getIntExtra(DicKeys.ROI_Y, 0)
-                    viewModel.roiW = data.getIntExtra(DicKeys.ROI_W, viewModel.realRefWidth)
-                    viewModel.roiH = data.getIntExtra(DicKeys.ROI_H, viewModel.realRefHeight)
-
-                    // Load the freeform ROI mask RoiDrawActivity wrote to disk.
-                    val maskPath = data.getStringExtra(DicKeys.MASK_FILE_PATH)
-                    if (maskPath != null) {
-                        val file = File(maskPath)
-                        if (file.exists()) {
-                            viewModel.roiMaskBytes = file.readBytes()
-                        }
-                    }
-
-                    // A selection covering the whole image counts as no custom ROI.
-                    viewModel.hasCustomRoi =
-                        !(viewModel.roiW == viewModel.realRefWidth && viewModel.roiH == viewModel.realRefHeight)
-                    wizardSlots.updateRoiSummary()
-
-                    sweepHelper.refreshLineCutPreview()
-                    checkReady()
-                    requestSubsetRecommendation()
-                }
+                result.data?.let { applyRoiResult(it) }
             } else {
                 // Cancelled editor → fall back to full-image ROI.
                 applyFullImageRoi()
@@ -466,21 +468,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnDefChange).setOnClickListener { launchDefPicker() }
 
         btnDefineRoi.setOnClickListener {
-            if (viewModel.refBytes != null) {
-                val tempFile = File(cacheDir, "temp_roi_ref.bin")
-                try {
-                    tempFile.writeBytes(viewModel.refBytes!!)
-                    val intent = Intent(this, RoiDrawActivity::class.java)
-                    intent.putExtra(DicKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
-                    intent.putExtra(DicKeys.IMAGE_WIDTH, viewModel.realRefWidth)
-                    intent.putExtra(DicKeys.IMAGE_HEIGHT, viewModel.realRefHeight)
-                    roiStudioLauncher.launch(intent)
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to write temp ROI reference file")
-                    Toast.makeText(this, R.string.failed_save_temp_file, Toast.LENGTH_SHORT).show()
-                }
-            } else {
+            val bytes = viewModel.refBytes
+            if (bytes == null) {
                 Toast.makeText(this, R.string.load_image_first, Toast.LENGTH_SHORT).show()
+            } else {
+                openRoiStudio(bytes, roiStudioLauncher)
             }
         }
 
@@ -488,6 +480,84 @@ class StaticAnalysisActivity : AppCompatActivity() {
             // A field still holding focus has not committed its typed value yet.
             commitParamFields()
             if (!viewModel.sweepMode) startBatchAnalysis()
+        }
+    }
+
+    /**
+     * Hand the reference image to [RoiDrawActivity] through a cache file.
+     *
+     * The copy runs on [Dispatchers.IO]: [bytes] is the decoded reference, tens
+     * of megabytes for a RAW frame, and writing that from the click handler
+     * froze the wizard for the length of the write.
+     */
+    private fun openRoiStudio(
+        bytes: ByteArray,
+        launcher: ActivityResultLauncher<Intent>,
+    ) {
+        val tempFile = File(cacheDir, "temp_roi_ref.bin")
+        lifecycleScope.launch {
+            val written = withContext(Dispatchers.IO) {
+                try {
+                    tempFile.writeBytes(bytes)
+                    true
+                } catch (e: IOException) {
+                    Timber.e(e, "Failed to write temp ROI reference file")
+                    false
+                }
+            }
+            if (!written) {
+                Toast.makeText(
+                    this@StaticAnalysisActivity,
+                    R.string.failed_save_temp_file,
+                    Toast.LENGTH_SHORT,
+                ).show()
+                return@launch
+            }
+            val intent = Intent(this@StaticAnalysisActivity, RoiDrawActivity::class.java)
+            intent.putExtra(DicKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
+            intent.putExtra(DicKeys.IMAGE_WIDTH, viewModel.realRefWidth)
+            intent.putExtra(DicKeys.IMAGE_HEIGHT, viewModel.realRefHeight)
+            launcher.launch(intent)
+        }
+    }
+
+    /**
+     * Adopt the ROI the studio returned.
+     *
+     * The freeform mask is read on [Dispatchers.IO] — one byte per reference
+     * pixel, so tens of megabytes on a modern sensor, and reading it inline
+     * stalled the very frame that had to draw the updated summary. Everything
+     * that depends on the mask stays after the read, in order.
+     */
+    private fun applyRoiResult(data: Intent) {
+        viewModel.roiX = data.getIntExtra(DicKeys.ROI_X, 0)
+        viewModel.roiY = data.getIntExtra(DicKeys.ROI_Y, 0)
+        viewModel.roiW = data.getIntExtra(DicKeys.ROI_W, viewModel.realRefWidth)
+        viewModel.roiH = data.getIntExtra(DicKeys.ROI_H, viewModel.realRefHeight)
+
+        // A selection covering the whole image counts as no custom ROI.
+        viewModel.hasCustomRoi =
+            !(viewModel.roiW == viewModel.realRefWidth && viewModel.roiH == viewModel.realRefHeight)
+
+        val maskPath = data.getStringExtra(DicKeys.MASK_FILE_PATH)
+        lifecycleScope.launch {
+            val mask = maskPath?.let { path ->
+                withContext(Dispatchers.IO) {
+                    File(path).takeIf(File::exists)?.let { file ->
+                        try {
+                            file.readBytes()
+                        } catch (e: IOException) {
+                            Timber.e(e, "Failed to read ROI mask")
+                            null
+                        }
+                    }
+                }
+            }
+            if (mask != null) viewModel.roiMaskBytes = mask
+            wizardSlots.updateRoiSummary()
+            sweepHelper.refreshLineCutPreview()
+            checkReady()
+            requestSubsetRecommendation()
         }
     }
 
@@ -518,6 +588,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun handleReferenceImage(uri: Uri) {
+        viewModel.captureFloor = null
         val name = getFileName(uri)
         val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
 
@@ -927,7 +998,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val limit = 3
         if (names.size <= limit) return names.joinToString(", ")
         val head = names.take(limit).joinToString(", ")
-        return getString(R.string.frames_size_mismatch_and_more_fmt, head, names.size - limit)
+        return resources.getQuantityString(
+            R.plurals.frames_size_mismatch_and_more_fmt,
+            names.size - limit,
+            head,
+            names.size - limit,
+        )
     }
 
     /** Drop a previous run's ❌ / success line when the user changes inputs. */
@@ -983,7 +1059,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         // Read off the slider here: the measurement runs on the native thread,
         // which must not touch views.
-        val sizes = etSubsetSize.valueFrom.toInt()..etSubsetSize.valueTo.toInt()
+        // The noise variance is measured on this phone under this light when
+        // the run captured its own frames; an import has no burst behind it and
+        // falls back to the paper's constant.
+        val tuning = SubsetRecommender.Tuning(
+            sizes = etSubsetSize.valueFrom.toInt()..etSubsetSize.valueTo.toInt(),
+            noiseVariance = viewModel.captureFloor?.noiseVariance
+                ?: SubsetRecommender.NOISE_VARIANCE,
+        )
 
         lifecycleScope.launch(SemperNativeLib.nativeDispatcher) {
             val result = runCatching {
@@ -992,7 +1075,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     imgW = viewModel.realRefWidth,
                     imgH = viewModel.realRefHeight,
                     roi = roi,
-                    sizes = sizes,
+                    tuning = tuning,
                 )
             }.onFailure { Timber.w(it, "Subset recommendation failed") }.getOrNull()
 
@@ -1391,13 +1474,20 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED) return
             // Route to lattice with all-failed nodes so the user can tap each for details.
             viewModel.sweepPlan = emptyList()
-            viewModel.sweepSkipped = sweepHelper.currentPlan()
-            viewModel.sweepSkippedCodes = viewModel.sweepSkipped.map { outcome.engineErrorCode }
+            val plan = sweepHelper.currentPlan()
+            viewModel.sweepSkippedNodes = plan.map { point ->
+                SkippedNode(
+                    subset = point.subset,
+                    step = point.step,
+                    strainWindow = point.strainWindow,
+                    code = outcome.engineErrorCode,
+                )
+            }
             viewModel.lastBatchDirPath = outcome.batchDirPath
             openResultViewer(sweep = true)
             return
         }
-        val skipped = viewModel.sweepSkipped.size
+        val skipped = viewModel.sweepSkippedNodes.size
         if (skipped > 0) {
             // Partial sweeps are still worth browsing; say what was dropped.
             Toast.makeText(
@@ -1462,19 +1552,45 @@ class StaticAnalysisActivity : AppCompatActivity() {
         bodyRes: Int = R.string.cancel_run_body,
         onConfirm: () -> Unit,
     ) {
+        cancelRun = CancelRunConfig(titleRes, bodyRes, onConfirm)
         findViewById<View>(R.id.btnRunCancel).apply {
             isEnabled = true
-            setOnClickListener {
-                MaterialAlertDialogBuilder(this@StaticAnalysisActivity)
-                    .setTitle(titleRes)
-                    .setMessage(bodyRes)
-                    .setPositiveButton(R.string.action_cancel) { _, _ ->
-                        onConfirm()
-                        isEnabled = false
-                    }
-                    .setNegativeButton(R.string.keep_running, null)
-                    .show()
+            setOnClickListener { showCancelRunDialog() }
+        }
+    }
+
+    private fun showCancelRunDialog() {
+        val config = cancelRun ?: return
+        MaterialAlertDialogBuilder(this)
+            .setTitle(config.titleRes)
+            .setMessage(config.bodyRes)
+            .setPositiveButton(R.string.action_cancel) { _, _ ->
+                config.onConfirm()
+                findViewById<View>(R.id.btnRunCancel).isEnabled = false
             }
+            .setNegativeButton(R.string.keep_running, null)
+            .show()
+    }
+
+    private fun showLeaveAnalysisDialog() {
+        if (viewModel.launchedFromCapture) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.analysis_recapture_title)
+                .setMessage(R.string.analysis_recapture_message)
+                .setPositiveButton(R.string.analysis_recapture_confirm) { _, _ ->
+                    startActivity(Intent(this, CaptureSetupActivity::class.java))
+                    finish()
+                }
+                .setNegativeButton(R.string.exit) { _, _ -> finish() }
+                .setNeutralButton(R.string.cancel, null)
+                .show()
+        } else {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.exit_analysis_title)
+                .setMessage(R.string.exit_analysis_message)
+                .setPositiveButton(R.string.exit) { _, _ -> finish() }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
         }
     }
 
@@ -1486,6 +1602,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun clearCancelButton() {
+        cancelRun = null
         findViewById<View>(R.id.btnRunCancel).apply {
             isEnabled = false
             setOnClickListener(null)

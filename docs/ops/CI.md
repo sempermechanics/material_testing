@@ -36,7 +36,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 | `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/` | No — always runs | seconds |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
 | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, Kover coverage log | `app` (PR); always on `main` push | ~5–8 / ~10 min |
-| `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest` | main push / labels | ~20–40 / ~60–90 min |
+| `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest`. Excludes `com.indicvision.semper.benchmark` on debug (those need the `benchmark` job). | main push / labels | ~20–40 / ~60–90 min |
 | `tier4-backend` | ruff, shell-script parse, pip-audit, hashed-lock verification, pytest at `--cov-fail-under=75`, Firestore emulator suite | `backend` (PR); always on `main` push | ~5–10 min |
 | `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, R8 mapping artifact | main push / labels | ~15–40 / up to ~90 min |
 | `tier-benchmark` | Macrobenchmark cold/warm startup (`:benchmark`). Emulator **smoke**: `suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`; no numeric thresholds. API 34. | `benchmark` label / `run_benchmark` dispatch only | ~20–40 min |
@@ -127,6 +127,14 @@ Never Tier 3 / Tier 5 for Dependabot. Path filters use an explicit
 `base: pull_request.base.sha` so Dependabot's 403 on the PR Files API does not
 fail open into a full matrix.
 
+**A `dependabot/pip/…` PR always lands Tier 4 red, and that is expected.**
+Dependabot bumps `backend/requirements.txt` and cannot regenerate the hashed
+`requirements.lock`, so tier 4's *Verify the hashed lock* step reports a version
+diff. Fix it before merging by running
+[`Backend lock`](../../.github/workflows/backend-lock.yml) against the Dependabot
+branch — it compiles on Linux / Python 3.12 and pushes the lock to that PR. See
+[RELEASING.md](RELEASING.md) § Bumping backend dependencies.
+
 `secret-scan` and `legal-pages` are absent from the tables on purpose: they
 carry no path filter and run on every event.
 
@@ -152,7 +160,8 @@ passing. Free private orgs may block classic branch protection — see
 
 # Individual tiers
 ./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug   # tier 1
-./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64                # tier 3 (emulator)
+./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 \
+  -Pandroid.testInstrumentationRunnerArguments.notPackage=com.indicvision.semper.benchmark  # tier 3
 cd backend && pip install -r requirements-test.txt && pytest tests/ -v      # tier 4
 
 # The two always-on gates

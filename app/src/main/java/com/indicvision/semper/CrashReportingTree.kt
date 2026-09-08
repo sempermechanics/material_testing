@@ -1,21 +1,17 @@
 package com.indicvision.semper
 
+import android.content.Context
 import android.util.Log
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.indicvision.semper.data.DicSettings
 import timber.log.Timber
 
 /**
- * Release logging tree that forwards to Firebase Crashlytics **and** logcat.
- *
- * Debug builds keep the verbose [Timber.DebugTree]; release builds plant this.
- * WARN/ERROR become Crashlytics breadcrumbs (and ERROR+throwable → non-fatal).
- * The same WARN/ERROR lines are also printed to logcat — otherwise alpha field
- * debugging only saw WorkManager `RETRY` with no Semper reason (INFO was
- * dropped and Crashlytics breadcrumbs never appear in `adb logcat`).
- * INFO/DEBUG/VERBOSE stay out of logcat to keep release noise down.
+ * Release tree: Crashlytics breadcrumbs; logcat only when diagnostics consent is on.
  */
-class CrashReportingTree : Timber.Tree() {
+class CrashReportingTree(context: Context) : Timber.Tree() {
 
+    private val appContext = context.applicationContext
     private val crashlytics = FirebaseCrashlytics.getInstance()
 
     override fun isLoggable(tag: String?, priority: Int): Boolean =
@@ -23,12 +19,13 @@ class CrashReportingTree : Timber.Tree() {
 
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
         val safeTag = tag?.take(MAX_TAG_LEN) ?: "Semper"
-        // Mirror to logcat first so `adb logcat` works offline / without Crashlytics.
-        if (t != null) {
-            Log.println(priority, safeTag, message)
-            Log.println(priority, safeTag, Log.getStackTraceString(t))
-        } else {
-            Log.println(priority, safeTag, message)
+        if (DicSettings.diagnosticsEnabled(appContext)) {
+            if (t != null) {
+                Log.println(priority, safeTag, message)
+                Log.println(priority, safeTag, Log.getStackTraceString(t))
+            } else {
+                Log.println(priority, safeTag, message)
+            }
         }
         crashlytics.log(if (tag != null) "$tag: $message" else message)
         if (priority >= Log.ERROR && t != null) {

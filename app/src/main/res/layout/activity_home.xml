@@ -189,6 +189,7 @@
             android:layout_marginBottom="12dp"
             android:contentDescription="@string/app_name_short"
             android:forceDarkAllowed="false"
+            tools:targetApi="29"
             android:scaleType="fitCenter"
             android:src="@drawable/semper_mark_s" />
 

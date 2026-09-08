@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The focus ring on the capture preview. Read in code as well as in the
+         layout: the ring is centred on the focus point by translation, and
+         measuring it instead would race the first layout pass, which puts the
+         ring's corner on the point rather than its middle. -->
+    <dimen name="capture_focus_marker_size">72dp</dimen>
+
+    <!-- The magnified crop shown at the focus point. Its *window* is a count of
+         real preview pixels and so lives in code, not here; this is only how
+         large that window is drawn, and the ratio between the two is the
+         magnification — around 3-4x on a typical phone, enough to see speckle
+         go soft. -->
+    <dimen name="capture_focus_loupe_size">120dp</dimen>
+</resources>

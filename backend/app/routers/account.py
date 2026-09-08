@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from .. import audit, drive, firestore_repo as repo
+from .. import audit, drive, errors, firestore_repo as repo
 from .. import rate_limit
 from ..deps import current_user, verified_device
 
@@ -74,7 +74,7 @@ def export_account(ctx=Depends(verified_device)):
     user = ctx["user"]
     uid = user["uid"]
     if not rate_limit.export_bucket.allow(uid):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     profile = repo.get_user(uid) or {}
 
     audit.record(uid, action="DATA_EXPORT", target={"type": "user", "id": uid})
@@ -151,7 +151,7 @@ def delete_account(ctx=Depends(verified_device)):
     user, device = ctx["user"], ctx["device"]
     uid = user["uid"]
     if not rate_limit.erase_bucket.allow(uid):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     started = time.monotonic()
     token = drive.access_token()
 

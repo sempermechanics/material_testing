@@ -60,6 +60,9 @@
     <string name="exit_indic_message">Are you sure you want to exit the app?</string>
     <string name="exit_analysis_title">Exit analysis?</string>
     <string name="exit_analysis_message">Are you sure you want to leave? All uncalculated setup and ROI definitions will be lost.</string>
+    <string name="analysis_recapture_title">Leave analysis?</string>
+    <string name="analysis_recapture_message">You can re-record with a different plan, exit to Home, or stay and keep editing.</string>
+    <string name="analysis_recapture_confirm">Re-record</string>
     <string name="no_images_selected">No images selected</string>
     <string name="failed_save_temp_file">Failed to save temporary file</string>
     <string name="load_image_first">Load an image first.</string>
@@ -184,8 +187,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Home screen -->
     <string name="home_title">Analyses</string>
     <string name="home_empty_title">No analyses yet</string>
-    <string name="home_empty_body">Pick reference image or video.</string>
+    <string name="home_empty_body">Import photos or record a new test.</string>
     <string name="home_new_analysis">New analysis</string>
+    <string name="home_fab_import">Import</string>
+    <string name="home_fab_record">Record</string>
     <string name="home_settings">Settings</string>
     <string name="home_thumb_desc">Reference image preview</string>
     <string name="home_sync_config_unavailable">Can\'t sync yet — check your connection and pull to refresh</string>
@@ -272,10 +277,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="export_cloud_data_failed">Couldn\'t download your account data. Check your connection and try again.</string>
     <string name="export_cloud_data_offline">Cloud sync isn\'t set up on this build, so there\'s no cloud data to download.</string>
     <!-- Diagnostics consent -->
-    <string name="setting_diagnostics">Send crash reports</string>
-    <string name="setting_diagnostics_sub">Share anonymous crash and error diagnostics so we can fix problems. Off by default; no analysis data or images are ever sent.</string>
+    <string name="setting_diagnostics">Send crash reports and usage data</string>
+    <string name="setting_diagnostics_sub">Share anonymous crash diagnostics and coarse usage events — which features ran, and whether they succeeded — so we can fix problems. Off by default; your images, results, specimen names, file paths and analysis data are never sent.</string>
     <string name="diagnostics_prompt_title">Help improve Semper?</string>
-    <string name="diagnostics_prompt_body">Semper can send anonymous crash reports and error diagnostics when something goes wrong.\n\nThis never includes your images, results, or specimen names. You can change this at any time in Settings.</string>
+    <string name="diagnostics_prompt_body">Semper can send anonymous crash reports when something goes wrong, and coarse usage events such as whether an analysis started, finished or failed.\n\nThis never includes your images, results, specimen names, file paths or analysis data. You can change this at any time in Settings.</string>
     <string name="diagnostics_prompt_accept">Send reports</string>
     <string name="diagnostics_prompt_decline">Not now</string>
     <string name="delete_account">Delete my account and data</string>
@@ -353,7 +358,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_backup_failed_device">This account is backing up from another device.</string>
     <string name="cloud_backup_failed_too_large">This analysis is too large to back up.</string>
     <string name="cloud_backup_failed_oom">Not enough memory on this device to prepare the backup. Try again after closing other apps, or use a device with more RAM.</string>
-    <string name="cloud_backup_failed_provision">Cloud backup setup failed (Drive upload targets). Tap Try again, or check backend Cloud Tasks / Drive.</string>
+    <string name="cloud_backup_failed_provision">Cloud backup setup could not be completed. Tap Try again.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
     <string name="cloud_delete_backup_title">Delete from backup</string>
     <string name="cloud_delete_backup_body">Choose what to remove for this analysis.\n\nDeleting the cloud backup is permanent — the raw images, results and report are erased from the cloud and cannot be recovered.</string>
@@ -380,7 +385,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="delete_device_kept_snackbar">Kept in the cloud</string>
     <string name="delete_device_restore_action">Restore…</string>
     <string name="setting_max_frames">Max frames</string>
-    <string name="setting_max_frames_info">More frames = longer analysis and more memory.</string>
+    <string name="setting_max_frames_info">A ceiling, not a target: it can only reduce a run, never add frames. It caps imported frames and it caps a capture — a rate that would exceed it is not offered. More frames = longer analysis and more memory.</string>
     <string name="info">Info</string>
     <string name="action_sign_out">Sign out</string>
     <string name="about_title">About</string>
@@ -389,7 +394,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="legal_terms">Terms of Service</string>
     <!-- Public legal pages on the product site. -->
     <string name="legal_privacy_url" translatable="false">https://sempermechanics.com/privacy/</string>
-    <string name="legal_terms_url" translatable="false">https://sempermechanics.com/privacy/</string>
+    <string name="legal_terms_url" translatable="false">https://sempermechanics.com/terms/</string>
     
     <string name="advanced_parameters">Advanced parameters</string>
     
@@ -436,8 +441,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="line_cut_preview_heading">Line cut</string>
     <string name="planned_lattice_heading">Planned lattice</string>
     <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · window %5$d</string>
-    <!-- VSG is derived (= (window-1)*step + 1), never independent info: dropped
-         from this label since step and window are already both spelled out in it. -->
+    <!-- VSG is the strain window read as a diameter in pixels, so the window
+         column already carries it: never independent info in this label. -->
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d</string>
     <string name="sweep_failed">The parameter sweep could not run.</string>
     
@@ -461,6 +466,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_reason_decode">Image could not be decoded</string>
     <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
     <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
+    <string name="sweep_reason_unknown">Unknown engine error (code %1$d)</string>
     <string name="sweep_node_title_fmt">S%1$d · St%2$d · W%3$d</string>
     <string name="sweep_node_skipped">This combination was skipped</string>
     <!-- Which frame a failure happened on; prefixes the reason above. -->
@@ -545,7 +551,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="action_reset">Reset</string>
     <string name="use_full_image">Use full image</string>
     <string name="region_of_interest">Region of interest</string>
-    <string name="jpeg_warning_inline">JPEG detected, use lossless formats (eg. PNG, TIFF) to improve accuracy</string>
+    <string name="lossy_format_warning_fmt">%1$s detected, use lossless formats (eg. PNG, TIFF) to improve accuracy</string>
     <string name="subset_low_texture_fmt">Speckle contrast is low, consider using a large subset or selecting a small RoI</string>
     <string name="next_reason_ref">add a reference image to continue</string>
     <string name="next_reason_def">add at least one deformed frame to continue</string>
@@ -564,7 +570,145 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="coach_skip">Skip</string>
     <string name="coach_next">Next</string>
     <string name="coach_done">Got it</string>
-    <string name="coach_home_fab">Pick a reference photo or a video</string>
+    <string name="coach_home_fab">Import photos or record a new test</string>
+
+    <!-- Capture / record flow -->
+    <string name="capture_setup_title">Record test</string>
+    <string name="capture_setup_intro">Choose frame rate, duration, and resolution. A test shot in the phone Camera app checks that the speckle is sharp before recording begins.</string>
+    <string name="capture_duration">Test duration</string>
+    <string name="capture_resolution">Recording resolution</string>
+    <string name="capture_duration_hint">mm:ss</string>
+    <string name="capture_duration_range">Between 00:01 and 10:00</string>
+    <string name="capture_fps_label">Capture rate</string>
+    <string name="capture_fps_value_fmt">%1$s fps</string>
+    <plurals name="capture_estimate_fmt">
+        <item quantity="one">%1$s fps · %2$d frame, one every %3$s · mode: %4$s</item>
+        <item quantity="other">%1$s fps · %2$d frames, one every %3$s · mode: %4$s</item>
+    </plurals>
+    <string name="capture_fps_assured">Every rate offered is one this camera can hold for the whole run at this resolution, with headroom to spare. You get what you pick.</string>
+    <string name="capture_fps_assured_with_ceiling">%1$s\n%2$s</string>
+    <string name="capture_fps_ceiling_camera">For a faster rate, choose a smaller resolution — the sensor and the encoder both slow down as the frame grows.</string>
+    <string name="capture_fps_ceiling_setting_fmt">Your Max frames setting (%1$d) is holding the top of this list down, not the camera. Raise it in Settings, or shorten the run.</string>
+    <string name="capture_interval_sec_fmt">%1$.1f s</string>
+    <string name="capture_interval_ms_fmt">%1$d ms</string>
+    <string name="capture_mode_stills">Still photos, focus locked from the test shot</string>
+    <string name="capture_continue_test_shot">Continue to test shot</string>
+    <string name="capture_budget_fail_title">Not enough space or memory</string>
+    <string name="capture_budget_fail_ram">Not enough free memory for this resolution. Close other apps or choose a smaller size.</string>
+    <string name="capture_budget_fail_storage">Not enough free storage for this recording. Free space or shorten the duration.</string>
+    <string name="capture_budget_fail_both">Not enough free memory and storage for this plan. Lower the resolution or shorten the duration.</string>
+    <string name="capture_no_camera_app">No Camera app is available to take the test shot.</string>
+    <string name="capture_session_title">Recording</string>
+    <string name="capture_status_test_shot">Take a test shot of the speckle (before loading). Get it sharp, then return here.</string>
+    <string name="capture_status_select_roi">Draw the area to check for contrast, then save.</string>
+    <string name="capture_status_checking">Checking speckle contrast…</string>
+    <string name="capture_status_locking">Locking focus from the test shot…</string>
+    <string name="capture_status_ready">Focus locked. This preview is the frame you will get — line the specimen up against it, then start.</string>
+    <!-- Consequence first and under 20 words, like the hardware-refusal
+         warnings: what is stale is the point, not that a sensor noticed. -->
+    <string name="capture_framing_changed_title">The camera moved</string>
+    <string name="capture_framing_changed_body">Focus and the measured floor describe the old framing. Take a new test shot before recording.</string>
+    <string name="capture_framing_changed_retry">Retake test shot</string>
+    <string name="capture_status_framing_changed">The camera moved — take a new test shot before recording.</string>
+    <!-- Focus confirmation. The one step in the flow where the person is
+         better than the app: autofocus is weakest on fine repeating texture,
+         which is exactly what a speckle pattern is, and only the user can see
+         whether the result is sharp. Everything measured afterwards — the
+         noise floor, the run — is measured through this focus. -->
+    <string name="capture_status_confirm_focus">Focus is locked here. Check the speckle looks sharp — tap anywhere to focus there instead.</string>
+    <string name="capture_status_refocusing">Focusing…</string>
+    <string name="capture_focus_confirm">Focus looks sharp</string>
+    <string name="capture_focus_marker">Focus point</string>
+    <string name="capture_refocus_failed">Could not focus there. The previous focus point is still locked.</string>
+    <string name="capture_focus_loupe">Magnified view of the focus point</string>
+    <!-- Both worded as comparisons, never as verdicts: the sharpness measure has
+         no absolute scale, so the app can honestly say this point is softer than
+         another one tried and cannot say any point is sharp enough. -->
+    <string name="capture_focus_sharpest_yet">Sharpest so far</string>
+    <string name="capture_focus_sharpness_fmt">%1$d%% of sharpest so far</string>
+    <string name="capture_status_reference">Capturing reference frame…</string>
+    <string name="capture_status_recording_stills">Capturing stills…</string>
+    <!-- Precision mode engages itself; this is the one line that says so.
+         Reference only, see CaptureSessionActivity.averagingFrames. -->
+    <plurals name="capture_averaging_fmt">
+        <item quantity="one">Averaging %1$d shot for a cleaner reference.</item>
+        <item quantity="other">Averaging %1$d shots for a cleaner reference.</item>
+    </plurals>
+    <string name="capture_status_matching_sizes">Matching frame sizes…</string>
+    <string name="capture_progress_fmt">Frame %1$d of %2$d</string>
+    <string name="capture_start_recording">Start recording</string>
+    <string name="capture_stop_title">Stop recording?</string>
+    <string name="capture_stop_message">Frames already taken will be discarded. You can change the plan and try again.</string>
+    <string name="capture_stop_confirm">Stop</string>
+    <string name="capture_leave_setup_title">Go back?</string>
+    <string name="capture_leave_setup_message">Test-shot progress will be lost. You can change duration, frame rate, or resolution on the plan screen.</string>
+    <string name="capture_leave_setup_confirm">Back</string>
+    <string name="capture_roi_needed_title">Select an area first</string>
+    <string name="capture_roi_needed_body">Contrast is checked inside the region you draw. Select an area on the test shot before continuing.</string>
+    <string name="capture_roi_select">Select area</string>
+    <string name="capture_roi_too_small_title">Area too small</string>
+    <string name="capture_roi_too_small_body">That region is too small to measure pattern contrast. Draw a larger area on the speckled surface.</string>
+    <string name="capture_speckle_fail_title">Speckle contrast is too low</string>
+    <string name="capture_speckle_fail_body">The selected area does not have enough pattern contrast for a reliable analysis. Pick a better area, or retake the test shot with sharper focus and better lighting.</string>
+    <string name="capture_retry">Retry</string>
+    <string name="capture_af_fail_title">Could not lock focus</string>
+    <string name="capture_af_fail_body">The camera could not lock focus on the test-shot point. Retake the test shot.</string>
+    <string name="capture_permission_needed">Camera access is needed to lock focus and record the rest of the test.</string>
+    <string name="capture_cancelled">Recording cancelled.</string>
+    <string name="capture_frames_failed">The camera stopped returning frames, so recording stopped early. Frames already taken were kept.</string>
+    <string name="capture_camera_lost">The camera was released to another app or shut down, so recording stopped early. Frames already taken were kept.</string>
+    <string name="capture_test_shot_empty">No photo was saved. Try again.</string>
+    <!-- Noise-floor gate. The specimen is mounted but unloaded, so every
+         displacement measured here is error. The floor value is shown large in
+         the dialog; body text explains what to do without repeating the number. -->
+    <string name="capture_status_noise_check">Measuring the noise floor…</string>
+    <string name="capture_noise_floor_label">Measurement floor</string>
+    <string name="capture_noise_floor_body">Finer strain may not show in the results. Add light or measure over a larger area to improve.</string>
+    <string name="capture_noise_floor_readout">Measurement floor %1$s. Finer strain may not show — add light or use a larger area.</string>
+    <string name="capture_noise_continue">Continue</string>
+    <string name="capture_noise_unsettled_title">Readings will not settle</string>
+    <string name="capture_noise_unsettled_body">Something moved or the light flickered between test frames. Steady the rig, then retry.</string>
+    <string name="capture_noise_drift_title">The image is drifting</string>
+    <string name="capture_noise_drift_body">The frame shifts steadily between shots. Let the rig settle for a minute, then retry.</string>
+    <!-- Floor above the limit. A strong warning, never a refusal: the wording
+         has to make the consequence unmissable in one glance, because the user
+         is trusted to overrule it and needs the real cost to do that well. The
+         same verdict is stamped on the session, the PDF and the CSV. -->
+    <string name="capture_noise_erroneous_title">Results will be unreliable</string>
+    <string name="capture_noise_erroneous_body">Strain below this level is noise, not a real measurement. This will be noted on the report.</string>
+    <!-- Same, plus settings the phone refused: two independent signals pointing
+         the same way earn a plainer sentence than either does alone. -->
+    <plurals name="capture_noise_erroneous_refused_body">
+        <item quantity="one">%1$d camera setting could not be locked. Strain below this floor is noise, not measurement. Noted on the report.</item>
+        <item quantity="other">%1$d camera settings could not be locked. Strain below this floor is noise, not measurement. Noted on the report.</item>
+    </plurals>
+    <string name="capture_record_anyway">Record anyway</string>
+    <string name="capture_retry_test_shot">Retry test shot</string>
+    <!-- Imaging-pipeline refusals. Effect first, under 20 words each; the
+         mechanism lives in the FAQ the warning links to. Only one is ever
+         shown, chosen by CaptureIspWarning as the costliest refusal. -->
+    <string name="capture_isp_warn_ois">Lens stabiliser will not switch off — the image may shift between frames.</string>
+    <string name="capture_isp_warn_eis">Video stabilisation will not switch off — frames may be warped to look steady.</string>
+    <string name="capture_isp_warn_zsl">Phone merges several shots into one photo — frames may not line up.</string>
+    <string name="capture_isp_warn_denoise">Noise reduction will not switch off — it blurs the pattern the analysis measures.</string>
+    <string name="capture_isp_warn_edge">Sharpening will not switch off — it rewrites the edges the analysis measures.</string>
+    <string name="capture_isp_warn_tonemap">The phone fixes its own tone curve — brightness may shift between frames.</string>
+    <string name="capture_isp_warn_shading">Vignetting correction will not hold still — it can look like a strain gradient.</string>
+    <string name="capture_isp_warn_aberration">Colour-fringe correction will not switch off — it moves pixels slightly.</string>
+    <string name="capture_isp_warn_scene">A scene mode is active and will not switch off — it retunes the whole pipeline.</string>
+    <string name="capture_isp_warn_zoom">Zoom cannot be pinned — the phone may resample the frame between shots.</string>
+    <string name="capture_isp_warn_awb">White balance will not lock — grey levels may drift between frames.</string>
+    <plurals name="capture_isp_warn_more">
+        <item quantity="one">%1$s Plus %2$d more.</item>
+        <item quantity="other">%1$s Plus %2$d more.</item>
+    </plurals>
+    <!-- Measured, not asked for: the phone reports noise reduction as switched
+         off and smooths the frames anyway, which no Camera2 key exposes. Shown
+         once after the test shot, and recorded on the report. -->
+    <string name="capture_status_saving_gallery">Saving frames to your gallery…</string>
+    <string name="capture_gallery_no_room">Not enough space to copy the frames to your gallery — they are still saved in the app.</string>
+    <string name="capture_denoise_warn">Phone is smoothing frames despite the settings — fine detail is lost, noise looks lower than it is.</string>
+    <string name="capture_speckle_check_timeout">Checking the test shot took too long. Retake it.</string>
     <string name="coach_analysis_ref">The reference image can be changed at any time.</string>
     <string name="coach_analysis_def">Add deformed frames next. When you pick several, you can sort by name, date, or drag.</string>
     <string name="coach_analysis_mode">Single solve or parameter sweep?</string>
@@ -683,6 +827,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="url_manual">https://sempermechanics.com/manual/</string>
     <string name="url_faq_jpeg" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
     <string name="url_faq_speckle" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
+    <string name="url_faq_noise_floor" translatable="false">https://sempermechanics.com/support/troubleshooting/#setup</string>
+    <string name="url_faq_imaging_pipeline" translatable="false">https://sempermechanics.com/support/troubleshooting/#setup</string>
     <string name="url_faq_frame_size" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
     <string name="url_faq_roi_too_small" translatable="false">https://sempermechanics.com/support/troubleshooting/#setup</string>
     <string name="url_faq_sweep_subset_range" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
@@ -833,7 +979,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">The image resolution isn\'t matching to the reference (%1$d × %2$d): %3$s</item>
         <item quantity="other">The image resolution isn\'t matching to the reference (%1$d × %2$d): %3$s</item>
     </plurals>
-    <string name="frames_size_mismatch_and_more_fmt">%1$s, and %2$d more</string>
+    <plurals name="frames_size_mismatch_and_more_fmt">
+        <item quantity="one">%1$s, and %2$d more</item>
+        <item quantity="other">%1$s, and %2$d more</item>
+    </plurals>
     <plurals name="sweep_plan_grid_fmt">
         <item quantity="one">1 analyses · subset 1–1 px · window 1–1</item>
         <item quantity="other">%1$d analyses · subset %2$d–%3$d px · window %4$d–%5$d</item>

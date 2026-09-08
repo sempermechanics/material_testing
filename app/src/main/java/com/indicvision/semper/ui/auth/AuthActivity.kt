@@ -6,6 +6,7 @@ package com.indicvision.semper.ui.auth
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -18,6 +19,7 @@ import androidx.credentials.CredentialManager
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
+import com.indicvision.semper.data.AUTH_HOST
 import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.CrispToast
@@ -148,8 +150,24 @@ class AuthActivity : AppCompatActivity() {
         maybeHandlePasswordReset(intent)
     }
 
+    /**
+     * True when [data] is one of our own auth continue links.
+     *
+     * This activity is exported, so an explicit `Intent` from any installed app
+     * reaches these handlers with a URI of its choosing — the manifest's App
+     * Link filter constrains implicit matching only, and never sees an explicit
+     * start. Firebase does validate the `oobCode` server-side, so a foreign link
+     * cannot actually reset anything; the check is so we never hand a code from
+     * an unrelated host to Firebase, nor show a reset form a stranger opened.
+     */
+    private fun isTrustedAuthLink(data: Uri): Boolean =
+        data.scheme.equals("https", ignoreCase = true) &&
+            data.host.equals(AUTH_HOST, ignoreCase = true)
+
     private fun maybeCompleteEmailLink(intent: Intent?) {
-        val link = intent?.data?.toString() ?: return
+        val data = intent?.data ?: return
+        if (!isTrustedAuthLink(data)) return
+        val link = data.toString()
         if (authRepo.isEmailSignInLink(link)) completeEmailLink(link)
     }
 
@@ -159,6 +177,7 @@ class AuthActivity : AppCompatActivity() {
      */
     private fun maybeHandlePasswordReset(intent: Intent?) {
         val data = intent?.data ?: return
+        if (!isTrustedAuthLink(data)) return
         if (data.getQueryParameter("mode") != "resetPassword") return
         val oobCode = data.getQueryParameter("oobCode") ?: return
         setLoading(true)

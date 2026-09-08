@@ -39,6 +39,7 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.ParamClipboard
+import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.FaqRedirect
@@ -161,14 +162,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             DicKeys.SWEEP_STRAIN_WINS,
             solved = true,
         )
-        val skippedCodes = intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_CODES) ?: IntArray(0)
-        val skipped = nodesFrom(
-            DicKeys.SWEEP_SKIP_SUBSETS,
-            DicKeys.SWEEP_SKIP_STEPS,
-            DicKeys.SWEEP_SKIP_STRAIN_WINS,
-            solved = false,
-            codes = skippedCodes,
-        )
+        val skipped = skippedNodesFromIntent(intent)
         val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.window }))
         solvedNodes = nodes.filter { it.solved }
         // Frame-index lookup, so per-frame loops don't scan solvedNodes (was O(F²)).
@@ -365,6 +359,28 @@ class VsgLatticeActivity : AppCompatActivity() {
         )
     }
 
+    private fun skippedNodesFromIntent(intent: Intent): List<VsgLatticeView.Node> {
+        val nodes = SkippedNode.decodeFromExtras(
+            intent.getStringExtra(DicKeys.SWEEP_SKIPPED),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_SUBSETS),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_STEPS),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS),
+            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_CODES),
+        )
+        return nodes.map { node ->
+            VsgLatticeView.Node(
+                subset = node.subset,
+                step = node.step,
+                window = node.strainWindow,
+                vsg = VsgStudy.vsgFor(node.strainWindow),
+                solved = false,
+                frameIndex = -1,
+                failureReason = getString(EngineFailure.shortReasonRes(node.code)),
+                failureCode = node.code,
+            )
+        }
+    }
+
     private fun nodesFrom(
         subsetsKey: String,
         stepsKey: String,
@@ -381,7 +397,7 @@ class VsgLatticeActivity : AppCompatActivity() {
                 subset = subsets[i],
                 step = steps[i],
                 window = windows[i],
-                vsg = VsgStudy.vsgFor(steps[i], windows[i]),
+                vsg = VsgStudy.vsgFor(windows[i]),
                 solved = solved,
                 frameIndex = if (solved) i else -1,
                 failureReason = codes.getOrNull(i)

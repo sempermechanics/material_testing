@@ -16,6 +16,7 @@ import logging
 
 from fastapi import Header, HTTPException
 
+from . import errors
 from .config import settings
 
 log = logging.getLogger("indic.tasks")
@@ -79,7 +80,7 @@ def tasks_caller(authorization: str = Header(default="")) -> dict:
     if settings.DEV_INSECURE_AUTH:
         return {"email": settings.TASKS_INVOKER_SA or "dev-task-invoker"}
     if not authorization.startswith("Bearer "):
-        raise HTTPException(401, "missing_bearer")
+        raise HTTPException(401, errors.MISSING_BEARER)
 
     from google.auth.transport import requests as ga_requests
     from google.oauth2 import id_token as ga_id_token
@@ -91,7 +92,7 @@ def tasks_caller(authorization: str = Header(default="")) -> dict:
         )
     except Exception as e:  # noqa: BLE001
         log.warning("task OIDC verification failed: %s", e)
-        raise HTTPException(401, "invalid_task_token") from e
+        raise HTTPException(401, errors.INVALID_TASK_TOKEN) from e
 
     email = (claims.get("email") or "").lower()
     expected = (settings.TASKS_INVOKER_SA or "").lower()
@@ -99,7 +100,7 @@ def tasks_caller(authorization: str = Header(default="")) -> dict:
     # audience check alone is not authentication — the identity must match.
     if not expected or email != expected:
         log.warning("task token from unexpected principal %r", email)
-        raise HTTPException(403, "not_task_invoker")
+        raise HTTPException(403, errors.NOT_TASK_INVOKER)
     if not claims.get("email_verified", True):
-        raise HTTPException(403, "not_task_invoker")
+        raise HTTPException(403, errors.NOT_TASK_INVOKER)
     return {"email": email}

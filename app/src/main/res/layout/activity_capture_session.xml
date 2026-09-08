@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/text_primary">
+
+    <TextureView
+        android:id="@+id/capturePreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Positioned in code by translationX/Y, so its layout position is only
+         the origin the translation is measured from. -->
+    <View
+        android:id="@+id/captureFocusMarker"
+        android:layout_width="@dimen/capture_focus_marker_size"
+        android:layout_height="@dimen/capture_focus_marker_size"
+        android:layout_gravity="top|start"
+        android:background="@drawable/focus_ring"
+        android:contentDescription="@string/capture_focus_marker"
+        android:visibility="gone" />
+
+    <!-- Not clickable, and neither is its container, so a tap here still falls
+         through to the preview underneath and moves the focus point. -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="16dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/captureFocusLoupe"
+            android:layout_width="@dimen/capture_focus_loupe_size"
+            android:layout_height="@dimen/capture_focus_loupe_size"
+            android:contentDescription="@string/capture_focus_loupe"
+            android:foreground="@drawable/focus_loupe_border"
+            android:scaleType="fitXY"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvCaptureFocusSharpness"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="#99000000"
+            android:paddingLeft="6dp"
+            android:paddingTop="2dp"
+            android:paddingRight="6dp"
+            android:paddingBottom="2dp"
+            android:textColor="@color/text_on_primary"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#99000000">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbarCaptureSession"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:title="@string/capture_session_title"
+            app:navigationIcon="@drawable/ic_nav_prev"
+            app:titleTextColor="@color/text_on_primary" />
+
+        <TextView
+            android:id="@+id/tvCaptureStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/text_on_primary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/tvCaptureProgress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/sky_bright"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnCaptureStart"
+        style="@style/Widget.Semper.Button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:text="@string/capture_start_recording"
+        android:visibility="gone" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnCaptureFocusConfirm"
+        style="@style/Widget.Semper.Button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:text="@string/capture_focus_confirm"
+        android:visibility="gone" />
+</FrameLayout>

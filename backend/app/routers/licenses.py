@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException
 
-from .. import audit, firestore_repo as repo
+from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
 from ..deps import current_user
 from ..models import LicenseActivate
@@ -17,20 +17,20 @@ def activate_license(
 ):
     """Redeem a Professional (or re-entered) key locked to this email and device."""
     if not rate_limit.license_activate_bucket.allow(user["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
     code, config = repo.activate_license(
         user["uid"], user.get("email") or "", device_id, body.key,
     )
     if code:
         status = {
-            "license_not_found": 404,
-            "user_not_found": 404,
-            "license_already_redeemed": 409,
-            "license_seats_exhausted": 409,
+            errors.LICENSE_NOT_FOUND: 404,
+            errors.USER_NOT_FOUND: 404,
+            errors.LICENSE_ALREADY_REDEEMED: 409,
+            errors.LICENSE_SEATS_EXHAUSTED: 409,
             # 403, not 410: the key is real and may be renewed in place, so
             # this is "you may not use it", not "it is gone".
-            "license_expired": 403,
+            errors.LICENSE_EXPIRED: 403,
         }.get(code, 403)
         raise HTTPException(status, code)
     audit.record(
@@ -44,13 +44,13 @@ def activate_license(
 #: `no_floating_seat` is a 200 elsewhere — see the checkout docstring — but as
 #: an explicit checkout it is a refusal the caller asked for and gets 409.
 _LEASE_STATUS = {
-    "no_license": 404,
-    "license_not_found": 404,
-    "license_revoked": 403,
-    "license_expired": 403,
-    "not_eligible": 403,
-    "seating_not_floating": 409,
-    "no_floating_seat": 409,
+    errors.NO_LICENSE: 404,
+    errors.LICENSE_NOT_FOUND: 404,
+    errors.LICENSE_REVOKED: 403,
+    errors.LICENSE_EXPIRED: 403,
+    errors.NOT_ELIGIBLE: 403,
+    errors.SEATING_NOT_FLOATING: 409,
+    errors.NO_FLOATING_SEAT: 409,
 }
 
 
@@ -76,7 +76,7 @@ def checkout_lease(
     offers to try again rather than treating it as a dead end.
     """
     if not rate_limit.institution_bucket.allow(user["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
     code, config = repo.checkout_lease(user, device_id)
     if code:
@@ -93,7 +93,7 @@ def release_lease(user=Depends(current_user)):
     heartbeat.
     """
     if not rate_limit.institution_bucket.allow(user["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     code, config = repo.release_lease(user)
     if code:
         raise HTTPException(_LEASE_STATUS.get(code, 403), code)

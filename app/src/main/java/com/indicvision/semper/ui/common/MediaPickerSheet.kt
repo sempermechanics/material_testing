@@ -237,7 +237,8 @@ class MediaPickerSheet private constructor(
             return
         }
         if (!selected.add(item.uri)) selected.remove(item.uri)
-        adapter.notifyDataSetChanged()
+        val position = adapter.indexOf(item.uri)
+        if (position >= 0) adapter.notifyItemChanged(position)
         refreshUse()
     }
 

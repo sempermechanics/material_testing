@@ -275,6 +275,7 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = intent.getIntExtra(DicKeys.START_FRAME, 0)
             // Otherwise the summary is what the viewer opens on — it answers
             // "what happened across the test" before any single frame does.
+            // Sweeps never use the summary slot (combinations are not a time series).
             showingSummary = !intent.hasExtra(DicKeys.START_FRAME)
         }
 
@@ -286,6 +287,8 @@ class ResultViewerActivity : AppCompatActivity() {
         sweepSteps = intent.getIntArrayExtra(DicKeys.SWEEP_STEPS)
         sweepStrainWins = intent.getIntArrayExtra(DicKeys.SWEEP_STRAIN_WINS)
         lineCutHorizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
+        // Sweep extras are available now; drop any restored summary flag.
+        if (isSweep) showingSummary = false
 
         roiX = intent.getIntExtra(DicKeys.ROI_X, 0)
         roiY = intent.getIntExtra(DicKeys.ROI_Y, 0)
@@ -337,11 +340,12 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
             tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
             loadFrameData(currentFrameIndex)
-            // Whole-sequence ranges still feed the summary GIF / share animations.
-            if (batchFiles.size > 1) summary.start()
-            if (showingSummary) {
+            // Summary GIF / share animations are single-setting only.
+            if (!isSweep && batchFiles.size > 1) summary.start()
+            if (showingSummary && !isSweep) {
                 enterSummary()
             } else {
+                showingSummary = false
                 updateNavButtons()
                 bumpChrome()
             }
@@ -424,6 +428,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Glass-pill popup listing every field; the live field is checked. */
     private fun showFieldPopup(anchor: View) {
+        @SuppressLint("InflateParams")
         val popupView = layoutInflater.inflate(R.layout.popup_field_options, null)
         val window = PopupWindow(
             popupView,
@@ -472,6 +477,11 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Bring edge chrome back, then schedule auto-hide. */
     internal fun bumpChrome() {
+        if (chromeVisible) {
+            chromeTop.removeCallbacks(hideChromeRunnable)
+            chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
+            return
+        }
         fadeChrome(visible = true)
         chromeTop.removeCallbacks(hideChromeRunnable)
         chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
@@ -529,7 +539,7 @@ class ResultViewerActivity : AppCompatActivity() {
         }
         when {
             showingSummary -> Unit
-            currentFrameIndex == 0 -> enterSummary()
+            currentFrameIndex == 0 -> if (!isSweep) enterSummary()
             else -> {
                 currentFrameIndex--
                 updateNavButtons()
@@ -589,7 +599,13 @@ class ResultViewerActivity : AppCompatActivity() {
             val reqH = viewH.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
             refDecodeJob?.cancel()
             refDecodeJob = lifecycleScope.launch(Dispatchers.IO) {
-                val bmp = BitmapDecode.decodeFileForView(refPath, reqW, reqH)
+                val bmp = BitmapDecode.decodeFileForView(
+                    refPath,
+                    reqW,
+                    reqH,
+                    rawWidth = imgW,
+                    rawHeight = imgH,
+                )
                 withContext(Dispatchers.Main) {
                     if (isDestroyed || isFinishing) {
                         bmp?.recycle()
@@ -957,8 +973,7 @@ class ResultViewerActivity : AppCompatActivity() {
      * Falls back to the session name, then the first deformed frame, then "analysis".
      */
     private fun shareBaseName(): String {
-        val record = intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
-            ?.let { runCatching { com.indicvision.semper.data.SessionStore.get(this, it) }.getOrNull() }
+        val record = sessionRecord
         val raw = record?.refName?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }
             ?: record?.name?.takeIf { it.isNotBlank() }
             ?: originalDefNames.firstOrNull()?.substringBeforeLast('.')
@@ -966,10 +981,24 @@ class ResultViewerActivity : AppCompatActivity() {
         return raw.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_').take(60).ifBlank { "analysis" }
     }
 
+    /**
+     * The stored record behind this viewer, or null when it was opened without
+     * one (a run still in flight, or a legacy Intent).
+     *
+     * Read once and kept: the share name, the CSV and every page of an
+     * all-frames report want the same few fields off it, and re-reading the
+     * session index per report page would be a file read per page.
+     */
+    internal val sessionRecord: com.indicvision.semper.data.SessionRecord? by lazy {
+        intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
+            ?.let { runCatching { com.indicvision.semper.data.SessionStore.get(this, it) }.getOrNull() }
+    }
+
     internal fun buildShareSnapshot(): ShareCenter.Snapshot? {
         val data = rawData ?: return null
         // Snapshot can open with ref path alone while display decode is still in flight.
         val base = cachedBaseImage
+        val summaryHelper = summary
         return ShareCenter.Snapshot(
             data = data,
             batchFiles = batchFiles,
@@ -987,9 +1016,18 @@ class ResultViewerActivity : AppCompatActivity() {
             baseImage = base,
             refImagePath = refImagePath,
             defImagePaths = defImagePaths,
-            summary = summary.animation,
-            summaryBounds = { index -> summary.boundsFor(index) },
+            summary = if (isSweep) null else summaryHelper.animation,
+            summaryBounds = { index -> if (isSweep) null else summaryHelper.boundsFor(index) },
             buildReportAt = { index, frameData -> buildReportData(index, frameData) },
+            captureFloor = sessionRecord?.captureFloor,
+            referenceName = intent.getStringExtra(DicKeys.REF_NAME).orEmpty(),
+            strainMethod = intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG",
+            subset = intent.getIntExtra(DicKeys.SUBSET_SIZE, 41),
+            strainWindow = intent.getIntExtra(DicKeys.STRAIN_WINDOW, 15),
+            roiX = roiX,
+            roiY = roiY,
+            roiW = roiW,
+            roiH = roiH,
         )
     }
 
@@ -1049,11 +1087,33 @@ class ResultViewerActivity : AppCompatActivity() {
         } else {
             getString(R.string.viewer_stats_plain_fmt, maxText, minText, meanText, unit)
         }
+        detailStats += floorCaption(index)
         tvStatsCaption.text = detailStats
     }
 
+    /**
+     * The strain floor this session was captured at, appended beside the
+     * result it qualifies — never shown alone, and never for a displacement
+     * (px) field, since the floor is quoted in strain and only means
+     * something next to a strain number.
+     *
+     * Reuses [CaptureNoiseFloor.warning] for an exceeded floor (the same
+     * sentence the report carries) and the capture screen's own floor
+     * wording otherwise, so the number reads the same wherever it appears.
+     */
+    private fun floorCaption(index: Int): String {
+        val floor = sessionRecord?.captureFloor
+        if (!DicResult.isStrainFieldIndex(index) || floor == null) return ""
+        val sentence = floor.warning() ?: getString(R.string.capture_noise_floor_readout, floor.label())
+        return "\n" + sentence
+    }
+
     private fun updateNavButtons() {
-        btnPrevFrame.isEnabled = !showingSummary && batchFiles.isNotEmpty()
+        // Sweep: no summary slot, so Prev is inert on the first combination.
+        btnPrevFrame.isEnabled =
+            !showingSummary &&
+            batchFiles.isNotEmpty() &&
+            (currentFrameIndex > 0 || !isSweep)
         btnNextFrame.isEnabled = showingSummary || currentFrameIndex < batchFiles.size - 1
 
         btnPrevFrame.alpha = if (btnPrevFrame.isEnabled) 1.0f else 0.5f
@@ -1074,6 +1134,7 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     private fun enterSummary() {
+        if (isSweep) return
         showingSummary = true
         inspect.dismissProbe()
         summary.show()

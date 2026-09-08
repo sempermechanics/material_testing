@@ -7,6 +7,7 @@ import android.content.Intent
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.navigation.AppIntents
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
@@ -110,11 +111,7 @@ object AnalysisNavHelper {
                 putExtra(DicKeys.SWEEP_STEPS, plan.map { it.step }.toIntArray())
                 putExtra(DicKeys.SWEEP_STRAIN_WINS, plan.map { it.strainWindow }.toIntArray())
                 putExtra(DicKeys.LINE_CUT_HORIZONTAL, viewModel.lineCutHorizontal)
-                val skipped = viewModel.sweepSkipped
-                putExtra(DicKeys.SWEEP_SKIP_SUBSETS, skipped.map { it.subset }.toIntArray())
-                putExtra(DicKeys.SWEEP_SKIP_STEPS, skipped.map { it.step }.toIntArray())
-                putExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS, skipped.map { it.strainWindow }.toIntArray())
-                putExtra(DicKeys.SWEEP_SKIP_CODES, viewModel.sweepSkippedCodes.toIntArray())
+                putExtra(DicKeys.SWEEP_SKIPPED, SkippedNode.encodeJson(viewModel.sweepSkippedNodes))
             }
             putExtra(DicKeys.STOP_CODE, viewModel.lastStopCode)
             putExtra(DicKeys.PLANNED_FRAMES, viewModel.lastPlannedFrames)

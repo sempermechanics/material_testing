@@ -90,7 +90,13 @@ object SessionUploadBundler {
         val (baseW, baseH) =
             VisualizationEngine.cappedDims(record.imgW, record.imgH, VisualizationEngine.REPORT_MAX_EDGE)
         val baseImg: Bitmap? = if (canReport) {
-            val originalBaseImg = decodeBaseImage(refFile, rawDeformedDir, record.defNames.firstOrNull())
+            val originalBaseImg = decodeBaseImage(
+                refFile,
+                rawDeformedDir,
+                record.defNames.firstOrNull(),
+                record.imgW,
+                record.imgH,
+            )
             if (originalBaseImg == null) {
                 Timber.e("No decodable base image (reference %s) — skipping reports", refFile.absolutePath)
                 null
@@ -115,7 +121,18 @@ object SessionUploadBundler {
         }
 
         val sweepImage = record.defNames.firstOrNull().orEmpty()
-        val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep) }
+        val csvMetadata = AnalysisCsvWriter.Metadata(
+            referenceName = record.refName,
+            strainMethod = record.strainMethod.ifBlank { "VSG" },
+            imgW = record.imgW,
+            imgH = record.imgH,
+            roiX = record.roiX,
+            roiY = record.roiY,
+            roiW = record.roiW,
+            roiH = record.roiH,
+            captureFloor = record.captureFloor,
+        )
+        val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, csvMetadata) }
         try {
             record.defNames.forEachIndexed { index, defName ->
                 val datFile = SessionPaths.frameDat(sessionDir, index)
@@ -129,19 +146,19 @@ object SessionUploadBundler {
                     return@forEachIndexed
                 }
 
-                csvAppender?.append(
-                    AnalysisCsvWriter.Frame(
-                        image = if (record.isSweep) {
-                            sweepImage
-                        } else {
-                            record.defNames.getOrElse(index) { "Frame_${index + 1}" }
-                        },
-                        subset = record.sweepSubsets.getOrElse(index) { record.subset },
-                        step = record.sweepSteps.getOrElse(index) { record.step },
-                        strainWindow = record.sweepStrainWindows.getOrElse(index) { record.strainWindow },
-                        data = { data },
-                    ),
+                val frame = AnalysisCsvWriter.Frame(
+                    image = if (record.isSweep) {
+                        sweepImage
+                    } else {
+                        record.defNames.getOrElse(index) { "Frame_${index + 1}" }
+                    },
+                    subset = record.sweepSubsets.getOrElse(index) { record.subset },
+                    step = record.sweepSteps.getOrElse(index) { record.step },
+                    strainWindow = record.sweepStrainWindows.getOrElse(index) { record.strainWindow },
+                    data = { data },
                 )
+                csvAppender?.appendFieldStats(frame, data)
+                csvAppender?.append(frame)
 
                 if (ctx == null) {
                     onFrame(index + 1, frameTotal)
@@ -183,10 +200,14 @@ object SessionUploadBundler {
             scratch?.delete()
             baseImg?.recycle()
         }
-        // The per-field looping GIFs the share sheet builds — added to the backup so
-        // a restored/downloaded session has the animations too. Memory-bounded
-        // (640 px, one frame at a time), so no OOM risk like the report render.
-        val animations = if (canReport) stageAnimations(context, record, sessionDir, processedDir) else 0
+        // Per-field looping GIFs for single-setting backups only. Sweeps are
+        // parameter combinations, not a time series — no animations folder.
+        val animations =
+            if (canReport && !record.isSweep) {
+                stageAnimations(context, record, sessionDir, processedDir)
+            } else {
+                0
+            }
         if (writeReports) {
             Timber.i(
                 "Staged %d frame reports, %d processed images, %d animations",
@@ -286,6 +307,8 @@ object SessionUploadBundler {
             coverW,
             coverH,
             VisualizationEngine.REPORT_MAX_EDGE,
+            rawWidth = record.imgW,
+            rawHeight = record.imgH,
         )
         val defImg = if (originalDefImg != null) {
             originalDefImg.scale(coverW, coverH)
@@ -316,6 +339,7 @@ object SessionUploadBundler {
                 referenceImageName = "Baseline",
                 deformedImageName = frameName,
                 drawMinMarker = false,
+                captureFloor = record.captureFloor,
             ),
         )
 
@@ -344,12 +368,31 @@ object SessionUploadBundler {
      * if the reference won't decode. Decoded capped to [VisualizationEngine.REPORT_MAX_EDGE]
      * so a huge reference never lands full-res in memory.
      */
-    private fun decodeBaseImage(refFile: File, rawDeformedDir: File, defName: String?): Bitmap? {
+    private fun decodeBaseImage(
+        refFile: File,
+        rawDeformedDir: File,
+        defName: String?,
+        imgW: Int,
+        imgH: Int,
+    ): Bitmap? {
         val edge = VisualizationEngine.REPORT_MAX_EDGE
-        return BitmapDecode.decodeFileForView(refFile.absolutePath, edge, edge, edge)
-            ?: defName?.let {
-                BitmapDecode.decodeFileForView(File(rawDeformedDir, it).absolutePath, edge, edge, edge)
-            }
+        return BitmapDecode.decodeFileForView(
+            refFile.absolutePath,
+            edge,
+            edge,
+            edge,
+            rawWidth = imgW,
+            rawHeight = imgH,
+        ) ?: defName?.let {
+            BitmapDecode.decodeFileForView(
+                File(rawDeformedDir, it).absolutePath,
+                edge,
+                edge,
+                edge,
+                rawWidth = imgW,
+                rawHeight = imgH,
+            )
+        }
     }
 
     private const val ENGINE_STATS_SIZE = 16

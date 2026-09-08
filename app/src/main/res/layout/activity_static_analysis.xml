@@ -275,9 +275,9 @@
                     </com.google.android.material.card.MaterialCardView>
                 </FrameLayout>
 
-                <!-- Inline JPEG accuracy warning (non-blocking) -->
+                <!-- Inline lossy-format accuracy warning (non-blocking) -->
                 <include
-                    android:id="@+id/jpegWarnRow"
+                    android:id="@+id/formatWarnRow"
                     layout="@layout/warn_chip_row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

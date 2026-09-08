@@ -37,6 +37,8 @@ class PdfLayoutEngine(
     private val colorText = "#37474F".toColorInt() // Slate Gray
     private val colorBorder = "#CFD8DC".toColorInt() // Light Gray
     private val colorZebra = "#F8F9FA".toColorInt() // Faint Gray
+    private val colorWarn = "#B71C1C".toColorInt() // Deep Red
+    private val colorWarnFill = "#FFEBEE".toColorInt() // Pale Red
 
     // Typography
     private val h1Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -59,6 +61,18 @@ class PdfLayoutEngine(
         textSize = 38f
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
         textAlign = Paint.Align.RIGHT
+    }
+    private val noticePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorWarn
+        textSize = 40f
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+    }
+
+    /** Quiet cover notes (noise floor / caveats) — smaller than body, italic. */
+    private val italicNotePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorText
+        textSize = 30f
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
     }
     private val tableHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
@@ -174,6 +188,80 @@ class PdfLayoutEngine(
 
     fun advanceY(amount: Float) {
         cursorY += amount
+    }
+
+    /**
+     * Small italic note under a cover section — floor value and caveats, not
+     * a table row and not a boxed warning. Wraps on words like [drawNotice].
+     */
+    fun drawItalicNote(text: String) {
+        val lines = wrap(text, italicNotePaint, contentWidth)
+        lines.forEachIndexed { index, line ->
+            canvas?.drawText(
+                line,
+                margin,
+                cursorY + ITALIC_NOTE_BASELINE + ITALIC_NOTE_LINE * index,
+                italicNotePaint,
+            )
+        }
+        cursorY += ITALIC_NOTE_BASELINE + ITALIC_NOTE_LINE * lines.size.coerceAtLeast(1) + 12f
+    }
+
+    /**
+     * A boxed warning that reads before the numbers it qualifies do.
+     *
+     * Given its own primitive rather than a [drawKeyValue] pair because a
+     * caveat rendered as one more grey row of the settings table is a caveat
+     * nobody reads — and the one caveat this report carries is the one that
+     * says which of its strain values are measurement and which are noise.
+     * Wraps on words, so a longer sentence grows the box rather than running
+     * off the page.
+     */
+    fun drawNotice(text: String) {
+        val lines = wrap(text, noticePaint, contentWidth - (NOTICE_PAD * 2))
+        val height = NOTICE_PAD * 2 + lines.size * NOTICE_LINE
+        canvas?.drawRoundRect(
+            RectF(margin, cursorY, pageWidth - margin, cursorY + height),
+            12f,
+            12f,
+            Paint().apply { color = colorWarnFill },
+        )
+        canvas?.drawRoundRect(
+            RectF(margin, cursorY, pageWidth - margin, cursorY + height),
+            12f,
+            12f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = colorWarn
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+            },
+        )
+        lines.forEachIndexed { index, line ->
+            canvas?.drawText(
+                line,
+                margin + NOTICE_PAD,
+                cursorY + NOTICE_PAD + NOTICE_LINE * index + 45f,
+                noticePaint,
+            )
+        }
+        cursorY += height + 20f
+    }
+
+    /** Greedy word wrap; a single word wider than [width] gets its own line. */
+    private fun wrap(text: String, paint: Paint, width: Float): List<String> {
+        val lines = mutableListOf<String>()
+        var line = StringBuilder()
+        text.split(' ').forEach { word ->
+            val candidate = if (line.isEmpty()) word else "$line $word"
+            if (paint.measureText(candidate) <= width || line.isEmpty()) {
+                line = StringBuilder(candidate)
+            } else {
+                lines.add(line.toString())
+                line = StringBuilder(word)
+            }
+        }
+        if (line.isNotEmpty()) lines.add(line.toString())
+        return lines
     }
 
     fun drawTable(headers: List<String>, rows: List<List<String>>, colWeights: List<Float>) {
@@ -361,5 +449,13 @@ class PdfLayoutEngine(
     private companion object {
         const val BRAND_LOGO_WIDTH = 520f
         const val BRAND_LOGO_GAP = 40f
+
+        /** Inset and line pitch of [drawNotice]'s box. */
+        const val NOTICE_PAD = 40f
+        const val NOTICE_LINE = 55f
+
+        /** Line pitch of [drawItalicNote]. */
+        const val ITALIC_NOTE_BASELINE = 36f
+        const val ITALIC_NOTE_LINE = 40f
     }
 }

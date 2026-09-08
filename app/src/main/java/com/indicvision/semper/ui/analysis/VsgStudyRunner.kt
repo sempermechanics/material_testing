@@ -13,6 +13,9 @@ import java.nio.ByteBuffer
  * Executes the sweep a [VsgStudy] plans: solves one deformed frame once per
  * parameter combination and writes each result as its own `.dat` file.
  *
+ * Every combination in the plan is attempted. Only a cancel ends a sweep early
+ * — see [run] for why low convergence does not, unlike in a batch.
+ *
  * The output is deliberately shaped like an ordinary batch of frames — one
  * `.dat` per combination, named in plan order — so the sweep lands in the
  * normal result viewer and the normal report path, with each combination
@@ -73,7 +76,8 @@ object VsgStudyRunner {
      *   partial one
      * @param engineErrorCode 0 when at least one combination solved,
      *   [ERROR_CANCELLED] when the user stopped it, otherwise the engine's own
-     *   negative code from the last attempt
+     *   negative code from the last attempt. Low convergence is not an error
+     *   here — see [run].
      */
     data class Result(
         val runs: List<RunOutcome>,
@@ -95,7 +99,27 @@ object VsgStudyRunner {
             AnalysisCancelGate.requested = value
         }
 
-    /** Runs every combination of [params].plan in order. */
+    /**
+     * Runs every combination of [params].plan in order, to the end of the plan.
+     *
+     * A batch stops after [AnalysisViewModel.LOW_CONVERGENCE_STRIKES]
+     * consecutive under-converged solves, and should: its solves are
+     * successive *frames*, so once the pair decorrelates every later frame is
+     * further away and finishing only spends minutes producing fields nobody
+     * should trust.
+     *
+     * A sweep's consecutive solves are successive *parameter combinations* on
+     * one frame pair, where that reasoning does not hold. The plan is ordered
+     * smallest subset first, and a small subset is exactly the one most likely
+     * to come back under-converged — so the strike rule systematically killed
+     * sweeps in their opening combinations, before reaching the larger subsets
+     * the user ran the sweep to find. It is the same argument [skipCodeFor]
+     * already makes about failures: one bad node says nothing about the rest.
+     *
+     * Under-converged combinations are kept and written like any other. The
+     * lattice shows each node's own result, which is where a judgement about
+     * which settings worked belongs.
+     */
     @Suppress("LoopWithTooManyJumpStatements") // cancel break + skip continue are intentional
     fun run(
         refBytes: ByteArray,
@@ -119,15 +143,14 @@ object VsgStudyRunner {
         val skipped = ArrayList<VsgStudy.Point>()
         val skippedCodes = ArrayList<Int>()
         var lastEngineError = 0
-        val convergenceGate = ConvergenceGate()
 
         // A cancel short-circuits the remaining solves; the one already running
-        // stops on its own, since the engine polls the same flag. A convergence
-        // collapse ends it the same way. The guard must be inside the loop —
-        // Iterable.takeWhile on a List is eager and would capture the whole plan
-        // before cancelRequested can flip.
+        // stops on its own, since the engine polls the same flag. Nothing else
+        // ends the sweep early — see the KDoc. The guard must be inside the
+        // loop — Iterable.takeWhile on a List is eager and would capture the
+        // whole plan before cancelRequested can flip.
         for ((index, point) in params.plan.withIndex()) {
-            if (cancelRequested || convergenceGate.shouldStop) break
+            if (cancelRequested) break
             val metrics = newMetrics()
             onProgress(Progress(index, total, index * PERCENT / maxOf(1, total), point, 0, -1f))
 
@@ -143,11 +166,6 @@ object VsgStudyRunner {
                 continue
             }
             if (firstMetrics == null) firstMetrics = metrics
-
-            // Combination after combination coming back under-converged means the
-            // pair itself has decorrelated, not that the settings are wrong —
-            // sweeping the rest would burn minutes to prove the same thing.
-            convergenceGate.record(metrics[EngineStats.SLOT_CONVERGENCE])
 
             // Named by solved index (not plan index) so .dat files stay dense
             // and line up with [runs] / upload's frame_0000..N-1 walk — skipped
@@ -175,11 +193,6 @@ object VsgStudyRunner {
         // produced nothing reports the engine's own code, which says why.
         if (cancelRequested) {
             errorCode = ERROR_CANCELLED
-        } else if (convergenceGate.shouldStop) {
-            // Reported even though some combinations solved: the user needs to
-            // know the sweep is short because the images gave up, not because
-            // the plan was.
-            errorCode = AnalysisRunCodes.ERROR_LOW_CONVERGENCE
         } else if (runs.isEmpty() && skipped.isNotEmpty()) {
             errorCode = lastEngineError
         }

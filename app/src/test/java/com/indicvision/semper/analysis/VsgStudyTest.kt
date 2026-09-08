@@ -20,9 +20,14 @@ class VsgStudyTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `vsg follows the strain window relation`() {
-        assertEquals((15 - 1) * 5 + 1, VsgStudy.vsgFor(5, 15))
-        assertEquals(71, VsgStudy.Point(41, 5, 15).vsg)
+    fun `the gauge length is the strain window in pixels, whatever the step`() {
+        // The engine walks a circle of diameter strainWindow in physical
+        // pixels, so the step changes how many points fall inside it and not
+        // how big it is. Asserted at two very different steps because the old
+        // expression multiplied by the step and agreed with this only at 1.
+        assertEquals(15, VsgStudy.vsgFor(15))
+        assertEquals(15, VsgStudy.Point(41, 5, 15).vsg)
+        assertEquals(15, VsgStudy.Point(41, 20, 15).vsg)
     }
 
     // ------------------------------------------------------------------
@@ -226,10 +231,8 @@ class VsgStudyTest {
     @Test
     fun `windowForVsg inverts vsgFor`() {
         // A VSG that is exactly reachable maps back to its own window.
-        val step = 8
         val window = 15
-        val vsg = VsgStudy.vsgFor(step, window) // (15-1)*8+1 = 113
-        assertEquals(window, VsgStudy.windowForVsg(step, vsg))
+        assertEquals(window, VsgStudy.windowForVsg(VsgStudy.vsgFor(window)))
     }
 
     @Test

@@ -33,7 +33,16 @@ object ViewerReportFactory {
         val cap = VisualizationEngine.REPORT_MAX_EDGE
         val (capW, capH) = VisualizationEngine.cappedDims(host.imgW, host.imgH, cap)
         val refPath = host.intent.getStringExtra(DicKeys.REF_PATH)
-        val decodedCapped = refPath?.let { BitmapDecode.decodeFileForView(it, capW, capH, cap) }
+        val decodedCapped = refPath?.let {
+            BitmapDecode.decodeFileForView(
+                it,
+                capW,
+                capH,
+                cap,
+                rawWidth = host.imgW,
+                rawHeight = host.imgH,
+            )
+        }
         val cached = host.cachedBaseImage
         val baseImg = when {
             decodedCapped != null -> decodedCapped
@@ -56,7 +65,16 @@ object ViewerReportFactory {
             EngineStats(0, 0, 0, 0, 0, 0, 0, 0, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
         }
 
-        val realDefImg = host.currentDefPath?.let { BitmapDecode.decodeFileForView(it, capW, capH, cap) } ?: baseImg
+        val realDefImg = host.currentDefPath?.let {
+            BitmapDecode.decodeFileForView(
+                it,
+                capW,
+                capH,
+                cap,
+                rawWidth = host.imgW,
+                rawHeight = host.imgH,
+            )
+        } ?: baseImg
 
         // buildReport keeps only a downscaled copy of the cover images, so the
         // full-size decode above is ours to free — and an all-frames report
@@ -109,6 +127,7 @@ object ViewerReportFactory {
                 referenceImageName = host.intent.getStringExtra(DicKeys.REF_NAME) ?: "reference.png",
                 deformedImageName = host.originalDefNames.getOrNull(frameIndex)
                     ?: "Frame_${frameIndex + 1}",
+                captureFloor = host.sessionRecord?.captureFloor,
             ),
         )
     }

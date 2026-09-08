@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import audit, firestore_repo as repo
+from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
 from ..deps import admin_user, verified_device
 from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
@@ -23,7 +23,7 @@ def admin_list_users(
     Response includes `nextPageToken` / `hasMore`.
     """
     if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     limit = max(1, min(limit, 200))
     users, next_token = repo.list_users(
         status, limit=limit, page_token=page_token or None,
@@ -42,9 +42,9 @@ def admin_list_users(
 @router.post("/v1/admin/users/{uid}/approve")
 def admin_approve_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(admin_user)):
     if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     if not repo.set_user_status(uid, "APPROVED"):
-        raise HTTPException(404, "user_not_found")
+        raise HTTPException(404, errors.USER_NOT_FOUND)
     audit.record(admin["uid"], action="ADMIN_APPROVE", target={"type": "user", "id": uid})
     return {"uid": uid, "access_status": "APPROVED"}
 
@@ -52,9 +52,9 @@ def admin_approve_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(adm
 @router.post("/v1/admin/users/{uid}/revoke")
 def admin_revoke_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(admin_user)):
     if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     if not repo.set_user_status(uid, "SUSPENDED"):
-        raise HTTPException(404, "user_not_found")
+        raise HTTPException(404, errors.USER_NOT_FOUND)
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
     return {"uid": uid, "access_status": "SUSPENDED"}
 
@@ -64,15 +64,15 @@ def admin_patch_user_config(uid: Uid, body: UserConfigPatch,
                             ctx=Depends(verified_device), admin=Depends(admin_user)):
     """Set or clear per-user product-limit overrides on the Firestore user doc."""
     if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     # model_dump(exclude_unset=True) keeps omitted fields out; explicit nulls
     # remain so set_user_config can DELETE_FIELD them.
     patch = body.model_dump(exclude_unset=True)
     if not patch:
-        raise HTTPException(400, "empty_patch")
+        raise HTTPException(400, errors.EMPTY_PATCH)
     resolved = repo.set_user_config(uid, patch)
     if resolved is None:
-        raise HTTPException(404, "user_not_found")
+        raise HTTPException(404, errors.USER_NOT_FOUND)
     audit.record(admin["uid"], action="ADMIN_CONFIG", target={"type": "user", "id": uid},
                  detail={"patch": patch, "resolved": resolved})
     return {"uid": uid, "config": resolved}
@@ -85,7 +85,7 @@ def admin_list_licenses(
     admin=Depends(admin_user),
 ):
     if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     limit = max(1, min(limit, 200))
     licenses, next_token = repo.list_licenses(limit=limit, page_token=page_token or None)
     return {
@@ -115,7 +115,7 @@ def admin_create_license(
     revoke; institution IT never reaches this route.
     """
     if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     if body.kind == KIND_INSTITUTION:
         minted = repo.create_institution_license(
             domain_lock=body.domainLock,
@@ -169,11 +169,11 @@ def admin_update_license(
     Terms only — `kind`, the locks and the key itself are fixed at mint.
     """
     if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     patch = body.model_dump(exclude_none=True)
     updated = repo.update_license(license_id, patch, admin["uid"])
     if updated is None:
-        raise HTTPException(404, "license_not_found")
+        raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     audit.record(
         admin["uid"], action="ADMIN_LICENSE_EXTEND",
         target={"type": "license", "id": license_id},
@@ -189,10 +189,10 @@ def admin_revoke_license(
     admin=Depends(admin_user),
 ):
     if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     revoked = repo.revoke_license(license_id, admin["uid"])
     if revoked is None:
-        raise HTTPException(404, "license_not_found")
+        raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     audit.record(
         admin["uid"], action="ADMIN_LICENSE_REVOKE",
         target={"type": "license", "id": license_id},

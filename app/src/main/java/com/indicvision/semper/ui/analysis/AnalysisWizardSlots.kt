@@ -12,7 +12,7 @@ import com.indicvision.semper.R
 
 /**
  * Load-frames and confirm-settings slot chrome: dropzones vs filled cards,
- * JPEG warning, ROI subtitle.
+ * lossy-format warning, ROI subtitle.
  *
  * Readiness / Compute enablement stays in [AnalysisReadyGate].
  */
@@ -29,7 +29,7 @@ class AnalysisWizardSlots(
     private val ivDefIcon: ImageView,
     private val tvDefName: TextView,
     private val tvDefMeta: TextView,
-    private val jpegWarnRow: View,
+    private val formatWarnRow: View,
     private val rvFrameOrder: View,
     private val btnFrameOrderSort: View,
     private val frameOrderAdapter: FrameOrderAdapter,
@@ -51,7 +51,7 @@ class AnalysisWizardSlots(
             )
             preview?.let { ivRefThumb.setImageBitmap(it) }
         }
-        updateJpegChip()
+        updateFormatChip()
     }
 
     /** Deformed slot: dropzone when empty, count card + order strip when filled. */
@@ -81,7 +81,7 @@ class AnalysisWizardSlots(
             btnFrameOrderSort.isVisible = false
             frameOrderAdapter.submit(emptyList())
         }
-        updateJpegChip()
+        updateFormatChip()
     }
 
     /** ROI card subtitle reflecting the current selection. */
@@ -100,11 +100,18 @@ class AnalysisWizardSlots(
         onLineCutPreview()
     }
 
-    /** Inline, non-blocking JPEG accuracy warning. */
-    fun updateJpegChip() {
-        val jpeg = viewModel.refName.endsWith(".jpg", true) ||
-            viewModel.refName.endsWith(".jpeg", true) ||
-            viewModel.defFilePaths.any { it.endsWith(".jpg", true) || it.endsWith(".jpeg", true) }
-        jpegWarnRow.visibility = if (jpeg) View.VISIBLE else View.GONE
+    /**
+     * Inline, non-blocking accuracy warning naming whichever formats in the
+     * set are not lossless — the reference counts too, so a PNG frame set
+     * behind a camera-app JPEG reference still says "JPEG", not "PNG".
+     */
+    fun updateFormatChip() {
+        val lossy = LossyFormatCheck.lossyLabels(
+            listOf(viewModel.refName) + viewModel.defOriginalNames.ifEmpty { viewModel.defFilePaths },
+        )
+        formatWarnRow.isVisible = lossy.isNotEmpty()
+        if (lossy.isEmpty()) return
+        formatWarnRow.findViewById<TextView>(R.id.tvWarnText).text =
+            activity.getString(R.string.lossy_format_warning_fmt, lossy.joinToString(", "))
     }
 }

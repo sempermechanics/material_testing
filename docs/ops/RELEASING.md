@@ -160,6 +160,8 @@ cd backend
 # 1. Edit requirements.txt (the direct dependency you actually want to move).
 # 2. Regenerate the hashed lock from it on Python 3.12 (CI and Cloud Run runtime).
 #    Do not compile the lock on 3.13 — the header and markers must match runtime.
+#    Compile on Linux: uvicorn[standard] pulls uvloop there; a Windows lock omits
+#    it and `--require-hashes` then fails in CI.
 pip install pip-tools
 pip-compile --generate-hashes --output-file requirements.lock requirements.txt
 ```
@@ -169,6 +171,22 @@ CI tier 4 then proves the lock resolves under `--require-hashes` on Python 3.12
 stale or hand-edited lock fails in CI rather than in the Cloud Build step of a
 deploy. Never edit `requirements.lock` by hand — the hashes will not match and
 the image will fail to build. Never bump txt without regenerating the lock.
+
+**If you have no Linux Python 3.12 to hand, do not improvise.** Compiling on
+Windows or on 3.13 produces a lock that installs fine locally and then fails
+`--require-hashes` in CI: `uvicorn[standard]` pulls `uvloop` on Linux and swaps
+in `colorama` on Windows, and the marker set differs between 3.12 and 3.13. Run
+the [`Backend lock`](../../.github/workflows/backend-lock.yml) workflow instead —
+Actions → Backend lock → Run workflow, and give it the branch. It compiles in
+the documented environment and pushes the lock to that branch.
+
+**Dependabot cannot do this step.** It bumps `requirements.txt` and has no way to
+produce a hashed lock, so every backend Dependabot PR arrives with the two files
+out of step and tier 4 red. Run `Backend lock` against the Dependabot branch to
+fix the PR in place. A `Backend lock` check also runs on any PR touching either
+file: when the committed lock is stale it fails and attaches the regenerated file
+as the `requirements-lock` artifact, so the fix is a download rather than a
+toolchain install.
 
 ### Local gate before triggering release
 

@@ -21,7 +21,7 @@ exist.
 """
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import audit, firestore_repo as repo
+from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
 from ..deps import current_user
 from ..licenses import KIND_INSTITUTION, normalize_kind
@@ -44,13 +44,13 @@ def institution_admin_context(license_id: DocumentId, user: dict = Depends(curre
     another institution learns nothing.
     """
     if not user.get("emailVerified"):
-        raise HTTPException(403, "email_not_verified")
+        raise HTTPException(403, errors.EMAIL_NOT_VERIFIED)
     lic = repo.get_license(license_id)
     if not lic or normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
-        raise HTTPException(404, "license_not_found")
+        raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     email = (user.get("email") or "").strip().lower()
     if not repo.is_institution_admin(lic, email):
-        raise HTTPException(404, "license_not_found")
+        raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     return {"user": user, "license_id": license_id}
 
 
@@ -61,7 +61,7 @@ def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_context)):
     plaintext — only the license's keyPrefix, same redaction as the
     Semper-staff admin listing."""
     if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     return {
         "license": repo.institution_license_summary(license_id),
         "seats": repo.list_institution_seats(license_id),
@@ -87,14 +87,14 @@ def add_seat(
     they want to work.
     """
     if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     code, seat = repo.add_institution_member(license_id, body.email)
     if code:
         status = {
-            "license_not_found": 404,
-            "user_not_found": 404,
-            "license_seats_exhausted": 409,
-            "license_seat_disabled": 409,
+            errors.LICENSE_NOT_FOUND: 404,
+            errors.USER_NOT_FOUND: 404,
+            errors.LICENSE_SEATS_EXHAUSTED: 409,
+            errors.LICENSE_SEAT_DISABLED: 409,
         }.get(code, 403)
         raise HTTPException(status, code)
     audit.record(
@@ -118,15 +118,15 @@ def patch_seat(
     restores Professional in place — same uid/account, no data migration
     either direction. At least one field must be set."""
     if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     if body.clearDeviceLock is None and body.enabled is None:
-        raise HTTPException(400, "empty_patch")
+        raise HTTPException(400, errors.EMPTY_PATCH)
     if body.clearDeviceLock:
         if not repo.clear_seat_device_lock(license_id, uid):
-            raise HTTPException(404, "seat_not_found")
+            raise HTTPException(404, errors.SEAT_NOT_FOUND)
     if body.enabled is not None:
         if not repo.set_seat_enabled(license_id, uid, body.enabled):
-            raise HTTPException(404, "seat_not_found")
+            raise HTTPException(404, errors.SEAT_NOT_FOUND)
     audit.record(
         ctx["user"]["uid"], action="INSTITUTION_SEAT_PATCH",
         target={"type": "seat", "id": f"{license_id}/{uid}"},
@@ -135,7 +135,7 @@ def patch_seat(
     seats = repo.list_institution_seats(license_id)
     seat = next((s for s in seats if s["uid"] == uid), None)
     if seat is None:
-        raise HTTPException(404, "seat_not_found")
+        raise HTTPException(404, errors.SEAT_NOT_FOUND)
     return {"licenseId": license_id, "seat": seat}
 
 
@@ -146,9 +146,9 @@ def revoke_seat(license_id: DocumentId, uid: Uid, ctx=Depends(institution_admin_
     and frees the slot so another domain member can activate. Whole-key revoke
     stays on the Semper-staff POST /v1/admin/licenses/{id}/revoke path."""
     if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
-        raise HTTPException(429, "rate_limited")
+        raise HTTPException(429, errors.RATE_LIMITED)
     if not repo.revoke_institution_seat(license_id, uid):
-        raise HTTPException(404, "seat_not_found")
+        raise HTTPException(404, errors.SEAT_NOT_FOUND)
     audit.record(
         ctx["user"]["uid"], action="INSTITUTION_SEAT_REVOKE",
         target={"type": "seat", "id": f"{license_id}/{uid}"},

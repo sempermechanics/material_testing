@@ -28,9 +28,6 @@ private const val DOWNLOAD_READ_TIMEOUT_S = 300L
 /** Seat routes take no body; the backend reads the caller from the token. */
 private const val EMPTY_JSON = "{}"
 
-/** Backend error code for a floating pool with every seat in use. */
-private const val NO_SEAT = "no_floating_seat"
-
 /**
  * Client for the Semper GCP backend (Cloud Run / FastAPI).
  *
@@ -70,11 +67,37 @@ class IndicApi private constructor(context: Context) {
     private val octet = "application/octet-stream".toMediaType()
     private val drive = DriveTransfer(client, downloadClient, octet)
 
-    class ApiException(val code: Int, val detail: String) : IOException("HTTP $code: $detail")
-    class NotApprovedException : IOException("not_approved")
+    /**
+     * A non-2xx from the Semper backend.
+     *
+     * [requestId] is the response's `X-Request-Id` when the backend answered at
+     * all (absent for a gateway kill with no headers). It is carried into the
+     * message so every place that already shows or logs an exception message —
+     * the restore worker's failure output, Timber, Crashlytics — becomes
+     * joinable with the backend access log without touching those call sites.
+     */
+    class ApiException(
+        val code: Int,
+        val body: String,
+        val requestId: String? = null,
+    ) : IOException(IndicApiHttp.withRef("HTTP $code: $body", requestId)) {
 
-    /** This account is bound to a *different* device (registration refused). */
-    class DeviceConflictException : IOException("device_conflict")
+        val parsedDetail: String get() = ApiErrors.detailOf(body)
+    }
+
+    class NotApprovedException : IOException(ApiErrors.NOT_APPROVED)
+
+    /**
+     * This account is bound to a *different* device (registration refused).
+     * [requestId] is the backend's `X-Request-Id` when it answered — a device
+     * rebind is a support conversation, so the log line has to be findable.
+     */
+    class DeviceConflictException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_CONFLICT)
+
+    /**
+     * This device is already bound to a different account (409 from `GET /v1/me`).
+     */
+    class DeviceInUseException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_IN_USE)
 
     /**
      * Every floating seat on the institution's license is in use right now.
@@ -83,21 +106,40 @@ class IndicApi private constructor(context: Context) {
      * entitled to a seat as soon as one frees. Distinct from [ApiException] so
      * callers cannot render it as a generic failure.
      */
-    class NoSeatAvailableException : IOException("no_floating_seat")
+    class NoSeatAvailableException : IOException(ApiErrors.NO_FLOATING_SEAT)
 
     /**
      * The backend has no ACTIVE device record for us — the record was revoked or
      * deleted server-side while we still believed we were registered. Callers
      * should re-register and retry rather than give up.
      */
-    class DeviceNotActiveException : IOException("device_not_active")
+    class DeviceNotActiveException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_NOT_ACTIVE)
 
     /** Maps a failed signed-request response to the most specific exception. */
+    private fun failSigned(resp: Response): Nothing =
+        failSigned(resp.code, IndicApiHttp.bodyText(resp), IndicApiHttp.requestIdOf(resp))
+
+    /**
+     * As above when the body has already been read. Matches on the parsed
+     * `detail` code ([ApiErrors]) rather than a substring of the whole body.
+     */
     @Suppress("ThrowsCount") // one throw per distinct 409 sub-reason, then the fallback
-    private fun failSigned(code: Int, body: String): Nothing {
-        if (code == HttpStatus.CONFLICT && body.contains("device_not_active")) throw DeviceNotActiveException()
-        if (code == HttpStatus.CONFLICT && body.contains("device_conflict")) throw DeviceConflictException()
-        throw ApiException(code, body)
+    private fun failSigned(code: Int, body: String, requestId: String?): Nothing {
+        if (code == HttpStatus.CONFLICT) {
+            val detail = ApiErrors.detailOf(body)
+            if (ApiErrors.isCode(detail, ApiErrors.DEVICE_NOT_ACTIVE)) throw DeviceNotActiveException(requestId)
+            if (ApiErrors.isCode(detail, ApiErrors.DEVICE_IN_USE)) throw DeviceInUseException(requestId)
+            if (ApiErrors.isCode(detail, ApiErrors.DEVICE_CONFLICT)) throw DeviceConflictException(requestId)
+        }
+        throw ApiException(code, body, requestId)
+    }
+
+    /**
+     * The 403/other mapping shared by the token-authenticated endpoints that are
+     * only reachable by an approved account.
+     */
+    private val approvedOnly: (Int, String, String?) -> Nothing = { code, body, ref ->
+        if (code == HttpStatus.FORBIDDEN) throw NotApprovedException() else throw ApiException(code, body, ref)
     }
 
     /**
@@ -108,7 +150,7 @@ class IndicApi private constructor(context: Context) {
     private fun authedGet(
         idToken: String,
         url: String,
-        onError: (Int, String) -> Nothing = { code, body -> throw ApiException(code, body) },
+        onError: (Int, String, String?) -> Nothing = { code, body, ref -> throw ApiException(code, body, ref) },
     ): String {
         val req = Request.Builder().url(url)
             .header("Authorization", "Bearer $idToken")
@@ -118,7 +160,7 @@ class IndicApi private constructor(context: Context) {
             return if (resp.code == HttpStatus.OK) {
                 resp.body.string()
             } else {
-                onError(resp.code, IndicApiHttp.bodyText(resp))
+                onError(resp.code, IndicApiHttp.bodyText(resp), IndicApiHttp.requestIdOf(resp))
             }
         }
     }
@@ -128,10 +170,10 @@ class IndicApi private constructor(context: Context) {
     /** GET /v1/me. Throws [NotApprovedException] for a PENDING/SUSPENDED user. */
     suspend fun me(idToken: String): MeResponse = withContext(Dispatchers.IO) {
         json.decodeFromString(
-            authedGet(idToken, "$base/v1/me") { code, body ->
+            authedGet(idToken, "$base/v1/me") { code, body, ref ->
                 if (code == HttpStatus.FORBIDDEN) throw NotApprovedException()
-                if (code == HttpStatus.CONFLICT) throw DeviceConflictException()
-                throw ApiException(code, body)
+                if (code == HttpStatus.CONFLICT) throwForMeConflict(body, ref)
+                throw ApiException(code, body, ref)
             },
         )
     }
@@ -139,9 +181,7 @@ class IndicApi private constructor(context: Context) {
     /** GET /v1/config — resolved product limits for this account. */
     suspend fun getConfig(idToken: String): AppConfigDto = withContext(Dispatchers.IO) {
         json.decodeFromString(
-            authedGet(idToken, "$base/v1/config") { code, body ->
-                if (code == HttpStatus.FORBIDDEN) throw NotApprovedException() else throw ApiException(code, body)
-            },
+            authedGet(idToken, "$base/v1/config", approvedOnly),
         )
     }
 
@@ -162,7 +202,7 @@ class IndicApi private constructor(context: Context) {
     suspend fun exportAccount(idToken: String, dest: java.io.File): Unit = withContext(Dispatchers.IO) {
         val resp = signedRequest(idToken, "GET", "/v1/me/export", ByteArray(0))
         resp.use {
-            if (it.code != HttpStatus.OK) failSigned(it.code, IndicApiHttp.bodyText(it))
+            if (it.code != HttpStatus.OK) failSigned(it)
             val part = java.io.File(dest.parentFile, dest.name + ".part")
             it.body.byteStream().use { input ->
                 part.outputStream().buffered().use { output -> input.copyTo(output) }
@@ -195,8 +235,8 @@ class IndicApi private constructor(context: Context) {
         client.newCall(req).execute().use { resp ->
             when (resp.code) {
                 HttpStatus.CREATED, HttpStatus.OK -> Unit
-                HttpStatus.CONFLICT -> throw DeviceConflictException()
-                else -> throw ApiException(resp.code, IndicApiHttp.bodyText(resp))
+                HttpStatus.CONFLICT -> throw DeviceConflictException(IndicApiHttp.requestIdOf(resp))
+                else -> throw IndicApiHttp.apiException(resp)
             }
         }
     }
@@ -222,7 +262,11 @@ class IndicApi private constructor(context: Context) {
             .header("X-Device-Id", device.getDeviceId())
             .post(json.encodeToString(body).toRequestBody(jsonMedia)).build()
         client.newCall(req).execute().use { resp ->
-            if (resp.code != HttpStatus.OK) throw ApiException(resp.code, IndicApiHttp.bodyText(resp))
+            if (resp.code != HttpStatus.OK) {
+                throw ApiException(
+                    resp.code, IndicApiHttp.bodyText(resp), IndicApiHttp.requestIdOf(resp),
+                )
+            }
             val decoded: LicenseActivateResponse = json.decodeFromString(resp.body.string())
             decoded.config
         }
@@ -253,11 +297,13 @@ class IndicApi private constructor(context: Context) {
                 .post(EMPTY_JSON.toRequestBody(jsonMedia)).build()
             client.newCall(req).execute().use { resp ->
                 if (resp.code != HttpStatus.OK) {
-                    val detail = IndicApiHttp.bodyText(resp)
-                    if (resp.code == HttpStatus.CONFLICT && NO_SEAT in detail) {
+                    val body = IndicApiHttp.bodyText(resp)
+                    if (resp.code == HttpStatus.CONFLICT &&
+                        ApiErrors.hasCode(body, ApiErrors.NO_FLOATING_SEAT)
+                    ) {
                         throw NoSeatAvailableException()
                     }
-                    throw ApiException(resp.code, detail)
+                    throw ApiException(resp.code, body, IndicApiHttp.requestIdOf(resp))
                 }
                 val decoded: LicenseActivateResponse = json.decodeFromString(resp.body.string())
                 decoded.config
@@ -290,9 +336,7 @@ class IndicApi private constructor(context: Context) {
                 if (!pageToken.isNullOrBlank()) append("&page_token=").append(pageToken)
             }
             val page: ListSessionsResponse = json.decodeFromString(
-                authedGet(idToken, "$base/v1/sessions?$qs") { code, body ->
-                    if (code == HttpStatus.FORBIDDEN) throw NotApprovedException() else throw ApiException(code, body)
-                },
+                authedGet(idToken, "$base/v1/sessions?$qs", approvedOnly),
             )
             all += page.sessions
             lastQuota = page.quota
@@ -312,7 +356,7 @@ class IndicApi private constructor(context: Context) {
             if (it.code == HttpStatus.OK) {
                 json.decodeFromString(it.body.string())
             } else {
-                failSigned(it.code, IndicApiHttp.bodyText(it))
+                failSigned(it)
             }
         }
     }
@@ -339,7 +383,7 @@ class IndicApi private constructor(context: Context) {
             if (it.code == HttpStatus.OK) {
                 json.decodeFromString(it.body.string())
             } else {
-                failSigned(it.code, IndicApiHttp.bodyText(it))
+                failSigned(it)
             }
         }
     }
@@ -352,7 +396,7 @@ class IndicApi private constructor(context: Context) {
     ) = withContext(Dispatchers.IO) {
         val bodyBytes = json.encodeToString(request).toByteArray()
         val resp = signedPost(idToken, "/v1/files/$fileId/complete", bodyBytes)
-        resp.use { if (it.code != HttpStatus.OK) failSigned(it.code, IndicApiHttp.bodyText(it)) }
+        resp.use { if (it.code != HttpStatus.OK) failSigned(it) }
     }
 
     // ----------------------------------------------------------------- restore
@@ -424,11 +468,11 @@ class IndicApi private constructor(context: Context) {
     suspend fun listUsers(idToken: String, status: String = ""): List<AdminUserDto> = withContext(Dispatchers.IO) {
         val url = if (status.isBlank()) "$base/v1/admin/users" else "$base/v1/admin/users?status=$status"
         json.decodeFromString<AdminUsersResponse>(
-            authedGet(idToken, url) { code, body ->
+            authedGet(idToken, url) { code, body, ref ->
                 if (code == HttpStatus.FORBIDDEN) {
-                    throw ApiException(HttpStatus.FORBIDDEN, "not_admin")
+                    throw ApiException(HttpStatus.FORBIDDEN, ApiErrors.NOT_ADMIN, ref)
                 } else {
-                    throw ApiException(code, body)
+                    throw ApiException(code, body, ref)
                 }
             },
         ).users
@@ -437,7 +481,7 @@ class IndicApi private constructor(context: Context) {
     /** POST /v1/admin/users/{uid}/{action} — device-attested (approve/revoke). */
     suspend fun setUserStatus(idToken: String, uid: String, action: String) = withContext(Dispatchers.IO) {
         signedPost(idToken, "/v1/admin/users/$uid/$action", ByteArray(0)).use { resp ->
-            if (resp.code != HttpStatus.OK) throw ApiException(resp.code, IndicApiHttp.bodyText(resp))
+            if (resp.code != HttpStatus.OK) throw IndicApiHttp.apiException(resp)
         }
     }
 
@@ -477,7 +521,7 @@ class IndicApi private constructor(context: Context) {
         // so a 404 means the route isn't reachable (e.g. not published on the
         // API Gateway). Treating that as success would wipe the local copy while
         // leaving every byte in the cloud.
-        resp.use { if (it.code != HttpStatus.OK) failSigned(it.code, IndicApiHttp.bodyText(it)) }
+        resp.use { if (it.code != HttpStatus.OK) failSigned(it) }
     }
 
     /**
@@ -494,8 +538,10 @@ class IndicApi private constructor(context: Context) {
             // (`session_not_found`). A bare 404 means the route isn't reachable —
             // accepting that as success would delete the local copy and orphan
             // the cloud data forever.
-            if (it.code == HttpStatus.NOT_FOUND && body.contains("session_not_found")) return@use
-            failSigned(it.code, body)
+            if (it.code == HttpStatus.NOT_FOUND && ApiErrors.hasCode(body, ApiErrors.SESSION_NOT_FOUND)) {
+                return@use
+            }
+            failSigned(it.code, body, IndicApiHttp.requestIdOf(it))
         }
     }
 
@@ -506,13 +552,21 @@ class IndicApi private constructor(context: Context) {
             .header("X-Device-Id", device.getDeviceId())
             .post(ByteArray(0).toRequestBody(jsonMedia)).build()
         client.newCall(req).execute().use { resp ->
-            if (resp.code != HttpStatus.OK) throw ApiException(resp.code, IndicApiHttp.bodyText(resp))
+            if (resp.code != HttpStatus.OK) throw IndicApiHttp.apiException(resp)
             val nonce: ChallengeResponse = json.decodeFromString(resp.body.string())
             return nonce.nonce
         }
     }
 
-    /** Signature over (nonce || METHOD || path) ++ SHA-256(body) — matches backend/app/deps.py. */
+    /**
+     * Signature over (nonce || METHOD || path) ++ SHA-256(body) — matches
+     * backend/app/deps.py.
+     *
+     * [path] is everything after the host, query string included: the backend
+     * appends `?` + query when the request has one, so a call site that signs a
+     * bare path and then fetches it with parameters would be rejected. No route
+     * takes query parameters today; this is what to keep in step when one does.
+     */
     private fun signedHeaders(
         idToken: String,
         method: String,
@@ -583,6 +637,16 @@ class IndicApi private constructor(context: Context) {
          * Process-wide client. Shares OkHttp pools and DeviceKeyManager; call sites
          * must not construct [IndicApi] directly.
          */
+        /** Maps a 409 from `GET /v1/me` to the most specific device-binding exception. */
+        internal fun throwForMeConflict(body: String, requestId: String?): Nothing {
+            val err: Throwable = when {
+                ApiErrors.hasCode(body, ApiErrors.DEVICE_IN_USE) -> DeviceInUseException(requestId)
+                ApiErrors.hasCode(body, ApiErrors.DEVICE_CONFLICT) -> DeviceConflictException(requestId)
+                else -> ApiException(HttpStatus.CONFLICT, body, requestId)
+            }
+            throw err
+        }
+
         fun get(context: Context): IndicApi {
             val existing = instance
             if (existing != null) return existing

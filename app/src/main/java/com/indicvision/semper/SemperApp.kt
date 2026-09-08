@@ -25,7 +25,7 @@ class SemperApp : Application() {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         } else {
-            Timber.plant(CrashReportingTree())
+            Timber.plant(CrashReportingTree(this))
         }
         DicSettings.migrate(this)
         // Manifest disables Crashlytics/Analytics collection, so a fresh install

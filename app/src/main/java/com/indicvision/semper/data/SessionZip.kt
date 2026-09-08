@@ -118,8 +118,8 @@ internal object SessionZip {
         val digest = Digests.sha256()
         var promoted = false
         try {
-            writeArchive(tmp, members, digest, onBytes, encodeDatEntries)
-            verifyRoundTrip(tmp, members, encodeDatEntries)
+            val storedCrcs = writeArchive(tmp, members, digest, onBytes, encodeDatEntries)
+            verifyRoundTrip(tmp, members, encodeDatEntries, storedCrcs)
             val hex = Digests.toHex(digest.digest())
             promote(tmp, out)
             promoted = true
@@ -151,12 +151,14 @@ internal object SessionZip {
         digest: java.security.MessageDigest,
         onBytes: (Long) -> Unit,
         encodeDatEntries: Boolean,
-    ) {
+    ): Map<String, Long> {
+        val storedCrcs = mutableMapOf<String, Long>()
         DigestOutputStream(BufferedOutputStream(tmp.outputStream()), digest).use { digOut ->
             ZipOutputStream(digOut).use { zip ->
-                members.forEach { putMember(zip, it, onBytes, encodeDatEntries) }
+                members.forEach { putMember(zip, it, onBytes, encodeDatEntries, storedCrcs) }
             }
         }
+        return storedCrcs
     }
 
     /**
@@ -249,14 +251,14 @@ internal object SessionZip {
                 zf.getInputStream(entry).use { input -> onEntry(role, name, input) }
             }
         } catch (e: ZipException) {
-            throw IllegalArgumentException(
-                "Session.zip entry ${entry.name} inflate failed — corrupt transfer",
-                e,
+            throw CorruptTransferException(
+                "entry_inflate_failed",
+                IllegalArgumentException(entry.name, e),
             )
         } catch (e: IOException) {
-            throw IllegalArgumentException(
-                "Session.zip entry ${entry.name} read failed — corrupt transfer",
-                e,
+            throw CorruptTransferException(
+                "entry_read_failed",
+                IllegalArgumentException(entry.name, e),
             )
         }
     }
@@ -270,14 +272,14 @@ internal object SessionZip {
     private fun decodeDatEntryOrThrow(zf: ZipFile, entry: ZipEntry): ByteArray = try {
         DatCodec.decodeIfEncoded(zf.getInputStream(entry).use { it.readBytes() })
     } catch (e: IllegalArgumentException) {
-        throw IllegalArgumentException(
-            "Session.zip entry ${entry.name} DatCodec decode failed — corrupt transfer",
-            e,
+        throw CorruptTransferException(
+            "entry_datcodec_decode_failed",
+            IllegalArgumentException(entry.name, e),
         )
     } catch (e: IllegalStateException) {
-        throw IllegalArgumentException(
-            "Session.zip entry ${entry.name} DatCodec decode failed — corrupt transfer",
-            e,
+        throw CorruptTransferException(
+            "entry_datcodec_decode_failed",
+            IllegalArgumentException(entry.name, e),
         )
     }
 
@@ -286,13 +288,18 @@ internal object SessionZip {
      * is true — see [isDatEntry]'s class-doc note on why this is version-gated
      * rather than unconditional. Every other member is unaffected either way.
      */
-    private fun putMember(zip: ZipOutputStream, member: Member, onBytes: (Long) -> Unit, encodeDatEntries: Boolean) {
+    private fun putMember(
+        zip: ZipOutputStream,
+        member: Member,
+        onBytes: (Long) -> Unit,
+        encodeDatEntries: Boolean,
+        storedCrcs: MutableMap<String, Long>,
+    ) {
         val entryName = entryName(member.role, member.name)
         if (encodeDatEntries && isDatEntry(member.name)) {
-            val encoded = DatCodec.encode(member.file.readBytes())
-            putStoredBytes(zip, entryName, encoded, onBytes)
+            storedCrcs[entryName] = putStoredBytes(zip, entryName, DatCodec.encode(member.file.readBytes()), onBytes)
         } else if (shouldStore(member.name)) {
-            putStored(zip, entryName, member.file, onBytes)
+            storedCrcs[entryName] = putStored(zip, entryName, member.file, onBytes)
         } else {
             putDeflated(zip, entryName, member.file, onBytes)
         }
@@ -303,7 +310,12 @@ internal object SessionZip {
      * the [merge] path) as a `STORED` entry. Does not itself compress — the bytes are
      * whatever the caller already produced.
      */
-    private fun putStoredBytes(zip: ZipOutputStream, entryName: String, bytes: ByteArray, onBytes: (Long) -> Unit) {
+    private fun putStoredBytes(
+        zip: ZipOutputStream,
+        entryName: String,
+        bytes: ByteArray,
+        onBytes: (Long) -> Unit,
+    ): Long {
         val crc = CRC32().apply { update(bytes) }
         val entry = ZipEntry(entryName).apply {
             method = ZipEntry.STORED
@@ -315,6 +327,7 @@ internal object SessionZip {
         zip.write(bytes)
         zip.closeEntry()
         onBytes(bytes.size.toLong())
+        return crc.value
     }
 
     private fun putStored(
@@ -322,7 +335,7 @@ internal object SessionZip {
         entryName: String,
         file: File,
         onBytes: (Long) -> Unit,
-    ) {
+    ): Long {
         val crc = CRC32()
         val buf = ByteArray(COPY_BUFFER)
         file.inputStream().use { input ->
@@ -341,6 +354,7 @@ internal object SessionZip {
         zip.putNextEntry(entry)
         copyReporting(file, zip, buf, onBytes)
         zip.closeEntry()
+        return crc.value
     }
 
     private fun putDeflated(
@@ -373,16 +387,26 @@ internal object SessionZip {
     }
 
     /** Ensure every member extracts byte-identical to its source before upload. */
-    fun verifyRoundTrip(zip: File, members: List<Member>, encodeDatEntries: Boolean = false) {
+    fun verifyRoundTrip(
+        zip: File,
+        members: List<Member>,
+        encodeDatEntries: Boolean = false,
+        storedCrcs: Map<String, Long> = emptyMap(),
+    ) {
         ZipFile(zip).use { zf ->
             check(zf.size() == members.size) {
                 "Session.zip entry count ${zf.size()} != payload ${members.size}"
             }
-            members.forEach { member -> checkMember(zf, member, encodeDatEntries) }
+            members.forEach { member -> checkMember(zf, member, encodeDatEntries, storedCrcs) }
         }
     }
 
-    private fun checkMember(zf: ZipFile, member: Member, encodeDatEntries: Boolean) {
+    private fun checkMember(
+        zf: ZipFile,
+        member: Member,
+        encodeDatEntries: Boolean,
+        storedCrcs: Map<String, Long>,
+    ) {
         val name = entryName(member.role, member.name)
         val entry = zf.getEntry(name)
             ?: error("Session.zip missing entry $name after bundling")
@@ -412,7 +436,7 @@ internal object SessionZip {
             // algorithm the zip format itself uses to catch accidental byte
             // corruption, which is the only threat model here (this promotes a
             // local file we just wrote, not data received from an untrusted party).
-            val expectCrc = crc32(member.file)
+            val expectCrc = storedCrcs[name] ?: crc32(member.file)
             check(entry.crc == expectCrc) {
                 "Session.zip entry $name round-trip CRC mismatch after bundling " +
                     "(archive=${entry.crc}, source=$expectCrc)"

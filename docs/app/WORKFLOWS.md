@@ -1,36 +1,19 @@
-# App workflows — the complete map
+# App manual test pass
 
-Every user-facing flow in Semper, as a tree plus a checkable test step per leaf.
-Use it two ways:
+Every user-facing flow in Semper as a checkable step. Walk the tables top to
+bottom on a debug build and tick the boxes; a full pass should never land you on
+a screen this file doesn't name.
 
-- **As a map** — the trees answer "what screens exist and how do I reach them".
-- **As a manual test script** — walk the tables top to bottom on a debug build
-  and tick the boxes. A full pass should never land you on a screen this file
-  doesn't name.
+This is the **test script**. The map — which files each flow runs through, what
+it writes, where its failures surface — is
+[../WORKFLOWS.md](../WORKFLOWS.md), whose §A ids match the section numbers here
+(§5.4 below is `A5.4` there). For the *automated* suite see
+[TESTING.md](TESTING.md); for how the code is laid out see
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
-For the *automated* suite see [TESTING.md](TESTING.md); for how the code is laid
-out see [ARCHITECTURE.md](ARCHITECTURE.md). This file covers what a human sees.
-
-## How the app is put together
-
-There is no `NavHost`, no Compose and no Fragments. Semper is **Activity-based**:
-12 activities in `app/src/main/AndroidManifest.xml`, wired with plain
-`startActivity` and `ActivityResultContracts`. Sub-flows are wizard pages inside
-one Activity, `BottomSheetDialog`s, `MaterialAlertDialog`s and `PopupMenu`s. So a
-"workflow" here is rarely a route — most of this tree lives inside four files.
-
-| Activity | Flow |
-|---|---|
-| `SplashActivity` | 0. App launch |
-| `AuthActivity` | 1. Login |
-| `PendingApprovalActivity` | 2. Pending approval |
-| `HomeActivity` | 3. Home |
-| `SettingsActivity` · `AdminActivity` | 4. Settings |
-| `StaticAnalysisActivity` | 5. Analysis (3-step wizard) |
-| `RoiDrawActivity` | 6. ROI editor |
-| `VsgLatticeActivity` | 7. Lattice |
-| `ResultViewerActivity` · `SaveExportActivity` | 8. Result viewer |
-| `SessionLimitActivity` | 9. Session limit |
+Semper is Activity-based — no NavHost, no Compose, no Fragments — so most of what
+follows happens inside four files. §11 records the paths that are gated, blocked
+or dead, and is not part of the pass.
 
 ## Legend
 
@@ -45,18 +28,6 @@ one Activity, `BottomSheetDialog`s, `MaterialAlertDialog`s and `PopupMenu`s. So 
 ## 0. App launch
 
 Decides where you land. No user input; the whole flow is a routing decision.
-
-```
-0. App launch — SplashActivity
-   ├── session restore (400 ms delayed spinner)
-   ├── no session ................................ → 1. Login
-   ├── status PENDING ............................ → 2. Pending approval
-   ├── status APPROVED ........................... → 3. Home
-   ├── offline + cached approval ................. → 3. Home, "Offline mode" toast
-   ├── quota already full ........................ → 3. Home, with 9. Session limit
-   │                                                 opening on top (Home checks, not Splash)
-   └── [debug] dev bypass ........................ → 3. Home, cloud disabled
-```
 
 **Entry:** launcher icon. **Exit:** Login, Pending approval, Home or Session limit.
 
@@ -77,24 +48,6 @@ Decides where you land. No user input; the whole flow is a routing decision.
 **One screen**, not five. The sign-in / create-account distinction is a mode
 toggle on the same layout, and forgot-password is a link that fires an email —
 neither opens a separate screen.
-
-```
-1. Login — AuthActivity
-   ├── Google SSO                        (button hidden when not configured)
-   ├── Email / password sign in
-   ├── Create account                    (same screen; sends a verification
-   │                                      email silently, never enforced)
-   ├── Email sign-in link (passwordless)
-   │   ├── request the link
-   │   ├── return via App Link deep link → /finishSignIn
-   │   └── wrong-device error path
-   ├── Forgot password (reset email; reports success even for unknown emails)
-   │   └── return via App Link deep link → /finishReset
-   │       └── set-new-password form, in-app (same Activity, reset mode)
-   ├── Generate secure password          [register]
-   └── validation: email format, password policy on register (8+, upper, lower,
-       digit, special), confirm mismatch, routing-error banner from Splash
-```
 
 **Entry:** Splash, sign-out, or the sign-in deep link. **Exit:** Home or Pending
 approval, depending on the backend's answer.
@@ -135,13 +88,6 @@ approval, depending on the backend's answer.
 
 The allow-list gate. Firebase says who you are; the backend says whether you're
 allowed in. A new account sits here until an admin approves it.
-
-```
-2. Pending approval — PendingApprovalActivity
-   ├── Request access (mailto to support, prefilled with account/device/build)
-   ├── Check status  (manual only — it does not poll)
-   └── Log out
-```
 
 **Entry:** Splash or Login when status is `PENDING`. **Exit:** Home on approval,
 Login on sign-out.
@@ -191,13 +137,15 @@ The session list and the only entry point to a new analysis.
    ├── Empty state → "Start analysis"   (same as the FAB — no longer Settings)
    ├── Start new analysis (FAB)
    │   ├── quota gate .................. → 9. Session limit
-   │   └── New analysis sheet ......... → 3a. Media picker sheet
+   │   ├── expands to Import | Record
+   │   ├── Import ...................... → 3a. Media picker sheet
+   │   └── Record ...................... → 3b. Capture setup / session
    ├── Settings (gear)
    └── Exit-app confirm on Back
 ```
 
 **Entry:** Splash, Pending approval, the viewer's home button, sign-in.
-**Exit:** Analysis, Settings, Result viewer, Lattice, Session limit.
+**Exit:** Analysis, Settings, Result viewer, Lattice, Session limit, Capture setup.
 
 | # | Action | Expected |
 |---|---|---|
@@ -229,30 +177,19 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.16 | Tap the quota chip below the cap | Settings (or the limit screen at the cap) |
 | [ ] 3.17 | Reach the quota cap | The chip turns red |
 | [ ] 3.18 | Pull to refresh | Cloud reconcile runs; a repair or failure is reported by toast |
-| [ ] 3.19 | Open Home with no sessions | Empty state reading "Pick reference image or video." with a **Start analysis** button — it does what the FAB does; it no longer opens Settings |
-| [ ] 3.20 | Tap **+** below the quota | The **New analysis** sheet (§3a), not a two-button chooser |
-| [ ] 3.21 | Tap **+** at the quota cap | Session limit screen instead of the sheet |
+| [ ] 3.19 | Open Home with no sessions | Empty state reading "Import photos or record a new test." with a **Start analysis** button — it does what the FAB does; it no longer opens Settings |
+| [ ] 3.20 | Tap **+** below the quota | A short menu expands: **Import** and **Record** (not the media sheet immediately) |
+| [ ] 3.20a | Tap **Import** | The **New analysis** sheet (§3a) |
+| [ ] 3.20b | Tap **Record** | Capture setup (§3b) |
+| [ ] 3.21 | Tap **+** at the quota cap | Session limit screen instead of the menu |
 | [ ] 3.22 | Look for a transfer banner, feedback prompt or upgrade prompt on Home | There is none. Home's only progress surface is the per-row badge and bar; the transfer banner lives in Settings and the result viewer |
 | [ ] 3.24 | Press Back on Home | "Exit app?" confirmation |
 
 ### 3a. New analysis — the media picker sheet
 
 Not an Activity: `MediaPickerSheet`, a full-height bottom sheet titled **New
-analysis**. It replaced the old two-button Photos/Files chooser, and it is the
-same sheet the wizard's two dropzones open (§5.1), so test it once here.
-
-```
-3a. New analysis — MediaPickerSheet (bottom sheet)
-    ├── segmented tabs: Images | Files      (Images pre-checked)
-    ├── Images
-    │   ├── in-sheet 3-column gallery of the device's media
-    │   ├── video tiles carry a video badge
-    │   ├── no permission yet → empty state + "Allow access"
-    │   └── multi-select (deformed frames only) → "Use N" confirm
-    ├── Files ......................... dismisses the sheet, opens SAF
-    │                                    (image/* + video/*; the only route to DNG/RAW)
-    └── coach marks on first use       (one pair for reference, one for deformed)
-```
+analysis**. It is what **Import** opens from the Home FAB menu, and the same
+sheet the wizard's two dropzones open (§5.1), so test it once here.
 
 | # | Action | Expected |
 |---|---|---|
@@ -269,6 +206,88 @@ same sheet the wizard's two dropzones open (§5.1), so test it once here.
 | [ ] 3a.9 | Open the sheet the first time in each mode | Coach marks run once for the reference pick and once for the deformed pick, then never again |
 | [ ] 3a.10 | Check what permission is asked for, and when | `READ_MEDIA_IMAGES` (and `READ_MEDIA_VIDEO` from Home) is requested when the **Images** tab needs it — never on the Files path |
 
+### 3b. Record — capture setup and session
+
+```
+3b. Record — CaptureSetupActivity → CaptureSessionActivity
+    ├── fps (offered as a short assured list, not a slider), duration,
+    │   resolution (Camera2 catalogue)
+    ├── mode line: stills, locked and lossless PNG — the video path is gone
+    ├── RAM ≥ 1.5× and storage ≥ 1.25× before the test shot
+    ├── CAMERA permission requested up front — ACTION_IMAGE_CAPTURE rejects a
+    │   manifest-declared-but-ungranted CAMERA permission on some Android 11+
+    │   devices, so this can no longer wait until after the test shot
+    ├── Test shot via manufacturer Camera app (ACTION_IMAGE_CAPTURE)
+    ├── ROI editor on the test shot (contrast check region)
+    ├── SSSIG / low-texture gate inside that ROI (hard fail → reselect / Retry)
+    ├── Re-check budget from the real JPEG, then a one-time PNG-encode timing
+    │   calibration that can revise the offered frame rates
+    ├── Lock AF (+ AE) on the test-shot focus point
+    ├── Freeze the ISP (CaptureIspLock) and read every key back out of the
+    │   TotalCaptureResult; whatever the HAL refused is collapsed into one
+    │   warning with a FAQ link
+    ├── Confirm focus: the locked preview holds with a ring on the focus point,
+    │   a magnified unfiltered crop of it, and a sharpness reading given only
+    │   as a percentage of the sharpest point tried. A tap anywhere re-locks
+    │   there (AE re-meters with it); a refused tap restores the previous point.
+    │   Nothing is measured until the user accepts — it sits after the lock,
+    │   not before the test shot, because the vendor Camera app runs its own AF
+    ├── Noise-floor burst: up to 6 stills on the run's own settings, static
+    │   scene, no load yet (NoiseFloorGate). Yields sigma_u, the strain floor
+    │   at the gauge in use, the image noise variance D(eta), the frame-to-
+    │   frame brightness scatter, and the neighbour correlation that catches a
+    │   phone smoothing underneath the lockdown
+    ├── Verdict: a floor above the limit warns and never blocks — Record
+    │   anyway stays the primary action and the floor is stamped on the
+    │   session, the PDF and the CSV. A passing floor is also a dialog:
+    │   **Continue** (not Record anyway), with ⓘ for the FAQ. A burst that
+    │   would not settle or that drifted asks to retry instead, because there
+    │   the measurement failed to measure itself
+    ├── Framing hold: from **Start recording** onward the gravity direction is
+    │   held, and a sustained re-aim withdraws Start — the frozen focus and the
+    │   measured floor both describe the old framing and nothing downstream
+    │   re-checks either (FramingWatch; released once recording begins)
+    ├── Timed stills (PNG, converted from the sensor's own YUV output — no
+    │   JPEG step)
+    ├── Second copy of the as-captured frames into Pictures/semper/<date>-<time>
+    │   (CaptureGallerySave; skipped with one line when there is no room, or
+    │   below Android 10)
+    ├── Hand-off: RESULT_OK + PICKED_REF_URI + PICKED_DEF_URIS → setup starts
+    │   the analysis wizard and finishes (Back from wizard → Home)
+    └── Back / Cancel: setup close → Home; session Back / Cancel → setup
+        (plan kept); mid-stills Back → confirm Stop, then setup
+```
+
+| # | Action | Expected |
+|---|---|---|
+| [ ] 3b.1 | From Home FAB → **Record** | Setup screen with fps, duration, resolution, and a mode summary |
+| [ ] 3b.1a | Press Back / close on setup | Home — Record is abandoned |
+| [ ] 3b.2 | Choose a plan that exceeds free RAM or storage | Blocking dialog; no test shot |
+| [ ] 3b.3 | Continue with a valid plan | CAMERA permission prompt (first run), then the phone Camera app opens for one test shot; **setup stays under the session** |
+| [ ] 3b.3a | Press Back on the session before recording | Setup again, with the previous fps / duration / resolution still filled |
+| [ ] 3b.4 | Cancel the test shot or save nothing | Retry / Cancel (Cancel → setup) |
+| [ ] 3b.4b | Complete the test shot | ROI editor opens on that photo |
+| [ ] 3b.4c | Cancel the ROI editor without saving | Prompt to select an area again, retake, or cancel (Cancel → setup) |
+| [ ] 3b.5 | Save an ROI on a weak / blank pattern | Speckle-fail dialog with FAQ **Why?**; can reselect area or retake |
+| [ ] 3b.5a | Tap **Why?** on that dialog, open the FAQ, return | Same dialog still up (Select area / Retry); flow continues |
+| [ ] 3b.5b | Save an ROI that is too small | Too-small dialog; select a larger area |
+| [ ] 3b.6 | Good test shot + ROI with enough contrast | Focus locks and the preview holds at **Focus looks sharp** with a ring, a magnified crop and a sharpness reading — the burst does not run until it is tapped |
+| [ ] 3b.6a1 | Tap elsewhere on the preview during that step | The ring and the loupe move there and the lens re-locks; a tap on a letterbox bar does nothing |
+| [ ] 3b.6a2 | Tap a spot the lens cannot focus on | One short message, and the **previous** focus point is still locked — a refused tap never costs the lock that worked |
+| [ ] 3b.6a3 | Compare a sharp point against a soft one | The reading is always a percentage *of the sharpest so far*, never a verdict that a point is sharp enough |
+| [ ] 3b.6b | Cover the lens so AF never locks (real device) | AF-fail dialog, Retry test shot — never starts on a floating lens |
+| [ ] 3b.6c | Watch the test shot on a phone that refuses ISP keys | Exactly one warning, effect first, under 20 words, with a working FAQ link. A phone that honoured everything shows none |
+| [ ] 3b.6d | Dim the light or defocus slightly, then take a test shot | Floor verdict dialog; **Record anyway** is the primary action, **Retry test shot** beside it, **Why?** opens the noise-floor FAQ **without dismissing** the dialog |
+| [ ] 3b.6d2 | Tap **Why?** (or pass **ⓘ**), open the FAQ, return | Same dialog still up; after **Continue** / **Record anyway**, **Start recording** works (camera re-locks if the HAL dropped it; floor is not re-measured) |
+| [ ] 3b.6e | Nudge the tripod during the burst | One disturbed frame does not flip a good setup into a refusal (median over 5 estimates) |
+| [ ] 3b.6e2 | Knock the tripod once with **Start recording** showing | Nothing happens — a knock is an acceleration, not a new framing |
+| [ ] 3b.6e3 | Re-aim the rig a few degrees with **Start recording** showing | **The camera moved**, Start withdrawn, **Retake test shot** as the primary action and the status line saying the same; recording cannot proceed on the stale floor |
+| [ ] 3b.6f | Pass the gate on a good setup | Dialog shows large **measurement floor** value (e.g. **402 µε**), body text, **ⓘ** → `#noise-floor` without dismiss; **Continue** enables **Start recording**; floor recorded on session |
+| [ ] 3b.6g | Press Back while timed stills are running | **Stop recording?** confirm; confirming returns to setup (frames discarded) |
+| [ ] 3b.7 | Complete a stills run | Wizard opens with reference + deformed frames filled; Back from wizard step 1 confirms exit to Home (not setup) |
+| [ ] 3b.8 | Open the phone's gallery after a run | A `semper/<date>-<time>` folder under Pictures holds the reference and every frame, as captured |
+| [ ] 3b.9 | Export the PDF and the CSV for that run | Cover **Measurement Floor** is italic notes only (noise floor value plus any floor/denoise warnings; no Image Noise row, no Frame Motion block); CSV opens with `#` session metadata and per-frame field stats, then point rows (`image,x_px,…,znssd` plus floor/motion suffix columns on recorded runs only) |
+
 ---
 
 ## 4. Settings
@@ -277,47 +296,6 @@ One scrolling screen of seven collapsible sections, all collapsed on open, plus 
 two-button footer. Long-running work here does **not** block the screen: restores,
 downloads and the two data exports run behind a **transfer banner** pinned at the
 top of Settings (§4.0).
-
-```
-4. Settings — SettingsActivity
-   ├── Account
-   │   ├── email, device ID (read-only, selectable)
-   │   └── Pending access requests      [admin] → AdminActivity
-   │       └── approve / deny a user
-   ├── Cloud backup
-   │   ├── "Save to cloud" toggle → offer to back up N local-only analyses
-   │   ├── "Wi-Fi only uploads" toggle
-   │   └── sync status line (up to date / pending)
-   ├── Analyses data management         (local ⋈ cloud, merged)
-   │   ├── open the analysis
-   │   ├── Back up now / Retry backup
-   │   ├── Download                     (any row with a cloud copy, incl. phone+cloud;
-   │   │                                 SAF destination picked first, then a worker)
-   │   ├── Restore from cloud           (background worker; only when local is missing)
-   │   └── Delete backup → cloud only / cloud + local / forever
-   │       └── 5-second Undo before the delete really fires
-   ├── Storage
-   │   ├── analyses size + cache size   (measured, refreshed on expand)
-   │   ├── Free up space                (drops local frames of backed-up analyses)
-   │   ├── Clear cache
-   │   └── Auto-free budget             (slider 0–64 GB, 0 = off; enforced at app start)
-   ├── Your data
-   │   ├── Send crash reports           (opt-in toggle; mirrors the first-run prompt.
-   │   │                                 The same flag gates product analytics — see §11)
-   │   ├── Export my data               (master ZIP → 8.5a Send to)
-   │   ├── Download my cloud account data  (server-side export of the account)
-   │   └── Delete my account and data   (backend first; local wipe only on success)
-   ├── Analysis preferences
-   │   └── Max frames per analysis      (10–150, default 50) + info dialog
-   ├── Help & support
-   │   ├── Open Manual / Report a bug / Request a feature
-   │   │     → https://sempermechanics.com/…
-   │   ├── Send feedback                (mailto, prefilled with version/device/build)
-   │   ├── support@sempermechanics.com      (selectable, copyable)
-   │   └── Email support                (mailto, prefilled with account/device/build)
-   ├── About                            (version + Privacy Policy / Terms links)
-   └── Sign out
-```
 
 **Entry:** the Home gear (also the quota chip and any sync badge).
 **Exit:** Home, Admin, a result, or Login.
@@ -375,7 +353,7 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 | [ ] 4.19a | Tap **Download my cloud account data** | The server-side export of the account is fetched the same way, banner and all, then offered through the same sheet |
 | [ ] 4.19b | Trigger either export with no network | It fails with a named reason, not a silent no-op |
 | [ ] 4.19c | Toggle **Send crash reports** off, then force a crash on a debug build | Nothing is uploaded; turning it on again resumes collection without a restart |
-| [ ] 4.19d | Read what that toggle actually controls | It gates **both** crash reporting and consent-gated product analytics (analysis started/completed/failed, exports, feedback). The label says only "crash reports" — see §11 |
+| [ ] 4.19d | Read what that toggle actually controls | It gates **both** crash reporting and consent-gated product analytics (analysis started/completed/failed, exports, feedback), and the label now says so: **Send crash reports and usage data**, with the subtitle naming the usage events and what is never sent |
 | [ ] 4.20 | Tap **Delete my account and data** | Dialog listing exactly what goes: local analyses, cloud backups, profile and device |
 | [ ] 4.20a | Confirm it | The **sign-in screen** opens to re-verify, with your email filled in and locked, and no "create account" toggle |
 | [ ] 4.20b | Enter the wrong password there | "Incorrect password." and nothing is deleted |
@@ -399,13 +377,6 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 
 ### 4.1 Admin `[admin]`
 
-```
-4.1 Admin — AdminActivity
-    ├── list of PENDING users (email + display name)
-    ├── Approve
-    └── Deny
-```
-
 | # | Action | Expected |
 |---|---|---|
 | [ ] 4.1.1 | Open the admin list | Every user awaiting approval is listed — each one should match a mail support already received (§2.0) |
@@ -425,21 +396,6 @@ mode chosen on page 2.
 Lattice, Session limit, or back to Home.
 
 ### 5.1 Step 1 — Load frames
-
-```
-5.1 Load frames
-    ├── coach marks on first visit            (both dropzones)
-    ├── Reference image → 3a. New analysis sheet   (RAW/DNG only via Files)
-    ├── Deformed frames → 3a. New analysis sheet   (multi-select, capped)
-    ├── Video source
-    │   ├── sampling sheet: fps slider, time-segment range, live estimate
-    │   └── extraction progress
-    ├── Frame order
-    │   ├── Name ↑ / Name ↓ / Date oldest / Date newest / Manual
-    │   └── drag thumbnails to reorder (Manual)
-    ├── warnings: JPEG accuracy, low texture (SSSIG) — chip + FAQ
-    └── blocking error: frame size mismatch (chip on step 2 + FAQ)
-```
 
 | # | Action | Expected |
 |---|---|---|
@@ -475,28 +431,6 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 
 ### 5.2 Step 2 — Confirm settings
 
-```
-5.2 Confirm settings
-    ├── Analysis mode: Single setting / Parameter sweep
-    ├── Region of interest ......... → 6. ROI editor (cancel = full image)
-    ├── Advanced parameters                   [single]
-    │   ├── Paste params chip  (only when the lattice clipboard holds a set)
-    │   ├── subset size      (slider + typed field + ⓘ)
-    │   ├── step size        (title + ⓘ; short slider + typed px on the next row)
-    │   ├── overlap          (title + ⓘ on the step title row; typed ratio beside the step readout)
-    │   ├── strain window    (slider + typed field + ⓘ)
-    │   ├── interpolator: Bicubic 4×4 / Keys 6×6
-    │   └── Reset to recommended
-    ├── Sweep settings                        [sweep]
-    │   ├── subset size range
-    │   ├── strain window range
-    │   ├── step size (subset ÷ N, default 3) + overlap at the end
-    │   └── frame to sweep
-    ├── frame-size mismatch warning chip + FAQ   (when a deformed frame differs)
-    ├── coach marks on first visit  (mode toggle, ROI, visible settings card)
-    └── Compute  [single]  /  Next: Summary →  [sweep]
-```
-
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.2.1 | Arrive on step 2 | Analysis mode is at the top; there is no inputs-summary card |
@@ -530,16 +464,6 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 
 ### 5.3 Step 3 — Sweep summary `[sweep]`
 
-```
-5.3 Sweep summary
-    ├── planned lattice preview
-    ├── lattice samples: no. of subsets × no. of VSGs (1–8 each)
-    ├── plan summary, or a warning chip + FAQ for "empty plan" / "subset too big"
-    ├── Line-cut preview + X/Y axis
-    ├── coach marks on first visit  (planned lattice, line cut, Compute)
-    └── Compute
-```
-
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.3.1 | Arrive on step 3 | Toolbar reads "Step 3 of 3"; planned lattice is first, line cut below it |
@@ -554,14 +478,6 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | [ ] 5.3.16 | Read a valid plan summary | "N analyses · subset a–b px · VSG c–d px" |
 
 ### 5.4 Running
-
-```
-5.4 Running
-    ├── progress %, elapsed
-    ├── compute tiles: "# converged", "convergence"            [compute/sweep only]
-    ├── Cancel (confirm; cooperative — the engine stops mid-frame)
-    └── Back is hard-blocked, screen kept on
-```
 
 The same overlay is reused for importing frames and extracting video, but the two
 compute tiles are **hidden** there — they would only ever read zero. Import and
@@ -623,21 +539,6 @@ extraction show determinate progress instead.
 Full-screen editor over the reference image. Two edit modes crossed with two
 tools — the Crop/Erase toggle persists when you switch between Draw and Manual.
 
-```
-6. ROI editor — RoiDrawActivity
-   ├── Draw mode
-   │   ├── Rectangle / Square
-   │   └── draw, move, corner-resize (min 50 px)
-   ├── Manual mode
-   │   └── X / Y / W / H fields + Apply
-   ├── Crop ↔ Erase
-   │   └── exclusion holes / mask; multiple, individually editable
-   ├── Use full image
-   ├── Reset
-   ├── live HUD readout (W × H at (x, y))
-   └── Save ROI / Cancel
-```
-
 **Entry:** the ROI card on analysis step 2. **Exit:** back to step 2, with the
 ROI and mask, or with full-image defaults on cancel.
 
@@ -676,27 +577,6 @@ The screen is designed to be driven with one thumb: the column **scrolls**
 (lattice, then controls, then plot) while the two action buttons stay pinned at
 the bottom, and every node can be reached with the prev/next stepper without
 aiming at a small target.
-
-```
-7. Parameter sweep — VsgLatticeActivity
-   ├── coach marks                       (first visit: the lattice, then the plot)
-   ├── summary: total / solved / skipped / step denominator   (above the lattice)
-   ├── result lattice: subset across × strain window up,
-   │                   solved (filled) vs skipped (hollow ring)
-   │   ├── every solved node shares one colour; the focused one also gets a
-   │   │   selection ring (no legend row — the coach mark covers it once)
-   │   ├── a faint connector ladder joins the nodes of each subset column
-   │   ├── tap a node → focus it
-   │   └── double-tap / long-press → open that combination in the viewer
-   ├── stepper row: ‹ prev · parameter chip · next ›   (solved nodes only)
-   ├── strain plot section               (hidden until the profiles load)
-   │   ├── component spinner: Exx / Eyy / Exy   (in a glass pill with a chevron)
-   │   ├── All ↔ Node — one pill         (**All** is the default)
-   │   ├── plot: pinch-zoom, two-finger pan, double-tap to reset
-   │   ├── scrub slider under the plot   (two-way synced with the drag)
-   │   └── readout: "x=…  y=…" (Node) or "x=…  label=…" (All curves)
-   └── Save graph · View                 (pinned bottom bar)
-```
 
 **Entry:** finishing a sweep, or tapping a sweep row on Home or in Settings.
 **Exit:** Result viewer, or back to Home.
@@ -760,47 +640,6 @@ aiming at a small target.
 The main results browser. Reached directly for a single-setting run, or through
 the Lattice for a sweep.
 
-```
-8. Result viewer — ResultViewerActivity
-   ├── summary animation                        (the slot before frame 1)
-   │   ├── every frame of the selected field, looping, ≤10 s
-   │   └── one colour scale for the whole sequence
-   ├── field switching: U / V / Exx / Eyy / Exy
-   ├── image viewer
-   │   ├── pinch zoom (to 10×) and pan
-   │   ├── double-tap zoom / reset
-   │   ├── horizontal fling (fit-to-screen) steps frames
-   │   └── jet heatmap over the reference (fixed 0.7 alpha)
-   ├── colour scale bar (hairline over the figure)
-   │   ├── default: this frame's 2nd/98th-percentile clamp, labeled "≤ / ≥"
-   │   │   (not "Min:"/"Max:" — the true extrema can lie beyond the label;
-   │   │   the ⓘ peek sheet shows those instead, and the two are allowed to differ)
-   │   ├── tap → custom min / max
-   │   └── Auto scale (drops custom; returns to the frame's clamped bounds)
-   ├── edge chrome (auto-hides on a timer; pan / scrub / field tap / probe brings it back)
-   │   │   back · short title (field · frame) · ⓘ · Home · share
-   │   ├── ⓘ peek sheet: specimen name, max/min (with coords) + mean +
-   │   │                 settings used (+ stop reason, + line-cut on sweep)
-   │   ├── centre double-tap while hidden shows chrome; swipe down may show it
-   │   └── figure runs edge-to-edge under the status / nav bars
-   ├── field FAB (top-left pill) → popup of all five; live field checked
-   ├── frame scrubbing: prev / next + "name (i / N)"
-   │   └── type a frame number to jump straight there
-   ├── tap-to-probe
-   │   ├── short tap anywhere on the figure → nearest point reading
-   │   └── tap readout chip to dismiss
-   ├── Share (node icon)
-   │   ├── Single Field (current field + frame)
-   │   ├── All fields (5, zipped)
-   │   ├── Animations (5 GIFs, zipped)
-   │   ├── PDF report (all frames)
-   │   ├── CSV data
-   │   ├── Everything (.zip: raw photos + animations + results + CSV + PDF)
-   │   └── → Send to sheet: Save to Files / Share  (§8.5a)
-   ├── Home (chrome icon, top bar)
-   └── Back (chrome arrow, or system Back → 7. Lattice for sweeps)
-```
-
 **Entry:** a finished single-setting run, a Home or Settings row, or a Lattice
 node. **Exit:** Home, or back to the Lattice.
 
@@ -836,6 +675,8 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2.4 | Reach the first frame | **Prev** goes back to the summary, not nowhere |
 | [ ] 8.2.5 | Tap Next rapidly | Keeps up without stuttering or showing a stale frame |
 | [ ] 8.2.6 | Scrub through a sweep | Each frame is a different combination; the settings sheet follows it |
+| [ ] 8.2.6a | On a sweep, **Prev** on the first combination | Stays on that combination (no overview slot) |
+| [ ] 8.2.6b | Open Share on a sweep | No **Animations** row; **Everything** has no `animations/` folder |
 | [ ] 8.2.7 | Rotate the device | The same frame and field stay on screen |
 | [ ] 8.2.8 | Type a frame number and press Go | Jumps straight there; the field has no underline under it |
 | [ ] 8.2.9 | Type `0`, a number past the end, or letters | Nothing moves and the current number comes back |
@@ -845,7 +686,10 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2.13 | Open a session with no `.dat` frames | Snackbar `no_batch_data` with **Why?** → FAQ |
 | [ ] 8.2.14 | Force a frame OOM (huge session, low memory) | Snackbar with **Why?** → viewer-oom FAQ |
 
-### 8.2a Summary animation
+### 8.2a Summary animation `[single]`
+
+Single-setting analyses only (not parameter sweeps — those open from the lattice
+onto a combination, with no summary slot and no Animations share target).
 
 | # | Action | Expected |
 |---|---|---|
@@ -860,7 +704,6 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.2a.7 | Set a custom scale for one field | Only that field's animation rebuilds |
 | [ ] 8.2a.8 | Tap **Next** on the summary, then **Prev** on frame 1 | Leaves to frame 1 and comes back |
 | [ ] 8.2a.9 | Step into the frames while it is still building | The viewer stays responsive throughout |
-| [ ] 8.2a.10 | Open a sweep node from the Lattice | Lands on that node, not on the summary |
 | [ ] 8.2a.11 | Run on Android 8 | The first frame with a note that animation needs Android 9; sharing still works |
 
 ### 8.3 Tap to probe
@@ -903,11 +746,11 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.5.1 | Tap Share | Sheet with six targets, captioned positionally — "frame N of M shown · photos share the current frame". It no longer names the frame; the frame's own name is on the **Single Field** row's sub-line |
 | [ ] 8.5.2 | **Single Field** | One annotated PNG of the field and frame on screen |
 | [ ] 8.5.3 | **All fields** | Five PNGs for the current frame, zipped for hand-off. The row's sub-line and each PNG's stamp name the **source image**; the file names still come from the analysis name |
-| [ ] 8.5.3a | **Animations** | Five GIFs, one per field, zipped; each loops when opened in a gallery app |
-| [ ] 8.5.3b | Same, immediately on entering the viewer | Fields not built yet are built under the progress dialog — never silently missing |
+| [ ] 8.5.3a | **Animations** `[single]` | Five GIFs, one per field, zipped; each loops when opened in a gallery app. Row is absent on a parameter sweep |
+| [ ] 8.5.3b | Same, immediately on entering the viewer `[single]` | Fields not built yet are built under the progress dialog — never silently missing |
 | [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
-| [ ] 8.5.5 | **CSV data** | Header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd`; a sweep inserts four more after `image` — `subset_px,step_px,strain_window,vsg_px` |
-| [ ] 8.5.6 | **Everything (.zip)** | Raw photos, the five animations, per-frame results for all five fields, the CSV and the PDF |
+| [ ] 8.5.5 | **CSV data** | `#` preamble (version, reference, strain method, ROI, optional floor in mε, per-frame U/V/Exx/Eyy/Exy max/min/mean), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — recorded sessions append `noise_floor_mε,shift_u_px,shift_v_px,shift_rot_deg`; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image` |
+| [ ] 8.5.6 | **Everything (.zip)** | Raw photos, per-frame results for all five fields, the CSV and the PDF; single-setting also includes the five field GIFs under `animations/` |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
 | [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |
 | [ ] 8.5.8a | Dismiss that dialog with Back, or by tapping outside | The export keeps running behind a **transfer banner** at the top of the viewer, with its own progress, Cancel and ‹ › paging — the same strip Settings uses (§4.0) |
@@ -954,13 +797,6 @@ and the lattice's **Save graph** (§7.3.4, straight to the system chooser).
 The quota gate. Not a paywall — there is no billing anywhere in the app; the
 route past it is an email to support.
 
-```
-9. Session limit — SessionLimitActivity
-   ├── Email support (prefilled)
-   ├── Re-check limit
-   └── Back to my analyses
-```
-
 **Entry:** Home cold start, the Home FAB, the quota chip, a pre-run check, a
 sweep hitting the cap, or a background upload rejected with a quota error.
 **Exit:** Home, once the limit clears.
@@ -996,6 +832,16 @@ today is exercised through the API directly (or a future
 is unaffected either way: once `GET /v1/config` reports `mode=licensed`,
 the cap simply doesn't apply and 9.1 never triggers.
 
+**9.4 No seat right now (floating institution licence).** A separate gate from
+this screen, and not a limit: the account is on the roster but every seat is in
+use. It appears when starting new work — the Home **+** button, before the
+Import/Record menu opens, and again at Compute for a run started from inside an
+analysis. Saved analyses stay open throughout, and a run already in flight is
+never interrupted.
+
+The screen is one button that asks for a seat again. Unlike 9.1 it needs no
+email to support: seats free themselves as colleagues finish.
+
 **9.3 License expiry notice (Home).** Separate from this screen, and not a
 gate. A licensed account whose key expires within 14 days — or which is past
 expiry but still inside its grace window — shows a small chip under the Home
@@ -1016,7 +862,8 @@ shows it.
 ## 10. Background work
 
 Uploads, restores, **bundle downloads** and backup deletes run in WorkManager and
-survive leaving the screen:
+survive leaving the screen. Their file chains, failure outputs and log signals
+are `B1`–`B4` in [../WORKFLOWS.md](../WORKFLOWS.md#b-app--background-and-data-workflows):
 
 | Worker | Job |
 |---|---|
@@ -1130,10 +977,9 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
   Firebase Analytics events for analysis started / completed / failed, the two
   data exports and Send feedback — all buckets and enums, never images, results,
   session ids or specimen names — and every one of them is dropped unless
-  `DicSettings.diagnosticsEnabled` is on. The **consent copy names only crash
-  reports**, which understates what the toggle controls; the
-  [privacy policy](../legal/PRIVACY_POLICY.md) §2.4 already describes both. Copy
-  fix tracked in [ops/TECH_DEBT.md](../ops/TECH_DEBT.md).
+  `DicSettings.diagnosticsEnabled` is on. The consent copy names both halves —
+  **Send crash reports and usage data** — matching
+  [the privacy policy](../legal/PRIVACY_POLICY.md) §2.4.
 - **An interrupted solve cannot be resumed** — it is a foreground coroutine, so
   process death loses the run.
 - **`AnalysisWizardSmokeTest`** opens the analysis wizard and asserts chrome

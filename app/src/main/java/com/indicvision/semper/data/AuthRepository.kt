@@ -23,6 +23,18 @@ import timber.log.Timber
 import java.io.IOException
 
 /**
+ * Host both Firebase auth continue links return to — the project's default
+ * hosting domain. Must be an Authorized Domain in the Firebase project and
+ * handled as an App Link by this app (see docs); keep in sync with the
+ * backend's FIREBASE_PROJECT_ID.
+ *
+ * Top-level rather than on [AuthRepository]'s private companion because
+ * `AuthActivity` checks arriving links against it, and one constant beats a
+ * second copy of the domain drifting out of step with the manifest.
+ */
+const val AUTH_HOST = "indicvision-dic-app-auth.firebaseapp.com"
+
+/**
  * Authentication + access-gate.
  *
  * Identity is federated through **Firebase Auth** — Google, email/password, or
@@ -388,20 +400,16 @@ class AuthRepository(context: Context) {
             TokenStore.setStatus(appContext, AccessStatus.PENDING)
             Result.success(AccessStatus.PENDING)
         } catch (e: IndicApi.DeviceConflictException) {
-            Result.failure(
-                Exception(
-                    "This device is already linked to another account, or this account to " +
-                        "another device. Sign in with that account, or ask an admin to reset the binding.",
-                    e,
-                ),
-            )
+            deviceBindingFailure(e)
+        } catch (e: IndicApi.DeviceInUseException) {
+            deviceBindingFailure(e)
         } catch (e: IndicApi.ApiException) {
             if (e.code == HTTP_UNAUTHORIZED) {
                 // Gateway/backend rejected the Firebase ID token (wrong audience,
                 // expired, or malformed). Surface a short server hint when present
                 // so "Session expired" is not the only clue for a misconfigured
                 // FIREBASE_PROJECT_ID / API Gateway JWT audience.
-                val hint = e.detail.trim().lineSequence().firstOrNull().orEmpty()
+                val hint = e.parsedDetail.lineSequence().firstOrNull().orEmpty()
                     .take(API_ERROR_HINT_MAX_CHARS)
                     .ifBlank { null }
                 val message = if (hint != null) {
@@ -433,6 +441,15 @@ class AuthRepository(context: Context) {
             Result.failure(Exception("Could not verify account. Check your connection and sign in again."))
         }
 
+    private fun deviceBindingFailure(cause: IOException): Result<String> =
+        Result.failure(
+            Exception(
+                "This device is already linked to another account, or this account to " +
+                    "another device. Sign in with that account, or ask an admin to reset the binding.",
+                cause,
+            ),
+        )
+
     private companion object {
         /** HTTP 401 from the backend: the session token is no longer valid. */
         const val HTTP_UNAUTHORIZED = 401
@@ -442,13 +459,10 @@ class AuthRepository(context: Context) {
 
         const val K_PENDING_EMAIL = "pending_email"
 
-        // Where the email link returns to. Must be an Authorized Domain in the
-        // Firebase project and handled as an App Link by this app (see docs).
-        // Keep in sync with the backend's FIREBASE_PROJECT_ID — this is that
-        // project's default hosting domain.
-        const val EMAIL_LINK_CONTINUE_URL = "https://indicvision-dic-app-auth.firebaseapp.com/finishSignIn"
+        /** Email sign-in link continue URL — see [AUTH_HOST]. */
+        const val EMAIL_LINK_CONTINUE_URL = "https://$AUTH_HOST/finishSignIn"
 
         /** Password-reset App Link continue URL — keep in sync with the manifest filter. */
-        const val RESET_CONTINUE_URL = "https://indicvision-dic-app-auth.firebaseapp.com/finishReset"
+        const val RESET_CONTINUE_URL = "https://$AUTH_HOST/finishReset"
     }
 }

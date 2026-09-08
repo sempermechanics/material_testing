@@ -21,11 +21,13 @@ import androidx.lifecycle.viewModelScope
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
+import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionRecordSettings
 import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
 import kotlinx.coroutines.CancellationException
@@ -111,7 +113,7 @@ class AnalysisViewModel : ViewModel() {
     var defFrameDates: List<Long> = emptyList()
 
     /** How the user wants deformed frames ordered (image batches only). */
-    var defOrderMode: FrameOrderMode = FrameOrderMode.PICKER
+    var defOrderMode: FrameOrderMode = FrameOrderMode.NAME
 
     /** Ascending/descending for Name and Date modes. */
     var defOrderDirection: FrameOrderDirection = FrameOrderDirection.ASCENDING
@@ -126,6 +128,17 @@ class AnalysisViewModel : ViewModel() {
      * deformed-frames card show an icon that matches what the user chose.
      */
     var defFromVideo: Boolean = false
+
+    /**
+     * The floor the capture screen measured, when these frames were captured
+     * rather than imported. Set once from the hand-off Intent and carried onto
+     * every session record this analysis writes.
+     *
+     * Null is the ordinary state for an import, and it stays null rather than
+     * being defaulted: a session that never measured a floor must not appear to
+     * have measured a good one.
+     */
+    var captureFloor: CaptureNoiseFloor? = null
 
     var realRefWidth: Int = 0
     var realRefHeight: Int = 0
@@ -329,10 +342,10 @@ class AnalysisViewModel : ViewModel() {
     var sweepPlan: List<VsgStudy.Point> = emptyList()
 
     /** Combinations the engine could not solve in the last sweep. */
-    var sweepSkipped: List<VsgStudy.Point> = emptyList()
+    var sweepSkippedNodes: List<SkippedNode> = emptyList()
 
-    /** Engine code per skipped combination, index-aligned with [sweepSkipped]. */
-    var sweepSkippedCodes: List<Int> = emptyList()
+    /** Opened from capture flow (enables Re-record on step 1 back). */
+    var launchedFromCapture: Boolean = false
 
     /**
      * @param labels one human-readable name per combination, index-aligned with
@@ -418,8 +431,9 @@ class AnalysisViewModel : ViewModel() {
         )
 
         sweepPlan = result.runs.map { it.point }
-        sweepSkipped = result.skipped
-        sweepSkippedCodes = result.skippedCodes
+        sweepSkippedNodes = result.skipped.mapIndexed { index, point ->
+            SkippedNode(point.subset, point.step, point.strainWindow, result.skippedCodes[index])
+        }
         engineStatsArray = result.firstMetrics
         val executionTimeMs = (System.currentTimeMillis() - startedAt).toInt()
 
@@ -493,7 +507,7 @@ class AnalysisViewModel : ViewModel() {
     ) {
         val roi = request.roi
         currentSessionId = newPendingSessionId()
-        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes)
+        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
         lastRefPath = refPngPath
         lastStep = result.runs.first().point.step
 
@@ -538,6 +552,7 @@ class AnalysisViewModel : ViewModel() {
             frameCount = result.runs.size,
             defNames = result.runs.map { rawName },
             engineStatsArray = engineStatsArray,
+            captureFloor = captureFloor,
         ).copy(
             name = summary.name,
             // What makes a reopened session a sweep again: without these the
@@ -547,10 +562,9 @@ class AnalysisViewModel : ViewModel() {
             sweepStrainWindows = result.runs.map { it.point.strainWindow },
             sweepLabels = summary.solvedLabels,
             lineCutHorizontal = lineCutHorizontal,
-            sweepSkipSubsets = skipped.map { it.subset },
-            sweepSkipSteps = skipped.map { it.step },
-            sweepSkipStrainWindows = skipped.map { it.strainWindow },
-            sweepSkipCodes = result.skippedCodes,
+            sweepSkippedNodes = skipped.mapIndexed { index, point ->
+                SkippedNode(point.subset, point.step, point.strainWindow, result.skippedCodes[index])
+            },
             stopCode = result.engineErrorCode.also { lastStopCode = it },
             plannedFrameCount = result.runs.size + skipped.size,
             headline = summary.headline,

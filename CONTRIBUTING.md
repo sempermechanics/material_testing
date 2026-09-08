@@ -97,7 +97,7 @@ rm -rf app/.cxx app/build
 ./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.viewer.*"
 
 # Emulator smoke (needs an x86_64 emulator running)
-./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64
+./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 "-Pandroid.testInstrumentationRunnerArguments.notPackage=com.indicvision.semper.benchmark"
 
 # Performance benchmarks — not part of the push gate; they need a device and are
 # label-gated in CI. See docs/app/TESTING.md#performance-benchmarks before running.
@@ -158,7 +158,8 @@ parallel). Kotlin/docs-only PRs run ~10–15 min via path filters.
 | Area | Entry point |
 |---|---|
 | Android UI / sessions / viewer | [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md) |
-| Every user-facing screen and flow | [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) |
+| Every workflow and the files behind it | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) |
+| Every user-facing screen, as a manual test pass | [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) |
 | App tests (workflow chunks) | [docs/app/TESTING.md](docs/app/TESTING.md) |
 | C++ correlation engine | The `native/` submodule — the app-facing rules are in [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
 | Engine tests | [docs/engine/TESTING.md](docs/engine/TESTING.md) |

@@ -39,18 +39,47 @@ import kotlin.math.roundToInt
 object VsgStudy {
 
     /**
-     * VSG footprint of a (step, strain window) pair, in pixels.
+     * VSG footprint of a strain window, in pixels — which is the strain window
+     * itself, because the engine reads that parameter as a **diameter in
+     * pixels** rather than as a count of data points.
      *
-     * Note this is the form requested for this app — the guide's own expression
-     * carries the subset size rather than the 1 px here, i.e.
-     * `(strainWindow - 1) * step + subset`, which reports a footprint larger by
-     * `subset - 1`. Both orderings of the sweep are identical; only the printed
-     * number differs. Everything downstream goes through this one function.
+     * The engine takes `radius = strain_window / 2` and tests each neighbour's
+     * distance from the centre in physical pixels, so the footprint the strain
+     * fit averages over is a circle of that diameter no matter how the grid is
+     * spaced. Step decides how many points land inside the circle; it does not
+     * change the circle. That is also DICe's convention for the same parameter.
+     *
+     * This previously returned `(strainWindow - 1) * step + 1`, the iDICs
+     * guide's expression for a window counted in **data points**. Applied to a
+     * window already given in pixels it multiplies the reported gauge by
+     * roughly the step size, and since the strain floor goes as `1 / L_vsg`,
+     * every quoted floor came out that many times better than the settings
+     * could deliver.
+     *
+     * Two device runs settled it rather than the argument doing so. Solving
+     * `L = sqrt(2) * sigma_u / sigma_e` from each run's own measured
+     * displacement jitter and strain scatter, on a static specimen over 60
+     * frames:
+     *
+     * | device | step | measured `L` | this function | old expression |
+     * |--------|------|--------------|---------------|----------------|
+     * | Samsung SM-G996U1 | 3 | 13.4 px | 15 px | 43 px |
+     * | Pixel 6 | 5 | 10.6 px | 15 px | 71 px |
+     *
+     * Both land just under the nominal window, which is what the engine's 90%
+     * support rule predicts — the outer ring of the circle is not always
+     * filled, so the effective gauge is slightly smaller than the diameter
+     * asked for. Neither is near the old expression at either step.
      */
-    fun vsgFor(step: Int, strainWindow: Int): Int = (strainWindow - 1) * step + 1
+    fun vsgFor(strainWindow: Int): Int = strainWindow
 
     /** Strain window is odd and matches the range of the settings slider. */
     const val MIN_STRAIN_WINDOW = 5
+
+    /** The settings slider's own starting value (`activity` layout `etStrainWindow`).
+     *  Capture-time estimates of the strain floor quote it, because it is what a
+     *  single analysis will actually run at unless the user changes it. */
+    const val DEFAULT_STRAIN_WINDOW = 15
     const val MAX_STRAIN_WINDOW = 101
 
     /** Step size range of the settings slider. */
@@ -117,7 +146,7 @@ object VsgStudy {
         val strainWindow: Int,
     ) {
         /** Footprint the strain calculation averages over, in pixels. */
-        val vsg: Int get() = vsgFor(step, strainWindow)
+        val vsg: Int get() = vsgFor(strainWindow)
     }
 
     /** The single step size for [subset] at the chosen [denominator]: `subset/N`, in pixels. */
@@ -160,23 +189,33 @@ object VsgStudy {
         return (subset * (1.0 - o)).roundToInt().coerceIn(MIN_STEP, maxStepFor(subset))
     }
 
-    /** The strain window whose VSG is nearest [vsg] at [step]; odd and in range. */
-    fun windowForVsg(step: Int, vsg: Int): Int {
-        val raw = ((vsg - 1).toDouble() / step).roundToInt() + 1
-        return raw.coerceIn(MIN_STRAIN_WINDOW, MAX_STRAIN_WINDOW) or 1
-    }
+    /**
+     * The strain window whose VSG is nearest [vsg]; odd and in range.
+     *
+     * The inverse of [vsgFor], which is now the identity, so this is only the
+     * snap to what the engine accepts. Kept as a named function because the
+     * sweep's y-axis is a VSG axis and reads better saying so.
+     */
+    fun windowForVsg(vsg: Int): Int = vsg.coerceIn(MIN_STRAIN_WINDOW, MAX_STRAIN_WINDOW) or 1
 
-    /** Smallest VSG reachable for [subset]: its finest step, narrowest window. */
-    fun minVsg(subset: Int): Int =
-        vsgFor(stepSizeFor(subset, STEP_DENOM_MAX), MIN_STRAIN_WINDOW)
+    /** Smallest VSG the engine will accept, in pixels. */
+    fun minVsg(): Int = MIN_STRAIN_WINDOW
 
-    /** Largest VSG reachable for [subset]: its coarsest step, widest window. */
-    fun maxVsg(subset: Int): Int =
-        vsgFor(stepSizeFor(subset, STEP_DENOM_MIN), MAX_STRAIN_WINDOW)
+    /**
+     * Largest VSG the engine will accept, in pixels.
+     *
+     * This is the binding limit on strain resolution, and it is worth naming as
+     * such: the floor goes as `sqrt(2) * sigma_u / L_vsg`, so at 101 px even a
+     * displacement noise of 0.006 px — better than the two test devices reach —
+     * cannot report below about 90 microstrain. A floor in the single
+     * microstrain range needs a gauge in the hundreds to thousands of pixels,
+     * which is a decision about this ceiling and not about the camera.
+     */
+    fun maxVsg(): Int = MAX_STRAIN_WINDOW
 
     /** Default VSG ceiling offered for [subset], inside the reachable range. */
     fun defaultVsgMax(subset: Int): Int =
-        (DEFAULT_VSG_MAX_FACTOR * subset).coerceIn(minVsg(subset), maxVsg(subset))
+        (DEFAULT_VSG_MAX_FACTOR * subset).coerceIn(minVsg(), maxVsg())
 
     /**
      * The odd subset sizes between [subsetMin] and [subsetMax] inclusive. Both

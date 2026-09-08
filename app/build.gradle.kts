@@ -284,6 +284,8 @@ android {
                 "AndroidGradlePluginVersion",
                 // Photo Picker is the primary path; broad gallery access is unused.
                 "SelectedPhotoAccess",
+                // targetSdk 36 is deliberate until a dedicated bump PR (TECH_DEBT).
+                "OldTargetApi",
             )
     }
 }
@@ -376,7 +378,7 @@ kover {
             // Modest floor after excluding view classes; raise deliberately once
             // the measured number from `:app:koverLog` settles higher.
             rule {
-                minBound(15)
+                minBound(27)
             }
         }
     }

@@ -15,6 +15,20 @@ object DicKeys {
     const val PICKED_REF_URI = "PICKED_REF_URI"
     const val PICKED_VIDEO_URI = "PICKED_VIDEO_URI"
 
+    /** Deformed-frame URI strings (capture hand-off); consumed once on wizard open. */
+    const val PICKED_DEF_URIS = "PICKED_DEF_URIS"
+
+    /**
+     * The capture screen's measured strain floor as JSON, so the analysis that
+     * follows can stamp it on the session, the report and the CSV. One extra
+     * rather than six, so a field added later does not touch this boundary.
+     * Absent when the frames were imported rather than captured.
+     */
+    const val CAPTURE_NOISE_FLOOR = "CAPTURE_NOISE_FLOOR"
+
+    /** Set when analysis opens from capture (not import). */
+    const val LAUNCHED_FROM_CAPTURE = "LAUNCHED_FROM_CAPTURE"
+
     // ── StaticAnalysisActivity  RoiDrawActivity
     const val IMAGE_FILE_PATH = "IMAGE_FILE_PATH"
     const val MASK_FILE_PATH = "MASK_FILE_PATH"
@@ -88,14 +102,14 @@ object DicKeys {
     /** True when the study's line cut runs along x; false for along y. */
     const val LINE_CUT_HORIZONTAL = "LINE_CUT_HORIZONTAL"
 
-    // Sweep combinations the engine could not solve, for the lattice staging
-    // screen (VsgLatticeActivity). Index-aligned with each other.
+    // Legacy skip arrays (read fallback). Prefer SWEEP_SKIPPED JSON.
     const val SWEEP_SKIP_SUBSETS = "SWEEP_SKIP_SUBSETS"
     const val SWEEP_SKIP_STEPS = "SWEEP_SKIP_STEPS"
     const val SWEEP_SKIP_STRAIN_WINS = "SWEEP_SKIP_STRAIN_WINS"
-
-    /** Engine code per skipped node. Index-aligned with SWEEP_SKIP_*. */
     const val SWEEP_SKIP_CODES = "SWEEP_SKIP_CODES"
+
+    /** JSON list of skipped sweep nodes. */
+    const val SWEEP_SKIPPED = "SWEEP_SKIPPED"
 
     /** Why the run stopped early, or 0 when it finished; and what it planned. */
     const val STOP_CODE = "STOP_CODE"

@@ -310,7 +310,7 @@ class SettingsActivity : AppCompatActivity() {
                 destUri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
-        }.onFailure { Timber.e(it, "Could not persist write grant for %s", destUri) }
+        }.onFailure { Timber.e(it, "Could not persist write grant for destination") }
             .isSuccess
         if (!granted) {
             Toast.makeText(this, R.string.save_failed, Toast.LENGTH_LONG).show()
@@ -324,7 +324,7 @@ class SettingsActivity : AppCompatActivity() {
                 destUri = destUri.toString(),
                 localSessionId = pending.localSessionId,
             )
-        }.onFailure { Timber.e(it, "Could not enqueue bundle download %s", pending.cloudSessionId) }
+        }.onFailure { Timber.e(it, "Could not enqueue bundle download") }
             .isSuccess
         if (!enqueued) {
             runCatching {
@@ -446,7 +446,7 @@ class SettingsActivity : AppCompatActivity() {
             CloudRestore.enqueueRestore(this, cloud.sessionId, targetLocalId)
             true
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            Timber.e(e, "Could not enqueue restore %s", cloud.sessionId)
+            Timber.e(e, "Could not enqueue restore")
             if (existing == null) {
                 SessionStore.delete(this, targetLocalId)
             } else {

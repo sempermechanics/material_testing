@@ -64,73 +64,67 @@
                     android:id="@+id/latticeSamplesBody"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
                     android:paddingTop="4dp"
                     android:visibility="gone">
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
+                    <ImageButton
+                        android:id="@+id/btnSamplesInfo"
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_marginEnd="4dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/info"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_info_min"
+                        app:tint="@color/viewer_chrome_muted" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilSubsetSamples"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:layout_marginEnd="6dp"
+                        android:layout_weight="1"
+                        android:hint="@string/subset_samples"
+                        app:boxStrokeColor="@color/input_box_stroke"
+                        app:hintTextColor="@color/viewer_chrome_muted">
 
-                        <ImageButton
-                            android:id="@+id/btnSamplesInfo"
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_marginEnd="4dp"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="@string/info"
-                            android:scaleType="fitCenter"
-                            android:src="@drawable/ic_info_min"
-                            app:tint="@color/viewer_chrome_muted" />
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilSubsetSamples"
-                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                            android:layout_width="0dp"
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etSubsetSamplesValue"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginEnd="6dp"
-                            android:layout_weight="1"
-                            android:hint="@string/subset_samples"
-                            app:boxStrokeColor="@color/input_box_stroke"
-                            app:hintTextColor="@color/viewer_chrome_muted">
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no"
+                            android:inputType="number"
+                            android:maxLength="1"
+                            android:textColor="@color/viewer_chrome_text"
+                            tools:text="3" />
+                    </com.google.android.material.textfield.TextInputLayout>
 
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etSubsetSamplesValue"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:imeOptions="actionDone"
-                                android:importantForAutofill="no"
-                                android:inputType="number"
-                                android:maxLength="1"
-                                android:textColor="@color/viewer_chrome_text"
-                                tools:text="3" />
-                        </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilVsgSamples"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="@string/vsg_samples"
+                        app:boxStrokeColor="@color/input_box_stroke"
+                        app:hintTextColor="@color/viewer_chrome_muted">
 
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilVsgSamples"
-                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                            android:layout_width="0dp"
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etVsgSamplesValue"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:hint="@string/vsg_samples"
-                            app:boxStrokeColor="@color/input_box_stroke"
-                            app:hintTextColor="@color/viewer_chrome_muted">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etVsgSamplesValue"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:imeOptions="actionDone"
-                                android:importantForAutofill="no"
-                                android:inputType="number"
-                                android:maxLength="1"
-                                android:textColor="@color/viewer_chrome_text"
-                                tools:text="3" />
-                        </com.google.android.material.textfield.TextInputLayout>
-                    </LinearLayout>
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no"
+                            android:inputType="number"
+                            android:maxLength="1"
+                            android:textColor="@color/viewer_chrome_text"
+                            tools:text="3" />
+                    </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
 
                 <!-- Matches the result lattice's height (compact=true set in

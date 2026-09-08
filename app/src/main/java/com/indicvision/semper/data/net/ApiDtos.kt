@@ -104,7 +104,7 @@ data class ChallengeResponse(val nonce: String)
 @Serializable
 data class FileSpecDto(
     val name: String,
-    val role: String, // "raw" | "processed" | "reports" | "metadata"
+    val role: String, // one of ArtifactRoles.*
     val bytes: Long,
     val sha256: String,
 )

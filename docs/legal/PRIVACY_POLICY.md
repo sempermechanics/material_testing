@@ -46,7 +46,7 @@ No large-language-model or generative-AI provider is integrated.
 
 - **Off by default, and nothing is collected until you agree.** Collection is
   disabled in the app manifest; the app asks once on first launch and you can
-  change the answer at any time in **Settings → Your data → Send crash reports**.
+  change the answer at any time in **Settings → Your data → Send crash reports and usage data**.
   Declining, or switching it off later, also deletes any report still queued on
   the device.
 - When enabled: crash reports and non-fatal diagnostics from the Android app,

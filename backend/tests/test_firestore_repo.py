@@ -292,6 +292,54 @@ def test_active_device_same_email_reuses_user(monkeypatch, store):
     assert "sub-b" not in store._data["users"]
 
 
+def test_same_device_no_email_does_not_adopt(monkeypatch, store):
+    """A token carrying no address must not inherit a bound account.
+
+    `_emails_conflict` used to answer "no conflict" whenever either side was
+    blank, so a sign-in with no email at all adopted the account bound to the
+    device id it presented — and the device id is a header the caller picks.
+    """
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    repo.get_or_create_user(_claims(sub="sub-a", email="a@b.com"), device_id="dev-1")
+    with pytest.raises(repo.DeviceInUseError):
+        repo.get_or_create_user(_claims(sub="sub-x", email=None), device_id="dev-1")
+    assert "sub-x" not in store._data.get("users", {})
+
+
+def test_same_device_unverified_email_does_not_adopt(monkeypatch, store):
+    """Matching the address is not enough — it has to be a proven address."""
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    repo.get_or_create_user(_claims(sub="sub-a", email="a@b.com"), device_id="dev-1")
+    with pytest.raises(repo.DeviceInUseError):
+        repo.get_or_create_user(
+            _claims(sub="sub-y", email="a@b.com", verified=False), device_id="dev-1",
+        )
+    assert "sub-y" not in store._data.get("users", {})
+
+
+def test_first_sign_in_race_keeps_the_winner(monkeypatch, store):
+    """The loser of a create race reads the winner's profile, never over-writes it.
+
+    Two first-ever requests from one account overlap on launch. An
+    unconditional `set` reset an approved profile back to PENDING; `create`
+    fails instead, and the caller falls through to the existing document.
+    """
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    repo.get_or_create_user(_claims(sub="racer", email="r@b.com"))
+    store._data["users"]["racer"]["access_status"] = "APPROVED"
+
+    again = repo.get_or_create_user(_claims(sub="racer", email="r@b.com"))
+
+    assert again["access_status"] == "APPROVED"
+    assert store._data["users"]["racer"]["access_status"] == "APPROVED"
+
+
 def test_new_documents_include_schema_version(store):
     monkey_claims = _claims(sub="versioned")
     repo.get_or_create_user(monkey_claims)
