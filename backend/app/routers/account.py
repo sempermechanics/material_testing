@@ -22,8 +22,35 @@ def json_dumps(value) -> str:
 
 @router.get("/v1/me")
 def me(user=Depends(current_user)):
-    return {"uid": user["uid"], "email": user.get("email"),
-            "role": user.get("role"), "access_status": user["access_status"]}
+    """Who the caller is, and what their license currently grants.
+
+    The `license` block answers "am I entitled, and for how much longer" in the
+    same round trip as identity, so the app can warn about an approaching
+    expiry instead of only discovering it when `mode` silently flips to demo.
+    It costs no extra Firestore read — `current_user` already returns the whole
+    user document, and the summary is pure over it.
+
+    `/v1/config` remains the source of truth for limits and feature flags; this
+    is deliberately the smaller answer.
+    """
+    summary = repo.license_summary(user)
+    return {
+        "uid": user["uid"],
+        "email": user.get("email"),
+        "role": user.get("role"),
+        "access_status": user["access_status"],
+        "license": {
+            "mode": summary["mode"],
+            "kind": summary["licenseKind"],
+            "prefix": summary["prefix"],
+            "duration": summary["duration"],
+            # Both null when perpetual. inGrace is past expiry but still fully
+            # entitled — a warning, not a restriction.
+            "expiresAt": summary["expiresAt"],
+            "graceEndsAt": summary["graceEndsAt"],
+            "inGrace": summary["inGrace"],
+        },
+    }
 
 
 @router.get("/v1/config")

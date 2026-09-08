@@ -422,6 +422,28 @@ paths:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
         '422': { description: "kind=institution missing domainLock/adminEmails, or kind=individual missing emailLock/deviceIdLock" }
+  /v1/admin/licenses/{licenseId}:
+    patch:
+      operationId: adminUpdateLicense
+      description: >
+        Device-attested, Semper-staff only. Change an existing license's terms
+        in place — this is the renewal path. Extending expiresAt re-entitles
+        every current holder (the individual redeemer, or every non-revoked
+        institution seat) without issuing a new key or asking anyone to
+        re-activate; the new terms are pushed to their user documents before
+        the response returns. Terms only: kind, the email/device/domain locks
+        and the key itself are fixed at mint. Send only the fields that change.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '404': { description: License not found }
+        '422': { description: "No field set, or a value out of range" }
+        '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}/revoke:
     post:
       operationId: adminRevokeLicense

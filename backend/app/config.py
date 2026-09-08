@@ -42,6 +42,16 @@ class Settings:
         "LICENSED_MAX_SESSIONS_PER_USER",
         os.environ.get("PRO_MAX_SESSIONS_PER_USER", "999"),
     )
+
+    # Grace window stamped onto a newly minted timed license when the mint
+    # request does not name one. It exists so a renewal in flight does not
+    # strand a paying user mid-project; entitlements stay FULL throughout.
+    #
+    # This is a mint-time default only. A license already in Firestore that
+    # carries no graceDays reads as ZERO, not as this value — see
+    # firestore_repo._grace_days. Otherwise deploying a grace default would
+    # retroactively reinstate every account that expired within the window.
+    LICENSE_GRACE_DAYS_DEFAULT = _env_int("LICENSE_GRACE_DAYS_DEFAULT", "14")
     MAX_FILES_PER_SESSION = _env_int("MAX_FILES_PER_SESSION", "600")
     MAX_FRAMES_PER_ANALYSIS = _env_int("MAX_FRAMES_PER_ANALYSIS", "150")
 

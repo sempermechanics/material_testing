@@ -8,6 +8,11 @@ grace, revoked, or an institution member holding no seat). It replaced the
 older `plan` field, whose `professional` value is the same state under the
 previous name.
 
+`duration` is orthogonal to `kind`: a license of either kind may be perpetual
+or timed. A timed license stops granting use at `expiresAt` plus `graceDays`;
+entitlements are unchanged during grace, so a renewal that lands late does not
+interrupt work. A perpetual one never stops.
+
 The wire keeps BOTH names for now. An installed app decodes `plan` and fails
 closed to Demo when it is absent (see LicenseEntitlements on Android), so
 dropping `plan` from a response would silently demote every user in the fleet.
@@ -17,6 +22,7 @@ a build that reads `mode`.
 import hashlib
 import re
 import secrets
+from datetime import datetime, timedelta, timezone
 
 MODE_DEMO = "demo"
 MODE_LICENSED = "licensed"
@@ -33,6 +39,15 @@ KINDS = frozenset({KIND_INDIVIDUAL, KIND_INSTITUTION})
 
 #: Pre-rename value for KIND_INSTITUTION, accepted on read.
 LEGACY_KIND_CAMPUS = "campus"
+
+#: How long a license grants use for. Orthogonal to `kind` — an individual or
+#: an institution license may be either shape.
+#:   perpetual — never stops granting use. May still carry `supportUntil`,
+#:               which is informational and never gates anything.
+#:   timed     — stops at `expiresAt`, plus `graceDays`.
+DURATION_PERPETUAL = "perpetual"
+DURATION_TIMED = "timed"
+DURATIONS = frozenset({DURATION_PERPETUAL, DURATION_TIMED})
 
 
 def legacy_plan(mode: str) -> str:
@@ -58,6 +73,44 @@ def normalize_kind(raw) -> str:
     if value == LEGACY_KIND_CAMPUS:
         return KIND_INSTITUTION
     return value if value in KINDS else KIND_INDIVIDUAL
+
+
+def normalize_duration(raw, *, has_expiry: bool) -> str:
+    """Coerce a stored `duration`, inferring it when the field is absent.
+
+    Licenses minted before duration existed carry no such field, so infer from
+    whether they have an expiry at all. That is exactly the distinction the
+    field makes explicit, so the inference is lossless — it exists to spare a
+    migration, not to guess.
+    """
+    value = raw.strip().lower() if isinstance(raw, str) else ""
+    if value in DURATIONS:
+        return value
+    return DURATION_TIMED if has_expiry else DURATION_PERPETUAL
+
+
+def as_utc(value):
+    """A tz-aware UTC datetime, or None if `value` is not a datetime.
+
+    `expiresAt` reaches Firestore from a client-supplied payload, so a naive
+    datetime can be persisted. Every comparison against `_now()` has to coerce
+    first or raise TypeError; doing it in one place keeps that from being
+    re-derived at each call site.
+    """
+    if not isinstance(value, datetime):
+        return None
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+def grace_ends_at(expires_at, grace_days: int):
+    """When entitlement actually stops: `expiresAt` plus the grace window.
+
+    None for a license with no expiry (perpetual), which never stops.
+    """
+    expiry = as_utc(expires_at)
+    if expiry is None:
+        return None
+    return expiry + timedelta(days=max(0, int(grace_days or 0)))
 
 
 # Ambiguous 0/O/1/I omitted so support can read a key over the phone.

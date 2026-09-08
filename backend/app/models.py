@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated, List, Literal, Optional
 
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -168,12 +168,23 @@ class AdminLicenseCreate(BaseModel):
     it is normalised to `"institution"` before validation.
     """
     kind: Literal["individual", "institution"] = "individual"
+    #: Orthogonal to `kind`. `timed` requires a future `expiresAt`; `perpetual`
+    #: must not carry one. Default is perpetual — the shape that cannot expire
+    #: on someone by accident.
+    duration: Literal["perpetual", "timed"] = "perpetual"
     emailLock: Optional[str] = Field(default=None, min_length=3, max_length=320)
     deviceIdLock: Optional[DeviceId] = None
     domainLock: Optional[str] = Field(default=None, min_length=1, max_length=253)
     adminEmails: List[str] = Field(default_factory=list, max_length=20)
     maxSeats: Optional[int] = Field(default=None, gt=0, le=100000)
     expiresAt: Optional[datetime] = None
+    #: Days after `expiresAt` that entitlement continues, unchanged, so a
+    #: renewal in flight does not interrupt work. Omitted uses the fleet
+    #: default; 0 is a hard cliff.
+    graceDays: Optional[int] = Field(default=None, ge=0, le=365)
+    #: Informational. Never gates anything — a perpetual license whose support
+    #: has lapsed still grants full use.
+    supportUntil: Optional[datetime] = None
     maxAnalyses: Optional[int] = Field(default=None, gt=0)
     note: DisplayString = ""
 
@@ -182,6 +193,19 @@ class AdminLicenseCreate(BaseModel):
     def _kind_alias(cls, value):
         """Accept the pre-rename `campus` spelling from older ops tooling."""
         return "institution" if value == "campus" else value
+
+    @field_validator("expiresAt", "supportUntil")
+    @classmethod
+    def _aware_utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """Coerce a naive datetime to UTC at the boundary.
+
+        A payload may legitimately omit an offset. Letting a naive value
+        through means every later comparison has to coerce or raise TypeError,
+        so it is settled once, here.
+        """
+        if value is None or value.tzinfo is not None:
+            return value
+        return value.replace(tzinfo=timezone.utc)
 
     @field_validator("emailLock")
     @classmethod
@@ -221,6 +245,20 @@ class AdminLicenseCreate(BaseModel):
         return out
 
     @model_validator(mode="after")
+    def _duration_requires_matching_expiry(self) -> "AdminLicenseCreate":
+        """A timed license without an expiry would be perpetual by accident,
+        and a perpetual one carrying an expiry says two contradictory things.
+        Reject both rather than silently picking a winner."""
+        if self.duration == "timed":
+            if self.expiresAt is None:
+                raise ValueError("timed licenses require expiresAt")
+            if self.expiresAt <= datetime.now(timezone.utc):
+                raise ValueError("expiresAt must be in the future")
+        elif self.expiresAt is not None:
+            raise ValueError('perpetual licenses must not set expiresAt (use duration="timed")')
+        return self
+
+    @model_validator(mode="after")
     def _kind_requires_matching_locks(self) -> "AdminLicenseCreate":
         if self.kind == "individual":
             if not self.emailLock or not self.deviceIdLock:
@@ -241,3 +279,40 @@ class InstitutionSeatPatch(BaseModel):
     see routers/institutions.py and firestore_repo.set_seat_enabled."""
     clearDeviceLock: Optional[bool] = None
     enabled: Optional[bool] = None
+
+
+class AdminLicenseUpdate(BaseModel):
+    """Ops edit of an already-minted license — renewal, mostly.
+
+    Before this existed a timed license could only be replaced, which meant
+    issuing a new key and re-activating every holder. Extending `expiresAt`
+    here re-entitles everyone already on the license in place.
+
+    Terms only. It cannot change `kind`, the domain or email locks, or the
+    key — those decide *who* the license is for, and changing them under
+    existing holders is a different operation with different consequences.
+    Send only what changes; at least one field is required.
+    """
+    expiresAt: Optional[datetime] = None
+    graceDays: Optional[int] = Field(default=None, ge=0, le=365)
+    supportUntil: Optional[datetime] = None
+    maxSeats: Optional[int] = Field(default=None, gt=0, le=100000)
+    maxAnalyses: Optional[int] = Field(default=None, gt=0)
+    note: Optional[DisplayString] = None
+
+    @field_validator("expiresAt", "supportUntil")
+    @classmethod
+    def _aware_utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        if value is None or value.tzinfo is not None:
+            return value
+        return value.replace(tzinfo=timezone.utc)
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> "AdminLicenseUpdate":
+        if all(
+            getattr(self, name) is None
+            for name in ("expiresAt", "graceDays", "supportUntil", "maxSeats",
+                         "maxAnalyses", "note")
+        ):
+            raise ValueError("at least one field must be set")
+        return self

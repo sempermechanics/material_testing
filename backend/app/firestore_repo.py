@@ -9,15 +9,20 @@ from google.cloud import firestore
 from . import notify
 from .config import settings
 from .licenses import (
+    DURATION_PERPETUAL,
+    DURATION_TIMED,
     KIND_INDIVIDUAL,
     KIND_INSTITUTION,
     MODE_DEMO,
     MODE_LICENSED,
     MODES,
+    as_utc,
     generate_key,
+    grace_ends_at,
     key_hash,
     key_prefix,
     legacy_plan,
+    normalize_duration,
     normalize_kind,
     normalize_mode,
 )
@@ -355,25 +360,54 @@ def _stored_mode(user: dict) -> str:
     return normalize_mode(raw)
 
 
-def _license_expired(user: dict) -> bool:
-    exp = user.get("licenseExpiresAt")
-    if exp is None:
-        return False
-    if isinstance(exp, datetime) and exp.tzinfo is None:
-        exp = exp.replace(tzinfo=timezone.utc)
+def _grace_days(user: dict) -> int:
+    """This account's grace window in days. Absent reads as ZERO.
+
+    Deliberately not `settings.LICENSE_GRACE_DAYS_DEFAULT`: that is the value
+    stamped onto a license at mint. A user document that predates grace has no
+    `licenseGraceDays`, and defaulting those to a non-zero window would
+    retroactively reinstate every account that expired inside it the moment
+    this deploys. New mints carry the field explicitly.
+    """
+    raw = user.get("licenseGraceDays")
     try:
-        return exp <= _now()
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _expiry_state(user: dict) -> tuple[bool, bool, object]:
+    """(entitlement_over, in_grace, grace_ends_at) for this account.
+
+    `entitlement_over` is the only one that gates: it is true once even the
+    grace window has passed. `in_grace` means past `expiresAt` but still
+    entitled — the app shows a renewal warning, nothing is withdrawn.
+
+    Fails OPEN on a malformed timestamp, matching the behaviour this replaced:
+    a garbage `licenseExpiresAt` keeps the account licensed rather than
+    cutting off a paying user over a bad write.
+    """
+    expiry = as_utc(user.get("licenseExpiresAt"))
+    if expiry is None:
+        return False, False, None
+    ends = grace_ends_at(expiry, _grace_days(user))
+    try:
+        now = _now()
+        return ends <= now, expiry <= now < ends, ends
     except TypeError:
-        return False
+        return False, False, ends
 
 
 def effective_mode(user: dict) -> str:
-    """Licensed until the key expires; missing/unknown/expired → demo."""
+    """Licensed until the key expires past grace; anything else → demo.
+
+    Grace is inside the licensed branch on purpose: an account in grace keeps
+    every entitlement it had. Only the warning changes.
+    """
     if _stored_mode(user) != MODE_LICENSED:
         return MODE_DEMO
-    if _license_expired(user):
-        return MODE_DEMO
-    return MODE_LICENSED
+    entitlement_over, _in_grace, _ends = _expiry_state(user)
+    return MODE_DEMO if entitlement_over else MODE_LICENSED
 
 
 def resolve_user_config(user: dict) -> dict:
@@ -387,7 +421,8 @@ def resolve_user_config(user: dict) -> dict:
     mirror kept for installed clients. Both always describe the same state.
     """
     dat_codec_override = _bool_override(user, "datCodecEncodingEnabled")
-    mode = effective_mode(user)
+    summary = license_summary(user)
+    mode = summary["mode"]
     is_licensed = mode == MODE_LICENSED
     if is_licensed:
         max_sessions = (
@@ -403,7 +438,13 @@ def resolve_user_config(user: dict) -> dict:
         # to Demo when it is missing, so removing this key demotes the whole
         # fleet. Remove only once adoption of a `mode`-reading build is high.
         "plan": legacy_plan(mode),
-        "licenseKind": normalize_kind(user.get("licenseKind")) if user.get("licenseKind") else "",
+        "licenseKind": summary["licenseKind"],
+        "licenseDuration": summary["duration"],
+        # Both null for a perpetual license. `inGrace` means past expiry but
+        # still fully entitled — the app warns, it does not gate on this.
+        "licenseExpiresAt": summary["expiresAt"],
+        "licenseGraceEndsAt": summary["graceEndsAt"],
+        "inGrace": summary["inGrace"],
         "cloudBackupEnabled": is_licensed,
         "shareEnabled": is_licensed,
         "maxSessions": max_sessions,
@@ -419,7 +460,29 @@ def resolve_user_config(user: dict) -> dict:
             if dat_codec_override is not None
             else settings.DAT_CODEC_ENCODING_ENABLED
         ),
-        "licensePrefix": user.get("licensePrefix") or "",
+        "licensePrefix": summary["prefix"],
+    }
+
+
+def license_summary(user: dict) -> dict:
+    """What license this account holds and when it stops — pure, no reads.
+
+    `current_user` already returns the whole user document, so both /v1/me and
+    resolve_user_config compute this without touching Firestore. Everything
+    here is mirrored onto the user at activation; see _license_mirror_patch.
+    """
+    expiry = as_utc(user.get("licenseExpiresAt"))
+    _over, in_grace, ends = _expiry_state(user)
+    return {
+        "mode": effective_mode(user),
+        "licenseKind": normalize_kind(user.get("licenseKind")) if user.get("licenseKind") else "",
+        "duration": normalize_duration(
+            user.get("licenseDuration"), has_expiry=expiry is not None,
+        ),
+        "prefix": user.get("licensePrefix") or "",
+        "expiresAt": expiry,
+        "graceEndsAt": ends,
+        "inGrace": in_grace,
     }
 
 
@@ -514,7 +577,15 @@ def _license_public(license_id: str, data: dict) -> dict:
         "createdByUid": data.get("createdByUid") or "",
         "redeemedAt": data.get("redeemedAt"),
         "redeemedByUid": data.get("redeemedByUid") or "",
+        "duration": normalize_duration(
+            data.get("duration"), has_expiry=data.get("expiresAt") is not None,
+        ),
         "expiresAt": data.get("expiresAt"),
+        "graceDays": data.get("graceDays"),
+        "graceEndsAt": grace_ends_at(data.get("expiresAt"), data.get("graceDays") or 0),
+        # Informational; never gates. A perpetual license whose support has
+        # lapsed still grants full use.
+        "supportUntil": data.get("supportUntil"),
         "maxAnalyses": data.get("maxAnalyses"),
         "note": data.get("note") or "",
     }
@@ -533,6 +604,8 @@ def _write_license(
     max_seats: int | None = None,
     redeemed_by_uid: str | None = None,
     expires_at=None,
+    grace_days: int | None = None,
+    support_until=None,
     max_analyses: int | None = None,
     note: str = "",
 ) -> tuple[str, str, dict]:
@@ -567,6 +640,18 @@ def _write_license(
         stored["seatsUsed"] = 0
     if expires_at is not None:
         stored["expiresAt"] = expires_at
+        stored["duration"] = DURATION_TIMED
+        # Stamped explicitly at mint so the value in force is recorded on the
+        # document rather than inherited from whatever the env says later.
+        stored["graceDays"] = (
+            settings.LICENSE_GRACE_DAYS_DEFAULT if grace_days is None else max(0, int(grace_days))
+        )
+    else:
+        stored["duration"] = DURATION_PERPETUAL
+    if support_until is not None:
+        # Informational only. A perpetual license whose support has lapsed
+        # still grants full use — nothing reads this to gate anything.
+        stored["supportUntil"] = support_until
     if max_analyses is not None:
         stored["maxAnalyses"] = int(max_analyses)
     if redeemed_by_uid:
@@ -687,6 +772,36 @@ def _seat_ref(license_id: str, uid: str):
     return db().collection("licenses").document(license_id).collection("seats").document(uid)
 
 
+def _license_mirror_patch(lic: dict) -> dict:
+    """The license terms copied onto the user document at activation.
+
+    `effective_mode` and `license_summary` read only the user dict, which is
+    what keeps `resolve_user_config` free of Firestore reads on request paths
+    that call it for every session and file. The cost is that these are a
+    snapshot: changing the license after activation does not reach anyone who
+    already holds a seat. `update_license` fans the new values back out — it is
+    the only writer that has to, and it is rare.
+
+    Every field is written on every activation, cleared with DELETE_FIELD when
+    the license does not carry it, so re-activating onto a different license
+    never leaves a stale term behind.
+    """
+    expires_at = lic.get("expiresAt")
+    grace_days = lic.get("graceDays")
+    max_analyses = lic.get("maxAnalyses")
+    return {
+        "licenseExpiresAt": expires_at if expires_at is not None else firestore.DELETE_FIELD,
+        "licenseGraceDays": (
+            max(0, int(grace_days)) if isinstance(grace_days, (int, float))
+            else firestore.DELETE_FIELD
+        ),
+        "licenseDuration": normalize_duration(
+            lic.get("duration"), has_expiry=expires_at is not None,
+        ),
+        "licenseMaxAnalyses": int(max_analyses) if max_analyses else firestore.DELETE_FIELD,
+    }
+
+
 def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: dict, ref, key: str):
     status = lic.get("status") or "unused"
     if status == "revoked":
@@ -707,14 +822,7 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
         "licensePrefix": lic.get("keyPrefix") or key_prefix(key),
         "updatedAt": firestore.SERVER_TIMESTAMP,
     }
-    if lic.get("expiresAt") is not None:
-        user_patch["licenseExpiresAt"] = lic["expiresAt"]
-    else:
-        user_patch["licenseExpiresAt"] = firestore.DELETE_FIELD
-    if lic.get("maxAnalyses"):
-        user_patch["licenseMaxAnalyses"] = int(lic["maxAnalyses"])
-    else:
-        user_patch["licenseMaxAnalyses"] = firestore.DELETE_FIELD
+    user_patch.update(_license_mirror_patch(lic))
 
     license_patch = {}
     if status == "unused":
@@ -774,14 +882,7 @@ def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic:
         "licensePrefix": lic.get("keyPrefix") or key_prefix(key),
         "updatedAt": firestore.SERVER_TIMESTAMP,
     }
-    if lic.get("expiresAt") is not None:
-        user_patch["licenseExpiresAt"] = lic["expiresAt"]
-    else:
-        user_patch["licenseExpiresAt"] = firestore.DELETE_FIELD
-    if lic.get("maxAnalyses"):
-        user_patch["licenseMaxAnalyses"] = int(lic["maxAnalyses"])
-    else:
-        user_patch["licenseMaxAnalyses"] = firestore.DELETE_FIELD
+    user_patch.update(_license_mirror_patch(lic))
 
     batch = db().batch()
     batch.update(db().collection("users").document(uid), user_patch)
@@ -831,9 +932,30 @@ def activate_license(uid: str, email: str, device_id: str, key: str) -> tuple[st
     if not snap.exists:
         return "license_not_found", None
     lic = snap.to_dict() or {}
+    if _license_past_grace(lic):
+        # Without this the activation "succeeds": the past expiry is mirrored
+        # onto the user, effective_mode immediately resolves demo, and the
+        # caller is handed err="" with a demo config and no explanation.
+        return "license_expired", None
     if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
         return _activate_institution(user, uid, email, device_id, lic, ref, key)
     return _activate_individual(user, uid, email, device_id, lic, ref, key)
+
+
+def _license_past_grace(lic: dict) -> bool:
+    """True once a license grants nothing, grace included.
+
+    Reads the license document rather than the user mirror, because at
+    activation there is no mirror yet. Fails open on a malformed timestamp,
+    matching _expiry_state.
+    """
+    ends = grace_ends_at(lic.get("expiresAt"), lic.get("graceDays") or 0)
+    if ends is None:
+        return False
+    try:
+        return ends <= _now()
+    except TypeError:
+        return False
 
 
 def check_device_lock(user: dict, device_id: str) -> bool:
@@ -922,6 +1044,78 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
         if redeemer and _license_mode(lic) == MODE_LICENSED:
             _drop_user_to_demo_if_licensed(redeemer, license_id)
     return _license_public(license_id, {**lic, "status": "revoked"})
+
+
+def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
+    """Change a license's terms and push them to everyone already holding it.
+
+    Renewal is the reason this exists. `_license_mirror_patch` snapshots the
+    terms onto each user at activation so the hot read path needs no Firestore
+    lookup; the cost is that editing the license alone reaches nobody. So this
+    writes the document and then fans the new mirror out — to the individual
+    redeemer, or to every seat on an institution license.
+
+    The fan-out is bounded by `seatsUsed` and renewal is rare, which is what
+    makes this the right side of the trade against a per-request read. Revoked
+    seats are skipped: they hold no entitlement to refresh, and touching them
+    would quietly resurrect a revoked member on the next resolve.
+
+    Returns the updated public license, or None if there is no such license.
+    """
+    ref = db().collection("licenses").document(license_id)
+    snap = ref.get()
+    if not snap.exists:
+        return None
+    lic = snap.to_dict() or {}
+
+    update = {k: v for k, v in patch.items() if v is not None}
+    if not update:
+        return _license_public(license_id, lic)
+    if "expiresAt" in update:
+        # A license given an expiry becomes timed; the mint-time validator
+        # cannot speak for an edit made years later.
+        update["duration"] = DURATION_TIMED
+    if "graceDays" in update:
+        update["graceDays"] = max(0, int(update["graceDays"]))
+    update["updatedAt"] = firestore.SERVER_TIMESTAMP
+    update["updatedByUid"] = admin_uid
+    ref.update(update)
+
+    merged = {**lic, **update}
+    mirror = _license_mirror_patch(merged)
+    for uid in _license_holder_uids(ref, merged):
+        _refresh_license_mirror(uid, license_id, mirror)
+    return _license_public(license_id, merged)
+
+
+def _license_holder_uids(ref, lic: dict) -> list[str]:
+    """Everyone currently entitled by this license."""
+    if normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+        redeemer = lic.get("redeemedByUid")
+        return [redeemer] if redeemer else []
+    out = []
+    for seat_doc in ref.collection("seats").stream():
+        seat = seat_doc.to_dict() or {}
+        if seat.get("status") == "revoked":
+            continue
+        out.append(seat.get("uid") or seat_doc.id)
+    return out
+
+
+def _refresh_license_mirror(uid: str, license_id: str, mirror: dict) -> None:
+    """Re-stamp one holder's copy of the license terms.
+
+    Guarded on `licenseId` for the same reason as the demo drop below: a user
+    who has since moved to a different license must not have this one's terms
+    written over theirs.
+    """
+    user_ref = db().collection("users").document(uid)
+    user_snap = user_ref.get()
+    if not user_snap.exists:
+        return
+    if (user_snap.to_dict() or {}).get("licenseId") != license_id:
+        return
+    user_ref.update({**mirror, "updatedAt": firestore.SERVER_TIMESTAMP})
 
 
 def _drop_user_to_demo_if_licensed(uid: str, license_id: str) -> None:

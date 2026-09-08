@@ -28,6 +28,9 @@ def activate_license(
             "user_not_found": 404,
             "license_already_redeemed": 409,
             "license_seats_exhausted": 409,
+            # 403, not 410: the key is real and may be renewed in place, so
+            # this is "you may not use it", not "it is gone".
+            "license_expired": 403,
         }.get(code, 403)
         raise HTTPException(status, code)
     audit.record(

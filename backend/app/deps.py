@@ -21,7 +21,7 @@ log = logging.getLogger("indic.auth")
 
 _DEV_USER = {"uid": "dev-user", "email": "dev@local", "role": "admin",
              "access_status": "APPROVED", "activeDeviceId": "dev-device",
-             "emailVerified": True, "plan": "professional"}
+             "emailVerified": True, "mode": "licensed", "plan": "professional"}
 _DEV_DEVICE = {"deviceId": "dev-device", "uid": "dev-user", "status": "ACTIVE"}
 
 

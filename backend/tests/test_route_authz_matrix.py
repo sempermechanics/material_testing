@@ -67,6 +67,7 @@ EXPECTED = {
     ("PATCH", "/v1/admin/users/{uid}/config"): DEVICE_ADMIN,
     ("GET", "/v1/admin/licenses"): ADMIN,
     ("POST", "/v1/admin/licenses"): DEVICE_ADMIN,
+    ("PATCH", "/v1/admin/licenses/{license_id}"): DEVICE_ADMIN,
     ("POST", "/v1/admin/licenses/{license_id}/revoke"): DEVICE_ADMIN,
     ("POST", "/v1/licenses/activate"): USER,
     ("GET", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,

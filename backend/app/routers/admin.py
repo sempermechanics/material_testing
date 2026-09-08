@@ -4,7 +4,7 @@ from .. import audit, firestore_repo as repo
 from .. import rate_limit
 from ..deps import admin_user, verified_device
 from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
-from ..models import AdminLicenseCreate, UserConfigPatch
+from ..models import AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
 from ..validation import AccessStatus, DocumentId, PageToken, Uid
 
 router = APIRouter()
@@ -148,6 +148,36 @@ def admin_create_license(
                 "deviceIdLock": body.deviceIdLock},
     )
     return minted
+
+
+@router.patch("/v1/admin/licenses/{license_id}")
+def admin_update_license(
+    license_id: DocumentId,
+    body: AdminLicenseUpdate,
+    ctx=Depends(verified_device),
+    admin=Depends(admin_user),
+):
+    """Device-attested, Semper-staff only. Change a license's terms in place.
+
+    Renewal lives here: extending `expiresAt` re-entitles everyone already on
+    the license without issuing a new key or asking anyone to re-activate. The
+    new terms are pushed to the individual redeemer, or to every non-revoked
+    institution seat, before this returns.
+
+    Terms only — `kind`, the locks and the key itself are fixed at mint.
+    """
+    if not rate_limit.admin_bucket.allow(admin["uid"]):
+        raise HTTPException(429, "rate_limited")
+    patch = body.model_dump(exclude_none=True)
+    updated = repo.update_license(license_id, patch, admin["uid"])
+    if updated is None:
+        raise HTTPException(404, "license_not_found")
+    audit.record(
+        admin["uid"], action="ADMIN_LICENSE_EXTEND",
+        target={"type": "license", "id": license_id},
+        detail={k: str(v) for k, v in patch.items()},
+    )
+    return updated
 
 
 @router.post("/v1/admin/licenses/{license_id}/revoke")
