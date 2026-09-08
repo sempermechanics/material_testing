@@ -718,6 +718,18 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="limit_still_full">Still at the limit. Delete an analysis or email support@sempermechanics.com.</string>
     <string name="limit_cleared">You\'re under the limit again.</string>
 
+    <!-- Floating-seat gate. Not a paywall and not a block on the app: the
+         account is eligible and everything already saved stays open. Only
+         starting new work waits for a colleague to finish. -->
+    <string name="seat_title">All seats are in use</string>
+    <string name="seat_body">Your institution\'s licence has a set number of seats, and they\'re all taken right now. Your saved analyses are still here — only starting a new one has to wait.\n\nSeats free up as colleagues finish, so try again in a moment.</string>
+    <string name="seat_take">Try for a seat</string>
+    <string name="seat_back">Back to my analyses</string>
+    <string name="seat_taken">You\'ve got a seat.</string>
+    <string name="seat_still_full">Still no free seat. Try again shortly.</string>
+    <string name="seat_error">Couldn\'t check for a seat. Check your connection and try again.</string>
+    <string name="seat_offline">You\'re offline — connect to take a seat.</string>
+
     <!-- License expiry notice on Home. Advisory only — nothing is withdrawn
          while the renewal is outstanding. -->
     <string name="license_expiring_today">License expires today — email %1$s to renew</string>

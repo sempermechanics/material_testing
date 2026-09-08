@@ -43,14 +43,31 @@ data class AppConfigDto(
     val cloudBackupEnabled: Boolean = false,
     val shareEnabled: Boolean = false,
     val licensePrefix: String = "",
-    /** `""`, `"individual"`, or `"institution"` — display/support metadata
-     * only, not a gating input. Entitlements (cloudBackupEnabled/shareEnabled/
-     * mode) are identical for an individual and an institution seat; this
-     * field exists so Settings can show e.g. "Activated via university.edu"
-     * and so support tickets can tell the two shapes apart. A backend
-     * predating the rename sends `"campus"`; [LicenseEntitlements] normalises
-     * it. */
+    /** `""`, `"individual"`, or `"institution"` — display/support metadata,
+     * so Settings can show e.g. "Activated via university.edu" and support
+     * tickets can tell the two shapes apart. A backend predating the rename
+     * sends `"campus"`; [AppRemoteConfig] normalises it.
+     *
+     * Not a gating input: entitlements are identical for an individual and an
+     * institution seat once [mode] is licensed. What differs on an institution
+     * license is [licenseSeating], and it is that field — not this one — that
+     * decides whether a seat has to be taken. */
     val licenseKind: String = "",
+    /** `assigned` or `floating`, for an institution license. Empty on a
+     * backend predating floating seats, which the cache reads as assigned —
+     * every license that existed then entitled its members outright.
+     *
+     * `floating` plus [mode] `demo` is the one combination that means "you may
+     * work, but somebody else is holding the seat": eligible, not blocked. */
+    val licenseSeating: String = "",
+    /** ISO-8601 instant this account's floating seat lapses, or null when it
+     * holds none (and always null on an assigned license). */
+    val leaseExpiresAt: String? = null,
+    /** How often to renew the seat. Renewing IS the heartbeat — the backend
+     * has no separate route — so this is the interval between checkout calls
+     * while work is in progress. 0 until a backend that knows about seats
+     * answers. */
+    val leaseHeartbeatMinutes: Int = 0,
     /** `perpetual` or `timed`. Empty on a backend predating duration; the
      * cache infers it from whether an expiry arrived. */
     val licenseDuration: String = "",

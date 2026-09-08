@@ -1094,7 +1094,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // Hard stop: do not start a new analysis when the session quota is full.
         // Re-runs that update an existing Home row are still allowed.
         lifecycleScope.launch {
-            if (!ensureSessionQuota()) return@launch
+            if (!ensureCanStart()) return@launch
 
             isProcessing = true
             checkReady()
@@ -1323,7 +1323,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val roi = resolveRoi(plan.maxOf { it.subset }) ?: return
 
         lifecycleScope.launch {
-            if (!ensureSessionQuota()) return@launch
+            if (!ensureCanStart()) return@launch
 
             isProcessing = true
             checkReady()
@@ -1454,8 +1454,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
     }
 
-    private suspend fun ensureSessionQuota(): Boolean =
-        AnalysisNavHelper.ensureSessionQuota(this, viewModel)
+    private suspend fun ensureCanStart(): Boolean =
+        AnalysisNavHelper.ensureCanStart(this, viewModel)
 
     private fun wireCancelButton(
         titleRes: Int = R.string.cancel_run_title,

@@ -231,6 +231,29 @@ class ApiDtosContractTest {
     }
 
     @Test
+    fun `config response decodes the floating seat fields`() {
+        val cfg = json.decodeFromString<AppConfigDto>(
+            """
+            {"mode":"licensed","licenseKind":"institution","licenseSeating":"floating",
+             "leaseExpiresAt":"2027-03-01T00:00:00Z","leaseHeartbeatMinutes":30}
+            """.trimIndent(),
+        )
+        assertEquals("floating", cfg.licenseSeating)
+        assertEquals("2027-03-01T00:00:00Z", cfg.leaseExpiresAt)
+        assertEquals(30, cfg.leaseHeartbeatMinutes)
+    }
+
+    @Test
+    fun `config response without seating decodes blank, which reads as assigned`() {
+        // A deploy predating floating seats sends nothing here. Blank must not
+        // be misread as floating, or every institution user would be gated.
+        val cfg = json.decodeFromString<AppConfigDto>("""{"mode":"licensed"}""")
+        assertEquals("", cfg.licenseSeating)
+        assertNull(cfg.leaseExpiresAt)
+        assertEquals(0, cfg.leaseHeartbeatMinutes)
+    }
+
+    @Test
     fun `license activate request encodes the exact backend field name`() {
         val encoded = json.encodeToString(LicenseActivateRequest(key = "SEMP-AAAA-BBBB-CCCC-DDDD"))
         assertTrue(encoded.contains("\"key\""))

@@ -45,11 +45,44 @@ object LicenseEntitlements {
         isLicensed(context) && AppRemoteConfig.shareEnabled(context)
 
     /**
-     * `""`, `"individual"`, or `"institution"`. Display/support metadata only —
-     * an individual and an institution seat both resolve to [MODE_LICENSED]
-     * with identical entitlements, so nothing above gates on this value.
+     * `""`, `"individual"`, or `"institution"`. Display/support metadata — an
+     * individual and an institution seat resolve to identical entitlements
+     * once [isLicensed], so nothing gates on *this* value.
+     *
+     * What can differ on an institution license is [needsSeat]: a floating one
+     * entitles only the members currently holding a seat.
      */
     fun licenseKind(context: Context): String = AppRemoteConfig.licenseKind(context)
+
+    /**
+     * Whether this account has to hold a floating seat to work.
+     *
+     * True only for a floating institution license. On an assigned license,
+     * and against any backend that predates floating seats, this is false and
+     * nothing changes.
+     */
+    fun needsSeat(context: Context): Boolean =
+        AppRemoteConfig.licenseSeating(context) == AppRemoteConfig.SEATING_FLOATING
+
+    /**
+     * Whether starting new work needs a seat this account does not have.
+     *
+     * A **parallel** gate to the quota one, not a widening of it: an
+     * institution member is [MODE_LICENSED], so `isSessionLimitReached` and
+     * `analysisCap` never fire for them. Without this they would sail past
+     * every existing check.
+     *
+     * Reads [isLicensed] as the answer rather than the cached lease date. The
+     * backend already folds the lease into `mode` — it resolves demo the
+     * moment a seat lapses — so trusting a local timestamp instead would just
+     * be a second, staler opinion of the same thing.
+     */
+    fun seatRequiredToStart(context: Context): Boolean =
+        needsSeat(context) && !isLicensed(context)
+
+    /** How often to renew a held seat while work is in progress, in minutes. */
+    fun seatHeartbeatMinutes(context: Context): Int =
+        AppRemoteConfig.leaseHeartbeatMinutes(context)
 
     fun unlimitedAnalysis(context: Context): Boolean = isLicensed(context)
 

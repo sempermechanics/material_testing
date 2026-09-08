@@ -295,6 +295,77 @@ class LicenseEntitlementsTest {
         assertTrue(AppRemoteConfig.isStale(ctx, LicenseEntitlements.STALE_CACHE_MS, fetchedAt - day))
     }
 
+    // ---- floating seats ----
+
+    @Test
+    fun `an assigned license never needs a seat`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", licenseSeating = "assigned"))
+        assertFalse(LicenseEntitlements.needsSeat(ctx))
+        assertFalse(LicenseEntitlements.seatRequiredToStart(ctx))
+    }
+
+    @Test
+    fun `a backend predating floating seats reads as assigned`() {
+        // Failing the other way would lock every institution user out of
+        // starting work against an older deploy.
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed"))
+        assertFalse(LicenseEntitlements.needsSeat(ctx))
+        assertFalse(LicenseEntitlements.seatRequiredToStart(ctx))
+    }
+
+    @Test
+    fun `a floating member holding a seat may start work`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", licenseSeating = "floating"))
+        assertTrue(LicenseEntitlements.needsSeat(ctx))
+        assertFalse(LicenseEntitlements.seatRequiredToStart(ctx))
+    }
+
+    @Test
+    fun `a floating member without a seat is gated`() {
+        // demo + floating is the one combination meaning "eligible, but
+        // somebody else has the seat".
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo", licenseSeating = "floating"))
+        assertTrue(LicenseEntitlements.seatRequiredToStart(ctx))
+    }
+
+    @Test
+    fun `a plain demo account is not sent to the seat screen`() {
+        // It has no institution license at all — the quota gate is what limits
+        // it, and offering a seat it can never take would be nonsense.
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo"))
+        assertFalse(LicenseEntitlements.seatRequiredToStart(ctx))
+    }
+
+    @Test
+    fun `the seat gate is independent of the analysis quota`() {
+        // The reason this is a parallel predicate: a licensed institution
+        // member has no analysis cap, so every existing quota check waves them
+        // through regardless of whether they hold a seat.
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo", licenseSeating = "floating"))
+        assertTrue(LicenseEntitlements.seatRequiredToStart(ctx))
+
+        AppRemoteConfig.apply(
+            ctx,
+            AppConfigDto(mode = "licensed", licenseSeating = "floating", maxSessions = 5),
+        )
+        assertEquals(Int.MAX_VALUE, LicenseEntitlements.analysisCap(ctx))
+        assertFalse(LicenseEntitlements.seatRequiredToStart(ctx))
+    }
+
+    @Test
+    fun `the heartbeat interval falls back when the backend does not send one`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", licenseSeating = "floating"))
+        assertEquals(
+            AppRemoteConfig.DEFAULT_HEARTBEAT_MINUTES,
+            LicenseEntitlements.seatHeartbeatMinutes(ctx),
+        )
+        AppRemoteConfig.apply(
+            ctx,
+            AppConfigDto(mode = "licensed", licenseSeating = "floating", leaseHeartbeatMinutes = 10),
+        )
+        assertEquals(10, LicenseEntitlements.seatHeartbeatMinutes(ctx))
+    }
+
     @Test
     fun `a demo account upgrading the app stays demo`() {
         ctx.getSharedPreferences("indic_remote_config", Context.MODE_PRIVATE)

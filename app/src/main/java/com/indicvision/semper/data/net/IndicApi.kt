@@ -25,6 +25,12 @@ private const val WRITE_TIMEOUT_S = 300L
 private const val READ_TIMEOUT_S = 60L
 private const val DOWNLOAD_READ_TIMEOUT_S = 300L
 
+/** Seat routes take no body; the backend reads the caller from the token. */
+private const val EMPTY_JSON = "{}"
+
+/** Backend error code for a floating pool with every seat in use. */
+private const val NO_SEAT = "no_floating_seat"
+
 /**
  * Client for the Semper GCP backend (Cloud Run / FastAPI).
  *
@@ -69,6 +75,15 @@ class IndicApi private constructor(context: Context) {
 
     /** This account is bound to a *different* device (registration refused). */
     class DeviceConflictException : IOException("device_conflict")
+
+    /**
+     * Every floating seat on the institution's license is in use right now.
+     *
+     * Not an account problem: the caller is still on the roster and still
+     * entitled to a seat as soon as one frees. Distinct from [ApiException] so
+     * callers cannot render it as a generic failure.
+     */
+    class NoSeatAvailableException : IOException("no_floating_seat")
 
     /**
      * The backend has no ACTIVE device record for us — the record was revoked or
@@ -212,6 +227,42 @@ class IndicApi private constructor(context: Context) {
             decoded.config
         }
     }
+
+    /**
+     * POST /v1/licenses/checkout — take or renew a floating seat.
+     *
+     * Calling it again IS the heartbeat: renewing does not consume a second
+     * seat, so there is no separate route to get that wrong. Call it every
+     * [AppConfigDto.leaseHeartbeatMinutes] while work is in progress.
+     *
+     * Throws [NoSeatAvailableException] when the pool is full. That is not a
+     * problem with the account — the member is still eligible and still in
+     * demo — so it is a distinct type rather than a generic [ApiException],
+     * to stop a caller rendering "something went wrong" for it.
+     */
+    suspend fun checkoutLease(idToken: String): AppConfigDto = seatCall(idToken, "checkout")
+
+    /** POST /v1/licenses/release — give a floating seat back. Idempotent. */
+    suspend fun releaseLease(idToken: String): AppConfigDto = seatCall(idToken, "release")
+
+    private suspend fun seatCall(idToken: String, action: String): AppConfigDto =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder().url("$base/v1/licenses/$action")
+                .header("Authorization", "Bearer $idToken")
+                .header("X-Device-Id", device.getDeviceId())
+                .post(EMPTY_JSON.toRequestBody(jsonMedia)).build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.code != HttpStatus.OK) {
+                    val detail = IndicApiHttp.bodyText(resp)
+                    if (resp.code == HttpStatus.CONFLICT && NO_SEAT in detail) {
+                        throw NoSeatAvailableException()
+                    }
+                    throw ApiException(resp.code, detail)
+                }
+                val decoded: LicenseActivateResponse = json.decodeFromString(resp.body.string())
+                decoded.config
+            }
+        }
 
     // ----------------------------------------------------------- session/files
 

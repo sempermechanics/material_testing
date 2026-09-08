@@ -36,6 +36,7 @@ import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.ui.analysis.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.CrispToast
@@ -147,6 +148,15 @@ class HomeActivity : AppCompatActivity() {
         fab = findViewById(R.id.fabNewAnalysis)
         positionFabAtNineTenths()
         fab.setOnClickListener {
+            // Two independent reasons new work cannot start. The seat check is
+            // first because an institution member is licensed, so the quota
+            // check below is false for them by definition and would wave them
+            // through. btnEmptyRestore delegates here via performClick(), so
+            // both entry points are covered by this one listener.
+            if (LicenseEntitlements.seatRequiredToStart(this)) {
+                AnalysisNavHelper.openSeatRequired(this)
+                return@setOnClickListener
+            }
             // At the account's analysis limit, block new work behind the persistent
             // limit screen (email support) instead of letting it fail on upload.
             if (TokenStore.isSessionLimitReached(this)) {

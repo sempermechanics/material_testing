@@ -34,6 +34,9 @@ object AppRemoteConfig {
     private const val K_LICENSE_DURATION = "license_duration"
     private const val K_LICENSE_EXPIRES_AT = "license_expires_at"
     private const val K_IN_GRACE = "license_in_grace"
+    private const val K_SEATING = "license_seating"
+    private const val K_LEASE_EXPIRES_AT = "lease_expires_at"
+    private const val K_HEARTBEAT_MINUTES = "lease_heartbeat_minutes"
 
     /**
      * When [apply] last stored a response. Without it the cache has no age:
@@ -56,6 +59,18 @@ object AppRemoteConfig {
 
     const val DURATION_PERPETUAL = "perpetual"
     const val DURATION_TIMED = "timed"
+
+    /** Every member of the roster is entitled outright. */
+    const val SEATING_ASSIGNED = "assigned"
+
+    /** Only so many members are entitled at once; a seat must be taken. */
+    const val SEATING_FLOATING = "floating"
+
+    /**
+     * Renew a seat at least this often when the backend has not said. Only a
+     * fallback: a backend that knows about seats always sends its own value.
+     */
+    const val DEFAULT_HEARTBEAT_MINUTES = 30
 
     /** No expiry on file — a perpetual license, or nothing fetched yet. */
     const val NO_INSTANT = 0L
@@ -86,6 +101,9 @@ object AppRemoteConfig {
             putString(K_LICENSE_DURATION, resolveDuration(config))
             putLong(K_LICENSE_EXPIRES_AT, parseInstant(config.licenseExpiresAt))
             putBoolean(K_IN_GRACE, config.inGrace)
+            putString(K_SEATING, resolveSeating(config))
+            putLong(K_LEASE_EXPIRES_AT, parseInstant(config.leaseExpiresAt))
+            putInt(K_HEARTBEAT_MINUTES, config.leaseHeartbeatMinutes.coerceAtLeast(0))
             putLong(K_FETCHED_AT, now)
             putInt(K_FAIL_STREAK, 0)
         }
@@ -100,6 +118,17 @@ object AppRemoteConfig {
         if (raw.isNullOrBlank()) return NO_INSTANT
         return runCatching { Instant.parse(raw).toEpochMilli() }.getOrDefault(NO_INSTANT)
     }
+
+    /**
+     * Assigned unless the backend explicitly says floating.
+     *
+     * A deploy predating floating seats sends nothing here, and every license
+     * that existed then entitled its members outright — so assigned is what
+     * those responses mean, not a guess. Failing the other way would lock
+     * every institution user out of starting work against an older backend.
+     */
+    private fun resolveSeating(config: AppConfigDto): String =
+        if (config.licenseSeating == SEATING_FLOATING) SEATING_FLOATING else SEATING_ASSIGNED
 
     /** `timed` only when the backend said so, or when an expiry actually arrived. */
     private fun resolveDuration(config: AppConfigDto): String = when {
@@ -221,6 +250,20 @@ object AppRemoteConfig {
 
     /** Past expiry but still fully entitled — warn, do not gate. */
     fun inGrace(context: Context): Boolean = prefs(context).getBoolean(K_IN_GRACE, false)
+
+    /** `assigned` or `floating`; assigned until a response says otherwise. */
+    fun licenseSeating(context: Context): String =
+        prefs(context).getString(K_SEATING, SEATING_ASSIGNED) ?: SEATING_ASSIGNED
+
+    /** Epoch millis this account's floating seat lapses, or [NO_INSTANT]. */
+    fun leaseExpiresAtMillis(context: Context): Long =
+        prefs(context).getLong(K_LEASE_EXPIRES_AT, NO_INSTANT)
+
+    /** How often to renew a held seat, in minutes. */
+    fun leaseHeartbeatMinutes(context: Context): Int {
+        val stored = prefs(context).getInt(K_HEARTBEAT_MINUTES, 0)
+        return if (stored > 0) stored else DEFAULT_HEARTBEAT_MINUTES
+    }
 
     /** Drop cached limits (sign-out). */
     fun clear(context: Context) = prefs(context).edit { clear() }
