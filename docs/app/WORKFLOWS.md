@@ -137,15 +137,13 @@ The session list and the only entry point to a new analysis.
    ├── Empty state → "Start analysis"   (same as the FAB — no longer Settings)
    ├── Start new analysis (FAB)
    │   ├── quota gate .................. → 9. Session limit
-   │   ├── expands to Import | Record
-   │   ├── Import ...................... → 3a. Media picker sheet
-   │   └── Record ...................... → 3b. Capture setup / session
+   │   └── opens the source chooser .... → 3a. Media picker sheet
    ├── Settings (gear)
    └── Exit-app confirm on Back
 ```
 
 **Entry:** Splash, Pending approval, the viewer's home button, sign-in.
-**Exit:** Analysis, Settings, Result viewer, Lattice, Session limit, Capture setup.
+**Exit:** Analysis, Settings, Result viewer, Lattice, Session limit.
 
 | # | Action | Expected |
 |---|---|---|
@@ -177,11 +175,9 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.16 | Tap the quota chip below the cap | Settings (or the limit screen at the cap) |
 | [ ] 3.17 | Reach the quota cap | The chip turns red |
 | [ ] 3.18 | Pull to refresh | Cloud reconcile runs; a repair or failure is reported by toast |
-| [ ] 3.19 | Open Home with no sessions | Empty state reading "Import photos or record a new test." with a **Start analysis** button — it does what the FAB does; it no longer opens Settings |
-| [ ] 3.20 | Tap **+** below the quota | A short menu expands: **Import** and **Record** (not the media sheet immediately) |
-| [ ] 3.20a | Tap **Import** | The **New analysis** sheet (§3a) |
-| [ ] 3.20b | Tap **Record** | Capture setup (§3b) |
-| [ ] 3.21 | Tap **+** at the quota cap | Session limit screen instead of the menu |
+| [ ] 3.19 | Open Home with no sessions | Empty state reading "Import photos or a video to start an analysis." with a **Start analysis** button — it does what the FAB does; it no longer opens Settings |
+| [ ] 3.20 | Tap **+** below the quota | The **New analysis** sheet (§3a) opens straight away — there is no intermediate menu |
+| [ ] 3.21 | Tap **+** at the quota cap | Session limit screen instead of the sheet |
 | [ ] 3.22 | Look for a transfer banner, feedback prompt or upgrade prompt on Home | There is none. Home's only progress surface is the per-row badge and bar; the transfer banner lives in Settings and the result viewer |
 | [ ] 3.24 | Press Back on Home | "Exit app?" confirmation |
 
@@ -205,90 +201,6 @@ sheet the wizard's two dropzones open (§5.1), so test it once here.
 | [ ] 3a.8 | Tap the **Files** tab | The sheet dismisses and the system SAF browser opens for images *and* video — this is still the only route to DNG/RAW |
 | [ ] 3a.9 | Open the sheet the first time in each mode | Coach marks run once for the reference pick and once for the deformed pick, then never again |
 | [ ] 3a.10 | Check what permission is asked for, and when | `READ_MEDIA_IMAGES` (and `READ_MEDIA_VIDEO` from Home) is requested when the **Images** tab needs it — never on the Files path |
-
-### 3b. Record — capture setup and session
-
-```
-3b. Record — CaptureSetupActivity → CaptureSessionActivity
-    ├── fps (offered as a short assured list, not a slider), duration,
-    │   resolution (Camera2 catalogue)
-    ├── mode line: stills, locked and lossless PNG — the video path is gone
-    ├── RAM ≥ 1.5× and storage ≥ 1.25× before the test shot
-    ├── CAMERA permission requested up front — ACTION_IMAGE_CAPTURE rejects a
-    │   manifest-declared-but-ungranted CAMERA permission on some Android 11+
-    │   devices, so this can no longer wait until after the test shot
-    ├── Test shot via manufacturer Camera app (ACTION_IMAGE_CAPTURE)
-    ├── ROI editor on the test shot (contrast check region)
-    ├── SSSIG / low-texture gate inside that ROI (hard fail → reselect / Retry)
-    ├── Re-check budget from the real JPEG, then a one-time PNG-encode timing
-    │   calibration that can revise the offered frame rates
-    ├── Lock AF (+ AE) on the test-shot focus point
-    ├── Freeze the ISP (CaptureIspLock) and read every key back out of the
-    │   TotalCaptureResult; whatever the HAL refused is collapsed into one
-    │   warning with a FAQ link
-    ├── Confirm focus: the locked preview holds with a ring on the focus point,
-    │   a magnified unfiltered crop of it, and a sharpness reading given only
-    │   as a percentage of the sharpest point tried. A tap anywhere re-locks
-    │   there (AE re-meters with it); a refused tap restores the previous point.
-    │   Nothing is measured until the user accepts — it sits after the lock,
-    │   not before the test shot, because the vendor Camera app runs its own AF
-    ├── Noise-floor burst: up to 6 stills on the run's own settings, static
-    │   scene, no load yet (NoiseFloorGate). Yields sigma_u, the strain floor
-    │   at the gauge in use, the image noise variance D(eta), the frame-to-
-    │   frame brightness scatter, and the neighbour correlation that catches a
-    │   phone smoothing underneath the lockdown
-    ├── Verdict: a floor above the limit warns and never blocks — Record
-    │   anyway stays the primary action and the floor is stamped on the
-    │   session, the PDF and the CSV. A passing floor is also a dialog:
-    │   **Continue** (not Record anyway), with ⓘ for the FAQ. A burst that
-    │   would not settle or that drifted asks to retry instead, because there
-    │   the measurement failed to measure itself
-    ├── Framing hold: from **Start recording** onward the gravity direction is
-    │   held, and a sustained re-aim withdraws Start — the frozen focus and the
-    │   measured floor both describe the old framing and nothing downstream
-    │   re-checks either (FramingWatch; released once recording begins)
-    ├── Timed stills (PNG, converted from the sensor's own YUV output — no
-    │   JPEG step)
-    ├── Second copy of the as-captured frames into Pictures/semper/<date>-<time>
-    │   (CaptureGallerySave; skipped with one line when there is no room, or
-    │   below Android 10)
-    ├── Hand-off: RESULT_OK + PICKED_REF_URI + PICKED_DEF_URIS → setup starts
-    │   the analysis wizard and finishes (Back from wizard → Home)
-    └── Back / Cancel: setup close → Home; session Back / Cancel → setup
-        (plan kept); mid-stills Back → confirm Stop, then setup
-```
-
-| # | Action | Expected |
-|---|---|---|
-| [ ] 3b.1 | From Home FAB → **Record** | Setup screen with fps, duration, resolution, and a mode summary |
-| [ ] 3b.1a | Press Back / close on setup | Home — Record is abandoned |
-| [ ] 3b.2 | Choose a plan that exceeds free RAM or storage | Blocking dialog; no test shot |
-| [ ] 3b.3 | Continue with a valid plan | CAMERA permission prompt (first run), then the phone Camera app opens for one test shot; **setup stays under the session** |
-| [ ] 3b.3a | Press Back on the session before recording | Setup again, with the previous fps / duration / resolution still filled |
-| [ ] 3b.4 | Cancel the test shot or save nothing | Retry / Cancel (Cancel → setup) |
-| [ ] 3b.4b | Complete the test shot | ROI editor opens on that photo |
-| [ ] 3b.4c | Cancel the ROI editor without saving | Prompt to select an area again, retake, or cancel (Cancel → setup) |
-| [ ] 3b.5 | Save an ROI on a weak / blank pattern | Speckle-fail dialog with FAQ **Why?**; can reselect area or retake |
-| [ ] 3b.5a | Tap **Why?** on that dialog, open the FAQ, return | Same dialog still up (Select area / Retry); flow continues |
-| [ ] 3b.5b | Save an ROI that is too small | Too-small dialog; select a larger area |
-| [ ] 3b.6 | Good test shot + ROI with enough contrast | Focus locks and the preview holds at **Focus looks sharp** with a ring, a magnified crop and a sharpness reading — the burst does not run until it is tapped |
-| [ ] 3b.6a1 | Tap elsewhere on the preview during that step | The ring and the loupe move there and the lens re-locks; a tap on a letterbox bar does nothing |
-| [ ] 3b.6a2 | Tap a spot the lens cannot focus on | One short message, and the **previous** focus point is still locked — a refused tap never costs the lock that worked |
-| [ ] 3b.6a3 | Compare a sharp point against a soft one | The reading is always a percentage *of the sharpest so far*, never a verdict that a point is sharp enough |
-| [ ] 3b.6b | Cover the lens so AF never locks (real device) | AF-fail dialog, Retry test shot — never starts on a floating lens |
-| [ ] 3b.6c | Watch the test shot on a phone that refuses ISP keys | Exactly one warning, effect first, under 20 words, with a working FAQ link. A phone that honoured everything shows none |
-| [ ] 3b.6d | Dim the light or defocus slightly, then take a test shot | Floor verdict dialog; **Record anyway** is the primary action, **Retry test shot** beside it, **Why?** opens the noise-floor FAQ **without dismissing** the dialog |
-| [ ] 3b.6d2 | Tap **Why?** (or pass **ⓘ**), open the FAQ, return | Same dialog still up; after **Continue** / **Record anyway**, **Start recording** works (camera re-locks if the HAL dropped it; floor is not re-measured) |
-| [ ] 3b.6e | Nudge the tripod during the burst | One disturbed frame does not flip a good setup into a refusal (median over 5 estimates) |
-| [ ] 3b.6e2 | Knock the tripod once with **Start recording** showing | Nothing happens — a knock is an acceleration, not a new framing |
-| [ ] 3b.6e3 | Re-aim the rig a few degrees with **Start recording** showing | **The camera moved**, Start withdrawn, **Retake test shot** as the primary action and the status line saying the same; recording cannot proceed on the stale floor |
-| [ ] 3b.6f | Pass the gate on a good setup | Dialog shows large **measurement floor** value (e.g. **402 µε**), body text, **ⓘ** → `#noise-floor` without dismiss; **Continue** enables **Start recording**; floor recorded on session |
-| [ ] 3b.6g | Press Back while timed stills are running | **Stop recording?** confirm; confirming returns to setup (frames discarded) |
-| [ ] 3b.7 | Complete a stills run | Wizard opens with reference + deformed frames filled; Back from wizard step 1 confirms exit to Home (not setup) |
-| [ ] 3b.8 | Open the phone's gallery after a run | A `semper/<date>-<time>` folder under Pictures holds the reference and every frame, as captured |
-| [ ] 3b.9 | Export the PDF and the CSV for that run | Cover **Measurement Floor** is italic notes only (noise floor value plus any floor/denoise warnings; no Image Noise row, no Frame Motion block); CSV opens with `#` session metadata and per-frame field stats, then point rows (`image,x_px,…,znssd` plus floor/motion suffix columns on recorded runs only) |
-
----
 
 ## 4. Settings
 
@@ -749,7 +661,7 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.5.3a | **Animations** `[single]` | Five GIFs, one per field, zipped; each loops when opened in a gallery app. Row is absent on a parameter sweep |
 | [ ] 8.5.3b | Same, immediately on entering the viewer `[single]` | Fields not built yet are built under the progress dialog — never silently missing |
 | [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
-| [ ] 8.5.5 | **CSV data** | `#` preamble (version, reference, strain method, ROI, optional floor in mε, per-frame U/V/Exx/Eyy/Exy max/min/mean), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — recorded sessions append `noise_floor_mε,shift_u_px,shift_v_px,shift_rot_deg`; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image` |
+| [ ] 8.5.5 | **CSV data** | `#` preamble (version, reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg` — the three motion columns are written for every session, empty when a frame admits no fit; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image` |
 | [ ] 8.5.6 | **Everything (.zip)** | Raw photos, per-frame results for all five fields, the CSV and the PDF; single-setting also includes the five field GIFs under `animations/` |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
 | [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |

@@ -214,6 +214,6 @@
         android:elevation="6dp"
         android:padding="6dp"
         android:scaleType="fitCenter"
-        android:src="@drawable/ic_capture"
+        android:src="@drawable/ic_new_analysis"
         app:tint="@color/text_on_primary" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

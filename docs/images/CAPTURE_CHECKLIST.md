@@ -40,7 +40,7 @@ available.
 
 | File | Used in §. | State to be in |
 |---|---|---|
-| `home.png` | §1 | A few sessions with mixed sync badges (**Synced** / **Pending** / **Only in cloud**) so the badge language is visible in one shot |
+| `home.png` | §1 | A few sessions with mixed sync badges (**Synced** / **Pending** / **Only in cloud**) so the badge language is visible in one shot. **Also now stale for a second reason:** the shot shows the old camera-and-video FAB glyph, and the button is a plain **+** since the camera feature was removed |
 | `delete-dialog.png` | §10 | The delete choice dialog, on a row with both local and cloud copies, so it reads **Delete device** / **Delete cloud** |
 | `settings.png` | §10 | **Analyses data management** with a row showing all three actions — Download / Restore / Delete — and, if a transfer is running, the top transfer banner (§4.0 of WORKFLOWS.md) |
 

@@ -7,9 +7,15 @@
 True strain was **zero**. Every Exx value in this study is measurement error — not
 material stretch. That is what makes lighting and rig setup visible.
 
-In-app **Why?** / **ⓘ** copy for the measurement-floor dialog lives in
-[FAQ.md — lighting-and-accuracy](FAQ.md#lighting-and-accuracy). This page is the
-lab write-up: protocol, numbers, and a setup checklist.
+> **The in-app measurement-floor gate this study describes has been removed**
+> along with the camera recording feature. The numbers below still stand — they
+> are a record of what a phone on a tripod actually measures under different
+> light, and the setup checklist applies to frames shot any way you like. What is
+> gone is the app screen that measured a floor for you and stamped it on the
+> session.
+
+Short FAQ version: [FAQ.md — lighting-and-accuracy](FAQ.md#lighting-and-accuracy).
+This page is the lab write-up: protocol, numbers, and a setup checklist.
 
 ---
 

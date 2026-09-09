@@ -87,7 +87,6 @@ Full commands, engine bumps, disk hygiene, and backend setup:
 | `native/` | **Submodule** — solver, strain, seeding, JNI, engine tests & docs |
 | `app/src/main/cpp/` | App-side JNI boundary |
 | `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI, parameter-sweep lattice |
-| `app/src/main/java/.../ui/capture/` | Home **Record**: test shot, noise floor, timed capture |
 | `app/src/main/java/.../ui/viewer/` | Heatmaps, probe, exports |
 | `app/src/main/java/.../ui/auth/` · `ui/settings/` | Sign-in, access gating, settings |
 | `app/src/main/java/.../report/` | PDF report generation |

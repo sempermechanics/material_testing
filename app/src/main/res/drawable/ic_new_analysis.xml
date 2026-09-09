@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="24dp"
+    android:viewportWidth="40"
+    android:viewportHeight="24">
+    <!--
+      A neutral "new analysis" plus. The 40x24 viewport is kept from the icon this
+      replaced so the FAB's fitCenter scaling, and therefore the glyph's on-screen
+      height, does not change. Bar half-width 1.2 matches the 2.4-unit stroke the
+      rest of the icon set draws at this viewport.
+    -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M18.8,4h2.4v16h-2.4z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12,10.8h16v2.4h-16z" />
+</vector>

@@ -138,7 +138,6 @@ class SessionRepository {
         engineStatsArray: FloatArray?,
         stopCode: Int = 0,
         plannedFrameCount: Int = 0,
-        captureFloor: CaptureNoiseFloor? = null,
     ): SessionRecord {
         val now = System.currentTimeMillis()
         val existing = SessionStore.get(appContext, localSessionId)
@@ -181,7 +180,6 @@ class SessionRepository {
             pointsConverged = pointsConverged,
             avgIterations = avgIterations,
             executionTimeMs = executionTimeMs,
-            captureFloor = captureFloor,
             syncState = if (cloudEnabled) SessionRecord.SyncState.PENDING else SessionRecord.SyncState.LOCAL_ONLY,
         )
     }

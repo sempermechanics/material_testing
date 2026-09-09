@@ -1,7 +1,6 @@
 package com.indicvision.semper.results
 
 import com.indicvision.semper.DicResult
-import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.RigidBodyFit
 import org.junit.Assert.assertEquals
@@ -135,20 +134,17 @@ class RigidBodyFitTest {
     }
 
     @Test
-    fun `an unmeasured frame writes empty motion fields in the recorded suffix`() {
-        val floor = CaptureNoiseFloor(100.0, 15.0, 0.001, 5, exceeded = false, overridden = false)
-        assertEquals("0.10000,,,", AnalysisCsvWriter.recordedSuffixColumns(floor, null))
+    fun `an unmeasured frame writes empty motion fields`() {
+        assertEquals(",,", AnalysisCsvWriter.motionSuffixColumns(null))
     }
 
     @Test
-    fun `the recorded motion suffix is three fields after the floor`() {
+    fun `the motion suffix is three fields`() {
         val fit = requireNotNull(RigidBodyFit.fit(field { _, _ -> 1.5f to -2.25f }))
-        val floor = CaptureNoiseFloor(100.0, 15.0, 0.001, 5, exceeded = false, overridden = false)
-        val suffix = AnalysisCsvWriter.recordedSuffixColumns(floor, fit).trimEnd(',')
-        val parts = suffix.split(',')
-        assertEquals(4, parts.size)
-        assertEquals(1.5, parts[1].toDouble(), TOLERANCE)
-        assertEquals(-2.25, parts[2].toDouble(), TOLERANCE)
+        val parts = AnalysisCsvWriter.motionSuffixColumns(fit).split(',')
+        assertEquals(3, parts.size)
+        assertEquals(1.5, parts[0].toDouble(), TOLERANCE)
+        assertEquals(-2.25, parts[1].toDouble(), TOLERANCE)
     }
 
     private companion object {

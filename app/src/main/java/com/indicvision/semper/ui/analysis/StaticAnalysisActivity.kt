@@ -50,12 +50,10 @@ import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
-import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.net.AppRemoteConfig
-import com.indicvision.semper.ui.capture.CaptureSetupActivity
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
@@ -349,24 +347,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
             intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
             handleVideo(it.toUri())
         }
-        // The floor the capture screen measured, before the frames themselves,
-        // so a hand-off that fails on the frames still cannot leave a floor
-        // belonging to one run attached to the next.
-        intent.getStringExtra(DicKeys.CAPTURE_NOISE_FLOOR)?.let {
-            intent.removeExtra(DicKeys.CAPTURE_NOISE_FLOOR)
-            viewModel.captureFloor = CaptureNoiseFloor.decode(it)
-        }
         intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
             intent.removeExtra(DicKeys.PICKED_DEF_URIS)
             if (list.isNotEmpty()) {
                 onDeformedPicked(list.map { it.toUri() })
             }
         }
-        if (intent.hasExtra(DicKeys.LAUNCHED_FROM_CAPTURE)) {
-            viewModel.launchedFromCapture = intent.getBooleanExtra(DicKeys.LAUNCHED_FROM_CAPTURE, false)
-            intent.removeExtra(DicKeys.LAUNCHED_FROM_CAPTURE)
-        }
-
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
         // and keep the wizard nav above the nav-bar gesture area so the top
         // controls aren't in the system swipe-down zone.
@@ -588,7 +574,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun handleReferenceImage(uri: Uri) {
-        viewModel.captureFloor = null
         val name = getFileName(uri)
         val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
 
@@ -1059,13 +1044,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         // Read off the slider here: the measurement runs on the native thread,
         // which must not touch views.
-        // The noise variance is measured on this phone under this light when
-        // the run captured its own frames; an import has no burst behind it and
-        // falls back to the paper's constant.
         val tuning = SubsetRecommender.Tuning(
             sizes = etSubsetSize.valueFrom.toInt()..etSubsetSize.valueTo.toInt(),
-            noiseVariance = viewModel.captureFloor?.noiseVariance
-                ?: SubsetRecommender.NOISE_VARIANCE,
         )
 
         lifecycleScope.launch(SemperNativeLib.nativeDispatcher) {
@@ -1573,25 +1553,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun showLeaveAnalysisDialog() {
-        if (viewModel.launchedFromCapture) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.analysis_recapture_title)
-                .setMessage(R.string.analysis_recapture_message)
-                .setPositiveButton(R.string.analysis_recapture_confirm) { _, _ ->
-                    startActivity(Intent(this, CaptureSetupActivity::class.java))
-                    finish()
-                }
-                .setNegativeButton(R.string.exit) { _, _ -> finish() }
-                .setNeutralButton(R.string.cancel, null)
-                .show()
-        } else {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.exit_analysis_title)
-                .setMessage(R.string.exit_analysis_message)
-                .setPositiveButton(R.string.exit) { _, _ -> finish() }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
-        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.exit_analysis_title)
+            .setMessage(R.string.exit_analysis_message)
+            .setPositiveButton(R.string.exit) { _, _ -> finish() }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun finishImportOperation() {

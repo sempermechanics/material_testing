@@ -130,7 +130,6 @@ object SessionUploadBundler {
             roiY = record.roiY,
             roiW = record.roiW,
             roiH = record.roiH,
-            captureFloor = record.captureFloor,
         )
         val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, csvMetadata) }
         try {
@@ -339,7 +338,6 @@ object SessionUploadBundler {
                 referenceImageName = "Baseline",
                 deformedImageName = frameName,
                 drawMinMarker = false,
-                captureFloor = record.captureFloor,
             ),
         )
 
