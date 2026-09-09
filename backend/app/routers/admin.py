@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
-from ..deps import admin_user, verified_device
+from ..deps import admin_user, attested_or_mfa_admin
 from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
 from ..models import AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
 from ..validation import AccessStatus, DocumentId, PageToken, Uid
@@ -40,7 +40,7 @@ def admin_list_users(
 
 
 @router.post("/v1/admin/users/{uid}/approve")
-def admin_approve_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(admin_user)):
+def admin_approve_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
     if not rate_limit.admin_bucket.allow(admin["uid"]):
         raise HTTPException(429, errors.RATE_LIMITED)
     if not repo.set_user_status(uid, "APPROVED"):
@@ -50,7 +50,7 @@ def admin_approve_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(adm
 
 
 @router.post("/v1/admin/users/{uid}/revoke")
-def admin_revoke_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(admin_user)):
+def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
     if not rate_limit.admin_bucket.allow(admin["uid"]):
         raise HTTPException(429, errors.RATE_LIMITED)
     if not repo.set_user_status(uid, "SUSPENDED"):
@@ -61,7 +61,7 @@ def admin_revoke_user(uid: Uid, ctx=Depends(verified_device), admin=Depends(admi
 
 @router.patch("/v1/admin/users/{uid}/config")
 def admin_patch_user_config(uid: Uid, body: UserConfigPatch,
-                            ctx=Depends(verified_device), admin=Depends(admin_user)):
+                            ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
     """Set or clear per-user product-limit overrides on the Firestore user doc."""
     if not rate_limit.admin_bucket.allow(admin["uid"]):
         raise HTTPException(429, errors.RATE_LIMITED)
@@ -102,7 +102,7 @@ def admin_list_licenses(
 @router.post("/v1/admin/licenses")
 def admin_create_license(
     body: AdminLicenseCreate,
-    ctx=Depends(verified_device),
+    ctx=Depends(attested_or_mfa_admin),
     admin=Depends(admin_user),
 ):
     """Mint a licensed key. `kind=individual` (default) locks one email and
@@ -156,7 +156,7 @@ def admin_create_license(
 def admin_update_license(
     license_id: DocumentId,
     body: AdminLicenseUpdate,
-    ctx=Depends(verified_device),
+    ctx=Depends(attested_or_mfa_admin),
     admin=Depends(admin_user),
 ):
     """Device-attested, Semper-staff only. Change a license's terms in place.
@@ -185,7 +185,7 @@ def admin_update_license(
 @router.post("/v1/admin/licenses/{license_id}/revoke")
 def admin_revoke_license(
     license_id: DocumentId,
-    ctx=Depends(verified_device),
+    ctx=Depends(attested_or_mfa_admin),
     admin=Depends(admin_user),
 ):
     if not rate_limit.admin_bucket.allow(admin["uid"]):

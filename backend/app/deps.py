@@ -3,6 +3,7 @@ import base64
 import binascii
 import hashlib
 import logging
+import time
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -23,6 +24,10 @@ _DEV_USER = {"uid": "dev-user", "email": "dev@local", "role": "admin",
              "access_status": "APPROVED", "activeDeviceId": "dev-device",
              "emailVerified": True, "mode": "licensed", "plan": "professional"}
 _DEV_DEVICE = {"deviceId": "dev-device", "uid": "dev-user", "status": statuses.DEVICE_ACTIVE}
+#: Claims the dev bypass pretends the token carried. Shaped like a real
+#: second-factor sign-in so the console path is exercised in dev rather than
+#: skipped by a branch that only exists there.
+_DEV_CLAIMS = {"firebase": {"sign_in_second_factor": "phone"}}
 
 
 def _client_bearer(authorization: str, x_forwarded_authorization: str) -> str:
@@ -49,6 +54,7 @@ def current_user(
     `request.state.uid` so access logs work on authn-only routes (not only
     device-attested ones).
     """
+    claims: dict = _DEV_CLAIMS if settings.DEV_INSECURE_AUTH else {}
     if settings.DEV_INSECURE_AUTH:
         user = _DEV_USER
     else:
@@ -87,6 +93,15 @@ def current_user(
         request.state.uid = user["uid"]
         obs.bind_uid(user["uid"])
     except Exception:  # noqa: BLE001 - logging enrichment must never fail a request
+        pass
+    # Verified claims, for dependencies that need to know *how* the caller
+    # signed in rather than only who they are — today that is the console's
+    # second-factor check. Stashed on request.state instead of merged into the
+    # user dict: that dict is written back to Firestore by several callers, and
+    # a token claim is not a user field.
+    try:
+        request.state.claims = claims
+    except Exception:  # noqa: BLE001
         pass
     return user
 
@@ -165,6 +180,97 @@ async def verified_device(
     except Exception:  # noqa: BLE001
         pass
     return {"user": user, "device": dev}
+
+
+def _second_factor(claims: dict) -> str:
+    """The second factor the token records, or "" when there was none.
+
+    Firebase sets `firebase.sign_in_second_factor` only on a token minted after
+    an MFA challenge actually completed. Enrolment alone does not set it, so
+    this is "they proved a second factor for *this* session", not "they own
+    one" — which is the property worth checking.
+    """
+    firebase = claims.get("firebase")
+    if not isinstance(firebase, dict):
+        return ""
+    return str(firebase.get("sign_in_second_factor") or "")
+
+
+def _auth_age_seconds(claims: dict) -> float | None:
+    """How long ago this session authenticated, or None if the token does not
+    say. None is treated as too old: a token that will not state its own age
+    cannot satisfy a freshness requirement."""
+    raw = claims.get("auth_time")
+    try:
+        return time.time() - float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+async def attested_or_mfa_admin(
+    request: Request,
+    user: dict = Depends(admin_user),
+    x_device_id: str = Header(default=""),
+    x_nonce: str = Header(default=""),
+    x_signature: str = Header(default=""),
+) -> dict:
+    """State-changing admin caller: an attested device, or a 2FA browser.
+
+    The device path is unchanged and still preferred — if the request carries
+    any device header it is held to the full `verified_device` check, so the
+    phone admin screen keeps exactly the guarantee it had.
+
+    The browser path exists because a browser cannot produce an ECDSA
+    attestation, which is what kept the staff console read-only. It is
+    accepted on two conditions, and both are checked here rather than trusted
+    from the client:
+
+    * the ID token records a completed **second factor**, so a token stolen
+      from a password-only session is refused; and
+    * the sign-in behind it is **recent** (ADMIN_WEB_REAUTH_SECONDS), so a
+      token that leaks later stops working — the console re-authenticates
+      rather than holding authority for the token's full hour.
+
+    This is deliberately weaker than device attestation and is not a drop-in
+    equivalent: an attacker who phishes a live MFA session inside the window
+    can mint a licence, which the device path made impossible. It is enabled
+    because staff need to administer licences from a computer; set
+    ADMIN_WEB_MFA_ENABLED=0 to withdraw the browser path entirely.
+
+    Reads are not routed through here. Only the routes that change state are,
+    so an operator can browse the console on an ordinary session and is asked
+    to re-authenticate at the point of acting.
+    """
+    if settings.DEV_INSECURE_AUTH:
+        return {"user": user, "device": _DEV_DEVICE, "via": "dev"}
+
+    if x_device_id or x_nonce or x_signature:
+        ctx = await verified_device(request, user, x_device_id, x_nonce, x_signature)
+        return {**ctx, "via": "device"}
+
+    if not settings.ADMIN_WEB_MFA_ENABLED:
+        # No device headers and no browser path: this is the attestation-only
+        # posture, and the honest answer is that the call needs a device.
+        raise HTTPException(400, errors.INVALID_SIGNATURE)
+
+    claims = getattr(request.state, "claims", None) or {}
+    factor = _second_factor(claims)
+    if not factor:
+        audit.record(user["uid"], action="AUTH_DENIED", outcome="DENIED",
+                     detail={"stage": "second_factor"})
+        raise HTTPException(403, errors.MFA_REQUIRED)
+
+    age = _auth_age_seconds(claims)
+    if age is None or age > settings.ADMIN_WEB_REAUTH_SECONDS:
+        audit.record(user["uid"], action="AUTH_DENIED", outcome="DENIED",
+                     detail={"stage": "reauth", "ageSeconds": age})
+        raise HTTPException(403, errors.REAUTH_REQUIRED)
+
+    try:
+        request.state.device_id = ""
+    except Exception:  # noqa: BLE001
+        pass
+    return {"user": user, "device": {}, "via": "mfa", "secondFactor": factor}
 
 
 async def device_or_legacy_reader(

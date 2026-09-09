@@ -100,6 +100,29 @@ class Settings:
         if e.strip()
     }
 
+    # --- staff console second factor ---------------------------------------
+    # Every state-changing /v1/admin/* route requires a device attestation: an
+    # ECDSA signature from a registered device keypair, which proves the call
+    # came from a specific enrolled phone and not merely from a stolen ID
+    # token. A browser cannot produce one, which is why the staff console was
+    # read-only.
+    #
+    # These two settings are the deliberate substitute. A browser caller is
+    # accepted for those routes when the ID token carries a *second factor*
+    # (firebase.sign_in_second_factor, present only when MFA was actually
+    # completed) and the sign-in behind it is recent. That is a real, checkable
+    # control rather than an absent one — a leaked token from a session that
+    # never did MFA is still refused — but it is weaker than device binding,
+    # and the freshness window is what limits the damage a stolen token can do.
+    #
+    # ADMIN_WEB_MFA_ENABLED=0 disables the browser path entirely and restores
+    # attestation-only admin. Set it that way if the console is not in use.
+    ADMIN_WEB_MFA_ENABLED = os.environ.get("ADMIN_WEB_MFA_ENABLED", "1") == "1"
+    # How old a sign-in may be and still authorise a state change, in seconds.
+    # Short on purpose: this is "sudo mode", re-entered by re-authenticating,
+    # not a session length. Reads are not subject to it.
+    ADMIN_WEB_REAUTH_SECONDS = _env_int("ADMIN_WEB_REAUTH_SECONDS", "900")
+
     # Where "a new user is waiting for approval" mail goes. Same address the app
     # shows in Settings -> Help & support and on the pending-approval screen.
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@sempermechanics.com")

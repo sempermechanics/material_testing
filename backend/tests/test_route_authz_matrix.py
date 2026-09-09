@@ -23,7 +23,13 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from app import audit, deps, drive, firestore_repo as repo
 from app.config import settings
-from app.deps import admin_user, current_user, device_or_legacy_reader, verified_device
+from app.deps import (
+    admin_user,
+    attested_or_mfa_admin,
+    current_user,
+    device_or_legacy_reader,
+    verified_device,
+)
 from app.main import app
 from app.routers.institutions import institution_admin_context
 from app.tasks import tasks_caller
@@ -42,6 +48,14 @@ DEVICE_MIGRATING = "device-migrating"
 # institution_admin_context, not via admin_user or verified_device. Deliberately
 # distinct from ADMIN/DEVICE_ADMIN: no Semper role=admin, no device attestation.
 INSTITUTION_ADMIN = "institution-admin"
+# Semper staff changing state. Satisfied EITHER by a device attestation (the
+# phone admin screen, unchanged) OR by an admin whose ID token records a
+# completed second factor and a recent sign-in (the browser console, which
+# cannot produce an attestation). Recorded as its own tier rather than folded
+# into DEVICE_ADMIN because it is genuinely weaker: a phished live MFA session
+# inside the freshness window can do what a stolen token alone could not. The
+# table below is where that trade is visible.
+ADMIN_STEPUP = "admin-stepup"
 
 # (method, path) -> required tier. Keep in sync deliberately, not automatically:
 # the point is that a human decides.
@@ -62,13 +76,13 @@ EXPECTED = {
     ("GET", "/v1/files/{file_id}/content"): DEVICE,
     ("POST", "/v1/files/{file_id}/complete"): DEVICE,
     ("GET", "/v1/admin/users"): ADMIN,                          # read-only: no device needed
-    ("POST", "/v1/admin/users/{uid}/approve"): DEVICE_ADMIN,
-    ("POST", "/v1/admin/users/{uid}/revoke"): DEVICE_ADMIN,
-    ("PATCH", "/v1/admin/users/{uid}/config"): DEVICE_ADMIN,
+    ("POST", "/v1/admin/users/{uid}/approve"): ADMIN_STEPUP,
+    ("POST", "/v1/admin/users/{uid}/revoke"): ADMIN_STEPUP,
+    ("PATCH", "/v1/admin/users/{uid}/config"): ADMIN_STEPUP,
     ("GET", "/v1/admin/licenses"): ADMIN,
-    ("POST", "/v1/admin/licenses"): DEVICE_ADMIN,
-    ("PATCH", "/v1/admin/licenses/{license_id}"): DEVICE_ADMIN,
-    ("POST", "/v1/admin/licenses/{license_id}/revoke"): DEVICE_ADMIN,
+    ("POST", "/v1/admin/licenses"): ADMIN_STEPUP,
+    ("PATCH", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP,
+    ("POST", "/v1/admin/licenses/{license_id}/revoke"): ADMIN_STEPUP,
     ("POST", "/v1/licenses/activate"): USER,
     # Lease routes are USER, not INSTITUTION_ADMIN: the member takes their own
     # seat. Eligibility is the seat document, checked inside the transaction —
@@ -111,6 +125,12 @@ def _tier(route) -> str:
     # it never appears in the flattened deps — detect the wrapper itself.
     if device_or_legacy_reader in calls:
         return DEVICE_MIGRATING
+    # Also calls verified_device directly rather than through Depends, so the
+    # flattened dependency set shows only admin_user — without this branch the
+    # route would silently read as plain ADMIN and the step-up would vanish
+    # from the table it is supposed to be visible in.
+    if attested_or_mfa_admin in calls:
+        return ADMIN_STEPUP
     if institution_admin_context in calls:
         return INSTITUTION_ADMIN
     has_device = verified_device in calls

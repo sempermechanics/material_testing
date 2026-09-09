@@ -105,15 +105,16 @@ async def test_cross_user_session_is_404(secure, client, monkeypatch):
     assert r.json()["detail"] == "session_not_found"
 
 
-@pytest.mark.asyncio
-async def test_admin_mutation_requires_device_attestation(secure, client, monkeypatch):
+def _admin_token(secure, monkeypatch, claims: dict):
+    """An admin signing in with exactly these extra token claims."""
     monkeypatch.setattr(
         deps, "verify_id_token",
-        lambda _t: {"sub": "admin-1", "email": "admin@sempermechanics.com", "email_verified": True},
+        lambda _t: {"sub": "admin-1", "email": "admin@sempermechanics.com",
+                    "email_verified": True, **claims},
     )
     monkeypatch.setattr(
         repo, "get_or_create_user",
-        lambda claims, device_id=None: {
+        lambda c, device_id=None: {
             "uid": "admin-1", "email": "admin@sempermechanics.com",
             "role": "admin", "access_status": "APPROVED", "activeDeviceId": "adev",
         },
@@ -124,12 +125,99 @@ async def test_admin_mutation_requires_device_attestation(secure, client, monkey
         },
         "target": {"email": "t@e.com", "role": "user", "access_status": "PENDING"},
     }
-    # ID token alone — no device headers — must not mutate.
+
+
+@pytest.mark.asyncio
+async def test_admin_mutation_rejects_a_bare_id_token(secure, client, monkeypatch):
+    """The property that must survive the console: a token on its own is not
+    enough to change anything, however it was obtained.
+
+    The staff console replaced device attestation with a second factor for
+    browser callers, so the *code* changed — but a password-only session, which
+    is what a stolen or replayed token usually is, still gets nowhere.
+    """
+    _admin_token(secure, monkeypatch, {})
     r = await client.post(
         "/v1/admin/users/target/approve",
         headers={"Authorization": "Bearer ok"},
     )
-    assert r.status_code in (400, 401, 409)
+    assert r.status_code == 403
+    assert r.json()["detail"] == "mfa_required"
+    assert secure._data["users"]["target"]["access_status"] == "PENDING"
+
+
+@pytest.mark.asyncio
+async def test_admin_mutation_rejects_a_stale_second_factor(secure, client, monkeypatch):
+    """Enrolling in MFA once does not buy authority for the token's whole
+    lifetime. The freshness window is what bounds a leaked token."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    _admin_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "phone"},
+        "auth_time": _time.time() - 3600,
+    })
+    r = await client.post(
+        "/v1/admin/users/target/approve",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "reauth_required"
+    assert secure._data["users"]["target"]["access_status"] == "PENDING"
+
+
+@pytest.mark.asyncio
+async def test_admin_mutation_rejects_a_token_that_will_not_state_its_age(
+    secure, client, monkeypatch,
+):
+    """No auth_time is treated as too old, not as fresh — a token that will not
+    say when it was minted cannot satisfy a freshness requirement."""
+    _admin_token(secure, monkeypatch, {"firebase": {"sign_in_second_factor": "phone"}})
+    r = await client.post(
+        "/v1/admin/users/target/approve",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "reauth_required"
+    assert secure._data["users"]["target"]["access_status"] == "PENDING"
+
+
+@pytest.mark.asyncio
+async def test_admin_mutation_accepts_a_fresh_second_factor(secure, client, monkeypatch):
+    """The console path itself: 2FA plus a recent sign-in, from a browser that
+    can produce no device signature at all."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    _admin_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "phone"},
+        "auth_time": _time.time() - 60,
+    })
+    r = await client.post(
+        "/v1/admin/users/target/approve",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 200, r.text
+    assert secure._data["users"]["target"]["access_status"] == "APPROVED"
+
+
+@pytest.mark.asyncio
+async def test_the_browser_path_can_be_withdrawn_entirely(secure, client, monkeypatch):
+    """ADMIN_WEB_MFA_ENABLED=0 restores attestation-only admin, so a deployment
+    that does not use the console is not carrying its weaker tier."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", False)
+    _admin_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "phone"},
+        "auth_time": _time.time(),
+    })
+    r = await client.post(
+        "/v1/admin/users/target/approve",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 400
     assert secure._data["users"]["target"]["access_status"] == "PENDING"
 
 

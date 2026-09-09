@@ -7,6 +7,15 @@ info:
     (ECDSA-P256 over nonce+METHOD+path+sha256(body)) in addition to the
     end-user Bearer ID token (Authorization or X-Forwarded-Authorization).
 
+    State-changing /v1/admin/* routes accept EITHER that attestation or, for
+    the staff web console, an admin ID token that records a completed second
+    factor (firebase.sign_in_second_factor) from a sign-in newer than
+    ADMIN_WEB_REAUTH_SECONDS. A browser cannot produce an attestation, which
+    is what previously kept the console read-only. The browser path is
+    genuinely weaker than device binding — a phished live MFA session inside
+    the freshness window can act — and is withdrawn entirely by setting
+    ADMIN_WEB_MFA_ENABLED=0. Admin *reads* require neither.
+
     POST /v1/tasks/provision-session is deliberately absent: it is the Cloud
     Tasks callback, delivered straight to the Cloud Run URL with an OIDC token
     for the task invoker service account, and must not be reachable through the
@@ -349,7 +358,9 @@ paths:
   /v1/admin/users/{uid}/approve:
     post:
       operationId: adminApproveUser
-      description: Device-attested admin mutation.
+      description: >
+        Admin state change: device attestation, or a second-factor admin
+        session from the console. See the step-up note in the API description.
       parameters:
         - name: uid
           in: path
@@ -358,10 +369,13 @@ paths:
       responses:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
   /v1/admin/users/{uid}/revoke:
     post:
       operationId: adminRevokeUser
-      description: Device-attested admin mutation.
+      description: >
+        Admin state change: device attestation, or a second-factor admin
+        session from the console. See the step-up note in the API description.
       parameters:
         - name: uid
           in: path
@@ -370,12 +384,14 @@ paths:
       responses:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
   /v1/admin/users/{uid}/config:
     patch:
       operationId: adminPatchUserConfig
       description: >
-        Device-attested. Set or clear per-user product-limit overrides
-        (maxSessions, maxFilesPerSession, maxFrames).
+        Admin state change (attestation or console second factor). Set or clear
+        per-user product-limit overrides (maxSessions, maxFilesPerSession,
+        maxFrames).
       parameters:
         - name: uid
           in: path
@@ -385,6 +401,7 @@ paths:
         '200': { description: OK }
         '400': { description: Empty patch }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: User not found }
   /v1/licenses/checkout:
     post:
@@ -450,6 +467,7 @@ paths:
       responses:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '422': { description: "kind=institution missing domainLock/adminEmails, or kind=individual missing emailLock/deviceIdLock" }
   /v1/admin/licenses/{licenseId}:
     patch:
@@ -470,6 +488,7 @@ paths:
       responses:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: License not found }
         '422': { description: "No field set, or a value out of range" }
         '429': { description: Rate limited }
@@ -491,6 +510,7 @@ paths:
       responses:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: License not found }
   # ---------------------------------------------------------------------------
   # Pre-rename aliases of the three routes above. ESPv2 is the front door and
