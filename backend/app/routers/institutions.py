@@ -59,12 +59,19 @@ def institution_admin_context(license_id: DocumentId, user: dict = Depends(curre
 def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_context)):
     """Every seat on this license: uid, email, device lock, status. No key
     plaintext — only the license's keyPrefix, same redaction as the
-    Semper-staff admin listing."""
+    Semper-staff admin listing.
+
+    `invites` are the addresses promised a place who have not signed in yet.
+    They are listed beside the seats because to the person managing the
+    roster they are the same list — "who is on this licence" — even though
+    only one of the two holds a uid and counts against `maxSeats`.
+    """
     if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
         raise HTTPException(429, errors.RATE_LIMITED)
     return {
         "license": repo.institution_license_summary(license_id),
         "seats": repo.list_institution_seats(license_id),
+        "invites": repo.list_institution_invites(license_id),
     }
 
 
@@ -77,31 +84,70 @@ def add_seat(
 ):
     """Put someone on this license's roster, by email.
 
-    They must already have an account. Demo is open to everyone, so "sign in
-    once, then I'll add you" is the flow — which is why there are no invite
-    records, no email-keyed documents and no second identity space here.
-    `404 user_not_found` means exactly that: ask them to sign in first.
+    They do not need an account yet. An address that already has one takes a
+    seat immediately; an address that does not becomes a pending **invite**,
+    redeemed automatically the first time that person signs in. IT works from
+    a list of addresses and cannot make people sign up on cue, so refusing
+    them until they had was pushing a scheduling problem onto the wrong
+    person.
 
-    On an assigned license this entitles them immediately. On a floating one
+    Exactly one of `seat` and `invite` comes back. An invite holds no seat and
+    consumes no slot — there is no uid to entitle yet, and every check in the
+    system is keyed by uid.
+
+    On an assigned license a seat entitles them immediately. On a floating one
     it makes them eligible and consumes no slot; they check out a lease when
     they want to work.
     """
     if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
         raise HTTPException(429, errors.RATE_LIMITED)
-    code, seat = repo.add_institution_member(license_id, body.email)
+    code, seat, invite = repo.add_institution_member(
+        license_id, body.email, invited_by_uid=ctx["user"]["uid"],
+    )
     if code:
         status = {
             errors.LICENSE_NOT_FOUND: 404,
             errors.USER_NOT_FOUND: 404,
             errors.LICENSE_SEATS_EXHAUSTED: 409,
             errors.LICENSE_SEAT_DISABLED: 409,
+            errors.INVITE_EXISTS: 409,
+            errors.INVALID_EMAIL: 400,
         }.get(code, 403)
         raise HTTPException(status, code)
     audit.record(
-        ctx["user"]["uid"], action="INSTITUTION_SEAT_ADD",
-        target={"type": "seat", "id": f"{license_id}/{(seat or {}).get('uid')}"},
+        ctx["user"]["uid"],
+        action="INSTITUTION_SEAT_ADD" if seat else "INSTITUTION_INVITE_ADD",
+        target={"type": "seat" if seat else "invite",
+                "id": f"{license_id}/{(seat or invite or {}).get('uid') or (invite or {}).get('id')}"},
     )
-    return {"licenseId": license_id, "seat": seat}
+    return {"licenseId": license_id, "seat": seat, "invite": invite}
+
+
+@router.delete("/v1/institutions/licenses/{license_id}/invites/{invite_key}")
+@router.delete("/v1/campus/licenses/{license_id}/invites/{invite_key}", include_in_schema=False)
+def revoke_invite(
+    license_id: DocumentId,
+    invite_key: DocumentId,
+    ctx=Depends(institution_admin_context),
+):
+    """Withdraw a promise that has not been kept yet.
+
+    Addressed by the invite id from the seats listing, not by email: an
+    address in a request path ends up in access logs and proxy history, and
+    the id is what the console already holds.
+
+    Nothing to undo on the account side — an unclaimed invite never entitled
+    anyone. Removing a member who *has* signed in is the seat revoke route.
+    """
+    if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
+        raise HTTPException(429, errors.RATE_LIMITED)
+    if not repo.revoke_institution_invite(license_id, invite_key):
+        raise HTTPException(404, errors.INVITE_NOT_FOUND)
+    audit.record(
+        ctx["user"]["uid"], action="INSTITUTION_INVITE_REVOKE",
+        target={"type": "invite", "id": f"{license_id}/{invite_key}"},
+    )
+    return {"licenseId": license_id, "inviteId": invite_key, "revoked": True}
 
 
 @router.patch("/v1/institutions/licenses/{license_id}/seats/{uid}")

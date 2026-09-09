@@ -567,22 +567,25 @@ paths:
     post:
       operationId: institutionAddSeat
       description: >
-        Put someone on this license's roster, by email. They must already have
-        an account — demo is open to everyone, so "sign in once, then I'll add
-        you" is the flow, and 404 user_not_found means exactly that. On an
-        assigned license this entitles them immediately; on a floating one it
-        makes them eligible and consumes no slot, since a slot is taken by
-        checking out a lease.
+        Put someone on this license's roster, by email. They do not need an
+        account yet: an address that has one takes a seat immediately, and an
+        address that does not becomes a pending invite, redeemed automatically
+        at that person's first sign-in. Exactly one of seat and invite is
+        returned. An invite holds no seat and consumes no slot — there is no
+        uid to entitle until it is claimed. On an assigned license a seat
+        entitles immediately; on a floating one it makes the holder eligible
+        and a slot is taken by checking out a lease.
       parameters:
         - name: licenseId
           in: path
           required: true
           type: string
       responses:
-        '200': { description: OK }
+        '200': { description: "OK — carries either seat or invite" }
+        '400': { description: invalid_email }
         '403': { description: email_not_verified }
-        '404': { description: "license_not_found, or that email has no account yet (user_not_found)" }
-        '409': { description: "Roster full, or that seat is on hold (license_seats_exhausted, license_seat_disabled)" }
+        '404': { description: license_not_found }
+        '409': { description: "Roster full, seat on hold, or that address is already promised to a different licence (license_seats_exhausted, license_seat_disabled, invite_exists)" }
         '429': { description: Rate limited }
     get:
       operationId: institutionListSeats
@@ -592,8 +595,9 @@ paths:
         *verified* email is present in this license's adminEmails; a
         license id the caller does not administer 404s identically to one
         that does not exist, so probing another institution's license ids
-        learns nothing. Lists every seat: uid, email, device lock, status.
-        Never returns key plaintext.
+        learns nothing. Lists every seat: uid, email, device lock, status,
+        plus the outstanding invites — addresses promised a place who have
+        not signed in yet. Never returns key plaintext.
       parameters:
         - name: licenseId
           in: path
@@ -603,6 +607,50 @@ paths:
         '200': { description: OK }
         '403': { description: email_not_verified }
         '404': { description: "license_not_found (unknown, not an institution license, or not administered by caller)" }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses/{licenseId}/invites/{inviteKey}:
+    delete:
+      operationId: institutionRevokeInvite
+      description: >
+        Withdraw a promise that has not been kept yet. Addressed by the invite
+        id from the seats listing rather than by email, so addresses stay out
+        of request paths and access logs. Nothing to undo on the account side:
+        an unclaimed invite never entitled anyone. Removing a member who HAS
+        signed in is the seat revoke route. An invite id belonging to another
+        licence 404s identically to one that does not exist.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: inviteKey
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or invite_not_found }
+        '429': { description: Rate limited }
+  /v1/campus/licenses/{licenseId}/invites/{inviteKey}:
+    delete:
+      operationId: campusRevokeInvite
+      description: >
+        Deprecated alias of DELETE
+        /v1/institutions/licenses/{licenseId}/invites/{inviteKey}.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: inviteKey
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or invite_not_found }
         '429': { description: Rate limited }
   /v1/institutions/licenses/{licenseId}/seats/{uid}:
     patch:

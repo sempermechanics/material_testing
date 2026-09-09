@@ -227,7 +227,10 @@ Everything above is required (or near enough). These are the rest of what
 
 | Variable | Default | What it does |
 |---|---|---|
-| `MAX_SESSIONS_PER_USER` | `4` | How many analyses a user may keep in the cloud. Overridable per user via `PATCH /v1/admin/users/{uid}/config` |
+| `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. Overridable per user via `PATCH /v1/admin/users/{uid}/config` |
+| `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. A key's own `maxAnalyses`, or a per-user override, takes precedence when tighter |
+
+> `MAX_SESSIONS_PER_USER` was the single cap for every user, defaulting to 4. It is **no longer read** — `mode` now selects between the two rows above. A service that still sets it gets `DEMO_MAX_ANALYSES` for unlicensed users, so set that variable deliberately before deploying.
 | `MAX_FILES_PER_SESSION` | `600` | Upper bound on files in one analysis |
 | `MAX_FRAMES_PER_ANALYSIS` | `150` | Deformed-frame ceiling the app enforces |
 | `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |

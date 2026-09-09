@@ -26,15 +26,23 @@ class Settings:
     # Fleet-wide defaults for product limits. Per-user overrides live on the
     # Firestore users/{uid} document (maxSessions / maxFilesPerSession /
     # maxFrames); resolve_user_config merges override → these defaults.
-    # DEMO_MAX_ANALYSES is the demo mode's local analysis cap. Licensed cloud
-    # backups use LICENSED_MAX_SESSIONS_PER_USER unless a key or admin
-    # override sets a tighter ceiling. MAX_SESSIONS_PER_USER is the legacy
-    # cloud cap kept for env compatibility; the licensed resolve prefers
-    # LICENSED_MAX_SESSIONS_PER_USER.
+    #
+    # There is exactly one cap per mode, and `mode` picks between them:
+    # DEMO_MAX_ANALYSES for an unlicensed account, LICENSED_MAX_SESSIONS_PER_USER
+    # for a licensed one (unless a key or admin override sets a tighter
+    # ceiling). Both are the number of analyses the account may keep in the
+    # cloud — routers/sessions.py enforces creation against whichever applies.
+    #
+    # `MAX_SESSIONS_PER_USER` USED TO BE that number for everyone, at a default
+    # of 4. It is deliberately gone rather than left unread: keeping a variable
+    # that a deployment still sets, and that silently no longer does anything,
+    # is worse than removing it and saying so. A service that still sets it now
+    # gets DEMO_MAX_ANALYSES for unlicensed users — see
+    # docs/backend/BACKEND_SETUP_GCP.md.
+    #
     # MAX_FILES_PER_SESSION bounds one analysis (150 frames x raw+dat+csv +
     # reference + report + metadata ≈ 460, so 600 gives headroom);
     # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces.
-    MAX_SESSIONS_PER_USER = _env_int("MAX_SESSIONS_PER_USER", "4")
     DEMO_MAX_ANALYSES = _env_int("DEMO_MAX_ANALYSES", "25")
     # Deployed services still set PRO_MAX_SESSIONS_PER_USER; it is read as the
     # default so the rename does not require a coordinated env change.

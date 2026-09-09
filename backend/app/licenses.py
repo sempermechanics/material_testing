@@ -172,3 +172,21 @@ def key_prefix(key: str) -> str:
     canonical = canonicalize(key)
     body = canonical[len(_PREFIX):] if canonical.startswith(_PREFIX) else canonical
     return f"{_PREFIX}-{body[:_GROUP_LEN]}" if body else _PREFIX
+
+
+def normalize_email(email: str) -> str:
+    """Lowercased and trimmed — the one spelling every lookup uses."""
+    return (email or "").strip().lower()
+
+
+def invite_id(email: str) -> str:
+    """Document id for a pending institution invite.
+
+    A hash rather than the address itself, for two reasons that both matter.
+    An email is not a legal Firestore document id in general (`.` and `..` are
+    reserved, `/` is a path separator, and the id is length-bounded), and a
+    plaintext id would make the invite list enumerable by guessing addresses.
+    The hash is deterministic, so claiming an invite at sign-in is a single
+    document read rather than a query.
+    """
+    return hashlib.sha256(normalize_email(email).encode("utf-8")).hexdigest()

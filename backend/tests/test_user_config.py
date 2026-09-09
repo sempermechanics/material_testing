@@ -14,7 +14,6 @@ def store(monkeypatch):
 
 
 def _limit_env(monkeypatch):
-    monkeypatch.setattr(settings, "MAX_SESSIONS_PER_USER", 4)
     monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
     monkeypatch.setattr(settings, "LICENSED_MAX_SESSIONS_PER_USER", 999)
     monkeypatch.setattr(settings, "MAX_FILES_PER_SESSION", 600)

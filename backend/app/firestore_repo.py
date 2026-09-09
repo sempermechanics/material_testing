@@ -21,10 +21,12 @@ from .licenses import (
     as_utc,
     generate_key,
     grace_ends_at,
+    invite_id,
     key_hash,
     key_prefix,
     legacy_plan,
     normalize_duration,
+    normalize_email,
     normalize_kind,
     normalize_mode,
     normalize_seating,
@@ -225,11 +227,11 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
     # needs hour granularity; skip the write when nothing else changed and
     # the timestamp is still fresh.
     if not changed and not stale:
-        return ensure_demo_license({**cur, "uid": uid}, device_id)
+        return ensure_entitlement({**cur, "uid": uid}, device_id)
 
     patch = {**changed, "lastSeenAt": firestore.SERVER_TIMESTAMP}
     ref.update(patch)
-    return ensure_demo_license({**cur, **patch, "uid": uid}, device_id)
+    return ensure_entitlement({**cur, **patch, "uid": uid}, device_id)
 
 
 def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
@@ -291,7 +293,7 @@ def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
     created = {**data, "uid": uid}
     if data["access_status"] == statuses.ACCESS_PENDING:
         notify.access_request(uid, data["email"], data["displayName"], provider)
-    return ensure_demo_license(created, device_id)
+    return ensure_entitlement(created, device_id)
 
 
 def list_users(
@@ -1127,7 +1129,8 @@ def release_lease(user: dict) -> tuple[str, dict | None]:
     return "", resolve_user_config(merged)
 
 
-def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch: dict) -> str:
+def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch: dict,
+               invite_ref=None) -> str:
     """Take a seat on the roster, atomically. Returns an error code, or "".
 
     This was a read-then-`WriteBatch` — atomic for its writes, but carrying no
@@ -1139,6 +1142,13 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
     Every read happens before every write, as Firestore requires. The seat
     validation lives inside for the same reason as the count: it is decided
     from data read in the transaction.
+
+    `invite_ref`, when given, is a pending invite being redeemed: it is read
+    with the other reads and deleted with the other writes, so the seat and
+    the invite settle together. Consuming it in a second write would leave a
+    window where IT has revoked the invite but the seat is granted anyway, or
+    where the invite is gone and the claim then fails — either way the roster
+    and the invite list disagree.
     """
     lic_ref = db().collection("licenses").document(license_id)
     seat_ref = _seat_ref(license_id, uid)
@@ -1149,8 +1159,12 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
     def _claim(tx) -> str:
         lic_snap = lic_ref.get(transaction=tx)
         seat_snap = seat_ref.get(transaction=tx)
+        invite_snap = invite_ref.get(transaction=tx) if invite_ref is not None else None
         if not lic_snap.exists:
             return "license_not_found"
+        if invite_ref is not None and not invite_snap.exists:
+            # Revoked between the read that found it and this transaction.
+            return "invite_not_found"
         lic = lic_snap.to_dict() or {}
         if (lic.get("status") or "active") == "revoked":
             return "license_revoked"
@@ -1196,6 +1210,8 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
             })
             tx.update(lic_ref, {"seatsUsed": firestore.Increment(1)})
         tx.update(user_ref, user_patch)
+        if invite_ref is not None:
+            tx.delete(invite_ref)
         return ""
 
     try:
@@ -1497,12 +1513,209 @@ def find_user_by_email(email: str) -> dict | None:
     return None
 
 
-def add_institution_member(license_id: str, email: str) -> tuple[str, dict | None]:
-    """Put someone on an institution license's roster. Returns (error, seat).
+#: Pending invites, keyed by a hash of the invited address. Top-level rather
+#: than a subcollection of the licence so claiming one at sign-in is a single
+#: document read: a subcollection would need a collection-group query (and its
+#: index) on a path that runs for every account that does not yet hold a key.
+_INVITES = "licenseInvites"
+
+
+def _invite_ref(email: str):
+    return db().collection(_INVITES).document(invite_id(email))
+
+
+def _institution_member_patch(license_id: str, lic: dict) -> dict:
+    """The user-document patch that puts someone on an institution licence.
+
+    Shared by the two ways onto a roster — IT adding an existing account, and
+    a newcomer redeeming an invite at sign-in — so the two cannot drift into
+    entitling people differently.
+    """
+    patch = {
+        **_mode_patch(MODE_LICENSED),
+        "licenseId": license_id,
+        "licenseKind": KIND_INSTITUTION,
+        "licensePrefix": lic.get("keyPrefix") or "",
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    patch.update(_license_mirror_patch(lic))
+    return patch
+
+
+def _invite_public(doc_id: str, inv: dict) -> dict:
+    return {
+        "id": doc_id,
+        "email": inv.get("email") or "",
+        "licenseId": inv.get("licenseId") or "",
+        "invitedByUid": inv.get("invitedByUid") or "",
+        "createdAt": inv.get("createdAt"),
+    }
+
+
+def invite_institution_member(
+    license_id: str, email: str, invited_by_uid: str,
+) -> tuple[str, dict | None]:
+    """Reserve a roster place for someone who has no account yet.
+
+    Returns (error, invite). The invite is redeemed by `claim_pending_invite`
+    the first time that address signs in, which is also the moment the person
+    would otherwise have been given a Demo key.
+
+    Deliberately consumes no seat and no slot. Until a real account claims it
+    there is no uid, and every entitlement check in the system is keyed by uid
+    — so counting an invite against `maxSeats` would mean decrementing a count
+    for a person who may never arrive. An invite is a promise; the seat is
+    taken when it is kept.
+    """
+    lic = get_license(license_id)
+    if not lic:
+        return "license_not_found", None
+    if normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+        return "license_not_found", None
+    if (lic.get("status") or "active") == "revoked":
+        return "license_revoked", None
+    address = normalize_email(email)
+    if not address:
+        return "invalid_email", None
+
+    ref = _invite_ref(address)
+    existing = ref.get()
+    if existing.exists:
+        held = existing.to_dict() or {}
+        # Re-inviting to the same licence is a no-op rather than an error, so
+        # IT pasting a list twice is harmless. A different licence is refused:
+        # silently moving someone between institutions would be the wrong
+        # default, and the address is the only identity we have to go on.
+        if (held.get("licenseId") or "") != license_id:
+            return "invite_exists", None
+        return "", _invite_public(ref.id, held)
+
+    data = {
+        "email": address,
+        "licenseId": license_id,
+        "invitedByUid": invited_by_uid,
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "schemaVersion": SCHEMA_VERSION,
+    }
+    ref.set(data)
+    return "", _invite_public(ref.id, ref.get().to_dict() or data)
+
+
+def list_institution_invites(license_id: str) -> list[dict]:
+    """Outstanding invites on one licence, oldest first.
+
+    Sorted here rather than in Firestore: ordering by `createdAt` alongside the
+    `licenseId` equality would need a composite index for a list that is small
+    by construction (it drains as people sign in).
+    """
+    rows = [
+        _invite_public(doc.id, doc.to_dict() or {})
+        for doc in db().collection(_INVITES).where("licenseId", "==", license_id).stream()
+    ]
+    rows.sort(key=lambda r: (r.get("createdAt") is None, r.get("createdAt")))
+    return rows
+
+
+def revoke_institution_invite(license_id: str, invite_key: str) -> bool:
+    """Withdraw an unclaimed invite. False when there is none to withdraw.
+
+    Addressed by the invite's own id — the hash `list_institution_invites`
+    returns — rather than by email. That keeps addresses out of request paths
+    and access logs, and it is the id the console already has in hand.
+
+    Guarded on `licenseId` so one institution's IT cannot delete another's
+    invite by guessing an id.
+    """
+    ref = db().collection(_INVITES).document(invite_key)
+    snap = ref.get()
+    if not snap.exists:
+        return False
+    if ((snap.to_dict() or {}).get("licenseId") or "") != license_id:
+        return False
+    ref.delete()
+    return True
+
+
+def claim_pending_invite(user: dict) -> dict:
+    """Redeem an institution invite for an account that has just become usable.
+
+    Returns the updated user when a seat was taken, otherwise the user
+    unchanged. Called from `ensure_entitlement`, i.e. exactly where a Demo key
+    would otherwise be minted — so an invited newcomer lands licensed on their
+    first request rather than demo-then-upgraded.
+
+    The guards are `ensure_demo_license`'s, and they bound the cost: this runs
+    only for an approved, verified account that holds no licence yet, which is
+    a one-request window before the Demo key exists. It is not a per-request
+    read.
+
+    Email verification is required and not merely preferred. The invite names
+    an address, and the address is the whole claim to the seat; honouring an
+    unverified one would let anyone who can type someone else's address take
+    the institution seat meant for them.
+    """
+    uid = user.get("uid")
+    if not uid or user.get("licenseId"):
+        return user
+    if user.get("access_status") != "APPROVED" or not user.get("emailVerified"):
+        return user
+    address = normalize_email(user.get("email"))
+    if not address:
+        return user
+
+    ref = _invite_ref(address)
+    snap = ref.get()
+    if not snap.exists:
+        return user
+    license_id = ((snap.to_dict() or {}).get("licenseId") or "")
+    lic = get_license(license_id) if license_id else None
+    if not lic or normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+        # The licence was deleted out from under the invite. Drop it rather
+        # than leaving a record that can never be redeemed.
+        ref.delete()
+        return user
+    if (lic.get("status") or "active") == "revoked":
+        ref.delete()
+        return user
+
+    patch = _institution_member_patch(license_id, lic)
+    # No device lock: the invite predates any device choice, and the lock is
+    # set the first time the seat is actually used.
+    err = claim_seat(license_id, uid, address, "", patch, invite_ref=ref)
+    if err:
+        # Seats exhausted, or lost to contention. Leave the invite in place so
+        # it is redeemed on a later request once IT frees a slot.
+        log.warning("invite claim failed uid=%s license=%s err=%s", uid, license_id, err)
+        return user
+    return {**user, **patch, "uid": uid}
+
+
+def ensure_entitlement(user: dict, device_id: str | None) -> dict:
+    """Give a newly-usable account whatever it is entitled to.
+
+    An institution seat it was invited to, if there is one, else a Demo key.
+    The order is the point: `ensure_demo_license` stamps a `licenseId`, and
+    every later call short-circuits on that field, so minting Demo first would
+    strand the invite permanently.
+    """
+    claimed = claim_pending_invite(user)
+    if claimed.get("licenseId"):
+        return claimed
+    return ensure_demo_license(claimed, device_id)
+
+
+def add_institution_member(license_id: str, email: str,
+                           invited_by_uid: str = "") -> tuple[str, dict | None, dict | None]:
+    """Put someone on an institution license's roster. Returns (error, seat, invite).
 
     On an assigned license this entitles them immediately. On a floating one
     it makes them eligible; they still check out a lease to work, and adding
     a member therefore consumes no slot.
+
+    Exactly one of `seat` and `invite` is set on success. An address with no
+    account yet becomes a pending invite rather than a `user_not_found` error:
+    IT works from a list of addresses and cannot make people sign up first, so
+    refusing them was pushing a scheduling problem onto the wrong person.
 
     Idempotent for an active seat, and re-adding someone previously revoked
     gives them a fresh slot. A *disabled* seat is refused with
@@ -1512,28 +1725,21 @@ def add_institution_member(license_id: str, email: str) -> tuple[str, dict | Non
     """
     lic = get_license(license_id)
     if not lic:
-        return "license_not_found", None
+        return "license_not_found", None, None
     user = find_user_by_email(email)
     if not user:
-        return "user_not_found", None
+        err, invite = invite_institution_member(license_id, email, invited_by_uid)
+        return err, None, invite
     uid = user["uid"]
-
-    user_patch = {
-        **_mode_patch(MODE_LICENSED),
-        "licenseId": license_id,
-        "licenseKind": KIND_INSTITUTION,
-        "licensePrefix": lic.get("keyPrefix") or "",
-        "updatedAt": firestore.SERVER_TIMESTAMP,
-    }
-    user_patch.update(_license_mirror_patch(lic))
 
     # No device lock: IT adds a member before that member has picked a device,
     # and the lock is set the first time they actually use the license.
-    err = claim_seat(license_id, uid, user.get("email") or email, "", user_patch)
+    err = claim_seat(license_id, uid, user.get("email") or email, "",
+                     _institution_member_patch(license_id, lic))
     if err:
-        return err, None
+        return err, None, None
     seats = list_institution_seats(license_id)
-    return "", next((s for s in seats if s["uid"] == uid), None)
+    return "", next((s for s in seats if s["uid"] == uid), None), None
 
 
 def institution_license_summary(license_id: str) -> dict | None:
@@ -1694,7 +1900,7 @@ def register_device(uid: str, body: DeviceReg) -> dict:
     batch.commit()
     user = _load_user(uid)
     if user:
-        ensure_demo_license(user, body.deviceId)
+        ensure_entitlement(user, body.deviceId)
     return {**dev, "deviceId": body.deviceId}
 
 

@@ -1,0 +1,111 @@
+"""The API Gateway spec and the FastAPI app must describe the same surface.
+
+ESPv2 is a strict allowlist. A route that exists in the application but not in
+`gateway/openapi.yaml` is simply unreachable in production — the gateway
+rejects it before the container is ever consulted, and nothing in the app's
+logs says why. That failure has happened twice on this codebase (the
+`/v1/campus/*` aliases, then the lease routes), both times surviving code
+review because both halves looked right in isolation.
+
+The reverse direction matters less but is still a bug: a path declared at the
+gateway with no handler behind it is a 404 that the gateway happily forwards.
+
+Paths are compared with their parameter *names* erased, because the two files
+spell them differently by convention — FastAPI takes `{license_id}` from the
+Python signature, the gateway spec uses `{licenseId}`. Only the shape and the
+methods are the contract.
+"""
+import pathlib
+import re
+
+import yaml
+
+from app.main import app
+
+_HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+
+#: Routes FastAPI serves that are deliberately NOT exposed at the gateway.
+#: Everything here is reachable only on the container's own port, which no
+#: external client can address once the service is private.
+_NOT_PUBLISHED = {
+    # FastAPI's own docs. Publishing them would hand an unauthenticated caller
+    # a map of every route and schema.
+    ("GET", "/openapi.json"),
+    ("GET", "/docs"),
+    ("GET", "/docs/oauth2-redirect"),
+    ("GET", "/redoc"),
+    # The Cloud Tasks callback. Cloud Tasks posts straight to
+    # TASKS_TARGET_BASE_URL (the Cloud Run service URL) carrying an OIDC token
+    # for the invoker service account — it never traverses the API Gateway, and
+    # publishing it there would expose a route that no user-facing caller may
+    # reach. See app/tasks.py.
+    ("POST", "/v1/tasks/provision-session"),
+}
+
+
+def _erase_params(path: str) -> str:
+    return re.sub(r"\{[^}]+\}", "{}", path)
+
+
+def _iter_api_routes(routes):
+    """Walk `app.routes`, descending into FastAPI's `_IncludedRouter` wrappers.
+
+    `include_router` no longer flattens child routes onto `app.routes`; they
+    hang off `original_router`. Walking only the top level here would compare
+    the gateway against four docs endpoints and pass vacuously — which is
+    worse than having no test, so this mirrors test_route_authz_matrix.
+    """
+    for route in routes:
+        nested = getattr(route, "original_router", None)
+        if nested is not None:
+            yield from _iter_api_routes(nested.routes)
+            continue
+        yield route
+
+
+def _app_surface() -> set[tuple[str, str]]:
+    out = set()
+    for route in _iter_api_routes(app.routes):
+        for method in getattr(route, "methods", None) or ():
+            if method in _HTTP_METHODS:
+                out.add((method, _erase_params(route.path)))
+    return out
+
+
+def _gateway_surface() -> set[tuple[str, str]]:
+    spec_path = pathlib.Path(__file__).resolve().parents[1] / "gateway" / "openapi.yaml"
+    spec = yaml.safe_load(spec_path.read_text())
+    out = set()
+    for path, operations in (spec.get("paths") or {}).items():
+        for method in operations:
+            if method.upper() in _HTTP_METHODS:
+                out.add((method.upper(), _erase_params(path)))
+    return out
+
+
+def test_every_app_route_is_reachable_through_the_gateway():
+    missing = _app_surface() - _gateway_surface() - _NOT_PUBLISHED
+    assert not missing, (
+        "route(s) served by the app but absent from gateway/openapi.yaml, so "
+        f"unreachable in production: {sorted(missing)}. Declare them there in "
+        "the same commit, or add them to _NOT_PUBLISHED with the reason."
+    )
+
+
+def test_every_gateway_path_has_a_handler():
+    orphaned = _gateway_surface() - _app_surface()
+    assert not orphaned, (
+        "path(s) declared at the gateway with no handler behind them, so a "
+        f"caller gets a forwarded 404: {sorted(orphaned)}"
+    )
+
+
+def test_the_deprecated_aliases_are_published_too():
+    """The aliases exist for institution IT's own scripts, which are out of our
+    control. An alias that is not at the gateway is not an alias at all — it is
+    a 404 with a comment claiming otherwise, which is the exact bug this file
+    was written after."""
+    gateway = _gateway_surface()
+    for method, path in sorted(_app_surface()):
+        if "/v1/campus/" in path:
+            assert (method, path) in gateway, f"unpublished alias: {method} {path}"

@@ -79,13 +79,19 @@ EXPECTED = {
     ("GET", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("PATCH", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
     ("DELETE", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
-    # Pre-rename aliases of the three routes above. Same handler, same tier —
+    # Withdrawing an unclaimed invite. Same tier as the seat routes: an invite
+    # is a roster decision, and it is scoped to one licence by the same
+    # adminEmails check — the handler additionally refuses an invite whose
+    # licenseId is not this one, so a guessed id reaches nothing.
+    ("DELETE", "/v1/institutions/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_ADMIN,
+    # Pre-rename aliases of the routes above. Same handler, same tier —
     # declared explicitly so a deprecation that drops them has to come through
     # this table, and so an alias can never quietly gain a weaker tier.
     ("POST", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("GET", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("PATCH", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
     ("DELETE", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
+    ("DELETE", "/v1/campus/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_ADMIN,
     ("POST", "/v1/tasks/provision-session"): TASK,
 }
 

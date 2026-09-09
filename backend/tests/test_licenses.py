@@ -992,7 +992,7 @@ def test_a_roster_member_without_a_lease_is_demo(store):
     _roster(store, "u1")
     minted = _mint_floating()
     license_id = minted["license"]["id"]
-    err, seat = repo.add_institution_member(license_id, "u1@university.edu")
+    err, seat, _invite = repo.add_institution_member(license_id, "u1@university.edu")
     assert err == ""
     assert seat["uid"] == "u1"
 
@@ -1149,14 +1149,124 @@ def test_release_is_idempotent(store):
 
 # ---------------------------------------------------- adding roster members
 
-def test_adding_a_member_who_never_signed_in_says_so(store):
-    """Demo is open to everyone, so 'sign in once and I'll add you' is the
-    flow — not an invite system."""
+def test_adding_a_member_who_never_signed_in_creates_an_invite(store):
+    """IT works from a list of addresses and cannot make people sign up on
+    cue, so an unknown address is a promise rather than a rejection."""
     store._data["users"] = {}
     minted = _mint_floating()
-    err, seat = repo.add_institution_member(minted["license"]["id"], "nobody@university.edu")
-    assert err == "user_not_found"
+    license_id = minted["license"]["id"]
+    err, seat, invite = repo.add_institution_member(
+        license_id, "Nobody@University.edu", invited_by_uid="it-admin",
+    )
+    assert err == ""
     assert seat is None
+    assert invite["email"] == "nobody@university.edu"  # normalised
+    assert invite["licenseId"] == license_id
+    assert invite["invitedByUid"] == "it-admin"
+    # A promise is not a seat: nothing is consumed until someone claims it.
+    assert store._data["licenses"][license_id].get("seatsUsed", 0) == 0
+
+
+def test_an_invite_is_redeemed_at_first_sign_in(store):
+    """The whole point of the invite: the newcomer lands licensed, not demo
+    then upgraded."""
+    store._data["users"] = {}
+    minted = _mint_floating()
+    license_id = minted["license"]["id"]
+    repo.add_institution_member(license_id, "newcomer@university.edu")
+
+    user = {"uid": "new-1", "email": "newcomer@university.edu",
+            "access_status": "APPROVED", "emailVerified": True}
+    store._data["users"]["new-1"] = dict(user)
+    out = repo.ensure_entitlement(user, None)
+
+    assert out["licenseId"] == license_id
+    assert out["licenseKind"] == "institution"
+    assert store._data[f"licenses/{license_id}/seats"]["new-1"]["status"] == "active"
+    assert store._data["licenses"][license_id]["seatsUsed"] == 1
+    # Consumed, so a second sign-in cannot take a second seat.
+    assert store._data.get("licenseInvites", {}) == {}
+
+
+def test_an_unverified_address_never_redeems_an_invite(store):
+    """The address is the entire claim to the seat, so an unproven one takes
+    nothing — otherwise anyone who can type it gets the seat meant for them."""
+    store._data["users"] = {}
+    minted = _mint_floating()
+    license_id = minted["license"]["id"]
+    repo.add_institution_member(license_id, "newcomer@university.edu")
+
+    user = {"uid": "imposter", "email": "newcomer@university.edu",
+            "access_status": "APPROVED", "emailVerified": False}
+    store._data["users"]["imposter"] = dict(user)
+    out = repo.claim_pending_invite(user)
+
+    assert out.get("licenseId") is None
+    assert store._data.get(f"licenses/{license_id}/seats", {}) == {}
+    # Still waiting for the real owner of the address.
+    assert len(store._data["licenseInvites"]) == 1
+
+
+def test_an_invite_to_a_second_licence_is_refused(store):
+    store._data["users"] = {}
+    first = _mint_floating()["license"]["id"]
+    second = _mint_floating()["license"]["id"]
+    repo.add_institution_member(first, "shared@university.edu")
+    err, seat, invite = repo.add_institution_member(second, "shared@university.edu")
+    assert err == "invite_exists"
+    assert seat is None and invite is None
+
+
+def test_re_inviting_to_the_same_licence_is_a_no_op(store):
+    """IT pasting the same list twice must not be an error."""
+    store._data["users"] = {}
+    license_id = _mint_floating()["license"]["id"]
+    repo.add_institution_member(license_id, "twice@university.edu")
+    err, _seat, invite = repo.add_institution_member(license_id, "twice@university.edu")
+    assert err == ""
+    assert invite["licenseId"] == license_id
+    assert len(store._data["licenseInvites"]) == 1
+
+
+def test_a_revoked_invite_is_never_redeemed(store):
+    store._data["users"] = {}
+    license_id = _mint_floating()["license"]["id"]
+    _err, _seat, invite = repo.add_institution_member(license_id, "gone@university.edu")
+
+    assert repo.revoke_institution_invite(license_id, invite["id"]) is True
+    assert repo.revoke_institution_invite(license_id, invite["id"]) is False
+
+    user = {"uid": "gone-1", "email": "gone@university.edu",
+            "access_status": "APPROVED", "emailVerified": True}
+    store._data["users"]["gone-1"] = dict(user)
+    out = repo.ensure_entitlement(user, "dev-1")
+    # Falls through to the Demo key everyone gets.
+    assert out["mode"] == "demo"
+    assert store._data.get(f"licenses/{license_id}/seats", {}) == {}
+
+
+def test_one_institution_cannot_revoke_anothers_invite(store):
+    store._data["users"] = {}
+    mine = _mint_floating()["license"]["id"]
+    theirs = _mint_floating()["license"]["id"]
+    _err, _seat, invite = repo.add_institution_member(theirs, "theirs@university.edu")
+    assert repo.revoke_institution_invite(mine, invite["id"]) is False
+    assert len(store._data["licenseInvites"]) == 1
+
+
+def test_an_invite_whose_licence_was_revoked_is_dropped(store):
+    store._data["users"] = {}
+    license_id = _mint_floating()["license"]["id"]
+    repo.add_institution_member(license_id, "orphan@university.edu")
+    store._data["licenses"][license_id]["status"] = "revoked"
+
+    user = {"uid": "orphan-1", "email": "orphan@university.edu",
+            "access_status": "APPROVED", "emailVerified": True}
+    store._data["users"]["orphan-1"] = dict(user)
+    out = repo.claim_pending_invite(user)
+
+    assert out.get("licenseId") is None
+    assert store._data["licenseInvites"] == {}
 
 
 def test_adding_a_member_consumes_no_floating_slot(store):
@@ -1174,7 +1284,7 @@ def test_adding_a_member_twice_is_idempotent(store):
     minted = _mint_floating()
     license_id = minted["license"]["id"]
     repo.add_institution_member(license_id, "u1@university.edu")
-    err, _ = repo.add_institution_member(license_id, "u1@university.edu")
+    err, _seat, _invite = repo.add_institution_member(license_id, "u1@university.edu")
     assert err == ""
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
 
@@ -1285,12 +1395,26 @@ async def test_add_member_over_http(client, monkeypatch):
     assert resp.status_code == 200, resp.text
     assert resp.json()["seat"]["uid"] == "student"
 
+    # An address with no account is a promise, not a rejection.
     missing = await client.post(
         f"/v1/institutions/licenses/{license_id}/seats",
         json={"email": "nobody@university.edu"},
     )
-    assert missing.status_code == 404
-    assert missing.json()["detail"] == "user_not_found"
+    assert missing.status_code == 200, missing.text
+    assert missing.json()["seat"] is None
+    assert missing.json()["invite"]["email"] == "nobody@university.edu"
+
+    listed = await client.get(f"/v1/institutions/licenses/{license_id}/seats")
+    assert listed.status_code == 200, listed.text
+    assert [i["email"] for i in listed.json()["invites"]] == ["nobody@university.edu"]
+
+    invite_id = listed.json()["invites"][0]["id"]
+    dropped = await client.delete(
+        f"/v1/institutions/licenses/{license_id}/invites/{invite_id}"
+    )
+    assert dropped.status_code == 200, dropped.text
+    again = await client.get(f"/v1/institutions/licenses/{license_id}/seats")
+    assert again.json()["invites"] == []
 
 
 def test_floating_requires_max_seats_at_mint():

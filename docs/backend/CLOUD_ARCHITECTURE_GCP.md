@@ -569,7 +569,8 @@ collection reference and read across the collection tree. Treat any new
 client-supplied identifier that reaches Firestore as needing the same treatment.
 
 **Per-user quota overrides.** `resolve_user_config` merges the fleet defaults
-(`MAX_SESSIONS_PER_USER`, `MAX_FILES_PER_SESSION`, `MAX_FRAMES_PER_ANALYSIS`)
+(`DEMO_MAX_ANALYSES` / `LICENSED_MAX_SESSIONS_PER_USER`, `MAX_FILES_PER_SESSION`,
+`MAX_FRAMES_PER_ANALYSIS`)
 with optional per-user values on `users/{uid}`, so one tester can be raised
 without redeploying. Admins set them via
 `PATCH /v1/admin/users/{uid}/config`, and the app reads the resolved numbers

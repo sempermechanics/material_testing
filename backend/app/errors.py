@@ -72,6 +72,24 @@ NO_FLOATING_SEAT = "no_floating_seat"
 SEATING_NOT_FLOATING = "seating_not_floating"
 EMAIL_NOT_VERIFIED = "email_not_verified"
 
+# --- institution invites ---------------------------------------------------
+# An invite reserves a roster place for an address with no account yet. It is
+# consumed at that address's first sign-in; until then it holds no seat and no
+# uid. `invite_exists` means the address is already promised to a DIFFERENT
+# licence — re-inviting to the same one is a no-op, not an error.
+INVITE_EXISTS = "invite_exists"
+INVITE_NOT_FOUND = "invite_not_found"
+INVALID_EMAIL = "invalid_email"
+
+# --- admin second factor ---------------------------------------------------
+# The console is a browser, which cannot produce a device attestation, so the
+# staff web path proves itself with a second factor and a recent sign-in
+# instead. `mfa_required` means the account has no second factor on the token
+# at all; `reauth_required` means it has one but the sign-in is too old for a
+# state-changing call and the operator must re-authenticate.
+MFA_REQUIRED = "mfa_required"
+REAUTH_REQUIRED = "reauth_required"
+
 # --- upstream / throttling -------------------------------------------------
 RATE_LIMITED = "rate_limited"
 DRIVE_DOWNLOAD_FAILED = "drive_download_failed"
