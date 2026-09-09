@@ -369,10 +369,50 @@ which is what catches a re-capture started from inside an analysis;
 screen: seats free themselves.
 Two static consoles under `firebase-hosting/public/console/` (no build step).
 `/console/institution` is fully functional because `institution_admin_context`
-is token-only by design. `/console/operator` is **read-only** — every mutating
-`/v1/admin/*` route needs `verified_device`, which a browser cannot produce,
-and that is the control working rather than a gap. CSP is widened for
+is token-only by design. `/console/operator` shipped **read-only** — every
+mutating `/v1/admin/*` route needs `verified_device`, which a browser cannot
+produce — which was the control working rather than a gap; the next section
+replaces that restriction rather than deleting the control. CSP is widened for
 `/console/**` alone, `connect-src` only.
+
+**Invites, 2FA console, demo quota (same branch, latest):** three changes that
+correct earlier sections above.
+
+*Institution members no longer need an account first.* An address with none
+becomes a pending invite in a top-level `licenseInvites/{sha256(email)}`
+collection, redeemed automatically at that person's first sign-in by
+`ensure_entitlement`, which tries the invite **before** `ensure_demo_license` —
+the latter stamps a `licenseId` every later call short-circuits on, so minting
+demo first would strand the invite. Top-level so redemption is one document
+read rather than a collection-group query on a hot path; hashed because an
+email is not a legal document id and a plaintext one would be enumerable. An
+invite holds no seat and no slot, and is consumed inside `claim_seat`'s
+transaction. Redemption requires a **verified** email — the address is the
+whole claim to the seat. This supersedes "the person just has to have signed in
+once" above.
+
+*The operator console can now act.* `attested_or_mfa_admin` accepts either a
+device attestation (phone, unchanged) or an admin ID token carrying a completed
+second factor from a sign-in newer than `ADMIN_WEB_REAUTH_SECONDS` (15 min).
+Deliberately weaker than device binding — a phished live MFA session inside the
+window can mint a licence — so it is its own authz tier (`ADMIN_STEPUP`) rather
+than folded into `DEVICE_ADMIN`, and `ADMIN_WEB_MFA_ENABLED=0` withdraws it.
+The console issues, extends, revokes (typed key-prefix confirmation), drives
+rosters and approves accounts; enrolment is TOTP with the secret shown for
+manual entry, since posting it to a QR service would hand away the factor.
+
+*`MAX_SESSIONS_PER_USER` is deleted, not just unread.* `mode` selects between
+`DEMO_MAX_ANALYSES` (25) and `LICENSED_MAX_SESSIONS_PER_USER`. **A deployment
+still setting the old variable silently gets 25 instead of 4** — set
+`DEMO_MAX_ANALYSES` deliberately before deploying.
+
+*Two test tiers added.* `tests/test_gateway_parity.py` compares every FastAPI
+route against `gateway/openapi.yaml` (ESPv2 is an allowlist, so a missing
+declaration is an unreachable route with nothing in the logs — that trap has
+bitten twice). Seven emulator tests now cover the seat and lease invariants
+that are structurally untestable against the fake store; the over-claim one was
+verified to fail against the pre-fix code ("over-admitted: 16 claims succeeded
+against a cap of 5").
 
 Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
 §20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,

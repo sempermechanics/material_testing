@@ -229,14 +229,21 @@ Everything above is required (or near enough). These are the rest of what
 |---|---|---|
 | `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. Overridable per user via `PATCH /v1/admin/users/{uid}/config` |
 | `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. A key's own `maxAnalyses`, or a per-user override, takes precedence when tighter |
-
-> `MAX_SESSIONS_PER_USER` was the single cap for every user, defaulting to 4. It is **no longer read** — `mode` now selects between the two rows above. A service that still sets it gets `DEMO_MAX_ANALYSES` for unlicensed users, so set that variable deliberately before deploying.
+| `ADMIN_WEB_MFA_ENABLED` | `1` | Whether the staff console may act at all. `0` restores attestation-only admin — every state change then needs the phone |
+| `ADMIN_WEB_REAUTH_SECONDS` | `900` | How old a console sign-in may be and still authorise a state change. Sudo mode, not a session length |
 | `MAX_FILES_PER_SESSION` | `600` | Upper bound on files in one analysis |
 | `MAX_FRAMES_PER_ANALYSIS` | `150` | Deformed-frame ceiling the app enforces |
 | `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |
 | `TASKS_QUEUE` · `TASKS_LOCATION` · `TASKS_TARGET_BASE_URL` · `TASKS_INVOKER_SA` | unset / `asia-south1` / unset / `SERVICE_ACCOUNT_EMAIL` | Async provisioning — see A6. Leave `TASKS_QUEUE` empty to provision inline |
 | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
 | `REQUIRE_ATTESTED_UPLOADS` | off locally / **`1` in production** | Production pilot keeps this at `1`. See the hardening note below |
+
+> **`MAX_SESSIONS_PER_USER` is no longer read.** It was the single cloud cap
+> for every user, defaulting to 4; `mode` now selects between
+> `DEMO_MAX_ANALYSES` and `LICENSED_MAX_SESSIONS_PER_USER` instead. A service
+> that still sets it gets `DEMO_MAX_ANALYSES` for unlicensed users — six times
+> the old ceiling at the default — so **set that variable deliberately before
+> deploying** rather than inheriting it.
 
 **Production hardening: `REQUIRE_ATTESTED_UPLOADS=1` (live on pilot).**
 `GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While this

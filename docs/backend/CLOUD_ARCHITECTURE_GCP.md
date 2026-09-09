@@ -1194,14 +1194,42 @@ expiry keeps a paying customer working; an unreadable lease frees the slot,
 because on a floating pool "no lease" is the common case and treating an
 unparseable one as live would hand out the pool for free.
 
-#### Joining: sign up for demo, IT promotes you
+#### Joining: IT adds an address, whether or not it has an account
 
 `POST /v1/institutions/licenses/{id}/seats` takes an **email**. There is no key
-to type and no invite system: demo is open to everyone, so "sign in once, then
-I'll add you" is the flow, and `404 user_not_found` means exactly that. The
-backend resolves the email to a uid — seats have to be uid-keyed, since that is
-what every entitlement check has in hand — which avoids email-keyed documents,
-pending invites and a second identity space to keep consistent.
+for a member to type. Seats are uid-keyed — they have to be, since a uid is
+what every entitlement check has in hand — so the backend resolves the address
+first:
+
+- **the address has an account** → a seat is claimed immediately;
+- **it does not** → a **pending invite** is written instead, and redeemed
+  automatically the first time that person signs in.
+
+The invite path exists because IT works from a list of addresses and cannot
+make people sign up on cue. Refusing with `user_not_found` until they had was
+pushing a scheduling problem onto the wrong person.
+
+Invites live in a top-level `licenseInvites/{sha256(email)}` collection.
+**Top-level** so redemption is a single document read: a subcollection of the
+licence would need a collection-group query, and its index, on a path that runs
+for every account not yet holding a key. **Hashed** because an email is not a
+legal Firestore document id in general (`.` and `..` are reserved, `/` is a
+path separator) and a plaintext id would make the invite list enumerable by
+guessing addresses.
+
+An invite holds **no seat and no slot**. There is no uid to entitle until it is
+claimed, so counting it against `maxSeats` would mean decrementing a count for
+someone who may never arrive. An invite is a promise; the seat is taken when it
+is kept.
+
+Redemption happens in `ensure_entitlement`, which tries the invite **before**
+`ensure_demo_license`. The order is load-bearing: the latter stamps a
+`licenseId` that every later call short-circuits on, so minting demo first
+would strand the invite permanently. It also requires a **verified** email —
+the address is the entire claim to the seat, and honouring an unverified one
+would let anyone who can type someone else's address take the seat meant for
+them. The claim runs inside `claim_seat`'s transaction, so the seat write and
+the invite delete commit together or neither does.
 
 Adding a member consumes **no floating slot**. A slot is taken by checking out
 a lease.
@@ -1268,22 +1296,52 @@ would cost more than it saves.
 
 | Path | Who | What it can do |
 |---|---|---|
-| `/console/institution` | IT named in a licence's `adminEmails` | **Everything**: add/remove roster members, see who holds a seat, hold a member, clear a device lock |
-| `/console/operator` | Semper staff | **Read-only**: look up licences and pending accounts |
+| `/console/institution` | IT named in a licence's `adminEmails` | Add/remove roster members, withdraw an unclaimed invitation, see who holds a seat, hold a member, clear a device lock |
+| `/console/operator` | Semper staff **with a second factor** | Issue individual and institution licences, extend a term, revoke a key, drive any roster, approve accounts |
 
-**The operator console is read-only because of §3, not an oversight.** Every
-mutating `/v1/admin/*` route requires `verified_device` — an ECDSA signature
-from a device keypair registered in Firestore — and a browser cannot produce
-one. That is the control's whole purpose: a stolen session cookie or ID token
-must not be able to mint a licence, revoke a key or approve an account. Making
-those reachable from a browser means deleting that guarantee, so minting,
-renewing, revoking and approving stay on the phone admin screen and the staff
-CLI.
+**The operator console was read-only, and the reason was real.** Every
+state-changing `/v1/admin/*` route requires proof beyond an ID token. On the
+phone that proof is `verified_device` — an ECDSA signature from a device
+keypair registered in Firestore — and a browser cannot produce one. The
+control's whole purpose is that a stolen session cookie or ID token must not
+mint a licence, revoke a key or approve an account.
 
-The institution console has no such limit because `institution_admin_context`
-is token-only **by design** (§20.4) — written for IT working from a browser or
-curl, not from the licensed device. That decision is what makes this half
-buildable at all.
+It has not been removed. `attested_or_mfa_admin` adds a second, narrower door
+for browser callers, and both halves of it are checked server-side:
+
+- the ID token records a **completed second factor**
+  (`firebase.sign_in_second_factor`, which Firebase sets only after an MFA
+  challenge actually succeeded — enrolment alone does not), so a stolen
+  password-only token is still refused; **and**
+- the sign-in behind it is newer than `ADMIN_WEB_REAUTH_SECONDS` (default 15
+  minutes), so a token that leaks later stops working. Sudo mode, not a
+  session length. A token that declines to state its own `auth_time` is
+  treated as too old rather than as fresh.
+
+Any request carrying device headers is still held to the full `verified_device`
+check, so the phone path is untouched.
+
+**This is weaker than device binding and the code says so rather than implying
+equivalence.** Someone who phishes a live MFA session inside the freshness
+window can mint a licence, which attestation made impossible. That is the
+trade: staff need to administer licences from a computer.
+`ADMIN_WEB_MFA_ENABLED=0` withdraws the browser path entirely and restores
+attestation-only admin. The route authz table records it as its own tier,
+`ADMIN_STEPUP`, rather than folding it into `DEVICE_ADMIN`, so the trade stays
+visible to a reviewer.
+
+Console enrolment is **TOTP**, and the page shows the secret for manual entry
+rather than a QR code: every QR service is somebody else's server and the
+payload is the TOTP secret itself, so fetching a picture would hand away the
+factor protecting licence issuance.
+
+Destructive actions confirm twice — a dialog naming who is affected, then
+typing the key prefix. Revoking withdraws entitlement; it deletes nothing.
+
+The institution console needs no second factor because
+`institution_admin_context` is token-only **by design** (§20.4) — written for
+IT working from a browser or curl, not from the licensed device, and reaching
+only the licences that name the caller.
 
 **CSP is relaxed for `/console/**` alone.** Every other page — the legal pages,
 the auth continue-URLs — keeps the strict `default-src 'self'`. Only

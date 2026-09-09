@@ -779,17 +779,23 @@ the address named in `adminEmails`, paste the licence id, and the roster,
 who currently holds a seat, and the add/hold/remove actions are all there. The
 routes below are what it calls, and stay equally usable from a script.
 
-Semper staff have `/console/operator`, which is **read-only**: minting,
-renewing, revoking and approving all need a device-attested session, which a
-browser cannot produce. Those stay on the phone admin screen.
+Semper staff have `/console/operator`, which now does the whole job: issue an
+individual or institution licence, extend a term, revoke a key, drive any
+institution's roster, and approve accounts. It requires a **second factor** and
+a sign-in from the last 15 minutes, because a browser cannot produce the device
+attestation the phone path uses — the page walks you through enrolling an
+authenticator app the first time. Revoking asks you to type the key prefix
+before it will proceed. The phone admin screen still works exactly as before.
 
 **Institution IT self-service.** Once an institution key exists, its `adminEmails`
-manage seats themselves, with no Semper staff involvement and no dashboard —
-they call three routes directly (script, curl, or their own tooling):
+manage seats themselves, with no Semper staff involvement — from the console
+above, or by calling these routes directly (script, curl, or their own tooling):
 
 | Need | Route |
 |---|---|
-| See who's activated, and each seat's status | `GET /v1/institutions/licenses/{id}/seats` |
+| See who's activated, each seat's status, and who has been invited but not yet signed in | `GET /v1/institutions/licenses/{id}/seats` |
+| Add someone by email — they do **not** need an account yet; an unknown address becomes a pending invitation, redeemed automatically at their first sign-in | `POST /v1/institutions/licenses/{id}/seats` `{"email": …}` |
+| Withdraw an invitation nobody has claimed | `DELETE .../invites/{inviteId}` — the id comes from the seats listing |
 | Someone lost/replaced their device | `PATCH .../seats/{uid}` `{"clearDeviceLock": true}` — lets them re-bind without a support ticket |
 | Pause someone without losing their seat (e.g. leave of absence) | `PATCH .../seats/{uid}` `{"enabled": false}`, then later `{"enabled": true}` to restore — this does **not** free the seat slot |
 | Someone leaves the institution for good | `DELETE .../seats/{uid}` — drops them to Demo and **frees the slot** for someone else |

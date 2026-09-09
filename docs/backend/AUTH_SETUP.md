@@ -147,7 +147,8 @@ leak or escalate into:
 |---|---|---|
 | **User** | `current_user` | Verified ID token, `access_status == APPROVED`. Also re-checks the license/device lock on every call carrying `X-Device-Id` (see CLOUD_ARCHITECTURE_GCP §20.2). |
 | **Admin** (Semper staff) | `admin_user` | `role == "admin"` or a verified email in `ADMIN_EMAILS`. Token only — enough for read-only admin screens. |
-| **Device-attested admin** | `verified_device` + `admin_user` | Every *mutating* admin route: approve, revoke, config patch, license mint, whole-key revoke. |
+| **Device-attested admin** | `verified_device` + `admin_user` | Device-attested calls from the phone admin screen. Still the strongest tier, and still what any request carrying device headers is held to. |
+| **Step-up admin** | `attested_or_mfa_admin` | Every *mutating* admin route: approve, revoke, config patch, license mint, whole-key revoke. Satisfied by the tier above, **or** by an admin whose ID token records a completed second factor (`firebase.sign_in_second_factor`) from a sign-in newer than `ADMIN_WEB_REAUTH_SECONDS`. The second form exists for the staff console — a browser cannot produce an attestation — and is deliberately weaker: a phished live MFA session inside the window can act. `ADMIN_WEB_MFA_ENABLED=0` removes it and restores attestation-only admin. |
 | **Institution admin** | `institution_admin_context` | **Not** a role and **not** `ADMIN_EMAILS`. An APPROVED user whose *verified* email appears in one specific license's `adminEmails`. Authority is scoped to that license alone; a license the caller does not administer 404s identically to one that does not exist. Deliberately not device-attested — IT manages seats from a browser or curl, not the licensed device. |
 
 The tiers are asserted structurally in
