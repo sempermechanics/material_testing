@@ -70,3 +70,31 @@ td.actions { text-align: right; white-space: nowrap; }
 .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .err { color: var(--danger); }
 .wrap { overflow-x: auto; }
+
+/* Forms. The mint form is the only dense one, so the grid is defined once
+   here rather than per page: two columns where there is room, one where a
+   phone would otherwise squeeze the labels into an unreadable column. */
+.grid {
+  display: grid; gap: .75rem 1rem; margin: .75rem 0;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+.grid label, .row label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
+.grid label.wide { grid-column: 1 / -1; }
+.row label { flex-direction: row; align-items: center; gap: .35rem; }
+select {
+  font: inherit; padding: .5rem .6rem; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+}
+input:disabled, select:disabled { opacity: .5; }
+
+/* Keys, secrets and device ids: fixed width so a transposed character is
+   visible, and selectable in one gesture because both are meant to be copied. */
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .9em;
+}
+.key {
+  user-select: all; font-size: 1.05rem; letter-spacing: .04em;
+  padding: .5rem .6rem; border-radius: 8px; background: var(--bg);
+  border: 1px solid var(--line); display: inline-block; word-break: break-all;
+}

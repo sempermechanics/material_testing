@@ -6,23 +6,48 @@ two pages would cost more than it saves.
 
 | Path | Who | What it can do |
 |---|---|---|
-| `/console/institution` | IT staff named in a licence's `adminEmails` | **Everything.** Add and remove roster members, see who holds a seat, put a member on hold, clear a device lock. |
-| `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) | **Read-only.** Look up licences and accounts awaiting approval. |
+| `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members, withdraw an unclaimed invitation, see who holds a seat, put a member on hold, clear a device lock. |
+| `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, extend a term, revoke a key, drive any institution roster, approve accounts. |
 
-## Why the operator console is read-only
+## Why the operator console needs a second factor
 
-Every mutating `/v1/admin/*` route requires `verified_device` — an ECDSA
-signature over the request, from a device keypair registered in Firestore. A
-browser cannot produce one, and that is the point: it means a stolen session
-cookie or ID token cannot mint a licence, approve an account or revoke a key.
+Every state-changing `/v1/admin/*` route wants proof beyond an ID token. On the
+phone that proof is `verified_device` — an ECDSA signature over the request,
+from a device keypair registered in Firestore. It exists so that a stolen
+session cookie or ID token cannot mint a licence, approve an account or revoke
+a key. A browser cannot produce one, which is why this page used to be
+read-only.
 
-Making those operations reachable from a browser would mean removing that
-control. Minting, renewing, revoking and approving therefore stay on the phone
-admin screen and the staff CLI. This page is for looking things up.
+The browser path is the deliberate substitute, not its removal. A console
+caller is accepted only when the ID token records a **completed second factor**
+and the sign-in behind it is **recent** (`ADMIN_WEB_REAUTH_SECONDS`, default 15
+minutes). Both halves matter: the factor check refuses a stolen password-only
+token, and the freshness check stops a token that leaks later from carrying
+authority for its full hour.
 
-The institution console has no such limit because `institution_admin_context`
-is token-only **by design** — it was written for IT working from a browser or
-curl, not from the licensed device. See CLOUD_ARCHITECTURE_GCP §20.4.
+It is weaker than device binding and worth saying so plainly: someone who
+phishes a live MFA session inside the window can act, which the attestation
+path made impossible. `ADMIN_WEB_MFA_ENABLED=0` withdraws the browser path
+entirely and restores attestation-only admin.
+
+Enrolment is TOTP, and the page shows the secret for manual entry rather than a
+QR code. Every QR service is somebody else's server and the payload is the TOTP
+secret itself, so fetching a picture would hand away the factor that protects
+licence issuance. The CSP forbids third-party images in any case.
+
+The institution console needs no second factor because
+`institution_admin_context` is token-only **by design** — it was written for IT
+working from a browser or curl, not from the licensed device, and it can only
+ever reach the licences that name the caller. See CLOUD_ARCHITECTURE_GCP §20.4.
+
+## Confirming destructive actions
+
+Revoking a licence drops a whole institution to demo, so the page asks twice:
+once as a plain confirmation naming who is affected, then by making the
+operator **type the key prefix**. A yes/no dialog is muscle memory by the third
+licence of the afternoon; typing `SEMP-4K2P` is not something a hand does
+absent-mindedly. Nothing is deleted either way — revoking withdraws
+entitlement and leaves every saved analysis in place.
 
 ## Deploying
 

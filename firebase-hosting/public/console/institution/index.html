@@ -132,10 +132,18 @@
         : "Everyone here is licensed. Removing someone frees their seat for " +
           "another member.";
 
-      $("rows").innerHTML = data.seats.map(seatRow).join("");
+      // Invites belong in the same list: to whoever manages the roster this
+      // is one question — "who is on this licence" — even though only a seat
+      // holds a uid and counts against the cap.
+      $("rows").innerHTML =
+        data.seats.map(seatRow).concat((data.invites || []).map(inviteRow)).join("") ||
+        '<tr><td colspan="5" class="muted">Nobody on this licence yet.</td></tr>';
       $("rosterCard").hidden = false;
       for (const el of document.querySelectorAll("[data-act]")) {
         el.addEventListener("click", () => act(el.dataset.act, el.dataset.uid));
+      }
+      for (const el of document.querySelectorAll("[data-invite]")) {
+        el.addEventListener("click", () => withdraw(el.dataset.invite));
       }
     }
 
@@ -165,24 +173,57 @@
         </tr>`;
     }
 
+    function inviteRow(invite) {
+      return `
+        <tr>
+          <td>${esc(invite.email)}</td>
+          <td><span class="pill warn">invited</span></td>
+          <td><span class="pill off">—</span></td>
+          <td class="muted">joins at first sign-in</td>
+          <td class="actions">
+            <button class="danger" data-invite="${esc(invite.id)}">Withdraw</button>
+          </td>
+        </tr>`;
+    }
+
+    async function withdraw(inviteId) {
+      if (!confirm("Withdraw this invitation? Nobody has claimed it yet.")) return;
+      setStatus("Withdrawing…");
+      try {
+        await api(
+          `/v1/institutions/licenses/${encodeURIComponent(licenseId)}/invites/${encodeURIComponent(inviteId)}`,
+          { method: "DELETE" },
+        );
+        await load();
+      } catch (e) {
+        setStatus(`Could not withdraw: ${e.message}`, true);
+      }
+    }
+
     async function addMember() {
       const email = $("addEmail").value.trim();
       if (!email) return;
       setStatus("Adding…");
       try {
-        await api(`/v1/institutions/licenses/${encodeURIComponent(licenseId)}/seats`, {
-          method: "POST",
-          body: JSON.stringify({ email }),
-        });
+        const out = await api(
+          `/v1/institutions/licenses/${encodeURIComponent(licenseId)}/seats`,
+          { method: "POST", body: JSON.stringify({ email }) },
+        );
         $("addEmail").value = "";
         await load();
-      } catch (e) {
-        // The one error worth explaining rather than echoing: it means the
-        // person has never opened Semper, not that the address is wrong.
+        // Someone who has never opened Semper is invited rather than refused,
+        // so say which of the two happened — "added" and "invited" mean
+        // different things to whoever is chasing them.
         setStatus(
-          e.message === "user_not_found"
-            ? `${email} has not signed in to Semper yet. Ask them to sign in once — ` +
-              "it is free — then add them again."
+          out.seat
+            ? `${email} is on the licence now.`
+            : `${email} has not signed in yet — invited. They join automatically ` +
+              "the first time they do.",
+        );
+      } catch (e) {
+        setStatus(
+          e.message === "invite_exists"
+            ? `${email} is already promised a place on a different licence.`
             : `Could not add ${email}: ${e.message}`,
           true,
         );
