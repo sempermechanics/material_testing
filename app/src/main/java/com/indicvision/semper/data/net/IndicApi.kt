@@ -264,7 +264,9 @@ class IndicApi private constructor(context: Context) {
         client.newCall(req).execute().use { resp ->
             if (resp.code != HttpStatus.OK) {
                 throw ApiException(
-                    resp.code, IndicApiHttp.bodyText(resp), IndicApiHttp.requestIdOf(resp),
+                    resp.code,
+                    IndicApiHttp.bodyText(resp),
+                    IndicApiHttp.requestIdOf(resp),
                 )
             }
             val decoded: LicenseActivateResponse = json.decodeFromString(resp.body.string())

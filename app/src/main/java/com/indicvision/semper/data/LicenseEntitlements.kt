@@ -11,6 +11,7 @@ import kotlin.math.ceil
  * the app fails closed to demo: 25 saved analyses, no cloud backup/restore,
  * no share.
  */
+@Suppress("TooManyFunctions")
 object LicenseEntitlements {
 
     const val MODE_DEMO = "demo"
@@ -104,11 +105,15 @@ object LicenseEntitlements {
      * what the app will do.
      */
     fun daysUntilExpiry(context: Context, now: Long = System.currentTimeMillis()): Long? {
-        if (!isLicensed(context)) return null
         val expiresAt = AppRemoteConfig.licenseExpiresAtMillis(context)
-        if (expiresAt == AppRemoteConfig.NO_INSTANT) return null
-        if (AppRemoteConfig.isStale(context, STALE_CACHE_MS, now)) return null
-        return ceil((expiresAt - now).toDouble() / MILLIS_PER_DAY).toLong()
+        val worthWarningAbout = isLicensed(context) &&
+            expiresAt != AppRemoteConfig.NO_INSTANT &&
+            !AppRemoteConfig.isStale(context, STALE_CACHE_MS, now)
+        return if (!worthWarningAbout) {
+            null
+        } else {
+            ceil((expiresAt - now).toDouble() / MILLIS_PER_DAY).toLong()
+        }
     }
 
     /**
@@ -119,9 +124,15 @@ object LicenseEntitlements {
      * countdown.
      */
     fun expiryNoticeDays(context: Context, now: Long = System.currentTimeMillis()): Long? {
-        if (inGrace(context)) return daysUntilExpiry(context, now) ?: 0L
-        val days = daysUntilExpiry(context, now) ?: return null
-        return if (days <= EXPIRY_WARN_DAYS) days else null
+        val days = daysUntilExpiry(context, now)
+        return when {
+            // In grace the expiry has passed, so a stale cache — which makes
+            // `days` null — still warrants the overdue notice.
+            inGrace(context) -> days ?: 0L
+            days == null -> null
+            days <= EXPIRY_WARN_DAYS -> days
+            else -> null
+        }
     }
 
     /**

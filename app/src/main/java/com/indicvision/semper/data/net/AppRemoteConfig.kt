@@ -2,7 +2,9 @@ package com.indicvision.semper.data.net
 
 import android.content.Context
 import androidx.core.content.edit
-import java.time.Instant
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Cached product limits from [GET /v1/config](IndicApi.getConfig).
@@ -75,6 +77,12 @@ object AppRemoteConfig {
     /** No expiry on file — a perpetual license, or nothing fetched yet. */
     const val NO_INSTANT = 0L
 
+    /** ISO-8601 instant with an explicit offset, sub-second digits removed. */
+    private const val ISO_INSTANT = "yyyy-MM-dd'T'HH:mm:ssXXX"
+
+    /** The fractional-seconds group; nothing else in an instant matches. */
+    private val SUBSECOND = Regex("""\.\d+""")
+
     private fun normalizeKind(raw: String): String =
         if (raw == LEGACY_KIND_CAMPUS) "institution" else raw
 
@@ -113,10 +121,25 @@ object AppRemoteConfig {
      * Epoch millis for an ISO-8601 instant, or [NO_INSTANT] when absent or
      * unparseable. Unparseable is treated as absent rather than as an expiry
      * at the epoch, which would read as expired forever.
+     *
+     * `SimpleDateFormat`, not `java.time`: minSdk is 24 and core library
+     * desugaring is off, so `Instant.parse` is an API 26 call the lint gate
+     * rejects. The rest of the app parses timestamps this way too.
+     *
+     * `XXX` accepts both spellings of a zero offset — the backend serialises
+     * an aware datetime as `+00:00`, while `Instant.toString()` (what the
+     * tests build) writes `Z`. Sub-second digits are dropped first: the
+     * backend emits microseconds, and `SSS` would read all six as
+     * milliseconds and land the expiry minutes late.
      */
     private fun parseInstant(raw: String?): Long {
         if (raw.isNullOrBlank()) return NO_INSTANT
-        return runCatching { Instant.parse(raw).toEpochMilli() }.getOrDefault(NO_INSTANT)
+        val text = SUBSECOND.replace(raw.trim(), "")
+        val format = SimpleDateFormat(ISO_INSTANT, Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+            isLenient = false
+        }
+        return runCatching { format.parse(text)?.time ?: NO_INSTANT }.getOrDefault(NO_INSTANT)
     }
 
     /**

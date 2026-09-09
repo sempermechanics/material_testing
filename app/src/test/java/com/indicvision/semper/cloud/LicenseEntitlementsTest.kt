@@ -214,8 +214,10 @@ class LicenseEntitlementsTest {
         val now = 1_000_000_000_000L
         applyLicensed(Instant.ofEpochMilli(now + 30 * day).toString(), now = now)
         assertEquals(30L, LicenseEntitlements.daysUntilExpiry(ctx, now))
-        assertNull("30 days out is not yet worth interrupting for",
-            LicenseEntitlements.expiryNoticeDays(ctx, now))
+        assertNull(
+            "30 days out is not yet worth interrupting for",
+            LicenseEntitlements.expiryNoticeDays(ctx, now),
+        )
     }
 
     @Test
@@ -266,6 +268,33 @@ class LicenseEntitlementsTest {
             now = now,
         )
         assertNull(LicenseEntitlements.expiryNoticeDays(ctx, now))
+    }
+
+    @Test
+    fun `the expiry parses in the shape the backend actually sends`() {
+        // Every other case here builds its timestamp with Instant.toString(),
+        // which writes `Z`. The backend serialises an aware datetime, so what
+        // arrives on the wire is `+00:00` with microseconds — a spelling no
+        // test covered while the parser only had to satisfy Instant.parse.
+        val now = 1_000_000_000_000L // 2001-09-09T01:46:40Z
+        for (wire in listOf(
+            "2001-09-18T01:46:40+00:00",
+            "2001-09-18T01:46:40.123456+00:00",
+            "2001-09-18T01:46:40Z",
+        )) {
+            AppRemoteConfig.clear(ctx)
+            applyLicensed(wire, now = now)
+            assertEquals(wire, 9L, LicenseEntitlements.expiryNoticeDays(ctx, now))
+        }
+    }
+
+    @Test
+    fun `an expiry offset from UTC lands on the instant it names`() {
+        // 06:46:40 five hours behind UTC is the same moment as 11:46:40Z,
+        // ten hours after `now` — inside the same day, so still 1 day out.
+        val now = 1_000_000_000_000L
+        applyLicensed("2001-09-09T06:46:40-05:00", now = now)
+        assertEquals(1L, LicenseEntitlements.expiryNoticeDays(ctx, now))
     }
 
     @Test

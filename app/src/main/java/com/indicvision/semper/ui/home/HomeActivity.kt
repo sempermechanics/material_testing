@@ -475,7 +475,9 @@ class HomeActivity : AppCompatActivity() {
             LicenseEntitlements.inGrace(this) -> getString(R.string.license_grace, support)
             days <= 0L -> getString(R.string.license_expiring_today, support)
             else -> resources.getQuantityString(
-                R.plurals.license_expiring_fmt, days.toInt(), days.toInt(),
+                R.plurals.license_expiring_fmt,
+                days.toInt(),
+                days.toInt(),
             )
         }
         tvHomeLicense.setTextColor(
