@@ -321,6 +321,10 @@ Lattice, Session limit, or back to Home.
 | [ ] 5.1.8 | Include one frame of a different pixel size | **Compute** stays disabled. On step 2 a warning chip says the image resolution isn't matching the reference (W×H) and lists the mismatched filename(s); its info icon asks first whether to leave the app, then opens the frame-size FAQ |
 | [ ] 5.1.9 | Load JPEGs | A non-blocking accuracy warning chip appears; its info icon asks first whether to leave the app, then opens the JPEG FAQ |
 | [ ] 5.1.10 | Load a poorly speckled reference | A low-texture warning names a suggested subset size; its info icon opens the speckle FAQ behind the same leave-the-app confirm |
+| [ ] 5.1.11 | Load any speckled reference and open step 2 | A muted line under the subset slider reads "Speckle measures about N px across. Good practice asks for 3–9 px." |
+| [ ] 5.1.12 | Load a reference shot far back, so the dots are 1–2 px | A second chip on step 1 says the speckle is below the 3 px minimum and to shoot closer or use a coarser pattern |
+| [ ] 5.1.13 | Load a close-up whose dots span more than 9 px | The chip says the pattern is over-resolved — correlates fine, but a finer pattern would give more points |
+| [ ] 5.1.14 | Load a reference with no measurable pattern at all (blank card) | Neither the readout nor the size chip appears; no number is invented |
 | [ ] 5.1.11 | Open the sort menu → **Name A–Z** | Thumbnails reorder; the badge numbers renumber 1…N |
 | [ ] 5.1.12 | Choose **Date oldest first** | Order follows capture date, not filename |
 | [ ] 5.1.13 | Choose **Manual** | Hint toast about dragging; drag a thumbnail and it stays where dropped |

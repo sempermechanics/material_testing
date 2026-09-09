@@ -17,7 +17,7 @@ App ↔ FAQ map: [FAQ_LINKS.md](FAQ_LINKS.md).
 | Section | Anchor | Opened from |
 |---------|--------|-------------|
 | Lossy formats | [jpeg-warning](#jpeg-warning) | Wizard step 1 chip |
-| Speckle contrast | [speckle-contrast](#speckle-contrast) | Wizard chip |
+| Speckle contrast & size | [speckle-contrast](#speckle-contrast) | Wizard chips; speckle readout |
 | Lighting & accuracy | [lighting-and-accuracy](#lighting-and-accuracy) | Reports |
 | Strain field stats | [strain-field-stats](#strain-field-stats) | Result viewer; reports |
 | Frame size mismatch | [frame-size-mismatch](#frame-size-mismatch) | Wizard step 2 chip |
@@ -55,7 +55,11 @@ JPEGs out of the gallery.
 
 ## speckle-contrast {#speckle-contrast}
 
-**When you see it:** Low SSSIG chip in the wizard (**Why?** opens this section).
+**When you see it:** Either of the two speckle chips in the wizard's first step
+(**Why?** opens this section). They report different faults and are worth telling
+apart.
+
+### Low speckle contrast
 
 **Why it matters:** DIC tracks small windows of random pattern. If gradients inside
 a subset are weak, correlation fails or wanders.
@@ -66,6 +70,24 @@ a subset are weak, correlation fails or wanders.
 - Improve **lighting** — even, diffuse light; avoid glare and deep shadows in the ROI.
 - Focus sharply on the speckled surface.
 - Draw the ROI over the busiest part of the pattern.
+
+### Speckle size
+
+Under the subset slider the wizard reports how large your speckles actually
+measure, in pixels of the frame you imported. The iDICs *Good Practices Guide for
+Digital Image Correlation* asks for dots spanning **3 to 9 px**, and the app
+measures yours from the reference frame's own autocorrelation.
+
+| What it says | What it means | What to do |
+|---|---|---|
+| Below 3 px | The pattern is too fine for this frame to resolve. It aliases, and points can fail to correlate at all. | Shoot closer, or spray a coarser pattern. |
+| 3–9 px | Nothing to change. | — |
+| Above 9 px | It will correlate, but the extra pixels buy no extra accuracy, and a subset large enough to span the dots leaves you fewer measurement points across the ROI. | A finer pattern, or shoot from further back. |
+| Subset spans too few speckles | A subset should cover about three dots. Fewer than that and it looks much like its neighbours, so it can correlate confidently against the wrong place. | Raise the subset size to the value the chip names. |
+
+Contrast and size are independent: a pattern can be crisp and black-on-white and
+still be far too fine, and the contrast chip will say nothing about it. That is why
+both are reported.
 
 See [lighting-and-accuracy](#lighting-and-accuracy) for how much light changes
 measured strain noise.

@@ -267,6 +267,19 @@
                         android:stepSize="2"
                         android:value="41" />
 
+                    <!-- Measured speckle size for the loaded reference. Shown
+                         whether or not it is a problem: it is the number the
+                         subset recommendation rests on, and a user who can see
+                         it can judge their own pattern. Gone until measured. -->
+                    <TextView
+                        android:id="@+id/tvSpeckleReadout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/viewer_chrome_muted"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        tools:text="Speckle measures about 5.4 px across." />
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

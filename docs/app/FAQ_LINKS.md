@@ -15,6 +15,7 @@ publishers; live links use the section ids below.
 |------|---------|------------------|------------------|-------------------------|
 | Wizard step 1 | Lossy-format accuracy chip | `lossy_format_warning_fmt` + chip FAQ | `url_faq_jpeg` | `#loading` |
 | Wizard step 1 | Low speckle / SSSIG chip | `texture_low_fmt` + chip FAQ | `url_faq_speckle` | `#loading` |
+| Wizard step 1 | Speckle-size chip | `speckle_under_resolved_fmt` / `speckle_over_resolved_fmt` / `speckle_subset_span_fmt` | `url_faq_speckle` | `#loading` |
 | Wizard step 2 | Frame-size mismatch chip | `frames_size_mismatch_fmt` + chip FAQ | `url_faq_frame_size` | `#loading` |
 | Wizard step 2 | ROI smaller than subset | `roi_too_small` snackbar **Why?** | `url_faq_roi_too_small` | `#setup` |
 | Wizard sweep | Subset range above ROI | sweep plan chip | `url_faq_sweep_subset_range` | `#reading` |

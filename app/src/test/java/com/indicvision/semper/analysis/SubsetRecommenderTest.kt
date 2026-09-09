@@ -1,7 +1,10 @@
 package com.indicvision.semper.analysis
 
+import com.indicvision.semper.ui.analysis.DicGoodPractice
 import com.indicvision.semper.ui.analysis.SubsetRecommender
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.sqrt
@@ -97,5 +100,65 @@ class SubsetRecommenderTest {
         val patch = randomPatch(seed = 11, amplitude = 255f)
         val size = SubsetRecommender.subsetSizeForPatch(patch, side, minSize = 41, maxSize = maxSize)
         assertTrue(size >= 41)
+    }
+
+    // ------------------------------------------------------------------
+    // What the recommendation reports about the speckle itself
+    // ------------------------------------------------------------------
+
+    private fun result(subset: Int, speckle: Double?) = SubsetRecommender.Result(
+        subsetSize = subset,
+        samples = 16,
+        cappedSamples = 0,
+        speckleDiameterPx = speckle,
+    )
+
+    @Test
+    fun `an unmeasured speckle reports no verdict and asks for no subset`() {
+        val rec = result(subset = 41, speckle = null)
+        assertNull(rec.speckleVerdict)
+        assertNull(rec.subsetSpanningSpeckles)
+    }
+
+    @Test
+    fun `the verdict is the good-practice band applied to the measurement`() {
+        assertEquals(DicGoodPractice.Verdict.UNDER_RESOLVED, result(41, 2.0).speckleVerdict)
+        assertEquals(DicGoodPractice.Verdict.USABLE, result(41, 5.0).speckleVerdict)
+        assertEquals(DicGoodPractice.Verdict.OVER_RESOLVED, result(41, 14.0).speckleVerdict)
+    }
+
+    @Test
+    fun `the requirement is stated whether or not the recommendation meets it`() {
+        // It is a property of the pattern, not of the SSSIG answer: the caller
+        // compares it against the size the user actually has dialled in, which
+        // the recommendation cannot know. So a fine speckle still reports one
+        // even though 41 px comfortably clears it.
+        val wanted = result(subset = 41, speckle = 5.0).subsetSpanningSpeckles
+        assertNotNull(wanted)
+        assertTrue("wanted $wanted", wanted!! < 41)
+    }
+
+    @Test
+    fun `a coarse pattern asks for more subset than SSSIG did`() {
+        // The case this cross-check exists for: SSSIG is a *sum* over the
+        // subset, so a coarse, high-contrast pattern clears the threshold at a
+        // size that spans barely one dot and correlates against the wrong dot
+        // as readily as the right one.
+        val rec = result(subset = 21, speckle = 20.0)
+        val wanted = rec.subsetSpanningSpeckles
+        assertNotNull(wanted)
+        assertTrue("wanted $wanted", wanted!! > rec.subsetSize)
+        assertTrue("wanted $wanted", wanted >= 20 * DicGoodPractice.MIN_SPECKLES_PER_SUBSET)
+        assertEquals(1, wanted % 2)
+    }
+
+    @Test
+    fun `the requirement never exceeds what the engine would accept`() {
+        // A pattern too coarse for any allowed subset clamps rather than naming
+        // a size the slider cannot reach.
+        assertEquals(
+            SubsetRecommender.MAX_SUBSET,
+            result(subset = 41, speckle = 400.0).subsetSpanningSpeckles,
+        )
     }
 }

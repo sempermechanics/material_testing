@@ -170,6 +170,21 @@ migration.
 `ui/analysis/`: they take plain arrays or raw image bytes, so they judge an
 imported frame as readily as a captured one.
 
+`SpeckleScale` and `DicGoodPractice` came the same way and now have a caller.
+`SubsetRecommender.recommend` measures the speckle diameter by autocorrelation on
+the very patches it already reads for SSSIG — no extra decode — and returns the
+median as `Result.speckleDiameterPx`. The wizard's first step reports it against
+the iDICs 3-9 px band: a muted readout under the subset slider whenever it is
+measurable, and a warning chip when the pattern is under- or over-resolved, or
+when the recommended subset would not span three dots.
+
+The two speckle chips answer different questions and neither substitutes for the
+other. SSSIG is a *sum* of gradients over a subset, so it clears its threshold on
+a pattern far too fine to resolve simply by growing the subset; speckle size is
+what the guidance is actually written against, and what the user can fix at the
+bench. The size measurement only reports — it does not steer the recommended
+subset, which stays the SSSIG answer.
+
 
 `RawRgba` closed the DNG-in-`RoiDrawActivity` gap:
 one shared helper detects a `w*h*4` blob and samples straight into a
@@ -237,7 +252,8 @@ actions / backend / gradle #102–#104.
 New analysis picks media in-sheet (Images gallery; **Files** dismisses the sheet
 and opens SAF). The reference picker opens full height and dims the grid for
 1 s behind a large centred hint ("Select the reference image"); deformed
-multi-select stays immediate. Wizard warnings (JPEG, low speckle, frame-size
+multi-select stays immediate. Wizard warnings (JPEG, low speckle, speckle size,
+frame-size
 mismatch, ROI too small, empty/too-big sweep plan) and remaining actionable
 errors (engine failure dialog **Why?** plus a lasting ⓘ on the status line,
 import / video, viewer batch/OOM/scale, lattice hollow nodes) link to Troubleshooting

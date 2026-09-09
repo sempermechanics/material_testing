@@ -112,6 +112,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Inline speckle-quality warning from the SSSIG measurement. */
     private lateinit var lowTextureWarnRow: View
+
+    /** Inline speckle-*size* warning: the measured dot diameter against the iDICs band. */
+    private lateinit var speckleWarnRow: View
+
+    /** The measured speckle diameter, shown under the subset slider whether or not it is a problem. */
+    private lateinit var tvSpeckleReadout: TextView
     private lateinit var frameSizeWarnRow: View
     private lateinit var tvNextReason: TextView
     private var refPreviewBmp: android.graphics.Bitmap? = null
@@ -232,6 +238,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         lowTextureWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
             confirmOpenFaq(getString(R.string.url_faq_speckle))
         }
+        speckleWarnRow = findViewById(R.id.speckleWarnRow)
+        tvSpeckleReadout = findViewById(R.id.tvSpeckleReadout)
         tvNextReason = findViewById(R.id.tvNextReason)
         tvInstruction = findViewById(R.id.tvInstruction)
         tvRefName = findViewById(R.id.tvRefName)
@@ -1081,6 +1089,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun applySubsetRecommendation() {
         val rec = viewModel.subsetRecommendation ?: run {
             lowTextureWarnRow.isVisible = false
+            speckleWarnRow.isVisible = false
+            tvSpeckleReadout.isVisible = false
             return
         }
         // The one thing the measurement knows that the slider cannot show: even
@@ -1103,6 +1113,72 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // A new recommendation re-seeds the sweep's suggested inputs (unless the
         // user has already set their own).
         sweepHelper.onRecommendationChanged()
+        // After the slider has been seeded, so the span check judges the size
+        // that will actually be run.
+        showSpeckleFeedback()
+    }
+
+    /**
+     * Reports the measured speckle size against the iDICs *Good Practices
+     * Guide* band, so the user learns something about their specimen rather
+     * than only about the slider.
+     *
+     * Two surfaces, because they answer to two different states. The readout
+     * under the subset slider is shown whenever a measurement exists, good news
+     * included — it is the number the recommendation rests on, and a user who
+     * can see it can judge their own pattern before spending a run on it. The
+     * warning chip is shown only when there is something to change, and states
+     * at most one thing: a pattern that is too fine to resolve makes the
+     * subset-span question moot, so the verdict is reported ahead of it.
+     */
+    private fun showSpeckleFeedback() {
+        val diameter = viewModel.subsetRecommendation?.speckleDiameterPx
+        if (diameter == null) {
+            // No measurable pattern in any sample patch. The low-texture chip
+            // already covers the case where that is the user's problem; saying
+            // nothing here is better than reporting a number we do not have.
+            speckleWarnRow.isVisible = false
+            tvSpeckleReadout.isVisible = false
+            return
+        }
+
+        tvSpeckleReadout.text = getString(
+            R.string.speckle_readout_fmt,
+            diameter,
+            DicGoodPractice.MIN_SPECKLE_PX.toInt(),
+            DicGoodPractice.MAX_SPECKLE_PX.toInt(),
+        )
+        tvSpeckleReadout.isVisible = true
+
+        val message = when (DicGoodPractice.verdictFor(diameter)) {
+            DicGoodPractice.Verdict.UNDER_RESOLVED -> getString(
+                R.string.speckle_under_resolved_fmt,
+                diameter,
+                DicGoodPractice.MIN_SPECKLE_PX.toInt(),
+            )
+            DicGoodPractice.Verdict.OVER_RESOLVED -> getString(
+                R.string.speckle_over_resolved_fmt,
+                diameter,
+                DicGoodPractice.MAX_SPECKLE_PX.toInt(),
+            )
+            // Read off the slider, not off the recommendation: the user may
+            // have moved it since, and a chip naming a size they are no longer
+            // using is worse than no chip.
+            else -> {
+                val inUse = etSubsetSize.value.toInt()
+                val wanted = viewModel.subsetRecommendation?.subsetSpanningSpeckles
+                if (wanted != null && wanted > inUse) {
+                    getString(R.string.speckle_subset_span_fmt, inUse, wanted)
+                } else {
+                    null
+                }
+            }
+        }
+        if (message == null) {
+            speckleWarnRow.isVisible = false
+        } else {
+            wireWarningChip(speckleWarnRow, message, getString(R.string.url_faq_speckle))
+        }
     }
 
     /**
@@ -1334,7 +1410,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             renderParamField = ::renderParamField,
             bindParamField = { field, slider, onUser -> bindParamField(field, slider, onUser) },
             showInfo = ::showInfo,
-            onSubsetUserModified = { viewModel.subsetUserModified = true },
+            onSubsetUserModified = {
+                viewModel.subsetUserModified = true
+                showSpeckleFeedback()
+            },
             onSubsetRecommendationRefresh = {
                 if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
             },
@@ -1347,6 +1426,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 etStrainWindow.value = 15f
                 rgInterpolator.check(R.id.rbBicubic)
                 settingsSheetHelper.syncFromStep()
+                showSpeckleFeedback()
                 if (::sweepHelper.isInitialized) {
                     viewModel.stepDenominator = VsgStudy.DEFAULT_STEP_DENOM
                     viewModel.subsetOverlap = VsgStudy.overlapForDenominator(VsgStudy.DEFAULT_STEP_DENOM)
@@ -1369,6 +1449,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etStepSize.value = snapToSlider(etStepSize, params.step).toFloat()
         etStrainWindow.value = snapToSlider(etStrainWindow, params.window).toFloat()
         settingsSheetHelper.syncFromStep()
+        showSpeckleFeedback()
         if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
         clearRunStatus()
         // Bring the advanced-params card into view so the pasted values are visible.

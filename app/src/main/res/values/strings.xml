@@ -548,6 +548,13 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="region_of_interest">Region of interest</string>
     <string name="lossy_format_warning_fmt">%1$s detected, use lossless formats (eg. PNG, TIFF) to improve accuracy</string>
     <string name="subset_low_texture_fmt">Speckle contrast is low, consider using a large subset or selecting a small RoI</string>
+
+    <!-- Speckle-size feedback, from the iDICs Good Practices Guide's 3-9 px
+         band. Measured on the reference frame; see SpeckleScale. -->
+    <string name="speckle_readout_fmt">Speckle measures about %1$.1f px across. Good practice asks for %2$d–%3$d px.</string>
+    <string name="speckle_under_resolved_fmt">Speckle measures about %1$.1f px across, below the %2$d px minimum. The pattern may be too fine for this frame to resolve, and points can fail to correlate. Shoot closer, or use a coarser pattern.</string>
+    <string name="speckle_over_resolved_fmt">Speckle measures about %1$.1f px across, above the %2$d px the method needs. It will correlate, but a finer pattern would give more measurement points across the same area.</string>
+    <string name="speckle_subset_span_fmt">A %1$d px subset spans too few speckles on this pattern to be unambiguous. Good practice asks for at least %2$d px here.</string>
     <string name="next_reason_ref">add a reference image to continue</string>
     <string name="next_reason_def">add at least one deformed frame to continue</string>
     <string name="run_analysis">Compute</string>
