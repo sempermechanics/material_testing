@@ -414,6 +414,26 @@ that are structurally untestable against the fake store; the over-claim one was
 verified to fail against the pre-fix code ("over-admitted: 16 claims succeeded
 against a cap of 5").
 
+**Individual licences are delivered by email too (same branch, latest).**
+Minting demanded a `deviceIdLock`, so ops needed the customer's device id
+before issuing anything, and then a key nothing in the app ever typed —
+`IndicApi.activateLicense` had zero callers. Now `emailLock` alone mints, and
+the mint writes a `licenseInvites` row like an institution roster addition
+does; `claim_pending_invite` reads the licence the invite points at and grants
+either a seat or the licence itself (`claim_individual_license`,
+`claim_seat`'s transactional counterpart). This supersedes "individual
+(unchanged)" above. `POST /v1/licenses/activate` stays, as support recovery.
+
+*The device lock is bound, not declared.* `_device_lock_state` answers
+**unbound** rather than matches/violates for a licence or seat that has not met
+a device, and `revalidate_device_lock` — already on every authed request
+carrying `X-Device-Id` — binds it, transactionally, first writer wins. This
+also closed a live hole: `ensure_demo_license` wrote blind, so of several
+requests racing at app launch the one that lost the claim could stamp a Demo
+key over the licence a sibling had just granted. It is a compare-and-set now.
+Three emulator tests cover the three races (one redeemer, one invite, one
+device).
+
 Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
 §20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,
 [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md),

@@ -1464,3 +1464,218 @@ def test_the_license_summary_reports_pool_usage(store):
     assert summary["maxSeats"] == 3
     assert summary["leasesActive"] == 1
     assert summary["seatsUsed"] == 1
+
+
+# ---------------- individual licences delivered by email ----------------
+# Minting used to demand the customer's device id, which meant reading it off
+# their phone and sending it to us before we could issue anything, and then
+# typing a key. These cover the delivery that replaces it: mint against the
+# address, sign in, done.
+
+
+def _mint_individual(email="solo@lab.org", **kw):
+    return repo.create_individual_license(
+        email_lock=email, created_by_uid="admin", **kw
+    )
+
+
+def _signed_in(store, uid, email):
+    user = {"uid": uid, "email": email,
+            "access_status": "APPROVED", "emailVerified": True}
+    store._data["users"][uid] = dict(user)
+    return user
+
+
+def test_minting_an_individual_licence_needs_only_an_address(store):
+    store._data["users"] = {}
+    minted = _mint_individual()
+    license_id = minted["license"]["id"]
+    assert minted["inviteError"] == ""
+    assert store._data["licenses"][license_id]["deviceIdLock"] == ""
+    # The invite is the delivery: nobody has to be told a key.
+    invites = list(store._data["licenseInvites"].values())
+    assert [i["email"] for i in invites] == ["solo@lab.org"]
+    assert invites[0]["licenseId"] == license_id
+
+
+def test_an_individual_licence_attaches_at_first_sign_in(store):
+    store._data["users"] = {}
+    license_id = _mint_individual()["license"]["id"]
+    user = _signed_in(store, "solo-1", "solo@lab.org")
+
+    out = repo.ensure_entitlement(user, "and-first")
+
+    assert out["licenseId"] == license_id
+    assert out["licenseKind"] == "individual"
+    assert out["mode"] == "licensed"
+    lic = store._data["licenses"][license_id]
+    assert lic["status"] == "redeemed"
+    assert lic["redeemedByUid"] == "solo-1"
+    # Consumed, so a second account cannot claim the same licence by typing
+    # the address.
+    assert store._data["licenseInvites"] == {}
+
+
+def test_the_first_device_to_sign_in_takes_the_lock(store):
+    """Binding is what ties an emailed licence to one device. It happens on
+    the request path, not at mint, so nobody has to know a device id early."""
+    store._data["users"] = {}
+    license_id = _mint_individual()["license"]["id"]
+    user = repo.ensure_entitlement(_signed_in(store, "solo-1", "solo@lab.org"), None)
+    assert store._data["licenses"][license_id]["deviceIdLock"] == ""
+
+    bound = repo.revalidate_device_lock(user, "and-first")
+
+    assert store._data["licenses"][license_id]["deviceIdLock"] == "and-first"
+    assert bound["mode"] == "licensed"
+
+
+def test_a_second_device_is_refused_once_the_lock_is_taken(store):
+    store._data["users"] = {}
+    license_id = _mint_individual()["license"]["id"]
+    user = repo.ensure_entitlement(_signed_in(store, "solo-1", "solo@lab.org"), None)
+    repo.revalidate_device_lock(user, "and-first")
+
+    demoted = repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-second")
+
+    assert demoted["mode"] == "demo"
+    assert store._data["users"]["solo-1"]["mode"] == "demo"
+    # Demotion never touches the lock or the licence itself.
+    assert store._data["licenses"][license_id]["deviceIdLock"] == "and-first"
+    assert store._data["licenses"][license_id]["status"] == "redeemed"
+
+
+def test_binding_is_idempotent_for_the_device_that_holds_the_lock(store):
+    store._data["users"] = {}
+    license_id = _mint_individual()["license"]["id"]
+    user = repo.ensure_entitlement(_signed_in(store, "solo-1", "solo@lab.org"), None)
+    repo.revalidate_device_lock(user, "and-first")
+    again = repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-first")
+    assert again["mode"] == "licensed"
+    assert store._data["licenses"][license_id]["deviceIdLock"] == "and-first"
+
+
+def test_an_institution_seat_from_an_invite_also_binds_on_first_use(store):
+    """The same rule, the other document. A seat added by IT carries no lock
+    until its holder shows up with a device.
+
+    Assigned rather than floating on purpose: on a floating licence the holder
+    is demo until they check out a lease, so there is no entitlement for a
+    device lock to be about yet."""
+    store._data["users"] = {}
+    license_id = _mint_institution()["license"]["id"]
+    repo.add_institution_member(license_id, "newcomer@university.edu")
+    user = repo.ensure_entitlement(
+        _signed_in(store, "new-1", "newcomer@university.edu"), None,
+    )
+    seats = store._data[f"licenses/{license_id}/seats"]
+    assert seats["new-1"]["deviceIdLock"] == ""
+
+    repo.revalidate_device_lock(user, "and-seat")
+
+    assert seats["new-1"]["deviceIdLock"] == "and-seat"
+
+
+def test_an_individual_invite_is_refused_to_the_wrong_address(store):
+    """The invite is keyed by address hash, so this cannot happen by mistake —
+    but emailLock is checked inside the claim anyway, because the licence's
+    own lock is the authority and the invite is only a pointer to it."""
+    store._data["users"] = {}
+    license_id = _mint_individual()["license"]["id"]
+    _signed_in(store, "other-1", "other@lab.org")
+
+    err = repo.claim_individual_license(
+        license_id, "other-1", "other@lab.org", {"mode": "licensed"},
+    )
+
+    assert err == "license_email_mismatch"
+    assert store._data["users"]["other-1"].get("mode") != "licensed"
+
+
+def test_an_individual_licence_is_claimed_once(store):
+    """Two accounts, one licence. The second is refused rather than silently
+    sharing the entitlement."""
+    store._data["users"] = {}
+    license_id = _mint_individual()["license"]["id"]
+    _signed_in(store, "first", "solo@lab.org")
+    _signed_in(store, "second", "solo@lab.org")
+    patch = repo._individual_member_patch(
+        license_id, store._data["licenses"][license_id],
+    )
+
+    assert repo.claim_individual_license(license_id, "first", "solo@lab.org", patch) == ""
+    err = repo.claim_individual_license(license_id, "second", "solo@lab.org", patch)
+
+    assert err == "license_already_redeemed"
+    assert store._data["licenses"][license_id]["redeemedByUid"] == "first"
+
+
+def test_a_revoked_individual_licence_is_never_claimed(store):
+    store._data["users"] = {}
+    minted = _mint_individual()
+    license_id = minted["license"]["id"]
+    repo.revoke_license(license_id, "admin")
+
+    out = repo.ensure_entitlement(_signed_in(store, "solo-1", "solo@lab.org"), "and-1")
+
+    assert out["licenseId"] != license_id
+    assert out["mode"] == "demo"
+    assert store._data["licenseInvites"] == {}
+
+
+def test_a_second_individual_licence_for_one_address_is_reported(store):
+    """Minting still succeeds — the licence exists and its key redeems it —
+    but the address is already promised elsewhere, and ops has to see that."""
+    store._data["users"] = {}
+    _mint_individual()
+    second = _mint_individual()
+    assert second["inviteError"] == "invite_exists"
+    assert len(store._data["licenseInvites"]) == 1
+
+
+def test_a_key_typed_for_recovery_binds_an_unbound_licence(store):
+    """activateLicense is the support path, not the delivery one — but it has
+    to cope with the licences delivery now mints, which carry no lock."""
+    store._data["users"] = {}
+    _signed_in(store, "solo-1", "solo@lab.org")
+    minted = _mint_individual()
+
+    err, cfg = repo.activate_license("solo-1", "solo@lab.org", "and-first", minted["key"])
+
+    assert err == ""
+    assert cfg["mode"] == "licensed"
+    assert store._data["licenses"][minted["license"]["id"]]["deviceIdLock"] == "and-first"
+    err2, _ = repo.activate_license("solo-1", "solo@lab.org", "and-second", minted["key"])
+    assert err2 == "license_device_mismatch"
+
+
+def test_mint_still_accepts_a_device_id_when_ops_knows_one(store):
+    store._data["users"] = {}
+    minted = repo.create_individual_license(
+        email_lock="known@lab.org", device_id_lock="and-known", created_by_uid="admin",
+    )
+    assert store._data["licenses"][minted["license"]["id"]]["deviceIdLock"] == "and-known"
+    user = repo.ensure_entitlement(_signed_in(store, "k-1", "known@lab.org"), None)
+    demoted = repo.revalidate_device_lock(user, "and-other")
+    assert demoted["mode"] == "demo"
+
+
+def test_a_demo_key_never_overwrites_a_licence_granted_a_moment_earlier(store):
+    """Several requests arrive together at app launch. One claims the invited
+    licence; the others are still holding the copy of the account they read
+    before it existed, and must not stamp a Demo key over it."""
+    store._data["users"] = {}
+    license_id = _mint_individual()["license"]["id"]
+    stale = _signed_in(store, "solo-1", "solo@lab.org")
+    stale["activeDeviceId"] = "and-first"
+
+    claimed = repo.ensure_entitlement(dict(stale), "and-first")
+    assert claimed["licenseId"] == license_id
+
+    out = repo.ensure_demo_license(stale, "and-first")
+
+    assert out["licenseId"] == license_id
+    assert out["mode"] == "licensed"
+    assert store._data["users"]["solo-1"]["licenseId"] == license_id
+    # And no orphan Demo record left behind pointing at nobody.
+    assert list(store._data["licenses"]) == [license_id]

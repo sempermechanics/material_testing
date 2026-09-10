@@ -66,9 +66,10 @@
         <div id="individualFields" class="grid">
           <label>Email lock
             <input id="emailLock" type="email" placeholder="person@lab.org" />
-          </label>
-          <label>Device id lock
-            <input id="deviceIdLock" placeholder="from the phone's Settings screen" />
+            <span class="muted">
+              The licence attaches when this address signs in, and binds to the
+              first device it signs in on. Nothing to send, nothing to type.
+            </span>
           </label>
         </div>
 
@@ -119,7 +120,8 @@
         <!-- The key is shown once and never again: only its hash is stored. -->
         <div id="mintedBox" class="note" hidden>
           <strong>Copy this key now.</strong> It is shown once — only a hash is
-          stored, so it cannot be recovered, only replaced.
+          stored, so it cannot be recovered, only replaced. Keep it for support
+          recovery; the customer does not need it, and should not be sent it.
           <p class="mono key" id="mintedKey"></p>
           <button id="copyKey" class="secondary">Copy</button>
         </div>
@@ -297,7 +299,7 @@
               maxSeats: num("maxSeats"),
               seating: $("seating").value,
             }
-          : { emailLock: str("emailLock"), deviceIdLock: str("deviceIdLock") }),
+          : { emailLock: str("emailLock") }),
       };
       for (const k of Object.keys(body)) if (body[k] === null) delete body[k];
 
@@ -308,12 +310,24 @@
           method: "POST", body: JSON.stringify(body),
         });
         // An institution mint returns no plaintext key — there is nothing for
-        // anyone to type, membership is the roster.
+        // anyone to type, membership is the roster. An individual one returns
+        // a key for support recovery only; delivery is the sign-in.
         if (out.key) {
           $("mintedKey").textContent = out.key;
           $("mintedBox").hidden = false;
         }
-        setStatus(out.key ? "Issued. Copy the key below." : "Institution licence issued.");
+        if (out.inviteError) {
+          // The licence exists and its key still redeems it, but the address
+          // is already promised another licence — a conflict only ops can
+          // resolve, and one that would otherwise pass silently.
+          setStatus(
+            `Issued, but ${$("emailLock").value} is already promised another ` +
+            `licence (${out.inviteError}) — it will not attach at sign-in.`,
+            true,
+          );
+        } else {
+          setStatus(out.key ? "Issued. Copy the key below." : "Institution licence issued.");
+        }
         loadLicences();
       } catch (e) {
         setStatus(mintError(e.message), true);

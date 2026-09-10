@@ -685,9 +685,13 @@ for the full design; this appendix is the day-to-day operator/support version.
 **Minting a key** (Semper staff, device-attested — same admin device that
 approves/revokes accounts):
 
-- **Individual**: `POST /v1/admin/licenses` with an `emailLock` and
-  `deviceIdLock`. Locked to that one person's account and device; they
-  activate it once.
+- **Individual**: `POST /v1/admin/licenses` with an `emailLock`. Minting also
+  records a pending invite against that address, and **that is the delivery**:
+  the customer signs in with it and the licence attaches on their first
+  request. It binds to the first device they sign in on, and stays on that
+  device. Nothing is sent to them and nothing is typed. `deviceIdLock` is
+  still accepted for the rare case where the device is known up front, but
+  normal issuing leaves it empty.
 - **Institution**: `POST /v1/admin/licenses` with `kind: "institution"`, a
   `domainLock` (the institution's email domain), the `adminEmails` of the
   people at that institution who will manage seats, and an optional
@@ -738,9 +742,24 @@ returns `403 license_expired` rather than appearing to succeed and leaving the
 user on Demo. Renew it first, then have them activate. A key still *inside*
 grace activates normally.
 
-Either way the plaintext key is only ever shown once, in the mint response —
-hand it to the individual or the institution's IT contact immediately; Semper
-does not store it anywhere retrievable afterward (only its hash).
+The plaintext key from an individual mint is shown once, in the mint response,
+and Semper does not store it anywhere retrievable afterward (only its hash).
+**Keep it; do not send it.** It exists for support recovery — re-attaching a
+licence when the invite has been consumed but the account has lost it — not
+for delivery. Institution keys are the same in reverse: membership is the
+roster, so there is nothing to hand anyone.
+
+**"I never got my licence."** Check `GET /v1/admin/licenses` for the address:
+`status: "unused"` with an outstanding invite means it is waiting for them to
+sign in, and the usual cause is that they signed in with a *different* address
+than the one it was minted against — mint a new licence against the right one
+and revoke the first. `status: "redeemed"` means it attached; if they are
+still in Demo, the device lock is the next thing to check.
+
+If minting reports the address is **already promised another licence**, the
+new licence exists and its key still redeems it, but the invite belongs to the
+earlier licence and the new one will not attach at sign-in. Revoke whichever
+of the two is wrong.
 
 **Assigned or floating seats.** An institution key is one or the other, set by
 `seating` at mint:

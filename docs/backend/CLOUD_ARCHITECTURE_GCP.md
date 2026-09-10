@@ -446,7 +446,11 @@ licenses/{id}                     (id = sha256(key) — the key hash IS the doc 
   status: "unused" | "redeemed" | "active" | "revoked"
                                    (individual starts "unused"; institution starts "active")
   # individual only:
-  emailLock, deviceIdLock, redeemedByUid
+  emailLock                       (required at mint; the address the licence
+                                   is delivered to)
+  deviceIdLock                    (empty at mint in normal issuing; bound to
+                                   the first device that signs in — §20.1)
+  redeemedByUid
   # institution only:
   domainLock                      (verified-email domain required to join, e.g. "university.edu")
   adminEmails: string[]           (verified emails allowed to manage this license's seats)
@@ -953,7 +957,7 @@ see [§20.7](#207-floating-seats).
 | Shape | How you get it | Locked to | Managed by |
 |---|---|---|---|
 | **Demo** | Default for every approved account; `ensure_demo_license` issues a Demo-plan license on first verified+device-bound login | email + device (so a Demo key can't be shared) | nobody — it's the floor |
-| **Licensed, individual** | Semper staff mint a key (`POST /v1/admin/licenses`, `kind=individual`) and hand it to one person | one email + one device | Semper staff only (`admin_user` + `verified_device`) |
+| **Licensed, individual** | Semper staff mint against one address (`POST /v1/admin/licenses`, `kind=individual`); it attaches when that address signs in and binds to the first device it signs in on | one email + one device | Semper staff only (`admin_user` + `verified_device`) |
 | **Licensed, institution** | Semper staff mint a key (`kind=institution`) with a `domainLock` and a list of `adminEmails`; any verified `@domainLock` member self-activates and claims a seat | a verified-email **domain**, per-member seat locked to one device | Institution IT, self-service, via the three `/v1/institutions/licenses/{id}/seats*` routes — **no dashboard UI ships**; IT drives these with their own tooling/curl |
 
 **Institution IT has a console** at `/console/institution` (§20.8); the routes
@@ -964,7 +968,41 @@ script. The institution seat-management routes
 self-service surface. Building a web console for institution IT is future
 work, not part of this feature.
 
-### 20.1 Activation
+### 20.1 Delivery, and activation as the fallback
+
+Neither licence kind is delivered by handing someone a key. An individual mint
+writes a **pending invite** against `emailLock` alongside the licence; an
+institution roster addition writes one for an address with no account yet.
+Either way the person signs in and `ensure_entitlement` attaches what they are
+owed on their first request — see
+[§20.7](#joining-it-adds-an-address-whether-or-not-it-has-an-account).
+
+The key still exists and still redeems, and `POST /v1/licenses/activate` is
+still the route that does it. It is the **support-recovery** path: re-attaching
+a licence whose invite has been consumed but whose account has lost it. Nothing
+in the app calls it, and nothing should have to.
+
+#### The device lock is bound, not declared
+
+A licence minted against an address alone carries `deviceIdLock: ""`, and a
+seat created from an invite or by IT carries the same. `_device_lock_state`
+answers **unbound** rather than *matches* or *violates* for those, and
+`revalidate_device_lock` — which already runs on every authed request carrying
+`X-Device-Id` — writes the lock the first time a real device presents itself.
+
+Binding is a transaction, not an update. Two devices signing in together both
+read an empty lock; a plain write would let the later one win, so the licence
+would silently follow whichever request Firestore ordered second. First writer
+wins, and the other device is a mismatch from its next request onward, which
+is the answer a device lock exists to give.
+
+The same rule makes the Demo mint a compare-and-set. Several requests arrive at
+app launch; the one that loses the race to claim a real licence is still
+holding the copy of the account it read beforehand, and a blind write there
+would stamp a Demo key over the entitlement a sibling request granted
+milliseconds earlier.
+
+#### Activation
 
 ```mermaid
 sequenceDiagram
@@ -974,7 +1012,8 @@ sequenceDiagram
     A->>R: POST /v1/licenses/activate {key} (ID token, X-Device-Id)
     R->>F: licenses/{sha256(key)}
     alt kind = individual
-        R->>R: emailLock == caller email? deviceIdLock == X-Device-Id?
+        R->>R: emailLock == caller email? deviceIdLock unset, or == X-Device-Id?
+        R->>F: licenses/{id}.deviceIdLock = X-Device-Id (if unset)
         R->>F: users/{uid}.mode = licensed, licenseKind = individual
     else kind = institution
         R->>R: verified-email domain == license.domainLock?
@@ -1208,6 +1247,14 @@ first:
 The invite path exists because IT works from a list of addresses and cannot
 make people sign up on cue. Refusing with `user_not_found` until they had was
 pushing a scheduling problem onto the wrong person.
+
+The same collection carries individual licences. An individual mint writes an
+invite against `emailLock`, and `claim_pending_invite` reads the licence the
+invite points at to decide what to grant — a seat for an institution key, the
+licence itself for an individual one, through `claim_individual_license`
+(`claim_seat`'s counterpart, transactional for the same reason: `redeemedByUid`
+names one account). The invite record carries no notion of kind, which is why
+there is one collection and not two.
 
 Invites live in a top-level `licenseInvites/{sha256(email)}` collection.
 **Top-level** so redemption is a single document read: a subcollection of the

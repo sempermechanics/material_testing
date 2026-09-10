@@ -528,3 +528,106 @@ def test_a_revoked_invite_loses_the_race_cleanly(emulator_repo):
     assert out.get("licenseId") is None
     assert emulator_repo.list_institution_seats(license_id) == []
     assert int(emulator_repo.get_license(license_id).get("seatsUsed") or 0) == 0
+
+
+def _emu_individual(repo_, email: str):
+    return repo_.create_individual_license(
+        email_lock=email, created_by_uid="emu-admin",
+    )["license"]["id"]
+
+
+def test_one_individual_licence_reaches_exactly_one_account(emulator_repo):
+    """An individual licence names one redeemer. Two accounts signing in with
+    the same address at once — the same person on a phone and a tablet, or a
+    shared mailbox — must not both come away holding it."""
+    tag = uuid.uuid4().hex[:8]
+    address = f"solo-{tag}@lab.org"
+    license_id = _emu_individual(emulator_repo, address)
+    users = [_emu_user(emulator_repo, f"emu-{tag}-{i}", address) for i in range(8)]
+    patch = {"licenseId": license_id, "mode": "licensed"}
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(
+            lambda u: emulator_repo.claim_individual_license(
+                license_id, u["uid"], address, dict(patch),
+            ),
+            users,
+        ))
+
+    admitted = [u for u, err in zip(users, results) if err == ""]
+    stored = emulator_repo.get_license(license_id)
+
+    assert len(admitted) == 1, f"{len(admitted)} accounts claimed one individual licence"
+    assert stored["redeemedByUid"] == admitted[0]["uid"]
+    assert stored["status"] == "redeemed"
+    # Losing is a refusal, never an exception surfacing as a 500.
+    assert all(isinstance(err, str) for err in results)
+
+
+def test_an_individual_invite_is_consumed_once_under_concurrency(emulator_repo):
+    """The whole delivery path, raced: mint against an address, sign in, land
+    licensed — and only once, however many requests arrive together.
+
+    Every worker is handed the account as it looked before any of them ran,
+    which is what six requests in flight at app launch actually see. The losers
+    fall through to the Demo mint holding that stale copy; the assertion is
+    that none of them stamps a Demo key over the licence a sibling just
+    granted.
+    """
+    tag = uuid.uuid4().hex[:8]
+    address = f"invited-{tag}@lab.org"
+    license_id = _emu_individual(emulator_repo, address)
+    uid = f"emu-{tag}"
+    user = _emu_user(emulator_repo, uid, address, activeDeviceId=f"dev-{tag}")
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        list(pool.map(
+            lambda _: emulator_repo.ensure_entitlement(dict(user), None), range(6),
+        ))
+
+    stored_user = emulator_repo.db().collection("users").document(uid).get().to_dict()
+    assert stored_user["licenseId"] == license_id
+    assert stored_user["mode"] == "licensed"
+    stored = emulator_repo.get_license(license_id)
+    assert stored["redeemedByUid"] == uid
+    assert emulator_repo.list_institution_invites(license_id) == [], "invite was not consumed"
+    # A loser that commits its Demo key before the winner claims the real one
+    # leaves that Demo record behind — the upgrade overwrites the account's
+    # pointer, not the document. Litter, not a wrong entitlement, so the
+    # assertion is that exactly one *licensed* record is redeemed by this
+    # account and it is the one the account points at.
+    licensed = [
+        doc.id for doc in emulator_repo.db().collection("licenses").stream()
+        if (doc.to_dict() or {}).get("redeemedByUid") == uid
+        and (doc.to_dict() or {}).get("mode") == "licensed"
+    ]
+    assert licensed == [license_id], f"{len(licensed)} licences entitled one account"
+
+
+def test_the_first_device_wins_an_unbound_lock(emulator_repo):
+    """Bind-on-first-use is what ties an emailed licence to a device. Two
+    devices signing in together both read an empty lock; a plain write would
+    let the later one win, so the licence would follow whichever request
+    Firestore happened to order second."""
+    tag = uuid.uuid4().hex[:8]
+    address = f"binder-{tag}@lab.org"
+    license_id = _emu_individual(emulator_repo, address)
+    uid = f"emu-{tag}"
+    user = _emu_user(emulator_repo, uid, address)
+    user = emulator_repo.ensure_entitlement(dict(user), None)
+    assert user["licenseId"] == license_id
+
+    ref = emulator_repo.db().collection("licenses").document(license_id)
+    devices = [f"dev-{tag}-{i}" for i in range(8)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        won = list(pool.map(lambda d: emulator_repo.bind_device_lock(ref, d), devices))
+
+    locked = emulator_repo.get_license(license_id)["deviceIdLock"]
+    assert sum(1 for w in won if w) == 1, "more than one device claimed the lock"
+    assert locked == devices[won.index(True)]
+    # Every other device is now a mismatch, which is the answer a lock exists
+    # to give: revalidation drops them to demo rather than re-binding.
+    loser = next(d for d in devices if d != locked)
+    demoted = emulator_repo.revalidate_device_lock(dict(user), loser)
+    assert demoted["mode"] == "demo"
+    assert emulator_repo.get_license(license_id)["deviceIdLock"] == locked

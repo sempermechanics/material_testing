@@ -750,6 +750,13 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
     Idempotent. Licensed accounts are left alone. The plaintext Demo key is
     not returned — the user never types it; the record exists so the seat is
     locked to this email and device.
+
+    The attachment is a compare-and-set on the stored document, not a blind
+    update. `user` was read before this request began, and several requests
+    arrive together at app launch: one that lost the race to claim a real
+    licence — the delivery path for every individual licence and every invited
+    seat — falls through to here holding a stale copy, and a blind write would
+    overwrite the entitlement granted moments earlier with a Demo key.
     """
     uid = user.get("uid")
     if not uid or user.get("licenseId"):
@@ -777,21 +784,59 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
         "licensePrefix": stored["keyPrefix"],
         "updatedAt": firestore.SERVER_TIMESTAMP,
     }
-    db().collection("users").document(uid).update(patch)
-    return {**user, **patch}
+    user_ref = db().collection("users").document(uid)
+    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
+
+    @firestore.transactional
+    def _attach(tx) -> bool:
+        snap = user_ref.get(transaction=tx)
+        if not snap.exists or ((snap.to_dict() or {}).get("licenseId") or ""):
+            return False
+        tx.update(user_ref, patch)
+        return True
+
+    try:
+        attached = _attach(transaction)
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        attached = False
+
+    if attached:
+        return {**user, **patch}
+    # Something reached this account first. Drop the key nobody will ever hold
+    # rather than leaving a redeemed Demo record pointing at no one, and answer
+    # with what the account actually has — which on the losing side of an
+    # invite claim is the licence, not demo.
+    db().collection("licenses").document(license_id).delete()
+    current = user_ref.get()
+    if not current.exists:
+        return user
+    return {**user, **(current.to_dict() or {}), "uid": uid}
 
 
 def create_individual_license(
     *,
     email_lock: str,
-    device_id_lock: str,
+    device_id_lock: str = "",
     created_by_uid: str,
     expires_at=None,
     max_analyses: int | None = None,
     note: str = "",
 ) -> dict:
     """Ops mint of an individual licensed key. Returns the plaintext key
-    once; only the hash is stored."""
+    once; only the hash is stored.
+
+    Also records a pending invite against `email_lock`, which is how the
+    licence actually reaches the customer: they sign in with that address and
+    `claim_pending_invite` attaches the licence on their first request. The
+    key is the fallback for support recovery, not the delivery mechanism —
+    nobody should have to type one.
+
+    `device_id_lock` stays available for the rare mint against a device we
+    already know, but is empty in normal use; the lock is bound at first
+    sign-in instead.
+    """
     key, license_id, stored = _write_license(
         mode=MODE_LICENSED,
         email_lock=email_lock,
@@ -803,7 +848,15 @@ def create_individual_license(
         max_analyses=max_analyses,
         note=note,
     )
-    return {"key": key, "license": _license_public(license_id, stored)}
+    err, _ = _write_invite(license_id, email_lock, created_by_uid)
+    if err:
+        # The licence exists and the key in hand still redeems it, so this is
+        # degraded delivery rather than a failed mint. `invite_exists` means
+        # the address is already promised another licence — a real conflict
+        # for ops to resolve, and one the returned licence makes visible.
+        log.warning("individual licence %s minted without an invite: %s", license_id, err)
+    return {"key": key, "license": _license_public(license_id, stored),
+            "inviteError": err or ""}
 
 
 def create_institution_license(
@@ -897,7 +950,16 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
         return "license_revoked", None
     if not _emails_match(lic.get("emailLock"), email):
         return "license_email_mismatch", None
-    if (lic.get("deviceIdLock") or "") != device_id:
+    locked = lic.get("deviceIdLock") or ""
+    if not locked and device_id:
+        # Bind-on-first-use, the same rule the request path applies. A licence
+        # minted against an address alone has no lock, so a key typed here for
+        # support recovery has to be able to set one rather than demand it.
+        # Re-read rather than assume: bind_device_lock is first-writer-wins,
+        # and losing the race means some other device owns this licence.
+        bind_device_lock(ref, device_id)
+        locked = (ref.get().to_dict() or {}).get("deviceIdLock") or ""
+    if locked != device_id:
         return "license_device_mismatch", None
     if status == "redeemed" and lic.get("redeemedByUid") != uid:
         return "license_already_redeemed", None
@@ -1225,6 +1287,83 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
         return "license_seats_exhausted"
 
 
+def _individual_member_patch(license_id: str, lic: dict) -> dict:
+    """The user-document patch that attaches an individual licence.
+
+    The counterpart to `_institution_member_patch`, and shared for the same
+    reason: a licence reached by typing its key and one reached by signing in
+    at the invited address must entitle the holder identically.
+    """
+    patch = {
+        **_mode_patch(_license_mode(lic)),
+        "licenseId": license_id,
+        "licenseKind": KIND_INDIVIDUAL,
+        "licensePrefix": lic.get("keyPrefix") or "",
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    patch.update(_license_mirror_patch(lic))
+    return patch
+
+
+def claim_individual_license(license_id: str, uid: str, email: str,
+                             user_patch: dict, invite_ref=None) -> str:
+    """Attach an individual licence to `uid`, atomically. Error code, or "".
+
+    The individual counterpart to `claim_seat`, transactional for the same
+    reason: `redeemedByUid` names one account, so two requests arriving
+    together must not both come away holding the licence. Reads before
+    writes, and the invite is consumed in the same transaction, so the promise
+    and the grant settle together rather than leaving a window where one
+    exists without the other.
+
+    No device lock is written here. Binding happens on the request path — see
+    `revalidate_device_lock` — because this runs for a caller who may not have
+    presented a device at all.
+    """
+    lic_ref = db().collection("licenses").document(license_id)
+    user_ref = db().collection("users").document(uid)
+    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
+
+    @firestore.transactional
+    def _claim(tx) -> str:
+        lic_snap = lic_ref.get(transaction=tx)
+        invite_snap = invite_ref.get(transaction=tx) if invite_ref is not None else None
+        if not lic_snap.exists:
+            return "license_not_found"
+        if invite_ref is not None and not invite_snap.exists:
+            # Withdrawn between the read that found it and this transaction.
+            return "invite_not_found"
+        lic = lic_snap.to_dict() or {}
+        status = lic.get("status") or "unused"
+        if status == "revoked":
+            return "license_revoked"
+        if not _emails_match(lic.get("emailLock"), email):
+            return "license_email_mismatch"
+        redeemer = lic.get("redeemedByUid")
+        if redeemer and redeemer != uid:
+            return "license_already_redeemed"
+        if status == "unused":
+            tx.update(lic_ref, {
+                "status": "redeemed",
+                "redeemedByUid": uid,
+                "redeemedAt": firestore.SERVER_TIMESTAMP,
+            })
+        tx.update(user_ref, user_patch)
+        if invite_ref is not None:
+            tx.delete(invite_ref)
+        return ""
+
+    try:
+        return _claim(transaction)
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        # Fail closed, as claim_seat does: granting a licence we could not
+        # commit is the outcome that breaks single-redeemer. The caller retries
+        # on their next request, which for the invite path is moments away.
+        return "license_already_redeemed"
+
+
 def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic: dict, ref, key: str):
     if (lic.get("status") or "active") == "revoked":
         return "license_revoked", None
@@ -1304,35 +1443,100 @@ def _license_past_grace(lic: dict) -> bool:
         return False
 
 
-def check_device_lock(user: dict, device_id: str) -> bool:
-    """True if `device_id` still matches this account's current entitlement.
+# Verdicts from _device_lock_state. "Unbound" is deliberately distinct from
+# "matches": both let the request through, but only one of them is a
+# instruction to write.
+_LOCK_OK = "ok"
+_LOCK_UNBOUND = "unbound"
+_LOCK_VIOLATION = "violation"
 
-    Individual: the device that redeemed the key. Institution: the device locked to
-    this uid's seat (unset until first activation, then sticky). Demo/no
-    license: no device lock to violate.
+
+def _device_lock_state(user: dict, device_id: str) -> tuple[str, object | None]:
+    """Judge `device_id` against this account's entitlement.
+
+    Returns the verdict and, when the lock is still empty, the document that
+    holds it. Three outcomes rather than the bool this replaced, because "no
+    lock yet" and "lock matches" are the same answer to *may this device
+    proceed* and opposite answers to *what should be written*.
+
+    Empty locks are now the normal way a licence starts life, not an edge
+    case. An individual licence minted against an email alone, and an
+    institution seat created from an invite or added by IT, both reach a
+    device for the first time with nothing bound — so the caller binds, and
+    the licence ties itself to a device without anyone typing a key.
+
+    Individual: the lock lives on the licence, one device for the licence.
+    Institution: on the seat, one device per member.
     """
     license_id = user.get("licenseId")
     if not license_id:
-        return True
+        return _LOCK_OK, None
     ref = db().collection("licenses").document(license_id)
     snap = ref.get()
     if not snap.exists:
-        return True
+        return _LOCK_OK, None
     lic = snap.to_dict() or {}
     if (lic.get("status") or "") == "revoked":
-        return False
-    kind = lic.get("kind") or "individual"
-    if kind == "individual":
-        locked = lic.get("deviceIdLock") or ""
-        return not locked or locked == device_id
-    seat_snap = _seat_ref(license_id, user.get("uid") or "").get()
+        return _LOCK_VIOLATION, None
+    if normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+        return _lock_verdict(lic.get("deviceIdLock"), device_id, ref)
+    seat_ref = _seat_ref(license_id, user.get("uid") or "")
+    seat_snap = seat_ref.get()
     if not seat_snap.exists:
-        return True
+        return _LOCK_OK, None
     seat = seat_snap.to_dict() or {}
     if seat.get("status") in ("revoked", "disabled"):
+        return _LOCK_VIOLATION, None
+    return _lock_verdict(seat.get("deviceIdLock"), device_id, seat_ref)
+
+
+def _lock_verdict(locked, device_id: str, ref) -> tuple[str, object | None]:
+    """The individual and institution branches differ only in which document
+    carries the lock, so the comparison itself lives in one place."""
+    locked = locked or ""
+    if not locked:
+        return _LOCK_UNBOUND, ref
+    return (_LOCK_OK, None) if locked == device_id else (_LOCK_VIOLATION, None)
+
+
+def bind_device_lock(ref, device_id: str) -> bool:
+    """Claim an empty device lock for `device_id`. True if this call bound it.
+
+    Transactional rather than a bare update: two devices signing in at once
+    both read an empty lock, and with a plain write the later one would win,
+    so the licence would silently follow whichever request Firestore happened
+    to order second. Re-reading inside the transaction makes the first binding
+    stick and turns the second device into a mismatch on its next request,
+    which is the answer a device lock exists to give.
+    """
+    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
+
+    @firestore.transactional
+    def _bind(tx) -> bool:
+        snap = ref.get(transaction=tx)
+        if not snap.exists or ((snap.to_dict() or {}).get("deviceIdLock") or ""):
+            return False
+        tx.update(ref, {"deviceIdLock": device_id})
+        return True
+
+    try:
+        return _bind(transaction)
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        # Another device bound it first. This one is a mismatch from its next
+        # request onward, which revalidate_device_lock will act on.
         return False
-    locked = seat.get("deviceIdLock") or ""
-    return not locked or locked == device_id
+
+
+def check_device_lock(user: dict, device_id: str) -> bool:
+    """True if `device_id` may still use this account's entitlement.
+
+    An unbound lock passes: it is not a violation, it is a licence that has
+    not met a device yet. Binding is revalidate_device_lock's job, because
+    only it knows the caller is a real authed request rather than a check.
+    """
+    return _device_lock_state(user, device_id)[0] != _LOCK_VIOLATION
 
 
 def revalidate_device_lock(user: dict, device_id: str | None) -> dict:
@@ -1343,15 +1547,28 @@ def revalidate_device_lock(user: dict, device_id: str | None) -> dict:
     revoke/activate to notice. No-op (and no write) for Demo accounts, accounts
     with no license on file, or a call with no device id to check.
 
+    Also the moment an unbound licence acquires its device. A licence minted
+    against an email, or a seat added to a roster, carries no lock until
+    someone actually signs in — so the first authed request that presents a
+    device id binds it here. That is what makes "we mint against your address
+    and you sign in" tie a licence to a device with no key and no activation
+    step; see _device_lock_state.
+
     This only ever *removes* entitlement in place — it never deletes or hides
-    the account's sessions/files, and re-locking to a new device happens only
-    through activate_license or an institution IT clear-device-lock action.
+    the account's sessions/files, and re-locking to a *different* device
+    happens only after a staff, IT or self-service clear of the existing lock.
     """
     if not device_id or not user.get("licenseId"):
         return user
     if effective_mode(user) != MODE_LICENSED:
         return user
-    if check_device_lock(user, device_id):
+    verdict, ref = _device_lock_state(user, device_id)
+    if verdict == _LOCK_UNBOUND:
+        if bind_device_lock(ref, device_id):
+            log.info("device lock bound uid=%s license=%s",
+                     user.get("uid"), user.get("licenseId"))
+        return user
+    if verdict == _LOCK_OK:
         return user
     uid = user.get("uid")
     if uid:
@@ -1574,6 +1791,20 @@ def invite_institution_member(
         return "license_not_found", None
     if (lic.get("status") or "active") == "revoked":
         return "license_revoked", None
+    return _write_invite(license_id, email, invited_by_uid)
+
+
+def _write_invite(license_id: str, email: str,
+                  invited_by_uid: str) -> tuple[str, dict | None]:
+    """Record the promise itself, having already established the licence is
+    one worth promising.
+
+    Split from `invite_institution_member` because an individual licence is
+    delivered the same way — mint against an address, let the person sign in —
+    but reaches this point through a different set of checks. The record is
+    identical either way, and `claim_pending_invite` reads the licence to
+    decide what to grant, so the invite carries no notion of kind.
+    """
     address = normalize_email(email)
     if not address:
         return "invalid_email", None
@@ -1637,9 +1868,15 @@ def revoke_institution_invite(license_id: str, invite_key: str) -> bool:
 
 
 def claim_pending_invite(user: dict) -> dict:
-    """Redeem an institution invite for an account that has just become usable.
+    """Redeem a pending invite for an account that has just become usable.
 
-    Returns the updated user when a seat was taken, otherwise the user
+    Both licence kinds arrive here. An institution invite takes a seat; an
+    individual one attaches the licence itself — the two ways a licence is
+    delivered without anybody typing a key, and the only two. The invite
+    record does not say which; the licence it points at does, which is why
+    there is one collection rather than two.
+
+    Returns the updated user when something was claimed, otherwise the user
     unchanged. Called from `ensure_entitlement`, i.e. exactly where a Demo key
     would otherwise be minted — so an invited newcomer lands licensed on their
     first request rather than demo-then-upgraded.
@@ -1669,7 +1906,7 @@ def claim_pending_invite(user: dict) -> dict:
         return user
     license_id = ((snap.to_dict() or {}).get("licenseId") or "")
     lic = get_license(license_id) if license_id else None
-    if not lic or normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+    if not lic:
         # The licence was deleted out from under the invite. Drop it rather
         # than leaving a record that can never be redeemed.
         ref.delete()
@@ -1678,13 +1915,19 @@ def claim_pending_invite(user: dict) -> dict:
         ref.delete()
         return user
 
-    patch = _institution_member_patch(license_id, lic)
-    # No device lock: the invite predates any device choice, and the lock is
-    # set the first time the seat is actually used.
-    err = claim_seat(license_id, uid, address, "", patch, invite_ref=ref)
+    # No device lock is passed either way: the invite predates any device
+    # choice, and the lock is bound on the first authed request that carries a
+    # device id — see revalidate_device_lock.
+    if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
+        patch = _institution_member_patch(license_id, lic)
+        err = claim_seat(license_id, uid, address, "", patch, invite_ref=ref)
+    else:
+        patch = _individual_member_patch(license_id, lic)
+        err = claim_individual_license(license_id, uid, address, patch, invite_ref=ref)
     if err:
-        # Seats exhausted, or lost to contention. Leave the invite in place so
-        # it is redeemed on a later request once IT frees a slot.
+        # Seats exhausted, already redeemed, or lost to contention. Leave the
+        # invite in place: the first two may be resolved by ops, and the third
+        # resolves itself on the next request.
         log.warning("invite claim failed uid=%s license=%s err=%s", uid, license_id, err)
         return user
     return {**user, **patch, "uid": uid}

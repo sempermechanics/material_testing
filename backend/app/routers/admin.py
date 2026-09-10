@@ -105,12 +105,19 @@ def admin_create_license(
     ctx=Depends(attested_or_mfa_admin),
     admin=Depends(admin_user),
 ):
-    """Mint a licensed key. `kind=individual` (default) locks one email and
-    one device, plaintext once. `kind=institution` mints an institution key
-    instead — no email/device lock at mint time; membership is decided
-    per-activation by `domainLock`, and `adminEmails` names the IT contacts
-    who self-serve seat management via
+    """Mint a licensed key.
+
+    `kind=individual` (default) locks one email; the device lock is optional
+    and normally left empty, binding to the first device that signs in as that
+    address. Minting also records a pending invite, which is how the licence
+    reaches the customer — they sign in and it attaches. The plaintext key is
+    returned once and is the support-recovery path, not the delivery one.
+
+    `kind=institution` mints an institution key instead — no email/device lock
+    at mint time; membership is decided per-activation by `domainLock`, and
+    `adminEmails` names the IT contacts who self-serve seat management via
     /v1/institutions/licenses/{id}/seats (see routers/institutions.py).
+
     Only Semper staff (this device-attested admin path) may mint or whole-key
     revoke; institution IT never reaches this route.
     """
@@ -147,7 +154,8 @@ def admin_create_license(
         admin["uid"], action="ADMIN_LICENSE_MINT",
         target={"type": "license", "id": minted["license"]["id"]},
         detail={"kind": KIND_INDIVIDUAL, "emailLock": body.emailLock,
-                "deviceIdLock": body.deviceIdLock},
+                "deviceIdLock": body.deviceIdLock,
+                "inviteError": minted.get("inviteError") or ""},
     )
     return minted
 

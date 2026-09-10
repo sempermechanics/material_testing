@@ -468,7 +468,7 @@ paths:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
-        '422': { description: "kind=institution missing domainLock/adminEmails, or kind=individual missing emailLock/deviceIdLock" }
+        '422': { description: "kind=institution missing domainLock/adminEmails, or kind=individual missing emailLock" }
   /v1/admin/licenses/{licenseId}:
     patch:
       operationId: adminUpdateLicense

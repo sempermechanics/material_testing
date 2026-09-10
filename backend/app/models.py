@@ -265,8 +265,13 @@ class AdminLicenseCreate(BaseModel):
     @model_validator(mode="after")
     def _kind_requires_matching_locks(self) -> "AdminLicenseCreate":
         if self.kind == "individual":
-            if not self.emailLock or not self.deviceIdLock:
-                raise ValueError("individual licenses require emailLock and deviceIdLock")
+            # `emailLock` alone. A device lock is accepted but no longer
+            # demanded, because demanding it meant the customer had to read a
+            # device id off their phone and send it to us before we could mint
+            # anything. Left empty, the licence binds to the first device that
+            # signs in as `emailLock` — see firestore_repo._device_lock_state.
+            if not self.emailLock:
+                raise ValueError("individual licenses require emailLock")
         else:  # institution
             if not self.domainLock:
                 raise ValueError("institution licenses require domainLock")
