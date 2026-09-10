@@ -68,12 +68,6 @@ class PdfLayoutEngine(
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
     }
 
-    /** Quiet cover notes (noise floor / caveats) — smaller than body, italic. */
-    private val italicNotePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = colorText
-        textSize = 30f
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
-    }
     private val tableHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = 35f
@@ -188,23 +182,6 @@ class PdfLayoutEngine(
 
     fun advanceY(amount: Float) {
         cursorY += amount
-    }
-
-    /**
-     * Small italic note under a cover section — floor value and caveats, not
-     * a table row and not a boxed warning. Wraps on words like [drawNotice].
-     */
-    fun drawItalicNote(text: String) {
-        val lines = wrap(text, italicNotePaint, contentWidth)
-        lines.forEachIndexed { index, line ->
-            canvas?.drawText(
-                line,
-                margin,
-                cursorY + ITALIC_NOTE_BASELINE + ITALIC_NOTE_LINE * index,
-                italicNotePaint,
-            )
-        }
-        cursorY += ITALIC_NOTE_BASELINE + ITALIC_NOTE_LINE * lines.size.coerceAtLeast(1) + 12f
     }
 
     /**
@@ -453,9 +430,5 @@ class PdfLayoutEngine(
         /** Inset and line pitch of [drawNotice]'s box. */
         const val NOTICE_PAD = 40f
         const val NOTICE_LINE = 55f
-
-        /** Line pitch of [drawItalicNote]. */
-        const val ITALIC_NOTE_BASELINE = 36f
-        const val ITALIC_NOTE_LINE = 40f
     }
 }

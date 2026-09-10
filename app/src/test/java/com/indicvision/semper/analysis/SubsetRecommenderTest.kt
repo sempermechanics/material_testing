@@ -154,11 +154,15 @@ class SubsetRecommenderTest {
 
     @Test
     fun `the requirement never exceeds what the engine would accept`() {
-        // A pattern too coarse for any allowed subset clamps rather than naming
-        // a size the slider cannot reach.
-        assertEquals(
-            SubsetRecommender.MAX_SUBSET,
-            result(subset = 41, speckle = 400.0).subsetSpanningSpeckles,
+        // A pattern too coarse for any allowed subset reports no requirement at
+        // all. Clamping to MAX_SUBSET would name a size the user could reach
+        // while it spans nowhere near three speckles — a chip telling them to
+        // do something that would not fix the problem. The over-resolved size
+        // chip is what speaks for a pattern this coarse.
+        assertNull(result(subset = 41, speckle = 400.0).subsetSpanningSpeckles)
+        assertTrue(
+            "a reachable requirement should still be reported",
+            result(subset = 21, speckle = 20.0).subsetSpanningSpeckles!! <= SubsetRecommender.MAX_SUBSET,
         )
     }
 }

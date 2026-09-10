@@ -3,6 +3,7 @@ package com.indicvision.semper.analysis
 import com.indicvision.semper.ui.analysis.DicGoodPractice
 import com.indicvision.semper.ui.analysis.SubsetRecommender
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,7 +41,17 @@ class DicGoodPracticeTest {
     @Test
     fun `a subset never leaves the range the engine accepts`() {
         assertEquals(SubsetRecommender.MIN_SUBSET, DicGoodPractice.subsetForSpeckle(1.0))
-        assertEquals(SubsetRecommender.MAX_SUBSET, DicGoodPractice.subsetForSpeckle(500.0))
+        val coarse = DicGoodPractice.subsetForSpeckle(30.0)
+        assertNotNull(coarse)
+        assertTrue("subset $coarse", coarse!! <= SubsetRecommender.MAX_SUBSET)
+    }
+
+    @Test
+    fun `a speckle too coarse for any accepted subset yields none`() {
+        // 3 x 50 px = 151, past MAX_SUBSET. Clamping to 121 would report a
+        // size that spans barely two speckles as if it spanned three.
+        assertNull(DicGoodPractice.subsetForSpeckle(50.0))
+        assertNull(DicGoodPractice.subsetForSpeckle(500.0))
     }
 
     @Test

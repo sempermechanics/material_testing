@@ -74,7 +74,10 @@ a subset are weak, correlation fails or wanders.
 ### Speckle size
 
 Under the subset slider the wizard reports how large your speckles actually
-measure, in pixels of the frame you imported. The iDICs *Good Practices Guide for
+measure, in pixels of the frame you imported. Anything wrong with the *size*
+of the pattern is flagged on step 1, beside the images — the only fix is a
+different photograph. Anything wrong with the *subset* is flagged on step 2,
+beside the slider that fixes it. The iDICs *Good Practices Guide for
 Digital Image Correlation* asks for dots spanning **3 to 9 px**, and the app
 measures yours from the reference frame's own autocorrelation.
 
@@ -83,7 +86,7 @@ measures yours from the reference frame's own autocorrelation.
 | Below 3 px | The pattern is too fine for this frame to resolve. It aliases, and points can fail to correlate at all. | Shoot closer, or spray a coarser pattern. |
 | 3–9 px | Nothing to change. | — |
 | Above 9 px | It will correlate, but the extra pixels buy no extra accuracy, and a subset large enough to span the dots leaves you fewer measurement points across the ROI. | A finer pattern, or shoot from further back. |
-| Subset spans too few speckles | A subset should cover about three dots. Fewer than that and it looks much like its neighbours, so it can correlate confidently against the wrong place. | Raise the subset size to the value the chip names. |
+| Subset spans too few speckles | A subset should cover about three dots. Fewer than that and it looks much like its neighbours, so it can correlate confidently against the wrong place. | Raise the subset size to the value the chip names — the chip sits under the slider on step 2, so it clears as you move it. |
 
 Contrast and size are independent: a pattern can be crisp and black-on-white and
 still be far too fine, and the contrast chip will say nothing about it. That is why

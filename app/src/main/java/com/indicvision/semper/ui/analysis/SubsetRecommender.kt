@@ -59,8 +59,15 @@ object SubsetRecommender {
      * [NOISE_VARIANCE] makes the measurement able to fix the failure it was
      * brought in for — a phone whose noise is *worse* than the lab camera's,
      * where the recommended subset is too small — while being unable to cause
-     * the opposite one. See [NoiseFloorPixels.noiseCorrelationOf] for the
-     * measurement that detects the smoothing, which warns rather than steers.
+     * the opposite one.
+     *
+     * **Nothing calls this with a real measurement today.** The in-app camera
+     * that produced one was removed, so every caller takes the default and the
+     * threshold is the paper's constant. The parameter and the clamp stay
+     * because the reasoning above is what any future measurement — from an
+     * import-side probe, say — would have to satisfy; see
+     * [NoiseFloorPixels.noiseCorrelationOf], which measures the smoothing but
+     * currently has no threshold and no caller either.
      *
      * A non-finite or non-positive value means no measurement, and falls back.
      */

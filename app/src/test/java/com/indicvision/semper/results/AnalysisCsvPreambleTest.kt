@@ -2,6 +2,7 @@ package com.indicvision.semper.results
 
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.report.AnalysisCsvWriter
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -105,5 +106,75 @@ class AnalysisCsvPreambleTest {
         )
         assertTrue(text.contains("frame_a.jpg,0,0,1.5,-2.25,"))
         assertTrue(text.contains(",1.5000,-2.2500,"))
+    }
+
+    /**
+     * Every data row has exactly as many fields as the header names.
+     *
+     * The `contains(…)` assertions above pin the text of the header and of
+     * individual values, and would all still pass if the separator between the
+     * point columns and the motion suffix were dropped or doubled — the one
+     * mistake the suffix assembly can make. This counts instead, on a real
+     * file, for both the single and the sweep header (whose prefix carries four
+     * extra columns) and for the null-fit path (a frame whose data provider
+     * returns an unsolvable field writes no rows, so the fit is exercised by
+     * the solved frame beside it).
+     */
+    private fun assertFieldCountParity(sweep: Boolean) {
+        val out = File.createTempFile("semper_csv_parity", ".csv")
+        out.deleteOnExit()
+        val data = translatedGrid()
+        val frames = listOf(
+            AnalysisCsvWriter.Frame(
+                image = "frame_a.jpg",
+                subset = 41,
+                step = 5,
+                strainWindow = 15,
+                data = { data },
+            ),
+            AnalysisCsvWriter.Frame(
+                image = "frame_b.jpg",
+                subset = 41,
+                step = 5,
+                strainWindow = 15,
+                data = { null },
+            ),
+        )
+        val metadata = AnalysisCsvWriter.Metadata(
+            referenceName = "ref.jpg",
+            strainMethod = "VSG",
+            imgW = 640,
+            imgH = 480,
+            roiX = 0,
+            roiY = 0,
+            roiW = 640,
+            roiH = 480,
+        )
+        AnalysisCsvWriter.write(out, sweep, frames, metadata)
+
+        val lines = out.readLines()
+            .filter { it.isNotBlank() && !it.startsWith("#") }
+        val header = lines.first()
+        assertTrue("header should name the motion columns: $header", header.endsWith(",shift_rot_deg"))
+        val expected = header.split(',').size
+        val rows = lines.drop(1)
+        assertTrue("no data rows were written", rows.isNotEmpty())
+        rows.forEachIndexed { index, line ->
+            assertEquals(
+                "row $index has the wrong field count (sweep=$sweep): $line",
+                expected,
+                line.split(',').size,
+            )
+        }
+    }
+
+    @Test
+    fun `every point row has as many fields as the single header`() {
+        assertFieldCountParity(sweep = false)
+    }
+
+    @Test
+    fun `every point row has as many fields as the sweep header`() {
+        assertFieldCountParity(sweep = true)
     }
 }

@@ -184,8 +184,9 @@ The session list and the only entry point to a new analysis.
 ### 3a. New analysis — the media picker sheet
 
 Not an Activity: `MediaPickerSheet`, a full-height bottom sheet titled **New
-analysis**. It is what **Import** opens from the Home FAB menu, and the same
-sheet the wizard's two dropzones open (§5.1), so test it once here.
+analysis**. It is what the Home **+** button opens directly — there is no
+intermediate menu — and the same sheet the wizard's two dropzones open (§5.1),
+so test it once here.
 
 | # | Action | Expected |
 |---|---|---|
@@ -322,15 +323,16 @@ Lattice, Session limit, or back to Home.
 | [ ] 5.1.9 | Load JPEGs | A non-blocking accuracy warning chip appears; its info icon asks first whether to leave the app, then opens the JPEG FAQ |
 | [ ] 5.1.10 | Load a poorly speckled reference | A low-texture warning names a suggested subset size; its info icon opens the speckle FAQ behind the same leave-the-app confirm |
 | [ ] 5.1.11 | Load any speckled reference and open step 2 | A muted line under the subset slider reads "Speckle measures about N px across. Good practice asks for 3–9 px." |
-| [ ] 5.1.12 | Load a reference shot far back, so the dots are 1–2 px | A second chip on step 1 says the speckle is below the 3 px minimum and to shoot closer or use a coarser pattern |
-| [ ] 5.1.13 | Load a close-up whose dots span more than 9 px | The chip says the pattern is over-resolved — correlates fine, but a finer pattern would give more points |
-| [ ] 5.1.14 | Load a reference with no measurable pattern at all (blank card) | Neither the readout nor the size chip appears; no number is invented |
-| [ ] 5.1.11 | Open the sort menu → **Name A–Z** | Thumbnails reorder; the badge numbers renumber 1…N |
-| [ ] 5.1.12 | Choose **Date oldest first** | Order follows capture date, not filename |
-| [ ] 5.1.13 | Choose **Manual** | Hint toast about dragging; drag a thumbnail and it stays where dropped |
-| [ ] 5.1.14 | Load a single deformed frame | The sort control is hidden |
-| [ ] 5.1.15 | Press Back on step 1 with inputs loaded | "Exit analysis?" confirmation. On steps 2 and 3 Back walks back a step instead — the confirm is step 1 only |
-| [ ] 5.1.16 | Open step 1 for the first time | Coach marks point at the reference dropzone, then the deformed one |
+| [ ] 5.1.12 | Load a reference shot far back, so the dots are 1–2 px | A chip **on step 1** says the speckle is below the 3 px minimum and to shoot closer or use a coarser pattern |
+| [ ] 5.1.13 | Load a close-up whose dots span more than 9 px | The step 1 chip says the pattern is over-resolved — correlates fine, but a finer pattern would give more points. No span chip appears on step 2: the size verdict suppresses it |
+| [ ] 5.1.14 | Load a reference inside the band whose speckle needs a larger subset than the slider is on (e.g. dots ~7 px against a subset of 15) | A chip appears **on step 2, under the subset slider**, naming the subset in use and the one wanted. Raise the slider past it and the chip clears in place, without leaving step 2 |
+| [ ] 5.1.15 | Load a reference with no measurable pattern at all (blank card) | Neither the readout nor either chip appears; no number is invented |
+| [ ] 5.1.16 | Open the sort menu → **Name A–Z** | Thumbnails reorder; the badge numbers renumber 1…N |
+| [ ] 5.1.17 | Choose **Date oldest first** | Order follows capture date, not filename |
+| [ ] 5.1.18 | Choose **Manual** | Hint toast about dragging; drag a thumbnail and it stays where dropped |
+| [ ] 5.1.19 | Load a single deformed frame | The sort control is hidden |
+| [ ] 5.1.20 | Press Back on step 1 with inputs loaded | "Exit analysis?" confirmation. On steps 2 and 3 Back walks back a step instead — the confirm is step 1 only |
+| [ ] 5.1.21 | Open step 1 for the first time | Coach marks point at the reference dropzone, then the deformed one |
 
 #### 5.1a Video source
 

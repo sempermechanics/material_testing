@@ -74,12 +74,17 @@ object DicGoodPractice {
     }
 
     /**
-     * A subset spanning [MIN_SPECKLES_PER_SUBSET] speckles, snapped odd and
-     * into the range the engine will accept.
+     * A subset spanning [MIN_SPECKLES_PER_SUBSET] speckles, snapped odd, or
+     * null when no subset the engine accepts can span that many.
      *
      * Odd because the engine centres a subset on a pixel and an even size has
-     * no centre; clamped because [SubsetRecommender] owns what the solver can
-     * be asked for, and a size outside that is not a subset it would run.
+     * no centre. Below [SubsetRecommender.MIN_SUBSET] the answer is raised to
+     * the floor — a larger subset than asked for still spans the speckles. A
+     * requirement above [SubsetRecommender.MAX_SUBSET] returns null instead of
+     * the clamp: the clamped value does *not* span three speckles, and
+     * reporting it would tell the user a size is sufficient when it is not.
+     * Null means "this pattern is too coarse for any subset", which is the
+     * honest answer and is what the [Verdict.OVER_RESOLVED] chip already says.
      *
      * This is a *cross-check* on the SSSIG recommendation, not a replacement
      * for it. SSSIG asks whether a subset carries enough gradient for the
@@ -92,6 +97,7 @@ object DicGoodPractice {
         if (!diameterPx.isFinite() || diameterPx <= 0.0) return null
         val spanning = ceil(diameterPx * MIN_SPECKLES_PER_SUBSET).toInt()
         val odd = if (spanning % 2 == 0) spanning + 1 else spanning
-        return odd.coerceIn(SubsetRecommender.MIN_SUBSET, SubsetRecommender.MAX_SUBSET)
+        return odd.coerceAtLeast(SubsetRecommender.MIN_SUBSET)
+            .takeIf { it <= SubsetRecommender.MAX_SUBSET }
     }
 }

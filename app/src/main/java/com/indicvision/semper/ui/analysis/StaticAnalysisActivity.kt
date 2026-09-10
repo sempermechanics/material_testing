@@ -115,6 +115,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Inline speckle-*size* warning: the measured dot diameter against the iDICs band. */
     private lateinit var speckleWarnRow: View
+    private lateinit var speckleSpanWarnRow: View
 
     /** The measured speckle diameter, shown under the subset slider whether or not it is a problem. */
     private lateinit var tvSpeckleReadout: TextView
@@ -239,6 +240,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             confirmOpenFaq(getString(R.string.url_faq_speckle))
         }
         speckleWarnRow = findViewById(R.id.speckleWarnRow)
+        speckleSpanWarnRow = findViewById(R.id.speckleSpanWarnRow)
         tvSpeckleReadout = findViewById(R.id.tvSpeckleReadout)
         tvNextReason = findViewById(R.id.tvNextReason)
         tvInstruction = findViewById(R.id.tvInstruction)
@@ -1090,6 +1092,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val rec = viewModel.subsetRecommendation ?: run {
             lowTextureWarnRow.isVisible = false
             speckleWarnRow.isVisible = false
+            speckleSpanWarnRow.isVisible = false
             tvSpeckleReadout.isVisible = false
             return
         }
@@ -1123,13 +1126,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * Guide* band, so the user learns something about their specimen rather
      * than only about the slider.
      *
-     * Two surfaces, because they answer to two different states. The readout
-     * under the subset slider is shown whenever a measurement exists, good news
-     * included — it is the number the recommendation rests on, and a user who
-     * can see it can judge their own pattern before spending a run on it. The
-     * warning chip is shown only when there is something to change, and states
-     * at most one thing: a pattern that is too fine to resolve makes the
-     * subset-span question moot, so the verdict is reported ahead of it.
+     * Three surfaces, each placed where its fix is. The readout under the
+     * subset slider is shown whenever a measurement exists, good news included
+     * — it is the number the recommendation rests on, and a user who can see
+     * it can judge their own pattern before spending a run on it. The size
+     * chip sits on step 1 with the images, because a pattern outside the band
+     * is fixed by a different photograph and by nothing on step 2. The span
+     * chip sits on step 2 under the slider, because that slider is its fix and
+     * a warning the user cannot watch clear is a warning they will not trust.
+     *
+     * At most one chip shows: a pattern too fine or too coarse to resolve
+     * makes the subset-span question moot, so the size verdict is reported
+     * ahead of it and suppresses the span chip entirely.
      */
     private fun showSpeckleFeedback() {
         val diameter = viewModel.subsetRecommendation?.speckleDiameterPx
@@ -1138,6 +1146,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             // already covers the case where that is the user's problem; saying
             // nothing here is better than reporting a number we do not have.
             speckleWarnRow.isVisible = false
+            speckleSpanWarnRow.isVisible = false
             tvSpeckleReadout.isVisible = false
             return
         }
@@ -1150,7 +1159,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
         tvSpeckleReadout.isVisible = true
 
-        val message = when (DicGoodPractice.verdictFor(diameter)) {
+        val sizeMessage = when (DicGoodPractice.verdictFor(diameter)) {
             DicGoodPractice.Verdict.UNDER_RESOLVED -> getString(
                 R.string.speckle_under_resolved_fmt,
                 diameter,
@@ -1161,23 +1170,35 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 diameter,
                 DicGoodPractice.MAX_SPECKLE_PX.toInt(),
             )
-            // Read off the slider, not off the recommendation: the user may
-            // have moved it since, and a chip naming a size they are no longer
-            // using is worse than no chip.
-            else -> {
-                val inUse = etSubsetSize.value.toInt()
-                val wanted = viewModel.subsetRecommendation?.subsetSpanningSpeckles
-                if (wanted != null && wanted > inUse) {
-                    getString(R.string.speckle_subset_span_fmt, inUse, wanted)
-                } else {
-                    null
-                }
+            DicGoodPractice.Verdict.USABLE -> null
+        }
+        // Read off the slider, not off the recommendation: the user may have
+        // moved it since, and a chip naming a size they are no longer using is
+        // worse than no chip. Suppressed outright while the size chip is up —
+        // spanning three speckles is not the problem on a pattern that cannot
+        // be resolved at all.
+        val spanMessage = if (sizeMessage != null) {
+            null
+        } else {
+            val inUse = etSubsetSize.value.toInt()
+            val wanted = viewModel.subsetRecommendation?.subsetSpanningSpeckles
+            if (wanted != null && wanted > inUse) {
+                getString(R.string.speckle_subset_span_fmt, inUse, wanted)
+            } else {
+                null
             }
         }
-        if (message == null) {
+
+        val faqUrl = getString(R.string.url_faq_speckle)
+        if (sizeMessage == null) {
             speckleWarnRow.isVisible = false
         } else {
-            wireWarningChip(speckleWarnRow, message, getString(R.string.url_faq_speckle))
+            wireWarningChip(speckleWarnRow, sizeMessage, faqUrl)
+        }
+        if (spanMessage == null) {
+            speckleSpanWarnRow.isVisible = false
+        } else {
+            wireWarningChip(speckleSpanWarnRow, spanMessage, faqUrl)
         }
     }
 
