@@ -294,6 +294,20 @@
                     android:layout_marginTop="12dp"
                     android:visibility="gone" />
 
+                <!-- Inline speckle-size warning: the measured dot diameter
+                     sits outside the iDICs 3-9 px band. A different question
+                     from the row above it, which is about contrast rather than
+                     scale. Scale belongs on this step because the only fix is
+                     a different image; the subset-span message, whose fix is
+                     the step 2 slider, lives on step 2 instead. -->
+                <include
+                    android:id="@+id/speckleWarnRow"
+                    layout="@layout/warn_chip_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:visibility="gone" />
+
                 <TextView
                     android:id="@+id/tvNextReason"
                     android:layout_width="match_parent"

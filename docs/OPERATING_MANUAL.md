@@ -24,10 +24,14 @@ strain fields — and has not used this app. -->
 ---
 
 > **`delete-dialog.png` below still shows the pre-2026-08 UI** — recapturing it
-> needs a signed-in account with a cloud-backed analysis. `home.png` and
-> `settings.png` show the current UI but only its local-only state; the cloud
-> sync-badge variety and the Settings **Download** row need the same real-account
-> pass. Every other screenshot on this page matches the current UI. The diagrams
+> needs a signed-in account with a cloud-backed analysis. `home.png`,
+> `step2-parameters.png` and `speckle-warning.png` were recaptured on 2026-09-09
+> after the in-app camera was removed, so they show the current **+** button and
+> the speckle readout — but `home.png` is now an empty-state shot, so the list
+> rows and the cloud sync badges are not visible on it; those and the Settings
+> **Download** row still need a real-account pass. `settings.png` shows the
+> current UI but only its local-only state. Every other screenshot on this page
+> matches the current UI. The diagrams
 > (`pipeline.svg`, `wizard.svg`, `subset-step.svg`, `vsg.svg`, `lattice.svg`) are
 > conceptual, not screen captures, and are current. Remaining work:
 > [images/CAPTURE_CHECKLIST.md](images/CAPTURE_CHECKLIST.md).
@@ -87,9 +91,9 @@ Send crash reports**.
 <img src="images/home.png" width="300" alt="Home screen">
 
 Home lists your analyses. Tap one to open it. Long-press for select, rename,
-delete. Pull down to sync. **+** expands to **Import** (pick existing photos or
-video) or **Record** (test shot in the phone Camera app, draw the area to
-check for contrast, then a timed capture with focus locked from that shot).
+delete. Pull down to sync. **+** goes straight to the picker — pick existing
+photos or a video. There is no in-app camera; the app measures images you
+already have. (The shot above is the empty state, before any analysis exists.)
 
 ---
 
@@ -146,6 +150,27 @@ can still work entirely through Files — it opens the system file browser:
 <img src="images/media-picker-files-saf.png" width="300" alt="Files tab opening the system file browser">
 
 The strip shows the deformed frames with order badges.
+
+**The app measures your speckle as soon as the reference loads.** It
+autocorrelates a window of the reference and reports the average speckle
+diameter. If that falls outside the 3–9 px band the iDICs Good Practices Guide
+asks for, a warning chip appears under the dropzones saying what it measured and
+what it means:
+
+<img src="images/speckle-warning.png" width="300" alt="Step 1 speckle size warning">
+
+The chip is advice, not a block — the run proceeds either way. Under 3 px the
+pattern is finer than the method can resolve and no subset size fixes it; over
+9 px it will correlate, but a finer pattern would give more measurement points
+across the same area. Either way the fix is a different photograph, which is
+why the chip sits here with the images.
+
+A separate chip appears **on step 2, under the subset slider**, when the speckle
+is inside the band but the subset is too small to span three of them. It names
+the subset that would, and it clears as you move the slider past it — the
+control and the warning are on the same screen on purpose:
+
+<img src="images/speckle-span-warning.png" width="300" alt="Step 2 subset-span warning under the subset slider">
 
 **The badge order is the analysis order.** Frame 1 here is frame 1 everywhere
 after. Tap the sort icon to change it:
@@ -248,6 +273,17 @@ for 0.007 px accuracy, sampled on a 4×4 grid and taken as the median.
 
 It is a starting point. Touch the slider and it stops tracking the image.
 **Reset** brings it back.
+
+A muted line under the subset slider reads **"Speckle measures about N px
+across. Good practice asks for 3–9 px."** — the same measurement as the step 1
+chip, kept in front of you while you move the slider. It updates as the
+reference changes and disappears if the reference is removed. Below it, a
+warning chip appears if the subset you are on cannot span three speckles, and
+names the size that would; it clears as soon as the slider passes that size.
+
+On a pattern coarser than about 40 px no allowed subset spans three dots, so no
+size is named — the over-resolved chip on step 1 is the honest answer there, and
+raising the slider to its maximum would not fix it.
 
 **Subset overlap** is how much neighbouring windows cover each other after a
 step: `overlap = 1 − step / subset`. The two controls stay in sync. The iDICs

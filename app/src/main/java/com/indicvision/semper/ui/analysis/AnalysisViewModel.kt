@@ -21,7 +21,6 @@ import androidx.lifecycle.viewModelScope
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
-import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionRecordSettings
@@ -128,17 +127,6 @@ class AnalysisViewModel : ViewModel() {
      * deformed-frames card show an icon that matches what the user chose.
      */
     var defFromVideo: Boolean = false
-
-    /**
-     * The floor the capture screen measured, when these frames were captured
-     * rather than imported. Set once from the hand-off Intent and carried onto
-     * every session record this analysis writes.
-     *
-     * Null is the ordinary state for an import, and it stays null rather than
-     * being defaulted: a session that never measured a floor must not appear to
-     * have measured a good one.
-     */
-    var captureFloor: CaptureNoiseFloor? = null
 
     var realRefWidth: Int = 0
     var realRefHeight: Int = 0
@@ -343,9 +331,6 @@ class AnalysisViewModel : ViewModel() {
 
     /** Combinations the engine could not solve in the last sweep. */
     var sweepSkippedNodes: List<SkippedNode> = emptyList()
-
-    /** Opened from capture flow (enables Re-record on step 1 back). */
-    var launchedFromCapture: Boolean = false
 
     /**
      * @param labels one human-readable name per combination, index-aligned with
@@ -552,7 +537,6 @@ class AnalysisViewModel : ViewModel() {
             frameCount = result.runs.size,
             defNames = result.runs.map { rawName },
             engineStatsArray = engineStatsArray,
-            captureFloor = captureFloor,
         ).copy(
             name = summary.name,
             // What makes a reopened session a sweep again: without these the

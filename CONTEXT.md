@@ -65,7 +65,6 @@ Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`
 | `ui/settings/` | `SettingsActivity` + `Settings*Section` |
 | `ui/home/` | Session list |
 | `ui/common/` | Insets, `MediaPickerSheet`, `CrispToast`, `TransferBannerController` |
-| `ui/capture/` | Home Record: setup, test shot, contrast ROI, AF lock, timed capture |
 | `data/` | Auth, session store, upload/restore/download workers, storage budget |
 | `analytics/` | `SemperAnalytics` — consent-gated events, same flag as Crashlytics |
 | `report/` | PDF / CSV / `VisualizationEngine` |
@@ -83,8 +82,8 @@ Wizard later steps inflate through **ViewStubs**. `goToStep` stays on
 Full-field batch: `DicBatchRunner` + `DicFieldIo` shared with VSG. JNI
 `computeFullFieldDirect` stays **inside that one loop**.
 
-New analysis starts from the Home FAB menu: **Import** opens `MediaPickerSheet`
-(shared with wizard dropzones); **Record** runs the capture flow in `ui/capture/`.
+New analysis starts from the Home **+**, which opens `MediaPickerSheet`
+(shared with the wizard dropzones).
 Long transfers show a
 non-modal `TransferBannerController` strip in Settings and the viewer; uploads,
 restores, `DicBundleDownloadWorker` downloads and backup deletes are WorkManager.
@@ -121,8 +120,7 @@ Empty `app/lint-baseline.xml` and `app/detekt-baseline.xml`. Prefer a targeted
 `@file:Suppress` or an extract over stuffing a baseline.
 
 `OldTargetApi` is disabled in `app/build.gradle.kts` until a deliberate
-`targetSdk` 36→37 bump. Capture keeps portrait via `tools:ignore` on
-`CaptureSessionActivity`. Do not re-enable those or turn on `warningsAsErrors`
+`targetSdk` 36→37 bump. Do not re-enable that or turn on `warningsAsErrors`
 in a drive-by. Settings / wizard settings XML stay under `TooManyViews` by
 inflating through `SettingsScrollContentView` /
 `WizardStepSettingsContentView`.
@@ -144,103 +142,49 @@ inflates through `SettingsScrollContentView` /
 `WizardStepSettingsContentView`. `OldTargetApi` stays disabled until a
 deliberate targetSdk PR.
 
-Home **+** expands to **Import** (existing `MediaPickerSheet`) or **Record**
-(`ui/capture/`: setup → Camera-app test shot → contrast ROI → SSSIG gate →
-hardware AF lock → user-confirmed focus → noise-floor burst → timed stills →
-wizard via `PICKED_REF_URI` + `PICKED_DEF_URIS`). Stills only — the video path
-is gone. Frames are lossless grayscale PNG written straight from the locked
-session's `YUV_420_888` luma plane (`GrayPngEncoder`), never JPEG. The reference
-is taken through the locked session too (`captureLockedReference`), at the run's
-own resolution under the same frozen focus and exposure; the vendor Camera app's
-test shot is only the fallback when that capture failed, and
-`CaptureFrameSizeMatcher` is what makes the fallback usable.
+**The in-app camera recording feature has been removed.** Home **+** now opens
+the import source chooser directly; there is one acquisition path. Deleted with
+it: `ui/capture/` in full, the `CAMERA` permission and camera `<queries>`, the
+two capture activities, and the measured **capture noise floor** end to end —
+the stored `SessionRecord.captureFloor`, its viewer caption, its CSV preamble
+line and its PDF cover section.
 
-The offered frame rates are a short list, not a free slider: `CaptureFrameCost`
-takes the larger of the Camera2 sensor read-out floor
-(`CameraCapabilities.sensorFloorMs`) and a real on-device PNG-encode timing
-(`CaptureCalibration`, re-measured once after the test shot), and
-`CapturePlanOptions` builds the chips from it with `ASSURANCE_MARGIN` on top so
-every rate shown is one the run will actually deliver. `StillSequenceRunner`
-schedules each frame from t0 rather than from its predecessor, so a slow frame
-cannot walk the run off the end of the test window, and `CaptureWorkspace`
-clears the previous run's frames so a shorter run cannot inherit the tail of a
-longer one.
+Two consequences worth knowing:
 
-**Precision work on this branch.** A phone shooting a *static* specimen on a
-tripod used to report Exx spanning 48 me — the vendor camera app's own
-processing, not the engine, which is bit-exact against its oracles. Two device
-runs (Samsung SM-G996U1, Pixel 6) now measure 8.7 me and 3.5 me on the same
-kind of scene, with convergence up from 72.7% to 77.3% / 94.8%. What changed:
+- **The CSV's rigid-body motion columns survived and became unconditional.**
+  `shift_u_px, shift_v_px, shift_rot_deg` used to be gated on a session having a
+  measured floor, which tied an export column to the camera by accident. The fit
+  is read off the solved field itself (`RigidBodyFit`), so every session now
+  carries the columns; a frame that admits no fit writes three empty ones.
+- **`SubsetRecommender` is back on the paper's constant.** The measured
+  `D(eta)` came from the capture burst and no import can supply it. Since
+  `thresholdFor` clamps to `max(measured, NOISE_VARIANCE)`, recommendations can
+  only loosen slightly, and only relative to runs this app captured itself.
 
-- `CaptureIspLock` freezes every ISP key the device *lists* — OIS, EIS, noise
-  reduction, edge, tonemap, shading, aberration, scene/effect, zoom and AWB —
-  and nothing it does not, so a LEGACY HAL gets the subset it honours rather
-  than a rejected request that takes the session down. Every key is read back
-  out of the `TotalCaptureResult`; what the HAL ignored is named once, effect
-  first, with a FAQ link.
-- `ExposurePlan` rounds the converged exposure **up** to a whole mains
-  half-period (10 ms at 50 Hz, 8.333 ms at 60 Hz, 50 ms when the device will
-  not say which — 50 ms is a whole number of both) and scales ISO down to
-  hold brightness. Flicker stops moving the tone between frames.
-- `NoiseFloorGate` takes up to 6 stills at the end of the test shot, on the
-  run's own settings, with the specimen mounted and nothing loaded yet. Six
-  is derived, not round: *n* frames give *n − 1* pairwise estimates, and a
-  monotone run of *k* exchangeable estimates has probability `2/k!`, so the
-  drift test is a coin flip at 3 estimates and usable at 5 — which is 6 frames.
-  The verdict **warns and never blocks** — `Record anyway` is the primary
-  action and the floor is stamped on the session and the PDF cover, because an
-  override that leaves no trace is how a bad number becomes a published number.
-  The share CSV opens with `#` metadata and per-frame field stats, then point
-  rows with an optional recorded-session suffix (floor in mε plus scene-motion
-  columns); imports omit those trailing columns. A clean pass is also a dialog:
-  large **measurement floor** value + body, **Continue**, **ⓘ** → FAQ
-  `#noise-floor` (does not dismiss) — not **Why?**, because the number is a fact.
-  Fail / drift / unsettled use **Why?** the same way.
-- **`strain_window` is a diameter in pixels**, not a multiple of the step
-  (`VsgStudy.vsgFor`). The gate quoted floors 3-5x better than the settings
-  could deliver until the device data caught it. `MAX_STRAIN_WINDOW` (101 px)
-  is now the binding limit on how small a floor can honestly be reported.
-- The subset recommendation solves against `D(eta)` measured on *this* phone
-  under *this* light instead of the 2008 paper's lab camera — but only for a
-  run this app captured, and `SubsetRecommender.thresholdFor` clamps so a
-  measurement can only ever **raise** the threshold. The Pixel reported
-  `D = 0.35` against the Samsung's 34 because a vendor denoiser was running
-  underneath the frozen pipeline; believing it would have recommended a subset
-  smaller than the paper's own default. `NoiseFloorPixels.noiseCorrelationOf`
-  catches that case directly — sensor noise is white between neighbours, a
-  denoiser is not — and warns.
-- `RigidBodyFit` reports how much of each frame's displacement was the whole
-  scene moving (both phones walked 1-2 px over 60 s, monotone, thermal). It is
-  **reported and never subtracted**: uniform translation already cancels in
-  strain, and a fit taken over the whole ROI would remove real deformation
-  along with it.
-- `CaptureGallerySave` puts a second copy of the as-captured frames in
-  `Pictures/semper/<date>-<time>` so the raw measurement is reachable without this
-  app. It never blocks the run and skips with one line when there is no room.
+Upgrade safety is pinned by `SessionStoreLegacyFloorTest`: `SessionStore`'s
+parser is built with `ignoreUnknownKeys`, so an `index.json` written before the
+removal — still carrying its `captureFloor` object — loads unchanged. No
+migration.
 
-Shipped on this branch from that precision work: k-averaging on the reference
-only ([AveragingPlan]; no precision-mode toggle), a catalogue that can offer
-frames above 2048 px when RAM allows ([sustainableCeiling]), and picking the
-longest rear lens by physical camera id ([pickBackCameraId]).
+`NoiseFloorPixels` / `NoiseFloorProbe` / `NoiseFloorStats` stay in
+`ui/analysis/`: they take plain arrays or raw image bytes, so they judge an
+imported frame as readily as a captured one.
 
-**Focus is confirmed by the user before anything is measured.** The lock now
-stops at the live preview: a ring marks the focus point, a magnified unfiltered
-crop of it sits beside a sharpness reading, a tap anywhere re-locks there, and
-the burst does not run until the user accepts. Autofocus is weakest on fine
-repeating texture and a speckle pattern is nothing else, so the point the
-speckle check picked was a guess — and a soft reference sets a floor nothing
-downstream recovers, since defocus blurs the very gradients the correlation is
-built on. The step sits **after** the lock, not before the test shot as first
-sketched: the test shot is a vendor-camera-app intent that runs its own AF, so
-there is no lock to carry into it, and only the locked preview shows the run's
-own frame. It moves earlier when the test shot moves onto the locked session.
-Supporting pieces: `PreviewMap` owns the buffer / view / upright-fraction
-geometry as one invertible map (a tap and the ring it draws must be exact
-inverses); `FocusSharpness` is mean squared gradient over variance, so the
-reading tracks SSSIG and a dim patch does not read as a soft one; and
-`FramingWatch` holds the gravity direction from **Start recording** onward and
-withdraws Start on a sustained re-aim, because the frozen focus and the measured
-floor both describe the framing they were taken in and nothing re-checks either.
+`SpeckleScale` and `DicGoodPractice` came the same way and now have a caller.
+`SubsetRecommender.recommend` measures the speckle diameter by autocorrelation on
+the very patches it already reads for SSSIG — no extra decode — and returns the
+median as `Result.speckleDiameterPx`. The wizard's first step reports it against
+the iDICs 3-9 px band: a muted readout under the subset slider whenever it is
+measurable, and a warning chip when the pattern is under- or over-resolved, or
+when the recommended subset would not span three dots.
+
+The two speckle chips answer different questions and neither substitutes for the
+other. SSSIG is a *sum* of gradients over a subset, so it clears its threshold on
+a pattern far too fine to resolve simply by growing the subset; speckle size is
+what the guidance is actually written against, and what the user can fix at the
+bench. The size measurement only reports — it does not steer the recommended
+subset, which stays the SSSIG answer.
+
 
 `RawRgba` closed the DNG-in-`RoiDrawActivity` gap:
 one shared helper detects a `w*h*4` blob and samples straight into a
@@ -308,7 +252,8 @@ actions / backend / gradle #102–#104.
 New analysis picks media in-sheet (Images gallery; **Files** dismisses the sheet
 and opens SAF). The reference picker opens full height and dims the grid for
 1 s behind a large centred hint ("Select the reference image"); deformed
-multi-select stays immediate. Wizard warnings (JPEG, low speckle, frame-size
+multi-select stays immediate. Wizard warnings (JPEG, low speckle, speckle size,
+frame-size
 mismatch, ROI too small, empty/too-big sweep plan) and remaining actionable
 errors (engine failure dialog **Why?** plus a lasting ⓘ on the status line,
 import / video, viewer batch/OOM/scale, lattice hollow nodes) link to Troubleshooting

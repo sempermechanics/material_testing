@@ -22,7 +22,6 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
-import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
@@ -504,7 +503,6 @@ class ShareCenter(private val host: ResultViewerActivity) {
             roiY = s.roiY,
             roiW = s.roiW,
             roiH = s.roiH,
-            captureFloor = s.captureFloor,
         )
         val f = File(shareDir(), "${s.baseName}_data.csv")
         AnalysisCsvWriter.write(f, sweep, frames, metadata)
@@ -720,8 +718,6 @@ class ShareCenter(private val host: ResultViewerActivity) {
          * reusing the one on screen.
          */
         val buildReportAt: (Int, FloatArray) -> com.indicvision.semper.report.ReportData?,
-        /** The floor the frames were captured at; null for an imported analysis. */
-        val captureFloor: CaptureNoiseFloor? = null,
         val referenceName: String = "",
         val strainMethod: String = "VSG",
         val subset: Int = 41,

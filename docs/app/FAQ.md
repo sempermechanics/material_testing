@@ -17,13 +17,11 @@ App ↔ FAQ map: [FAQ_LINKS.md](FAQ_LINKS.md).
 | Section | Anchor | Opened from |
 |---------|--------|-------------|
 | Lossy formats | [jpeg-warning](#jpeg-warning) | Wizard step 1 chip |
-| Speckle contrast | [speckle-contrast](#speckle-contrast) | Wizard chip; capture speckle fail **Why?** |
-| Measurement floor | [noise-floor](#noise-floor) | Capture floor dialog **ⓘ** / **Why?**; result viewer caption |
-| Lighting & accuracy | [lighting-and-accuracy](#lighting-and-accuracy) | Linked from measurement floor; reports |
+| Speckle contrast & size | [speckle-contrast](#speckle-contrast) | Wizard chips; speckle readout |
+| Lighting & accuracy | [lighting-and-accuracy](#lighting-and-accuracy) | Reports |
 | Strain field stats | [strain-field-stats](#strain-field-stats) | Result viewer; reports |
-| Imaging pipeline | [imaging-pipeline](#imaging-pipeline) | Capture ISP / denoise snackbars |
 | Frame size mismatch | [frame-size-mismatch](#frame-size-mismatch) | Wizard step 2 chip |
-| ROI too small | [roi-too-small](#roi-too-small) | Wizard / capture ROI snackbar **Why?** |
+| ROI too small | [roi-too-small](#roi-too-small) | Wizard ROI snackbar **Why?** |
 | Sweep subset range | [sweep-subset-range](#sweep-subset-range) | Sweep plan chip |
 | Sweep empty plan | [sweep-empty-plan](#sweep-empty-plan) | Sweep plan chip |
 | Engine: decorrelation | [engine-features](#engine-features) | Engine failure **Why?**; lattice node |
@@ -49,16 +47,19 @@ lossless (JPEG, HEIC, etc.).
 **Why it matters:** Lossy compression adds blocking artefacts and softens speckle
 edges. Displacement can still run, but strain noise and failed subsets rise.
 
-**What to do:** Re-export or re-capture as **PNG** or **TIFF** when accuracy matters.
-For phone capture, use the in-app recorder (PNG stills) instead of pulling JPEGs
-from the gallery.
+**What to do:** Re-export or re-shoot as **PNG** or **TIFF** when accuracy matters.
+On a phone, shoot in a camera mode that writes lossless stills rather than pulling
+JPEGs out of the gallery.
 
 ---
 
 ## speckle-contrast {#speckle-contrast}
 
-**When you see it:** Low SSSIG chip in the wizard, or **Speckle contrast is too
-low** after the capture test shot (**Why?** opens this section).
+**When you see it:** Either of the two speckle chips in the wizard's first step
+(**Why?** opens this section). They report different faults and are worth telling
+apart.
+
+### Low speckle contrast
 
 **Why it matters:** DIC tracks small windows of random pattern. If gradients inside
 a subset are weak, correlation fails or wanders.
@@ -68,72 +69,31 @@ a subset are weak, correlation fails or wanders.
 - Paint a finer, high-contrast speckle (black on white or white on black).
 - Improve **lighting** — even, diffuse light; avoid glare and deep shadows in the ROI.
 - Focus sharply on the speckled surface.
-- Draw the contrast ROI on the busiest part of the pattern.
+- Draw the ROI over the busiest part of the pattern.
+
+### Speckle size
+
+Under the subset slider the wizard reports how large your speckles actually
+measure, in pixels of the frame you imported. Anything wrong with the *size*
+of the pattern is flagged on step 1, beside the images — the only fix is a
+different photograph. Anything wrong with the *subset* is flagged on step 2,
+beside the slider that fixes it. The iDICs *Good Practices Guide for
+Digital Image Correlation* asks for dots spanning **3 to 9 px**, and the app
+measures yours from the reference frame's own autocorrelation.
+
+| What it says | What it means | What to do |
+|---|---|---|
+| Below 3 px | The pattern is too fine for this frame to resolve. It aliases, and points can fail to correlate at all. | Shoot closer, or spray a coarser pattern. |
+| 3–9 px | Nothing to change. | — |
+| Above 9 px | It will correlate, but the extra pixels buy no extra accuracy, and a subset large enough to span the dots leaves you fewer measurement points across the ROI. | A finer pattern, or shoot from further back. |
+| Subset spans too few speckles | A subset should cover about three dots. Fewer than that and it looks much like its neighbours, so it can correlate confidently against the wrong place. | Raise the subset size to the value the chip names — the chip sits under the slider on step 2, so it clears as you move it. |
+
+Contrast and size are independent: a pattern can be crisp and black-on-white and
+still be far too fine, and the contrast chip will say nothing about it. That is why
+both are reported.
 
 See [lighting-and-accuracy](#lighting-and-accuracy) for how much light changes
 measured strain noise.
-
----
-
-## noise-floor {#noise-floor}
-
-**When you see it:** After a good test-shot ROI, the app captures a short **static
-burst** (2–5 stills) and shows a **measurement floor** dialog:
-
-| Floor | Dialog |
-|-------|--------|
-| **At or below ~1 mε** | Large **measurement floor** value (e.g. **402 µε**), plain-language body, **Continue**, **ⓘ** for this FAQ |
-| **Above ~1 mε** | Red **Results will be unreliable**, same large floor value (e.g. **1.0 mε**), **Record anyway** (primary), **Retry test shot**, **Why?** (does not dismiss the dialog) |
-
-Other outcomes: **Readings will not settle** (motion or flicker) and **The image
-is drifting** (steady shift) — retry after stabilising the rig; **Why?** still
-links here.
-
-### What the number means
-
-The specimen is **not loaded yet**. Every displacement in the burst is treated as
-**error**, not real strain. The app correlates burst frames against the first burst
-frame over your contrast ROI, takes the **median** displacement scatter σ across
-pairs, and converts it to strain at a **15 px gauge**:
-
-```
-floor (microstrain) = √2 × σ_px / 15 × 10⁶
-```
-
-**Display:** values below **1 mε** show as **µε** (e.g. 402 µε); at or above 1 mε
-as **mε** (e.g. 1.0 mε). Same number, different unit for readability.
-
-**Gate:** **1 mε** is the warning line. Above it, strain smaller than the floor is
-mostly noise — the app warns strongly but still lets you **Record anyway** and
-stamps the floor on the **PDF**, **CSV**, and session.
-
-### What the dialog is telling you to do
-
-- **Finer strain may not show** below the floor — that is the smallest change the
-  setup can reliably resolve on this burst.
-- **Add light** or **measure over a larger area** (larger subset / ROI) to lower
-  the floor. See [lighting-and-accuracy](#lighting-and-accuracy).
-
-### How the floor is measured (not the heatmap)
-
-The floor comes from a **coarse probe grid** over the ROI during the burst — not
-from the strain heatmap after loading. It is a **displacement-noise** estimate,
-one number for the whole setup.
-
-### Burst vs exported PNGs
-
-The dialog measures a **pre-recording burst** (frames are then deleted). Gallery
-`reference.png` and `frame_*.png` come from the **recording session** later. The
-formula is the same; the **images are not**. The value stamped on your **CSV/PDF**
-is authoritative for what the run was captured at. Offline re-analysis of exported
-PNGs may read higher or lower — especially in bright light — without indicating a
-bug. Dim runs often agree closely; bright/medium can diverge when burst frames
-were tighter in time than later recording stills.
-
-### Result viewer
-
-On strain fields, a caption under the colour bar repeats the floor when it was
-within limits, or the report warning when you recorded past it.
 
 ---
 
@@ -203,7 +163,6 @@ min, max, and scatter. They answer different questions.
 | **Mean / median** | Average / middle Exx in the field | Stay **near 0 mε** — looks fine even when the run is noisy |
 | **Min / max** | Single worst points in the field | **Spike** (±100–800 mε) from outliers, drift, or bad subsets — **misleading alone** |
 | **Robust σ (MAD)** | Typical point-to-point scatter | **Best single accuracy read** — tracks lighting and subset |
-| **Measurement floor** | Capture-time displacement noise | Smallest strain the **setup** can trust; compare robust σ **to** the floor |
 
 ### Patterns from the lighting study
 
@@ -225,29 +184,6 @@ heatmap colour scale uses percentiles (p02–p98); CSV extrema are raw.
 
 ---
 
-## imaging-pipeline {#imaging-pipeline}
-
-**When you see it:** After the floor gate — one snackbar naming the costliest
-imaging setting the phone **refused to lock**, or a **frames were smoothed**
-warning when neighbour correlation on the burst difference image is high.
-
-**Why it matters:** DIC needs pixel-level stability frame to frame. OIS, EIS, ZSL
-merge, spatial denoise, sharpening, tone mapping, AWB drift, and scene modes can
-shift or blur speckle between stills even when the app asked for a manual pipeline.
-
-**What to do:**
-
-- Prefer a **manual / pro** camera path when available; disable beauty / scene modes.
-- Retry on a phone that honours more keys, or accept the warning and use a **larger
-  subset** and **more light**.
-- Smoothed frames: the measured noise variance can look **better than reality** —
-  treat the floor as optimistic and read [strain-field-stats](#strain-field-stats).
-
-Each refusal string in the app names one effect (e.g. lens stabiliser will not
-switch off). **Why?** on the snackbar opens this section.
-
----
-
 ## frame-size-mismatch {#frame-size-mismatch}
 
 **When you see it:** Wizard step 2 — deformed frames differ in pixel size from the
@@ -256,8 +192,8 @@ reference.
 **Why it matters:** Subset positions are in reference pixels; a size change breaks
 the grid unless frames are rescaled (not automatic).
 
-**What to do:** Re-export all frames at the same resolution, or re-capture with
-fixed resolution settings.
+**What to do:** Re-export all frames at the same resolution, or re-shoot with a
+fixed resolution setting.
 
 ---
 
@@ -383,8 +319,8 @@ successfully.
 
 **When you see it:** Not enough memory to decode a full-field frame.
 
-**What to do:** Close other apps; open a smaller analysis; reduce ROI or resolution
-at capture.
+**What to do:** Close other apps; open a smaller analysis; reduce the ROI or shoot
+at a lower resolution.
 
 ---
 

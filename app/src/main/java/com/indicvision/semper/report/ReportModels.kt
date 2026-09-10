@@ -1,7 +1,6 @@
 package com.indicvision.semper.report
 
 import android.graphics.Bitmap
-import com.indicvision.semper.data.CaptureNoiseFloor
 
 data class ReportData(
     val sessionId: String,
@@ -31,14 +30,6 @@ data class ReportData(
 
     /** Traceability, e.g. "v1.4 (12) • arm64-v8a". Null when unavailable. */
     val appBuild: String? = null,
-
-    /**
-     * The strain floor the frames were captured at, when they were captured by
-     * this app rather than imported. Null means no burst measured one — which
-     * the cover states plainly rather than leaving blank, because a reader who
-     * sees no floor should not assume a good one.
-     */
-    val captureFloor: CaptureNoiseFloor? = null,
 
     /**
      * How much of this frame's displacement was the whole scene moving. Null

@@ -1019,7 +1019,6 @@ class ResultViewerActivity : AppCompatActivity() {
             summary = if (isSweep) null else summaryHelper.animation,
             summaryBounds = { index -> if (isSweep) null else summaryHelper.boundsFor(index) },
             buildReportAt = { index, frameData -> buildReportData(index, frameData) },
-            captureFloor = sessionRecord?.captureFloor,
             referenceName = intent.getStringExtra(DicKeys.REF_NAME).orEmpty(),
             strainMethod = intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG",
             subset = intent.getIntExtra(DicKeys.SUBSET_SIZE, 41),
@@ -1087,25 +1086,7 @@ class ResultViewerActivity : AppCompatActivity() {
         } else {
             getString(R.string.viewer_stats_plain_fmt, maxText, minText, meanText, unit)
         }
-        detailStats += floorCaption(index)
         tvStatsCaption.text = detailStats
-    }
-
-    /**
-     * The strain floor this session was captured at, appended beside the
-     * result it qualifies — never shown alone, and never for a displacement
-     * (px) field, since the floor is quoted in strain and only means
-     * something next to a strain number.
-     *
-     * Reuses [CaptureNoiseFloor.warning] for an exceeded floor (the same
-     * sentence the report carries) and the capture screen's own floor
-     * wording otherwise, so the number reads the same wherever it appears.
-     */
-    private fun floorCaption(index: Int): String {
-        val floor = sessionRecord?.captureFloor
-        if (!DicResult.isStrainFieldIndex(index) || floor == null) return ""
-        val sentence = floor.warning() ?: getString(R.string.capture_noise_floor_readout, floor.label())
-        return "\n" + sentence
     }
 
     private fun updateNavButtons() {

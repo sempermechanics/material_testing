@@ -267,6 +267,33 @@
                         android:stepSize="2"
                         android:value="41" />
 
+                    <!-- Measured speckle size for the loaded reference. Shown
+                         whether or not it is a problem: it is the number the
+                         subset recommendation rests on, and a user who can see
+                         it can judge their own pattern. Gone until measured. -->
+                    <TextView
+                        android:id="@+id/tvSpeckleReadout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:textColor="@color/viewer_chrome_muted"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        tools:text="Speckle measures about 5.4 px across." />
+
+                    <!-- The subset is too small to span three speckles. Lives
+                         here rather than on step 1 with the size chips: this
+                         is the one speckle message whose fix is the slider
+                         directly above it, so moving the slider clears it in
+                         place instead of somewhere the user cannot see. -->
+                    <include
+                        android:id="@+id/speckleSpanWarnRow"
+                        layout="@layout/warn_chip_row"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone" />
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
