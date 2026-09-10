@@ -132,6 +132,10 @@ class _Query:
         "<=": operator.le,
         ">": operator.gt,
         ">=": operator.ge,
+        # Membership, not comparison: the left side is the stored list.
+        "array_contains": lambda stored, wanted: (
+            isinstance(stored, (list, tuple)) and wanted in stored
+        ),
     }
 
     def where(self, field, op, value):
@@ -171,6 +175,8 @@ class _Query:
         """
         if field not in data:
             return op == "!=" if "!" in op else False
+        if op == "array_contains":
+            return cls._OPS[op](data[field], value)
         try:
             return cls._OPS[op](data[field], value)
         except TypeError:

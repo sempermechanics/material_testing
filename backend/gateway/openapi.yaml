@@ -286,6 +286,41 @@ paths:
           type: string
       responses:
         '200': { description: OK }
+  /v1/sessions/{sid}/bundle:
+    get:
+      operationId: downloadSessionBundle
+      description: >
+        The whole analysis as one zip, at the user step-up tier: a second
+        factor and a recent sign-in stand in for device attestation, so this
+        is reachable from a browser where /v1/files/{fileId}/content is not.
+        Entries are <role>/<name> plus a manifest.json, stored rather than
+        deflated. Streamed straight from Drive, so it needs the same longer
+        deadline as the single-file proxy rather than the 60s JSON budget.
+      produces:
+        - application/zip
+      # Operation-level backend MUST restate address + APPEND_PATH_TO_ADDRESS —
+      # omitting path_translation defaults to CONSTANT_ADDRESS and breaks routing.
+      x-google-backend:
+        address: __CLOUD_RUN_URL__
+        jwt_audience: __CLOUD_RUN_URL__
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 300.0
+      x-google-quota:
+        metricCosts:
+          download-requests: 1
+      parameters:
+        - name: sid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid ID token }
+        '403': { description: "mfa_required, reauth_required, or feature_not_licensed" }
+        '404': { description: session_not_found }
+        '409': { description: "file_not_uploaded — nothing in this analysis finished uploading" }
+        '429': { description: Rate limited }
+        '502': { description: Drive download failed }
   /v1/files/{fileId}/complete:
     post:
       operationId: completeFile
@@ -629,6 +664,19 @@ paths:
         '200': { description: OK }
         '403': { description: email_not_verified }
         '404': { description: license_not_found or seat_not_found }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses:
+    get:
+      operationId: institutionMyLicenses
+      description: >
+        Which institution licences the caller administers, found from their
+        verified email rather than from a licence id they already hold. This
+        is what lets one sign-in page route somebody to their own roster.
+        An empty list is the ordinary answer and is not an error. No
+        /v1/campus alias: the route is new, so nothing pre-rename calls it.
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
         '429': { description: Rate limited }
   /v1/institutions/licenses/{licenseId}/seats:
     post:

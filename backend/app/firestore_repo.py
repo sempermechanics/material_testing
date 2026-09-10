@@ -1791,6 +1791,37 @@ def get_license(license_id: str) -> dict | None:
     return snap.to_dict() if snap.exists else None
 
 
+def list_licenses_administered_by(email: str) -> list[dict]:
+    """Every live institution licence that names this address in `adminEmails`.
+
+    The inverse of `is_institution_admin`, which can only answer for a licence
+    id you already hold. Sign-in has an address and nothing else, so without
+    this a member of institution IT has no way to reach their own roster
+    except by being told the id out of band.
+
+    `kind` and `status` are filtered in Python rather than added to the query:
+    one address administers a handful of licences at most, and each extra
+    equality clause on top of `array_contains` costs another composite index
+    for no measurable gain.
+
+    Same redaction as `institution_license_summary` — no key plaintext.
+    """
+    wanted = (email or "").strip().lower()
+    if not wanted:
+        return []
+    out = []
+    q = db().collection("licenses").where("adminEmails", "array_contains", wanted)
+    for d in q.stream():
+        data = d.to_dict() or {}
+        if normalize_kind(data.get("kind")) != KIND_INSTITUTION:
+            continue
+        if (data.get("status") or "") == "revoked":
+            continue
+        out.append(_license_public(d.id, data))
+    out.sort(key=lambda lic: lic["id"])
+    return out
+
+
 def find_user_by_email(email: str) -> dict | None:
     """The account holding this email, or None. Used to add a roster member.
 
@@ -2755,6 +2786,47 @@ def list_session_files_all(sid: str, *, page_size: int = 200) -> list:
                 "sizeBytes": f.get("sizeBytes", 0),
                 "sha256": f.get("sha256"),
                 "status": f.get("status"),
+            })
+        if len(docs) < page_size:
+            break
+        cursor = docs[-1]
+    return out
+
+
+def list_session_artifacts(sid: str, *, page_size: int = 200) -> list:
+    """Every *uploaded* file in a session, with the Drive id needed to read it.
+
+    Separate from `list_session_files_all` on purpose. That projection feeds
+    `GET /v1/me/export`, where a Drive file id is a handle to bytes the caller
+    is not being handed and so is deliberately withheld; this one exists only
+    for code that is about to fetch those bytes on the caller's behalf. Keeping
+    them apart means adding a field here can never widen the export.
+
+    Pending files are skipped: they have no `driveFileId` yet, and an archive
+    is of what was stored, not of what was promised.
+    """
+    out = []
+    query = db().collection("files").where("sessionId", "==", sid).order_by("__name__")
+    cursor = None
+    while True:
+        page_q = query.limit(page_size)
+        if cursor is not None:
+            page_q = page_q.start_after(cursor)
+        docs = list(page_q.stream())
+        if not docs:
+            break
+        for d in docs:
+            f = d.to_dict()
+            if f.get("status") != statuses.FILE_COMPLETED or not f.get("driveFileId"):
+                continue
+            out.append({
+                "fileId": d.id,
+                "name": f.get("name"),
+                "role": f.get("role"),
+                "sizeBytes": f.get("sizeBytes", 0),
+                "sha256": f.get("sha256"),
+                "driveFileId": f.get("driveFileId"),
+                "createdAt": f.get("createdAt"),
             })
         if len(docs) < page_size:
             break

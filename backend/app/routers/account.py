@@ -49,6 +49,12 @@ def me(user=Depends(current_user)):
             "expiresAt": summary["expiresAt"],
             "graceEndsAt": summary["graceEndsAt"],
             "inGrace": summary["inGrace"],
+            # Seating and the lease are here so a page that renders "you hold
+            # a floating seat until 14:20" needs this call alone. `/v1/config`
+            # carries them too, but it is the larger answer and a browser
+            # asking "what am I?" should not have to fetch limits to find out.
+            "seating": summary["seating"],
+            "leaseExpiresAt": summary["leaseExpiresAt"],
         },
     }
 

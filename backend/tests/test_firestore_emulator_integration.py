@@ -630,3 +630,33 @@ def test_the_first_device_wins_an_unbound_lock(emulator_repo):
     demoted = emulator_repo.revalidate_device_lock(dict(user), loser)
     assert demoted["mode"] == "demo"
     assert emulator_repo.get_license(license_id)["deviceIdLock"] == locked
+
+
+def test_an_address_finds_the_licences_it_administers(emulator_repo):
+    """`array_contains` against a real Firestore, not the double.
+
+    The fake store answers membership queries in Python, so it would happily
+    serve a query the real index cannot. This is the one that proves the
+    single-clause shape works unaided — and that `kind` and `status` really
+    can be filtered afterwards without a composite index.
+    """
+    tag = uuid.uuid4().hex[:8]
+    address = f"it-{tag}@lab.org"
+    mine = emulator_repo.create_institution_license(
+        domain_lock=f"{tag}.lab.org", admin_emails=[address, f"other-{tag}@lab.org"],
+        created_by_uid="admin", max_seats=3,
+    )["license"]["id"]
+    revoked = emulator_repo.create_institution_license(
+        domain_lock=f"{tag}.old.org", admin_emails=[address],
+        created_by_uid="admin", max_seats=1,
+    )["license"]["id"]
+    emulator_repo.revoke_license(revoked, "admin")
+    emulator_repo.create_institution_license(
+        domain_lock=f"{tag}.other.org", admin_emails=[f"nobody-{tag}@lab.org"],
+        created_by_uid="admin", max_seats=1,
+    )
+
+    found = [lic["id"] for lic in emulator_repo.list_licenses_administered_by(address)]
+
+    assert found == [mine], "a revoked or foreign licence reached the listing"
+

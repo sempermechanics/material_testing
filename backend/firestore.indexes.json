@@ -36,6 +36,15 @@
       ]
     },
     {
+      "//": "list_licenses_administered_by — a single sign-in page has an address and has to work out whether it belongs to institution IT. array_contains on a repeated field is served by the automatic single-field index; declared anyway so every query in firestore_repo.py has an entry here. kind and status are filtered in Python precisely so this stays a single-clause query and needs no composite.",
+      "collectionGroup": "licenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "adminEmails", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
       "//": "find_user_by_email — institution IT adds a roster member by email, and seats are keyed by uid. Single equality, which Firestore can serve from automatic single-field indexes; declared anyway so every query in firestore_repo.py has an entry here.",
       "collectionGroup": "users",
       "queryScope": "COLLECTION",

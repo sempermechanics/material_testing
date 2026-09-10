@@ -54,6 +54,33 @@ def institution_admin_context(license_id: DocumentId, user: dict = Depends(curre
     return {"user": user, "license_id": license_id}
 
 
+@router.get("/v1/institutions/licenses")
+def list_my_licenses(user=Depends(current_user)):
+    """Which institution licences this caller administers.
+
+    Every other route here is addressed by a licence id the caller already
+    holds. Sign-in holds an address and nothing else, so without this a member
+    of institution IT can only reach their roster by being told the id out of
+    band — which is how it worked, and why the console had a text box asking
+    for one. This is the read that lets a single sign-in page decide where to
+    send somebody.
+
+    No `/v1/campus/*` alias: the route is new, so nothing pre-rename can be
+    calling it, and an alias nobody uses is an alias to deprecate later.
+
+    Verified email, same as `institution_admin_context` — `adminEmails` names
+    addresses, and an address nobody has proved they own must not be able to
+    read a customer's roster. An empty list is the ordinary answer for the
+    overwhelming majority of accounts and is not an error.
+    """
+    if not rate_limit.institution_bucket.allow(user["uid"]):
+        raise HTTPException(429, errors.RATE_LIMITED)
+    if not user.get("emailVerified"):
+        raise HTTPException(403, errors.EMAIL_NOT_VERIFIED)
+    licenses = repo.list_licenses_administered_by(user.get("email") or "")
+    return {"licenses": licenses}
+
+
 @router.get("/v1/institutions/licenses/{license_id}/seats")
 @router.get("/v1/campus/licenses/{license_id}/seats", include_in_schema=False)  # pre-rename alias
 def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_context)):

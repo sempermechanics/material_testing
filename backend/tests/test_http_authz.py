@@ -1,13 +1,15 @@
 """HTTP authz tests with DEV_INSECURE_AUTH off — 401/403 trust boundaries."""
 import base64
 import hashlib
+import io
+import zipfile
 
 import fake_firestore
 import pytest
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app import audit, deps, firestore_repo as repo
+from app import audit, deps, drive, firestore_repo as repo, statuses
 from app.config import settings
 
 
@@ -366,3 +368,67 @@ async def test_the_holder_step_up_authorises_nothing_staff_can_do(secure, client
     assert r.status_code == 403
     assert r.json()["detail"] == "not_admin"
     assert secure._data["licenses"][license_id]["deviceIdLock"] == "old-phone"
+
+
+# --- the second thing that tier exists for -----------------------------------
+# Pulling an analysis out through a browser. `GET /v1/files/{id}/content` is
+# device-attested and stays that way; the bundle route is the same bytes at
+# the step-up tier, so the pair below is what stops a bare token draining an
+# account from anywhere.
+
+
+def _holder_with_an_analysis(secure, monkeypatch, claims: dict) -> str:
+    """The holder above, plus one uploaded analysis they own."""
+    _holder_token(secure, monkeypatch, claims)
+    sid = "sess-h1"
+    secure._data["sessions"] = {sid: {"uid": "holder-1", "specimen": "coupon-1",
+                                      "status": statuses.SESSION_COMPLETED}}
+    secure._data["files"] = {f"{sid}_bundle_Session.zip": {
+        "sessionId": sid, "uid": "holder-1", "role": "bundle", "name": "Session.zip",
+        "sizeBytes": 4, "sha256": "aa", "status": statuses.FILE_COMPLETED,
+        "driveFileId": "drive-1",
+    }}
+    monkeypatch.setattr(drive, "access_token", lambda: "tok")
+    monkeypatch.setattr(drive, "open_download",
+                        lambda token, fid, **kw: _Chunks(b"DATA"))
+    return sid
+
+
+class _Chunks:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def iter_chunks(self, chunk_size: int = 0):
+        yield self._payload
+
+
+@pytest.mark.asyncio
+async def test_a_bundle_is_refused_to_a_bare_id_token(secure, client, monkeypatch):
+    sid = _holder_with_an_analysis(secure, monkeypatch, {})
+
+    r = await client.get(f"/v1/sessions/{sid}/bundle",
+                         headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 403
+    assert r.json()["detail"] == "mfa_required"
+
+
+@pytest.mark.asyncio
+async def test_a_bundle_reaches_a_browser_that_proved_a_second_factor(
+    secure, client, monkeypatch,
+):
+    """No device signature is possible here at all — that is the point."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    sid = _holder_with_an_analysis(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 60,
+    })
+
+    r = await client.get(f"/v1/sessions/{sid}/bundle",
+                         headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 200, r.text
+    assert zipfile.ZipFile(io.BytesIO(r.content)).read("bundle/Session.zip") == b"DATA"

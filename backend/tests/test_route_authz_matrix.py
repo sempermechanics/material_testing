@@ -82,6 +82,11 @@ EXPECTED = {
     ("DELETE", "/v1/sessions/{sid}"): DEVICE,
     ("GET", "/v1/sessions/{sid}/uploads"): DEVICE_MIGRATING,    # returns Drive upload URIs
     ("GET", "/v1/sessions/{sid}/files"): USER,
+    # The whole analysis out through a browser. USER_STEPUP because the
+    # device-attested single-file route it stands in for is DEVICE, and the
+    # data is the same data — a bare ID token must not be enough to drain an
+    # account from anywhere.
+    ("GET", "/v1/sessions/{sid}/bundle"): USER_STEPUP,
     ("GET", "/v1/files/{file_id}/content"): DEVICE,
     ("POST", "/v1/files/{file_id}/complete"): DEVICE,
     ("GET", "/v1/admin/users"): ADMIN,                          # read-only: no device needed
@@ -106,6 +111,12 @@ EXPECTED = {
     # is exactly what a stolen one is, and this decides which device the
     # licence follows.
     ("POST", "/v1/licenses/unbind"): USER_STEPUP,
+    # "Which licences do I administer" — USER, not INSTITUTION_ADMIN, because
+    # it is the question that finds the licence id every other route here
+    # already requires. It cannot be scoped to a licence the caller has not
+    # named yet; the handler scopes it to the caller's own verified address
+    # instead, and answers an empty list for everybody else.
+    ("GET", "/v1/institutions/licenses"): USER,
     ("POST", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("GET", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("PATCH", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
