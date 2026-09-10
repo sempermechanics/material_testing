@@ -42,6 +42,7 @@ object AnalysisVideoExtractHelper {
         cacheDir: File,
         tvResult: TextView,
         overlayHelper: ComputeOverlayHelper,
+        preferKeyframes: Boolean = true,
         onApplied: (AppliedResult) -> Unit,
         onFinished: () -> Unit,
     ): Job {
@@ -58,6 +59,7 @@ object AnalysisVideoExtractHelper {
                     endMs = endMs,
                     maxFrames = DicSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity)),
                     cacheDir = cacheDir,
+                    preferKeyframes = preferKeyframes,
                     onProgress = { percent, status ->
                         overlayHelper.update(percent = percent.toFloat(), status = status)
                     },
