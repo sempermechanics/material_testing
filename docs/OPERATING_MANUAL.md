@@ -789,12 +789,22 @@ POST /v1/institutions/licenses/{licenseId}/seats
 {"email": "student@university.edu"}
 ```
 
-There is **no key for members to type**. The person must have signed in to
-Semper at least once — everyone can sign up and use Demo, so this is the same
-step that gave them Demo — and `404 user_not_found` means exactly that: ask
-them to sign in, then add them. On an assigned key they are licensed
-immediately; on a floating one they become eligible and take a seat when they
-work.
+There is **no key for members to type**, and the person does **not** need an
+account first. An address that already has one takes a seat immediately; an
+address that does not becomes a pending invitation, redeemed by itself the
+first time that person signs in. IT works from a list of addresses and cannot
+make people sign up on cue, so the roster is built from the list you have.
+
+The response says which of the two happened — exactly one of `seat` and
+`invite` comes back — and the seats console labels an unclaimed place
+*invited* rather than showing an error. An invitation holds no seat and counts
+against nothing until it is claimed. On an assigned key a seat is licensed
+immediately; on a floating one it makes the member eligible, and they take a
+seat when they work.
+
+The refusals worth recognising are `409 invite_exists` (that address is
+already promised a place on a different licence — withdraw the other
+invitation first) and `409 license_seats_exhausted` on an assigned key.
 
 **One address for everybody.** `sempermechanics.com/login` is the only web
 address anyone needs — a customer, an IT contact, or Semper staff. It signs
