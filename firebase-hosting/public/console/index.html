@@ -3,31 +3,182 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Console · Semper DIC</title>
+  <!-- This page is also served at a rewritten address (see firebase.json), where the browser's own base would be the site root and every relative path here — the stylesheet, auth.js, the links onward — would resolve one directory too high. Naming the base makes both addresses behave identically. -->
+  <base href="/console/" />
+  <title>Sign in · Semper DIC</title>
   <link rel="stylesheet" href="console.css" />
 </head>
 <body>
   <header>
     <span class="brand">Semper&nbsp;DIC</span>
-    <h1>Console</h1>
+    <h1>Sign in</h1>
+    <span class="spacer"></span>
+    <span id="who" class="muted"></span>
+    <button id="signIn">Sign in with Google</button>
+    <button id="signOut" class="secondary" hidden>Sign out</button>
   </header>
+
   <main>
-    <section class="card">
-      <h2><a href="institution/">Institution seats</a></h2>
-      <p class="muted">
-        For IT staff named on an institution licence: add and remove members,
-        see who is using a seat right now, put someone on hold, and let a member
-        move to a new device.
-      </p>
-    </section>
-    <section class="card">
-      <h2><a href="operator/">Operator</a></h2>
-      <p class="muted">
-        For Semper staff: issue, extend and revoke licences, manage an
-        institution's roster, and approve accounts. Needs two-factor
-        authentication — the page walks you through enrolling one.
-      </p>
-    </section>
+    <div id="app" hidden>
+      <p id="status" class="muted"></p>
+
+      <!-- Shown only when the account can open more than one dashboard, or
+           when we could not establish which it should be. -->
+      <section class="card" id="choices" hidden>
+        <h2 id="choicesTitle">Where would you like to go?</h2>
+        <p class="muted" id="choicesHelp"></p>
+        <div id="links"></div>
+      </section>
+    </div>
+
+    <p id="signedOut" class="muted">
+      Sign in and you will be taken to the right place: your own licence and
+      analyses, your institution's seats, or the operator console.
+    </p>
   </main>
+
+  <script type="module">
+    /* The front door. One address to give anybody — a customer, an IT
+     * contact, a colleague on the Semper side — that lands each of them
+     * somewhere useful without their having to know which of three pages is
+     * theirs.
+     *
+     * Identity decides, and identity is what the backend already knows: the
+     * `role` it returns for the caller, and whether any live institution
+     * licence names their address. Nothing is inferred from the email domain
+     * or remembered in the browser, so an account that changes hands routes
+     * correctly the first time.
+     */
+    import { requireSignIn, api, setStatus, esc } from "./auth.js";
+
+    const $ = (id) => document.getElementById(id);
+
+    const DESTINATIONS = {
+      operator: {
+        href: "operator/",
+        title: "Operator",
+        blurb: "Issue, extend and revoke licences, drive any institution's " +
+               "roster, and approve accounts. Needs two-factor authentication.",
+      },
+      institution: {
+        href: "institution/",
+        title: "Institution seats",
+        blurb: "Add and remove members, see who is using a seat right now, " +
+               "put someone on hold, and let a member move to a new device.",
+      },
+      account: {
+        href: "account/",
+        title: "Your account",
+        blurb: "Your licence, your seat, and your saved analyses.",
+      },
+    };
+
+    requireSignIn(async () => {
+      $("signedOut").hidden = true;
+      setStatus("Finding your dashboard…");
+      try {
+        const [me, administered] = await Promise.all([
+          api("/v1/me"),
+          licencesAdministered(),
+        ]);
+        route(me, administered);
+      } catch (e) {
+        // /v1/me failing is the one thing this page cannot work around: with
+        // no answer about the caller there is nothing to route on. Offer all
+        // three rather than guessing at one.
+        setStatus(`Could not tell where to send you: ${e.message}`, true);
+        offer(["operator", "institution", "account"], {
+          title: "Choose a dashboard",
+          help: "Each one will say plainly if it is not yours.",
+        });
+      }
+    });
+
+    /**
+     * The institution licences this address administers, and whether the
+     * answer is trustworthy.
+     *
+     * A refusal is an ordinary answer here: an unverified address cannot be
+     * named as an administrator in the first place, so `email_not_verified`
+     * means "none" as surely as an empty list does. Any other failure is a
+     * fault, and routing on it would silently send an IT contact to the wrong
+     * page — so it is reported as uncertainty instead.
+     */
+    async function licencesAdministered() {
+      try {
+        const out = await api("/v1/institutions/licenses");
+        return { licenses: out.licenses || [], certain: true };
+      } catch (e) {
+        if (e.message === "email_not_verified") return { licenses: [], certain: true };
+        return { licenses: [], certain: false, why: e.message };
+      }
+    }
+
+    function route(me, administered) {
+      const targets = [];
+      if (me.role === "admin") targets.push("operator");
+      if (administered.licenses.length) targets.push("institution");
+
+      if (!administered.certain) {
+        setStatus(
+          `Could not check whether you administer an institution licence ` +
+          `(${administered.why}).`,
+          true,
+        );
+        offer([...targets, "institution", "account"], {
+          title: "Choose a dashboard",
+          help: "Each one will say plainly if it is not yours.",
+        });
+        return;
+      }
+
+      if (targets.length > 1) {
+        setStatus("");
+        offer([...targets, "account"], {
+          title: `Signed in as ${me.email || "you"}`,
+          help: "Your account can open more than one of these.",
+        });
+        return;
+      }
+
+      // Exactly one place to be.
+      const only = targets[0] || "account";
+
+      // `?stay=1` asks for the menu instead of the forward, so that a link
+      // back here from one console does not bounce straight out of it again.
+      if (new URLSearchParams(location.search).has("stay")) {
+        setStatus("");
+        offer([only, "account"], { title: `Signed in as ${me.email || "you"}`, help: "" });
+        return;
+      }
+
+      // Deep-link the one licence an IT contact administers, so the common
+      // case never asks them to paste an id they were sent months ago.
+      const one = administered.licenses.length === 1 ? administered.licenses[0].id : "";
+      const href = only === "institution" && one
+        ? `institution/?license=${encodeURIComponent(one)}`
+        : DESTINATIONS[only].href;
+      // replace, not assign: the back button should leave the console, not
+      // land on a page that immediately forwards again.
+      location.replace(href);
+    }
+
+    /** Render the switcher, in the order given, each destination once. */
+    function offer(names, { title, help }) {
+      $("choicesTitle").textContent = title;
+      $("choicesHelp").textContent = help;
+      $("links").innerHTML = [...new Set(names)]
+        .map((name) => {
+          const d = DESTINATIONS[name];
+          return `
+            <section class="card">
+              <h2><a href="${esc(d.href)}">${esc(d.title)}</a></h2>
+              <p class="muted">${esc(d.blurb)}</p>
+            </section>`;
+        })
+        .join("");
+      $("choices").hidden = false;
+    }
+  </script>
 </body>
 </html>

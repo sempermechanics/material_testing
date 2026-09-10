@@ -33,9 +33,6 @@ import {
   multiFactor,
   getMultiFactorResolver,
   TotpMultiFactorGenerator,
-  PhoneAuthProvider,
-  PhoneMultiFactorGenerator,
-  RecaptchaVerifier,
 } from "/__/firebase/12.4.0/firebase-auth.js";
 import { firebaseConfig } from "/__/firebase/init.js";
 import { API_BASE_URL } from "./config.js";
@@ -59,51 +56,24 @@ function ask(message) {
 /**
  * Complete a second-factor challenge raised during sign-in or re-auth.
  *
- * Both factor types Firebase offers are handled, because an operator who
- * already enrolled a phone must not be locked out of the console by a page
- * that only speaks TOTP — they would have no way in to enrol anything else.
+ * TOTP only. The project enrols no SMS factor, so a phone hint cannot reach
+ * this code: handling one meant carrying an invisible reCAPTCHA and two more
+ * SDK imports for a branch nothing can enter. An unrecognised factor is
+ * reported rather than half-handled — a page that cannot challenge a factor
+ * should say so, not fail obscurely inside the SDK.
  */
 async function resolveChallenge(error) {
   const resolver = getMultiFactorResolver(auth, error);
-  const hint = resolver.hints[0];
+  const hint = resolver.hints.find(
+    (h) => h.factorId === TotpMultiFactorGenerator.FACTOR_ID,
+  );
   if (!hint) throw new Error(ERR_NO_SECOND_FACTOR);
 
-  if (hint.factorId === TotpMultiFactorGenerator.FACTOR_ID) {
-    const code = ask("Enter the 6-digit code from your authenticator app:");
-    if (!code) throw new Error(ERR_CANCELLED);
-    return resolver.resolveSignIn(
-      TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code),
-    );
-  }
-
-  if (hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID) {
-    const verifier = invisibleRecaptcha();
-    const verificationId = await new PhoneAuthProvider(auth).verifyPhoneNumber(
-      { multiFactorHint: hint, session: resolver.session },
-      verifier,
-    );
-    const code = ask(`Enter the code sent to ${hint.phoneNumber || "your phone"}:`);
-    if (!code) throw new Error(ERR_CANCELLED);
-    return resolver.resolveSignIn(
-      PhoneMultiFactorGenerator.assertion(
-        PhoneAuthProvider.credential(verificationId, code),
-      ),
-    );
-  }
-  throw new Error(ERR_NO_SECOND_FACTOR);
-}
-
-let recaptcha = null;
-function invisibleRecaptcha() {
-  if (recaptcha) return recaptcha;
-  let host = document.getElementById("recaptcha");
-  if (!host) {
-    host = document.createElement("div");
-    host.id = "recaptcha";
-    document.body.appendChild(host);
-  }
-  recaptcha = new RecaptchaVerifier(auth, host, { size: "invisible" });
-  return recaptcha;
+  const code = ask("Enter the 6-digit code from your authenticator app:");
+  if (!code) throw new Error(ERR_CANCELLED);
+  return resolver.resolveSignIn(
+    TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code),
+  );
 }
 
 /** Sign in, resolving a second-factor challenge if one is raised. */
@@ -249,6 +219,72 @@ export async function api(path, options = {}, { allowStepUp = true } = {}) {
     }
     throw e;
   }
+}
+
+/**
+ * A call that answers with bytes rather than JSON — today, a session bundle.
+ *
+ * `api()` cannot serve this: it reads the whole response as text and parses
+ * it as JSON, which would both corrupt a zip and throw on its first byte. The
+ * step-up retry is why this is not a bare `fetch` either — the bundle route
+ * sits at the user step-up tier, so a tab left open past the re-authentication
+ * window answers `reauth_required` to a download the caller is entitled to.
+ *
+ * Failures are still JSON, so the error path reads the body the way `api()`
+ * does and throws the backend's own code.
+ */
+export async function apiBlob(path, options = {}) {
+  const send = async () => {
+    const user = auth.currentUser;
+    if (!user) throw new Error("not_signed_in");
+    const token = await user.getIdToken();
+    const resp = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: { Authorization: `Bearer ${token}`, ...(options.headers || {}) },
+    });
+    if (!resp.ok) {
+      let code = `http_${resp.status}`;
+      // A refusal from the gateway rather than the app is not JSON, and the
+      // status line is then the whole of what we know.
+      try {
+        code = JSON.parse(await resp.text()).detail || code;
+      } catch { /* keep http_<status> */ }
+      throw new Error(code);
+    }
+    return resp.blob();
+  };
+
+  try {
+    return await send();
+  } catch (e) {
+    if (e.message === "reauth_required") {
+      await stepUp();
+      return send();
+    }
+    throw e;
+  }
+}
+
+/**
+ * Hand a Blob to the browser as a download.
+ *
+ * The backend streams the archive so that its own memory stays flat; the
+ * browser still holds the whole thing, because a page cannot write to the
+ * filesystem incrementally without the File System Access API, which is not
+ * available everywhere and would need a permission prompt of its own. An
+ * analysis is tens of megabytes, so this is a cost worth paying for a
+ * download that works the same way in every browser.
+ */
+export function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Not immediately: Safari reads the href after the click returns.
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 /** Write a message into the page's status line. */
