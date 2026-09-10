@@ -8,6 +8,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.File
 
 /**
@@ -23,6 +24,10 @@ import java.io.File
  * next person to touch that parser.
  */
 @RunWith(RobolectricTestRunner::class)
+// Pinned like every other Robolectric test here: Robolectric ships no
+// android-all jar for targetSdk 36, and without this the runner throws before
+// any test method runs.
+@Config(sdk = [34])
 class SessionStoreLegacyFloorTest {
 
     private lateinit var context: Context
