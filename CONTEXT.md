@@ -434,6 +434,25 @@ key over the licence a sibling had just granted. It is a compare-and-set now.
 Three emulator tests cover the three races (one redeemer, one invite, one
 device).
 
+*Four conditions that race left open are closed.* A claim now deletes the
+auto-minted Demo key it supersedes (`_drop_superseded_demo`, after the commit
+rather than inside it — reading the account in the claim's own transaction
+locks it, and six concurrent sign-ins then starved each other out), so the
+reverse interleaving stops leaving redeemed records nobody holds; the
+discriminator is `mode: demo` **and** `createdByUid: "system"` on the licence,
+never the holder's mode mirror, which revocation deliberately leaves
+demoted-in-place. A claim that only lost the
+race answers with a private `_CONTENDED` rather than the public
+"seats exhausted"/"already redeemed" codes, logged at `info`, so contention
+stops reading in the logs like a licence with no room left; the wire codes are
+unchanged, mapped back by `_public_claim_error`. A failed claim re-reads the
+account instead of returning the caller's pre-race copy, which matters for the
+consoles, since a browser sends no `X-Device-Id` and the Demo mint's re-read
+never runs. And revoking withdraws the licence's outstanding invites, so
+mint → revoke → re-mint to the same address delivers; `_write_invite` also
+overwrites an invite whose licence is revoked or gone, since such an invite
+promises nothing.
+
 Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
 §20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,
 [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md),

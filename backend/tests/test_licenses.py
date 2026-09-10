@@ -5,6 +5,8 @@ import pytest
 
 import fake_firestore
 
+from google.api_core.exceptions import Aborted
+
 from app import deps, firestore_repo as repo
 from app.config import settings
 from app.licenses import canonicalize, generate_key, key_hash, key_prefix
@@ -1679,3 +1681,176 @@ def test_a_demo_key_never_overwrites_a_licence_granted_a_moment_earlier(store):
     assert store._data["users"]["solo-1"]["licenseId"] == license_id
     # And no orphan Demo record left behind pointing at nobody.
     assert list(store._data["licenses"]) == [license_id]
+
+
+# ============================================================ raced sign-ins
+# Delivery by invite means several requests can arrive at one account at the
+# same moment, each holding the copy it read before the others wrote. These
+# cover what the losers leave behind and what they are told.
+
+
+def _always_contended(monkeypatch):
+    """Make every transaction lose the race, as one does under real load."""
+    def _decorator(fn):
+        def _lost(*_a, **_k):
+            raise Aborted("too much contention")
+        return _lost
+    monkeypatch.setattr(repo.firestore, "transactional", _decorator)
+
+
+def test_a_demo_key_minted_first_is_removed_when_the_licence_lands(store):
+    """The other interleaving. The losing request commits its Demo key before
+    the winner claims, so the Demo record is left redeemed with nobody
+    pointing at it — a live-looking key in the operator listing for every
+    raced sign-in."""
+    store._data["users"] = {}
+    license_id = _mint_individual()["license"]["id"]
+    demo_id = repo.ensure_demo_license(
+        _signed_in(store, "solo-1", "solo@lab.org"), "and-1",
+    )["licenseId"]
+    assert demo_id != license_id
+
+    patch = repo._individual_member_patch(
+        license_id, store._data["licenses"][license_id],
+    )
+    assert repo.claim_individual_license(license_id, "solo-1", "solo@lab.org", patch) == ""
+
+    assert store._data["users"]["solo-1"]["licenseId"] == license_id
+    assert list(store._data["licenses"]) == [license_id]
+
+
+def test_a_seat_also_clears_the_demo_key_it_replaces(store):
+    """Same rule on the other claim. IT adding someone who has been using
+    demo moves their pointer, and the key they leave is nobody's."""
+    store._data["users"] = {}
+    demo_id = repo.ensure_demo_license(
+        _signed_in(store, "new-1", "newcomer@university.edu"), "and-1",
+    )["licenseId"]
+    license_id = _mint_institution()["license"]["id"]
+
+    err, seat, _invite = repo.add_institution_member(license_id, "newcomer@university.edu")
+
+    assert (err, seat["uid"]) == ("", "new-1")
+    assert store._data["users"]["new-1"]["licenseId"] == license_id
+    assert demo_id not in store._data["licenses"]
+
+
+def test_a_revoked_licence_a_demoted_holder_points_at_is_kept(store):
+    """The discriminator has to be the licence, not the holder's mode.
+
+    Revocation demotes in place and leaves the pointer alone, so the account
+    sits at `mode: demo` addressing a real, revoked licence. Reading the
+    mirror would delete the revocation record itself."""
+    store._data["users"] = {}
+    first_id = _mint_individual()["license"]["id"]
+    repo.ensure_entitlement(_signed_in(store, "solo-1", "solo@lab.org"), None)
+    repo.revoke_license(first_id, "admin")
+    assert store._data["users"]["solo-1"]["mode"] == "demo"
+    assert store._data["users"]["solo-1"]["licenseId"] == first_id
+
+    second_id = _mint_individual()["license"]["id"]
+    patch = repo._individual_member_patch(
+        second_id, store._data["licenses"][second_id],
+    )
+    assert repo.claim_individual_license(second_id, "solo-1", "solo@lab.org", patch) == ""
+
+    assert store._data["licenses"][first_id]["status"] == "revoked"
+    assert store._data["users"]["solo-1"]["licenseId"] == second_id
+
+
+def test_a_claim_that_loses_answers_with_the_account_as_stored(store, monkeypatch):
+    """No device id in play — the shape of every console request, since a
+    browser sends no `X-Device-Id`. `ensure_demo_license` returns early there,
+    so nothing else re-reads, and the caller's pre-race copy would otherwise
+    be served: demo for one request to someone who is licensed."""
+    store._data["users"] = {}
+    license_id = _mint_individual()["license"]["id"]
+    stale = _signed_in(store, "solo-1", "solo@lab.org")
+    # What the request that beat us to it already committed.
+    store._data["users"]["solo-1"].update(
+        repo._individual_member_patch(license_id, store._data["licenses"][license_id]),
+    )
+    _always_contended(monkeypatch)
+
+    out = repo.ensure_entitlement(dict(stale), None)
+
+    assert out["licenseId"] == license_id
+    assert out["mode"] == "licensed"
+
+
+def test_contention_is_not_reported_as_an_exhausted_licence(store, monkeypatch, caplog):
+    """Both claims fail closed on a lost race, which is right — but saying so
+    with the public code made a busy sign-in read in the logs exactly like a
+    licence that genuinely has no room left."""
+    store._data["users"] = {}
+    license_id = _mint_individual()["license"]["id"]
+    user = _signed_in(store, "solo-1", "solo@lab.org")
+    _always_contended(monkeypatch)
+
+    assert repo.claim_individual_license(
+        license_id, "solo-1", "solo@lab.org", {"mode": "licensed"},
+    ) == repo._CONTENDED
+    assert repo.claim_seat(license_id, "solo-1", "solo@lab.org", "", {}) == repo._CONTENDED
+
+    with caplog.at_level("INFO"):
+        repo.claim_pending_invite(dict(user))
+    records = [r for r in caplog.records if "invite claim" in r.message]
+    assert [r.levelname for r in records] == ["INFO"]
+    assert "seats_exhausted" not in caplog.text
+
+    # The wire is unchanged: a caller who has to answer a route still gets a
+    # code that route already maps.
+    assert repo._public_claim_error(
+        repo._CONTENDED, "license_seats_exhausted") == "license_seats_exhausted"
+    assert repo._public_claim_error("license_revoked", "x") == "license_revoked"
+
+
+def test_revoking_frees_the_address_for_a_replacement_licence(store):
+    """Mint against the wrong terms, revoke, mint again — the most ordinary
+    correction there is, and it used to produce a licence nobody could
+    receive."""
+    store._data["users"] = {}
+    first_id = _mint_individual()["license"]["id"]
+    repo.revoke_license(first_id, "admin")
+    assert store._data["licenseInvites"] == {}
+
+    second = _mint_individual()
+
+    assert second["inviteError"] == ""
+    invites = list(store._data["licenseInvites"].values())
+    assert [i["licenseId"] for i in invites] == [second["license"]["id"]]
+
+    out = repo.ensure_entitlement(_signed_in(store, "solo-1", "solo@lab.org"), None)
+    assert out["licenseId"] == second["license"]["id"]
+    assert out["mode"] == "licensed"
+
+
+def test_an_invite_left_by_a_dead_licence_is_overwritten(store):
+    """The second layer. However a stale invite arose — a revoke that predates
+    the cleanup, a licence deleted by hand — it promises nothing, because the
+    claim discards it on sight. Refusing on its behalf only makes the
+    replacement undeliverable too."""
+    store._data["users"] = {}
+    revoked_id = _mint_individual()["license"]["id"]
+    # Straight to the document, so revoke_license's own cleanup is not what is
+    # under test here.
+    store._data["licenses"][revoked_id]["status"] = "revoked"
+    assert _mint_individual()["inviteError"] == ""
+
+    gone_id = _mint_individual("second@lab.org")["license"]["id"]
+    del store._data["licenses"][gone_id]
+    assert _mint_individual("second@lab.org")["inviteError"] == ""
+
+
+def test_revoking_an_institution_licence_withdraws_its_invites(store):
+    store._data["users"] = {}
+    license_id = _mint_institution()["license"]["id"]
+    repo.add_institution_member(license_id, "one@university.edu")
+    repo.add_institution_member(license_id, "two@university.edu")
+    other_id = _mint_individual()["license"]["id"]
+    assert len(store._data["licenseInvites"]) == 3
+
+    repo.revoke_license(license_id, "admin")
+
+    remaining = list(store._data["licenseInvites"].values())
+    assert [i["licenseId"] for i in remaining] == [other_id]

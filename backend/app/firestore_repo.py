@@ -79,6 +79,25 @@ def _lost_to_contention(exc: BaseException) -> bool:
     return isinstance(exc, ValueError) and isinstance(exc.__cause__, Aborted)
 
 
+#: What the claim transactions answer when they only lost the race. Private
+#: to this module: `errors.py` names wire codes, and this one never reaches the
+#: wire. It exists so contention stops being indistinguishable in the logs from
+#: a licence that genuinely has no room left. Callers that hand a code to a
+#: route put it through `_public_claim_error` first, so no route's error
+#: mapping changes.
+_CONTENDED = "_contended"
+
+
+def _public_claim_error(err: str, fallback: str) -> str:
+    """The wire code for a claim failure, contention included.
+
+    Contention fails closed as `fallback` — granting a seat or a licence we
+    could not commit is the one outcome that breaks the cap, and a caller who
+    lost the race succeeds on their next request.
+    """
+    return fallback if err == _CONTENDED else err
+
+
 def db() -> firestore.Client:
     """Process-wide Firestore singleton.
 
@@ -1191,6 +1210,48 @@ def release_lease(user: dict) -> tuple[str, dict | None]:
     return "", resolve_user_config(merged)
 
 
+def _drop_superseded_demo(uid: str, license_id: str) -> None:
+    """Delete the auto-minted Demo key an account has just stopped pointing at.
+
+    `ensure_demo_license` is a compare-and-set, so a request that lost the
+    race can no longer stamp Demo *over* a real licence. The opposite order is
+    what is left: the loser commits its Demo key first, the winning claim then
+    moves the account's pointer, and the Demo record survives
+    `status: "redeemed"` with nobody holding it — indistinguishable in
+    `GET /v1/admin/licenses` from a live key, one more of them for every raced
+    sign-in.
+
+    This runs after a claim commits, deliberately not inside it. Reading
+    `users/{uid}` in the claim's transaction looked like the tidy answer, and
+    it is wrong: a transaction that reads and then writes one document locks
+    it, so several requests arriving at one account together — the shape of
+    every app launch, and of the invite delivery path — abort each other
+    instead of queueing. Measured against the emulator, six concurrent
+    sign-ins starved out completely and the account landed on Demo. A plain
+    query and a guarded delete take no locks, and the worst a lost race costs
+    here is that the record survives to the next claim: the condition being
+    closed is litter in the operator listing, never a wrong entitlement.
+
+    The discriminator is the licence document, never the holder's `mode`
+    mirror. `_drop_user_to_demo_if_licensed` leaves a revoked holder demoted
+    in place and still pointing at the real, revoked licence, so a mirror test
+    would delete revocation records — considerably worse than the leak this
+    closes. Only `ensure_demo_license` writes `mode: demo` and
+    `createdByUid: "system"` together.
+    """
+    snap = db().collection("users").document(uid).get()
+    if not snap.exists or ((snap.to_dict() or {}).get("licenseId") or "") != license_id:
+        # Something has moved the account on again. Whatever it holds now is
+        # not this claim's to reason about.
+        return
+    for doc in db().collection("licenses").where("redeemedByUid", "==", uid).stream():
+        if doc.id == license_id:
+            continue
+        lic = doc.to_dict() or {}
+        if _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system":
+            doc.reference.delete()
+
+
 def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch: dict,
                invite_ref=None) -> str:
     """Take a seat on the roster, atomically. Returns an error code, or "".
@@ -1277,14 +1338,17 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
         return ""
 
     try:
-        return _claim(transaction)
+        err = _claim(transaction)
     except Exception as exc:  # noqa: BLE001
         if not _lost_to_contention(exc):
             raise
         # Fail closed. Handing out a seat we could not commit is the one
         # outcome that breaks the cap; a caller who lost the race just tries
         # again, and on a pool with room they win immediately.
-        return "license_seats_exhausted"
+        return _CONTENDED
+    if not err:
+        _drop_superseded_demo(uid, license_id)
+    return err
 
 
 def _individual_member_patch(license_id: str, lic: dict) -> dict:
@@ -1354,14 +1418,17 @@ def claim_individual_license(license_id: str, uid: str, email: str,
         return ""
 
     try:
-        return _claim(transaction)
+        err = _claim(transaction)
     except Exception as exc:  # noqa: BLE001
         if not _lost_to_contention(exc):
             raise
         # Fail closed, as claim_seat does: granting a licence we could not
         # commit is the outcome that breaks single-redeemer. The caller retries
         # on their next request, which for the invite path is moments away.
-        return "license_already_redeemed"
+        return _CONTENDED
+    if not err:
+        _drop_superseded_demo(uid, license_id)
+    return err
 
 
 def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic: dict, ref, key: str):
@@ -1383,7 +1450,7 @@ def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic:
 
     err = claim_seat(license_id, uid, email, device_id, user_patch)
     if err:
-        return err, None
+        return _public_claim_error(err, "license_seats_exhausted"), None
 
     merged = _apply_patch(user, user_patch)
     return "", resolve_user_config(merged)
@@ -1602,10 +1669,12 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
                 "updatedAt": firestore.SERVER_TIMESTAMP,
             })
         ref.update({"seatsUsed": 0})
+        _delete_license_invites(license_id)
     else:
         redeemer = lic.get("redeemedByUid")
         if redeemer and _license_mode(lic) == MODE_LICENSED:
             _drop_user_to_demo_if_licensed(redeemer, license_id)
+        _delete_license_invites(license_id, lic.get("emailLock") or "")
     return _license_public(license_id, {**lic, "status": "revoked"})
 
 
@@ -1794,6 +1863,44 @@ def invite_institution_member(
     return _write_invite(license_id, email, invited_by_uid)
 
 
+def _invite_is_stale(license_id: str) -> bool:
+    """True when the licence an invite points at can never be claimed.
+
+    `claim_pending_invite` deletes such an invite the moment the invited
+    person signs in, so it holds no promise to anyone. Refusing a new invite
+    on its behalf only makes the replacement licence undeliverable too.
+    """
+    if not license_id:
+        return True
+    lic = get_license(license_id)
+    return not lic or (lic.get("status") or "active") == "revoked"
+
+
+def _delete_license_invites(license_id: str, email_lock: str = "") -> None:
+    """Drop the promises a revoked licence can no longer keep.
+
+    Revoking used to leave `licenseInvites` untouched, which turned the most
+    ordinary correction there is — mint against the wrong address, revoke,
+    mint again for the right one — into a licence nobody could receive:
+    `_write_invite` refused an address already promised elsewhere, so the
+    second mint was minted and undeliverable.
+
+    An individual licence has at most one invite, at the key derived from its
+    `emailLock`, so it costs one delete guarded on `licenseId` — the same
+    guard `revoke_institution_invite` uses, and for the same reason. Without
+    an address to hash, and for an institution licence, it is the query
+    instead, over a list that is small by construction.
+    """
+    if email_lock:
+        ref = _invite_ref(email_lock)
+        snap = ref.get()
+        if snap.exists and ((snap.to_dict() or {}).get("licenseId") or "") == license_id:
+            ref.delete()
+        return
+    for doc in db().collection(_INVITES).where("licenseId", "==", license_id).stream():
+        doc.reference.delete()
+
+
 def _write_invite(license_id: str, email: str,
                   invited_by_uid: str) -> tuple[str, dict | None]:
     """Record the promise itself, having already established the licence is
@@ -1814,12 +1921,14 @@ def _write_invite(license_id: str, email: str,
     if existing.exists:
         held = existing.to_dict() or {}
         # Re-inviting to the same licence is a no-op rather than an error, so
-        # IT pasting a list twice is harmless. A different licence is refused:
-        # silently moving someone between institutions would be the wrong
-        # default, and the address is the only identity we have to go on.
-        if (held.get("licenseId") or "") != license_id:
+        # IT pasting a list twice is harmless. A different *live* licence is
+        # refused: silently moving someone between institutions would be the
+        # wrong default, and the address is the only identity we have to go
+        # on. A dead one is overwritten — see `_invite_is_stale`.
+        if (held.get("licenseId") or "") == license_id:
+            return "", _invite_public(ref.id, held)
+        if not _invite_is_stale(held.get("licenseId") or ""):
             return "invite_exists", None
-        return "", _invite_public(ref.id, held)
 
     data = {
         "email": address,
@@ -1925,11 +2034,26 @@ def claim_pending_invite(user: dict) -> dict:
         patch = _individual_member_patch(license_id, lic)
         err = claim_individual_license(license_id, uid, address, patch, invite_ref=ref)
     if err:
-        # Seats exhausted, already redeemed, or lost to contention. Leave the
-        # invite in place: the first two may be resolved by ops, and the third
-        # resolves itself on the next request.
-        log.warning("invite claim failed uid=%s license=%s err=%s", uid, license_id, err)
-        return user
+        # Leave the invite in place either way: seats exhausted or already
+        # redeemed may be resolved by ops, and contention resolves itself on
+        # the next request. Only the first two are worth a warning — logging
+        # a lost race at the same level made a busy sign-in read exactly like
+        # a licence with no room left.
+        if err == _CONTENDED:
+            log.info("invite claim lost the race uid=%s license=%s", uid, license_id)
+        else:
+            log.warning("invite claim failed uid=%s license=%s err=%s", uid, license_id, err)
+        # Answer with the account as stored, not with the caller's copy. The
+        # copy was read before this request began, and the request that beat
+        # us to the claim has already granted the entitlement; returning the
+        # stale dict serves one request as demo to someone who is licensed.
+        # `ensure_demo_license` usually rescues this by re-reading, but it
+        # returns early when there is no device id to mint against — which is
+        # every browser request, since the consoles send no `X-Device-Id`.
+        stored = db().collection("users").document(uid).get()
+        if not stored.exists:
+            return user
+        return {**user, **(stored.to_dict() or {}), "uid": uid}
     return {**user, **patch, "uid": uid}
 
 
@@ -1980,7 +2104,7 @@ def add_institution_member(license_id: str, email: str,
     err = claim_seat(license_id, uid, user.get("email") or email, "",
                      _institution_member_patch(license_id, lic))
     if err:
-        return err, None, None
+        return _public_claim_error(err, "license_seats_exhausted"), None, None
     seats = list_institution_seats(license_id)
     return "", next((s for s in seats if s["uid"] == uid), None), None
 

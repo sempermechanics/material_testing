@@ -1281,6 +1281,38 @@ the invite delete commit together or neither does.
 Adding a member consumes **no floating slot**. A slot is taken by checking out
 a lease.
 
+Revoking a licence withdraws the invites it issued — one keyed delete for an
+individual licence, guarded on `licenseId` exactly as `revoke_institution_invite`
+is, and the `licenseId` query for an institution one. Without it the most
+ordinary correction there is — mint against the wrong address, revoke, mint
+again — produced a licence nobody could receive, because `_write_invite`
+refuses an address already promised elsewhere. That refusal now applies only
+to a promise still worth keeping: an invite whose licence is revoked or gone
+is overwritten, since `claim_pending_invite` discards such an invite on sight
+and it therefore entitles no one.
+
+A claim also deletes the auto-minted Demo key it supersedes. Several requests
+arrive at one account together at app launch; `ensure_demo_license` is a
+compare-and-set, so a loser cannot stamp Demo *over* a licence, but a loser
+that commits first would otherwise leave a redeemed Demo record pointing at
+nobody — indistinguishable in `GET /v1/admin/licenses` from a live key, and
+one more per raced sign-in. `claim_seat` and `claim_individual_license` call
+`_drop_superseded_demo` once their transaction has committed: it re-reads the
+account, confirms the pointer is theirs, and deletes any other licence
+redeemed by that uid carrying `mode: demo` **and** `createdByUid: "system"` —
+the pair only `ensure_demo_license` writes.
+
+Two choices in that sentence are load-bearing. **After the commit, not
+inside it**: putting the account read in the claim's transaction makes it
+read *and* write one document, which takes a lock, and concurrent requests
+for one account then abort each other rather than queueing — measured
+against the emulator, six concurrent sign-ins starved out completely and the
+account landed on Demo. The sweep is a plain query and a guarded delete, so
+it takes no locks, and the worst a lost race costs is a record surviving to
+the next claim. **The licence and not the holder's mode mirror**: revocation
+demotes in place and leaves the pointer alone, so a mirror test would delete
+revocation records.
+
 #### Checkout, and why there is no heartbeat route
 
 `POST /v1/licenses/checkout` claims or extends. Re-calling it **is** the

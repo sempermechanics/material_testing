@@ -759,7 +759,11 @@ still in Demo, the device lock is the next thing to check.
 If minting reports the address is **already promised another licence**, the
 new licence exists and its key still redeems it, but the invite belongs to the
 earlier licence and the new one will not attach at sign-in. Revoke whichever
-of the two is wrong.
+of the two is wrong, then mint the replacement: revoking withdraws that
+licence's outstanding invites, which frees the address. Minting also recovers
+by itself from an invite left behind by a licence that is already revoked or
+deleted — such an invite promises nothing, since the claim discards it on
+sight, so a fresh mint overwrites it.
 
 **Assigned or floating seats.** An institution key is one or the other, set by
 `seating` at mint:

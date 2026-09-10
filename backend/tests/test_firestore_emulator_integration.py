@@ -591,17 +591,16 @@ def test_an_individual_invite_is_consumed_once_under_concurrency(emulator_repo):
     stored = emulator_repo.get_license(license_id)
     assert stored["redeemedByUid"] == uid
     assert emulator_repo.list_institution_invites(license_id) == [], "invite was not consumed"
-    # A loser that commits its Demo key before the winner claims the real one
-    # leaves that Demo record behind — the upgrade overwrites the account's
-    # pointer, not the document. Litter, not a wrong entitlement, so the
-    # assertion is that exactly one *licensed* record is redeemed by this
-    # account and it is the one the account points at.
-    licensed = [
+    # Strictly one record, of any mode. A loser that commits its Demo key
+    # before the winner claims the real one used to leave that Demo document
+    # behind — redeemed, pointed at by nobody, and indistinguishable in the
+    # operator listing from a live key. `_drop_superseded_demo` clears it once
+    # the claim has committed and the pointer is the claim's own.
+    held = [
         doc.id for doc in emulator_repo.db().collection("licenses").stream()
         if (doc.to_dict() or {}).get("redeemedByUid") == uid
-        and (doc.to_dict() or {}).get("mode") == "licensed"
     ]
-    assert licensed == [license_id], f"{len(licensed)} licences entitled one account"
+    assert held == [license_id], f"{len(held)} licences redeemed by one account"
 
 
 def test_the_first_device_wins_an_unbound_lock(emulator_repo):
