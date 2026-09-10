@@ -796,6 +796,21 @@ them to sign in, then add them. On an assigned key they are licensed
 immediately; on a floating one they become eligible and take a seat when they
 work.
 
+**One address for everybody.** `sempermechanics.com/login` is the only web
+address anyone needs — a customer, an IT contact, or Semper staff. It signs
+them in and forwards them to whichever dashboard is theirs: staff to the
+operator console, an address named in a licence's `adminEmails` to that
+roster, and everyone else to their own account page. Somebody who is both a
+Semper operator and runs a licence gets a choice rather than a guess.
+
+**Every user has an account page.** `/account` shows what the person holds —
+mode, kind, key prefix, term, expiry and grace, whether they hold a floating
+seat and until when — and how many analyses they have stored. From it they can
+give a floating seat back, move their licence to a different device, and
+download any stored analysis as one zip. The last two need a second factor;
+the page offers to enrol an authenticator app if there is none. Point a
+customer here before answering "am I licensed?" by hand.
+
 **The seats console.** Institution IT can do all of the below from
 `/console/institution` on the Semper auth site instead of curl — sign in with
 the address named in `adminEmails`, paste the licence id, and the roster,
@@ -838,7 +853,7 @@ empty the device lock:
 
 | Who | How |
 |---|---|
-| The holder | "Use Semper on a different device" — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes, and is allowed once every `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30). |
+| The holder | **Use Semper on a different device** on their own `/account` page — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes, and is allowed once every `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30). |
 | Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}`, or **New device** on the seat in `/console/institution`. |
 | Semper staff | **New device** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
 
@@ -859,6 +874,20 @@ request bind the licence, and only then restore. Restoring first fails as
 bound to the old phone. If someone reports "restore says I'm not licensed on
 my new phone", they are almost certainly at step 3 without step 2: check
 `GET /v1/admin/licenses` for whether the lock has actually moved.
+
+**Getting an analysis out through a browser.** A licensed user can download a
+stored analysis as a single zip from their `/account` page — images, results
+and reports together, ready to import back into the app on any device they are
+signed in on. It is `GET /v1/sessions/{sid}/bundle`, and it needs a second
+factor and a recent sign-in for the same reason the operator console does: a
+browser cannot produce the device attestation the phone uses, and this hands
+out data. Demo accounts are refused (`feature_not_licensed`); so is an
+analysis with nothing finished uploading (`file_not_uploaded`). A large
+analysis takes a while to arrive — the archive is streamed as it is built, so
+a download that begins is not yet a download that finished.
+
+This is the second route to moving someone's work to a new phone, alongside
+the app's own restore: pull the bundle here and import it.
 
 **Revoking the whole key** (Semper staff, e.g. a contract ends):
 `POST /v1/admin/licenses/{id}/revoke`. For an individual key, that one person

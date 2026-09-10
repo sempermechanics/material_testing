@@ -548,7 +548,7 @@ the way it does.
 | Floating seats, leases, pool accounting | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `checkout_lease`, `release_lease`, `claim_seat`, `_sweep_expired_leases` (§20.7) |
 | Duration, grace, renewal fan-out | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
 | Individual + institution license logic | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
-| Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth, no dashboard UI; also serves the `/v1/campus/*` aliases (§20.4, §20.5) |
+| Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth; the surface behind `/console/institution`, and equally usable from a script. Also serves the `/v1/campus/*` aliases (§20.4, §20.5) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
 | Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check, `device_or_legacy_reader` (§4) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
@@ -958,15 +958,16 @@ see [§20.7](#207-floating-seats).
 |---|---|---|---|
 | **Demo** | Default for every approved account; `ensure_demo_license` issues a Demo-plan license on first verified+device-bound login | email + device (so a Demo key can't be shared) | nobody — it's the floor |
 | **Licensed, individual** | Semper staff mint against one address (`POST /v1/admin/licenses`, `kind=individual`); it attaches when that address signs in and binds to the first device it signs in on | one email + one device | Semper staff only (`admin_user` + `verified_device`) |
-| **Licensed, institution** | Semper staff mint a key (`kind=institution`) with a `domainLock` and a list of `adminEmails`; any verified `@domainLock` member self-activates and claims a seat | a verified-email **domain**, per-member seat locked to one device | Institution IT, self-service, via the three `/v1/institutions/licenses/{id}/seats*` routes — **no dashboard UI ships**; IT drives these with their own tooling/curl |
+| **Licensed, institution** | Semper staff mint a key (`kind=institution`) with a `domainLock` and a list of `adminEmails`; any verified `@domainLock` member self-activates and claims a seat | a verified-email **domain**, per-member seat locked to one device | Institution IT, self-service, via the three `/v1/institutions/licenses/{id}/seats*` routes — from `/console/institution` (§20.8) or their own tooling |
 
 **Institution IT has a console** at `/console/institution` (§20.8); the routes
 below remain the whole API surface behind it, and are equally usable from a
 script. The institution seat-management routes
 (`GET`/`PATCH`/`DELETE /v1/institutions/licenses/{licenseId}/seats...`, documented in
 [`gateway/openapi.yaml`](../../backend/gateway/openapi.yaml)) are the entire
-self-service surface. Building a web console for institution IT is future
-work, not part of this feature.
+self-service surface. `GET /v1/institutions/licenses` answers the question
+that comes before all of them — *which* licences does this address administer
+— so nobody has to be told an id before they can open the console (§20.11).
 
 ### 20.1 Delivery, and activation as the fallback
 
@@ -1368,13 +1369,15 @@ timestamp says so.
 
 ### 20.8 The consoles, and what a browser may do
 
-Two static pages on the existing auth Hosting site
+Static pages on the existing auth Hosting site
 (`firebase-hosting/public/console/`). No build step, no framework, no
-`package.json` — the site is served as files, and a toolchain for two pages
+`package.json` — the site is served as files, and a toolchain for four pages
 would cost more than it saves.
 
 | Path | Who | What it can do |
 |---|---|---|
+| `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs (§20.11) |
+| `/account` (`/console/account`) | Anyone with an account | Read the licence, its term, the seat and the stored analyses; return a floating seat, move the licence to another device, download an analysis. The last two need a second factor |
 | `/console/institution` | IT named in a licence's `adminEmails` | Add/remove roster members, withdraw an unclaimed invitation, see who holds a seat, hold a member, clear a device lock |
 | `/console/operator` | Semper staff **with a second factor** | Issue individual and institution licences, extend a term, revoke a key, unbind a licence or a seat from its device, drive any roster, approve accounts |
 
@@ -1409,7 +1412,14 @@ attestation-only admin. The route authz table records it as its own tier,
 `ADMIN_STEPUP`, rather than folding it into `DEVICE_ADMIN`, so the trade stays
 visible to a reviewer.
 
-Console enrolment is **TOTP**, and the page shows the secret for manual entry
+Console enrolment is **TOTP only**. No SMS factor is enabled on the project,
+so `auth.js` challenges TOTP and reports anything else rather than
+half-handling a factor it cannot complete — which is why the phone branch, the
+invisible reCAPTCHA and two SDK imports are gone from it. Leaving SMS off in
+the Firebase console is part of the configuration, not an oversight: a factor
+nobody can be challenged for is a factor somebody can be locked out by.
+
+The page shows the secret for manual entry
 rather than a QR code: every QR service is somebody else's server and the
 payload is the TOTP secret itself, so fetching a picture would hand away the
 factor protecting licence issuance.
@@ -1422,7 +1432,14 @@ The institution console needs no second factor because
 IT working from a browser or curl, not from the licensed device, and reaching
 only the licences that name the caller.
 
-**CSP is relaxed for `/console/**` alone.** Every other page — the legal pages,
+**CSP is relaxed for `/console/**` and the two addresses that rewrite into
+it.** A Hosting header is matched against the *request* path and knows nothing
+about a rewrite, so `/login` and `/account` would otherwise be served the
+strict global policy and could reach neither Firebase Auth nor the API; the
+policy is restated for them verbatim in `firebase.json`. For the same reason
+both pages carry a `<base href>`: a relative path in them would resolve
+against the site root at the pretty address and one directory too high.
+Every other page — the legal pages,
 the auth continue-URLs — keeps the strict `default-src 'self'`. Only
 `connect-src` is widened, for the API and Firebase Auth's token endpoints;
 `script-src` is **not**, because the Firebase SDK is served from Hosting's own
@@ -1524,3 +1541,93 @@ should sequence it rather than leaving it to chance:
 
 `test_restore_on_a_new_device_waits_for_the_lock_to_move` pins the ordering;
 it fails against a `clear_device_lock` without the mode restore above.
+
+### 20.11 One sign-in, and pulling an analysis out through a browser
+
+Three dashboards existed and nothing said which was yours. `/login` is the one
+address to hand to anybody: it signs the caller in, reads `GET /v1/me` and
+`GET /v1/institutions/licenses`, and forwards.
+
+| Signal | Destination |
+|---|---|
+| `role == admin` (kept in sync with `ADMIN_EMAILS` at sign-in) | operator |
+| the address is named in some live institution licence's `adminEmails` | that roster, deep-linked when there is exactly one |
+| otherwise | their own account page |
+
+Someone who is both gets a switcher rather than a guess, and so does a caller
+whose institution lookup failed for any reason other than an unverified
+address — routing on an answer we could not obtain would silently send an IT
+contact to the wrong page. Nothing is inferred from the email domain and
+nothing is cached in the browser, so an account that changes hands routes
+correctly the first time.
+
+**`GET /v1/institutions/licenses` is the inverse of `is_institution_admin`,**
+and it is a route rather than a field on `/v1/me` for a stated reason: `/v1/me`
+promises to cost no extra Firestore read, and the Android app calls it on every
+launch. Underneath, `list_licenses_administered_by` runs a single
+`array_contains` on `licenses.adminEmails` and filters kind and status in
+Python, so no composite index is needed; the index is declared in
+`firestore.indexes.json` anyway, per that file's own convention. It is
+`USER`-tier and requires a verified email — the same bar
+`institution_admin_context` sets, since an unverified address cannot be named
+as an administrator in the first place. Administering nothing is an empty list,
+not a refusal.
+
+#### The account page needs one call, not two
+
+`/v1/me`'s `license` block now carries `seating` and `leaseExpiresAt` alongside
+the term. Both were already in `license_summary`, and `/v1/config` already
+returned them — but `/v1/config` is the larger answer, and a browser asking
+"what am I?" should not have to fetch product limits to find out whether it
+holds a seat until 14:20.
+
+#### `GET /v1/sessions/{sid}/bundle`
+
+`GET /v1/files/{id}/content` and `GET /v1/me/export` are device-attested, so
+until now a browser could see that an analysis existed and not one byte of it.
+The bundle route is the browser's way out: one analysis as one zip, at the
+`USER_STEPUP` tier (§20.10) — a second factor and a recent sign-in stand in for
+the attestation a browser cannot produce.
+
+Four decisions in it are worth keeping:
+
+- **One archive over every completed artifact, not a proxy of the stored
+  `Session.zip`.** A modern session stores *two* Drive artifacts — the
+  `bundle`-role `Session.zip` and an `extras` zip — so proxying the first would
+  silently drop reports, CSV and processed images. Building the archive serves
+  modern and legacy sessions identically.
+- **`ZIP_STORED`, not deflate.** The contents are PNG and zip already;
+  compressing them again spends CPU per byte for nothing and throttles the
+  response to the compressor's speed.
+- **Streamed, never buffered.** `MAX_FILES_PER_SESSION` is 600.
+  `zipfile.ZipFile` writes into an unseekable sink that the `StreamingResponse`
+  generator drains after every Drive chunk, so memory stays flat whatever the
+  session's size; `zinfo.file_size` is set before `zf.open(…, "w")` so the
+  zip64 decision is right without a seek. `test_session_bundle.py` proves it by
+  counting drains rather than asserting it in a comment.
+- **Every refusal before the first byte.** Ownership, entitlement and the Drive
+  token are all resolved up front, because once a body has started there is no
+  status code left to send. The central directory, written last, is the
+  completion signal — a truncated transfer is detectable rather than looking
+  like a smaller but valid archive.
+
+`list_session_artifacts` is a second projection over the same `files`
+collection, deliberately kept apart from `list_session_files_all`. That one
+feeds `GET /v1/me/export`, where a Drive file id is a handle to bytes the
+caller is not being handed and is withheld on purpose; this one exists only for
+code about to fetch those bytes on the caller's behalf. Keeping them separate
+means adding a field here can never widen the GDPR export, and a test pins the
+split.
+
+The browser side is `apiBlob()` rather than `api()`, which reads every response
+as text and parses it as JSON — that would both corrupt an archive and throw on
+its first byte. It keeps the one behaviour that matters: the retry on
+`reauth_required`, so a tab left open past the re-authentication window does not
+report a refusal for a download the caller is entitled to.
+
+> **Cloud Run's request budget is the open risk.** The gateway declaration
+> gives this operation a 300s deadline, which a very large session on a slow
+> Drive could still exceed. The fallback if it becomes real is the pattern
+> already in the codebase for exactly this problem — Cloud Tasks async
+> provisioning ([`backend/app/tasks.py`](../../backend/app/tasks.py)) — minting the archive out of band and returning
+> a link.

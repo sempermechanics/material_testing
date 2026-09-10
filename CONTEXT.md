@@ -484,11 +484,46 @@ its place.
 restore — file content is device-attested, so restoring first fails as
 unlicensed on a phone the user has legitimately just moved to.
 
+**One sign-in, and a page of one's own (same branch, latest).** Three
+dashboards existed and nothing said which was yours; an end user had no page
+at all. `/login` is the front door now — it reads `GET /v1/me` and the new
+`GET /v1/institutions/licenses` and forwards: staff to the operator console, an
+address named in some live licence's `adminEmails` to that roster (deep-linked
+when there is exactly one), everyone else to the new `/account`. Both are
+Hosting rewrites into `/console/`, which is why the relaxed console CSP is
+restated for them — a header matches the request path, not the rewrite target
+— and why both pages carry a `<base href>`. This supersedes "two static
+consoles" above; there are four pages.
+
+*The listing is a route, not a field.* `GET /v1/institutions/licenses` is the
+inverse of `is_institution_admin`, kept off `/v1/me` because that route
+promises no extra Firestore read and the app calls it on every launch. One
+`array_contains` on `adminEmails`, kind and status filtered in Python so no
+composite index is needed. `/v1/me` did gain `seating` and `leaseExpiresAt`,
+both already computed, so the account page needs one call rather than two.
+
+*An analysis can leave through a browser.* `GET /v1/sessions/{sid}/bundle` at
+`USER_STEPUP` builds one `ZIP_STORED` archive over every completed artifact —
+not a proxy of the stored `Session.zip`, which would silently drop the
+`extras` zip that modern sessions also carry. It is streamed into an
+unseekable sink the response drains, so 600 files cost flat memory; every
+refusal is resolved before the first byte, since a started body has no status
+code left. `list_session_artifacts` is a second projection kept apart from the
+one feeding `/v1/me/export`, so adding a field here can never widen the GDPR
+export — a test pins the split, and another proves the streaming by counting
+drains. On the page it is `apiBlob()`, since `api()` parses every response as
+JSON.
+
+*The dead SMS branch is gone.* With the factor settled as TOTP-only, the phone
+case in `auth.js`, the invisible reCAPTCHA and two SDK imports were
+unreachable.
+
 Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
 §20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,
 [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md),
-[docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md) §3.1, and
-[docs/OPERATING_MANUAL.md](docs/OPERATING_MANUAL.md) Appendix D.
+[docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md) §3.1,
+[docs/OPERATING_MANUAL.md](docs/OPERATING_MANUAL.md) Appendix D, and
+[firebase-hosting/public/console/README.md](firebase-hosting/public/console/README.md).
 
 **Backend lock regeneration is a CI workflow now, not a local chore**
 ([#105](https://github.com/sempermechanics/semperdic-app/pull/105)). Dependabot
