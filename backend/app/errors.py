@@ -71,6 +71,11 @@ NO_LICENSE = "no_license"
 NO_FLOATING_SEAT = "no_floating_seat"
 SEATING_NOT_FLOATING = "seating_not_floating"
 EMAIL_NOT_VERIFIED = "email_not_verified"
+# Self-service device change only. Clearing a lock is not revoking — the
+# entitlement is untouched and the next device to sign in binds — so the only
+# thing that limits it is how often the holder may do it themselves. Staff and
+# IT are never subject to this.
+DEVICE_CHANGE_TOO_SOON = "device_change_too_soon"
 
 # --- institution invites ---------------------------------------------------
 # An invite reserves a roster place for an address with no account yet. It is

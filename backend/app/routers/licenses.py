@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
-from ..deps import current_user
+from ..deps import attested_or_mfa_user, current_user
 from ..models import LicenseActivate
 from ..validation import require_header_identifier
 
@@ -102,3 +102,56 @@ def release_lease(user=Depends(current_user)):
         target={"type": "lease", "id": f"{user.get('licenseId')}/{user['uid']}"},
     )
     return {"config": config}
+
+
+@router.post("/v1/licenses/unbind")
+def unbind_device(ctx=Depends(attested_or_mfa_user)):
+    """"Use Semper on a different device" — the holder's own device change.
+
+    Until now only institution IT could unbind a device, which left an
+    individual customer, and any member whose IT is slow, writing to support
+    for something they can prove they are entitled to do. Since Gap A,
+    clearing the lock is the whole operation: the licence or seat goes
+    unbound, and the next device to sign in binds it, first writer wins.
+
+    **Clearing is not revoking.** The entitlement, the seat, the lease and
+    every analysis stay exactly as they are; only the lock goes empty. Nothing
+    has to be typed on the new device.
+
+    Step-up rather than plain USER: this is worth more than a bearer token,
+    and it is reachable from a browser. But a second factor proves *who* is
+    asking, not *how often*, so it is also the one caller subject to
+    SELF_DEVICE_CHANGE_COOLDOWN_DAYS — one person could otherwise re-bind
+    daily and pass a single licence round a lab. Staff and IT are not, so a
+    support request always works.
+
+    The order on the new device matters and the app should follow it: sign in
+    (USER-tier, so `POST /v1/devices/register` works before any licence
+    binds), let the first authed request bind the lock, and only then restore.
+    File content is device-attested, so restoring first fails on a device the
+    user has legitimately just moved to.
+    """
+    user = ctx["user"]
+    if not rate_limit.license_activate_bucket.allow(user["uid"]):
+        raise HTTPException(429, errors.RATE_LIMITED)
+    license_id = user.get("licenseId") or ""
+    if not license_id:
+        raise HTTPException(404, errors.NO_LICENSE)
+    err, cleared = repo.clear_device_lock(license_id, user["uid"], actor=repo.ACTOR_SELF)
+    if err:
+        status = {
+            errors.LICENSE_NOT_FOUND: 404,
+            errors.SEAT_NOT_FOUND: 404,
+            # 429, not 403: the answer is "not yet", and the caller is told
+            # when. Nothing about their entitlement has changed.
+            errors.DEVICE_CHANGE_TOO_SOON: 429,
+        }.get(err, 403)
+        raise HTTPException(status, err)
+    audit.record(
+        user["uid"], action="LICENSE_DEVICE_UNBIND",
+        target={"type": (cleared or {}).get("scope") or "license", "id": license_id},
+        detail={k: str(v) for k, v in (cleared or {}).items()},
+    )
+    return {"licenseId": license_id, "deviceIdLock": "",
+            "previousDeviceId": (cleared or {}).get("previousDeviceId") or "",
+            "nextChangeAllowedAt": (cleared or {}).get("nextChangeAllowedAt") or ""}

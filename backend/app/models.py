@@ -332,6 +332,14 @@ class AdminLicenseUpdate(BaseModel):
     key — those decide *who* the license is for, and changing them under
     existing holders is a different operation with different consequences.
     Send only what changes; at least one field is required.
+
+    `clearDeviceLock=true` is the exception that proves the rule: the device
+    lock says *where* the licence may be used, not who for, and staff have to
+    be able to move a customer to a new phone. It is not a term — nothing is
+    mirrored onto the holder and nothing is revoked — so it travels alongside
+    the terms rather than among them, and it only applies to an individual
+    licence, whose lock lives on the licence document. An institution licence
+    keeps its locks on the seats.
     """
     expiresAt: Optional[datetime] = None
     graceDays: Optional[int] = Field(default=None, ge=0, le=365)
@@ -339,6 +347,7 @@ class AdminLicenseUpdate(BaseModel):
     maxSeats: Optional[int] = Field(default=None, gt=0, le=100000)
     maxAnalyses: Optional[int] = Field(default=None, gt=0)
     note: Optional[DisplayString] = None
+    clearDeviceLock: Optional[bool] = None
 
     @field_validator("expiresAt", "supportUntil")
     @classmethod
@@ -352,7 +361,7 @@ class AdminLicenseUpdate(BaseModel):
         if all(
             getattr(self, name) is None
             for name in ("expiresAt", "graceDays", "supportUntil", "maxSeats",
-                         "maxAnalyses", "note")
+                         "maxAnalyses", "note", "clearDeviceLock")
         ):
             raise ValueError("at least one field must be set")
         return self

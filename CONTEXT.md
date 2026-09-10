@@ -453,6 +453,37 @@ mint → revoke → re-mint to the same address delivers; `_write_invite` also
 overwrites an invite whose licence is revoked or gone, since such an invite
 promises nothing.
 
+**A licence can be moved to another device (same branch, latest).** Exactly
+one actor could unbind a device — institution IT, on a seat. Semper staff hit
+`404 license_not_found` on the institution route for every licence they are
+not named on, and the holder had no route at all. One primitive now,
+`clear_device_lock(license_id, uid, actor=…)`, behind four routes: the IT
+patch, a staff seat clear (`PATCH /v1/admin/licenses/{id}/seats/{uid}/device`),
+`clearDeviceLock` on the staff licence patch, and `POST /v1/licenses/unbind`
+for the holder. Since licences bind on first use, emptying the lock is the
+whole change — the next device to sign in takes it, and nothing is revoked.
+
+*Clearing has to give the mode back.* A device change is normally preceded by
+the holder trying the new phone, which demotes the account in place; without
+`_restore_holder_mode` the clear would leave them on Demo holding a live
+licence, since `revalidate_device_lock` returns early for a demo account and
+would never bind. It is guarded (not a revoked licence, not a revoked or
+disabled seat, not an account that has moved on) and runs outside the
+transaction, for the lock-upgrade reason above.
+
+*The holder's own change is the one that waits.* A second factor proves who is
+asking, not how often, so `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (30) against a
+`deviceChangedAt` only that path writes; staff and IT never read or write it,
+so support always works. The route sits on `attested_or_mfa_user` — the admin
+step-up with `current_user` beneath it, sharing one `_attested_or_mfa` — and
+the authz matrix records it as `USER_STEPUP`. Both halves of a change are
+audited: the device given up, and `LICENSE_DEVICE_BIND` for the one that takes
+its place.
+
+*Restore has an order.* Sign in, let one authed request bind the lock, then
+restore — file content is device-attested, so restoring first fails as
+unlicensed on a phone the user has legitimately just moved to.
+
 Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
 §20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,
 [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md),

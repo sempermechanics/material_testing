@@ -123,6 +123,21 @@ class Settings:
     # not a session length. Reads are not subject to it.
     ADMIN_WEB_REAUTH_SECONDS = _env_int("ADMIN_WEB_REAUTH_SECONDS", "900")
 
+    # Both settings above govern the browser step-up for the *user* tier too,
+    # not only for staff: an account holder changing their own device proves
+    # itself the same way, and there is no second posture worth configuring
+    # separately. The names are historical — the staff console is what first
+    # needed them.
+
+    # How long a holder must wait between changing their own device. A second
+    # factor proves who is asking, not how often, so without this one person
+    # could re-bind daily and pass a single licence round a lab. Counted
+    # against `deviceChangedAt`, which only the self-service route writes:
+    # staff- and IT-initiated changes neither read nor write it, so a support
+    # request is never blocked by a cooldown the holder has spent. Set to 0 to
+    # disable the wait entirely.
+    SELF_DEVICE_CHANGE_COOLDOWN_DAYS = _env_int("SELF_DEVICE_CHANGE_COOLDOWN_DAYS", "30")
+
     # Where "a new user is waiting for approval" mail goes. Same address the app
     # shows in Settings -> Help & support and on the pending-approval screen.
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@sempermechanics.com")

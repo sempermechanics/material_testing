@@ -26,6 +26,7 @@ from app.config import settings
 from app.deps import (
     admin_user,
     attested_or_mfa_admin,
+    attested_or_mfa_user,
     current_user,
     device_or_legacy_reader,
     verified_device,
@@ -56,6 +57,14 @@ INSTITUTION_ADMIN = "institution-admin"
 # inside the freshness window can do what a stolen token alone could not. The
 # table below is where that trade is visible.
 ADMIN_STEPUP = "admin-stepup"
+# The same step-up one tier down: an account holder acting on their own
+# licence, proved by an attested device or by a second factor on a recent
+# sign-in. It authorises nothing beyond what the holder already holds — it
+# only refuses to take a bare ID token as proof that they are present. Used
+# for the operations that are reachable from a browser and worth more than a
+# token: changing which device the licence is bound to, and pulling an
+# analysis out.
+USER_STEPUP = "user-stepup"
 
 # (method, path) -> required tier. Keep in sync deliberately, not automatically:
 # the point is that a human decides.
@@ -83,12 +92,20 @@ EXPECTED = {
     ("POST", "/v1/admin/licenses"): ADMIN_STEPUP,
     ("PATCH", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP,
     ("POST", "/v1/admin/licenses/{license_id}/revoke"): ADMIN_STEPUP,
+    # Staff unbinding one institution seat. The same operation IT has on its
+    # own route, at the staff tier, because staff are not in a customer's
+    # adminEmails and that route 404s for them.
+    ("PATCH", "/v1/admin/licenses/{license_id}/seats/{uid}/device"): ADMIN_STEPUP,
     ("POST", "/v1/licenses/activate"): USER,
     # Lease routes are USER, not INSTITUTION_ADMIN: the member takes their own
     # seat. Eligibility is the seat document, checked inside the transaction —
     # a caller with no seat gets `not_eligible`, so a bare token buys nothing.
     ("POST", "/v1/licenses/checkout"): USER,
     ("POST", "/v1/licenses/release"): USER,
+    # The holder's own device change. USER_STEPUP and not USER: a bare token
+    # is exactly what a stolen one is, and this decides which device the
+    # licence follows.
+    ("POST", "/v1/licenses/unbind"): USER_STEPUP,
     ("POST", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("GET", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
     ("PATCH", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
@@ -131,6 +148,11 @@ def _tier(route) -> str:
     # from the table it is supposed to be visible in.
     if attested_or_mfa_admin in calls:
         return ADMIN_STEPUP
+    # Same reason as above: the shared step-up calls verified_device directly
+    # rather than through Depends, so without this branch a step-up route
+    # would read as a plain USER one.
+    if attested_or_mfa_user in calls:
+        return USER_STEPUP
     if institution_admin_context in calls:
         return INSTITUTION_ADMIN
     has_device = verified_device in calls

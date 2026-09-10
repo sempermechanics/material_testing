@@ -262,3 +262,107 @@ async def test_admin_mutation_with_valid_device_attestation(secure, client, monk
     )
     assert r.status_code == 200
     assert secure._data["users"]["target"]["access_status"] == "APPROVED"
+
+
+# --- the same step-up, one tier down -----------------------------------------
+# Changing which device a licence is bound to is the holder's own operation,
+# not staff work, and it is reachable from a browser. It therefore sits on
+# `attested_or_mfa_user`: the step-up machinery of the admin cases above with
+# `current_user` beneath it instead of `admin_user`.
+
+
+def _holder_token(secure, monkeypatch, claims: dict) -> str:
+    """An ordinary licence holder signing in with exactly these extra claims.
+
+    Returns the id of the individual licence they hold, bound to `old-phone`.
+    """
+    secure._data["users"] = {
+        "holder-1": {"uid": "holder-1", "email": "holder@lab.org",
+                     "access_status": "APPROVED", "emailVerified": True},
+    }
+    minted = repo.create_individual_license(
+        email_lock="holder@lab.org", created_by_uid="admin",
+    )
+    license_id = minted["license"]["id"]
+    user = repo.ensure_entitlement(dict(secure._data["users"]["holder-1"]), None)
+    repo.revalidate_device_lock(user, "old-phone")
+    stored = dict(secure._data["users"]["holder-1"])
+    monkeypatch.setattr(
+        deps, "verify_id_token",
+        lambda _t: {"sub": "holder-1", "email": "holder@lab.org",
+                    "email_verified": True, **claims},
+    )
+    monkeypatch.setattr(repo, "get_or_create_user", lambda c, device_id=None: stored)
+    return license_id
+
+
+@pytest.mark.asyncio
+async def test_device_change_rejects_a_bare_id_token(secure, client, monkeypatch):
+    """A stolen token must not be able to move a licence onto the thief's
+    device — which is the whole reason this route is not plain USER tier."""
+    license_id = _holder_token(secure, monkeypatch, {})
+
+    r = await client.post("/v1/licenses/unbind", headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 403
+    assert r.json()["detail"] == "mfa_required"
+    assert secure._data["licenses"][license_id]["deviceIdLock"] == "old-phone"
+
+
+@pytest.mark.asyncio
+async def test_device_change_rejects_a_stale_second_factor(secure, client, monkeypatch):
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    license_id = _holder_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 3600,
+    })
+
+    r = await client.post("/v1/licenses/unbind", headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 403
+    assert r.json()["detail"] == "reauth_required"
+    assert secure._data["licenses"][license_id]["deviceIdLock"] == "old-phone"
+
+
+@pytest.mark.asyncio
+async def test_device_change_accepts_a_fresh_second_factor(secure, client, monkeypatch):
+    """The account dashboard's path: 2FA plus a recent sign-in, from a browser
+    that can produce no device signature at all."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    license_id = _holder_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 60,
+    })
+
+    r = await client.post("/v1/licenses/unbind", headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["previousDeviceId"] == "old-phone"
+    assert secure._data["licenses"][license_id]["deviceIdLock"] == ""
+
+
+@pytest.mark.asyncio
+async def test_the_holder_step_up_authorises_nothing_staff_can_do(secure, client, monkeypatch):
+    """The tier below the step-up is what differs, and it still binds: a
+    holder who has proved a second factor is still not an operator."""
+    import time as _time
+
+    license_id = _holder_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 60,
+    })
+
+    r = await client.patch(
+        f"/v1/admin/licenses/{license_id}",
+        json={"clearDeviceLock": True},
+        headers={"Authorization": "Bearer ok"},
+    )
+
+    assert r.status_code == 403
+    assert r.json()["detail"] == "not_admin"
+    assert secure._data["licenses"][license_id]["deviceIdLock"] == "old-phone"

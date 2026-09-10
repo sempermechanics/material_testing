@@ -432,6 +432,22 @@ paths:
         '403': { description: not_eligible }
         '404': { description: "No license attached to this account" }
         '429': { description: Rate limited }
+  /v1/licenses/unbind:
+    post:
+      operationId: unbindDevice
+      description: >
+        "Use Semper on a different device" — the holder unbinding their own
+        licence or seat. Clearing the lock is the whole device change: the
+        next device to sign in binds it, and nothing is typed. Clearing is not
+        revoking — entitlement, seat, lease and data are untouched. Requires
+        the user step-up (an attested device, or a second factor on a recent
+        sign-in), and is subject to SELF_DEVICE_CHANGE_COOLDOWN_DAYS, which
+        staff- and IT-initiated changes are not.
+      responses:
+        '200': { description: OK }
+        '403': { description: "No second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: "No license attached to this account, or no seat on it (no_license, seat_not_found)" }
+        '429': { description: "Rate limited, or another change is too soon (device_change_too_soon)" }
   /v1/licenses/activate:
     post:
       operationId: activateLicense
@@ -480,6 +496,11 @@ paths:
         re-activate; the new terms are pushed to their user documents before
         the response returns. Terms only: kind, the email/device/domain locks
         and the key itself are fixed at mint. Send only the fields that change.
+        clearDeviceLock=true is the one field that is not a term: it unbinds an
+        individual license from the device it is on so the customer can move to
+        a new one, and may be sent alone. Use
+        PATCH /v1/admin/licenses/{licenseId}/seats/{uid}/device for a member of
+        an institution license.
       parameters:
         - name: licenseId
           in: path
@@ -491,6 +512,32 @@ paths:
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: License not found }
         '422': { description: "No field set, or a value out of range" }
+        '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/seats/{uid}/device:
+    patch:
+      operationId: adminClearSeatDeviceLock
+      description: >
+        Device-attested, Semper-staff only. Unbind one institution seat from
+        the device it is on, so the member can move to a new one. The same
+        operation institution IT has via clearDeviceLock on
+        PATCH /v1/institutions/licenses/{licenseId}/seats/{uid}, at the staff
+        tier — staff are not in a customer's adminEmails, so that route 404s
+        for them. Clearing is not revoking: the seat, its lease and the
+        member's data are untouched, and the next device to sign in binds.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: "License or seat not found (license_not_found, seat_not_found)" }
         '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}/revoke:
     post:

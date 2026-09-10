@@ -174,20 +174,72 @@ def admin_update_license(
     new terms are pushed to the individual redeemer, or to every non-revoked
     institution seat, before this returns.
 
-    Terms only — `kind`, the locks and the key itself are fixed at mint.
+    Terms only — `kind`, the email/domain locks and the key itself are fixed
+    at mint. `clearDeviceLock=true` is the one thing here that is not a term:
+    it unbinds an individual licence from the phone it is on so the customer
+    can move to a new one. Nothing is revoked and nothing has to be typed —
+    the next device to sign in binds. Use the seat route below for an
+    institution member.
     """
     if not rate_limit.admin_bucket.allow(admin["uid"]):
         raise HTTPException(429, errors.RATE_LIMITED)
     patch = body.model_dump(exclude_none=True)
+    clear_lock = patch.pop("clearDeviceLock", False)
+    cleared = {}
+    if clear_lock:
+        err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
+        if err:
+            raise HTTPException(404, err)
+        audit.record(
+            admin["uid"], action="ADMIN_DEVICE_LOCK_CLEAR",
+            target={"type": "license", "id": license_id},
+            detail={k: str(v) for k, v in (cleared or {}).items()},
+        )
+    # An empty patch is a device change on its own; `update_license` answers
+    # with the licence as it stands and writes nothing, which is what that is.
     updated = repo.update_license(license_id, patch, admin["uid"])
     if updated is None:
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
-    audit.record(
-        admin["uid"], action="ADMIN_LICENSE_EXTEND",
-        target={"type": "license", "id": license_id},
-        detail={k: str(v) for k, v in patch.items()},
-    )
+    if patch:
+        audit.record(
+            admin["uid"], action="ADMIN_LICENSE_EXTEND",
+            target={"type": "license", "id": license_id},
+            detail={k: str(v) for k, v in patch.items()},
+        )
     return updated
+
+
+@router.patch("/v1/admin/licenses/{license_id}/seats/{uid}/device")
+def admin_clear_seat_device_lock(
+    license_id: DocumentId,
+    uid: Uid,
+    ctx=Depends(attested_or_mfa_admin),
+    admin=Depends(admin_user),
+):
+    """Semper staff unbinding one institution seat from its device.
+
+    The same operation IT already has at
+    `PATCH /v1/institutions/licenses/{id}/seats/{uid}` with
+    `clearDeviceLock`, at a different tier. Staff are not in a customer's
+    `adminEmails`, so that route 404s for them, and support requests reach
+    Semper before they reach the customer's own IT often enough that having
+    no answer was the wrong posture.
+
+    Clearing is not revoking: the seat, its lease and the member's data are
+    untouched, and the next device that signs in binds.
+    """
+    if not rate_limit.admin_bucket.allow(admin["uid"]):
+        raise HTTPException(429, errors.RATE_LIMITED)
+    err, cleared = repo.clear_device_lock(license_id, uid, actor=repo.ACTOR_STAFF)
+    if err:
+        raise HTTPException(404, err)
+    audit.record(
+        admin["uid"], action="ADMIN_DEVICE_LOCK_CLEAR",
+        target={"type": "seat", "id": f"{license_id}/{uid}"},
+        detail={k: str(v) for k, v in (cleared or {}).items()},
+    )
+    return {"licenseId": license_id, "uid": uid, "deviceIdLock": "",
+            "previousDeviceId": (cleared or {}).get("previousDeviceId") or ""}
 
 
 @router.post("/v1/admin/licenses/{license_id}/revoke")

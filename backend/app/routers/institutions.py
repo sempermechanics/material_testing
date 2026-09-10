@@ -167,8 +167,10 @@ def patch_seat(
         raise HTTPException(429, errors.RATE_LIMITED)
     if body.clearDeviceLock is None and body.enabled is None:
         raise HTTPException(400, errors.EMPTY_PATCH)
+    cleared = {}
     if body.clearDeviceLock:
-        if not repo.clear_seat_device_lock(license_id, uid):
+        err, cleared = repo.clear_device_lock(license_id, uid, actor=repo.ACTOR_IT)
+        if err:
             raise HTTPException(404, errors.SEAT_NOT_FOUND)
     if body.enabled is not None:
         if not repo.set_seat_enabled(license_id, uid, body.enabled):
@@ -176,7 +178,11 @@ def patch_seat(
     audit.record(
         ctx["user"]["uid"], action="INSTITUTION_SEAT_PATCH",
         target={"type": "seat", "id": f"{license_id}/{uid}"},
-        detail={"clearDeviceLock": bool(body.clearDeviceLock), "enabled": body.enabled},
+        detail={"clearDeviceLock": bool(body.clearDeviceLock), "enabled": body.enabled,
+                # The device given up. Its replacement is recorded by
+                # LICENSE_DEVICE_BIND when the next device signs in, so the
+                # two together say what the change actually was.
+                "previousDeviceId": (cleared or {}).get("previousDeviceId") or ""},
     )
     seats = repo.list_institution_seats(license_id)
     seat = next((s for s in seats if s["uid"] == uid), None)

@@ -214,7 +214,7 @@ async def attested_or_mfa_admin(
     x_nonce: str = Header(default=""),
     x_signature: str = Header(default=""),
 ) -> dict:
-    """State-changing admin caller: an attested device, or a 2FA browser.
+    """State-changing Semper-staff caller: an attested device, or a 2FA browser.
 
     The device path is unchanged and still preferred — if the request carries
     any device header it is held to the full `verified_device` check, so the
@@ -240,6 +240,44 @@ async def attested_or_mfa_admin(
     Reads are not routed through here. Only the routes that change state are,
     so an operator can browse the console on an ordinary session and is asked
     to re-authenticate at the point of acting.
+    """
+    return await _attested_or_mfa(request, user, x_device_id, x_nonce, x_signature)
+
+
+async def attested_or_mfa_user(
+    request: Request,
+    user: dict = Depends(current_user),
+    x_device_id: str = Header(default=""),
+    x_nonce: str = Header(default=""),
+    x_signature: str = Header(default=""),
+) -> dict:
+    """The same step-up, for an account holder acting on their own licence.
+
+    Identical machinery to `attested_or_mfa_admin` and deliberately so: the
+    question — has this caller proved themselves *now*, by an attested device
+    or by a second factor on a recent sign-in — does not change with who is
+    asking. Only the tier below it does, `current_user` rather than
+    `admin_user`, so this authorises nothing beyond what the holder already
+    holds.
+
+    It exists because two operations are worth more than an ID token and are
+    not staff work: changing which device a licence is bound to, and pulling
+    an analysis out through a browser. Both are reachable from a page rather
+    than the app, and a browser cannot produce an attestation.
+    """
+    return await _attested_or_mfa(request, user, x_device_id, x_nonce, x_signature)
+
+
+async def _attested_or_mfa(request: Request, user: dict, x_device_id: str,
+                           x_nonce: str, x_signature: str) -> dict:
+    """The step-up itself, shared by the admin and user tiers.
+
+    A device attestation is preferred and checked in full whenever the request
+    carries any device header, so the phone keeps exactly the guarantee it
+    had. The browser path — second factor, recent sign-in — is the fallback,
+    governed by ADMIN_WEB_MFA_ENABLED and ADMIN_WEB_REAUTH_SECONDS for both
+    tiers: the trade being made is the same one either way, and a deployment
+    that withdraws the browser path should withdraw all of it.
     """
     if settings.DEV_INSECURE_AUTH:
         return {"user": user, "device": _DEV_DEVICE, "via": "dev"}

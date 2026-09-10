@@ -803,8 +803,9 @@ who currently holds a seat, and the add/hold/remove actions are all there. The
 routes below are what it calls, and stay equally usable from a script.
 
 Semper staff have `/console/operator`, which now does the whole job: issue an
-individual or institution licence, extend a term, revoke a key, drive any
-institution's roster, and approve accounts. It requires a **second factor** and
+individual or institution licence, extend a term, revoke a key, unbind a
+licence or a seat from the device it is on, drive any institution's roster,
+and approve accounts. It requires a **second factor** and
 a sign-in from the last 15 minutes, because a browser cannot produce the device
 attestation the phone path uses — the page walks you through enrolling an
 authenticator app the first time. Revoking asks you to type the key prefix
@@ -830,6 +831,34 @@ seats from a browser or script, not from the licensed device itself. A
 license id they do not administer, or one that does not exist, both come back
 as the identical "not found" — so nothing about a foreign institution's
 licenses leaks by probing ids.
+
+**Changing device.** A phone dies, is replaced, or the wrong one was signed
+in on. Three people can move a licence, and all three do the same thing —
+empty the device lock:
+
+| Who | How |
+|---|---|
+| The holder | "Use Semper on a different device" — `POST /v1/licenses/unbind`. Needs a second factor and a sign-in from the last 15 minutes, and is allowed once every `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30). |
+| Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}`, or **New device** on the seat in `/console/institution`. |
+| Semper staff | **New device** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
+
+Clearing the lock **is** the change: the licence binds to whichever device
+signs in next. Nothing is re-issued, nothing is typed, and nothing is revoked
+— entitlement, seat, lease and every stored analysis stay as they are. A
+holder who was demoted to Demo by trying the new phone first gets their mode
+back as part of the clear.
+
+Only the holder's own change waits out a cooldown; a support request never
+does, so a lost phone is fixed the same day. `429 device_change_too_soon`
+means the holder has already moved device inside the window — the response
+says when they may again, and staff or IT can do it for them meanwhile.
+
+**The order on the new device matters.** Sign in first, then let one authed
+request bind the licence, and only then restore. Restoring first fails as
+*unlicensed* — file downloads are device-attested and the licence is still
+bound to the old phone. If someone reports "restore says I'm not licensed on
+my new phone", they are almost certainly at step 3 without step 2: check
+`GET /v1/admin/licenses` for whether the lock has actually moved.
 
 **Revoking the whole key** (Semper staff, e.g. a contract ends):
 `POST /v1/admin/licenses/{id}/revoke`. For an individual key, that one person

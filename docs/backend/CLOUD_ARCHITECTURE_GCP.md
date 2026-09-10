@@ -1376,7 +1376,7 @@ would cost more than it saves.
 | Path | Who | What it can do |
 |---|---|---|
 | `/console/institution` | IT named in a licence's `adminEmails` | Add/remove roster members, withdraw an unclaimed invitation, see who holds a seat, hold a member, clear a device lock |
-| `/console/operator` | Semper staff **with a second factor** | Issue individual and institution licences, extend a term, revoke a key, drive any roster, approve accounts |
+| `/console/operator` | Semper staff **with a second factor** | Issue individual and institution licences, extend a term, revoke a key, unbind a licence or a seat from its device, drive any roster, approve accounts |
 
 **The operator console was read-only, and the reason was real.** Every
 state-changing `/v1/admin/*` route requires proof beyond an ID token. On the
@@ -1439,3 +1439,88 @@ dependency tree and asserts it maps to exactly one expected auth tier —
 future change that accidentally widens (or narrows) an institution route's auth
 fails CI rather than shipping quietly.
 
+### 20.10 Changing device
+
+Three people can legitimately need a licence moved to a different phone, and
+until now only one of them could do it. The table is the whole feature:
+
+| Who | Route | Tier |
+|---|---|---|
+| Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}` | `INSTITUTION_ADMIN` |
+| Semper staff, a seat | `PATCH /v1/admin/licenses/{id}/seats/{uid}/device` | `ADMIN_STEPUP` |
+| Semper staff, an individual licence | `PATCH /v1/admin/licenses/{id}` `{"clearDeviceLock": true}` | `ADMIN_STEPUP` |
+| The holder | `POST /v1/licenses/unbind` | `USER_STEPUP` |
+
+All four reach one primitive, `firestore_repo.clear_device_lock`, which takes
+an `actor` — `ACTOR_STAFF`, `ACTOR_IT`, `ACTOR_SELF` — and selects the seat or
+the licence document by kind. The staff seat route exists because the operator
+console previously called the institution-tier one, which returns
+`404 license_not_found` for staff who are not in that licence's `adminEmails`
+(§20.4) — that is, for every licence Semper does not itself administer.
+
+**Clearing the lock is the whole change.** Since binding happens on first use
+(§20.1), an empty lock is `_LOCK_UNBOUND` and `revalidate_device_lock` binds
+it to whichever device signs in next, first writer wins. Nothing is
+re-activated, no key is re-issued, and nothing is typed on the new device.
+
+**Clearing is not revoking.** Entitlement, seat, lease, quota and every stored
+analysis are untouched; only the lock goes empty.
+
+#### The half that is easy to miss
+
+A device change is normally *preceded* by the holder trying the new phone. That
+request hits `revalidate_device_lock`, finds a mismatch, and demotes the
+account in place — `mode: demo` written onto the user document. Clearing the
+lock afterwards would not undo that on its own: `revalidate_device_lock`
+returns early for an account that reads as demo, so it would never reach the
+bind branch and the holder would sit on Demo holding a live licence, with no
+route that fixes it. `_restore_holder_mode` re-stamps the mode as part of the
+clear, guarded so that nothing is resurrected — skipped for a revoked licence,
+a revoked or disabled seat, and an account that has since moved to a different
+licence, with `effective_mode` still re-applying expiry, grace and the
+floating-lease check on top. It runs *outside* the transaction: reading
+`users/{uid}` and then writing it inside one takes a lock on that document,
+which is the contention that starved out concurrent claims before
+`_drop_superseded_demo` moved the same guarded read out of `claim_seat`
+(§20.1).
+
+#### Why the holder's own change is rate-limited and the others are not
+
+Self-service re-binding is a licence-sharing vector. A second factor proves
+*who* is asking, not *how often*, so one person could re-bind daily and pass a
+single licence round a lab. `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30)
+is counted against a `deviceChangedAt` stamp that only the self-service path
+writes; a second change inside the window answers
+`429 device_change_too_soon`, carrying `nextChangeAllowedAt`. Staff and IT
+neither read nor write that stamp, so a support request always works — a lost
+phone does not wait 30 days.
+
+`POST /v1/licenses/unbind` sits on `attested_or_mfa_user`, the same step-up
+machinery as `attested_or_mfa_admin` with `current_user` beneath it instead of
+`admin_user`; both delegate to one `_attested_or_mfa` so the browser path can
+only ever be withdrawn (`ADMIN_WEB_MFA_ENABLED=0`) for both at once. The route
+authz matrix records it as its own tier, `USER_STEPUP`.
+
+#### Both ends are audited
+
+A clear writes the device that was given up (`previousDeviceId`) —
+`ADMIN_DEVICE_LOCK_CLEAR`, `INSTITUTION_SEAT_PATCH` or
+`LICENSE_DEVICE_UNBIND` by caller — and `revalidate_device_lock` writes
+`LICENSE_DEVICE_BIND` with the device that took its place. Neither half is the
+change on its own; the pair is what an operator reads back.
+
+#### The order on the new device
+
+Restore already works on a new device, but only in this order, and the app
+should sequence it rather than leaving it to chance:
+
+1. Sign in and register the device — `POST /v1/devices/register` is USER-tier,
+   so it works before any licence binds.
+2. The licence binds on the next authed request carrying `X-Device-Id`.
+3. Restore. `GET /v1/files/{id}/content` is device-attested and
+   `verified_device` re-validates the lock before the route checks
+   `cloud_backup_enabled`, so restoring first fails as *unlicensed* on a device
+   the user has legitimately just moved to.
+
+`test_restore_on_a_new_device_waits_for_the_lock_to_move` pins the ordering;
+it fails against a `clear_device_lock` without the mode restore above.

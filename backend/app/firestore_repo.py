@@ -1634,6 +1634,17 @@ def revalidate_device_lock(user: dict, device_id: str | None) -> dict:
         if bind_device_lock(ref, device_id):
             log.info("device lock bound uid=%s license=%s",
                      user.get("uid"), user.get("licenseId"))
+            # Imported here rather than at module scope: `audit` reads `db`
+            # from this module, so the two cannot import each other eagerly.
+            # The record matters because it is the second half of a device
+            # change — `clear_device_lock` writes the device that was given
+            # up, and this writes the one that took its place.
+            from . import audit
+            audit.record(
+                user.get("uid"), device_id, action="LICENSE_DEVICE_BIND",
+                target={"type": "license", "id": user.get("licenseId")},
+                detail={"deviceId": device_id},
+            )
         return user
     if verdict == _LOCK_OK:
         return user
@@ -2137,14 +2148,149 @@ def list_institution_seats(license_id: str) -> list[dict]:
     return out
 
 
-def clear_seat_device_lock(license_id: str, uid: str) -> bool:
-    """IT support action: let a seat holder re-bind to a new device (lost
-    phone, factory reset). Does not touch enable/disable status."""
-    ref = _seat_ref(license_id, uid)
-    if not ref.get().exists:
-        return False
-    ref.update({"deviceIdLock": "", "updatedAt": firestore.SERVER_TIMESTAMP})
-    return True
+#: Who asked for a device change. Only the holder is rate-limited; see
+#: `clear_device_lock`.
+ACTOR_SELF = "self"
+ACTOR_STAFF = "staff"
+ACTOR_IT = "it"
+
+
+def _restore_holder_mode(license_id: str, lic: dict, ref, scope: str, uid: str) -> None:
+    """Give the holder their mode back now that the lock they missed is gone.
+
+    A device change is usually preceded by the holder trying the new device:
+    `revalidate_device_lock` finds the mismatch and demotes the account in
+    place, writing `mode: demo` onto the user document. Clearing the lock
+    afterwards would not undo that on its own — `revalidate_device_lock`
+    returns early for an account that reads as demo, so it would never reach
+    the bind branch and the holder would sit on Demo holding a live licence.
+    Re-stamping the mode here is what makes clearing the lock the whole
+    device change rather than half of one.
+
+    Nothing is resurrected. The write is skipped for a revoked licence, for a
+    seat that is revoked or on hold, and for an account that has since moved
+    to a different licence; and `effective_mode` still re-applies expiry,
+    grace and the floating-lease check to whatever is written here, so a
+    licence that has run out stays demo either way.
+
+    Deliberately outside the caller's transaction: reading `users/{uid}` and
+    then writing it inside one takes a lock on that document, which is what
+    starved out concurrent claims before `_drop_superseded_demo` moved the
+    same guarded read out of `claim_seat`.
+    """
+    if (lic.get("status") or "") == "revoked":
+        return
+    if scope == "seat":
+        seat = ref.get()
+        if not seat.exists or (seat.to_dict() or {}).get("status") != "active":
+            return
+        holder = uid
+    else:
+        holder = lic.get("redeemedByUid") or ""
+    if not holder:
+        return
+    user_ref = db().collection("users").document(holder)
+    snap = user_ref.get()
+    if not snap.exists or (snap.to_dict() or {}).get("licenseId") != license_id:
+        return
+    user_ref.update({
+        **_mode_patch(_license_mode(lic)),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+
+
+def clear_device_lock(license_id: str, uid: str = "", *,
+                      actor: str = ACTOR_STAFF) -> tuple[str, dict | None]:
+    """Unbind a licence or a seat from the device it is on. Error code, or "".
+
+    One primitive with three callers — Semper staff, institution IT, and the
+    holder — because there is one operation. Since Gap A, clearing the lock is
+    the *whole* device change: an empty lock reads as `_LOCK_UNBOUND`, and
+    `revalidate_device_lock` binds it to whatever signs in next, first writer
+    wins. Nothing is re-activated and nothing is typed.
+
+    **Clearing is not revoking.** Entitlement, seat, lease and data are all
+    untouched; only the lock goes empty. A holder demoted in place by the
+    mismatch they hit on the new device gets their mode back here — see
+    `_restore_holder_mode`, without which clearing would be half a device
+    change.
+
+    `uid` selects the seat on an institution licence. An individual licence
+    holds its lock on the licence document itself, so `uid` is ignored there.
+
+    The cooldown applies to `ACTOR_SELF` alone. A second factor proves *who*
+    is asking, not *how often*, so one person could otherwise re-bind daily
+    and pass a single licence round a lab. It is counted against
+    `deviceChangedAt`, which only this path writes: a staff or IT clear
+    neither reads nor writes that stamp, so a support request always works
+    however recently the holder changed device themselves.
+
+    On success the second element is the audit detail, including the device
+    that was given up — the other half of the record `revalidate_device_lock`
+    writes when the replacement binds.
+    """
+    lic_snap = db().collection("licenses").document(license_id).get()
+    if not lic_snap.exists:
+        return errors.LICENSE_NOT_FOUND, None
+    lic = lic_snap.to_dict() or {}
+    if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
+        if not uid:
+            return errors.SEAT_NOT_FOUND, None
+        ref, scope = _seat_ref(license_id, uid), "seat"
+    else:
+        ref, scope = db().collection("licenses").document(license_id), "license"
+
+    detail = {"scope": scope, "licenseId": license_id, "uid": uid, "actor": actor}
+    not_found = errors.SEAT_NOT_FOUND if scope == "seat" else errors.LICENSE_NOT_FOUND
+
+    if actor != ACTOR_SELF:
+        # No invariant to protect: staff and IT have no cooldown, and two
+        # clears landing together produce the same empty lock. A plain read
+        # and update keeps the support path out of the transaction machinery
+        # entirely.
+        snap = ref.get()
+        if not snap.exists:
+            return not_found, None
+        previous = (snap.to_dict() or {}).get("deviceIdLock") or ""
+        ref.update({"deviceIdLock": "", "updatedAt": firestore.SERVER_TIMESTAMP})
+        _restore_holder_mode(license_id, lic, ref, scope, uid)
+        return "", {**detail, "previousDeviceId": previous}
+
+    now = _now()
+    cooldown = timedelta(days=max(0, settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS))
+    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
+
+    @firestore.transactional
+    def _clear(tx) -> tuple[str, dict | None]:
+        snap = ref.get(transaction=tx)
+        if not snap.exists:
+            return not_found, None
+        doc = snap.to_dict() or {}
+        changed = as_utc(doc.get("deviceChangedAt"))
+        if cooldown and changed and now - changed < cooldown:
+            return errors.DEVICE_CHANGE_TOO_SOON, None
+        tx.update(ref, {
+            "deviceIdLock": "",
+            "deviceChangedAt": now,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+        return "", {
+            **detail,
+            "previousDeviceId": doc.get("deviceIdLock") or "",
+            "nextChangeAllowedAt": (now + cooldown).isoformat() if cooldown else "",
+        }
+
+    try:
+        err, cleared = _clear(transaction)
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        # Two self-service clears at once is the only way to reach this, and
+        # the cooldown is exactly what one of them must lose.
+        return errors.DEVICE_CHANGE_TOO_SOON, None
+    if not err:
+        _restore_holder_mode(license_id, lic, ref, scope, uid)
+    return err, cleared
 
 
 def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> bool:
