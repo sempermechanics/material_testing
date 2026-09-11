@@ -26,8 +26,10 @@ import { initializeApp } from "/__/firebase/12.4.0/firebase-app.js";
 import {
   getAuth,
   GoogleAuthProvider,
+  EmailAuthProvider,
   signInWithPopup,
   reauthenticateWithPopup,
+  reauthenticateWithCredential,
   signOut,
   onAuthStateChanged,
   multiFactor,
@@ -44,6 +46,7 @@ const provider = new GoogleAuthProvider();
 /** Error codes this module raises, so pages can branch instead of matching prose. */
 export const ERR_NO_SECOND_FACTOR = "console_no_second_factor";
 export const ERR_CANCELLED = "console_cancelled";
+export const ERR_NO_PASSWORD = "console_no_password";
 
 /* ---------------------------------------------------------------- challenge */
 
@@ -96,12 +99,23 @@ async function signIn() {
  * cached token, which still has the old auth_time, and the retry fails
  * identically to the call that triggered it — an infinite-looking loop that
  * looks like a backend bug.
+ *
+ * Google accounts re-auth via popup; email/password accounts may pass
+ * `password` to avoid a second Google prompt they cannot complete.
  */
-export async function stepUp() {
+export async function stepUp({ password } = {}) {
   const user = auth.currentUser;
   if (!user) throw new Error("not_signed_in");
   try {
-    await reauthenticateWithPopup(user, provider);
+    if (password != null && password !== "") {
+      if (!user.email) throw new Error(ERR_NO_PASSWORD);
+      await reauthenticateWithCredential(
+        user,
+        EmailAuthProvider.credential(user.email, password),
+      );
+    } else {
+      await reauthenticateWithPopup(user, provider);
+    }
   } catch (e) {
     if (e.code === "auth/multi-factor-auth-required") await resolveChallenge(e);
     else throw e;
@@ -117,6 +131,40 @@ export function hasSecondFactor(user = auth.currentUser) {
 /** The enrolled factors, for display. */
 export function enrolledFactors(user = auth.currentUser) {
   return user ? multiFactor(user).enrolledFactors : [];
+}
+
+/** Whether this ID token records a completed second factor for *this* session. */
+export async function sessionHasSecondFactor(user = auth.currentUser) {
+  if (!user) return false;
+  const result = await user.getIdTokenResult();
+  const firebase = result.claims && result.claims.firebase;
+  return Boolean(firebase && firebase.sign_in_second_factor);
+}
+
+/**
+ * Enrol TOTP if missing, then ensure this session completed a second factor.
+ * Every dashboard login uses this before routing or loading data.
+ */
+export async function ensureDashboardMfa() {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not_signed_in");
+  if (!hasSecondFactor(user)) {
+    setStatus(
+      "Enrol an authenticator app to open any Semper dashboard. " +
+        "Add the secret by hand — there is no QR code on purpose.",
+    );
+    const enrolment = await beginTotpEnrolment(user.email);
+    const shown = window.prompt(
+      "Add this secret to your authenticator app, then enter the 6-digit code:\n\n" +
+        enrolment.secret,
+    );
+    if (shown == null) throw new Error(ERR_CANCELLED);
+    await enrolment.finish(shown.trim());
+    setStatus("Authenticator enrolled.");
+  }
+  if (!(await sessionHasSecondFactor())) {
+    await stepUp();
+  }
 }
 
 /* --------------------------------------------------------------- enrolment */
@@ -152,8 +200,9 @@ export async function beginTotpEnrolment(accountLabel) {
 /* ------------------------------------------------------------------- shell */
 
 /**
- * Run `onReady(user)` once someone is signed in, wiring the header's sign-in
- * and sign-out buttons. Called by both consoles before they fetch anything.
+ * Run `onReady(user)` once someone is signed in *and* has completed dashboard
+ * MFA (enrolled TOTP + this session's second factor). Called by every console
+ * before it fetches anything.
  */
 export function requireSignIn(onReady) {
   const signInBtn = document.getElementById("signIn");
@@ -169,13 +218,28 @@ export function requireSignIn(onReady) {
   });
   signOutBtn.addEventListener("click", () => signOut(auth));
 
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     const signedIn = Boolean(user);
     signInBtn.hidden = signedIn;
     signOutBtn.hidden = !signedIn;
     who.textContent = signedIn ? user.email : "";
-    appEl.hidden = !signedIn;
-    if (signedIn) onReady(user);
+    if (!signedIn) {
+      appEl.hidden = true;
+      return;
+    }
+    try {
+      await ensureDashboardMfa();
+      appEl.hidden = false;
+      onReady(user);
+    } catch (e) {
+      if (e.message === ERR_CANCELLED) {
+        setStatus("Two-factor authentication is required for every dashboard.");
+        await signOut(auth);
+        return;
+      }
+      appEl.hidden = true;
+      setStatus(`Could not open the dashboard: ${e.code || e.message}`, true);
+    }
   });
 }
 
@@ -323,4 +387,21 @@ export function confirmByTyping(label, what) {
     `This cannot be undone.\n\nType ${label} to ${what}:`,
   );
   return typed != null && typed.trim() === label;
+}
+
+/**
+ * Fresh password (or Google re-auth) plus TOTP before whole-licence revoke.
+ *
+ * The backend refuses a revoke on a stale MFA session
+ * (ADMIN_WEB_REVOKE_REAUTH_SECONDS). Always step up here so the token's
+ * auth_time is new, then the typed key-prefix confirm still runs in the page.
+ */
+export async function stepUpForRevoke() {
+  const password = ask(
+    "Re-enter your account password to revoke this licence.\n\n" +
+      "Leave blank to re-authenticate with Google, then enter your " +
+      "authenticator code when asked.",
+  );
+  if (password === null) throw new Error(ERR_CANCELLED);
+  await stepUp({ password: password || undefined });
 }

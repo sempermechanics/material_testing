@@ -432,3 +432,132 @@ async def test_a_bundle_reaches_a_browser_that_proved_a_second_factor(
 
     assert r.status_code == 200, r.text
     assert zipfile.ZipFile(io.BytesIO(r.content)).read("bundle/Session.zip") == b"DATA"
+
+
+# --- whole-licence revoke: tighter freshness window --------------------------
+# Ordinary admin mutations accept ADMIN_WEB_REAUTH_SECONDS; revoke uses
+# ADMIN_WEB_REVOKE_REAUTH_SECONDS so a long-lived MFA session cannot wipe a
+# customer without a fresh password/Google re-auth plus TOTP.
+
+
+def _license_for_revoke(secure, monkeypatch, claims: dict) -> str:
+    _admin_token(secure, monkeypatch, claims)
+    minted = repo.create_individual_license(
+        email_lock="revoke-target@lab.org", created_by_uid="admin-1",
+    )
+    return minted["license"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_license_revoke_rejects_a_bare_id_token(secure, client, monkeypatch):
+    license_id = _license_for_revoke(secure, monkeypatch, {})
+    r = await client.post(
+        f"/v1/admin/licenses/{license_id}/revoke",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "mfa_required"
+    assert secure._data["licenses"][license_id]["status"] != "revoked"
+
+
+@pytest.mark.asyncio
+async def test_license_revoke_rejects_mfa_that_is_only_dashboard_fresh(
+    secure, client, monkeypatch,
+):
+    """Five minutes old is fine for mint/approve; revoke demands a tighter
+    window so the console's password+TOTP step-up is not optional."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REVOKE_REAUTH_SECONDS", 120)
+    license_id = _license_for_revoke(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 300,
+    })
+    r = await client.post(
+        f"/v1/admin/licenses/{license_id}/revoke",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "reauth_required"
+    assert secure._data["licenses"][license_id]["status"] != "revoked"
+
+
+@pytest.mark.asyncio
+async def test_license_revoke_accepts_a_fresh_second_factor(secure, client, monkeypatch):
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REVOKE_REAUTH_SECONDS", 120)
+    license_id = _license_for_revoke(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 30,
+    })
+    r = await client.post(
+        f"/v1/admin/licenses/{license_id}/revoke",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 200, r.text
+    assert secure._data["licenses"][license_id]["status"] == "revoked"
+
+
+# --- institution IT console: same MFA as other dashboards --------------------
+
+
+def _institution_it_token(secure, monkeypatch, claims: dict) -> str:
+    """IT for one institution licence; returns that licence id."""
+    license_id = "lic-it-mfa"
+    secure._data["licenses"] = {
+        license_id: {
+            "kind": "institution", "plan": "professional", "status": "active",
+            "domainLock": "university.edu", "adminEmails": ["it@university.edu"],
+            "keyPrefix": "SEMP-IT01", "seatsUsed": 0, "maxSeats": 5,
+        },
+    }
+    secure._data[f"licenses/{license_id}/seats"] = {}
+    monkeypatch.setattr(
+        deps, "verify_id_token",
+        lambda _t: {
+            "sub": "it-1", "email": "it@university.edu", "email_verified": True,
+            **claims,
+        },
+    )
+    monkeypatch.setattr(
+        repo, "get_or_create_user",
+        lambda c, device_id=None: {
+            "uid": "it-1", "email": "it@university.edu", "role": "user",
+            "access_status": "APPROVED", "emailVerified": True,
+        },
+    )
+    return license_id
+
+
+@pytest.mark.asyncio
+async def test_institution_seats_reject_a_bare_id_token(secure, client, monkeypatch):
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    license_id = _institution_it_token(secure, monkeypatch, {})
+    r = await client.get(
+        f"/v1/institutions/licenses/{license_id}/seats",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "mfa_required"
+
+
+@pytest.mark.asyncio
+async def test_institution_seats_accept_a_fresh_second_factor(secure, client, monkeypatch):
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    license_id = _institution_it_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 60,
+    })
+    r = await client.get(
+        f"/v1/institutions/licenses/{license_id}/seats",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["seats"] == []

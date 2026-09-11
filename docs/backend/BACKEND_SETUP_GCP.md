@@ -229,8 +229,9 @@ Everything above is required (or near enough). These are the rest of what
 |---|---|---|
 | `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. Overridable per user via `PATCH /v1/admin/users/{uid}/config` |
 | `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. A key's own `maxAnalyses`, or a per-user override, takes precedence when tighter |
-| `ADMIN_WEB_MFA_ENABLED` | `1` | Whether the staff console may act at all. `0` restores attestation-only admin — every state change then needs the phone |
-| `ADMIN_WEB_REAUTH_SECONDS` | `900` | How old a console sign-in may be and still authorise a state change. Sudo mode, not a session length |
+| `ADMIN_WEB_MFA_ENABLED` | `1` | Whether browser dashboards may act via MFA at all. `0` restores attestation-only admin — every state change then needs the phone |
+| `ADMIN_WEB_REAUTH_SECONDS` | `900` | How old a console sign-in may be and still authorise an ordinary state change. Sudo mode, not a session length |
+| `ADMIN_WEB_REVOKE_REAUTH_SECONDS` | `120` | Tighter window for whole-licence revoke; the operator page forces password/Google re-auth plus TOTP before that call |
 | `MAX_FILES_PER_SESSION` | `600` | Upper bound on files in one analysis |
 | `MAX_FRAMES_PER_ANALYSIS` | `150` | Deformed-frame ceiling the app enforces |
 | `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |

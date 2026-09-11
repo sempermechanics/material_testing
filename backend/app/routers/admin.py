@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
-from ..deps import admin_user, attested_or_mfa_admin
+from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh
 from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
 from ..models import AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
 from ..validation import AccessStatus, DocumentId, PageToken, Uid
@@ -245,9 +245,13 @@ def admin_clear_seat_device_lock(
 @router.post("/v1/admin/licenses/{license_id}/revoke")
 def admin_revoke_license(
     license_id: DocumentId,
-    ctx=Depends(attested_or_mfa_admin),
+    ctx=Depends(attested_or_mfa_admin_fresh),
     admin=Depends(admin_user),
 ):
+    """Whole-licence revoke. Browser callers need a *fresh* password/Google
+    re-auth plus TOTP (ADMIN_WEB_REVOKE_REAUTH_SECONDS), tighter than ordinary
+    dashboard mutations — the console forces step-up before this call.
+    """
     if not rate_limit.admin_bucket.allow(admin["uid"]):
         raise HTTPException(429, errors.RATE_LIMITED)
     revoked = repo.revoke_license(license_id, admin["uid"])

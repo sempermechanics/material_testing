@@ -1,29 +1,28 @@
 """Self-service seat management for institution licenses.
 
-No dashboard UI ships in this repo yet — institution IT drives these three
-routes directly (script, curl, or their own tooling). Deliberately separate
-from `routers/admin.py`: Semper-staff mint and whole-key revoke stay on the
-existing device-attested `admin_user` path; institution IT gets a narrower,
-token-only surface scoped to exactly the license(s) that name them.
+Institution IT drives these routes from the institution console (or curl).
+Deliberately separate from `routers/admin.py`: Semper-staff mint and
+whole-key revoke stay on the staff step-up path; institution IT gets a
+narrower surface scoped to exactly the license(s) that name them.
 
 Routes are served under both `/v1/institutions/*` (current) and the
 pre-rename `/v1/campus/*`. The aliases exist because institution IT scripts
 and curl one-liners are out of our control; drop them only after a
 deprecation window (see docs/backend/CLOUD_ARCHITECTURE_GCP.md §20).
 
-Auth is `current_user` (ID token, APPROVED — enforced by current_user itself)
-plus a *verified* email present in that specific license's `adminEmails`. Not
-`verified_device` — IT manages seats from a browser/curl, not the licensed
-device. Not Semper `role=admin` — an institution admin has no authority
-outside the licenses that name them, and cross-tenant access (institution A
-IT reaching institution B's seats) 404s the same as a license that does not
-exist.
+Auth is `current_user` (ID token, APPROVED) plus a *verified* email present
+in that specific license's `adminEmails`, **plus** the same browser step-up
+every dashboard uses (completed second factor on a recent sign-in). Not
+Semper `role=admin` — an institution admin has no authority outside the
+licenses that name them, and cross-tenant access (institution A IT reaching
+institution B's seats) 404s the same as a license that does not exist —
+membership is checked before MFA so a probe learns nothing about the factor.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
-from ..deps import current_user
+from ..deps import current_user, ensure_web_step_up
 from ..licenses import KIND_INSTITUTION, normalize_kind
 from ..models import InstitutionSeatAdd, InstitutionSeatPatch
 from ..validation import DocumentId, Uid
@@ -32,7 +31,7 @@ router = APIRouter()
 
 
 def institution_admin_context(license_id: DocumentId, user: dict = Depends(current_user)) -> dict:
-    """Institution IT auth for one institution license.
+    """Institution IT auth for one institution license (membership only).
 
     Fails closed at every step: unverified email, a license id that does not
     exist or is not an institution license, or an email absent from that
@@ -42,6 +41,9 @@ def institution_admin_context(license_id: DocumentId, user: dict = Depends(curre
     404 on a real-but-foreign license is intentional — it must read
     identically to a license that does not exist, so probing license ids from
     another institution learns nothing.
+
+    Mutating (and console-facing) routes use `institution_admin_stepup`, which
+    layers MFA on top of this check.
     """
     if not user.get("emailVerified"):
         raise HTTPException(403, errors.EMAIL_NOT_VERIFIED)
@@ -52,6 +54,26 @@ def institution_admin_context(license_id: DocumentId, user: dict = Depends(curre
     if not repo.is_institution_admin(lic, email):
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     return {"user": user, "license_id": license_id}
+
+
+async def institution_admin_stepup(
+    license_id: DocumentId,
+    request: Request,
+    user: dict = Depends(current_user),
+    x_device_id: str = Header(default=""),
+    x_nonce: str = Header(default=""),
+    x_signature: str = Header(default=""),
+) -> dict:
+    """Institution IT + dashboard MFA step-up.
+
+    Membership first (so foreign licences still 404), then the same
+    device-or-MFA gate the operator and account consoles use.
+    """
+    ctx = institution_admin_context(license_id, user)
+    await ensure_web_step_up(
+        request, user, x_device_id, x_nonce, x_signature,
+    )
+    return ctx
 
 
 @router.get("/v1/institutions/licenses")
@@ -83,7 +105,7 @@ def list_my_licenses(user=Depends(current_user)):
 
 @router.get("/v1/institutions/licenses/{license_id}/seats")
 @router.get("/v1/campus/licenses/{license_id}/seats", include_in_schema=False)  # pre-rename alias
-def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_context)):
+def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_stepup)):
     """Every seat on this license: uid, email, device lock, status. No key
     plaintext — only the license's keyPrefix, same redaction as the
     Semper-staff admin listing.
@@ -107,7 +129,7 @@ def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_context)):
 def add_seat(
     license_id: DocumentId,
     body: InstitutionSeatAdd,
-    ctx=Depends(institution_admin_context),
+    ctx=Depends(institution_admin_stepup),
 ):
     """Put someone on this license's roster, by email.
 
@@ -155,7 +177,7 @@ def add_seat(
 def revoke_invite(
     license_id: DocumentId,
     invite_key: DocumentId,
-    ctx=Depends(institution_admin_context),
+    ctx=Depends(institution_admin_stepup),
 ):
     """Withdraw a promise that has not been kept yet.
 
@@ -183,7 +205,7 @@ def patch_seat(
     license_id: DocumentId,
     uid: Uid,
     body: InstitutionSeatPatch,
-    ctx=Depends(institution_admin_context),
+    ctx=Depends(institution_admin_stepup),
 ):
     """`clearDeviceLock=true` lets a seat holder re-bind to a new device
     without a Semper support ticket. `enabled=false` drops the seat to Demo
@@ -220,7 +242,7 @@ def patch_seat(
 
 @router.delete("/v1/institutions/licenses/{license_id}/seats/{uid}")
 @router.delete("/v1/campus/licenses/{license_id}/seats/{uid}", include_in_schema=False)  # pre-rename alias
-def revoke_seat(license_id: DocumentId, uid: Uid, ctx=Depends(institution_admin_context)):
+def revoke_seat(license_id: DocumentId, uid: Uid, ctx=Depends(institution_admin_stepup)):
     """Single-seat revoke: drops the holder to Demo (in place, no data loss)
     and frees the slot so another domain member can activate. Whole-key revoke
     stays on the Semper-staff POST /v1/admin/licenses/{id}/revoke path."""

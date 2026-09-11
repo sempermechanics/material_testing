@@ -1058,16 +1058,21 @@ downloadable; re-activating restores creation with zero data loss. See
 
 ### 20.4 Institution IT auth is deliberately narrow
 
-`institution_admin_context` (`backend/app/routers/institutions.py`) is a distinct auth
-tier from everything else in the app — worth naming precisely because it is
-easy to over- or under-scope:
+`institution_admin_stepup` (`backend/app/routers/institutions.py`) wraps
+membership in `adminEmails` with the same browser MFA step-up every other
+dashboard uses. Worth naming precisely because it is easy to over- or
+under-scope:
 
-- **Not** `verified_device` — institution IT manages seats from a browser or
-  script, not from the licensed device itself.
+- **Not** `verified_device` — institution IT manages seats from a browser, not
+  from the licensed device itself. The browser path still requires a completed
+  second factor and a recent `auth_time` (`ADMIN_WEB_REAUTH_SECONDS`).
 - **Not** Semper `role=admin` — an institution admin has zero authority
   outside the license(s) that name their verified email in `adminEmails`.
-  Semper staff mint/revoke stays entirely on the existing
-  `admin_user` + `verified_device` path.
+  Semper staff mint/revoke stays on `attested_or_mfa_admin` /
+  `attested_or_mfa_admin_fresh`.
+- **Membership before MFA**: a foreign licence id still returns the identical
+  `404 license_not_found` without disclosing that a second factor would have
+  been the next gate.
 - **Fails closed at every step**: unverified caller email → 403. A license id
   that does not exist, or exists but is not `kind=institution`, or is
   `kind=institution` but the caller's email is absent from `adminEmails` — **all
@@ -1427,10 +1432,14 @@ factor protecting licence issuance.
 Destructive actions confirm twice — a dialog naming who is affected, then
 typing the key prefix. Revoking withdraws entitlement; it deletes nothing.
 
-The institution console needs no second factor because
-`institution_admin_context` is token-only **by design** (§20.4) — written for
-IT working from a browser or curl, not from the licensed device, and reaching
-only the licences that name the caller.
+The institution console, the account page, and the operator desk all require
+the same TOTP enrolment and session second factor before they load
+(`ensureDashboardMfa` in `auth.js`). Backend routes used by those pages refuse
+a password-only token the same way: institution seat/invite work sits on
+`institution_admin_stepup`; account unbind and bundle download sit on
+`attested_or_mfa_user`; staff mutations sit on `attested_or_mfa_admin`, with
+whole-licence revoke on the tighter `attested_or_mfa_admin_fresh`
+(`ADMIN_WEB_REVOKE_REAUTH_SECONDS`).
 
 **CSP is relaxed for `/console/**` and the two addresses that rewrite into
 it.** A Hosting header is matched against the *request* path and knows nothing

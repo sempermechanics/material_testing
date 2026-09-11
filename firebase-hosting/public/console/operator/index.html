@@ -198,7 +198,7 @@
     import {
       requireSignIn, api, setStatus, esc, when,
       hasSecondFactor, beginTotpEnrolment, confirmByTyping,
-      ERR_CANCELLED,
+      stepUpForRevoke, ERR_CANCELLED,
     } from "../auth.js";
 
     const $ = (id) => document.getElementById(id);
@@ -495,11 +495,16 @@
         return;
       }
       try {
+        await stepUpForRevoke();
         await api(`/v1/admin/licenses/${encodeURIComponent(id)}/revoke`, { method: "POST" });
         setStatus(`${label} revoked.`);
         loadLicences();
         if (roster && roster.id === id) closeRoster();
       } catch (e) {
+        if (e.message === ERR_CANCELLED) {
+          setStatus("Revoke cancelled.");
+          return;
+        }
         setStatus(`Could not revoke: ${e.message}`, true);
       }
     }

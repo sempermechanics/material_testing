@@ -120,14 +120,19 @@ class Settings:
     ADMIN_WEB_MFA_ENABLED = os.environ.get("ADMIN_WEB_MFA_ENABLED", "1") == "1"
     # How old a sign-in may be and still authorise a state change, in seconds.
     # Short on purpose: this is "sudo mode", re-entered by re-authenticating,
-    # not a session length. Reads are not subject to it.
+    # not a session length. Dashboard reads that sit behind step-up use this
+    # too (institution IT console, account unbind/bundle).
     ADMIN_WEB_REAUTH_SECONDS = _env_int("ADMIN_WEB_REAUTH_SECONDS", "900")
+    # Tighter window for whole-licence revoke: password (or Google re-auth)
+    # plus TOTP must be fresh, not merely "signed into the dashboard earlier".
+    ADMIN_WEB_REVOKE_REAUTH_SECONDS = _env_int(
+        "ADMIN_WEB_REVOKE_REAUTH_SECONDS", "120"
+    )
 
-    # Both settings above govern the browser step-up for the *user* tier too,
-    # not only for staff: an account holder changing their own device proves
-    # itself the same way, and there is no second posture worth configuring
-    # separately. The names are historical — the staff console is what first
-    # needed them.
+    # Both settings above govern the browser step-up for the *user* and
+    # *institution IT* tiers too, not only for staff: the same trade is being
+    # made either way. The names are historical — the staff console is what
+    # first needed them.
 
     # How long a holder must wait between changing their own device. A second
     # factor proves who is asking, not how often, so without this one person

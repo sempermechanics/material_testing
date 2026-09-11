@@ -241,7 +241,29 @@ async def attested_or_mfa_admin(
     so an operator can browse the console on an ordinary session and is asked
     to re-authenticate at the point of acting.
     """
-    return await _attested_or_mfa(request, user, x_device_id, x_nonce, x_signature)
+    return await _attested_or_mfa(
+        request, user, x_device_id, x_nonce, x_signature,
+        max_age_seconds=settings.ADMIN_WEB_REAUTH_SECONDS,
+    )
+
+
+async def attested_or_mfa_admin_fresh(
+    request: Request,
+    user: dict = Depends(admin_user),
+    x_device_id: str = Header(default=""),
+    x_nonce: str = Header(default=""),
+    x_signature: str = Header(default=""),
+) -> dict:
+    """Semper-staff step-up with the tighter revoke window.
+
+    Whole-licence revoke asks for password (or Google re-auth) plus TOTP in
+    the console; this dependency refuses a session that is merely "still
+    inside the ordinary dashboard window". Device attestation still passes.
+    """
+    return await _attested_or_mfa(
+        request, user, x_device_id, x_nonce, x_signature,
+        max_age_seconds=settings.ADMIN_WEB_REVOKE_REAUTH_SECONDS,
+    )
 
 
 async def attested_or_mfa_user(
@@ -265,19 +287,53 @@ async def attested_or_mfa_user(
     an analysis out through a browser. Both are reachable from a page rather
     than the app, and a browser cannot produce an attestation.
     """
-    return await _attested_or_mfa(request, user, x_device_id, x_nonce, x_signature)
+    return await _attested_or_mfa(
+        request, user, x_device_id, x_nonce, x_signature,
+        max_age_seconds=settings.ADMIN_WEB_REAUTH_SECONDS,
+    )
 
 
-async def _attested_or_mfa(request: Request, user: dict, x_device_id: str,
-                           x_nonce: str, x_signature: str) -> dict:
-    """The step-up itself, shared by the admin and user tiers.
+async def ensure_web_step_up(
+    request: Request,
+    user: dict,
+    x_device_id: str = "",
+    x_nonce: str = "",
+    x_signature: str = "",
+    *,
+    max_age_seconds: int | None = None,
+) -> dict:
+    """Shared browser/device step-up used by institution IT and the admin tiers.
+
+    Institution membership is checked by the caller *before* this, so a foreign
+    licence still 404s without disclosing that MFA was the next gate.
+    """
+    return await _attested_or_mfa(
+        request, user, x_device_id, x_nonce, x_signature,
+        max_age_seconds=(
+            settings.ADMIN_WEB_REAUTH_SECONDS
+            if max_age_seconds is None
+            else max_age_seconds
+        ),
+    )
+
+
+async def _attested_or_mfa(
+    request: Request,
+    user: dict,
+    x_device_id: str,
+    x_nonce: str,
+    x_signature: str,
+    *,
+    max_age_seconds: int,
+) -> dict:
+    """The step-up itself, shared by admin, user, and institution tiers.
 
     A device attestation is preferred and checked in full whenever the request
     carries any device header, so the phone keeps exactly the guarantee it
     had. The browser path — second factor, recent sign-in — is the fallback,
-    governed by ADMIN_WEB_MFA_ENABLED and ADMIN_WEB_REAUTH_SECONDS for both
-    tiers: the trade being made is the same one either way, and a deployment
-    that withdraws the browser path should withdraw all of it.
+    governed by ADMIN_WEB_MFA_ENABLED and the caller's freshness window: the
+    trade being made is the same one either way, and a deployment that
+    withdraws the browser path should withdraw all of it.
     """
     if settings.DEV_INSECURE_AUTH:
         return {"user": user, "device": _DEV_DEVICE, "via": "dev"}
@@ -299,7 +355,7 @@ async def _attested_or_mfa(request: Request, user: dict, x_device_id: str,
         raise HTTPException(403, errors.MFA_REQUIRED)
 
     age = _auth_age_seconds(claims)
-    if age is None or age > settings.ADMIN_WEB_REAUTH_SECONDS:
+    if age is None or age > max_age_seconds:
         audit.record(user["uid"], action="AUTH_DENIED", outcome="DENIED",
                      detail={"stage": "reauth", "ageSeconds": age})
         raise HTTPException(403, errors.REAUTH_REQUIRED)

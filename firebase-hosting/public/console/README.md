@@ -53,27 +53,23 @@ entirely and restores attestation-only admin.
 
 Enrolment is TOTP **only** — the project enrols no SMS factor, so `auth.js`
 challenges TOTP and reports anything else rather than half-handling a factor it
-cannot complete. The account page needs the same factor for its two
-consequential actions, moving a licence to a new device and downloading an
-analysis, and offers the same enrolment.
+cannot complete. Every dashboard — operator, institution, and account — enrols
+and challenges that factor before it loads. Consequential account actions
+(moving a licence, downloading an analysis) and institution roster changes
+also require a fresh second factor on the API side.
 
 Enrolment shows the secret for manual entry rather than a QR code. Every QR
 service is somebody else's server and the payload is the TOTP secret itself, so fetching a picture would hand away the factor that protects
 licence issuance. The CSP forbids third-party images in any case.
 
-The institution console needs no second factor because
-`institution_admin_context` is token-only **by design** — it was written for IT
-working from a browser or curl, not from the licensed device, and it can only
-ever reach the licences that name the caller. See CLOUD_ARCHITECTURE_GCP §20.4.
-
 ## Confirming destructive actions
 
-Revoking a licence drops a whole institution to demo, so the page asks twice:
-once as a plain confirmation naming who is affected, then by making the
-operator **type the key prefix**. A yes/no dialog is muscle memory by the third
-licence of the afternoon; typing `SEMP-4K2P` is not something a hand does
-absent-mindedly. Nothing is deleted either way — revoking withdraws
-entitlement and leaves every saved analysis in place.
+Revoking a licence drops a whole institution to demo, so the page asks more
+than once: password (or Google) re-auth plus authenticator code, a plain
+confirmation naming who is affected, then typing the **key prefix**. The API
+also refuses a revoke on a session older than
+`ADMIN_WEB_REVOKE_REAUTH_SECONDS`. Nothing is deleted either way — revoking
+withdraws entitlement and leaves every saved analysis in place.
 
 ## Deploying
 

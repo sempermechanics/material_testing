@@ -26,13 +26,14 @@ from app.config import settings
 from app.deps import (
     admin_user,
     attested_or_mfa_admin,
+    attested_or_mfa_admin_fresh,
     attested_or_mfa_user,
     current_user,
     device_or_legacy_reader,
     verified_device,
 )
 from app.main import app
-from app.routers.institutions import institution_admin_context
+from app.routers.institutions import institution_admin_context, institution_admin_stepup
 from app.tasks import tasks_caller
 
 NONE, USER, ADMIN, DEVICE, DEVICE_ADMIN = "none", "user", "admin", "device", "device+admin"
@@ -44,11 +45,11 @@ TASK = "cloud-task"
 # window). Recorded explicitly so the compatibility gap is visible in the table
 # rather than masquerading as a plain USER or DEVICE route. Delete with the flag.
 DEVICE_MIGRATING = "device-migrating"
-# Institution IT self-service: current_user (ID token, APPROVED) + a verified email
-# present in that specific license's adminEmails — checked inside
-# institution_admin_context, not via admin_user or verified_device. Deliberately
-# distinct from ADMIN/DEVICE_ADMIN: no Semper role=admin, no device attestation.
+# Institution IT self-service: membership in adminEmails plus dashboard MFA
+# (institution_admin_stepup). Membership is checked before MFA so a foreign
+# licence still 404s. Deliberately distinct from ADMIN/DEVICE_ADMIN.
 INSTITUTION_ADMIN = "institution-admin"
+INSTITUTION_STEPUP = "institution-stepup"
 # Semper staff changing state. Satisfied EITHER by a device attestation (the
 # phone admin screen, unchanged) OR by an admin whose ID token records a
 # completed second factor and a recent sign-in (the browser console, which
@@ -57,6 +58,8 @@ INSTITUTION_ADMIN = "institution-admin"
 # inside the freshness window can do what a stolen token alone could not. The
 # table below is where that trade is visible.
 ADMIN_STEPUP = "admin-stepup"
+# Whole-licence revoke: same machinery, tighter ADMIN_WEB_REVOKE_REAUTH_SECONDS.
+ADMIN_STEPUP_FRESH = "admin-stepup-fresh"
 # The same step-up one tier down: an account holder acting on their own
 # licence, proved by an attested device or by a second factor on a recent
 # sign-in. It authorises nothing beyond what the holder already holds — it
@@ -96,7 +99,7 @@ EXPECTED = {
     ("GET", "/v1/admin/licenses"): ADMIN,
     ("POST", "/v1/admin/licenses"): ADMIN_STEPUP,
     ("PATCH", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP,
-    ("POST", "/v1/admin/licenses/{license_id}/revoke"): ADMIN_STEPUP,
+    ("POST", "/v1/admin/licenses/{license_id}/revoke"): ADMIN_STEPUP_FRESH,
     # Staff unbinding one institution seat. The same operation IT has on its
     # own route, at the staff tier, because staff are not in a customer's
     # adminEmails and that route 404s for them.
@@ -117,23 +120,23 @@ EXPECTED = {
     # named yet; the handler scopes it to the caller's own verified address
     # instead, and answers an empty list for everybody else.
     ("GET", "/v1/institutions/licenses"): USER,
-    ("POST", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
-    ("GET", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
-    ("PATCH", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
-    ("DELETE", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
+    ("POST", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
+    ("GET", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
+    ("PATCH", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
+    ("DELETE", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
     # Withdrawing an unclaimed invite. Same tier as the seat routes: an invite
     # is a roster decision, and it is scoped to one licence by the same
     # adminEmails check — the handler additionally refuses an invite whose
     # licenseId is not this one, so a guessed id reaches nothing.
-    ("DELETE", "/v1/institutions/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_ADMIN,
+    ("DELETE", "/v1/institutions/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_STEPUP,
     # Pre-rename aliases of the routes above. Same handler, same tier —
     # declared explicitly so a deprecation that drops them has to come through
     # this table, and so an alias can never quietly gain a weaker tier.
-    ("POST", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
-    ("GET", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_ADMIN,
-    ("PATCH", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
-    ("DELETE", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_ADMIN,
-    ("DELETE", "/v1/campus/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_ADMIN,
+    ("POST", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
+    ("GET", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
+    ("PATCH", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
+    ("DELETE", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
+    ("DELETE", "/v1/campus/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_STEPUP,
     ("POST", "/v1/tasks/provision-session"): TASK,
 }
 
@@ -157,6 +160,8 @@ def _tier(route) -> str:
     # flattened dependency set shows only admin_user — without this branch the
     # route would silently read as plain ADMIN and the step-up would vanish
     # from the table it is supposed to be visible in.
+    if attested_or_mfa_admin_fresh in calls:
+        return ADMIN_STEPUP_FRESH
     if attested_or_mfa_admin in calls:
         return ADMIN_STEPUP
     # Same reason as above: the shared step-up calls verified_device directly
@@ -164,6 +169,10 @@ def _tier(route) -> str:
     # would read as a plain USER one.
     if attested_or_mfa_user in calls:
         return USER_STEPUP
+    # institution_admin_stepup wraps membership then MFA; check before the
+    # bare membership dependency used by list_my_licenses routing helpers.
+    if institution_admin_stepup in calls:
+        return INSTITUTION_STEPUP
     if institution_admin_context in calls:
         return INSTITUTION_ADMIN
     has_device = verified_device in calls
@@ -356,14 +365,32 @@ INSTITUTION_B = "license-institution-b"
 
 @pytest.fixture
 def institution_it(monkeypatch):
-    """An APPROVED, verified-email user who is IT for INSTITUTION_A only."""
+    """An APPROVED, verified-email user who is IT for INSTITUTION_A only.
+
+    Carries a fresh second-factor claim so own-licence seat routes (now
+    institution_admin_stepup) still succeed; foreign-licence tests still
+    404 on membership before MFA is consulted.
+    """
+    import time as _time
+
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", False)
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
     monkeypatch.setattr(audit, "record", lambda *a, **k: None)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
 
     uid = "it-admin-a"
-    monkeypatch.setattr(deps, "verify_id_token", lambda _t: {"sub": uid})
+    monkeypatch.setattr(
+        deps, "verify_id_token",
+        lambda _t: {
+            "sub": uid,
+            "email": "it@university-a.edu",
+            "email_verified": True,
+            "firebase": {"sign_in_second_factor": "totp"},
+            "auth_time": _time.time() - 60,
+        },
+    )
     profile = {
         "uid": uid, "email": "it@university-a.edu", "role": "user",
         "access_status": "APPROVED", "emailVerified": True,
