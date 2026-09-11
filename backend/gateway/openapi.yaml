@@ -574,6 +574,29 @@ paths:
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: "License or seat not found (license_not_found, seat_not_found)" }
         '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/device-history:
+    get:
+      operationId: adminLicenseDeviceHistory
+      description: >
+        Semper-staff read of recent device bind / clear / unbind audit events
+        for one licence. Ordinary admin token (same as listing licences) —
+        not a mutation, so no device attestation / MFA step-up.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: limit
+          in: query
+          required: false
+          type: integer
+          default: 50
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid ID token }
+        '403': { description: Not an admin }
+        '404': { description: License not found }
+        '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}/revoke:
     post:
       operationId: adminRevokeLicense

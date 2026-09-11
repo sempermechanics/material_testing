@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.lifecycleScope
+import com.google.firebase.auth.MultiFactorResolver
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.AUTH_HOST
@@ -24,7 +25,6 @@ import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
-import com.google.firebase.auth.MultiFactorResolver
 import kotlinx.coroutines.launch
 import timber.log.Timber
 

@@ -59,16 +59,16 @@ object SeatLease {
      */
     suspend fun refreshConfigAndSeatBestEffort(context: Context) {
         val api = IndicApi.get(context)
-        if (!api.enabled) return
-        val token = TokenProvider.usableIdToken() ?: return
-        runCatching { api.getConfig(token) }
+        val token = if (api.enabled) TokenProvider.usableIdToken() else null
+        if (token == null) return
+        val refreshed = runCatching { api.getConfig(token) }
             .onSuccess { AppRemoteConfig.apply(context, it) }
             .onFailure {
                 AppRemoteConfig.recordFetchFailure(context)
                 Timber.d(it, "Background license config refresh failed")
-                return
             }
-        if (holdsFloatingSeat(context)) {
+            .isSuccess
+        if (refreshed && holdsFloatingSeat(context)) {
             heartbeatBestEffort(context)
         }
     }
@@ -81,8 +81,8 @@ object SeatLease {
         release: suspend (String) -> AppConfigDto,
         applyConfig: (AppConfigDto) -> Unit,
     ): Boolean {
-        if (!shouldRelease() || !apiEnabled()) return false
-        val idToken = token() ?: return false
+        val idToken = if (shouldRelease() && apiEnabled()) token() else null
+        if (idToken == null) return false
         return runCatching {
             applyConfig(release(idToken))
             true
@@ -98,8 +98,8 @@ object SeatLease {
         checkout: suspend (String) -> AppConfigDto,
         applyConfig: (AppConfigDto) -> Unit,
     ): Boolean {
-        if (!shouldHeartbeat() || !apiEnabled()) return false
-        val idToken = token() ?: return false
+        val idToken = if (shouldHeartbeat() && apiEnabled()) token() else null
+        if (idToken == null) return false
         return runCatching {
             applyConfig(checkout(idToken))
             true
