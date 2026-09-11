@@ -770,8 +770,10 @@ class SettingsActivity : AppCompatActivity() {
                 .setTitle(R.string.logout_confirm_title)
                 .setMessage(R.string.logout_confirm_body)
                 .setPositiveButton(R.string.action_sign_out) { _, _ ->
-                    AuthRepository(this).signOut()
-                    AuthRoute.toSignIn(this)
+                    lifecycleScope.launch {
+                        AuthRepository(this@SettingsActivity).signOut()
+                        AuthRoute.toSignIn(this@SettingsActivity)
+                    }
                 }
                 .setNegativeButton(R.string.action_cancel, null)
                 .show()

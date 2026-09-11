@@ -295,7 +295,17 @@ class AuthRepository(context: Context) {
         resolveStatus()
     }
 
-    fun signOut() {
+    /**
+     * End the Firebase session and clear local tokens.
+     *
+     * A floating seat is released first (best-effort) so the institution pool
+     * sees the slot free immediately rather than waiting for the lease TTL.
+     * Call from a coroutine — the release needs the ID token that this method
+     * then discards.
+     */
+    suspend fun signOut() = withContext(Dispatchers.IO) {
+        SeatLease.releaseBestEffort(appContext)
+        LicenseConfigWorker.cancel(appContext)
         auth.signOut()
         TokenStore.clear(appContext)
     }
@@ -396,6 +406,7 @@ class AuthRepository(context: Context) {
         val status = resolveStatus()
         if (status.isSuccess) {
             SemperAnalytics.event(appContext, SemperAnalytics.SIGN_IN, mapOf("method" to method))
+            LicenseConfigWorker.enqueue(appContext)
         } else {
             SemperAnalytics.event(
                 appContext,

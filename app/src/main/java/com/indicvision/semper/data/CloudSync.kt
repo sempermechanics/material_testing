@@ -247,7 +247,7 @@ object CloudSync {
         eraseCloud: suspend () -> Boolean,
         deleteIdentity: suspend () -> Boolean,
         wipeLocal: () -> Unit,
-        signOut: () -> Unit,
+        signOut: suspend () -> Unit,
     ): AccountDeletion {
         if (!eraseCloud()) return AccountDeletion.CLOUD_UNREACHABLE
         val identityGone = deleteIdentity()
