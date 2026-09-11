@@ -626,6 +626,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="stat_empty">--</string>
     <string name="viewer_stats_fmt">max %1$s at (%2$d, %3$d)\nmin %4$s at (%5$d, %6$d)\nmean %7$s %8$s</string>
     <string name="viewer_stats_plain_fmt">max %1$s · min %2$s · mean %3$s %4$s</string>
+    <!-- Summary colour bar is a whole-sequence scale; the ⓘ sheet must quote
+         those same ends, not the hidden first frame's extrema. -->
+    <string name="viewer_stats_sequence_fmt">max %1$s · min %2$s %3$s</string>
     <string name="probe_reading_fmt">%1$s: %2$s %3$s\n(%4$d, %5$d)</string>
     <string name="probe_no_data">No data</string>
     

@@ -447,8 +447,10 @@ analysis.
 
 **Colour scale.** Default is a **clamp at this frame's 2nd and 98th percentiles**,
 which is why the hairline reads "≤" and "≥" rather than "Min"/"Max" — a handful of
-outliers must not flatten the whole map. The ⓘ sheet still gives you the true
-extrema, and the two are allowed to disagree. Tap the bar to set fixed min/max
+outliers must not flatten the whole map. On a single frame the ⓘ sheet still
+gives you the true extrema, and the two are allowed to disagree. While the
+summary animation is up, ⓘ quotes the same whole-sequence ends as the colour
+bar — not the first frame sitting behind it. Tap the bar to set fixed min/max
 (remembered per field). **Auto scale** drops a custom override and returns to the
 clamped bounds. On a single-setting analysis the
 summary GIF and share field GIFs still use a whole-sequence scale so the
