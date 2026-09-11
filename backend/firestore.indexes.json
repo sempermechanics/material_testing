@@ -54,5 +54,6 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [],
+  "//leases": "Floating-seat lease reclaim (_sweep_expired_leases) is a single-field inequality on seats.leaseExpiresAt; Firestore serves that from the automatic single-field index — no composite is required here."
 }

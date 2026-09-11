@@ -242,6 +242,27 @@ def admin_clear_seat_device_lock(
             "previousDeviceId": (cleared or {}).get("previousDeviceId") or ""}
 
 
+@router.get("/v1/admin/licenses/{license_id}/device-history")
+def admin_license_device_history(
+    license_id: DocumentId,
+    limit: int = 50,
+    admin=Depends(admin_user),
+):
+    """Recent device bind / clear / unbind events for one licence.
+
+    Read-only: ordinary admin token is enough (same as listing licences). The
+    console uses this after a "New device" clear so support can see the move.
+    """
+    if not rate_limit.admin_bucket.allow(admin["uid"]):
+        raise HTTPException(429, errors.RATE_LIMITED)
+    if repo.get_license(license_id) is None:
+        raise HTTPException(404, errors.LICENSE_NOT_FOUND)
+    return {
+        "licenseId": license_id,
+        "events": audit.list_license_device_history(license_id, limit=limit),
+    }
+
+
 @router.post("/v1/admin/licenses/{license_id}/revoke")
 def admin_revoke_license(
     license_id: DocumentId,

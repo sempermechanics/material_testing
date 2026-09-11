@@ -408,6 +408,7 @@
         ${lic.kind === "institution"
           ? `<button class="secondary" data-roster="${esc(lic.id)}">Roster</button>`
           : `<button class="secondary" data-device="${esc(lic.id)}">New device</button>`}
+        <button class="secondary" data-history="${esc(lic.id)}">Devices</button>
         <button class="danger" data-revoke="${esc(lic.id)}">Revoke</button>`;
       return `
         <tr>
@@ -428,6 +429,7 @@
       if (btn.dataset.revoke) revokeLicence(btn.dataset.revoke);
       if (btn.dataset.roster) openRoster(btn.dataset.roster);
       if (btn.dataset.device) clearLicenceDevice(btn.dataset.device);
+      if (btn.dataset.history) showDeviceHistory(btn.dataset.history);
     });
 
     const labelOf = (id) => {
@@ -476,6 +478,29 @@
         loadLicences();
       } catch (e) {
         setStatus(`Could not unbind: ${e.message}`, true);
+      }
+    }
+
+    async function showDeviceHistory(id) {
+      try {
+        const data = await api(
+          `/v1/admin/licenses/${encodeURIComponent(id)}/device-history?limit=30`,
+        );
+        const lines = (data.events || []).map((e) => {
+          const prev = (e.detail && e.detail.previousDeviceId) || "";
+          const next = (e.detail && e.detail.deviceId) || "";
+          const who = e.uid || "—";
+          return `${e.ts || "?"}  ${e.action}  by ${who}` +
+            (prev ? `  left ${prev}` : "") +
+            (next ? `  → ${next}` : "");
+        });
+        window.alert(
+          lines.length
+            ? `Device history for ${labelOf(id)}\n\n${lines.join("\n")}`
+            : `No device moves recorded for ${labelOf(id)} yet.`,
+        );
+      } catch (e) {
+        setStatus(`Could not load device history: ${e.message}`, true);
       }
     }
 

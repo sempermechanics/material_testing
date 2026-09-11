@@ -104,6 +104,9 @@ EXPECTED = {
     # own route, at the staff tier, because staff are not in a customer's
     # adminEmails and that route 404s for them.
     ("PATCH", "/v1/admin/licenses/{license_id}/seats/{uid}/device"): ADMIN_STEPUP,
+    # Read-only device-move history for support. ADMIN (token) not step-up —
+    # same tier as listing licences.
+    ("GET", "/v1/admin/licenses/{license_id}/device-history"): ADMIN,
     ("POST", "/v1/licenses/activate"): USER,
     # Lease routes are USER, not INSTITUTION_ADMIN: the member takes their own
     # seat. Eligibility is the seat document, checked inside the transaction —

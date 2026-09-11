@@ -165,6 +165,16 @@ class _Query:
         )
 
     @classmethod
+    def _field_value(cls, data: dict, field: str):
+        """Resolve `a.b.c` the way Firestore document fields do for queries."""
+        cur = data
+        for part in field.split("."):
+            if not isinstance(cur, dict) or part not in cur:
+                return None, False
+            cur = cur[part]
+        return cur, True
+
+    @classmethod
     def _passes(cls, data, field, op, value) -> bool:
         """One filter clause.
 
@@ -173,12 +183,13 @@ class _Query:
         are simply not in the result set. Getting this wrong would make an
         expired-lease sweep also pick up seats that hold no lease at all.
         """
-        if field not in data:
+        stored, present = cls._field_value(data, field)
+        if not present:
             return op == "!=" if "!" in op else False
         if op == "array_contains":
-            return cls._OPS[op](data[field], value)
+            return cls._OPS[op](stored, value)
         try:
-            return cls._OPS[op](data[field], value)
+            return cls._OPS[op](stored, value)
         except TypeError:
             return False  # mismatched types are never comparable in Firestore
 
