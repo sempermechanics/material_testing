@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
+import com.indicvision.semper.data.LicenseConfigWorker
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
@@ -69,6 +70,7 @@ class SeatRequiredActivity : AppCompatActivity() {
             outcome
                 .onSuccess { config ->
                     AppRemoteConfig.apply(this@SeatRequiredActivity, config)
+                    LicenseConfigWorker.enqueue(this@SeatRequiredActivity)
                     Toast.makeText(this@SeatRequiredActivity, R.string.seat_taken, Toast.LENGTH_SHORT).show()
                     finish()
                 }

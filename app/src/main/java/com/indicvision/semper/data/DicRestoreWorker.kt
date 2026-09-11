@@ -62,7 +62,7 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
                     SemperAnalytics.CLOUD_RESTORE_FAILED,
                     mapOf("reason" to "rejected"),
                 )
-                Result.failure(workDataOf(KEY_ERROR to e.message))
+                Result.failure(workDataOf(KEY_ERROR to LicenseErrors.restoreMessage(applicationContext, e.message)))
             } else {
                 // Keep cacheDir *.part so the next attempt can Range-resume the
                 // Session.zip after a gateway/Cloud Run 5xx kill.

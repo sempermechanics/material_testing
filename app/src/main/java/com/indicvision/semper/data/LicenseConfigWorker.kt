@@ -33,27 +33,33 @@ class LicenseConfigWorker(
         private const val PERIOD_HOURS = 4L
 
         fun enqueue(context: Context) {
-            val work = PeriodicWorkRequestBuilder<LicenseConfigWorker>(
-                PERIOD_HOURS,
-                TimeUnit.HOURS,
-            )
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build(),
+            runCatching {
+                val work = PeriodicWorkRequestBuilder<LicenseConfigWorker>(
+                    PERIOD_HOURS,
+                    TimeUnit.HOURS,
                 )
-                .addTag("license-config")
-                .build()
-            WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
-                UNIQUE_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                work,
-            )
+                    .setConstraints(
+                        Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .build(),
+                    )
+                    .addTag("license-config")
+                    .build()
+                WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
+                    UNIQUE_NAME,
+                    ExistingPeriodicWorkPolicy.KEEP,
+                    work,
+                )
+            }.onFailure {
+                timber.log.Timber.w(it, "Could not schedule license config refresh")
+            }
         }
 
         fun cancel(context: Context) {
-            WorkManager.getInstance(context.applicationContext)
-                .cancelUniqueWork(UNIQUE_NAME)
+            runCatching {
+                WorkManager.getInstance(context.applicationContext)
+                    .cancelUniqueWork(UNIQUE_NAME)
+            }
         }
     }
 }

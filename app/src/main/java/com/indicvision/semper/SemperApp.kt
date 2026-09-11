@@ -3,7 +3,6 @@ package com.indicvision.semper
 import android.app.Application
 import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.DicSettings
-import com.indicvision.semper.data.LicenseConfigWorker
 import com.indicvision.semper.data.SeatHeartbeat
 import com.indicvision.semper.data.StorageBudget
 import kotlinx.coroutines.CoroutineScope
@@ -41,9 +40,9 @@ class SemperApp : Application() {
             CacheJanitor.sweepOnStartup(this@SemperApp)
             StorageBudget.enforce(this@SemperApp)
         }
-        // Floating-seat renew while this process is up, plus a slower background
-        // config refresh so an idle phone still learns a remote revoke.
+        // Floating-seat renew while this process is up. The slower background
+        // config refresh is scheduled after a successful sign-in — WorkManager
+        // is not always ready during Application.onCreate in unit tests.
         SeatHeartbeat.start(appScope, this)
-        LicenseConfigWorker.enqueue(this)
     }
 }

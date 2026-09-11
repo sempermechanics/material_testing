@@ -58,6 +58,15 @@ object ApiErrors {
      */
     const val NO_FLOATING_SEAT = "no_floating_seat"
 
+    /** Cloud backup/share refused because the account is on demo (403). */
+    const val FEATURE_NOT_LICENSED = "feature_not_licensed"
+
+    /**
+     * This device is not the one the licence is bound to (403). Usually means
+     * restore was attempted before the lock moved, or on the wrong phone.
+     */
+    const val LICENSE_DEVICE_MISMATCH = "license_device_mismatch"
+
     /**
      * The `detail` of an error [body], or the trimmed body when it is not the
      * usual JSON envelope — API Gateway and Cloud Run kills answer with plain

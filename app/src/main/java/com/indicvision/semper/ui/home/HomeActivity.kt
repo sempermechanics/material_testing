@@ -314,7 +314,7 @@ class HomeActivity : AppCompatActivity() {
                                 ?: getString(R.string.restore_failed_generic)
                             CrispToast.show(
                                 this@HomeActivity,
-                                getString(R.string.restore_failed_fmt, reason),
+                                reason,
                                 long = true,
                             )
                             refresh()

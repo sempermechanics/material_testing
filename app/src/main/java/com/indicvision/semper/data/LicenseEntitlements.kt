@@ -55,6 +55,9 @@ object LicenseEntitlements {
      */
     fun licenseKind(context: Context): String = AppRemoteConfig.licenseKind(context)
 
+    /** Key prefix shown for support (never the full key). Empty on demo. */
+    fun licensePrefix(context: Context): String = AppRemoteConfig.licensePrefix(context)
+
     /**
      * Whether this account has to hold a floating seat to work.
      *

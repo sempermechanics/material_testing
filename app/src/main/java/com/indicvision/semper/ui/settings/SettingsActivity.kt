@@ -539,7 +539,7 @@ class SettingsActivity : AppCompatActivity() {
                                     ?: getString(R.string.restore_failed_generic)
                                 CrispToast.show(
                                     this@SettingsActivity,
-                                    getString(R.string.restore_failed_fmt, reason),
+                                    reason,
                                     long = true,
                                 )
                             }

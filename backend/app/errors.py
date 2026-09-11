@@ -127,5 +127,7 @@ CLIENT_BRANCHED = frozenset(
         # The app renders this as "all seats are in use, try again" rather
         # than a failure, so a rename here needs the matching ApiErrors.kt edit.
         NO_FLOATING_SEAT,
+        FEATURE_NOT_LICENSED,
+        LICENSE_DEVICE_MISMATCH,
     }
 )
