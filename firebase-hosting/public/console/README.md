@@ -73,23 +73,37 @@ withdraws entitlement and leaves every saved analysis in place.
 
 ## Deploying
 
-Two placeholders are substituted before deploy, the same way
-`backend/gateway/openapi.yaml` substitutes `__CLOUD_RUN_URL__`. Never commit a
+Use [`scripts/deploy-console.sh`](../../../scripts/deploy-console.sh) so the
+placeholders are always restored, even if deploy fails mid-way. Never commit a
 live hostname.
 
 ```bash
-# The API Gateway host the app talks to, and the Firebase Auth domain.
-API="https://your-gateway-host"
-AUTH_DOMAIN="your-project.firebaseapp.com"
-
-sed -i.bak "s|__API_BASE_URL__|${API}|g"        public/console/config.js
-sed -i.bak "s|__API_ORIGIN__|${API}|g"          firebase.json
-sed -i.bak "s|__AUTH_DOMAIN__|${AUTH_DOMAIN}|g" firebase.json
-firebase deploy --only hosting
-# Then restore the templates so the placeholders stay in git:
-mv public/console/config.js.bak public/console/config.js
-mv firebase.json.bak firebase.json
+# From the repo root. The API Gateway host the app talks to, and the Firebase
+# Auth domain (must be an authorised domain on the project).
+API_BASE_URL="https://your-gateway-host" \
+AUTH_DOMAIN="your-project.firebaseapp.com" \
+./scripts/deploy-console.sh
 ```
+
+The script copies `config.js` / `firebase.json`, substitutes `__API_BASE_URL__`,
+`__API_ORIGIN__`, and `__AUTH_DOMAIN__`, runs `firebase deploy --only hosting`,
+then a `trap` puts the templates back.
+
+### Go-live checklist (Identity Platform + consoles)
+
+Same Firebase project as the app (`indicvision-dic-app-auth`). Do **not** open a
+second Auth directory.
+
+1. Confirm which Hosting site owns `sempermechanics.com` (`firebase hosting:sites:list`). `/login` is a rewrite on that site once console files are deployed.
+2. Upgrade the project to **Identity Platform**, enable the **TOTP** second factor, leave **SMS** off. Add `sempermechanics.com` (and any preview channel) to authorised domains.
+3. Put your address in `ADMIN_EMAILS` / `role: admin` for the operator desk.
+4. Deploy Cloud Run with the intended `DEMO_MAX_ANALYSES`, and keep `ADMIN_WEB_MFA_ENABLED=1`. Redeploy **API Gateway** so checkout / release / unbind / bundle / campus aliases are on the public surface — the backend workflow alone does not.
+5. `firebase deploy --only firestore:indexes` from the backend indexes file.
+6. Run `./scripts/deploy-console.sh` with the live gateway and Auth domain.
+7. Hand-check: enrol TOTP at `/login` as staff, as institution IT, and as an account holder; revoke a test licence only after password + TOTP (+ key prefix); sign in on the phone and complete the authenticator challenge.
+
+Identity Platform itself is free to enable. Email/social stays free to the usual
+MAU tier; TOTP has no SMS charge when SMS stays off.
 
 The console's Content-Security-Policy is scoped to `/console/**` and the two
 addresses that rewrite into it. Every other page — the legal pages, the auth

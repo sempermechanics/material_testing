@@ -469,6 +469,20 @@ Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_G
 [docs/OPERATING_MANUAL.md](docs/OPERATING_MANUAL.md) Appendix D, and
 [firebase-hosting/public/console/README.md](firebase-hosting/public/console/README.md).
 
+**Licensing remaining work on this branch (newest).** Dashboard login now
+requires TOTP for operator, institution IT, and `/account` (not token-only IT).
+Whole-licence revoke uses a tighter `ADMIN_WEB_REVOKE_REAUTH_SECONDS` window.
+The phone completes the same authenticator challenge after web enrolment.
+Floating seats renew in-process on `seatHeartbeatMinutes` and release on
+sign-out; a four-hour `LicenseConfigWorker` refreshes `/v1/config` so idle
+phones learn a remote revoke. Demo clients no longer enqueue cloud backup or
+open the share sheet when entitlements deny them; restore maps
+`license_device_mismatch` to a bind-first message. Operators can read
+device-move history per licence. Console deploy is
+[`scripts/deploy-console.sh`](scripts/deploy-console.sh) with a trap that
+restores placeholders — go-live still needs Identity Platform + gateway
+redeploy (see console README).
+
 **Backend lock regeneration is a CI workflow now, not a local chore**
 ([#105](https://github.com/sempermechanics/semperdic-app/pull/105)). Dependabot
 bumps `backend/requirements.txt` and cannot produce the hashed
