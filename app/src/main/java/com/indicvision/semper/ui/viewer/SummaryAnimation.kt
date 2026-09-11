@@ -23,9 +23,10 @@ import java.util.Locale
  * Two properties make it worth having rather than just scrubbing:
  *
  * - **One colour scale for the whole sequence.** Each field is rendered against
- *   its range over *all* frames ([globalRanges]), so a colour means the same
- *   strain in the first frame as in the last. Per-frame auto scaling — what the
- *   scrubber does — renormalises every frame and makes them incomparable by eye.
+ *   the envelope of every frame's own colour-bar ends ([globalRanges]): the
+ *   lowest scale-min and the highest scale-max, which may come from different
+ *   frames. Per-frame auto scaling — what the scrubber does — renormalises
+ *   every frame and makes them incomparable by eye.
  * - **Exact colours.** Frames are rendered straight to jet-palette indices and
  *   handed to [GifEncoder] with that palette, so nothing is quantised.
  *
@@ -247,13 +248,13 @@ class SummaryAnimation(private val spec: Spec) {
         }
 
         /**
-         * Every field's value range across every frame, from one decode pass.
+         * Every field's colour-bar envelope across every frame, from one decode pass.
          *
-         * A field's entry spans the displayed range of all frames — the lowest low
-         * and the highest high of the per-frame percentile bounds the viewer
-         * itself shows. Using those rather than raw extremes matters: one
-         * decorrelated point anywhere in the sequence would otherwise stretch the
-         * scale so far that the whole animation renders as a single colour.
+         * A field's entry is the lowest of each frame's scale-min and the highest
+         * of each frame's scale-max — the same ends a still-frame colour bar would
+         * show ([VisualizationEngine.valueRanges]). Those two ends need not come
+         * from the same frame: if frame 1's scale is ±200 and a later frame's
+         * scale is ±400, the GIF colour bar is ±400.
          *
          * Fields with no correlated points anywhere are absent from the result.
          *
