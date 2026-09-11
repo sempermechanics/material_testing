@@ -7,10 +7,13 @@ import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthMultiFactorException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.MultiFactorResolver
+import com.google.firebase.auth.TotpMultiFactorGenerator
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
@@ -68,6 +71,53 @@ class AuthRepository(context: Context) {
     }
 
     /**
+     * Finish a sign-in that already passed the first factor and now needs the
+     * authenticator code. [resolver] and [enrollmentId] come from
+     * [MfaTotpRequired] — the exception Firebase throws after password/Google.
+     */
+    suspend fun completeTotpChallenge(
+        resolver: MultiFactorResolver,
+        enrollmentId: String,
+        code: String,
+    ): Result<String> = firebaseThen("totp") {
+        resolveTotpAssertion(resolver, enrollmentId, code)
+    }
+
+    /**
+     * Same second-factor proof for [reauthenticateWithPassword] /
+     * [reauthenticateWithGoogle], without resolving backend access status —
+     * the caller already has a session and only needs Firebase to accept the
+     * fresh proof.
+     */
+    suspend fun resolveTotpChallenge(
+        resolver: MultiFactorResolver,
+        enrollmentId: String,
+        code: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            resolveTotpAssertion(resolver, enrollmentId, code)
+            Result.success(Unit)
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
+            Result.failure(Exception("Incorrect authenticator code.", e))
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "TOTP challenge failed")
+            Result.failure(Exception(e.message ?: "Incorrect authenticator code."))
+        }
+    }
+
+    private suspend fun resolveTotpAssertion(
+        resolver: MultiFactorResolver,
+        enrollmentId: String,
+        code: String,
+    ) {
+        val assertion = TotpMultiFactorGenerator.getAssertionForSignIn(
+            enrollmentId,
+            code.trim(),
+        )
+        resolver.resolveSignIn(assertion).await()
+    }
+
+    /**
      * New account: email + password. Fires a verification email and stops there —
      * [firebaseThen] blocks the session until the address is confirmed, so a new
      * account never reaches the backend before its owner has proved the mailbox
@@ -91,6 +141,8 @@ class AuthRepository(context: Context) {
         try {
             user.reauthenticate(EmailAuthProvider.getCredential(email, password)).await()
             Result.success(Unit)
+        } catch (e: FirebaseAuthMultiFactorException) {
+            Result.failure(mfaRequired(e))
         } catch (e: FirebaseAuthInvalidCredentialsException) {
             Result.failure(Exception("Incorrect password.", e))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -105,6 +157,8 @@ class AuthRepository(context: Context) {
         try {
             user.reauthenticate(GoogleAuthProvider.getCredential(googleIdToken, null)).await()
             Result.success(Unit)
+        } catch (e: FirebaseAuthMultiFactorException) {
+            Result.failure(mfaRequired(e))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.w(e, "Google re-authentication failed")
             Result.failure(Exception(e.message ?: "Could not verify your identity."))
@@ -270,6 +324,13 @@ class AuthRepository(context: Context) {
         }
         try {
             signIn()
+        } catch (e: FirebaseAuthMultiFactorException) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.SIGN_IN_FAILED,
+                mapOf("method" to method, "reason" to "mfa_required"),
+            )
+            return@withContext Result.failure(mfaRequired(e))
         } catch (e: FirebaseAuthWeakPasswordException) {
             SemperAnalytics.event(
                 appContext,
@@ -299,7 +360,12 @@ class AuthRepository(context: Context) {
                 SemperAnalytics.SIGN_IN_FAILED,
                 mapOf("method" to method, "reason" to "bad_credentials"),
             )
-            return@withContext Result.failure(Exception("Incorrect email or password.", e))
+            val message = if (method == "totp") {
+                "Incorrect authenticator code."
+            } else {
+                "Incorrect email or password."
+            }
+            return@withContext Result.failure(Exception(message, e))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.w(e, "Firebase sign-in failed")
             SemperAnalytics.event(
@@ -370,6 +436,27 @@ class AuthRepository(context: Context) {
         Exception(
             "Verify your email first. We've sent a link to $email — open it, then sign in again.",
         )
+
+    /**
+     * First factor succeeded; the account needs the authenticator code before a
+     * session exists. [enrollmentId] is the TOTP factor Firebase already
+     * enrolled (usually on a dashboard); the phone only completes the challenge.
+     */
+    class MfaTotpRequired(
+        val resolver: MultiFactorResolver,
+        val enrollmentId: String,
+    ) : Exception("Enter the code from your authenticator app.")
+
+    /** Map Firebase's multi-factor exception to a TOTP challenge the UI can run. */
+    private fun mfaRequired(e: FirebaseAuthMultiFactorException): Exception {
+        val enrollmentId = TotpMfa.enrollmentId(e.resolver.hints)
+            ?: return Exception(
+                "This account needs an authenticator app. Open the Semper website, " +
+                    "enrol one, then try again on the phone.",
+                e,
+            )
+        return MfaTotpRequired(e.resolver, enrollmentId)
+    }
 
     /** True when this account signs in with a password and has not confirmed its address. */
     private suspend fun needsEmailVerification(user: FirebaseUser): Boolean {

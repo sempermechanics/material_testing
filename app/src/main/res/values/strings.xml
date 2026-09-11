@@ -763,6 +763,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="auth_google_failed">Google sign-in failed.</string>
     <string name="auth_sign_in_failed">Sign-in failed.</string>
     <string name="auth_verify_first">Check your email for the verification link.</string>
+    <string name="auth_totp_body">Enter the 6-digit code from your authenticator app. There is no text-message option.</string>
+    <string name="auth_totp_hint">Authenticator code</string>
+    <string name="auth_totp_verify">Verify</string>
+    <string name="auth_totp_empty">Enter the code from your authenticator app.</string>
+    <string name="auth_totp_subtitle">Two-factor authentication</string>
 
     <!-- Auth: startup routing -->
     <string name="status_offline_mode">Offline Mode</string>
