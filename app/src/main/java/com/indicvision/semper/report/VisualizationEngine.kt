@@ -199,9 +199,8 @@ object VisualizationEngine {
      * points — the same percentile-clamped bounds [generateHeatmap] would pick
      * for each. Null for a field with no correlated points.
      *
-     * The summary animation needs every field's range across every frame before
-     * it can render anything; decoding each frame once and asking for all five
-     * ranges together keeps that pre-pass to a single walk of the data.
+     * Per-frame heatmaps use this. The summary GIF widens these same ends
+     * across the batch: lowest scale-min, highest scale-max.
      */
     fun valueRanges(data: FloatArray, valIndices: IntArray): Map<Int, Pair<Float, Float>?> {
         // One primitive column per field, holding the same values in the same order as

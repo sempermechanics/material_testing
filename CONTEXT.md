@@ -270,7 +270,11 @@ Viewer chrome is inset-aware glass: heatmap rest-fit contains the ROI or
 accepted points between the top bar and the scrub bar (colour scale overlays
 the right edge), field switcher as a top-left glass pill with the live field
 checked in its popup, auto-hiding on a timer, restored by a centre double-tap
-when faded. A short tap anywhere on the figure probes. Settings' Analyses rows
+when faded. A short tap anywhere on the figure probes. On a still frame the
+ⓘ sheet quotes true min/max/mean and a histogram of accepted values. The
+looping summary GIF uses one colour scale from every frame's trimmed ends
+(lowest min, highest max, possibly from different frames); its ⓘ sheet
+quotes those same ends without mean or histogram. Settings' Analyses rows
 carry three actions — **Download** (SAF destination first, then a worker),
 **Restore** (only when local frames are gone) and **Delete**. The sweep
 lattice's plot toggle is an **All / Node** pill defaulting to **All**; the scrub

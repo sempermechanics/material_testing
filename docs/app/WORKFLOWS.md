@@ -571,7 +571,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.2b | Check fit at rest | Heatmap (ROI or accepted points) is contained between the top bar and scrub bar; the colour scale may overlay the right edge and stays put while the figure pans |
 | [ ] 8.1.2c | Zoom, pan a region that was under the scale into the open area, then tap to probe | Probe readout shows a real point; tapping the scale itself still opens the custom-scale dialog, not a probe |
 | [ ] 8.1.3 | Check the scale units | `px` for U and V, `mε` for the strain fields |
-| [ ] 8.1.3b | Compare the scale labels with the ⓘ sheet's max/min | Scale labels read "≤ x" / "≥ y" and may be narrower — that's the display clamp, disclosed rather than hidden; the ⓘ sheet's numbers are the field's true extrema |
+| [ ] 8.1.3b | Compare the scale labels with the ⓘ sheet's max/min | On a frame, scale labels read "≤ x" / "≥ y" and may be narrower than the ⓘ sheet (display clamp vs true extrema). On the summary, the colour bar and ⓘ both quote the lowest scale-min and highest scale-max across frames (those two ends may come from different frames) |
 | [ ] 8.1.4 | Pinch to zoom | Zooms smoothly up to about 10×; panning is clamped to the image |
 | [ ] 8.1.5 | Zoom in and pan | The heatmap stays registered to the reference — no drift |
 | [ ] 8.1.6 | Zoom, then switch field | Zoom and pan are preserved |
@@ -580,7 +580,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.9 | Enter valid bounds and apply | The heatmap and the scale labels both change |
 | [ ] 8.1.10 | Switch field, then switch back | The custom bounds are remembered *per field* |
 | [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped; the scale returns to this frame's clamped bounds — not to its true extrema |
-| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the specimen name, max / min with coordinates, mean, and settings used |
+| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the specimen name, max / min with coordinates, mean, a histogram of this field, and settings used |
 | [ ] 8.1.13 | Scrub frames without a custom scale | Scale labels follow each frame's own 2nd/98th-percentile clamp |
 
 ### 8.2 Frames
@@ -618,6 +618,7 @@ onto a combination, with no summary slot and no Animations share target).
 | [ ] 8.2a.3 | Watch a 150-frame analysis | Every frame is there and the loop still finishes inside 10 s |
 | [ ] 8.2a.4 | Compare early and late frames of a growing test | Colour rises through the sequence — one scale throughout, no per-frame renormalising |
 | [ ] 8.2a.5 | Read the scale labels beside it | The widest bounds in the whole sequence, not the current frame's |
+| [ ] 8.2a.5a | Open ⓘ on the summary | Max and min of that GIF scale, no mean, and no histogram |
 | [ ] 8.2a.6 | Switch field | The animation rebuilds in that field; switching back replays from cache |
 | [ ] 8.2a.7 | Set a custom scale for one field | Only that field's animation rebuilds |
 | [ ] 8.2a.8 | Tap **Next** on the summary, then **Prev** on frame 1 | Leaves to frame 1 and comes back |
@@ -641,21 +642,24 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.3.4 | Pinch while a probe is up | Zoom works; the crosshair stays glued to the image point |
 | [ ] 8.3.5 | Switch field or frame with a probe up | The value updates for the same image location (or "No data") |
 | [ ] 8.3.6 | Tap the readout chip | The probe dismisses |
-| [ ] 8.3.7 | Open ⓘ | Stats list max and min with coordinates, plus mean — no Max/Min toggle |
+| [ ] 8.3.7 | Open ⓘ | Stats list max and min with coordinates, plus mean and a histogram — no Max/Min toggle |
 | [ ] 8.3.8 | Rotate with a probe up | Frame, field and probe survive |
 
 ### 8.4 Details (ⓘ peek sheet)
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.4.1 | Tap the info button | Peek sheet titled **Details** with the specimen name under it, then max / min (coordinates) / mean, then subset, step, strain window, strain method, ROI and image size |
+| [ ] 8.4.1 | Tap the info button | Peek sheet titled **Details** with the specimen name under it, then max / min (coordinates) / mean, a histogram of this field's accepted values, then subset, step, strain window, strain method, ROI and image size |
 | [ ] 8.4.1a | Open it on a run that stopped early | Two extra rows: **Stopped early** and **Frames solved (n of N)** — the provenance survives a restart |
+| [ ] 8.4.1b | Open it on the summary GIF | Max and min of the GIF colour-bar ends, no mean, and no histogram |
 | [ ] 8.4.2 | Compare against what you entered in the wizard | They match |
 | [ ] 8.4.3 | Look for a **virtual strain gauge** row | There is none, deliberately: VSG is `(strain window − 1) × step + 1`, and both of those are already rows above it |
 | [ ] 8.4.4 | Scrub to another combination and reopen | The values follow the new frame, not the run's first |
 | [ ] 8.4.5 | Open it on a sweep | A line-cut plot with colour-matched Exx / Eyy / Exy and the cut axis named |
 | [ ] 8.4.6 | Open it on a single-setting run | No line-cut section |
 | [ ] 8.4.7 | Look for **Go to Home** in the sheet | It is not there any more — Home is a chrome icon in the top bar (§8.6.1) |
+| [ ] 8.4.8 | Tap a histogram bar | Caption under the plot names that bin's count and value range, in px or millistrain |
+| [ ] 8.4.9 | Compare the histogram with the colour bar | The histogram includes the outliers the colour bar has clamped; its ends are the true min and max |
 
 ### 8.5 Share and export
 

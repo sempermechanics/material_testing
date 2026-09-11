@@ -204,6 +204,9 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     private var showingSummary = false
 
+    /** True while the looping summary GIF is the thing on screen. */
+    internal val isShowingSummary: Boolean get() = showingSummary
+
     internal fun summaryBatchFiles(): List<File> = batchFiles
 
     /** How many frames this analysis actually holds. */
@@ -222,8 +225,11 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Called when [ViewerSummaryHelper] finishes the whole-sequence range pass. */
     internal fun onSequenceRangesReady() {
-        // Frame heatmaps use per-frame min/max; the summary GIF reads sequence
-        // ranges itself. Nothing to refresh here.
+        // The summary colour bar is sequence-global; refresh ⓘ so it quotes
+        // the same ends instead of the hidden first frame's extrema.
+        if (!showingSummary) return
+        val data = rawData ?: return
+        applyFieldMetrics(fieldMetricsFor(currentFrameIndex, currentDataIndex, data), currentDataIndex)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -1057,6 +1063,25 @@ class ResultViewerActivity : AppCompatActivity() {
         }
         tvFinding.text = getString(R.string.viewer_edge_title_fmt, currentTypeString, frameBit)
 
+        if (showingSummary) {
+            val seq = summary.boundsFor(index)
+            val placeholder = getString(R.string.stat_empty)
+            val multiplier = DicResult.strainMultiplier(index)
+            val maxText = if (seq != null) {
+                ReportBuilder.formatMetric(seq.second * multiplier)
+            } else {
+                placeholder
+            }
+            val minText = if (seq != null) {
+                ReportBuilder.formatMetric(seq.first * multiplier)
+            } else {
+                placeholder
+            }
+            detailStats = getString(R.string.viewer_stats_sequence_fmt, maxText, minText, unit)
+            tvStatsCaption.text = detailStats
+            return
+        }
+
         val stats = metrics.stats
         if (stats == null) {
             detailStats = getString(R.string.stat_empty)
@@ -1196,34 +1221,19 @@ class ResultViewerActivity : AppCompatActivity() {
     /**
      * Memoised [FieldMetrics] keyed by (frameIndex, dataIndex). A decoded frame is
      * immutable, so these never need invalidation — only an LRU size bound. Computing
-     * them is O(n) + an O(n log n) percentile sort; caching means a field toggle or a
+     * them is one walk of accepted points; caching means a field toggle or a
      * revisited frame costs nothing, and [updateVisualization] warms the entry on its
      * background thread so a scrub settle never does the work on the main thread.
      * Guarded by its own monitor (read on Main, written on Dispatchers.Default).
      */
     private val fieldMetricsCache = LinkedHashMap<Long, FieldMetrics>()
 
-    /**
-     * Per-thread extrema scratch: [fieldMetricsFor] runs from both the Main thread
-     * and a `Dispatchers.Default` coroutine ([updateVisualization]'s scrub-settle
-     * warm-up) concurrently, so a single shared buffer would race. `ThreadLocal`
-     * gives each caller thread its own reusable array — same allocation saving,
-     * no synchronization needed.
-     */
-    private val fieldMetricsScratch: ThreadLocal<FloatArray> = ThreadLocal.withInitial { FloatArray(0) }
-
     internal fun fieldMetricsFor(frameIndex: Int, dataIndex: Int, data: FloatArray): FieldMetrics {
         val key = (frameIndex.toLong() shl Int.SIZE_BITS) or (dataIndex.toLong() and 0xFFFF_FFFFL)
         synchronized(fieldMetricsCache) { fieldMetricsCache[key]?.let { return it } }
         val stats = DicResult.fieldStats(data, dataIndex)
-        val needed = data.size / DicResult.STRIDE
-        var scratch = fieldMetricsScratch.get() ?: FloatArray(0)
-        if (scratch.size < needed) {
-            scratch = FloatArray(needed)
-            fieldMetricsScratch.set(scratch)
-        }
-        val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex, absoluteStrainValues = false, scratch)
-        val metrics = FieldMetrics(stats, extrema.maxIdx, extrema.minIdx)
+        val (maxIdx, minIdx) = trueExtremaIndices(data, dataIndex)
+        val metrics = FieldMetrics(stats, maxIdx, minIdx)
         synchronized(fieldMetricsCache) {
             fieldMetricsCache[key] = metrics
             if (fieldMetricsCache.size > FIELD_METRICS_CACHE_MAX) {
@@ -1233,6 +1243,34 @@ class ResultViewerActivity : AppCompatActivity() {
             }
         }
         return metrics
+    }
+
+    /**
+     * Indices of the accepted points that carry this field's true min and max —
+     * the same values [DicResult.fieldStats] reports — so the ⓘ coordinates
+     * match the printed numbers (not the colour-bar percentile clamp).
+     */
+    private fun trueExtremaIndices(data: FloatArray, dataIndex: Int): Pair<Int, Int> {
+        var maxIdx = -1
+        var minIdx = -1
+        var maxV = Float.NEGATIVE_INFINITY
+        var minV = Float.POSITIVE_INFINITY
+        var i = 0
+        while (i < data.size) {
+            if (DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) {
+                val v = data[i + dataIndex]
+                if (v > maxV) {
+                    maxV = v
+                    maxIdx = i
+                }
+                if (v < minV) {
+                    minV = v
+                    minIdx = i
+                }
+            }
+            i += DicResult.STRIDE
+        }
+        return maxIdx to minIdx
     }
 
     /** Push cached stats into the finding caption. Main thread only. */

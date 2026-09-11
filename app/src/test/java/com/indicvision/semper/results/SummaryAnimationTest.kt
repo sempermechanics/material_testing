@@ -126,6 +126,36 @@ class SummaryAnimationTest {
     }
 
     @Test
+    fun `a later frame's wider colour bar still sets the sequence scale`() {
+        // GIF max = max of each frame's scale-max; GIF min = min of each
+        // frame's scale-min. Those two ends need not come from the same frame.
+        val files = listOf(
+            frame("early.dat", -200f, 50f),
+            frame("late.dat", -50f, 400f),
+        )
+        val fields = intArrayOf(DicResult.IDX_EXX)
+        val early = requireNotNull(
+            VisualizationEngine.valueRanges(
+                requireNotNull(DicResult.decodeDatFile(files[0])),
+                fields,
+            )[DicResult.IDX_EXX],
+        )
+        val late = requireNotNull(
+            VisualizationEngine.valueRanges(
+                requireNotNull(DicResult.decodeDatFile(files[1])),
+                fields,
+            )[DicResult.IDX_EXX],
+        )
+
+        val exx = runBlocking { SummaryAnimation.globalRanges(files) }.getValue(DicResult.IDX_EXX)
+
+        assertEquals(minOf(early.first, late.first), exx.first, 0f)
+        assertEquals(maxOf(early.second, late.second), exx.second, 0f)
+        assertTrue("later frame should raise the sequence max", exx.second > early.second)
+        assertTrue("earlier frame should keep the sequence min", exx.first < late.first)
+    }
+
+    @Test
     fun `all five fields come back from one pass`() {
         val ranges = runBlocking { SummaryAnimation.globalRanges(listOf(frame("a.dat", 0f, 1f))) }
 
