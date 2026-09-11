@@ -13,7 +13,6 @@ import android.graphics.pdf.PdfDocument
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.indicvision.semper.R
-import com.indicvision.semper.data.CaptureNoiseFloor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -178,8 +177,6 @@ object PdfReportGenerator {
         layout.drawKeyValue("Strain Window:", "${data.strainWindow} px")
         layout.advanceY(40f)
 
-        drawMeasurementFloor(layout, data.captureFloor)
-
         layout.drawSectionHeader("Analysis Region (ROI)")
         layout.drawKeyValue("Origin (X, Y):", "(${data.roiData.startX}, ${data.roiData.startY})")
         layout.drawKeyValue("Dimensions:", "${data.roiData.width} x ${data.roiData.height} px")
@@ -193,37 +190,6 @@ object PdfReportGenerator {
             data.deformedImageName,
         )
     }
-
-    /**
-     * What this capture could resolve, stated before any of the fields are
-     * shown.
-     *
-     * It sits on the cover rather than in an appendix because it qualifies
-     * every number in the document: a strain smaller than the floor is the
-     * camera, not the specimen, and a reader who reaches the Exx page without
-     * having seen this has already been misled. Quiet italic notes — not a
-     * settings table or a red box — carry the floor and any caveats.
-     *
-     * An imported analysis has no burst behind it and says so, rather than
-     * leaving the section out — an absent section reads as a clean bill of
-     * health to anyone who does not know it can be absent.
-     */
-    private fun drawMeasurementFloor(layout: PdfLayoutEngine, floor: CaptureNoiseFloor?) {
-        layout.drawSectionHeader("Measurement Floor")
-        if (floor == null) {
-            layout.drawItalicNote("Noise floor not measured (imported frames).")
-            layout.advanceY(40f)
-            return
-        }
-        layout.drawItalicNote(floor.detail())
-        floor.warning()?.let { layout.drawItalicNote(it) }
-        if (floor.denoised()) layout.drawItalicNote(DENOISED_NOTICE)
-        layout.advanceY(40f)
-    }
-
-    private const val DENOISED_NOTICE =
-        "The phone smoothed these frames despite being told not to. Fine detail is lost, " +
-            "and the measured image noise reads lower than the camera really is."
 
     /**
      * Pages 2+: the five field blocks, two to a page — U and V, then Exx and

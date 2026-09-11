@@ -59,8 +59,15 @@ object SubsetRecommender {
      * [NOISE_VARIANCE] makes the measurement able to fix the failure it was
      * brought in for — a phone whose noise is *worse* than the lab camera's,
      * where the recommended subset is too small — while being unable to cause
-     * the opposite one. See [NoiseFloorPixels.noiseCorrelationOf] for the
-     * measurement that detects the smoothing, which warns rather than steers.
+     * the opposite one.
+     *
+     * **Nothing calls this with a real measurement today.** The in-app camera
+     * that produced one was removed, so every caller takes the default and the
+     * threshold is the paper's constant. The parameter and the clamp stay
+     * because the reasoning above is what any future measurement — from an
+     * import-side probe, say — would have to satisfy; see
+     * [NoiseFloorPixels.noiseCorrelationOf], which measures the smoothing but
+     * currently has no threshold and no caller either.
      *
      * A non-finite or non-positive value means no measurement, and falls back.
      */
@@ -122,6 +129,10 @@ object SubsetRecommender {
      *   and were capped at the largest allowed subset
      * @param focusNormX normalized x of the strongest-contrast sample (0..1)
      * @param focusNormY normalized y of the strongest-contrast sample (0..1)
+     * @param speckleDiameterPx median speckle diameter across the same sample
+     *   points, in pixels of this image, or null when no point could be
+     *   measured. See [SpeckleScale]; this is a different question from the
+     *   subset size and is reported separately rather than folded into it.
      */
     data class Result(
         val subsetSize: Int,
@@ -129,9 +140,26 @@ object SubsetRecommender {
         val cappedSamples: Int,
         val focusNormX: Float = 0.5f,
         val focusNormY: Float = 0.5f,
+        val speckleDiameterPx: Double? = null,
     ) {
         /** True when the speckle is too weak for the target accuracy at any allowed size. */
         val lowTexture: Boolean get() = samples > 0 && cappedSamples * 2 >= samples
+
+        /** Where the measured speckle sits against the iDICs band, if it was measured. */
+        val speckleVerdict: DicGoodPractice.Verdict?
+            get() = speckleDiameterPx?.let { DicGoodPractice.verdictFor(it) }
+
+        /**
+         * The subset size the measured speckle asks for — enough to span
+         * [DicGoodPractice.MIN_SPECKLES_PER_SUBSET] dots — or null when the
+         * speckle was not measurable.
+         *
+         * Deliberately *not* compared against [subsetSize] here. This is a
+         * requirement, and whether it is met depends on the size the user has
+         * since dialled in, which the recommendation cannot know.
+         */
+        val subsetSpanningSpeckles: Int?
+            get() = speckleDiameterPx?.let { DicGoodPractice.subsetForSpeckle(it) }
     }
 
     /**
@@ -229,6 +257,12 @@ object SubsetRecommender {
             var bestCx = region.centerX()
             var bestCy = region.centerY()
 
+            // Speckle diameters from the same patches, so the measurement
+            // costs no extra decoding: the patch is already square, already
+            // full-resolution and already inside the ROI, which is exactly
+            // what SpeckleScale needs.
+            val speckles = ArrayList<Double>(GRID * GRID)
+
             for (row in 0 until GRID) {
                 for (col in 0 until GRID) {
                     val cx = region.left + ((2 * col + 1) * region.width()) / (2 * GRID)
@@ -238,6 +272,7 @@ object SubsetRecommender {
                     val patch = source.readGray(x0, y0, side) ?: continue
                     val size = subsetSizeForPatch(patch, side, minSize, cappedMax, threshold)
                     perPoint.add(size)
+                    SpeckleScale.diameterPx(patch)?.let { speckles.add(it) }
                     if (size < bestSize) {
                         bestSize = size
                         bestCx = cx
@@ -248,12 +283,17 @@ object SubsetRecommender {
 
             if (perPoint.isEmpty()) return null
             perPoint.sort()
+            // Median, not mean: a patch that lands on a bare corner of the
+            // specimen measures a speckle the size of the whole window, and
+            // one such outlier would drag an average clean out of the band.
+            speckles.sort()
             return Result(
                 subsetSize = perPoint[perPoint.size / 2],
                 samples = perPoint.size,
                 cappedSamples = perPoint.count { it >= cappedMax },
                 focusNormX = bestCx.toFloat() / imgW.coerceAtLeast(1),
                 focusNormY = bestCy.toFloat() / imgH.coerceAtLeast(1),
+                speckleDiameterPx = speckles.getOrNull(speckles.size / 2),
             )
         } finally {
             source.close()

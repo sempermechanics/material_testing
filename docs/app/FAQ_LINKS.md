@@ -15,6 +15,7 @@ publishers; live links use the section ids below.
 |------|---------|------------------|------------------|-------------------------|
 | Wizard step 1 | Lossy-format accuracy chip | `lossy_format_warning_fmt` + chip FAQ | `url_faq_jpeg` | `#loading` |
 | Wizard step 1 | Low speckle / SSSIG chip | `texture_low_fmt` + chip FAQ | `url_faq_speckle` | `#loading` |
+| Wizard step 1 | Speckle-size chip | `speckle_under_resolved_fmt` / `speckle_over_resolved_fmt` / `speckle_subset_span_fmt` | `url_faq_speckle` | `#loading` |
 | Wizard step 2 | Frame-size mismatch chip | `frames_size_mismatch_fmt` + chip FAQ | `url_faq_frame_size` | `#loading` |
 | Wizard step 2 | ROI smaller than subset | `roi_too_small` snackbar **Why?** | `url_faq_roi_too_small` | `#setup` |
 | Wizard sweep | Subset range above ROI | sweep plan chip | `url_faq_sweep_subset_range` | `#reading` |
@@ -28,24 +29,12 @@ publishers; live links use the section ids below.
 | Result viewer | No `.dat` batch on open | `no_batch_data` snackbar **Why?** | `url_faq_no_batch_data` | `#reading` |
 | Result viewer | OOM while loading a frame | `viewer_frame_oom` snackbar **Why?** | `url_faq_viewer_oom` | `#reading` |
 | Result viewer | Custom scale min ≥ max | `invalid_scale_inputs` snackbar **Why?** | `url_faq_custom_scale` | `#reading` |
-| Result viewer | Strain field floor caption | `capture_noise_floor_readout` / `CaptureNoiseFloor.warning()` | `url_faq_noise_floor` | `#setup` |
-| Capture test shot | Floor **pass** dialog | Large value + `capture_noise_floor_body`; **ⓘ** (does not dismiss) | `url_faq_noise_floor` | `#setup` |
-| Capture test shot | Floor **fail** / drift / unsettled | `capture_noise_erroneous_*` / unsettled / drift; **Why?** (does not dismiss) | `url_faq_noise_floor` | `#setup` |
-| Capture test shot | Speckle-fail dialog | **Why?** | `url_faq_speckle` | `#loading` |
-| Capture test shot | HAL refused settings | `capture_isp_warn_more` snackbar | `url_faq_imaging_pipeline` | `#setup` |
-| Capture test shot | Burst frames smoothed | `capture_denoise_warn` snackbar | `url_faq_imaging_pipeline` | `#setup` |
 | Lattice | Hollow node tap | short reason dialog **Why?** | same `url_faq_engine_*` as the node code | `#during-a-run` or `#reading` for VSG |
 | Lattice | All combinations failed (summary line) | tap `vsg_lattice_all_failed` | `url_faq_engine_vsg` | `#reading` |
 
 ---
 
-## Related in-app copy (2026-08-28)
-
-Measurement floor dialog strings (`capture_noise_floor_*`):
-
-- **Pass:** label `capture_noise_floor_label`, body `capture_noise_floor_body`, button `capture_noise_continue`
-- **Fail:** title `capture_noise_erroneous_title`, body `capture_noise_erroneous_body` (floor value in layout, not repeated in body)
-- **Viewer:** `capture_noise_floor_readout` under strain colour bar
+## Related in-app copy
 
 Deep dive in repo (not linked from app):
 [NOISE_FLOOR_STRAIN_ACCURACY.md](NOISE_FLOOR_STRAIN_ACCURACY.md) (canonical lighting /

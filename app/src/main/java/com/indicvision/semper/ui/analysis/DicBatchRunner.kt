@@ -350,7 +350,6 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 frameCount = solvedFrames,
                 stopCode = engineErrorCode.also { lastStopCode = it },
                 plannedFrameCount = plannedFrames.also { lastPlannedFrames = it },
-                captureFloor = captureFloor,
                 // The names actually on disk in raw_deformed/ — reopening a
                 // session, exporting and cloud upload resolve images by these.
                 defNames = persistedRawNames.mapIndexed { i, persisted ->

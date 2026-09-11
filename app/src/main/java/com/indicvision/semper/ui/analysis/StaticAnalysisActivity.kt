@@ -50,12 +50,10 @@ import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
-import com.indicvision.semper.data.CaptureNoiseFloor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.net.AppRemoteConfig
-import com.indicvision.semper.ui.capture.CaptureSetupActivity
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
@@ -114,6 +112,13 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Inline speckle-quality warning from the SSSIG measurement. */
     private lateinit var lowTextureWarnRow: View
+
+    /** Inline speckle-*size* warning: the measured dot diameter against the iDICs band. */
+    private lateinit var speckleWarnRow: View
+    private lateinit var speckleSpanWarnRow: View
+
+    /** The measured speckle diameter, shown under the subset slider whether or not it is a problem. */
+    private lateinit var tvSpeckleReadout: TextView
     private lateinit var frameSizeWarnRow: View
     private lateinit var tvNextReason: TextView
     private var refPreviewBmp: android.graphics.Bitmap? = null
@@ -234,6 +239,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         lowTextureWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
             confirmOpenFaq(getString(R.string.url_faq_speckle))
         }
+        speckleWarnRow = findViewById(R.id.speckleWarnRow)
+        speckleSpanWarnRow = findViewById(R.id.speckleSpanWarnRow)
+        tvSpeckleReadout = findViewById(R.id.tvSpeckleReadout)
         tvNextReason = findViewById(R.id.tvNextReason)
         tvInstruction = findViewById(R.id.tvInstruction)
         tvRefName = findViewById(R.id.tvRefName)
@@ -349,24 +357,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
             intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
             handleVideo(it.toUri())
         }
-        // The floor the capture screen measured, before the frames themselves,
-        // so a hand-off that fails on the frames still cannot leave a floor
-        // belonging to one run attached to the next.
-        intent.getStringExtra(DicKeys.CAPTURE_NOISE_FLOOR)?.let {
-            intent.removeExtra(DicKeys.CAPTURE_NOISE_FLOOR)
-            viewModel.captureFloor = CaptureNoiseFloor.decode(it)
-        }
         intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
             intent.removeExtra(DicKeys.PICKED_DEF_URIS)
             if (list.isNotEmpty()) {
                 onDeformedPicked(list.map { it.toUri() })
             }
         }
-        if (intent.hasExtra(DicKeys.LAUNCHED_FROM_CAPTURE)) {
-            viewModel.launchedFromCapture = intent.getBooleanExtra(DicKeys.LAUNCHED_FROM_CAPTURE, false)
-            intent.removeExtra(DicKeys.LAUNCHED_FROM_CAPTURE)
-        }
-
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
         // and keep the wizard nav above the nav-bar gesture area so the top
         // controls aren't in the system swipe-down zone.
@@ -588,7 +584,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun handleReferenceImage(uri: Uri) {
-        viewModel.captureFloor = null
         val name = getFileName(uri)
         val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
 
@@ -1059,13 +1054,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         // Read off the slider here: the measurement runs on the native thread,
         // which must not touch views.
-        // The noise variance is measured on this phone under this light when
-        // the run captured its own frames; an import has no burst behind it and
-        // falls back to the paper's constant.
         val tuning = SubsetRecommender.Tuning(
             sizes = etSubsetSize.valueFrom.toInt()..etSubsetSize.valueTo.toInt(),
-            noiseVariance = viewModel.captureFloor?.noiseVariance
-                ?: SubsetRecommender.NOISE_VARIANCE,
         )
 
         lifecycleScope.launch(SemperNativeLib.nativeDispatcher) {
@@ -1101,6 +1091,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun applySubsetRecommendation() {
         val rec = viewModel.subsetRecommendation ?: run {
             lowTextureWarnRow.isVisible = false
+            speckleWarnRow.isVisible = false
+            speckleSpanWarnRow.isVisible = false
+            tvSpeckleReadout.isVisible = false
             return
         }
         // The one thing the measurement knows that the slider cannot show: even
@@ -1123,6 +1116,90 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // A new recommendation re-seeds the sweep's suggested inputs (unless the
         // user has already set their own).
         sweepHelper.onRecommendationChanged()
+        // After the slider has been seeded, so the span check judges the size
+        // that will actually be run.
+        showSpeckleFeedback()
+    }
+
+    /**
+     * Reports the measured speckle size against the iDICs *Good Practices
+     * Guide* band, so the user learns something about their specimen rather
+     * than only about the slider.
+     *
+     * Three surfaces, each placed where its fix is. The readout under the
+     * subset slider is shown whenever a measurement exists, good news included
+     * — it is the number the recommendation rests on, and a user who can see
+     * it can judge their own pattern before spending a run on it. The size
+     * chip sits on step 1 with the images, because a pattern outside the band
+     * is fixed by a different photograph and by nothing on step 2. The span
+     * chip sits on step 2 under the slider, because that slider is its fix and
+     * a warning the user cannot watch clear is a warning they will not trust.
+     *
+     * At most one chip shows: a pattern too fine or too coarse to resolve
+     * makes the subset-span question moot, so the size verdict is reported
+     * ahead of it and suppresses the span chip entirely.
+     */
+    private fun showSpeckleFeedback() {
+        val diameter = viewModel.subsetRecommendation?.speckleDiameterPx
+        if (diameter == null) {
+            // No measurable pattern in any sample patch. The low-texture chip
+            // already covers the case where that is the user's problem; saying
+            // nothing here is better than reporting a number we do not have.
+            speckleWarnRow.isVisible = false
+            speckleSpanWarnRow.isVisible = false
+            tvSpeckleReadout.isVisible = false
+            return
+        }
+
+        tvSpeckleReadout.text = getString(
+            R.string.speckle_readout_fmt,
+            diameter,
+            DicGoodPractice.MIN_SPECKLE_PX.toInt(),
+            DicGoodPractice.MAX_SPECKLE_PX.toInt(),
+        )
+        tvSpeckleReadout.isVisible = true
+
+        val sizeMessage = when (DicGoodPractice.verdictFor(diameter)) {
+            DicGoodPractice.Verdict.UNDER_RESOLVED -> getString(
+                R.string.speckle_under_resolved_fmt,
+                diameter,
+                DicGoodPractice.MIN_SPECKLE_PX.toInt(),
+            )
+            DicGoodPractice.Verdict.OVER_RESOLVED -> getString(
+                R.string.speckle_over_resolved_fmt,
+                diameter,
+                DicGoodPractice.MAX_SPECKLE_PX.toInt(),
+            )
+            DicGoodPractice.Verdict.USABLE -> null
+        }
+        // Read off the slider, not off the recommendation: the user may have
+        // moved it since, and a chip naming a size they are no longer using is
+        // worse than no chip. Suppressed outright while the size chip is up —
+        // spanning three speckles is not the problem on a pattern that cannot
+        // be resolved at all.
+        val spanMessage = if (sizeMessage != null) {
+            null
+        } else {
+            val inUse = etSubsetSize.value.toInt()
+            val wanted = viewModel.subsetRecommendation?.subsetSpanningSpeckles
+            if (wanted != null && wanted > inUse) {
+                getString(R.string.speckle_subset_span_fmt, inUse, wanted)
+            } else {
+                null
+            }
+        }
+
+        val faqUrl = getString(R.string.url_faq_speckle)
+        if (sizeMessage == null) {
+            speckleWarnRow.isVisible = false
+        } else {
+            wireWarningChip(speckleWarnRow, sizeMessage, faqUrl)
+        }
+        if (spanMessage == null) {
+            speckleSpanWarnRow.isVisible = false
+        } else {
+            wireWarningChip(speckleSpanWarnRow, spanMessage, faqUrl)
+        }
     }
 
     /**
@@ -1354,7 +1431,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             renderParamField = ::renderParamField,
             bindParamField = { field, slider, onUser -> bindParamField(field, slider, onUser) },
             showInfo = ::showInfo,
-            onSubsetUserModified = { viewModel.subsetUserModified = true },
+            onSubsetUserModified = {
+                viewModel.subsetUserModified = true
+                showSpeckleFeedback()
+            },
             onSubsetRecommendationRefresh = {
                 if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
             },
@@ -1367,6 +1447,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 etStrainWindow.value = 15f
                 rgInterpolator.check(R.id.rbBicubic)
                 settingsSheetHelper.syncFromStep()
+                showSpeckleFeedback()
                 if (::sweepHelper.isInitialized) {
                     viewModel.stepDenominator = VsgStudy.DEFAULT_STEP_DENOM
                     viewModel.subsetOverlap = VsgStudy.overlapForDenominator(VsgStudy.DEFAULT_STEP_DENOM)
@@ -1389,6 +1470,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         etStepSize.value = snapToSlider(etStepSize, params.step).toFloat()
         etStrainWindow.value = snapToSlider(etStrainWindow, params.window).toFloat()
         settingsSheetHelper.syncFromStep()
+        showSpeckleFeedback()
         if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
         clearRunStatus()
         // Bring the advanced-params card into view so the pasted values are visible.
@@ -1573,25 +1655,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun showLeaveAnalysisDialog() {
-        if (viewModel.launchedFromCapture) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.analysis_recapture_title)
-                .setMessage(R.string.analysis_recapture_message)
-                .setPositiveButton(R.string.analysis_recapture_confirm) { _, _ ->
-                    startActivity(Intent(this, CaptureSetupActivity::class.java))
-                    finish()
-                }
-                .setNegativeButton(R.string.exit) { _, _ -> finish() }
-                .setNeutralButton(R.string.cancel, null)
-                .show()
-        } else {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.exit_analysis_title)
-                .setMessage(R.string.exit_analysis_message)
-                .setPositiveButton(R.string.exit) { _, _ -> finish() }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
-        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.exit_analysis_title)
+            .setMessage(R.string.exit_analysis_message)
+            .setPositiveButton(R.string.exit) { _, _ -> finish() }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun finishImportOperation() {

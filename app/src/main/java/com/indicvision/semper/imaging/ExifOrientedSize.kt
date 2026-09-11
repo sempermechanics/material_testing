@@ -19,10 +19,6 @@ import java.io.File
  * same file. Import measures deformed frames the fast way and the reference the
  * native way, which made picking one image as both sides of an analysis report
  * a size mismatch.
- *
- * The capture flow does not need this: [com.indicvision.semper.ui.capture.CaptureJpegOrient]
- * rewrites its JPEGs upright and resets the tag, so both decoders already agree
- * there.
  */
 object ExifOrientedSize {
 

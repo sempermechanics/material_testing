@@ -4,7 +4,6 @@
 package com.indicvision.semper.report
 
 import com.indicvision.semper.DicResult
-import com.indicvision.semper.data.CaptureNoiseFloor
 import java.io.File
 import java.io.Writer
 import java.util.Locale
@@ -13,15 +12,15 @@ import java.util.Locale
  * The analysis CSV, shared by the share-sheet export and the cloud upload so the
  * two never drift: one file covering every frame's solved points.
  *
- * The file opens with `#`-comment metadata (session settings, ROI, optional
- * capture floor in millistrain, and per-frame field max/min/mean), then a blank
- * line, then the point-data header and rows. Naive readers that treat every
- * line as data should skip lines starting with `#` (e.g. `pandas.read_csv(...,
- * comment='#')`).
+ * The file opens with `#`-comment metadata (session settings, ROI, and
+ * per-frame field max/min/mean), then a blank line, then the point-data header
+ * and rows. Naive readers that treat every line as data should skip lines
+ * starting with `#` (e.g. `pandas.read_csv(..., comment='#')`).
  *
- * Point rows always lead with `image` and the eight DIC columns
- * (`x_px`…`znssd`). Recorded sessions append `noise_floor_mε` and three rigid-
- * body motion columns; imports omit those trailing columns entirely.
+ * Point rows lead with `image` and the eight DIC columns (`x_px`…`znssd`), then
+ * the three rigid-body motion columns. Those trail every session: the motion fit
+ * is read off the solved field itself, so it is there whatever the frames came
+ * from.
  */
 object AnalysisCsvWriter {
 
@@ -35,7 +34,6 @@ object AnalysisCsvWriter {
         val roiY: Int,
         val roiW: Int,
         val roiH: Int,
-        val captureFloor: CaptureNoiseFloor? = null,
     )
 
     /** One frame: its identity columns plus a lazy provider of its decoded field. */
@@ -48,9 +46,8 @@ object AnalysisCsvWriter {
     )
 
     private const val CSV_VERSION = 1
-    private const val MILLISTRAIN_DIVISOR = 1000.0
     private const val POINT_HEADER_BASE = "x_px,y_px,u_px,v_px,exx,eyy,exy,znssd"
-    private const val RECORDED_SUFFIX_HEADER = "noise_floor_mε,shift_u_px,shift_v_px,shift_rot_deg"
+    private const val MOTION_SUFFIX_HEADER = "shift_u_px,shift_v_px,shift_rot_deg"
     private const val SWEEP_SETTINGS_HEADER = "subset_px,step_px,strain_window,vsg_px,"
 
     private val FIELD_STATS = listOf(
@@ -84,39 +81,34 @@ object AnalysisCsvWriter {
         return Appender(w, sweep, metadata)
     }
 
-    /** Millistrain floor fragment for a recorded row suffix; empty when unmeasured. */
-    internal fun floorMillistrainColumn(floor: CaptureNoiseFloor?): String {
-        if (floor == null) return ""
-        return String.format(Locale.US, "%.5f,", millistrainOf(floor))
-    }
-
-    private fun millistrainOf(floor: CaptureNoiseFloor): Double =
-        floor.microstrain / MILLISTRAIN_DIVISOR
-
     /**
-     * Trailing recorded-session columns: floor (mε) plus shift_u/v and rotation.
-     * Empty when there is no capture floor (imports).
+     * The three rigid-body motion values a point row ends with, without the
+     * comma that joins them to the DIC columns.
+     *
+     * Written for every session, because the fit is read off the solved field
+     * itself and so exists whatever the frames came from. A frame whose field
+     * admits no fit still yields three empty columns rather than a short row:
+     * a reader counting columns must not have to guess which value went
+     * missing.
      */
-    internal fun recordedSuffixColumns(floor: CaptureNoiseFloor?, fit: RigidBodyFit.Fit?): String {
-        if (floor == null) return ""
-        val floorCol = floorMillistrainColumn(floor)
-        if (fit == null) return "$floorCol,,"
-        return floorCol + String.format(
+    internal fun motionSuffixColumns(fit: RigidBodyFit.Fit?): String {
+        if (fit == null) return ",,"
+        return String.format(
             Locale.US,
-            "%.4f,%.4f,%.5f,",
+            "%.4f,%.4f,%.5f",
             fit.uPx,
             fit.vPx,
             fit.rotationDeg,
         )
     }
 
-    internal fun pointHeader(sweep: Boolean, recorded: Boolean): String {
+    internal fun pointHeader(sweep: Boolean): String {
         val base = if (sweep) {
             "image,$SWEEP_SETTINGS_HEADER$POINT_HEADER_BASE"
         } else {
             "image,$POINT_HEADER_BASE"
         }
-        return if (recorded) "$base,$RECORDED_SUFFIX_HEADER" else base
+        return "$base,$MOTION_SUFFIX_HEADER"
     }
 
     private fun writeGlobalPreamble(w: Writer, metadata: Metadata) {
@@ -129,10 +121,6 @@ object AnalysisCsvWriter {
         w.append("# roi_y,${metadata.roiY}\n")
         w.append("# roi_w,${metadata.roiW}\n")
         w.append("# roi_h,${metadata.roiH}\n")
-        val floorLine = metadata.captureFloor?.let { floor ->
-            String.format(Locale.US, "%.5f", millistrainOf(floor))
-        }.orEmpty()
-        w.append("# noise_floor_mε,$floorLine\n")
     }
 
     private fun writeFieldStatsRow(
@@ -186,9 +174,7 @@ object AnalysisCsvWriter {
         fun startPointSection() {
             if (pointSectionStarted) return
             writer.append('\n')
-            writer.append(
-                pointHeader(sweep, metadata.captureFloor != null),
-            ).append('\n')
+            writer.append(pointHeader(sweep)).append('\n')
             pointSectionStarted = true
         }
 
@@ -198,7 +184,6 @@ object AnalysisCsvWriter {
                 writer,
                 frame,
                 prefix(frame, sweep),
-                metadata.captureFloor,
                 row,
                 formatter,
             )
@@ -214,22 +199,19 @@ object AnalysisCsvWriter {
         w: Writer,
         frame: Frame,
         prefix: String,
-        floor: CaptureNoiseFloor?,
         row: StringBuffer,
         formatter: DicResult.CsvPointFormatter,
     ) {
         val data = frame.data() ?: return
-        val suffix = recordedSuffixColumns(floor, RigidBodyFit.fit(data))
+        val suffix = motionSuffixColumns(RigidBodyFit.fit(data))
         var i = 0
         while (i < data.size) {
             if (DicResult.isSolvedPoint(data[i + DicResult.IDX_ZNSSD])) {
                 row.setLength(0)
                 row.append(prefix)
                 formatter.appendPoint(row, data, i)
-                if (suffix.isNotEmpty()) {
-                    row.append(',')
-                    row.append(suffix.trimEnd(','))
-                }
+                row.append(',')
+                row.append(suffix)
                 row.append('\n')
                 w.append(row)
             }
