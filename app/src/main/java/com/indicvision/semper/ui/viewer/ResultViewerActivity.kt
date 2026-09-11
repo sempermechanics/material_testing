@@ -204,6 +204,9 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     private var showingSummary = false
 
+    /** True while the looping summary GIF is the thing on screen. */
+    internal val isShowingSummary: Boolean get() = showingSummary
+
     internal fun summaryBatchFiles(): List<File> = batchFiles
 
     /** How many frames this analysis actually holds. */
@@ -1062,14 +1065,21 @@ class ResultViewerActivity : AppCompatActivity() {
 
         if (showingSummary) {
             val seq = summary.boundsFor(index)
-            if (seq != null) {
-                val multiplier = DicResult.strainMultiplier(index)
-                val maxText = ReportBuilder.formatMetric(seq.second * multiplier)
-                val minText = ReportBuilder.formatMetric(seq.first * multiplier)
-                detailStats = getString(R.string.viewer_stats_sequence_fmt, maxText, minText, unit)
-                tvStatsCaption.text = detailStats
-                return
+            val placeholder = getString(R.string.stat_empty)
+            val multiplier = DicResult.strainMultiplier(index)
+            val maxText = if (seq != null) {
+                ReportBuilder.formatMetric(seq.second * multiplier)
+            } else {
+                placeholder
             }
+            val minText = if (seq != null) {
+                ReportBuilder.formatMetric(seq.first * multiplier)
+            } else {
+                placeholder
+            }
+            detailStats = getString(R.string.viewer_stats_sequence_fmt, maxText, minText, unit)
+            tvStatsCaption.text = detailStats
+            return
         }
 
         val stats = metrics.stats

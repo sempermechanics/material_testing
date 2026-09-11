@@ -225,7 +225,7 @@ exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFL
 | Reads | `.dat` frames via `DicResult.decodeDatFile` (memory-mapped) and `data/DatCodec` |
 | Renders | `report/VisualizationEngine` heatmaps, `ui/viewer/HeatmapFit` rest-fit, `TouchImageView` zoom/pan, `ViewerFieldPills`, `ScrubFrameCache` look-ahead; single-setting only: `ViewerSummaryHelper` + `SummaryAnimation` + `report/GifEncoder` |
 | Probe | `ViewerInspectHelper` + `PointSpatialIndex` (built lazily on first tap) + `InspectOverlayView` |
-| Details | `ViewerSettingsSheet` (ⓘ). On a frame: true extrema. On the summary: the same whole-sequence colour-bar ends as `ViewerSummaryHelper` |
+| Details | `ViewerSettingsSheet` (ⓘ). On a frame: true extrema. On the summary: min of every frame's colour-bar min and max of every frame's colour-bar max, matching the GIF |
 | Exports | `ShareCenter` → `ViewerReportFactory` / `report/ReportBuilder` / `PdfReportGenerator` / `AnalysisCsvWriter` / `data/SessionEverythingExporter` → `SendToSheet` → `SaveExportActivity` (SAF) |
 | Fails as | Snackbar + **Why?** FAQ (`no_batch_data`, OOM, scale) |
 | Tests | `results/*` (decode, CSV, heatmap, PDF, GIF, summary), `viewer/ScrubFrameCacheTest`, `viewer/FrameNumberEntryTest`, `HeatmapFitTest`, `ViewerFieldPillsTest` |
