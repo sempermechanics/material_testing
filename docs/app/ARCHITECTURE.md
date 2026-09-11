@@ -49,7 +49,7 @@ Intent extras shared across Activities live in
 | `imaging/` | `BitmapDecode`, `ImageEncode` — decode/encode away from the UI classes |
 | `navigation/` | `AppIntents` — intent factories so `data` / `report` never import a `ui` Activity |
 | `util/` | `BrandAssets`, `Digests`, `OverlayFormats` |
-| *(root)* | `SemperApp`, `Diagnostics`, `CrashReportingTree`, `DicKeys`, `DicResult` |
+| *(root)* | `SemperApp`, `Diagnostics`, `CrashReportingTree`, `DicKeys`, `DicResult`, `FieldHistogram` |
 
 Style for shared UI logic: plain `object` / small classes named `*Helper`,
 `*Extractor`, `*Router`, `*Bundler` — same pattern as

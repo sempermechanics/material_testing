@@ -442,8 +442,9 @@ field change. Double-tap zooms or resets. A horizontal fling while fit-to-screen
 steps frames. Chrome auto-hides after a short idle; pan or scrub brings it back,
 and so does a tap in the middle of the screen or a downward swipe. The figure
 itself runs edge to edge, under the system bars. The ⓘ sheet holds the specimen
-name, max / min (with coordinates), mean, and the settings used for this
-analysis.
+name, max / min (with coordinates), mean, a histogram of this frame's accepted
+values, and the settings used for this analysis. The looping summary has no
+mean and no histogram — its ⓘ sheet quotes only the GIF colour-bar ends.
 
 **Colour scale.** Default on a **single frame** is a **clamp at this frame's 2nd and 98th percentiles**,
 which is why the hairline reads "≤" and "≥" rather than "Min"/"Max" — a handful of
@@ -488,7 +489,10 @@ where you are. On a sweep each frame is a parameter combination, labelled like
 
 <img src="images/settings-used.png" width="300" alt="Settings used sheet">
 
-The ⓘ button. Everything the result was computed with — and on a sweep, the
+The ⓘ button. On a still frame: true min, max and mean, then a histogram of
+every accepted point (including values the colour bar has clamped away). Tap a
+bar for that bin's range and count. On the summary GIF the histogram is omitted.
+Then everything the result was computed with — and on a sweep, the
 line-cut plot. There is no separate VSG row: it is `(strain window − 1) × step + 1`,
 and both of those are already listed, so `(13 − 1) × 5 + 1 = 61 px` is yours to
 read off (the relation is in [§5](#5-parameters)). A run that stopped early also
