@@ -893,6 +893,26 @@ license id they do not administer, or one that does not exist, both come back
 as the identical "not found" — so nothing about a foreign institution's
 licenses leaks by probing ids.
 
+**Did the revoke actually land?** Removing someone frees the slot at once, so
+the seats console shows the new number immediately — but that number is what
+IT *intended*, and it is the only number IT has. The person's account is
+demoted a moment later, and their phone only finds out when the app next
+checks in, which for an idle phone is up to four hours.
+
+Semper staff can see the difference. In the operator console, **Verify** on an
+institution licence checks every seat against its holder and says, in words,
+which revocations have landed and which have not. Two answers matter:
+
+- *"The revoke did not land — this account is still licensed."* This is a
+  fault, not a delay: the demotion never wrote. **Revoke the seat again.** It
+  is safe to repeat and re-runs the demotion.
+- *"This account has not been back since."* Nothing is wrong. The record is
+  correct and the phone has not connected to hear it. It will, and there is
+  nothing to do.
+
+This is the check to run when someone reports that an ex-member is still using
+Semper, and the answer to give when IT asks whether a removal "went through".
+
 **Changing device.** A phone dies, is replaced, or the wrong one was signed
 in on. Three people can move a licence, and all three do the same thing —
 empty the device lock:

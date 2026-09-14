@@ -462,6 +462,34 @@ JSON.
 case in `auth.js`, the invisible reCAPTCHA and two SDK imports were
 unreachable.
 
+**A revoke has three clocks, and only one of them is counted (same branch,
+latest).** `seatsUsed` moves inside the revoke transaction, the holder's user
+document just after it (`_drop_user_to_demo_if_licensed`, outside the
+transaction and unretried), and the holder's *device* only at its next
+`/v1/config` fetch. Institution IT reads the first, so their console can only
+report intent. `GET /v1/admin/licenses/{id}/reconcile` is the second number: a
+plain `ADMIN` read, one user lookup per seat, sorting each into `active` (with
+`never_claimed` for a roster place nobody took up), `revokedConfirmed` or
+`revokedStillRunning`, each with a reason.
+
+*Confirmation takes two conditions.* Because the demotion already runs at
+revoke time, a bucket keyed only on stored mode would read clean almost always
+and hide the lag a customer actually feels. A revoke is settled only when the
+record has caught up **and** `lastSeenAt > revokedAt`. `still_licensed` is a
+fault repaired by revoking again (idempotent, re-runs the demotion);
+`no_checkin_since_revoke` is waited out. `lastSeenAt` is throttled to an hour,
+so the read over-reports unlanded revokes for up to that long — the safe
+direction.
+
+*Stored mode, not `effective_mode`.* A floating member between leases reads as
+demo and is squarely on the roster; the effective view would report a healthy
+pool as a mass of failed revokes. Both revoke paths now stamp `revokedAt`
+apart from `updatedAt`, which a later staff device clear would otherwise reset.
+
+Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
+§20.12, [docs/OPERATING_MANUAL.md](docs/OPERATING_MANUAL.md) Appendix D, and
+[firebase-hosting/public/console/README.md](firebase-hosting/public/console/README.md).
+
 Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
 §20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,
 [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md),

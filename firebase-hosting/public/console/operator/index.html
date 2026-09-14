@@ -171,6 +171,30 @@
         </div>
       </section>
 
+      <!-- -------------------------------------------------- reconcile -->
+      <!-- The roster above is what IT believes. This is what the licence
+           actually entitles, which is not the same thing and cannot be made
+           the same thing: a revoke reaches the seat at once, the holder's
+           account a moment later, and the holder's device only when it next
+           checks in. -->
+      <section class="card" id="verifyCard" hidden>
+        <div class="row">
+          <h2 style="margin:0">Verified seats · <span id="verifyName" class="mono"></span></h2>
+          <span class="spacer"></span>
+          <button id="verifyReload" class="secondary">Re-check</button>
+          <button id="verifyClose" class="secondary">Close</button>
+        </div>
+        <p id="verifySummary"></p>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr><th>Member</th><th>Seat</th><th>What that means</th><th>Last seen</th></tr>
+            </thead>
+            <tbody id="verifyRows"></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ------------------------------------------------------ people -->
       <section class="card">
         <div class="row">
@@ -204,6 +228,10 @@
     const $ = (id) => document.getElementById(id);
     let licences = [];
     let roster = null;      // { id, label } of the licence whose roster is open
+    // Reconciliation reports, keyed by licence id, kept only for this page
+    // load. Filled on demand: the read costs one user lookup per seat, so it
+    // is never run for the whole table at once.
+    let verified = {};
     let enrolment = null;
 
     requireSignIn((user) => {
@@ -357,6 +385,11 @@
 
     async function loadLicences() {
       setStatus("Loading…");
+      // Every caller of this is either a page load or something that just
+      // changed a licence or a seat, so any reconciliation already on screen
+      // describes a state that no longer exists.
+      const wasOpen = $("verifyCard").hidden ? "" : $("verifyCard").dataset.licence;
+      verified = {};
       try {
         const data = await api("/v1/admin/licenses?limit=200");
         licences = data.licenses || [];
@@ -366,6 +399,8 @@
           : `${page.count} licence(s).`;
         renderLicences();
         setStatus("");
+        // A revoke is exactly the moment to ask again whether it landed.
+        if (wasOpen) loadVerified(wasOpen);
       } catch (e) {
         setStatus(
           e.message === "not_admin"
@@ -392,9 +427,21 @@
       // The two counts mean different things, and conflating them is the
       // easiest mistake to make when reading this table: on a floating licence
       // maxSeats caps concurrent use, not roster size.
-      return lic.seating === "floating"
+      const intended = lic.seating === "floating"
         ? `${lic.leasesActive ?? 0}/${cap} in use · ${lic.seatsUsed ?? 0} on roster`
         : `${lic.seatsUsed ?? 0}/${cap}`;
+      return intended + verifiedNote(lic.id);
+    }
+
+    /** The second count, once someone has asked for it. */
+    function verifiedNote(id) {
+      const report = verified[id];
+      if (!report) return "";
+      const outstanding = report.counts.revokedStillRunning;
+      return outstanding
+        ? ` · <span class="err">${outstanding} revoke${outstanding === 1 ? "" : "s"}` +
+          ` not landed</span>`
+        : ` · <span class="ok">${report.entitled} verified</span>`;
     }
 
     function licenceRow(lic) {
@@ -406,7 +453,8 @@
       const actions = revoked ? "" : `
         <button class="secondary" data-extend="${esc(lic.id)}">Extend</button>
         ${lic.kind === "institution"
-          ? `<button class="secondary" data-roster="${esc(lic.id)}">Roster</button>`
+          ? `<button class="secondary" data-roster="${esc(lic.id)}">Roster</button>
+             <button class="secondary" data-verify="${esc(lic.id)}">Verify</button>`
           : `<button class="secondary" data-device="${esc(lic.id)}">New device</button>`}
         <button class="secondary" data-history="${esc(lic.id)}">Devices</button>
         <button class="danger" data-revoke="${esc(lic.id)}">Revoke</button>`;
@@ -430,6 +478,7 @@
       if (btn.dataset.roster) openRoster(btn.dataset.roster);
       if (btn.dataset.device) clearLicenceDevice(btn.dataset.device);
       if (btn.dataset.history) showDeviceHistory(btn.dataset.history);
+      if (btn.dataset.verify) openVerified(btn.dataset.verify);
     });
 
     const labelOf = (id) => {
@@ -503,6 +552,124 @@
         setStatus(`Could not load device history: ${e.message}`, true);
       }
     }
+
+    /* ------------------------------------------------------- verified seats
+     *
+     * The roster is a statement of intent. `seatsUsed` moves the instant IT
+     * revokes a seat, so the institution's own console can only ever report
+     * what IT meant to happen. This asks the backend what the licence still
+     * entitles, seat by seat, and names the difference.
+     *
+     * Two of the answers are ordinary and one is a fault, so every row says
+     * which it is in words rather than leaving a code to be looked up.
+     */
+    const SEAT_PROSE = {
+      "": "On the roster and holding the licence.",
+      never_claimed:
+        "Invited but never signed in. Occupies a seat; entitles nobody.",
+      still_licensed:
+        "The revoke did not land — this account is still licensed. " +
+        "Revoke the seat again to repair it.",
+      no_checkin_since_revoke:
+        "Revoked, but this account has not been back since. The device may " +
+        "still be running on the licence it cached.",
+      checked_in: "Revoked, and the account has been back since to hear it.",
+      moved_on: "Revoked, and the account is on a different licence now.",
+      no_account: "Revoked, and there is no account behind the seat.",
+    };
+
+    const SEAT_PILL = {
+      active: "ok",
+      revokedConfirmed: "off",
+      revokedStillRunning: "warn",
+    };
+
+    async function openVerified(id) {
+      $("verifyName").textContent = labelOf(id);
+      $("verifyCard").hidden = false;
+      $("verifyCard").dataset.licence = id;
+      await loadVerified(id);
+    }
+
+    async function loadVerified(id) {
+      $("verifySummary").textContent = "Checking every seat against its holder…";
+      $("verifyRows").innerHTML = "";
+      try {
+        const report = await api(
+          `/v1/admin/licenses/${encodeURIComponent(id)}/reconcile`,
+        );
+        verified[id] = report;
+        $("verifySummary").innerHTML = verifiedSummary(report);
+        $("verifyRows").innerHTML = (report.seats || []).map(verifiedRow).join("") ||
+          '<tr><td colspan="4" class="muted">No seats on this licence yet.</td></tr>';
+        // The Seats column now has a second number to show for this licence.
+        renderLicences();
+      } catch (e) {
+        const msg = e.message === "kind_not_institution"
+          ? "This is an individual licence: one holder, no roster, so there " +
+            "are no two counts to compare."
+          : `Could not check the seats: ${e.message}`;
+        $("verifySummary").innerHTML = `<span class="err">${esc(msg)}</span>`;
+      }
+    }
+
+    function verifiedSummary(report) {
+      const c = report.counts;
+      const parts = [
+        `IT's roster says <strong>${report.intended}</strong> ` +
+        `seat${report.intended === 1 ? " is" : "s are"} in use.`,
+        `<strong>${report.entitled}</strong> account` +
+        `${report.entitled === 1 ? " is" : "s are"} actually entitled.`,
+      ];
+      if (c.revokedStillRunning) {
+        parts.push(
+          `<span class="err"><strong>${c.revokedStillRunning}</strong> ` +
+          `revoke${c.revokedStillRunning === 1 ? " has" : "s have"} not ` +
+          `landed yet</span> — see below for which, and why.`,
+        );
+      } else {
+        parts.push('<span class="ok">Every revoke has landed.</span>');
+      }
+      if (c.neverClaimed) {
+        parts.push(
+          `${c.neverClaimed} seat${c.neverClaimed === 1 ? "" : "s"} ` +
+          "held by someone who has never signed in.",
+        );
+      }
+      // A counter that disagrees with its own seats is a different fault from
+      // anything the buckets describe, and worth saying out loud.
+      if (report.intended !== report.intendedRecounted) {
+        parts.push(
+          `<span class="err">seatsUsed says ${report.intended} but there ` +
+          `are ${report.intendedRecounted} live seats — the counter has ` +
+          "drifted.</span>",
+        );
+      }
+      return parts.join(" ");
+    }
+
+    function verifiedRow(s) {
+      const prose = SEAT_PROSE[s.reason] ?? s.reason;
+      const pill = SEAT_PILL[s.bucket] || "off";
+      // Revoked seats are dated by the revoke; live ones have nothing to date.
+      const seen = s.lastSeenAt ? esc(when(s.lastSeenAt)) : "never";
+      return `
+        <tr>
+          <td>${esc(s.email || s.uid)}</td>
+          <td><span class="pill ${pill}">${esc(s.status)}</span></td>
+          <td>${esc(prose)}</td>
+          <td class="muted">${seen}</td>
+        </tr>`;
+    }
+
+    $("verifyClose").addEventListener("click", () => {
+      $("verifyCard").hidden = true;
+    });
+
+    $("verifyReload").addEventListener("click", () => {
+      const id = $("verifyCard").dataset.licence;
+      if (id) loadVerified(id);
+    });
 
     async function revokeLicence(id) {
       const label = labelOf(id);

@@ -130,6 +130,39 @@ holds the whole thing, because a page cannot write to disk incrementally without
 the File System Access API. An analysis is tens of megabytes, which is a cost
 worth paying for a download that behaves the same everywhere.
 
+## The second seat count
+
+The **Verify** button on an institution licence asks
+`GET /v1/admin/licenses/{id}/reconcile` what that licence still entitles, and
+opens a panel comparing it with what IT believes.
+
+The two numbers cannot be made to agree by being more careful, which is the
+point of showing both. A revoke reaches the seat inside a transaction, the
+holder's user document just after it, and the holder's *device* only when the
+app next fetches `/v1/config`. `seatsUsed` — the only number the institution
+console has — moves at the first of those three.
+
+Each seat is placed in a bucket with a reason, and the panel prints the reason
+in words rather than leaving a code to be looked up. Two of them matter:
+
+- **`still_licensed`** is a fault. The demotion never landed and the backend
+  would still answer `licensed`. Revoking the seat again repairs it — that path
+  is idempotent and re-runs the demotion.
+- **`no_checkin_since_revoke`** is not. The record is right; the device has
+  simply not been back to hear it.
+
+The read costs one user lookup per seat, so it is never run for the whole
+table: nothing happens until someone presses **Verify**, and the result is
+cached only until the next action changes a licence, at which point the panel
+re-checks itself. That is deliberate — a revoke is exactly the moment to ask
+again whether it landed.
+
+The licence row's Seats cell picks up the second number once it exists, so the
+verified count sits beside the intended one where the mismatch is visible.
+
+See §20.12 of [the architecture doc](../../../docs/backend/CLOUD_ARCHITECTURE_GCP.md)
+for why confirmation takes two conditions rather than one.
+
 ## Note on the licence table
 
 `maxSeats` means two different things and the table says which:

@@ -1056,6 +1056,9 @@ creation (`POST /v1/sessions` → `403 feature_not_licensed` once
 downloadable; re-activating restores creation with zero data loss. See
 `test_downgrade_preserves_data_blocks_creation_then_reactivation_restores`.
 
+None of these reach the person instantly, and the counters IT reads move
+before they do. §20.12 is the read that measures the difference.
+
 ### 20.4 Institution IT auth is deliberately narrow
 
 `institution_admin_stepup` (`backend/app/routers/institutions.py`) wraps
@@ -1640,3 +1643,76 @@ report a refusal for a download the caller is entitled to.
 > already in the codebase for exactly this problem — Cloud Tasks async
 > provisioning ([`backend/app/tasks.py`](../../backend/app/tasks.py)) — minting the archive out of band and returning
 > a link.
+
+### 20.12 Two seat counts: what IT intends, and what the licence entitles
+
+A revoke does not land everywhere at once, and no amount of care makes it.
+It reaches three places on three different clocks:
+
+| Place | When it changes | Who reads it |
+|---|---|---|
+| The seat document and `seatsUsed` | Inside the revoke transaction, immediately | The institution console |
+| `users/{uid}.mode` | Just after that transaction commits, via `_drop_user_to_demo_if_licensed` — outside it, unretried | Every authed request |
+| The device | Whenever the app next fetches `/v1/config` | The person actually using Semper |
+
+So `seatsUsed` is a statement of *intent*. It is the only number institution
+IT has, and it moves the instant they act, which is why their console cannot
+tell them whether anything actually happened.
+
+`GET /v1/admin/licenses/{id}/reconcile` is the second number. It reads every
+seat, reads that seat holder's user document, and sorts each into one of three
+buckets with a reason attached:
+
+| Bucket | Reason | Means |
+|---|---|---|
+| `active` | — | On the roster and holding the licence. |
+| `active` | `never_claimed` | Invited, never signed in. Occupies a seat, entitles nobody. |
+| `revokedConfirmed` | `checked_in` | Demoted, and the account has made a request since the revoke — so its device has re-read `/v1/config`. |
+| `revokedConfirmed` | `moved_on` | The account is on a different licence now. |
+| `revokedConfirmed` | `no_account` | No user document behind the seat. |
+| `revokedStillRunning` | `still_licensed` | **A fault.** The demotion never landed; the backend itself would still answer `licensed`. |
+| `revokedStillRunning` | `no_checkin_since_revoke` | The record is right and the device has not been back to hear it. |
+
+Three decisions worth recording.
+
+**Confirmation takes two conditions, not one.** Because
+`_drop_user_to_demo_if_licensed` already runs at revoke time, a bucket keyed
+only on the stored mode would read clean almost always, and would hide the lag
+that a customer actually experiences — the app continuing to work off a cached
+entitlement. So a revoke counts as settled only when the record has caught up
+*and* `lastSeenAt > revokedAt`. The two still-running reasons want opposite
+responses: `still_licensed` is repaired by revoking the seat again, which is
+idempotent and re-runs the demotion; `no_checkin_since_revoke` is waited out,
+and the four-hourly background `/v1/config` refresh
+([`LicenseConfigWorker`](../../app/src/main/java/com/indicvision/semper/data/LicenseConfigWorker.kt))
+is what bounds it — §20.7's 30-minute lease heartbeat is a different clock,
+keeping a floating seat alive while the app is open.
+
+**The test is the stored mode, not `effective_mode`.** A floating member
+between leases reads as demo and is squarely on the roster, so the effective
+view would report a healthy pool as a licence entitling almost nobody.
+`test_a_floating_member_between_leases_is_not_mistaken_for_a_failed_revoke`
+pins this.
+
+**Both revoke paths stamp `revokedAt` separately from `updatedAt`.** The
+question the bucket turns on is "has the holder been back *since the
+revoke*?", and `updatedAt` moves for any later write to the seat — a staff
+device clear, for one — which would silently reset it. Seats revoked before
+this field existed fall back to `updatedAt`, which for them is the same
+instant.
+
+One known imprecision, in the safe direction. `lastSeenAt` is throttled to
+`_LAST_SEEN_THROTTLE` (one hour), so a request made shortly after a revoke may
+not have moved the stamp yet, and the seat reads as not-checked-in for up to
+that long. Over-reporting a revoke as unlanded is the right way to be wrong;
+the opposite would tell an operator a device had been told when it had not.
+
+The report also carries `intendedRecounted` — `seatsUsed` recomputed from the
+seats themselves. A disagreement between it and `intended` is a counter drift,
+a different fault from anything the buckets describe, and the operator console
+calls it out separately.
+
+**Cost and tier.** One user read per seat, so it is admin-only and on demand
+rather than a field on the licence listing. It is a plain `ADMIN` read like
+`GET /v1/admin/licenses`: it writes nothing, so it does not take the
+second-factor tier the mutating routes do.
