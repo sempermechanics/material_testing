@@ -4,6 +4,13 @@ Static pages on the existing auth Hosting site. No build step, no framework, no
 `package.json` — the site is served as files, and a toolchain for four pages
 would cost more than it saves.
 
+Each page is an HTML document plus one ES module beside it — `router.js`,
+`account/account.js`, `institution/institution.js`, `operator/operator.js` —
+loaded with `<script type="module" src="…">`. **Not inline.** The console
+`script-src` is `'self'` with no `'unsafe-inline'` (see below), so an inline
+script on these pages does not run at all: the page renders and every button is
+dead. `auth.js` and `config.js` are shared by all four.
+
 | Path | Who | What it can do |
 |---|---|---|
 | `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs. |
@@ -111,10 +118,31 @@ continue-URLs — keeps the strict
 `default-src 'self'` policy. Only `connect-src` is widened, for the API and
 Firebase Auth's token endpoints; `script-src` is **not**, because the Firebase
 SDK is served from Hosting's own `/__/firebase/` namespace, which is
-same-origin.
+same-origin. That is also why no page may carry an inline `<script>` body or an
+`onclick=` attribute: `'self'` admits the module files and nothing else.
 
 Firebase Auth must have this Hosting domain in its authorised domains, or the
 sign-in popup is rejected.
+
+## Checking them
+
+There is no compiler here, so nothing else in the repository fails when a
+page's wiring goes stale — the page loads, looks right, and does nothing.
+[`scripts/check_console.py`](../../../scripts/check_console.py) is the gate
+that reads them instead, and runs as the **Console pages** CI job:
+
+| It checks | Because |
+|---|---|
+| No inline script or `on*=` handler | The CSP above forbids both; such code never executes |
+| Every module loads and parses as an ES module | A typo in one is otherwise found by a browser, in production |
+| Every `$("id")` is an id its own page defines | Renaming an element silently unwires the code that used it |
+| `__API_BASE_URL__`, `__API_ORIGIN__`, `__AUTH_DOMAIN__` still hold placeholders | A deploy that fails to restore them commits a live hostname |
+| Every rewrite destination exists | `/login` pointing at a missing file 404s |
+| The two console CSPs are identical | The rewrite addresses would otherwise be served a different policy |
+| Every `/v1` path a console calls is in `gateway/openapi.yaml` | ESPv2 is an allowlist; an undeclared route 404s in production |
+
+Run it directly with `python scripts/check_console.py`. Node is used for the
+syntax check when it is on `PATH` and skipped with a note when it is not.
 
 ## Downloading an analysis
 

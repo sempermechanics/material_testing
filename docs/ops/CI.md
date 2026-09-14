@@ -19,6 +19,7 @@ Secrets, vars, and GitHub Environments are mapped in
 ```
 secret-scan ─────────────────────────────┐
 legal-pages ─────────────────────────────┤
+console-pages ───────────────────────────┤
 changes ──┬──> tier1-app-fast ───────────┤
           ├──> tier3-emulator-e2e (*) ───┤
           ├──> tier4-backend ────────────┤
@@ -34,6 +35,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 |-----|--------|---|-----------------------|
 | `secret-scan` | gitleaks (see below) | No — always runs | ~1–2 min |
 | `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/` | No — always runs | seconds |
+| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler | No — always runs | seconds |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
 | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, Kover coverage log | `app` (PR); always on `main` push | ~5–8 / ~10 min |
 | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest`. Excludes `com.indicvision.semper.benchmark` on debug (those need the `benchmark` job). | main push / labels | ~20–40 / ~60–90 min |
@@ -110,7 +112,7 @@ Two further filters widen `app` rather than gating a job directly:
 
 Editing `.github/workflows/ci.yml` on a PR runs Tier 1 and Tier 4 (the
 `ci_workflow` filter). Empty path outputs otherwise fail **closed** to gates-only
-(`secret-scan` + `legal-pages` + `ci-ok`), not a full matrix. Rules-only or
+(`secret-scan` + `legal-pages` + `console-pages` + `ci-ok`), not a full matrix. Rules-only or
 Hosting-only PRs match `backend` so they cannot skip Tier 4.
 
 ### Dependabot cheap path
@@ -135,8 +137,8 @@ diff. Fix it before merging by running
 branch — it compiles on Linux / Python 3.12 and pushes the lock to that PR. See
 [RELEASING.md](RELEASING.md) § Bumping backend dependencies.
 
-`secret-scan` and `legal-pages` are absent from the tables on purpose: they
-carry no path filter and run on every event.
+`secret-scan`, `legal-pages` and `console-pages` are absent from the tables on
+purpose: they carry no path filter and run on every event.
 
 Skipped jobs count as success for `ci-ok`.
 
@@ -166,6 +168,7 @@ cd backend && pip install -r requirements-test.txt && pytest tests/ -v      # ti
 
 # The two always-on gates
 python scripts/render_legal_pages.py --check                                # legal-pages
+python scripts/check_console.py                                             # console-pages
 gitleaks detect --config .gitleaks.toml                                     # secret-scan (human)
 ```
 
@@ -277,9 +280,9 @@ repo bundles ancient `gradle-wrapper.jar` files that fail checksum validation,
 and those jobs check out submodules recursively. Our own wrapper is validated by
 tier 1 when tier 1 runs.
 
-**Two jobs run on every single event.** `secret-scan` and `legal-pages` carry no
-path filter, so a documentation-only PR still runs them — and can still be
-blocked by them, which is the point.
+**Three jobs run on every single event.** `secret-scan`, `legal-pages` and
+`console-pages` carry no path filter, so a documentation-only PR still runs
+them — and can still be blocked by them, which is the point.
 
 **A green backend tier means more than pytest.** Tier 4 also audits dependencies
 with pip-audit, proves `requirements.lock` resolves under `--require-hashes` on

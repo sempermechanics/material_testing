@@ -114,15 +114,20 @@ cmake --build build/native-tests -j
 
 On Windows use `gradlew.bat` instead of `./gradlew`.
 
-### Two gates that run on every PR
+### Three gates that run on every PR
 
-Neither is path-filtered, so a documentation-only change is still subject to
-both, and both block `ci-ok`:
+None is path-filtered, so a documentation-only change is still subject to all
+of them, and each blocks `ci-ok`:
 
 ```bash
 python scripts/render_legal_pages.py --check   # legal pages match docs/legal/
+python scripts/check_console.py                # console wiring, CSP, gateway paths
 gitleaks detect --config .gitleaks.toml        # secrets (full history; human PRs)
 ```
+
+`check_console.py` is the consoles' only gate — they have no compiler, so a
+renamed element id or an undeclared `/v1` path fails nowhere else. See
+[firebase-hosting/public/console/README.md](firebase-hosting/public/console/README.md).
 
 Dependabot PRs use a CLI scan of **only the PR commit range** (no org
 `GITLEAKS_LICENSE` on Dependabot). Details: [docs/ops/CI.md](docs/ops/CI.md).

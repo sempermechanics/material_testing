@@ -15,6 +15,7 @@ Windows: `gradlew.bat`. Quote `-Pandroid.testInstrumentationRunnerArguments…` 
 | `./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 "-Pandroid.testInstrumentationRunnerArguments.notPackage=com.indicvision.semper.benchmark"` | Emulator instrumented; exclude benchmark package on debug |
 | `cd backend && python -m pytest tests/ -q --cov=app --cov-fail-under=75` | Backend (install lock + `requirements-test.txt`) |
 | `python scripts/render_legal_pages.py --check` | Hosted legal pages match `docs/legal/` |
+| `python scripts/check_console.py` | Console pages: wiring, CSP, placeholders, gateway paths |
 | `gitleaks detect --config .gitleaks.toml` | Secret scan |
 
 Clone needs `git submodule update --init --recursive`. First native build compiles

@@ -82,6 +82,24 @@ jobs:
       - name: Docs reference files that exist
         run: python scripts/check_doc_paths.py
 
+  console-pages:
+    name: Console pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # The consoles have no compiler and no build step, so nothing else in this
+    # repository fails when a page's wiring goes stale: the pages load, look
+    # right, and do nothing. This is the gate that reads them — inline script
+    # against the CSP that forbids it, ids the module asks for, deploy
+    # placeholders still unsubstituted, rewrite targets that exist, and every
+    # /v1 path declared on the gateway. Seconds to run, so it runs on every
+    # event rather than behind a path filter.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python scripts/check_console.py
+
   # ===================================================================
   # Path filters — same rules on PR and push. Prove only what the diff
   # can break. Optional full matrix via `full-ci` label or workflow_dispatch.
@@ -674,6 +692,7 @@ jobs:
     needs:
       - secret-scan
       - legal-pages
+      - console-pages
       - changes
       - tier1-app-fast
       - tier3-emulator-e2e
@@ -686,6 +705,7 @@ jobs:
           for result in \
             "${{ needs.secret-scan.result }}" \
             "${{ needs.legal-pages.result }}" \
+            "${{ needs.console-pages.result }}" \
             "${{ needs.changes.result }}" \
             "${{ needs.tier1-app-fast.result }}" \
             "${{ needs.tier3-emulator-e2e.result }}" \
