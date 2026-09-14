@@ -22,6 +22,14 @@ object ApiErrors {
     /** The caller is not an admin (403 from an admin route). */
     const val NOT_ADMIN = "not_admin"
 
+    /**
+     * This build could not be attested (403), while the backend is enforcing
+     * App Check. It says nothing about the account — an entitled user on a
+     * sideloaded or tampered build lands here — so it is rendered as "update
+     * from the Play Store", never as a licence problem.
+     */
+    const val APP_CHECK_REQUIRED = "app_check_required"
+
     /** This account is already bound to a different device (409). */
     const val DEVICE_CONFLICT = "device_conflict"
 

@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
 import com.indicvision.semper.data.LicenseConfigWorker
+import com.indicvision.semper.data.net.ApiErrors
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
@@ -77,16 +78,28 @@ class SeatRequiredActivity : AppCompatActivity() {
                 .onFailure { error ->
                     // A full pool is the expected answer, not a fault: say so
                     // plainly and leave the screen up to try again.
-                    val message = if (error is IndicApi.NoSeatAvailableException) {
-                        R.string.seat_still_full
-                    } else {
-                        Timber.w(error, "Could not take a seat")
-                        R.string.seat_error
+                    val message = when {
+                        error is IndicApi.NoSeatAvailableException -> R.string.seat_still_full
+                        // Past RetryOnTransient's three attempts, so this is a
+                        // sustained throttle, not a blip — blaming the
+                        // connection would send the user to their wifi settings
+                        // for a limit that clears on its own.
+                        error.hasApiCode(ApiErrors.RATE_LIMITED) -> R.string.error_rate_limited
+                        error.hasApiCode(ApiErrors.APP_CHECK_REQUIRED) ->
+                            R.string.error_app_check_required
+                        else -> {
+                            Timber.w(error, "Could not take a seat")
+                            R.string.seat_error
+                        }
                     }
                     Toast.makeText(this@SeatRequiredActivity, message, Toast.LENGTH_LONG).show()
                 }
         }
     }
+
+    /** True when this failure is the backend answering with [code]. */
+    private fun Throwable.hasApiCode(code: String): Boolean =
+        this is IndicApi.ApiException && ApiErrors.isCode(parsedDetail, code)
 
     private fun setLoading(loading: Boolean) {
         // INVISIBLE, not GONE, so the layout does not jump while it spins.

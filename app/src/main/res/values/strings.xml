@@ -745,6 +745,13 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="seat_error">Couldn\'t check for a seat. Check your connection and try again.</string>
     <string name="seat_offline">You\'re offline — connect to take a seat.</string>
 
+    <!-- Shown only after the client has already retried: a limit that is still
+         refusing is a server-side throttle, not the user's connection. -->
+    <string name="error_rate_limited">The server is busy right now. Wait a moment and try again.</string>
+    <!-- App Check refused the build, not the account. Nothing the user can fix
+         except installing the real thing, so say only that. -->
+    <string name="error_app_check_required">This copy of Semper could not be verified. Reinstall it from the Play Store.</string>
+
     <!-- License expiry notice on Home. Advisory only — nothing is withdrawn
          while the renewal is outstanding. -->
     <string name="license_expiring_today">License expires today — email %1$s to renew</string>
