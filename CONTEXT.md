@@ -428,6 +428,69 @@ Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_G
 [docs/OPERATING_MANUAL.md](docs/OPERATING_MANUAL.md) Appendix D, and
 [firebase-hosting/public/console/README.md](firebase-hosting/public/console/README.md).
 
+**An architecture pass on the same branch closed four things and deferred
+three.** It read the app against the standard boundaries — hoisted UI state,
+main-safe I/O, injected dependencies, attested network calls — and the findings
+worth acting on were the ones that cost correctness rather than shape.
+
+*App Check answers a question an ID token cannot.* `verify_id_token` attests the
+account and `deps.verified_device` attests the device, but neither says which
+*binary* is calling, and the Firebase Web API key that mints an ID token ships
+inside the APK as an identifier rather than a secret — so a script holding a
+valid sign-in could drive `POST /v1/licenses/checkout` and hoard a floating
+pool. The phone now attaches `X-Firebase-AppCheck` from a host-scoped OkHttp
+interceptor, and `current_user` demands one **only from a caller sending
+`X-Device-Id`**: the app always sends it and a browser never does, so the four
+consoles are exempt by construction rather than by a route list somebody has to
+keep in step. The check runs *before* `get_or_create_user`, so a caller on its
+way to being refused neither creates an account row nor moves a device lock, and
+it answers `app_check_required`, not `not_approved` — the account may be
+perfectly entitled. `APP_CHECK_MODE` is `off` (default) / `monitor` / `enforce`,
+and a fourth value fails startup rather than quietly disabling the gate. Play
+Integrity is the only provider installed: the debug provider needs a per-install
+secret registered by hand, and the interceptor fails open, so a developer build
+simply sends no header against `off` or `monitor`.
+
+*429 and 503 are not the same answer, and `RetryOnTransient` does not treat them
+alike.* 429 is retried unconditionally — the per-instance token bucket and the
+gateway quota both reject *before* the handler runs, so nothing happened and a
+repeat is not a second write. 503 carries no such promise, since ESPv2 emits it
+on both sides of handing the request on, so it is retried for GET and for the
+two POSTs that are idempotent by contract (`/v1/licenses/checkout`, whose repeat
+*is* the heartbeat, and `/v1/licenses/release`). Session create and the upload
+broker are deliberately absent: a duplicate there costs a Drive object. Three
+attempts, `Retry-After` preferred over the backoff and clamped; the long game
+stays WorkManager's, and this layer exists for the interactive calls that have
+no second chance and used to surface a one-second throttle as a flat failure.
+
+*Four session-index reads still ran from a tap*, in Home and Settings backup,
+the session-limit recheck and the viewer's share path. Both backup sites keep
+their write order rather than turning optimistic: the PENDING stamp lands before
+`CloudSync.enqueueUpload`, or an upload that finishes first has its SYNCED stamp
+overwritten by a late PENDING. The viewer warms its `sessionRecord` lazy in
+`onCreate` instead of restructuring `ShareCenter` — `by lazy` is synchronized,
+so a tap arriving mid-read waits on the read it would have done itself and never
+on a second one. `SessionStore`'s blocking accessors carry `@WorkerThread` as
+documentation only; see TD-24 for why that is half a pair. And the parameter
+sweep moved from the Activity's `lifecycleScope` onto `viewModelScope`, emitting
+progress and outcome as `SharedFlow`, so a rotation mid-sweep no longer throws
+the run away.
+
+*The three deferrals each name their blocker.* TD-24: `@MainThread` on ~27
+Activities is the other half of the thread contract, and needs a lint run to
+land against an empty baseline. TD-25: `AuthRepository` has no fake backend to
+test against, because `IndicApi` is final with a private constructor — a seam
+there admits only the real client, so it wants the interface extraction that
+CONTRIBUTING defers to a DI PR of its own. TD-26: wizard and viewer UI state
+still lives on the Activity rather than hoisted as `StateFlow`, on a 1.8k-line
+native-solve screen with bit-exact `.dat` oracles; the part that was losing work
+was the run, and the run is now on `viewModelScope`.
+
+Docs: [docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md) §3.2,
+[docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md),
+[docs/backend/BACKEND_SETUP_GCP.md](docs/backend/BACKEND_SETUP_GCP.md).
+
+
 **Backend lock regeneration is a CI workflow now, not a local chore**
 ([#105](https://github.com/sempermechanics/semperdic-app/pull/105)). Dependabot
 bumps `backend/requirements.txt` and cannot produce the hashed

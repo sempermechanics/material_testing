@@ -157,6 +157,47 @@ The tiers are asserted structurally in
 dependency tree — a route that gains or loses auth fails CI rather than
 shipping quietly.
 
+### 3.2 App Check — which *binary* is calling
+
+The tiers above answer *which account* (`current_user`) and *which device*
+(`verified_device`). Neither answers *which binary*, and the gap is real: the
+Firebase Web API key that mints ID tokens ships inside the APK and is an
+identifier, not a secret, so anything holding a user's credentials can drive the
+API directly. `POST /v1/licenses/checkout` is where that pays — a script can
+hoard a floating pool's seats against an account that is perfectly entitled.
+
+`deps._require_app_check` verifies a Firebase App Check token
+(`X-Firebase-AppCheck`, Play Integrity on Android) for callers that send
+`X-Device-Id`. Three things about that shape are deliberate:
+
+- **Only device callers are asked.** The four consoles are browsers: they never
+  send `X-Device-Id` and cannot attest. Keying on that header covers the
+  abusable routes without taking the web tier down, and without a reCAPTCHA
+  provider nobody would maintain.
+- **The check runs before `get_or_create_user`.** A refused caller must not
+  create an account row or move a device lock on its way out.
+  `test_app_check.py` pins that ordering.
+- **It is a third question, not a replacement.** App Check says the caller is
+  our build; it says nothing about entitlement. `app_check_required` is
+  therefore distinct from `not_approved`, and the app renders it as "reinstall
+  from the Play Store", never as a licence problem.
+
+`APP_CHECK_MODE` selects the posture, and **`off` is the default**:
+
+| Mode | Behaviour |
+|---|---|
+| `off` | The header is ignored entirely. Run this until an App Check-carrying build is the fleet. |
+| `monitor` | Verified when present, logged when absent or bad, never refused. The rollout setting — it tells you what fraction of live traffic would break before anything does. |
+| `enforce` | A device caller without a valid token is refused `403 app_check_required`. |
+
+A misspelt mode fails `_startup_checks()` rather than reading as `off`: an
+operator believing enforcement is on while nothing is checked is the one
+failure this setting cannot afford.
+
+The client half fails open — see
+[ARCHITECTURE.md](../app/ARCHITECTURE.md#the-two-interceptors-on-the-shared-client).
+Go to `enforce` only once `monitor` shows the missing-token rate at zero.
+
 ## 4. App config — local.properties
 
 ```properties

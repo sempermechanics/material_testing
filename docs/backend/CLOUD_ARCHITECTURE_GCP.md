@@ -340,6 +340,18 @@ signature *or* an ID token alone (startup warning). **Production keeps
 var of the same name — an empty var clears the flag on redeploy. Every other
 write and mint path already requires a device signature.
 
+**A device signature is not a binary attestation.** It proves the caller holds
+the account's registered device key; it says nothing about which build is
+holding it, and the Firebase Web API key that mints ID tokens ships inside the
+APK as an identifier rather than a secret. `APP_CHECK_MODE` (`off` default /
+`monitor` / `enforce`) closes that in `deps.current_user`: a caller sending
+`X-Device-Id` must also carry a valid Firebase App Check token, which the four
+consoles never trip because a browser sends no device id. Checked *before*
+`get_or_create_user`, so a refusal creates no account row and moves no device
+lock, and refused as `app_check_required` rather than `not_approved` — the
+account may be perfectly entitled. Rollout and the client's fail-open half:
+[AUTH_SETUP.md §3.2](AUTH_SETUP.md).
+
 **A Drive outage must never erase session metadata.** `GET /v1/sessions?verify=true`
 probes whether each session's blobs still exist, and purges Firestore metadata
 for ones that are gone. The probe returns three states, not two:
@@ -561,7 +573,7 @@ the way it does.
 | Outbound mail | [`backend/app/notify.py`](../../backend/app/notify.py) | Resend, fire-and-forget |
 | Pydantic models | [`backend/app/models.py`](../../backend/app/models.py) | |
 | Audit trail | [`backend/app/audit.py`](../../backend/app/audit.py) | |
-| Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `REQUIRE_ATTESTED_UPLOADS`, `TASKS_*` |
+| Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `REQUIRE_ATTESTED_UPLOADS`, `APP_CHECK_MODE`, `TASKS_*` |
 | Schema migrations | [`backend/scripts/migrate_schema.py`](../../backend/scripts/migrate_schema.py) | Versioned steps in `backend/scripts/migrations/` — see [FIRESTORE_SCHEMA_RUNBOOK.md](FIRESTORE_SCHEMA_RUNBOOK.md) |
 | Container | [`backend/Dockerfile`](../../backend/Dockerfile) | Installs from `requirements.lock` with `--require-hashes`. `requirements.txt` is the pin list; lock versions of direct deps must match txt. |
 | API Gateway spec | [`backend/gateway/openapi.yaml`](../../backend/gateway/openapi.yaml) | Covers all current routes; `__CLOUD_RUN_URL__` is substituted at deploy |
