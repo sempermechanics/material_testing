@@ -143,6 +143,34 @@ class Settings:
     # disable the wait entirely.
     SELF_DEVICE_CHANGE_COOLDOWN_DAYS = _env_int("SELF_DEVICE_CHANGE_COOLDOWN_DAYS", "30")
 
+    # --- App Check (device callers only) ------------------------------------
+    # The Firebase Web API key ships inside the APK (google-services.json) and
+    # is an identifier, not a secret, so anyone can mint a genuine ID token from
+    # a script. For the routes behind `verified_device` or a step-up tier that
+    # buys an attacker nothing — a DeviceKeyManager signature is a stronger
+    # proof than App Check. The exposed set is the ID-token-only routes, and
+    # `POST /v1/licenses/checkout` is the one worth abusing: it reads the device
+    # id from a *header* and doubles as the seat heartbeat, so a scripted client
+    # can hold a licence's floating seats under invented device ids.
+    #
+    # App Check closes that by attesting the *app binary* (Play Integrity) as
+    # well as the account. It is required only of callers that send
+    # `X-Device-Id` — that is the app, and it is the header the abuse needs.
+    # Browsers never send it, so the four consoles are unaffected and need no
+    # reCAPTCHA provider.
+    #
+    #   off     — header ignored entirely (the default, and what to run until
+    #             an App Check-carrying build is the fleet).
+    #   monitor — verified when present, logged when absent or bad, never
+    #             refused. The rollout setting: it tells you what fraction of
+    #             live traffic would break before anything does.
+    #   enforce — a device caller without a valid token is refused 403.
+    #
+    # Mirrors Firebase's own unenforced/enforced rollout, with `monitor` named
+    # for what it is. Flipping to `enforce` before the fleet has updated locks
+    # out every older build, so it is deliberately not the default.
+    APP_CHECK_MODE = os.environ.get("APP_CHECK_MODE", "off").strip().lower()
+
     # Where "a new user is waiting for approval" mail goes. Same address the app
     # shows in Settings -> Help & support and on the pending-approval screen.
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@sempermechanics.com")

@@ -99,6 +99,12 @@ INVALID_EMAIL = "invalid_email"
 MFA_REQUIRED = "mfa_required"
 REAUTH_REQUIRED = "reauth_required"
 
+# The caller sent X-Device-Id but no valid App Check token, while
+# APP_CHECK_MODE=enforce. It means "this is not our app binary", not "this
+# account is not allowed" — the account may be perfectly entitled. Distinct
+# from `not_approved` so a support conversation starts in the right place.
+APP_CHECK_REQUIRED = "app_check_required"
+
 # --- upstream / throttling -------------------------------------------------
 RATE_LIMITED = "rate_limited"
 DRIVE_DOWNLOAD_FAILED = "drive_download_failed"
@@ -133,5 +139,6 @@ CLIENT_BRANCHED = frozenset(
         NO_FLOATING_SEAT,
         FEATURE_NOT_LICENSED,
         LICENSE_DEVICE_MISMATCH,
+        APP_CHECK_REQUIRED,
     }
 )

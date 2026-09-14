@@ -65,6 +65,14 @@ def _startup_checks():
             "legacy callers. Temporary migration window — set it to 1 once the "
             "fleet has moved. ==="
         )
+    if settings.APP_CHECK_MODE not in ("off", "monitor", "enforce"):
+        # A misspelt mode must not read as "off". Silently ignoring it would
+        # leave an operator believing enforcement is on when nothing is checked,
+        # which is the one failure this setting cannot afford.
+        raise RuntimeError(
+            f"APP_CHECK_MODE={settings.APP_CHECK_MODE!r} is not one of "
+            "off / monitor / enforce."
+        )
 
 
 @asynccontextmanager

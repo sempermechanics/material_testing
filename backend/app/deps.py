@@ -14,7 +14,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import audit, errors, firestore_repo as repo, statuses
 from .config import settings
-from .google_auth import verify_id_token
+from .google_auth import verify_app_check_token, verify_id_token
 from .validation import require_header_identifier
 from . import observability as obs
 
@@ -41,11 +41,49 @@ def _client_bearer(authorization: str, x_forwarded_authorization: str) -> str:
     return x_forwarded_authorization or authorization
 
 
+def _require_app_check(token: str, uid: str) -> None:
+    """Attest the *app binary* for callers that identify a device.
+
+    Only callers sending `X-Device-Id` are asked: that is the app, and it is the
+    header the abuse this guards against needs. `POST /v1/licenses/checkout`
+    takes its device id from that header and doubles as the seat heartbeat, so
+    without this a script holding one valid sign-in can occupy an institution's
+    whole floating pool under invented device ids. Browsers never send
+    `X-Device-Id`, so the consoles are untouched and need no web provider.
+
+    Never raises in `monitor` mode — it logs `app_check_missing` /
+    `app_check_invalid` so the miss rate is visible in live traffic before
+    anything is refused. See `settings.APP_CHECK_MODE`.
+    """
+    mode = settings.APP_CHECK_MODE
+    if mode == "off":
+        return
+    enforcing = mode == "enforce"
+    if not token:
+        obs.log_event(log, logging.WARNING, "app_check_missing",
+                      uid=uid, enforcing=enforcing)
+        if enforcing:
+            audit.record(uid, action="AUTH_DENIED", outcome="DENIED",
+                         detail={"stage": "app_check", "reason": "missing"})
+            raise HTTPException(403, errors.APP_CHECK_REQUIRED)
+        return
+    try:
+        verify_app_check_token(token)
+    except Exception as e:  # noqa: BLE001 - any verification failure is a refusal
+        obs.log_event(log, logging.WARNING, "app_check_invalid",
+                      uid=uid, enforcing=enforcing, reason=str(e)[:200])
+        if enforcing:
+            audit.record(uid, action="AUTH_DENIED", outcome="DENIED",
+                         detail={"stage": "app_check", "reason": "invalid"})
+            raise HTTPException(403, errors.APP_CHECK_REQUIRED) from e
+
+
 def current_user(
     request: Request,
     authorization: str = Header(default=""),
     x_forwarded_authorization: str = Header(default=""),
     x_device_id: str = Header(default=""),
+    x_firebase_appcheck: str = Header(default=""),
 ) -> dict:
     """Resolve the caller from a Google ID token.
 
@@ -76,6 +114,10 @@ def current_user(
             )
         except HTTPException as exc:
             raise HTTPException(401, errors.INVALID_TOKEN) from exc
+        # Before get_or_create_user: a refused caller should not create an
+        # account row or move a device lock on the way to being refused.
+        if x_device_id:
+            _require_app_check(x_firebase_appcheck, str(claims.get("sub", "")))
         try:
             user = repo.get_or_create_user(claims, device_id=x_device_id or None)
         except repo.DeviceInUseError as exc:
