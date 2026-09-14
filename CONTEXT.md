@@ -339,8 +339,12 @@ revoking again (idempotent); `no_checkin_since_revoke` is waited out. It reads
 leases — the ordinary state for most of a roster — would report a healthy pool
 as mass revoke failure. Both revoke paths stamp `revokedAt` apart from
 `updatedAt`, which a later staff device clear would otherwise reset.
-`lastSeenAt` is throttled to an hour, so the read over-reports unlanded revokes
-for up to that long: the safe direction (TD-23).
+`lastSeenAt` is throttled to an hour, which would have made the read
+over-report unlanded revokes for that long; the revoke stamps
+`seenCheckpointAt` on the holder in the write the demotion already makes, and
+a `lastSeenAt` older than that checkpoint is stale whatever its age — so the
+holder's next request confirms the revoke, at the cost of one un-throttled
+write per revoked account.
 
 *Three authz tiers, deliberately distinct.* Institution IT authenticates on
 `current_user` + APPROVED + verified email in that licence's `adminEmails` — no
