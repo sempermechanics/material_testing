@@ -34,7 +34,7 @@ Priority = (Impact + Risk) × (6 − Effort).
 
 | ID | Category | Item | I | R | E | P | Status |
 |----|----------|------|---|---|---|---|--------|
-| TD-3 | Architecture | `ViewerSession` extras bag (FI-1) | 4 | 4 | 5 | **8** | Deferred |
+| TD-3 | Architecture | `ViewerSession` extras bag (FI-1) — **write half done**: `ViewerArgs` is the one packer and `ViewerArgsTest` pins both entry points' key sets. What is left is the unpack half, across four readers | 3 | 2 | 4 | **10** | Deferred — a parsed-object read side has to keep working for an Intent already in the back stack across an update |
 | TD-22 | Test | Consoles have no behavioural test — `check_console.py` reads their structure, nothing exercises a sign-in, a step-up or a revoke | 3 | 3 | 4 | **12** | Deferred — same Firebase Auth fixture blocker as auth-gated UI E2E |
 | TD-24 | Architecture | No `@MainThread` on UI entry points, so `SessionStore`'s `@WorkerThread` contract is documentation rather than a gate — lint's `WrongThread` fires only when the *calling* method is annotated | 2 | 2 | 3 | **12** | Deferred — annotating ~27 Activities needs a lint run to land against an empty baseline |
 | TD-25 | Test | `AuthRepository` cannot be unit-tested against a fake backend: `IndicApi` is final with a private constructor, so a defaulted constructor parameter would be a seam that admits only the real client | 2 | 2 | 2 | **16** | Deferred — needs an interface extracted from `IndicApi` and threaded through every worker and repository; that is the DI proposal CONTRIBUTING defers to its own PR |
@@ -57,7 +57,7 @@ honours.
 | Item | Why deferred |
 |------|----------------|
 | Auth-gated UI E2E | Needs Firebase secrets / fixtures in CI |
-| `ViewerSession` extras bag | `DicKeys` packed in two places (`SessionOpenHelper.intentFor`, `AnalysisNavHelper.openResults`); grill before deepening |
+| `ViewerSession` unpack half | `DicKeys` is now packed in one place (`ViewerArgs`); the four readers still parse the bundle themselves |
 | firebase-admin / hashed lock | Lock is regenerated from txt on each bump (`pip-compile --generate-hashes` on Python 3.12). Direct-dep versions in the lock must match `requirements.txt`. |
 | Identity Platform upgrade | The consoles' second factor is Firebase MFA (TOTP), which needs the project upgraded to Identity Platform — a project-wide Auth change shared with the mobile app, and a change to the Auth pricing model. Until it is done the consoles sign in and every write fails `mfa_required`. |
 

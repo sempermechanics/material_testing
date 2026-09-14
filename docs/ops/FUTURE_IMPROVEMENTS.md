@@ -24,21 +24,27 @@ is scheduled; take one deliberately, with its own PR.
 
 **Affects** A7, A8 · §E2.1 · *accuracy, debuggability*
 
-~25 `DicKeys` extras are packed in two places — `AnalysisNavHelper.openResults`
-(fresh run) and `ui/home/SessionOpenHelper.intentFor` (reopen) — and read in four
-(`ResultViewerActivity`, `VsgLatticeActivity`, `ViewerSettingsSheet`,
-`ViewerReportFactory`). The two packers do not write the same set, and a missing
+~25 `DicKeys` extras were packed in two places — `AnalysisNavHelper.openResults`
+(fresh run) and `ui/home/SessionOpenHelper.intentFor` (reopen) — and are read in
+four (`ResultViewerActivity`, `VsgLatticeActivity`, `ViewerSettingsSheet`,
+`ViewerReportFactory`). The two packers did not write the same set, and a missing
 extra silently defaults, so the ⓘ sheet, the report header and the export
-filename can differ by entry path with nothing logged.
+filename could differ by entry path with nothing logged.
 
-**Fix.** A `ViewerSession` value type with `fun toIntent()` / `fun from(intent)`
-as the only pack and unpack. Both current packers construct it; the four readers
-take the parsed object. Missing required fields fail loudly (or resolve from the
-session record) instead of defaulting.
+**Half of it has landed.** `ViewerArgs` (`ui/viewer/`) is now the only writer:
+both entry points construct it and call `toIntent`, and `ViewerArgsTest` asserts
+their key sets against each other, so the two cannot drift apart again. Only the
+post-run launch's two extra keys differ, and the test names them.
 
-**Blast radius.** Touches five UI files and the lattice→viewer hop. No format,
-no `.dat`, no wire change. A JVM test can assert round-trip equality for both
-entry paths, which is the thing nothing checks today.
+**Fix, what remains.** The unpack half: `fun from(intent)` on the same type, with
+the four readers taking the parsed object and a missing required field failing
+loudly (or resolving from the session record) instead of defaulting. Kept
+separate deliberately — the write side is one file and no format change, while
+the read side also has to keep working for an Intent already sitting in the back
+stack when the app updates.
+
+**Blast radius.** Four UI files and the lattice→viewer hop. No format, no
+`.dat`, no wire change.
 
 Already flagged as "next architecture" in [../../CONTEXT.md](../../CONTEXT.md)
 and in [TECH_DEBT.md](TECH_DEBT.md) — this is the concrete shape.

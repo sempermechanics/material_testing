@@ -14,7 +14,7 @@ chunk own?" here.
 | **analysis** | Import → ROI → batch / parameter sweep; speckle and noise-floor suitability | `analysis/AnalysisViewModelTest`, `VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `DicGoodPracticeTest`, `SpeckleScaleTest`, `NoiseFloorProbeTest`, `NoiseFloorStatsTest`, `NoiseCorrelationTest`, `FrameOrderHelperTest`, `BitmapDecodeTest`, `ExifOrientedSizeTest`, `LossyFormatCheckTest`, `RawRgbaTest` | — |
 | **session** | Session store durability, disk footprint, failure provenance | `session/SessionStoreAtomicTest`, `LocalStorageFootprintTest`, `FailureProvenanceTest` | — |
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `ReportBuilderMeanStdParityTest`, `GifEncoderTest`, `SummaryAnimationTest` | — |
-| **viewer** | Result viewer controls, frame cache bounds | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest` | — |
+| **viewer** | Result viewer controls, frame cache bounds, the Intent contract both entry points write | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerArgsTest` | — |
 | **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest` | — |
 | **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `DicSettingsMigrateTest` | — |
 | **analytics** | Consent-gated Firebase Analytics events | `analytics/SemperAnalyticsTest` | — |

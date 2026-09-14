@@ -4,16 +4,16 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SkippedNode
-import com.indicvision.semper.ui.analysis.VsgLatticeActivity
-import com.indicvision.semper.ui.viewer.ResultViewerActivity
+import com.indicvision.semper.ui.viewer.ViewerArgs
+import com.indicvision.semper.ui.viewer.ViewerSweepArgs
 
 /**
  * Packs a [SessionRecord] into the Intent that opens either the result viewer
- * or the VSG lattice (sweeps).
+ * or the VSG lattice (sweeps). The extras themselves are [ViewerArgs], shared
+ * with the post-run entry point so the two cannot drift apart.
  */
 object SessionOpenHelper {
 
@@ -34,44 +34,38 @@ object SessionOpenHelper {
         activity.startActivity(intentFor(activity, session))
     }
 
-    fun intentFor(context: Context, session: SessionRecord): Intent {
-        // A sweep session opens on the interactive lattice, which forwards these
-        // same extras to the result viewer when a node is tapped.
-        val target = if (session.isSweep) {
-            VsgLatticeActivity::class.java
-        } else {
-            ResultViewerActivity::class.java
-        }
-        return Intent(context, target).apply {
-            putExtra(DicKeys.IMG_W, session.imgW)
-            putExtra(DicKeys.IMG_H, session.imgH)
-            putExtra(DicKeys.STEP, session.step)
-            putExtra(DicKeys.REF_NAME, session.refName)
-            putExtra(DicKeys.REF_PATH, session.refPath)
-            putExtra(DicKeys.BATCH_DIR_PATH, session.sessionDir)
+    fun intentFor(context: Context, session: SessionRecord): Intent =
+        ViewerArgs(
+            imgW = session.imgW,
+            imgH = session.imgH,
+            step = session.step,
+            refName = session.refName,
+            refPath = session.refPath,
+            batchDirPath = session.sessionDir,
             // A sweep names its frames after the combination behind them, and
             // needs each frame's own settings to render and describe it.
-            val frameNames = if (session.isSweep) session.sweepLabels else session.defNames
-            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(frameNames))
-            if (session.isSweep) {
-                putExtra(DicKeys.SWEEP_SUBSETS, session.sweepSubsets.toIntArray())
-                putExtra(DicKeys.SWEEP_STEPS, session.sweepSteps.toIntArray())
-                putExtra(DicKeys.SWEEP_STRAIN_WINS, session.sweepStrainWindows.toIntArray())
-                putExtra(DicKeys.LINE_CUT_HORIZONTAL, session.lineCutHorizontal)
-                putExtra(DicKeys.SWEEP_SKIPPED, SkippedNode.encodeJson(session.resolvedSkipNodes()))
-            }
-            putExtra(DicKeys.STOP_CODE, session.stopCode)
-            putExtra(DicKeys.PLANNED_FRAMES, session.plannedFrameCount)
-            putExtra(DicKeys.SESSION_ID, session.id)
-            putExtra(DicKeys.SESSION_LOCAL_ID, session.id)
-            putExtra(DicKeys.SUBSET_SIZE, session.subset)
-            putExtra(DicKeys.STRAIN_WINDOW, session.strainWindow)
-            putExtra(DicKeys.STRAIN_METHOD, "VSG")
-            putExtra(DicKeys.ENGINE_STATS, session.engineStats.toFloatArray())
-            putExtra(DicKeys.ROI_X, session.roiX)
-            putExtra(DicKeys.ROI_Y, session.roiY)
-            putExtra(DicKeys.ROI_W, session.roiW)
-            putExtra(DicKeys.ROI_H, session.roiH)
-        }
-    }
+            frameNames = if (session.isSweep) session.sweepLabels else session.defNames,
+            stopCode = session.stopCode,
+            plannedFrames = session.plannedFrameCount,
+            sessionId = session.id,
+            sessionLocalId = session.id,
+            subsetSize = session.subset,
+            strainWindow = session.strainWindow,
+            engineStats = session.engineStats.toFloatArray(),
+            roiX = session.roiX,
+            roiY = session.roiY,
+            roiW = session.roiW,
+            roiH = session.roiH,
+            sweep = if (session.isSweep) {
+                ViewerSweepArgs(
+                    subsets = session.sweepSubsets,
+                    steps = session.sweepSteps,
+                    strainWindows = session.sweepStrainWindows,
+                    lineCutHorizontal = session.lineCutHorizontal,
+                    skippedJson = SkippedNode.encodeJson(session.resolvedSkipNodes()),
+                )
+            } else {
+                null
+            },
+        ).toIntent(context)
 }

@@ -552,9 +552,13 @@ proposals coming out of that map: [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUT
 A single-setting run that solves zero points shows the same VSG-failure
 wording as a sweep lattice node, not the generic "No data produced" dialog.
 
-**Next architecture (grill before coding):** `DicKeys` extras bag packed in
-`SessionOpenHelper.intentFor` and `AnalysisNavHelper.openResults` (~25 extras).
-A deep `ViewerSession` module would be the one pack/unpack. Session **commit**
-still sits on `AnalysisViewModel`'s public field bag after the JNI loop leaves.
+**Next architecture (grill before coding):** the `DicKeys` extras bag is now
+packed in one place — `ViewerArgs` in `ui/viewer/`, which both
+`SessionOpenHelper.intentFor` and `AnalysisNavHelper.openResults` construct,
+with `ViewerArgsTest` asserting their key sets against each other so they
+cannot drift apart again. The unpack half is still four readers parsing the
+bundle themselves, and is the larger move: an Intent already in the back stack
+has to keep working across an update. Session **commit** still sits on
+`AnalysisViewModel`'s public field bag after the JNI loop leaves.
 
 **PRs target `main`.** Do not force-push `main`.
