@@ -486,12 +486,39 @@ demo and is squarely on the roster; the effective view would report a healthy
 pool as a mass of failed revokes. Both revoke paths now stamp `revokedAt`
 apart from `updatedAt`, which a later staff device clear would otherwise reset.
 
-Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
-§20.12, [docs/OPERATING_MANUAL.md](docs/OPERATING_MANUAL.md) Appendix D, and
-[firebase-hosting/public/console/README.md](firebase-hosting/public/console/README.md).
+**The consoles run on code the CSP forbade (same branch, newest).** All four
+pages carried their module inline while the `/console/**` policy is
+`script-src 'self'` with no `'unsafe-inline'` — so the browser would have
+refused to execute any of it, and every console would have gone live rendering
+correctly and doing nothing. Each module now lives in a file beside its page
+(`router.js`, `account/account.js`, `institution/institution.js`,
+`operator/operator.js`) loaded with `src=`; bodies unchanged, and `<base href>`
+keeps every relative import resolving as before, rewrites included.
+
+*Found by the gate that was missing.* `scripts/check_console.py` runs as
+`console-pages`, unfiltered, beside `secret-scan` and `legal-pages`: no inline
+script or `on*=` handler, every module parses, every `$("id")` is an id its page
+defines, the three deploy placeholders are still placeholders, every rewrite
+destination exists, the two console CSPs are identical, and every `/v1` path a
+console calls is declared on the gateway. Each check was confirmed against a
+mutation of what it guards.
+
+**Gap F closed the licensing debt.** `licenseInvites` and the lease sweep now
+have index entries, so the rule stated in `firestore.indexes.json` holds again.
+The licence prefix is shown in Settings → Account — it was parsed, cached and
+displayed nowhere, and it is what support asks for. The cached lease expiry,
+the last symbol parsed and never read, is deleted instead: the backend folds
+the lease into `mode`, so a local lapse time is only a staler opinion of what
+`isLicensed` already answers. `WORKFLOWS.md` §9 no longer
+describes a key-entry screen as merely missing: there is none by design, since
+Gap A made licences attach by email. TD-22, TD-23 and the Identity Platform
+prerequisite are in [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md); FI-16 —
+bundle downloads against Cloud Run's request timeout, reconciliation's per-seat
+read cost, and the four-hour worst case for a revoke reaching an idle device —
+is in [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 Docs: [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
-§20, [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,
+§20 (§20.12 for the two seat counts), [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §9,
 [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md),
 [docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md) §3.1,
 [docs/OPERATING_MANUAL.md](docs/OPERATING_MANUAL.md) Appendix D, and

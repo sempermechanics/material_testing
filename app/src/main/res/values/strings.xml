@@ -309,6 +309,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="setting_wifi_only_sub">Wait for unmetered Wi‑Fi before uploading</string>
     <string name="account_section">Account</string>
     <string name="account_device_id_fmt">Device ID · %1$s</string>
+    <!-- The key prefix, never the key. It is what support asks for on the
+         phone, so it has to be readable somewhere in the app. -->
+    <string name="account_license_prefix_fmt">Licensed as %1$s</string>
     <string name="cloud_section">Cloud backup</string>
     <string name="analyses_data_management">Analyses data management</string>
     <string name="analyses_data_empty">No analyses on this phone or in the cloud yet.</string>

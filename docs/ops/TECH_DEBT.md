@@ -42,6 +42,8 @@ Priority = (Impact + Risk) × (6 − Effort).
 | TD-18 | Efficiency | `GrayPngEncoder` full-buffer + `toByteArray()` on hot path | 3 | 2 | 4 | **9** | Deferred |
 | TD-20 | Reuse | `LockedCameraSession` duplicate `captureStill` / `captureLuma` bodies | 2 | 2 | 4 | **8** | Deferred — audited 2026-08-31, no repro |
 | TD-21 | Efficiency | ImageReader listener re-registered every capture | 2 | 2 | 3 | **8** | Deferred — audited 2026-08-31, no repro |
+| TD-22 | Test | Consoles have no behavioural test — `check_console.py` reads their structure, nothing exercises a sign-in, a step-up or a revoke | 3 | 3 | 4 | **12** | Deferred — same Firebase Auth fixture blocker as auth-gated UI E2E |
+| TD-23 | Accuracy | Seat reconciliation inherits `lastSeenAt`'s one-hour write throttle, so a revoked seat can read *not checked in* for up to an hour after the device came back | 2 | 2 | 3 | **12** | Deferred — over-reports outstanding revokes, which is the safe direction |
 
 ## External / deferred (not blocked on code alone)
 
@@ -50,6 +52,7 @@ Priority = (Impact + Risk) × (6 − Effort).
 | Auth-gated UI E2E | Needs Firebase secrets / fixtures in CI |
 | `ViewerSession` extras bag | `DicKeys` packed in two places (`SessionOpenHelper.intentFor`, `AnalysisNavHelper.openResults`); grill before deepening |
 | firebase-admin / hashed lock | Lock is regenerated from txt on each bump (`pip-compile --generate-hashes` on Python 3.12). Direct-dep versions in the lock must match `requirements.txt`. |
+| Identity Platform upgrade | The consoles' second factor is Firebase MFA (TOTP), which needs the project upgraded to Identity Platform — a project-wide Auth change shared with the mobile app, and a change to the Auth pricing model. Until it is done the consoles sign in and every write fails `mfa_required`. |
 
 ## Perf / quality gates (do not loosen)
 

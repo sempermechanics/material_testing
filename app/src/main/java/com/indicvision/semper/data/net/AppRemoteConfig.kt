@@ -37,7 +37,6 @@ object AppRemoteConfig {
     private const val K_LICENSE_EXPIRES_AT = "license_expires_at"
     private const val K_IN_GRACE = "license_in_grace"
     private const val K_SEATING = "license_seating"
-    private const val K_LEASE_EXPIRES_AT = "lease_expires_at"
     private const val K_HEARTBEAT_MINUTES = "lease_heartbeat_minutes"
 
     /**
@@ -110,7 +109,6 @@ object AppRemoteConfig {
             putLong(K_LICENSE_EXPIRES_AT, parseInstant(config.licenseExpiresAt))
             putBoolean(K_IN_GRACE, config.inGrace)
             putString(K_SEATING, resolveSeating(config))
-            putLong(K_LEASE_EXPIRES_AT, parseInstant(config.leaseExpiresAt))
             putInt(K_HEARTBEAT_MINUTES, config.leaseHeartbeatMinutes.coerceAtLeast(0))
             putLong(K_FETCHED_AT, now)
             putInt(K_FAIL_STREAK, 0)
@@ -277,10 +275,6 @@ object AppRemoteConfig {
     /** `assigned` or `floating`; assigned until a response says otherwise. */
     fun licenseSeating(context: Context): String =
         prefs(context).getString(K_SEATING, SEATING_ASSIGNED) ?: SEATING_ASSIGNED
-
-    /** Epoch millis this account's floating seat lapses, or [NO_INSTANT]. */
-    fun leaseExpiresAtMillis(context: Context): Long =
-        prefs(context).getLong(K_LEASE_EXPIRES_AT, NO_INSTANT)
 
     /** How often to renew a held seat, in minutes. */
     fun leaseHeartbeatMinutes(context: Context): Int {

@@ -231,6 +231,7 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 |---|---|---|
 | [ ] 4.1 | Open Settings | All seven sections are collapsed; chevrons rotate on tap |
 | [ ] 4.2 | Expand **Account** | Your email and "Device ID · …" are shown; the device ID can be selected and copied |
+| [ ] 4.2a | Expand **Account** on a licensed account | "Licensed as SEMP-…" is shown below the device ID — the key prefix support asks for, never the key. Absent on demo |
 | [ ] 4.3 | Expand **Account** as a non-admin | No "Pending access requests" button |
 | [ ] 4.4 | Expand **Account** as an admin | The button appears and opens the admin list |
 | [ ] 4.5 | Turn **Save to cloud** on with local-only analyses present | A dialog offers to back up N of them |
@@ -737,18 +738,21 @@ sweep hitting the cap, or a background upload rejected with a quota error.
 - **Professional — individual key**: no local analysis cap
   (`analysisCap()` returns unlimited); Semper staff mint and hand over the key.
 - **Professional — institution seat**: identical entitlement to an
-  individual key (uncapped) — a institution seat and an individual key resolve to
+  individual key (uncapped) — an institution seat and an individual key resolve to
   the exact same `mode=licensed` on device. What differs is only how the
   seat is administered: institution IT self-service via backend routes (see
   §20.4 of the doc above), not Semper staff, and not through this app.
 
-**Status at this revision.** The backend fully supports redeeming either key
-shape (`POST /v1/licenses/activate`) and `IndicApi.activateLicense()` calls
-it, but there is no Settings screen wired to type a key in yet — activation
-today is exercised through the API directly (or a future
-`SettingsLicenseSection`). This screen's behavior for a Professional account
-is unaffected either way: once `GET /v1/config` reports `mode=licensed`,
-the cap simply doesn't apply and 9.1 never triggers.
+**Status at this revision.** There is no screen to type a key into, and there
+is not meant to be one. A licence is minted against the customer's email
+address and attaches at their next sign-in — an individual licence directly, an
+institution seat through the roster — so nothing is read off a phone, dictated,
+or typed. `POST /v1/licenses/activate` and `IndicApi.activateLicense()` remain
+for support recovery and have no caller in `app/src/`. What the app shows of a
+licence is its prefix, in Settings → Account (4.2a); the key itself never
+reaches the device. This screen's behaviour for a Professional account is
+unaffected either way: once `GET /v1/config` reports `mode=licensed`, the cap
+does not apply and 9.1 never triggers.
 
 **9.4 No seat right now (floating institution licence).** A separate gate from
 this screen, and not a limit: the account is on the roster but every seat is in
