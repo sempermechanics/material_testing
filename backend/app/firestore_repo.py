@@ -245,6 +245,18 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
     # that was dozens of writes to say the same thing. "Last seen" only
     # needs hour granularity; skip the write when nothing else changed and
     # the timestamp is still fresh.
+    #
+    # One thing does want finer granularity, and asks for it explicitly. A
+    # revoke stamps `seenCheckpointAt` (see _drop_user_to_demo_if_licensed),
+    # and seat reconciliation reads "has the holder been back since?" off
+    # lastSeenAt. Under the throttle alone that answer could stay "not yet"
+    # for an hour after the device had in fact checked in and been demoted.
+    # So a stamp predating the checkpoint is stale whatever its age: one
+    # unthrottled write per revoked account, once, after which the answer is
+    # exact instead of conservative.
+    checkpoint, seen = as_utc(cur.get("seenCheckpointAt")), as_utc(last_seen)
+    if checkpoint is not None and (seen is None or seen <= checkpoint):
+        stale = True
     if not changed and not stale:
         return ensure_entitlement({**cur, "uid": uid}, device_id)
 
@@ -1773,6 +1785,13 @@ def _drop_user_to_demo_if_licensed(uid: str, license_id: str) -> None:
         user_ref.update({
             **_mode_patch(MODE_DEMO),
             "updatedAt": firestore.SERVER_TIMESTAMP,
+            # The instant from which "has this account been back since?" is
+            # asked. `_touch_user` throttles lastSeenAt to the hour, which
+            # would leave reconciliation reading a landed revoke as unlanded
+            # for that long; the checkpoint makes the account's next request
+            # bypass the throttle exactly once. Written inside the update the
+            # demotion already performs, so it costs no extra write here.
+            "seenCheckpointAt": firestore.SERVER_TIMESTAMP,
         })
 
 
@@ -2545,12 +2564,19 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
 def _seen_since(last_seen, revoked_at) -> bool:
     """Has the account made a request since the seat was revoked?
 
-    Conservative in one direction on purpose. `lastSeenAt` is throttled to
-    `_LAST_SEEN_THROTTLE`, so a request made shortly after a revoke may not
-    have moved the stamp yet and the seat reads as not-checked-in for up to
-    that long. Over-reporting a revoke as unlanded is the safe way to be
-    wrong; the opposite would tell an operator a device had been told when it
-    had not.
+    `lastSeenAt` is throttled to `_LAST_SEEN_THROTTLE`, so on its own it
+    would answer this an hour late. The revoke stamps `seenCheckpointAt` on
+    the same write that demotes the holder, and `_touch_user` treats a
+    lastSeenAt older than that checkpoint as stale — so the account's first
+    request after a revoke moves the stamp regardless of the throttle and
+    this reads exactly.
+
+    It still errs in one direction, and deliberately in the safe one: a seat
+    revoked before either field existed, or one whose holder was already
+    pointed elsewhere when the revoke ran (so no demotion write happened),
+    has no checkpoint, and a missing revoke date is answered False. Over-
+    reporting a revoke as unlanded is the safe way to be wrong; the opposite
+    would tell an operator a device had been told when it had not.
     """
     last_seen, revoked_at = as_utc(last_seen), as_utc(revoked_at)
     if last_seen is None:

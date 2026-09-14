@@ -417,6 +417,10 @@ users/{uid}                       (uid = Google 'sub')
   licenseMaxAnalyses: number      (optional per-license cloud cap)
   schemaVersion                   (stamped by backend/scripts/migrate_schema.py)
   createdAt, updatedAt, lastSeenAt (Timestamp)
+  seenCheckpointAt                (Timestamp; stamped by a revoke — the instant
+                                   seat reconciliation measures check-in against,
+                                   and overrides the lastSeenAt write throttle
+                                   once, on the next request; §20.12)
 
 devices/{deviceId}                (deviceId = client UUID)
   uid, publicKeyPem
@@ -1713,11 +1717,24 @@ device clear, for one — which would silently reset it. Seats revoked before
 this field existed fall back to `updatedAt`, which for them is the same
 instant.
 
-One known imprecision, in the safe direction. `lastSeenAt` is throttled to
-`_LAST_SEEN_THROTTLE` (one hour), so a request made shortly after a revoke may
-not have moved the stamp yet, and the seat reads as not-checked-in for up to
-that long. Over-reporting a revoke as unlanded is the right way to be wrong;
-the opposite would tell an operator a device had been told when it had not.
+**The revoke stamps `seenCheckpointAt` on the holder too**, in the same write
+that demotes them, so it costs nothing extra. It exists because this read asks
+its question of `lastSeenAt`, which `_touch_user` throttles to
+`_LAST_SEEN_THROTTLE` (one hour): without a checkpoint, a holder last seen
+minutes before the revoke could make their next request, be demoted by it, and
+still read *not checked in* for the rest of the hour — an operator watching the
+verified count would see nothing move. `_touch_user` treats a `lastSeenAt`
+older than the checkpoint as stale whatever its age, so the account's first
+request after a revoke writes the stamp and this reads exactly. One
+un-throttled write per revoked account, once; the throttle governs every
+request after it.
+
+It still errs in one direction, deliberately in the safe one. A seat revoked
+before either field existed has no checkpoint, and a revoke whose holder had
+already moved to another licence performs no demotion write and so stamps
+none — but that seat is `moved_on`, already settled. Over-reporting a revoke as
+unlanded is the right way to be wrong; the opposite would tell an operator a
+device had been told when it had not.
 
 The report also carries `intendedRecounted` — `seatsUsed` recomputed from the
 seats themselves. A disagreement between it and `intended` is a counter drift,

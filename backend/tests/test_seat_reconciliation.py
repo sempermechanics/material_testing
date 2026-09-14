@@ -154,6 +154,45 @@ def test_a_demoted_holder_who_has_not_been_back_is_not_yet_confirmed(store):
     assert _bucket(report, "u1") == ("revokedConfirmed", repo.CHECKED_IN)
 
 
+def test_the_holders_next_request_confirms_the_revoke_despite_the_throttle(
+    store, monkeypatch,
+):
+    """TD-23: the check-in has to register on the request, not an hour later.
+
+    `lastSeenAt` is throttled to `_LAST_SEEN_THROTTLE`, and this read asks its
+    question of exactly that field. Without a checkpoint, a holder seen five
+    minutes before the revoke makes their next request, is demoted by it, and
+    still reads *not checked in* for the rest of the hour — an operator
+    watching the verified count sees nothing move.
+    """
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    license_id = _roster(store, "u1")
+    claims = {
+        "sub": "u1", "email": "u1@university.edu", "email_verified": True,
+        "firebase": {"sign_in_provider": "google.com"},
+    }
+    # Settle every other field first, so the only thing left to write is the
+    # timestamp — otherwise `changed` would carry the write and prove nothing.
+    repo.get_or_create_user(claims)
+    store._data["users"]["u1"]["lastSeenAt"] = (
+        datetime.now(timezone.utc) - timedelta(minutes=5)
+    )
+
+    assert repo.revoke_institution_seat(license_id, "u1") is True
+    assert _bucket(_report(license_id), "u1") == (
+        "revokedStillRunning", repo.NO_CHECKIN_SINCE_REVOKE,
+    )
+
+    # The holder's very next authed call — one request, well inside the hour.
+    repo.get_or_create_user(claims)
+
+    assert _bucket(_report(license_id), "u1") == (
+        "revokedConfirmed", repo.CHECKED_IN,
+    )
+
+
 def test_a_check_in_from_before_the_revoke_does_not_confirm_it(store):
     license_id = _roster(store, "u1")
     assert repo.revoke_institution_seat(license_id, "u1") is True
