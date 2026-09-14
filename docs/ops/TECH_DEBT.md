@@ -44,6 +44,7 @@ Priority = (Impact + Risk) × (6 − Effort).
 | TD-21 | Efficiency | ImageReader listener re-registered every capture | 2 | 2 | 3 | **8** | Deferred — audited 2026-08-31, no repro |
 | TD-22 | Test | Consoles have no behavioural test — `check_console.py` reads their structure, nothing exercises a sign-in, a step-up or a revoke | 3 | 3 | 4 | **12** | Deferred — same Firebase Auth fixture blocker as auth-gated UI E2E |
 | TD-23 | Accuracy | Seat reconciliation inherits `lastSeenAt`'s one-hour write throttle, so a revoked seat can read *not checked in* for up to an hour after the device came back | 2 | 2 | 3 | **12** | Deferred — over-reports outstanding revokes, which is the safe direction |
+| TD-24 | Architecture | No `@MainThread` on UI entry points, so `SessionStore`'s `@WorkerThread` contract is documentation rather than a gate — lint's `WrongThread` fires only when the *calling* method is annotated | 2 | 2 | 3 | **12** | Deferred — annotating ~27 Activities needs a lint run to land against an empty baseline |
 
 ## External / deferred (not blocked on code alone)
 

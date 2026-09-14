@@ -654,10 +654,14 @@ class SettingsActivity : AppCompatActivity() {
     private fun startBackup(entry: AnalysisEntry) {
         val record = entry.record ?: return
         val label = backupLabel(entry) ?: return
-        SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-        CloudSync.enqueueUpload(this, record.id)
-        Toast.makeText(this, label, Toast.LENGTH_SHORT).show()
-        wireAnalysesDataSection()
+        // Same ordering as Home's: the PENDING stamp before the worker, so a
+        // fast upload cannot have its SYNCED stamp overwritten by this one.
+        lifecycleScope.launch {
+            SessionStore.setSyncStateAsync(this@SettingsActivity, record.id, SessionRecord.SyncState.PENDING)
+            CloudSync.enqueueUpload(this@SettingsActivity, record.id)
+            Toast.makeText(this@SettingsActivity, label, Toast.LENGTH_SHORT).show()
+            wireAnalysesDataSection()
+        }
     }
 
     private fun stateLine(entry: AnalysisEntry): String = when (entry.location) {

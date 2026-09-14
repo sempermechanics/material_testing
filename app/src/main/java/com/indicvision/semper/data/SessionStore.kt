@@ -6,6 +6,7 @@
 package com.indicvision.semper.data
 
 import android.content.Context
+import androidx.annotation.WorkerThread
 import com.indicvision.semper.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -172,9 +173,13 @@ data class SessionRecord(
  * then overwrite with a one-record file — mutations refuse to write until the
  * index is readable again (from the primary file or `.bak`).
  *
- * Sync accessors take the lock on the calling thread. Prefer the `suspend`
- * variants ([listAsync], [upsertAsync], …) from UI code so disk+JSON never
- * block Main.
+ * Sync accessors take the lock on the calling thread and are marked
+ * [WorkerThread]; UI code calls the `suspend` variants ([listAsync],
+ * [upsertAsync], …) so disk+JSON never block Main. The annotation is half a
+ * pair: Android Lint's `WrongThread` fires only when the *calling* method
+ * carries a conflicting one, and nothing in this app is `@MainThread` yet, so
+ * today it documents the contract for the IDE rather than failing a build.
+ * Annotating the UI entry points is the other half — see docs/ops/TECH_DEBT.md.
  */
 object SessionStore {
 
@@ -207,11 +212,14 @@ object SessionStore {
     fun isIndexCorrupt(): Boolean = indexCorrupt
 
     /** Bytes one session occupies on disk, 0 once its artifacts have been dropped. */
+    @WorkerThread
     fun sizeOf(context: Context, id: String): Long = CacheJanitor.sizeOf(File(root(context), id))
 
     /** Bytes every local analysis occupies, including the index itself. */
+    @WorkerThread
     fun totalSize(context: Context): Long = CacheJanitor.sizeOf(root(context))
 
+    @WorkerThread
     fun list(context: Context): List<SessionRecord> = synchronized(lock) {
         when (val snap = readIndex(context)) {
             is IndexRead.Ok -> snap.records.sortedByDescending { it.createdAt }
@@ -226,6 +234,7 @@ object SessionStore {
     suspend fun listAsync(context: Context): List<SessionRecord> =
         withContext(Dispatchers.IO) { list(context) }
 
+    @WorkerThread
     fun get(context: Context, id: String): SessionRecord? = list(context).firstOrNull { it.id == id }
 
     suspend fun getAsync(context: Context, id: String): SessionRecord? =
@@ -238,6 +247,7 @@ object SessionStore {
      * @param allowOverLimit true for cloud restore (session already counts against quota).
      * @return false if a new session was refused (quota) or the index is corrupt.
      */
+    @WorkerThread
     fun upsert(
         context: Context,
         record: SessionRecord,
@@ -269,6 +279,7 @@ object SessionStore {
         allowOverLimit: Boolean = false,
     ): Boolean = withContext(Dispatchers.IO) { upsert(context, record, allowOverLimit) }
 
+    @WorkerThread
     fun rename(context: Context, id: String, newName: String) = synchronized(lock) {
         mutateIndex(context) { records ->
             records.map {
@@ -284,6 +295,7 @@ object SessionStore {
     suspend fun renameAsync(context: Context, id: String, newName: String) =
         withContext(Dispatchers.IO) { rename(context, id, newName) }
 
+    @WorkerThread
     fun updateHeadline(context: Context, id: String, headline: String) = synchronized(lock) {
         mutateIndex(context) { records ->
             records.map {
@@ -295,9 +307,11 @@ object SessionStore {
     suspend fun updateHeadlineAsync(context: Context, id: String, headline: String) =
         withContext(Dispatchers.IO) { updateHeadline(context, id, headline) }
 
+    @WorkerThread
     fun markSynced(context: Context, id: String) = setSyncState(context, id, SessionRecord.SyncState.SYNCED)
 
     /** Remember which cloud session backs this analysis (so it can be erased). */
+    @WorkerThread
     fun setCloudSessionId(context: Context, id: String, cloudSessionId: String) = synchronized(lock) {
         mutateIndex(context) { records ->
             records.map { if (it.id == id) it.copy(cloudSessionId = cloudSessionId) else it }
@@ -305,6 +319,7 @@ object SessionStore {
     }
 
     /** Set a session's sync state — used by cloud reconciliation as well as uploads. */
+    @WorkerThread
     fun setSyncState(context: Context, id: String, state: SessionRecord.SyncState) = synchronized(lock) {
         mutateIndex(context) { records ->
             records.map { if (it.id == id) it.copy(syncState = state) else it }
@@ -315,6 +330,7 @@ object SessionStore {
         withContext(Dispatchers.IO) { setSyncState(context, id, state) }
 
     /** Removes the index row AND the local files. Cloud copies are untouched. */
+    @WorkerThread
     fun delete(context: Context, id: String) = synchronized(lock) {
         if (!mutateIndex(context) { it.filterNot { r -> r.id == id } }) return
         dirFor(context, id).deleteRecursively()
@@ -334,6 +350,7 @@ object SessionStore {
      * survives. Leaves [SessionRecord.syncState] alone — typically [SYNCED] so
      * the row renders as "Only in cloud" via [SessionRecord.hasLocalData].
      */
+    @WorkerThread
     fun dropLocalArtifacts(context: Context, id: String) = synchronized(lock) {
         val record = get(context, id) ?: return@synchronized
         val dir = File(record.sessionDir)
@@ -357,6 +374,7 @@ object SessionStore {
      * Used by account deletion (GDPR); cloud erasure is handled separately.
      * Always allowed: intentional wipe, not a partial clobber of a corrupt file.
      */
+    @WorkerThread
     fun deleteAll(context: Context) = synchronized(lock) {
         root(context).deleteRecursively()
         root(context).mkdirs()

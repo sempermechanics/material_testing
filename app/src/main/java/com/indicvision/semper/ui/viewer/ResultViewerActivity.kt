@@ -264,6 +264,11 @@ class ResultViewerActivity : AppCompatActivity() {
         glassShield = findViewById(R.id.glassShield)
 
         inspect = ViewerInspectHelper(this)
+        // Warm [sessionRecord] here rather than at the share tap that needs it:
+        // the lazy reads the session index off disk, and by lazy is synchronized,
+        // so a tap arriving mid-read waits on the read it would have done itself
+        // and never on a second one.
+        lifecycleScope.launch(Dispatchers.IO) { sessionRecord }
 
         if (savedInstanceState != null) {
             val savedProbe = savedInstanceState.getInt("LAST_CLOSEST_IDX", -1)

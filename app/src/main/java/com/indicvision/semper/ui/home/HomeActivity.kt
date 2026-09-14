@@ -615,10 +615,16 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun enqueueBackup(record: SessionRecord, toastRes: Int) {
-        SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-        CloudSync.enqueueUpload(this, record.id)
-        adapter.rebindRow(record.id)
-        Toast.makeText(this, toastRes, Toast.LENGTH_SHORT).show()
+        // The index write is a file read-modify-write, and this runs from a tap.
+        // Order is preserved rather than made optimistic: the PENDING stamp has
+        // to land before the worker is queued, or an upload that finishes first
+        // would have its SYNCED stamp overwritten by this one.
+        lifecycleScope.launch {
+            SessionStore.setSyncStateAsync(this@HomeActivity, record.id, SessionRecord.SyncState.PENDING)
+            CloudSync.enqueueUpload(this@HomeActivity, record.id)
+            adapter.rebindRow(record.id)
+            Toast.makeText(this@HomeActivity, toastRes, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showFailedBackupDialog(record: SessionRecord) {
