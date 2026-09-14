@@ -345,6 +345,46 @@ class AnalysisViewModel : ViewModel() {
         val debugDir: File?,
     )
 
+    private val _sweepProgress = MutableSharedFlow<VsgStudyRunner.Progress?>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val sweepProgress: SharedFlow<VsgStudyRunner.Progress?> = _sweepProgress.asSharedFlow()
+
+    private val _sweepOutcome =
+        MutableSharedFlow<Result<BatchAnalysisOutcome>>(extraBufferCapacity = 1)
+    val sweepOutcome: SharedFlow<Result<BatchAnalysisOutcome>> = _sweepOutcome.asSharedFlow()
+
+    private var sweepJob: Job? = null
+
+    /**
+     * Sweep's counterpart to [launchBatchAnalysis], and for the same reason: a
+     * sweep is one full solve per combination, so it is as long as a batch run
+     * and was equally worth not losing to a rotation. It ran on the Activity's
+     * own scope until now, which cancelled it on destroy and left the partial
+     * session behind. Progress arrives on [sweepProgress], the result on
+     * [sweepOutcome].
+     */
+    fun launchVsgSweep(appContext: Context, request: SweepRequest) {
+        if (sweepJob?.isActive == true) return
+        sweepJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
+            _sweepProgress.tryEmit(null)
+            try {
+                val outcome = runVsgSweep(appContext, request) { update ->
+                    if (isActive) _sweepProgress.tryEmit(update)
+                }
+                _sweepOutcome.emit(Result.success(outcome))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Parameter sweep failed")
+                _sweepOutcome.emit(Result.failure(e))
+            } finally {
+                _sweepProgress.tryEmit(null)
+            }
+        }
+    }
+
     /**
      * Runs the sweep and persists it as an ordinary session: one `.dat` per
      * parameter combination, so the result viewer and the report treat the

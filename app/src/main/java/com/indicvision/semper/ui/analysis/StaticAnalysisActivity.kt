@@ -405,6 +405,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 showEngineFailureDialog(code, titleRes, frameIndex, frameName)
             },
             clearEngineFailFaq = { setEngineFailFaq(null) },
+            onSweepProgress = ::showSweepProgress,
+            onSweepFinished = ::onSweepFinished,
         ).observe()
 
         // Files (SAF) still reaches DNG/RAW and Drive, which MediaStore may not index.
@@ -1500,24 +1502,20 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val debugDir = EngineDebug.dirFor(cacheDir)
             val use6x6 = currentUseKeysInterpolator()
 
-            val outcome = runCatching {
-                val request = AnalysisViewModel.SweepRequest(
+            // Handed to the view model rather than run here: a sweep is one
+            // solve per combination, long enough that a rotation mid-run used to
+            // cancel it and leave the half-written session behind.
+            // BatchRunController tears the chrome down when it ends.
+            viewModel.launchVsgSweep(
+                applicationContext,
+                AnalysisViewModel.SweepRequest(
                     plan = plan,
                     labels = plan.map { sweepHelper.combinationLabel(it) },
                     roi = roi,
                     use6x6 = use6x6,
                     debugDir = debugDir,
-                )
-                viewModel.runVsgSweep(applicationContext, request) { progress ->
-                    showSweepProgress(progress)
-                }
-            }.onFailure { Timber.e(it, "Parameter sweep failed") }.getOrNull()
-
-            isProcessing = false
-            overlayHelper.hide()
-            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            checkReady()
-            onSweepFinished(outcome)
+                ),
+            )
         }
     }
 
