@@ -56,11 +56,16 @@ class RetryOnTransient : Interceptor {
     }
 
     private fun shouldRetry(chain: Interceptor.Chain, response: Response): Boolean {
-        if (response.code == HttpStatus.TOO_MANY_REQUESTS) return true
-        if (response.code != HttpStatus.SERVICE_UNAVAILABLE) return false
         val request = chain.request()
-        return request.method == "GET" ||
-            (request.method == "POST" && request.url.encodedPath in IDEMPOTENT_POSTS)
+        return when (response.code) {
+            // Rejected before the handler ran, so nothing happened.
+            HttpStatus.TOO_MANY_REQUESTS -> true
+            // May already have been delivered, so only where a repeat is harmless.
+            HttpStatus.SERVICE_UNAVAILABLE ->
+                request.method == "GET" ||
+                    (request.method == "POST" && request.url.encodedPath in IDEMPOTENT_POSTS)
+            else -> false
+        }
     }
 
     /** `Retry-After` when the server names one, else exponential with a ceiling. */

@@ -61,11 +61,12 @@ data class AppConfigDto(
      * work, but somebody else is holding the seat": eligible, not blocked. */
     val licenseSeating: String = "",
     /** ISO-8601 instant this account's floating seat lapses, or null when it
-     * holds none (and always null on an assigned license). */
-    // Parsed so the contract stays honest, and deliberately not cached: the
-    // backend folds the lease into `mode`, so a local copy of the lapse time
-    // would only be a second, staler opinion of what `isLicensed` already
-    // answers. The account console shows it; the app has no use for it.
+     * holds none (and always null on an assigned license).
+     *
+     * Parsed so the contract stays honest, and deliberately not cached: the
+     * backend folds the lease into `mode`, so a local copy of the lapse time
+     * would only be a second, staler opinion of what `isLicensed` already
+     * answers. The account console shows it; the app has no use for it. */
     val leaseExpiresAt: String? = null,
     /** How often to renew the seat. Renewing IS the heartbeat — the backend
      * has no separate route — so this is the interval between checkout calls
