@@ -263,6 +263,34 @@ def admin_license_device_history(
     }
 
 
+@router.get("/v1/admin/licenses/{license_id}/reconcile")
+def admin_reconcile_license_seats(
+    license_id: DocumentId,
+    admin=Depends(admin_user),
+):
+    """The second seat count: what this licence actually entitles right now.
+
+    The institution console shows `seatsUsed`, which moves the moment IT
+    revokes a seat — so it reports intent, and intent is all it can report.
+    This compares each seat against its holder's account and says which
+    revocations have landed, which have not, and why. The number worth acting
+    on is `counts.revokedStillRunning`.
+
+    A plain admin read, like `GET /v1/admin/licenses`: it changes nothing, so
+    it does not take the second-factor tier the write routes do. It costs one
+    user read per seat, which is why it is on demand and not folded into the
+    licence listing.
+    """
+    if not rate_limit.admin_bucket.allow(admin["uid"]):
+        raise HTTPException(429, errors.RATE_LIMITED)
+    err, report = repo.reconcile_institution_seats(license_id)
+    if err == errors.LICENSE_NOT_FOUND:
+        raise HTTPException(404, err)
+    if err:
+        raise HTTPException(400, err)
+    return report
+
+
 @router.post("/v1/admin/licenses/{license_id}/revoke")
 def admin_revoke_license(
     license_id: DocumentId,

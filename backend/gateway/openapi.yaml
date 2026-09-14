@@ -597,6 +597,35 @@ paths:
         '403': { description: Not an admin }
         '404': { description: License not found }
         '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/reconcile:
+    get:
+      operationId: adminReconcileLicenseSeats
+      description: >
+        Semper-staff only, institution licenses only. The second seat count.
+        seatsUsed, which is what institution IT sees, moves the instant a seat
+        is revoked, so it reports what IT intended. This compares every seat
+        against its holder's account and reports three buckets: active (with
+        neverClaimed as the subset nobody has taken up), revokedConfirmed, and
+        revokedStillRunning — a revoke that has not landed, either because the
+        demotion never wrote (still_licensed, repaired by revoking the seat
+        again) or because the device has not been back to hear it
+        (no_checkin_since_revoke). A read: no second factor, no writes. Costs
+        one user read per seat, so it is on demand rather than part of
+        GET /v1/admin/licenses.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: "Not an institution license, so there is no roster to reconcile (kind_not_institution)" }
+        '401': { description: Missing or invalid ID token }
+        '403': { description: Not an admin }
+        '404': { description: License not found }
+        '429': { description: Rate limited }
+        '404': { description: License not found }
+        '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}/revoke:
     post:
       operationId: adminRevokeLicense

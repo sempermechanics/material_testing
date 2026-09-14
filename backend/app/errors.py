@@ -70,6 +70,10 @@ NOT_ELIGIBLE = "not_eligible"
 NO_LICENSE = "no_license"
 NO_FLOATING_SEAT = "no_floating_seat"
 SEATING_NOT_FLOATING = "seating_not_floating"
+# Reconciliation is a roster operation. An individual licence has one
+# redeemer and no seats, so there are no two counts to compare and an empty
+# report would read like a clean bill of health.
+KIND_NOT_INSTITUTION = "kind_not_institution"
 EMAIL_NOT_VERIFIED = "email_not_verified"
 # Self-service device change only. Clearing a lock is not revoking — the
 # entitlement is untouched and the next device to sign in binds — so the only
