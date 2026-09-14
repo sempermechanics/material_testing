@@ -610,6 +610,13 @@ class IndicApi private constructor(context: Context) {
             .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
             .writeTimeout(WRITE_TIMEOUT_S, TimeUnit.SECONDS) // large chunk PUTs to Drive
             .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
+            // Application interceptors, so each sees the logical call once
+            // rather than once per redirect hop. Retry first, so a retried
+            // request gets a freshly read App Check token rather than replaying
+            // the one that may have expired while it waited. downloadClient
+            // inherits both through newBuilder() below.
+            .addInterceptor(RetryOnTransient())
+            .addInterceptor(AppCheckHeader())
             .apply {
                 val pins = BuildConfig.INDIC_API_CERT_PINS.trim()
                 val host = runCatching {
