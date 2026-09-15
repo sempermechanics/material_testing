@@ -636,9 +636,15 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
          those same ends, not the hidden first frame's extrema. -->
     <string name="viewer_stats_sequence_fmt">max %1$s · min %2$s %3$s</string>
     <string name="viewer_histogram_title_fmt">%1$s distribution</string>
-    <string name="viewer_histogram_bin_fmt">%1$d points · %2$s–%3$s %4$s</string>
+    <plurals name="viewer_histogram_bin_fmt">
+        <item quantity="one">%1$d point · %2$s–%3$s %4$s</item>
+        <item quantity="other">%1$d points · %2$s–%3$s %4$s</item>
+    </plurals>
     <string name="viewer_histogram_desc">Distribution of accepted field values</string>
-    <string name="viewer_histogram_desc_fmt">Distribution of %1$d accepted points</string>
+    <plurals name="viewer_histogram_desc_fmt">
+        <item quantity="one">Distribution of %1$d accepted point</item>
+        <item quantity="other">Distribution of %1$d accepted points</item>
+    </plurals>
     <string name="probe_reading_fmt">%1$s: %2$s %3$s\n(%4$d, %5$d)</string>
     <string name="probe_no_data">No data</string>
     

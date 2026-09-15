@@ -130,6 +130,9 @@ jobs:
         id: filter
         with:
           # Explicit base forces git-diff mode (avoids PR Files API 403 on Dependabot).
+          # An empty token is required on pull_request events, else the action
+          # ignores `base` and falls back to the Files API (and warns).
+          token: ''
           base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           filters: |
             app:

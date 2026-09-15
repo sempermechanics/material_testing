@@ -57,8 +57,9 @@ class FieldHistogramView @JvmOverloads constructor(
         this.histogram = histogram
         this.unit = unit
         selectedBin = -1
-        contentDescription = context.getString(
-            R.string.viewer_histogram_desc_fmt,
+        contentDescription = context.resources.getQuantityString(
+            R.plurals.viewer_histogram_desc_fmt,
+            histogram.n,
             histogram.n,
         )
         invalidate()

@@ -174,9 +174,11 @@ object ViewerSettingsSheet {
         val plot = sheetView.findViewById<FieldHistogramView>(R.id.plotFieldHistogram)
         plot.setHistogram(hist, unit)
         plot.onBinSelected = { index ->
-            val text = host.getString(
-                R.string.viewer_histogram_bin_fmt,
-                hist.counts[index],
+            val count = hist.counts[index]
+            val text = host.resources.getQuantityString(
+                R.plurals.viewer_histogram_bin_fmt,
+                count,
+                count,
                 ReportBuilder.formatMetric(hist.binStart(index)),
                 ReportBuilder.formatMetric(hist.binEnd(index)),
                 unit,
