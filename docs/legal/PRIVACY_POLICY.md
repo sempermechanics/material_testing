@@ -1,8 +1,10 @@
 # Semper — Privacy Policy
 
-**Last updated:** 2026-08-05  
-**Product:** Semper DIC Android app and optional cloud sync backend  
-**Contact:** support mailbox configured as `SUPPORT_EMAIL` for the deployment
+**Last updated:** 2026-09-15  
+**Product:** Semper DIC Android app, optional cloud sync backend, and web console  
+**Data controller (data fiduciary):** [OPERATOR LEGAL NAME], [REGISTERED ADDRESS], Chennai, Tamil Nadu, India  
+**Privacy contact:** the support mailbox configured as `SUPPORT_EMAIL` for the deployment  
+**Grievance Officer (Digital Personal Data Protection Act, 2023):** [GRIEVANCE OFFICER NAME], [GRIEVANCE OFFICER EMAIL]  
 
 This policy describes personal data processed by Semper when you use the app
 and, if enabled, the Semper cloud backend. Analysis itself runs **on-device**;
@@ -13,10 +15,19 @@ base URL.
 
 | Role | Who |
 |------|-----|
-| App operator / controller | The organization that distributes your build and operates the GCP/Firebase project |
+| Controller / data fiduciary | [OPERATOR LEGAL NAME], Chennai, India — the organization that distributes your build and operates the GCP/Firebase project |
 | Subprocessors (typical) | Google (Firebase Auth, Firestore, Google Drive, Firebase Crashlytics, Cloud Logging / Cloud Run), Resend (transactional email for access-request notifications) |
 
-No large-language-model or generative-AI provider is integrated.
+No large-language-model or generative-AI provider is integrated. Subprocessors
+are bound by written data-processing terms that require them to protect your
+data and to process it only on our instructions.
+
+The service is operated from India and is not offered to residents of the
+European Union, the European Economic Area, or the United Kingdom. We
+nevertheless apply the safeguards described here — a separate, withdrawable
+consent for any use of your content beyond providing the service, purpose
+limitation, data minimisation, the rights in section 5, and breach handling —
+as our standard for every user.
 
 ## 2. Data we process
 
@@ -78,6 +89,45 @@ No large-language-model or generative-AI provider is integrated.
   (auth denials, approvals, deletes, exports). They intentionally retain the
   fact of actions after account erasure and do **not** store analysis content.
 
+### 2.8 Product improvement — only with your separate consent
+
+- **Your separate choice.** The app asks, as its own option next to (not
+  inside) the Terms acceptance, whether your synced analysis content may be
+  used to improve Semper. The option is presented pre-selected; untick it to
+  decline. Declining has no effect on the service you receive. You can change your
+  answer at any time in **Settings → Your data → Use my data to improve
+  Semper**, or by emailing the privacy contact.
+- **What is used when you consent:** analysis content you have synced to the
+  cloud — images, `.dat` displacement/strain fields, reports, session metadata
+  (specimen label, parameters, engine metrics) — and metrics derived from them.
+  Content that stays on your device and is never synced is never used.
+- **How it is used:** to test, tune, validate, benchmark, and improve the
+  correlation engine, the app, and the service (for example regression
+  datasets, parameter tuning, and accuracy studies).
+- **Safeguards:** a pseudonymised copy is kept in a separate improvement
+  dataset with restricted access; account identifiers are replaced by an
+  internal key; specimen labels and free-text fields are stripped where they
+  are not needed; the dataset is never published in a form that identifies
+  you or your specimens and is never sold or licensed to third parties.
+- **Withdrawal and retention:** withdrawing consent stops new use immediately.
+  Your content is deleted from the improvement dataset within 30 days of
+  withdrawal or account deletion. Independently of withdrawal, raw content is
+  kept in the dataset for at most 36 months. Aggregated or derived results
+  (tuned parameters, statistics) that no longer contain your content may be
+  kept.
+- **Aggregate metrics without consent:** de-identified, aggregated engine and
+  operational metrics that contain no images, fields, or specimen names may be
+  used to operate, secure, and improve the service on the basis of our
+  legitimate interest. You can object using the same toggle.
+
+### 2.9 Terms-acceptance and consent records
+
+- When you accept the Terms of Service or change the product-improvement
+  choice, we record the version accepted, the time, your user id, the
+  registered device id, and the source (app or console). This is our evidence
+  of the agreement and of your consent choices; it is included in your data
+  export and is retained with the audit trail.
+
 ## 3. Purposes and legal bases (summary)
 
 | Purpose | Examples | Basis (typical) |
@@ -88,10 +138,25 @@ No large-language-model or generative-AI provider is integrated.
 | Reliability (server) | Cloud Logging, readiness probes | Legitimate interest |
 | Reliability (app diagnostics) | Crashlytics / Analytics crash reports | **Consent** — opt-in, withdrawable in Settings |
 | Support onboarding | Resend access-request mail | Legitimate interest |
+| Product improvement — your synced content | Regression datasets, tuning, accuracy studies (section 2.8) | **Consent** — separate option, pre-selected but declinable before continuing, withdrawable in Settings |
+| Product improvement — aggregate metrics | De-identified engine/operational statistics | Legitimate interest — objection honoured via the same toggle |
+| Contract and consent records | Terms version accepted, consent changes | Contract / legitimate interest (evidence of agreement) |
+| Legal compliance | Responding to lawful requests, tax and accounting records | Legal obligation |
 
-Exact legal bases depend on your jurisdiction and the deploying organization’s
-policies; replace this section with counsel-approved language before public
-launch if required.
+Where the law of your country names different bases, the closest equivalent
+applies. We do not make decisions about you based solely on automated
+processing that produce legal or similarly significant effects.
+
+## 3A. Where your data is processed and international transfers
+
+Cloud data is stored in the Google Cloud region selected by the operator for
+your deployment ([GCP REGION, e.g. asia-south1 (Mumbai)]) and may be processed
+by Google in other regions for redundancy and support. Transactional email is
+processed by Resend in the United States. Where data leaves India or your
+country, we rely on the subprocessors' contractual data-protection commitments
+and comply with applicable cross-border transfer rules, including those under
+the Digital Personal Data Protection Act, 2023, and any restrictions notified
+by the Government of India.
 
 ## 4. Retention
 
@@ -108,7 +173,41 @@ launch if required.
 Scheduled Firestore exports / PITR, where enabled, follow
 [FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md).
 
-## 5. Your rights — export and deletion
+## 5. Your rights
+
+You have the following rights over your personal data, subject to applicable
+law. We answer requests within 30 days (extendable where the law allows for
+complex requests, and we will tell you if so). To protect your account we
+verify requests through the app's device attestation or by re-authentication.
+
+- **Access** — obtain a copy of the personal data we hold about you and
+  information about how it is processed (use the export below).
+- **Correction** — have inaccurate or incomplete data corrected (profile
+  fields can be edited in the app or by request).
+- **Erasure** — have your account and cloud content deleted (see below).
+- **Restriction and objection** — ask us to limit processing, and object to
+  processing based on legitimate interest, including the aggregate-metrics use
+  in section 2.8.
+- **Portability** — receive your data in a structured, machine-readable format
+  (the export below is JSON).
+- **Withdraw consent** — at any time, for diagnostics (section 2.4) and for
+  product improvement (section 2.8), without affecting the lawfulness of
+  processing before withdrawal.
+- **Complain** — lodge a complaint with the data-protection authority that has
+  jurisdiction over you. In India this is the Data Protection Board of India,
+  after first raising the grievance with our Grievance Officer.
+
+**India (Digital Personal Data Protection Act, 2023).** You may access,
+correct, update, and erase your personal data, obtain grievance redressal
+through the Grievance Officer named above within the statutory period, and
+nominate a person to exercise these rights if you die or are incapacitated.
+
+**Other jurisdictions.** If the law where you live gives you equivalent rights
+(for example, rights to know, delete, or correct, and non-discrimination for
+exercising them), we honour them on request. We do not sell personal data and
+do not share it for cross-context behavioural advertising.
+
+### 5.1 Export and deletion
 
 - **Export:** In the app, **Settings → Your data → Download my cloud account
   data**. (Directly: authenticated, device-attested `GET /v1/me/export`, which
@@ -122,13 +221,22 @@ Scheduled Firestore exports / PITR, where enabled, follow
 - **Limits:** Third-party processor retention (Crashlytics, Logging, Resend,
   Workspace trash) may outlive application erasure until those systems’ own
   retention/TTL elapse. Export does not include other users’ data or raw
-  Cloud Logging streams.
+  Cloud Logging streams. The export includes your terms-acceptance and
+  consent records (section 2.9).
 
 ## 6. Sharing
 
 Data is shared with subprocessors above to operate the service. It is not sold.
 Admin operators of your deployment can approve users and view operational logs
 according to project IAM.
+
+## 6A. Data breaches
+
+If a breach of security affects your personal data, we will notify the
+competent authority within the period required by law (in India, as prescribed
+under the Digital Personal Data Protection Act, 2023) and will inform affected
+users without undue delay, describing the nature of the breach, the likely
+consequences, and the measures taken.
 
 ## 7. Security (summary)
 
@@ -139,15 +247,21 @@ security headers, and opaque client error bodies on Cloud Run. See
 
 ## 8. Children
 
-Semper is intended for professional / research use, not for children under 16
-(or the applicable age of digital consent).
+Semper is a professional / research tool offered to adults (18 or the age of
+majority where you live) acting in a business or professional capacity. It is
+not directed at children and we do not knowingly process children's data; if
+you believe a child has created an account, contact us and we will delete it.
 
 ## 9. Changes
 
-Material changes will update the “Last updated” date. Significant changes to
-cloud processing should be reflected in-app or in release notes.
+Material changes will update the “Last updated” date and will be announced
+in-app or in release notes. Any change that would expand consent-based
+processing (sections 2.4 and 2.8) is not applied to you until you consent to
+it again in the app.
 
 ## 10. Contact
 
 Use the in-app support / help action or the configured support email for privacy
-requests (export, deletion, access questions).
+requests (export, deletion, access questions). Grievances under the Digital
+Personal Data Protection Act, 2023 go to the Grievance Officer named at the top
+of this policy.

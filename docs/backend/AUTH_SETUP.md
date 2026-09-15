@@ -137,6 +137,35 @@ self-approve into a privileged domain.
 > code read used to sit in `config.py`; it has been removed, so don't go
 > looking for it.
 
+## 3a. Terms acceptance (clickwrap) and the improvement consent
+
+Signing in proves identity; it does not bind anyone to the Terms. The app
+records that as a separate, affirmative act: after **every** sign-in method
+(password, Google, email link) and before Pending or Home, `AccessRouter.intentFor`
+routes through `TermsActivity` whenever the accepted version on the device
+differs from the version in force. The Terms box starts unticked and is the
+only thing that unlocks the button; the improvement-consent box is pre-ticked
+(product decision) but is a separate option the user can untick; Decline (or
+Back) signs the user out.
+
+| Piece | Where |
+|---|---|
+| Version in force | `backend/app/legal.py::TERMS_VERSION` = the `**Version:**` line of [TERMS_OF_SERVICE.md](../legal/TERMS_OF_SERVICE.md); `tests/test_terms_and_consent.py` fails if they drift. `LegalTerms.TERMS_VERSION` in the app is the offline / PENDING fallback |
+| `GET /v1/me` | adds `terms: {required_version, accepted_version, terms_url, privacy_url}` and `improvement_consent: bool \| null` |
+| `POST /v1/me/terms` `{version}` | records `users/{uid}.termsAccepted`; **409 `terms_version_mismatch`** if the app sends a version the server does not serve (outdated app). Audit `TERMS_ACCEPTED` |
+| `PUT /v1/me/consents` `{improvement}` | records `users/{uid}.improvementConsent`; the optional "use my data to improve Semper" choice, withdrawable in Settings → Your data. Audit `CONSENT_CHANGED` |
+| Dependency | both use `any_status_user`: a **PENDING** account may accept (the gate runs before approval); SUSPENDED and unauthenticated are refused as before. `/v1/me` itself still needs `current_user` (APPROVED) |
+| Export | `GET /v1/me/export` includes both records |
+
+Bumping the Terms: edit the document, set the new date in `**Version:**`,
+`backend/app/legal.py` and `LegalTerms.kt`, and regenerate the hosted pages.
+Every user is re-gated on their next `/v1/me` because `required_version`
+changes; the app stores the server value and compares it locally.
+
+Acceptance is local-first: the gate opens as soon as the device has recorded
+the choice, and an unsynced acceptance is re-sent by `AuthRepository.resolveStatus`
+on the next successful `/v1/me`.
+
 ## 4. App config — local.properties
 
 ```properties
@@ -163,5 +192,6 @@ Sign in (Google / email link / password)
         └─ GET /v1/me  (Authorization: Bearer <Firebase ID token>)
              └─ firebase-admin verifies signature, exp, iss, aud == project id
                   └─ user row ensured in Firestore (PENDING on first sign-in)
-                       └─ APPROVED → Home · PENDING → Approval Pending screen
+                       └─ Terms gate (once per Terms version; Decline = sign out)
+                            └─ APPROVED → Home · PENDING → Approval Pending screen
 ```

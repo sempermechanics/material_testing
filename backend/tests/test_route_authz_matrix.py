@@ -23,11 +23,20 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from app import audit, deps, drive, firestore_repo as repo
 from app.config import settings
-from app.deps import admin_user, current_user, device_or_legacy_reader, verified_device
+from app.deps import (
+    admin_user,
+    any_status_user,
+    current_user,
+    device_or_legacy_reader,
+    verified_device,
+)
 from app.main import app
 from app.tasks import tasks_caller
 
 NONE, USER, ADMIN, DEVICE, DEVICE_ADMIN = "none", "user", "admin", "device", "device+admin"
+# Signed in but not necessarily approved: only the Terms/consent routes, which
+# must work at registration time, before an operator has approved the account.
+ANY_STATUS = "any-status"
 # Not a user tier: authenticated by the OIDC token Cloud Tasks attaches, and
 # reachable by nothing else — no ID token or device signature will open it.
 TASK = "cloud-task"
@@ -45,6 +54,8 @@ EXPECTED = {
     ("GET", "/v1/me"): USER,
     ("GET", "/v1/config"): USER,
     ("GET", "/v1/me/export"): DEVICE,
+    ("POST", "/v1/me/terms"): ANY_STATUS,                       # clickwrap runs before approval
+    ("PUT", "/v1/me/consents"): ANY_STATUS,
     ("DELETE", "/v1/me"): DEVICE,
     ("POST", "/v1/devices/register"): USER,                     # bootstrap: no device yet
     ("POST", "/v1/challenge"): USER,                            # bootstrap: mints the nonce
@@ -88,6 +99,8 @@ def _tier(route) -> str:
         return ADMIN
     if current_user in calls:
         return USER
+    if any_status_user in calls:
+        return ANY_STATUS
     return NONE
 
 
