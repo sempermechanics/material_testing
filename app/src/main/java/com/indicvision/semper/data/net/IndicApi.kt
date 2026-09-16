@@ -84,6 +84,9 @@ class IndicApi private constructor(context: Context) {
 
     class NotApprovedException : IOException(ApiErrors.NOT_APPROVED)
 
+    /** The Terms this build carries are older than the ones the server publishes (409). */
+    class TermsVersionMismatchException(val requestId: String? = null) : IOException(ApiErrors.TERMS_VERSION_MISMATCH)
+
     /**
      * This account is bound to a *different* device (registration refused).
      * [requestId] is the backend's `X-Request-Id` when it answered — a device
@@ -226,6 +229,42 @@ class IndicApi private constructor(context: Context) {
                 HttpStatus.CONFLICT -> throw DeviceConflictException(IndicApiHttp.requestIdOf(resp))
                 else -> throw IndicApiHttp.apiException(resp)
             }
+        }
+    }
+
+    // ---------------------------------------------------------- legal / consent
+
+    /**
+     * POST /v1/me/terms — record clickwrap acceptance of [version].
+     *
+     * Plain bearer auth (like [registerDevice]): the gate runs at registration,
+     * before a device is registered and before an operator has approved the
+     * account, so it can require neither attestation nor APPROVED status.
+     * Throws [TermsVersionMismatchException] when the server no longer serves
+     * [version] — the app is older than the published Terms.
+     */
+    suspend fun acceptTerms(idToken: String, version: String): Unit = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url("$base/v1/me/terms")
+            .header("Authorization", "Bearer $idToken")
+            .header("X-Device-Id", device.getDeviceId())
+            .post(json.encodeToString(TermsAcceptanceBody(version)).toRequestBody(jsonMedia)).build()
+        client.newCall(req).execute().use { resp ->
+            when (resp.code) {
+                HttpStatus.OK -> Unit
+                HttpStatus.CONFLICT -> throw TermsVersionMismatchException(IndicApiHttp.requestIdOf(resp))
+                else -> throw IndicApiHttp.apiException(resp)
+            }
+        }
+    }
+
+    /** PUT /v1/me/consents — grant or withdraw the optional product-improvement consent. */
+    suspend fun setImprovementConsent(idToken: String, granted: Boolean): Unit = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url("$base/v1/me/consents")
+            .header("Authorization", "Bearer $idToken")
+            .header("X-Device-Id", device.getDeviceId())
+            .put(json.encodeToString(ConsentUpdateBody(granted)).toRequestBody(jsonMedia)).build()
+        client.newCall(req).execute().use { resp ->
+            if (resp.code != HttpStatus.OK) throw IndicApiHttp.apiException(resp)
         }
     }
 

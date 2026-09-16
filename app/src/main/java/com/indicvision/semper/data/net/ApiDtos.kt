@@ -18,7 +18,26 @@ data class MeResponse(
     val email: String? = null,
     val role: String? = null,
     @SerialName("access_status") val accessStatus: String,
+    /** Absent on backends predating the clickwrap gate; the app then falls back to its own constant. */
+    val terms: TermsDto? = null,
+    /** null = never answered; the app treats that as "not asked", never as consent. */
+    @SerialName("improvement_consent") val improvementConsent: Boolean? = null,
 )
+
+/** Which Terms version the server requires, and which (if any) this account accepted. */
+@Serializable
+data class TermsDto(
+    @SerialName("required_version") val requiredVersion: String,
+    @SerialName("accepted_version") val acceptedVersion: String? = null,
+    @SerialName("terms_url") val termsUrl: String? = null,
+    @SerialName("privacy_url") val privacyUrl: String? = null,
+)
+
+@Serializable
+data class TermsAcceptanceBody(val version: String)
+
+@Serializable
+data class ConsentUpdateBody(val improvement: Boolean)
 
 /** Resolved product limits from GET /v1/config (per-user override → fleet default). */
 @Serializable

@@ -390,6 +390,26 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Public legal pages on the product site. -->
     <string name="legal_privacy_url" translatable="false">https://sempermechanics.com/privacy/</string>
     <string name="legal_terms_url" translatable="false">https://sempermechanics.com/terms/</string>
+
+    <!-- Clickwrap gate (TermsActivity) and the separate improvement consent -->
+    <string name="terms_title">Before you continue</string>
+    <string name="terms_version_fmt">Terms version %1$s</string>
+    <string name="terms_summary">Semper is a professional tool for digital image correlation. To use an account you need to agree to the Terms of Service and the Privacy Policy. In short: the app and engine stay our property and must not be reverse-engineered or shared; you are responsible for validating your own results; the service is provided as is; and Indian law applies, with disputes resolved in Chennai.</string>
+    <string name="terms_read_full_terms">Read the Terms</string>
+    <string name="terms_read_privacy">Privacy Policy</string>
+    <string name="terms_checkbox_agree">I have read and agree to the Terms of Service and the Privacy Policy</string>
+    <string name="terms_checkbox_improve">Use data to improve Semper</string>
+    <string name="terms_checkbox_improve_hint">Optional. Lets us use images, results and reports you sync to test and tune the engine. Untick to opt out; you can change this any time in Settings \u2192 Your data.</string>
+    <string name="terms_action_agree">Agree and continue</string>
+    <string name="terms_action_decline">Decline</string>
+    <string name="terms_error_update_app">This version of the app is out of date. Please update Semper to accept the current Terms.</string>
+    <string name="terms_error_generic">Could not record your acceptance. Please try again.</string>
+    <string name="terms_register_hint">You\u2019ll be asked to accept the Terms next.</string>
+    <string name="settings_improve_title">Use my data to improve Semper</string>
+    <string name="settings_improve_summary">Optional. Synced images, results and reports may be used to test and tune the engine. Withdrawing stops future use and removes your data from improvement datasets within 30 days.</string>
+    <string name="settings_terms_accepted_fmt">Terms accepted: version %1$s</string>
+    <string name="settings_terms_not_accepted">Terms not yet accepted on this device</string>
+    <string name="settings_view_terms">View Terms</string>
     
     <string name="advanced_parameters">Advanced parameters</string>
     

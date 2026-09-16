@@ -3,6 +3,7 @@
 package com.indicvision.semper.ui.auth
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
@@ -119,12 +120,23 @@ class SplashActivity : AppCompatActivity() {
         } else if (!(BuildConfig.DEBUG && !authRepo.cloudConfigured)) {
             return false
         }
-        navigateTo(HomeActivity::class.java)
+        // Local-only dev run: no account, so nothing to accept terms for.
+        navigateTo(HomeActivity::class.java, gated = false)
         return true
     }
 
-    private fun navigateTo(targetActivity: Class<*>, errorMessage: String? = null) {
-        val intent = Intent(this, targetActivity)
+    private fun navigateTo(
+        targetActivity: Class<out Activity>,
+        errorMessage: String? = null,
+        gated: Boolean = true,
+    ) {
+        // Home and Pending pass through the Terms gate when the accepted
+        // version is stale (or missing); everything else goes straight there.
+        val intent = if (gated) {
+            AccessRouter.intentFor(this, targetActivity)
+        } else {
+            Intent(this, targetActivity)
+        }
 
         // If an error occurred, package it up and send it to AuthActivity
         // so we can display it nicely in the UI.

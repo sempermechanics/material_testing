@@ -22,6 +22,9 @@ object ApiErrors {
     /** The caller is not an admin (403 from an admin route). */
     const val NOT_ADMIN = "not_admin"
 
+    /** The app tried to accept a Terms version the server no longer serves (409). */
+    const val TERMS_VERSION_MISMATCH = "terms_version_mismatch"
+
     /** This account is already bound to a different device (409). */
     const val DEVICE_CONFLICT = "device_conflict"
 

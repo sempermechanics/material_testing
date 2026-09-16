@@ -241,6 +241,16 @@
                 android:visibility="gone" />
         </FrameLayout>
 
+        <TextView
+            android:id="@+id/tvRegisterTermsHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/terms_register_hint"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
 
 
         <TextView

@@ -91,11 +91,57 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       Settings → Your data → "Download my cloud account data".
 - [x] Release signing cert listed in
       `firebase-hosting/public/.well-known/assetlinks.json` (debug + release).
-- [ ] Counsel review of legal templates (governing law, bases).
+- [ ] Counsel review of the Terms (India law, Chennai arbitration, liability
+      cap, indemnity, class waiver) and the Privacy Policy bases before public
+      distribution. Drafted as a risk exercise, not legal advice.
+- [ ] Fill the bracketed operator fields in both legal documents and
+      regenerate the pages: `[OPERATOR LEGAL NAME]`, `[REGISTERED ADDRESS]`,
+      `[GRIEVANCE OFFICER NAME]` / `[EMAIL]` (DPDP Act 2023 requires one),
+      `[GCP REGION …]`. `render_legal_pages.py --check` does not catch these.
+- [x] Clickwrap: Terms acceptance is an affirmative in-app act recorded
+      server-side (`users/{uid}.termsAccepted`) with a version, and the
+      product-improvement consent is a separate, pre-ticked but declinable,
+      withdrawable option
+      ([AUTH_SETUP.md](../backend/AUTH_SETUP.md) §3a).
 - [ ] Record cookie inventory per [COOKIE_CONSENT.md](../legal/COOKIE_CONSENT.md);
       no banner without non-essential cookies.
 - [ ] Confirm Crashlytics / Cloud Logging / Resend retention in vendor consoles
       and replace the UNKNOWN entries in the policy's retention table.
+
+### Legal rollout (branch `feat/legal-terms-clickwrap`)
+
+Pending before the rewritten Terms and the clickwrap gate go to real users.
+Order matters: the backend and gateway must serve the new routes before an app
+build that calls them ships, or every sign-in ends at an unrecordable gate.
+
+- [ ] Appoint the **Grievance Officer** (DPDP Act 2023) and fill the bracketed
+      fields in [TERMS_OF_SERVICE.md](../legal/TERMS_OF_SERVICE.md) and
+      [PRIVACY_POLICY.md](../legal/PRIVACY_POLICY.md); regenerate and **deploy
+      Hosting** so `/terms/` and `/privacy/` show the new text before the app
+      links to it.
+- [ ] Deploy the backend **and** redeploy API Gateway from the updated
+      `backend/gateway/openapi.yaml` (`POST /v1/me/terms`, `PUT /v1/me/consents`);
+      confirm with a curl that both reach Cloud Run through the gateway.
+- [ ] Manual device pass of the gate: fresh install → password sign-up → Terms
+      screen before Pending/Home → Agree writes `users/{uid}.termsAccepted`;
+      Google sign-in and email link show the same screen; Decline and Back sign
+      out; Settings → Your data toggle flips `improvementConsent` and
+      `GET /v1/me/export` shows both records; bumping `TERMS_VERSION` on a dev
+      backend re-gates an approved user on next launch.
+- [ ] Every **existing** user is re-gated once on their first launch after the
+      rollout (no `termsAccepted` on file). Tell pilot users beforehand; nobody
+      is locked out — PENDING accounts can accept too.
+- [ ] The Privacy Policy §2.8 promises a **separate, pseudonymised improvement
+      dataset**, deletion from it within 30 days of withdrawal, and a 36-month
+      cap on raw content. No tooling exists for that yet. Until it does, do not
+      copy any synced content into an improvement dataset, consent or not — the
+      toggle records the choice; it does not license a process that is not built.
+- [ ] Update the **Google Play Data safety** form: analysis content may be used
+      for app improvement (optional, user-controlled), and account data now
+      includes terms-acceptance / consent records.
+- [ ] Console: `source: console` is reserved for consent changes made without
+      `X-Device-Id`; the web console has no consent UI yet. Either add one or
+      note that withdrawal is app- or support-mailbox-only (the policy says both).
 
 ## Contention fixes found by the emulator tier
 
