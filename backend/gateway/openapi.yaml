@@ -181,6 +181,19 @@ paths:
       responses:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
+  /v1/me/terms:
+    post:
+      operationId: acceptTerms
+      description: Record clickwrap acceptance of the current Terms version (PENDING accounts allowed).
+      responses:
+        '200': { description: OK }
+        '409': { description: Client sent a version other than the current one }
+  /v1/me/consents:
+    put:
+      operationId: setConsents
+      description: Grant or withdraw the optional product-improvement consent (PENDING accounts allowed).
+      responses:
+        '200': { description: OK }
   /v1/devices/register:
     post:
       operationId: registerDevice

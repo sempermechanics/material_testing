@@ -194,7 +194,7 @@ object CloudSync {
         val token = TokenProvider.usableIdToken()
             ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
         try {
-            val cloudId = resolveCloudId(api, token, record!!)
+            val cloudId = resolveCloudId(api, token, record)
             if (cloudId != null) api.deleteSession(token, cloudId)
             SessionStore.delete(appContext, localSessionId)
             Timber.i("Erased analysis %s locally and in the cloud", localSessionId)

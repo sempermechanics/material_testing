@@ -131,10 +131,26 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-14)
+## Current state (2026-09-18)
 
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
+
+**Terms clickwrap (merged to `main` in #109, and into `feat/license-demo-pro`
+on 2026-09-18).** The Terms of
+Service were rewritten from the owner's side (IP and anti-reverse-engineering,
+acceptable use, AS-IS warranty disclaimer, capped liability, indemnity, sole
+discretion termination, Indian law with Chennai arbitration and a class waiver,
+professional use only, not offered in the EU/UK) and the Privacy Policy brought
+to a GDPR-grade standard without EU/UK-specific commitments (grievance officer,
+consent-based product improvement, transfers, breach handling, full rights
+list). Hosted pages regenerated. Acceptance is now a **clickwrap**:
+`AccessRouter.intentFor` sends every sign-in through `TermsActivity` until the
+device has accepted the version in force; the backend records it
+(`POST /v1/me/terms`, 409 on a stale app) and a separate, pre-ticked-but-declinable, withdrawable
+improvement consent (`PUT /v1/me/consents`, Settings → Your data). Details in
+[docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md) §3a. Bracketed operator
+fields in both documents still have to be filled before public distribution.
 
 Lint and detekt burn-down on this branch: empty baselines still; `:app:detekt`
 and `:app:lintDebug` report zero findings. Settings / wizard settings content

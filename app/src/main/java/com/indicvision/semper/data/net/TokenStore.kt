@@ -30,6 +30,10 @@ object TokenStore {
     private const val K_QUOTA_USED = "quota_used"
     private const val K_LIMIT_FORCED = "session_limit_forced"
     private const val K_BETA_ACKED_PREFIX = "beta_notice_acked_"
+    private const val K_TERMS_REQUIRED = "terms_required_version"
+    private const val K_TERMS_ACCEPTED = "terms_accepted_version"
+    private const val K_TERMS_SYNCED = "terms_accepted_synced"
+    private const val K_IMPROVEMENT_CONSENT = "improvement_consent" // "true" | "false" | absent
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -129,6 +133,38 @@ object TokenStore {
     fun setBetaNoticeAcked(context: Context) {
         val uid = cachedUid(context) ?: return
         onboardingPrefs(context).edit { putBoolean(K_BETA_ACKED_PREFIX + uid, true) }
+    }
+
+    // ------------------------------------------------------------ legal / consent
+
+    /** The Terms version the backend last said it requires; null until /v1/me has answered. */
+    fun termsRequiredVersion(context: Context): String? = prefs(context).getString(K_TERMS_REQUIRED, null)
+    fun setTermsRequiredVersion(context: Context, version: String) {
+        prefs(context).edit { putString(K_TERMS_REQUIRED, version) }
+    }
+
+    /** The Terms version this user agreed to on this device; null until the gate was passed. */
+    fun termsAcceptedVersion(context: Context): String? = prefs(context).getString(K_TERMS_ACCEPTED, null)
+
+    /**
+     * Record acceptance locally. [synced] is false until the backend confirmed it,
+     * so an acceptance made offline is re-sent on the next status refresh.
+     */
+    fun setTermsAccepted(context: Context, version: String, synced: Boolean) {
+        prefs(context).edit {
+            putString(K_TERMS_ACCEPTED, version)
+            putBoolean(K_TERMS_SYNCED, synced)
+        }
+    }
+
+    fun isTermsAcceptanceSynced(context: Context): Boolean = prefs(context).getBoolean(K_TERMS_SYNCED, false)
+
+    /** null = never answered. Never defaults to true: consent is only ever an explicit choice. */
+    fun improvementConsent(context: Context): Boolean? =
+        prefs(context).getString(K_IMPROVEMENT_CONSENT, null)?.toBooleanStrictOrNull()
+
+    fun setImprovementConsent(context: Context, granted: Boolean) {
+        prefs(context).edit { putString(K_IMPROVEMENT_CONSENT, granted.toString()) }
     }
 
     /** Wipe the local session cache (sign-out). Keystore device key is left intact. */

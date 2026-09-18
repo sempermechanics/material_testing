@@ -17,6 +17,7 @@ import com.google.firebase.auth.TotpMultiFactorGenerator
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.net.MeResponse
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
@@ -310,6 +311,65 @@ class AuthRepository(context: Context) {
         TokenStore.clear(appContext)
     }
 
+    // ------------------------------------------------------------ legal / consent
+
+    /**
+     * Record clickwrap acceptance of [version] and the separate improvement
+     * choice. Local first, so the gate opens even when the backend cannot be
+     * reached right now; an unsynced acceptance is re-sent by [resolveStatus].
+     *
+     * Fails only for [IndicApi.TermsVersionMismatchException]: agreeing to
+     * terms the server no longer serves must not open the gate.
+     */
+    suspend fun acceptTerms(version: String, improvementConsent: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val token = if (api.enabled) TokenProvider.usableIdToken() else null
+            if (token == null) {
+                TokenStore.setTermsAccepted(appContext, version, synced = false)
+                TokenStore.setImprovementConsent(appContext, improvementConsent)
+                return@withContext Result.success(Unit)
+            }
+            try {
+                api.acceptTerms(token, version)
+                TokenStore.setTermsAccepted(appContext, version, synced = true)
+            } catch (e: IndicApi.TermsVersionMismatchException) {
+                Timber.w(e, "Server requires a newer Terms version than this build carries")
+                return@withContext Result.failure(e)
+            } catch (e: IOException) {
+                Timber.d(e, "Terms acceptance not synced; will retry on next status refresh")
+                TokenStore.setTermsAccepted(appContext, version, synced = false)
+            }
+            setImprovementConsent(improvementConsent)
+            Result.success(Unit)
+        }
+
+    /**
+     * Grant or withdraw the product-improvement consent. The local value is the
+     * one the UI shows; the server copy is what the improvement pipeline reads,
+     * so a failed sync is reported rather than hidden.
+     */
+    suspend fun setImprovementConsent(granted: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        TokenStore.setImprovementConsent(appContext, granted)
+        val token = (if (api.enabled) TokenProvider.usableIdToken() else null)
+            ?: return@withContext Result.success(Unit)
+        try {
+            api.setImprovementConsent(token, granted)
+            Result.success(Unit)
+        } catch (e: IOException) {
+            Timber.w(e, "Improvement consent not synced")
+            Result.failure(e)
+        }
+    }
+
+    /** Push a locally recorded acceptance the backend has not confirmed yet. */
+    private suspend fun syncPendingTermsAcceptance(token: String) {
+        if (TokenStore.isTermsAcceptanceSynced(appContext)) return
+        val version = TokenStore.termsAcceptedVersion(appContext) ?: return
+        runCatching { api.acceptTerms(token, version) }
+            .onSuccess { TokenStore.setTermsAccepted(appContext, version, synced = true) }
+            .onFailure { Timber.d(it, "Terms acceptance still not synced") }
+    }
+
     fun cachedEmail(): String? = auth.currentUser?.email ?: TokenStore.cachedEmail(appContext)
 
     fun hasSession(): Boolean = auth.currentUser != null
@@ -485,6 +545,8 @@ class AuthRepository(context: Context) {
             val me = api.me(token) // 200 = APPROVED
             TokenStore.setStatus(appContext, AccessStatus.APPROVED)
             TokenStore.setRole(appContext, me.role ?: "user")
+            cacheLegalState(me)
+            syncPendingTermsAcceptance(token)
             runCatching { api.getConfig(token) }
                 .onSuccess { AppRemoteConfig.apply(appContext, it) }
                 .onFailure {
@@ -523,6 +585,21 @@ class AuthRepository(context: Context) {
             Timber.d(e, "Status check failed offline; using cached status")
             offlineOrExpired()
         }
+    }
+
+    /**
+     * The server's view of the Terms wins over this device's: a version bump
+     * re-gates on the next launch, and an acceptance made on another device
+     * (or before a reinstall) is honoured without asking again.
+     */
+    private fun cacheLegalState(me: MeResponse) {
+        val terms = me.terms ?: return
+        TokenStore.setTermsRequiredVersion(appContext, terms.requiredVersion)
+        val accepted = terms.acceptedVersion
+        if (accepted != null && TokenStore.termsAcceptedVersion(appContext) != accepted) {
+            TokenStore.setTermsAccepted(appContext, accepted, synced = true)
+        }
+        me.improvementConsent?.let { TokenStore.setImprovementConsent(appContext, it) }
     }
 
     private suspend fun ensureDeviceRegistered(idToken: String) {

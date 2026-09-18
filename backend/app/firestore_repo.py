@@ -2708,6 +2708,45 @@ def get_user(uid: str):
     return {**snap.to_dict(), "uid": uid} if snap.exists else None
 
 
+def record_terms_acceptance(uid: str, version: str, device_id: str | None, source: str) -> dict:
+    """Store the clickwrap record: which Terms version this account agreed to.
+
+    Overwrites the previous record — only the latest acceptance matters for the
+    gate, and the audit trail keeps the history. Returns the stored record with
+    a client-usable timestamp (the SERVER_TIMESTAMP sentinel is not JSON).
+    """
+    record = {
+        "version": version,
+        "acceptedAt": firestore.SERVER_TIMESTAMP,
+        "deviceId": device_id,
+        "source": source,
+    }
+    db().collection("users").document(uid).update({
+        "termsAccepted": record, "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+    return {**record, "acceptedAt": _now().isoformat()}
+
+
+def record_improvement_consent(uid: str, granted: bool, version: str, device_id: str | None,
+                               source: str) -> dict:
+    """Store the separate product-improvement consent (never bundled into the Terms).
+
+    `version` is the Terms/Privacy version the choice was made against, so a
+    later policy change can tell an old "yes" from a fresh one.
+    """
+    record = {
+        "granted": bool(granted),
+        "version": version,
+        "at": firestore.SERVER_TIMESTAMP,
+        "deviceId": device_id,
+        "source": source,
+    }
+    db().collection("users").document(uid).update({
+        "improvementConsent": record, "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+    return {**record, "at": _now().isoformat()}
+
+
 def list_user_devices(uid: str) -> list:
     out = []
     for d in db().collection("devices").where("uid", "==", uid).stream():

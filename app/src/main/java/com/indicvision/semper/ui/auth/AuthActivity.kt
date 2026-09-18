@@ -79,6 +79,7 @@ class AuthActivity : AppCompatActivity() {
     private lateinit var btnGoogle: Button
     private lateinit var googleOrDivider: View
     private lateinit var tvPasswordRules: TextView
+    private lateinit var tvRegisterTermsHint: TextView
     private lateinit var btnGeneratePassword: com.google.android.material.button.MaterialButton
     private lateinit var cardCredentials: View
     private lateinit var cardTotp: View
@@ -103,6 +104,7 @@ class AuthActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.progressBar)
         btnGoogle = findViewById(R.id.btnGoogleSignIn)
         tvPasswordRules = findViewById(R.id.tvPasswordRules)
+        tvRegisterTermsHint = findViewById(R.id.tvRegisterTermsHint)
         btnGeneratePassword = findViewById(R.id.btnGeneratePassword)
         cardCredentials = findViewById(R.id.cardCredentials)
         cardTotp = findViewById(R.id.cardTotp)
@@ -240,6 +242,10 @@ class AuthActivity : AppCompatActivity() {
         tvPasswordRules.visibility =
             if (registerMode || resetPasswordMode) View.VISIBLE else View.GONE
         tvPasswordRules.text = getString(R.string.password_hint_rules)
+        // The clickwrap itself is TermsActivity, reached through AccessRouter
+        // for every provider; this only tells password sign-ups what comes next.
+        tvRegisterTermsHint.visibility =
+            if (registerMode && !resetPasswordMode) View.VISIBLE else View.GONE
         btnGeneratePassword.visibility =
             if (registerMode || resetPasswordMode) View.VISIBLE else View.GONE
         tvToggle.visibility =
@@ -467,7 +473,9 @@ class AuthActivity : AppCompatActivity() {
                 // under the user — which is exactly what it reported.
                 pendingCredential?.let { (email, password) -> offerToSavePassword(email, password) }
                 pendingTotp = null
-                startActivity(Intent(this, AccessRouter.afterSignIn(status)))
+                // Through the router so the Terms gate runs before Pending/Home
+                // for every provider: password, Google, email link alike.
+                startActivity(AccessRouter.intentFor(this, AccessRouter.afterSignIn(status)))
                 finish()
             },
             onFailure = { error ->

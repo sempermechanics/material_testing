@@ -4,6 +4,19 @@ The application schema version is `backend/app/firestore_repo.py::SCHEMA_VERSION
 Every newly written server-owned document includes `schemaVersion`. Firestore is
 schemaless, so migrations must tolerate mixed versions while they run.
 
+## Optional fields that need no migration
+
+Additive, server-owned fields on `users/{uid}` whose absence has a defined
+meaning do not bump `SCHEMA_VERSION`:
+
+| Field | Written by | Absent means |
+|---|---|---|
+| `termsAccepted: {version, acceptedAt, deviceId, source}` | `POST /v1/me/terms` | the Terms have never been accepted — the app shows the gate |
+| `improvementConsent: {granted, version, at, deviceId, source}` | `PUT /v1/me/consents` | no consent given (same as `granted: false`) |
+
+`source` is `app` when the request carried `X-Device-Id`, else `console`. Both
+records are returned by `GET /v1/me/export` and deleted with the user document.
+
 ## How migrations are defined
 
 Migrations live in `backend/scripts/migrations/` as `NNN_slug.py`, each exporting:

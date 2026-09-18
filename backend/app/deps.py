@@ -78,19 +78,20 @@ def _require_app_check(token: str, uid: str) -> None:
             raise HTTPException(403, errors.APP_CHECK_REQUIRED) from e
 
 
-def current_user(
+def _authenticate(
     request: Request,
-    authorization: str = Header(default=""),
-    x_forwarded_authorization: str = Header(default=""),
-    x_device_id: str = Header(default=""),
-    x_firebase_appcheck: str = Header(default=""),
+    authorization: str,
+    x_forwarded_authorization: str,
+    x_device_id: str,
+    x_firebase_appcheck: str,
+    *,
+    require_approved: bool,
 ) -> dict:
-    """Resolve the caller from a Google ID token.
+    """Shared body of `current_user` / `any_status_user`.
 
-    Plain `def` (no awaits) so FastAPI/Starlette runs this in the threadpool —
-    `verify_id_token` and Firestore must not block the event loop. Sets
-    `request.state.uid` so access logs work on authn-only routes (not only
-    device-attested ones).
+    `require_approved=False` still refuses SUSPENDED accounts: the only status it
+    lets through that `current_user` does not is PENDING, for the one thing a
+    not-yet-approved user must be able to do — accept the Terms.
     """
     claims: dict = _DEV_CLAIMS if settings.DEV_INSECURE_AUTH else {}
     if settings.DEV_INSECURE_AUTH:
@@ -122,7 +123,8 @@ def current_user(
             user = repo.get_or_create_user(claims, device_id=x_device_id or None)
         except repo.DeviceInUseError as exc:
             raise HTTPException(409, errors.DEVICE_IN_USE) from exc
-        if user["access_status"] != "APPROVED":
+        status = user["access_status"]
+        if status != "APPROVED" and (require_approved or status != statuses.ACCESS_PENDING):
             raise HTTPException(403, errors.NOT_APPROVED)
         # Re-validate the license/seat device lock on every call that carries
         # X-Device-Id — not just at activation time. A revoked key, a disabled
@@ -146,6 +148,41 @@ def current_user(
     except Exception:  # noqa: BLE001
         pass
     return user
+
+
+def current_user(
+    request: Request,
+    authorization: str = Header(default=""),
+    x_forwarded_authorization: str = Header(default=""),
+    x_device_id: str = Header(default=""),
+    x_firebase_appcheck: str = Header(default=""),
+) -> dict:
+    """Resolve the caller from a Google ID token; APPROVED accounts only.
+
+    Plain `def` (no awaits) so FastAPI/Starlette runs this in the threadpool —
+    `verify_id_token` and Firestore must not block the event loop. Sets
+    `request.state.uid` so access logs work on authn-only routes (not only
+    device-attested ones).
+    """
+    return _authenticate(request, authorization, x_forwarded_authorization, x_device_id,
+                         x_firebase_appcheck, require_approved=True)
+
+
+def any_status_user(
+    request: Request,
+    authorization: str = Header(default=""),
+    x_forwarded_authorization: str = Header(default=""),
+    x_device_id: str = Header(default=""),
+    x_firebase_appcheck: str = Header(default=""),
+) -> dict:
+    """Like `current_user`, but a PENDING account is allowed through.
+
+    The Terms-acceptance gate runs at registration, before an operator has
+    approved the account, so the routes that record acceptance and consent
+    cannot sit behind the APPROVED check. Nothing else should use this.
+    """
+    return _authenticate(request, authorization, x_forwarded_authorization, x_device_id,
+                         x_firebase_appcheck, require_approved=False)
 
 
 def admin_user(user: dict = Depends(current_user)) -> dict:

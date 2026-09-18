@@ -30,6 +30,9 @@ object ApiErrors {
      */
     const val APP_CHECK_REQUIRED = "app_check_required"
 
+    /** The app tried to accept a Terms version the server no longer serves (409). */
+    const val TERMS_VERSION_MISMATCH = "terms_version_mismatch"
+
     /** This account is already bound to a different device (409). */
     const val DEVICE_CONFLICT = "device_conflict"
 

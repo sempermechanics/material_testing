@@ -331,7 +331,7 @@ object SessionStore {
 
     /** Removes the index row AND the local files. Cloud copies are untouched. */
     @WorkerThread
-    fun delete(context: Context, id: String) = synchronized(lock) {
+    fun delete(context: Context, id: String): Unit = synchronized(lock) {
         if (!mutateIndex(context) { it.filterNot { r -> r.id == id } }) return
         dirFor(context, id).deleteRecursively()
         val remaining = when (val snap = readIndex(context)) {
