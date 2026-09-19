@@ -43,7 +43,7 @@ Intent extras shared across Activities live in
 | `ui/limit/` | Session-quota screen |
 | `ui/common/` | Insets, motion, `MediaPickerSheet` (Import / wizard dropzones), `CrispToast`, `TransferBannerController` |
 | `data/` | Auth, session store, cloud sync/upload/restore/download, storage budget, param clipboard |
-| `data/net/` | Backend HTTP client (`IndicApi`), token store/provider |
+| `data/net/` | Backend HTTP client (`IndicApi`), its two OkHttp interceptors (`RetryOnTransient`, `AppCheckHeader`), token store/provider |
 | `report/` | PDF / CSV / visualization |
 | `analytics/` | `SemperAnalytics` — consent-gated Firebase Analytics events |
 | `imaging/` | `BitmapDecode`, `ImageEncode` — decode/encode away from the UI classes |
@@ -91,6 +91,55 @@ When cloud is configured (`INDIC_API_BASE_URL`):
 stops returning one, so a deep refresh sees the whole account rather than the
 first page. Anything that lists cloud sessions should go through it rather than
 issuing a single request.
+
+### The two interceptors on the shared client
+
+Both are application interceptors on `IndicApi`'s companion client, which
+`downloadClient` inherits through `newBuilder()`. Retry is added first, so it
+wraps the header: a retried attempt reads a fresh App Check token rather than
+replaying one that may have expired while it waited.
+
+`RetryOnTransient` retries **429 unconditionally** — the token bucket
+(`backend/app/rate_limit.py`) and the gateway quota both reject before the
+handler runs, so nothing happened. **503 is not the same promise**: ESPv2 emits
+it before *and* after handing a request on, so it is retried only for GET and
+for the POSTs whose handlers are idempotent by contract. Session create and the
+upload broker are deliberately absent — a duplicate there costs a Drive object.
+Three attempts with a ceiling, honouring `Retry-After`; where a call is
+worker-mediated, WorkManager's own backoff owns the long game.
+
+`AppCheckHeader` attaches `X-Firebase-AppCheck` to the configured API host
+only — Drive shares this client and has no use for it — and **fails open**: a
+build that cannot attest sends no header rather than a failed call, because the
+decision to refuse belongs to the backend, which is the side that knows whether
+it is in `monitor` or `enforce`. See
+[AUTH_SETUP.md §3.2](../backend/AUTH_SETUP.md).
+
+## Licensing & entitlements
+
+The app never decides its own plan — `data/LicenseEntitlements.kt` is the one
+place that answers "am I demo or licensed," and it reads through
+`data/net/AppRemoteConfig.kt`, which caches whatever the backend's
+`GET /v1/config` last reported (`plan`, `cloudBackupEnabled`, `shareEnabled`,
+`licensePrefix`, `licenseKind`). Fails closed: before the first successful
+fetch, and on any ambiguous value, everything reads as Demo.
+
+`IndicApi.activateLicense()` calls `POST /v1/licenses/activate` (bearer +
+`X-Device-Id`, not device-signed) to redeem a key — see
+[CLOUD_ARCHITECTURE_GCP.md §20](../backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements)
+for the backend's individual-vs-institution split. **On the Android side there is
+no distinction** between an individual key and a institution seat — both resolve
+to `mode=licensed` with identical entitlements; `licenseKind` is carried
+through only for display/support (e.g. "activated via university.edu"), not as a
+gating input anywhere in `LicenseEntitlements`.
+
+| Concern | File |
+|---|---|
+| Plan resolution / gating | `data/LicenseEntitlements.kt` |
+| Cached config, wire → prefs | `data/net/AppRemoteConfig.kt` (`AppConfigDto` in `ApiDtos.kt`) |
+| Redeem a key | `IndicApi.activateLicense()` |
+| Expiry notice | `LicenseEntitlements.expiryNoticeDays()` — advisory only; suppressed on a cache older than a week. `mode` stays the only gate. See [WORKFLOWS.md §9.3](WORKFLOWS.md#9-session-limit) |
+| Local analysis cap | `LicenseEntitlements.analysisCap()` — demo 25, licensed unlimited; see [WORKFLOWS.md §9](WORKFLOWS.md#9-session-limit) |
 
 ## Storage, diagnostics and the parameter clipboard
 

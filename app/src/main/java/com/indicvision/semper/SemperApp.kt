@@ -1,8 +1,11 @@
 package com.indicvision.semper
 
 import android.app.Application
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.SeatHeartbeat
 import com.indicvision.semper.data.StorageBudget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +30,7 @@ class SemperApp : Application() {
         } else {
             Timber.plant(CrashReportingTree(this))
         }
+        installAppCheck()
         DicSettings.migrate(this)
         // Manifest disables Crashlytics/Analytics collection, so a fresh install
         // sends nothing until the user opts in. This re-applies their choice on
@@ -39,5 +43,29 @@ class SemperApp : Application() {
             CacheJanitor.sweepOnStartup(this@SemperApp)
             StorageBudget.enforce(this@SemperApp)
         }
+        // Floating-seat renew while this process is up. The slower background
+        // config refresh is scheduled after a successful sign-in — WorkManager
+        // is not always ready during Application.onCreate in unit tests.
+        SeatHeartbeat.start(appScope, this)
+    }
+
+    /**
+     * Lets the backend tell this binary apart from anything else holding a
+     * valid sign-in. Attestation is an assertion the *server* checks, so a
+     * failure here is not fatal: [com.indicvision.semper.data.net.AppCheckHeader]
+     * omits the header and the request goes out on its other credentials, which
+     * is what `APP_CHECK_MODE=off` and `monitor` exist to absorb while a fleet
+     * that carries tokens is still rolling out.
+     *
+     * Skipped when there is no backend to attest to — an offline build, or the
+     * emulator sign-in bypass — so neither pays for a Play Integrity handshake
+     * nothing will read.
+     */
+    private fun installAppCheck() {
+        if (BuildConfig.INDIC_API_BASE_URL.isBlank() || BuildConfig.DEV_AUTH_BYPASS) return
+        runCatching {
+            FirebaseAppCheck.getInstance()
+                .installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
+        }.onFailure { Timber.w(it, "App Check provider unavailable") }
     }
 }

@@ -539,7 +539,7 @@ class SettingsActivity : AppCompatActivity() {
                                     ?: getString(R.string.restore_failed_generic)
                                 CrispToast.show(
                                     this@SettingsActivity,
-                                    getString(R.string.restore_failed_fmt, reason),
+                                    reason,
                                     long = true,
                                 )
                             }
@@ -654,10 +654,14 @@ class SettingsActivity : AppCompatActivity() {
     private fun startBackup(entry: AnalysisEntry) {
         val record = entry.record ?: return
         val label = backupLabel(entry) ?: return
-        SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-        CloudSync.enqueueUpload(this, record.id)
-        Toast.makeText(this, label, Toast.LENGTH_SHORT).show()
-        wireAnalysesDataSection()
+        // Same ordering as Home's: the PENDING stamp before the worker, so a
+        // fast upload cannot have its SYNCED stamp overwritten by this one.
+        lifecycleScope.launch {
+            SessionStore.setSyncStateAsync(this@SettingsActivity, record.id, SessionRecord.SyncState.PENDING)
+            CloudSync.enqueueUpload(this@SettingsActivity, record.id)
+            Toast.makeText(this@SettingsActivity, label, Toast.LENGTH_SHORT).show()
+            wireAnalysesDataSection()
+        }
     }
 
     private fun stateLine(entry: AnalysisEntry): String = when (entry.location) {
@@ -770,8 +774,10 @@ class SettingsActivity : AppCompatActivity() {
                 .setTitle(R.string.logout_confirm_title)
                 .setMessage(R.string.logout_confirm_body)
                 .setPositiveButton(R.string.action_sign_out) { _, _ ->
-                    AuthRepository(this).signOut()
-                    AuthRoute.toSignIn(this)
+                    lifecycleScope.launch {
+                        AuthRepository(this@SettingsActivity).signOut()
+                        AuthRoute.toSignIn(this@SettingsActivity)
+                    }
                 }
                 .setNegativeButton(R.string.action_cancel, null)
                 .show()

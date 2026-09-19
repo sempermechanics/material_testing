@@ -588,9 +588,12 @@ class VsgLatticeActivity : AppCompatActivity() {
         CrispToast.show(this, getString(R.string.vsg_lattice_params_copied))
     }
 
-    /** A quick "pop + highlight" on [view] to confirm the params were copied. */
+    /**
+     * A quick "pop + highlight" on [view] to confirm the params were copied.
+     * TalkBack hears the confirmation from the [CrispToast] pill, which is a
+     * polite live region, so no explicit announcement is made here.
+     */
     private fun animateCopyConfirmation(view: View) {
-        view.announceForAccessibility(getString(R.string.vsg_lattice_params_copied))
         view.animate()
             .scaleX(COPY_POP_SCALE).scaleY(COPY_POP_SCALE)
             .setDuration(COPY_POP_MS)

@@ -9,7 +9,17 @@ from fastapi.responses import JSONResponse
 from . import errors
 from . import observability as obs
 from .config import settings
-from .routers import account, admin, devices, files, health, provision_tasks, sessions
+from .routers import (
+    account,
+    admin,
+    devices,
+    files,
+    health,
+    institutions,
+    licenses,
+    provision_tasks,
+    sessions,
+)
 from .routers.account import json_dumps  # noqa: F401
 from .routers.files import _is_first_byte_request, download_file  # noqa: F401
 from .routers.health import _client_key  # noqa: F401
@@ -54,6 +64,14 @@ def _startup_checks():
             "=== REQUIRE_ATTESTED_UPLOADS unset: /uploads accepts unattested "
             "legacy callers. Temporary migration window — set it to 1 once the "
             "fleet has moved. ==="
+        )
+    if settings.APP_CHECK_MODE not in ("off", "monitor", "enforce"):
+        # A misspelt mode must not read as "off". Silently ignoring it would
+        # leave an operator believing enforcement is on when nothing is checked,
+        # which is the one failure this setting cannot afford.
+        raise RuntimeError(
+            f"APP_CHECK_MODE={settings.APP_CHECK_MODE!r} is not one of "
+            "off / monitor / enforce."
         )
 
 
@@ -171,10 +189,12 @@ async def dependency_error_handler(request: Request, exc: obs.DependencyError):
 app.include_router(health.router)
 app.include_router(account.router)
 app.include_router(devices.router)
+app.include_router(licenses.router)
 app.include_router(sessions.router)
 app.include_router(files.router)
 app.include_router(provision_tasks.router)
 app.include_router(admin.router)
+app.include_router(institutions.router)
 
 # Re-exports so existing tests keep `from app.main import …`.
 __all__ = [

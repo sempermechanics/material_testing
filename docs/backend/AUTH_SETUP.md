@@ -137,6 +137,67 @@ self-approve into a privileged domain.
 > code read used to sit in `config.py`; it has been removed, so don't go
 > looking for it.
 
+### 3.1 The four authorization tiers
+
+`role` on the user document is only ever `user` or `admin`. Authority beyond
+that is not a stored claim — it is derived per-request, so there is no role to
+leak or escalate into:
+
+| Tier | Dependency | How it is decided |
+|---|---|---|
+| **User** | `current_user` | Verified ID token, `access_status == APPROVED`. Also re-checks the license/device lock on every call carrying `X-Device-Id` (see CLOUD_ARCHITECTURE_GCP §20.2). |
+| **Admin** (Semper staff) | `admin_user` | `role == "admin"` or a verified email in `ADMIN_EMAILS`. Token only — enough for read-only admin screens. |
+| **Device-attested admin** | `verified_device` + `admin_user` | Device-attested calls from the phone admin screen. Still the strongest tier, and still what any request carrying device headers is held to. |
+| **Step-up admin** | `attested_or_mfa_admin` | Every *mutating* admin route except whole-licence revoke: approve, user revoke, config patch, license mint. Satisfied by device attestation, **or** by an admin whose ID token records a completed second factor (`firebase.sign_in_second_factor`) from a sign-in newer than `ADMIN_WEB_REAUTH_SECONDS`. The second form exists for the staff console — a browser cannot produce an attestation — and is deliberately weaker: a phished live MFA session inside the window can act. `ADMIN_WEB_MFA_ENABLED=0` removes it and restores attestation-only admin. |
+| **Step-up admin (revoke)** | `attested_or_mfa_admin_fresh` | Whole-licence revoke only. Same MFA proof, tighter `ADMIN_WEB_REVOKE_REAUTH_SECONDS` so the console's password/Google re-auth plus TOTP is required rather than a long-lived dashboard session. |
+| **Institution admin** | `institution_admin_stepup` | **Not** a role and **not** `ADMIN_EMAILS`. An APPROVED user whose *verified* email appears in one specific license's `adminEmails`, plus the same MFA/freshness check as other dashboards. Authority is scoped to that license alone; a license the caller does not administer 404s identically to one that does not exist (membership is checked before MFA). |
+
+The tiers are asserted structurally in
+`backend/tests/test_route_authz_matrix.py`, which walks every route's
+dependency tree — a route that gains or loses auth fails CI rather than
+shipping quietly.
+
+### 3.2 App Check — which *binary* is calling
+
+The tiers above answer *which account* (`current_user`) and *which device*
+(`verified_device`). Neither answers *which binary*, and the gap is real: the
+Firebase Web API key that mints ID tokens ships inside the APK and is an
+identifier, not a secret, so anything holding a user's credentials can drive the
+API directly. `POST /v1/licenses/checkout` is where that pays — a script can
+hoard a floating pool's seats against an account that is perfectly entitled.
+
+`deps._require_app_check` verifies a Firebase App Check token
+(`X-Firebase-AppCheck`, Play Integrity on Android) for callers that send
+`X-Device-Id`. Three things about that shape are deliberate:
+
+- **Only device callers are asked.** The four consoles are browsers: they never
+  send `X-Device-Id` and cannot attest. Keying on that header covers the
+  abusable routes without taking the web tier down, and without a reCAPTCHA
+  provider nobody would maintain.
+- **The check runs before `get_or_create_user`.** A refused caller must not
+  create an account row or move a device lock on its way out.
+  `test_app_check.py` pins that ordering.
+- **It is a third question, not a replacement.** App Check says the caller is
+  our build; it says nothing about entitlement. `app_check_required` is
+  therefore distinct from `not_approved`, and the app renders it as "reinstall
+  from the Play Store", never as a licence problem.
+
+`APP_CHECK_MODE` selects the posture, and **`off` is the default**:
+
+| Mode | Behaviour |
+|---|---|
+| `off` | The header is ignored entirely. Run this until an App Check-carrying build is the fleet. |
+| `monitor` | Verified when present, logged when absent or bad, never refused. The rollout setting — it tells you what fraction of live traffic would break before anything does. |
+| `enforce` | A device caller without a valid token is refused `403 app_check_required`. |
+
+A misspelt mode fails `_startup_checks()` rather than reading as `off`: an
+operator believing enforcement is on while nothing is checked is the one
+failure this setting cannot afford.
+
+The client half fails open — see
+[ARCHITECTURE.md](../app/ARCHITECTURE.md#the-two-interceptors-on-the-shared-client).
+Go to `enforce` only once `monitor` shows the missing-token rate at zero.
+
 ## 3a. Terms acceptance (clickwrap) and the improvement consent
 
 Signing in proves identity; it does not bind anyone to the Terms. The app

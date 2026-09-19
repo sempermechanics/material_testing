@@ -26,11 +26,52 @@ class Settings:
     # Fleet-wide defaults for product limits. Per-user overrides live on the
     # Firestore users/{uid} document (maxSessions / maxFilesPerSession /
     # maxFrames); resolve_user_config merges override → these defaults.
-    # MAX_SESSIONS_PER_USER = how many analyses a user may keep in the cloud;
+    #
+    # There is exactly one cap per mode, and `mode` picks between them:
+    # DEMO_MAX_ANALYSES for an unlicensed account, LICENSED_MAX_SESSIONS_PER_USER
+    # for a licensed one (unless a key or admin override sets a tighter
+    # ceiling). Both are the number of analyses the account may keep in the
+    # cloud — routers/sessions.py enforces creation against whichever applies.
+    #
+    # `MAX_SESSIONS_PER_USER` USED TO BE that number for everyone, at a default
+    # of 4. It is deliberately gone rather than left unread: keeping a variable
+    # that a deployment still sets, and that silently no longer does anything,
+    # is worse than removing it and saying so. A service that still sets it now
+    # gets DEMO_MAX_ANALYSES for unlicensed users — see
+    # docs/backend/BACKEND_SETUP_GCP.md.
+    #
     # MAX_FILES_PER_SESSION bounds one analysis (150 frames x raw+dat+csv +
     # reference + report + metadata ≈ 460, so 600 gives headroom);
     # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces.
-    MAX_SESSIONS_PER_USER = _env_int("MAX_SESSIONS_PER_USER", "4")
+    DEMO_MAX_ANALYSES = _env_int("DEMO_MAX_ANALYSES", "25")
+    # Deployed services still set PRO_MAX_SESSIONS_PER_USER; it is read as the
+    # default so the rename does not require a coordinated env change.
+    LICENSED_MAX_SESSIONS_PER_USER = _env_int(
+        "LICENSED_MAX_SESSIONS_PER_USER",
+        os.environ.get("PRO_MAX_SESSIONS_PER_USER", "999"),
+    )
+
+    # Grace window stamped onto a newly minted timed license when the mint
+    # request does not name one. It exists so a renewal in flight does not
+    # strand a paying user mid-project; entitlements stay FULL throughout.
+    #
+    # This is a mint-time default only. A license already in Firestore that
+    # carries no graceDays reads as ZERO, not as this value — see
+    # firestore_repo._grace_days. Otherwise deploying a grace default would
+    # retroactively reinstate every account that expired within the window.
+    LICENSE_GRACE_DAYS_DEFAULT = _env_int("LICENSE_GRACE_DAYS_DEFAULT", "14")
+
+    # How long a floating-seat lease lasts before it stops entitling anyone,
+    # and how often the app should renew it. A lease must outlive a working
+    # session comfortably — losing a seat because of a tunnel or a lunch break
+    # would be worse than a crashed client parking one — so the window is long
+    # and the heartbeat is what actually keeps it alive.
+    #
+    # A crashed or uninstalled client therefore holds its slot for up to
+    # LICENSE_LEASE_HOURS. That only costs anything on a pool that is full, and
+    # the expiry sweep reclaims it without anyone intervening.
+    LICENSE_LEASE_HOURS = _env_int("LICENSE_LEASE_HOURS", "8")
+    LICENSE_LEASE_HEARTBEAT_MINUTES = _env_int("LICENSE_LEASE_HEARTBEAT_MINUTES", "30")
     MAX_FILES_PER_SESSION = _env_int("MAX_FILES_PER_SESSION", "600")
     MAX_FRAMES_PER_ANALYSIS = _env_int("MAX_FRAMES_PER_ANALYSIS", "150")
 
@@ -52,18 +93,89 @@ class Settings:
 
     # Comma-separated emails that are treated as admins (role=admin, always
     # approved) — they can call the /v1/admin/* endpoints. e.g.
-    # "support@sempermechanics.com,damodar@sempermechanics.com".
+    # "support@indicvision.com,damodar@indicvision.com".
     ADMIN_EMAILS = {
         e.strip().lower()
         for e in os.environ.get("ADMIN_EMAILS", "").split(",")
         if e.strip()
     }
 
+    # --- staff console second factor ---------------------------------------
+    # Every state-changing /v1/admin/* route requires a device attestation: an
+    # ECDSA signature from a registered device keypair, which proves the call
+    # came from a specific enrolled phone and not merely from a stolen ID
+    # token. A browser cannot produce one, which is why the staff console was
+    # read-only.
+    #
+    # These two settings are the deliberate substitute. A browser caller is
+    # accepted for those routes when the ID token carries a *second factor*
+    # (firebase.sign_in_second_factor, present only when MFA was actually
+    # completed) and the sign-in behind it is recent. That is a real, checkable
+    # control rather than an absent one — a leaked token from a session that
+    # never did MFA is still refused — but it is weaker than device binding,
+    # and the freshness window is what limits the damage a stolen token can do.
+    #
+    # ADMIN_WEB_MFA_ENABLED=0 disables the browser path entirely and restores
+    # attestation-only admin. Set it that way if the console is not in use.
+    ADMIN_WEB_MFA_ENABLED = os.environ.get("ADMIN_WEB_MFA_ENABLED", "1") == "1"
+    # How old a sign-in may be and still authorise a state change, in seconds.
+    # Short on purpose: this is "sudo mode", re-entered by re-authenticating,
+    # not a session length. Dashboard reads that sit behind step-up use this
+    # too (institution IT console, account unbind/bundle).
+    ADMIN_WEB_REAUTH_SECONDS = _env_int("ADMIN_WEB_REAUTH_SECONDS", "900")
+    # Tighter window for whole-licence revoke: password (or Google re-auth)
+    # plus TOTP must be fresh, not merely "signed into the dashboard earlier".
+    ADMIN_WEB_REVOKE_REAUTH_SECONDS = _env_int(
+        "ADMIN_WEB_REVOKE_REAUTH_SECONDS", "120"
+    )
+
+    # Both settings above govern the browser step-up for the *user* and
+    # *institution IT* tiers too, not only for staff: the same trade is being
+    # made either way. The names are historical — the staff console is what
+    # first needed them.
+
+    # How long a holder must wait between changing their own device. A second
+    # factor proves who is asking, not how often, so without this one person
+    # could re-bind daily and pass a single licence round a lab. Counted
+    # against `deviceChangedAt`, which only the self-service route writes:
+    # staff- and IT-initiated changes neither read nor write it, so a support
+    # request is never blocked by a cooldown the holder has spent. Set to 0 to
+    # disable the wait entirely.
+    SELF_DEVICE_CHANGE_COOLDOWN_DAYS = _env_int("SELF_DEVICE_CHANGE_COOLDOWN_DAYS", "30")
+
+    # --- App Check (device callers only) ------------------------------------
+    # The Firebase Web API key ships inside the APK (google-services.json) and
+    # is an identifier, not a secret, so anyone can mint a genuine ID token from
+    # a script. For the routes behind `verified_device` or a step-up tier that
+    # buys an attacker nothing — a DeviceKeyManager signature is a stronger
+    # proof than App Check. The exposed set is the ID-token-only routes, and
+    # `POST /v1/licenses/checkout` is the one worth abusing: it reads the device
+    # id from a *header* and doubles as the seat heartbeat, so a scripted client
+    # can hold a licence's floating seats under invented device ids.
+    #
+    # App Check closes that by attesting the *app binary* (Play Integrity) as
+    # well as the account. It is required only of callers that send
+    # `X-Device-Id` — that is the app, and it is the header the abuse needs.
+    # Browsers never send it, so the four consoles are unaffected and need no
+    # reCAPTCHA provider.
+    #
+    #   off     — header ignored entirely (the default, and what to run until
+    #             an App Check-carrying build is the fleet).
+    #   monitor — verified when present, logged when absent or bad, never
+    #             refused. The rollout setting: it tells you what fraction of
+    #             live traffic would break before anything does.
+    #   enforce — a device caller without a valid token is refused 403.
+    #
+    # Mirrors Firebase's own unenforced/enforced rollout, with `monitor` named
+    # for what it is. Flipping to `enforce` before the fleet has updated locks
+    # out every older build, so it is deliberately not the default.
+    APP_CHECK_MODE = os.environ.get("APP_CHECK_MODE", "off").strip().lower()
+
     # Where "a new user is waiting for approval" mail goes. Same address the app
     # shows in Settings -> Help & support and on the pending-approval screen.
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@sempermechanics.com")
 
-    # Verified sender for outbound mail, e.g. "Semper <noreply@sempermechanics.com>",
+    # Verified sender for outbound mail, e.g. "Semper <noreply@indicvision.com>",
     # and the Resend API key (the one secret this service holds — set it with
     # --set-secrets, never --set-env-vars). Either one empty disables
     # notification mail entirely: nothing is sent and nothing fails.

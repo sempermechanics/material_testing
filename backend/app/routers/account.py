@@ -40,10 +40,43 @@ def _improvement_consent(user: dict) -> bool | None:
 
 @router.get("/v1/me")
 def me(user=Depends(current_user)):
-    return {"uid": user["uid"], "email": user.get("email"),
-            "role": user.get("role"), "access_status": user["access_status"],
-            "terms": _terms_block(user),
-            "improvement_consent": _improvement_consent(user)}
+    """Who the caller is, and what their license currently grants.
+
+    The `license` block answers "am I entitled, and for how much longer" in the
+    same round trip as identity, so the app can warn about an approaching
+    expiry instead of only discovering it when `mode` silently flips to demo.
+    It costs no extra Firestore read — `current_user` already returns the whole
+    user document, and the summary is pure over it.
+
+    `/v1/config` remains the source of truth for limits and feature flags; this
+    is deliberately the smaller answer.
+    """
+    summary = repo.license_summary(user)
+    return {
+        "uid": user["uid"],
+        "email": user.get("email"),
+        "role": user.get("role"),
+        "access_status": user["access_status"],
+        "license": {
+            "mode": summary["mode"],
+            "kind": summary["licenseKind"],
+            "prefix": summary["prefix"],
+            "duration": summary["duration"],
+            # Both null when perpetual. inGrace is past expiry but still fully
+            # entitled — a warning, not a restriction.
+            "expiresAt": summary["expiresAt"],
+            "graceEndsAt": summary["graceEndsAt"],
+            "inGrace": summary["inGrace"],
+            # Seating and the lease are here so a page that renders "you hold
+            # a floating seat until 14:20" needs this call alone. `/v1/config`
+            # carries them too, but it is the larger answer and a browser
+            # asking "what am I?" should not have to fetch limits to find out.
+            "seating": summary["seating"],
+            "leaseExpiresAt": summary["leaseExpiresAt"],
+        },
+        "terms": _terms_block(user),
+        "improvement_consent": _improvement_consent(user),
+    }
 
 
 class TermsAcceptance(BaseModel):
@@ -108,7 +141,7 @@ def set_consents(
 
 @router.get("/v1/config")
 def app_config(user=Depends(current_user)):
-    """Resolved product limits for the caller (per-user override → fleet default)."""
+    """Resolved plan, entitlements, and product limits for the caller."""
     return repo.resolve_user_config(user)
 
 

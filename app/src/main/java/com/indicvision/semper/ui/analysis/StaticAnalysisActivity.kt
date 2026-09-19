@@ -405,6 +405,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 showEngineFailureDialog(code, titleRes, frameIndex, frameName)
             },
             clearEngineFailFaq = { setEngineFailFaq(null) },
+            onSweepProgress = ::showSweepProgress,
+            onSweepFinished = ::onSweepFinished,
         ).observe()
 
         // Files (SAF) still reaches DNG/RAW and Drive, which MediaStore may not index.
@@ -1254,7 +1256,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // Hard stop: do not start a new analysis when the session quota is full.
         // Re-runs that update an existing Home row are still allowed.
         lifecycleScope.launch {
-            if (!ensureSessionQuota()) return@launch
+            if (!ensureCanStart()) return@launch
 
             isProcessing = true
             checkReady()
@@ -1488,7 +1490,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val roi = resolveRoi(plan.maxOf { it.subset }) ?: return
 
         lifecycleScope.launch {
-            if (!ensureSessionQuota()) return@launch
+            if (!ensureCanStart()) return@launch
 
             isProcessing = true
             checkReady()
@@ -1500,24 +1502,20 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val debugDir = EngineDebug.dirFor(cacheDir)
             val use6x6 = currentUseKeysInterpolator()
 
-            val outcome = runCatching {
-                val request = AnalysisViewModel.SweepRequest(
+            // Handed to the view model rather than run here: a sweep is one
+            // solve per combination, long enough that a rotation mid-run used to
+            // cancel it and leave the half-written session behind.
+            // BatchRunController tears the chrome down when it ends.
+            viewModel.launchVsgSweep(
+                applicationContext,
+                AnalysisViewModel.SweepRequest(
                     plan = plan,
                     labels = plan.map { sweepHelper.combinationLabel(it) },
                     roi = roi,
                     use6x6 = use6x6,
                     debugDir = debugDir,
-                )
-                viewModel.runVsgSweep(applicationContext, request) { progress ->
-                    showSweepProgress(progress)
-                }
-            }.onFailure { Timber.e(it, "Parameter sweep failed") }.getOrNull()
-
-            isProcessing = false
-            overlayHelper.hide()
-            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            checkReady()
-            onSweepFinished(outcome)
+                ),
+            )
         }
     }
 
@@ -1626,8 +1624,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
     }
 
-    private suspend fun ensureSessionQuota(): Boolean =
-        AnalysisNavHelper.ensureSessionQuota(this, viewModel)
+    private suspend fun ensureCanStart(): Boolean =
+        AnalysisNavHelper.ensureCanStart(this, viewModel)
 
     private fun wireCancelButton(
         titleRes: Int = R.string.cancel_run_title,

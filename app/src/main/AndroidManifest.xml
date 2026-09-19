@@ -105,6 +105,10 @@
             android:name=".ui.limit.SessionLimitActivity"
             android:exported="false"
             android:launchMode="singleTop" />
+        <activity
+            android:name=".ui.limit.SeatRequiredActivity"
+            android:exported="false"
+            android:launchMode="singleTop" />
         <activity android:name=".ui.viewer.ResultViewerActivity" />
 
         <activity

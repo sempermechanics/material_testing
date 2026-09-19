@@ -151,7 +151,10 @@ object CloudSync {
     ) {
         if (throttled && AppRemoteConfig.isKnown(appContext)) return
         runCatching { api.getConfig(token) }
-            .onSuccess { AppRemoteConfig.apply(appContext, it) }
+            .onSuccess {
+                AppRemoteConfig.apply(appContext, it)
+                LicenseConfigWorker.enqueue(appContext)
+            }
             .onFailure {
                 AppRemoteConfig.recordFetchFailure(appContext)
                 Timber.d(it, "App remote config fetch failed during reconcile")
@@ -191,7 +194,7 @@ object CloudSync {
         val token = TokenProvider.usableIdToken()
             ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
         try {
-            val cloudId = resolveCloudId(api, token, record!!)
+            val cloudId = resolveCloudId(api, token, record)
             if (cloudId != null) api.deleteSession(token, cloudId)
             SessionStore.delete(appContext, localSessionId)
             Timber.i("Erased analysis %s locally and in the cloud", localSessionId)
@@ -247,7 +250,7 @@ object CloudSync {
         eraseCloud: suspend () -> Boolean,
         deleteIdentity: suspend () -> Boolean,
         wipeLocal: () -> Unit,
-        signOut: () -> Unit,
+        signOut: suspend () -> Unit,
     ): AccountDeletion {
         if (!eraseCloud()) return AccountDeletion.CLOUD_UNREACHABLE
         val identityGone = deleteIdentity()
@@ -369,6 +372,10 @@ object CloudSync {
         context: Context,
         localSessionId: String,
     ) {
+        if (!LicenseEntitlements.cloudBackupEnabled(context)) {
+            Timber.i("Upload skipped for %s — cloud backup not entitled", localSessionId)
+            return
+        }
         if (!TokenStore.isQuotaKnown(context)) {
             Timber.i("Upload deferred for %s — cloud quota not yet known", localSessionId)
             return

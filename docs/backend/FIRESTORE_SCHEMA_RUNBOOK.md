@@ -57,7 +57,9 @@ interrupted halfway is retried rather than assumed done.
    `python backend/scripts/migrate_schema.py --project PROJECT_ID --apply`.
 5. Run the dry-run again; it must report zero changes and list the migration as
    already applied. Verify representative user, device, session, file, challenge,
-   and audit documents.
+   audit, **license and seat** documents. License documents entered the chain
+   only at migration 002 — 001's collection list omits them — so an environment
+   whose last migration is 001 has never had them walked.
 6. Only then deploy code that requires the new version.
 
 The runner reads and writes in pages of 400, is idempotent at both the migration

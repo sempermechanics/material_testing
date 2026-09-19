@@ -3,13 +3,13 @@
 package com.indicvision.semper.ui.analysis
 
 import android.app.Activity
-import android.content.Intent
-import com.indicvision.semper.DicKeys
+import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.navigation.AppIntents
-import com.indicvision.semper.ui.viewer.ResultViewerActivity
+import com.indicvision.semper.ui.viewer.ViewerArgs
+import com.indicvision.semper.ui.viewer.ViewerSweepArgs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -21,6 +21,46 @@ object AnalysisNavHelper {
 
     fun openSessionLimit(host: Activity) {
         host.startActivity(AppIntents.sessionLimit(host))
+    }
+
+    fun openSeatRequired(host: Activity) {
+        host.startActivity(AppIntents.seatRequired(host))
+    }
+
+    /**
+     * Every reason a new analysis may not start, in one call.
+     *
+     * Returns false having already navigated to whichever gate applies. Both
+     * checks are guarded by [AnalysisViewModel.wouldCreateNewSession], so a
+     * **run already in flight, or a re-run of an existing session, always
+     * passes** — losing a seat mid-analysis must never abort work.
+     */
+    suspend fun ensureCanStart(
+        host: Activity,
+        viewModel: AnalysisViewModel,
+    ): Boolean = ensureSeat(host, viewModel) && ensureSessionQuota(host, viewModel)
+
+    /**
+     * Hard stop when this account holds no floating seat.
+     *
+     * A **separate** gate from the quota one rather than a widening of it: an
+     * institution member is licensed, so [TokenStore.isSessionLimitReached] is
+     * false for them by definition and they would otherwise pass every
+     * existing check.
+     *
+     * Only a floating institution license can fail here. Assigned licenses,
+     * individual licenses and demo accounts all return true and fall through
+     * to the quota gate, which is what actually limits them.
+     */
+    @Suppress("ReturnCount") // early-outs for re-run / not-floating / blocked
+    suspend fun ensureSeat(
+        host: Activity,
+        viewModel: AnalysisViewModel,
+    ): Boolean {
+        if (!viewModel.wouldCreateNewSession()) return true
+        if (!LicenseEntitlements.seatRequiredToStart(host)) return true
+        openSeatRequired(host)
+        return false
     }
 
     /**
@@ -54,37 +94,40 @@ object AnalysisNavHelper {
         strainWindow: Int,
     ) {
         val plan = viewModel.sweepPlan
-        val target = if (sweep) VsgLatticeActivity::class.java else ResultViewerActivity::class.java
-        val intent = Intent(host, target).apply {
-            putExtra(DicKeys.IMG_W, viewModel.realRefWidth)
-            putExtra(DicKeys.IMG_H, viewModel.realRefHeight)
-            putExtra(DicKeys.STEP, viewModel.lastStep)
-            putExtra(DicKeys.REF_NAME, viewModel.refName)
-            putExtra(DicKeys.REF_PATH, viewModel.lastRefPath ?: "")
-            putExtra(DicKeys.DEF_PATH, viewModel.lastDefPath)
-            putExtra(DicKeys.BATCH_DIR_PATH, viewModel.lastBatchDirPath)
-            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, frameNames)
-            putStringArrayListExtra(DicKeys.DEF_FILE_PATHS, ArrayList(viewModel.defFilePaths))
-            if (sweep) {
-                putExtra(DicKeys.SWEEP_SUBSETS, plan.map { it.subset }.toIntArray())
-                putExtra(DicKeys.SWEEP_STEPS, plan.map { it.step }.toIntArray())
-                putExtra(DicKeys.SWEEP_STRAIN_WINS, plan.map { it.strainWindow }.toIntArray())
-                putExtra(DicKeys.LINE_CUT_HORIZONTAL, viewModel.lineCutHorizontal)
-                putExtra(DicKeys.SWEEP_SKIPPED, SkippedNode.encodeJson(viewModel.sweepSkippedNodes))
-            }
-            putExtra(DicKeys.STOP_CODE, viewModel.lastStopCode)
-            putExtra(DicKeys.PLANNED_FRAMES, viewModel.lastPlannedFrames)
-            putExtra(DicKeys.SESSION_ID, viewModel.currentSessionId)
-            putExtra(DicKeys.SESSION_LOCAL_ID, viewModel.workingLocalId)
-            putExtra(DicKeys.SUBSET_SIZE, subsetSize)
-            putExtra(DicKeys.STRAIN_WINDOW, strainWindow)
-            putExtra(DicKeys.STRAIN_METHOD, "VSG")
-            putExtra(DicKeys.ENGINE_STATS, viewModel.engineStatsArray)
-            putExtra(DicKeys.ROI_X, viewModel.roiX)
-            putExtra(DicKeys.ROI_Y, viewModel.roiY)
-            putExtra(DicKeys.ROI_W, viewModel.roiW)
-            putExtra(DicKeys.ROI_H, viewModel.roiH)
-        }
-        host.startActivity(intent)
+        host.startActivity(
+            ViewerArgs(
+                imgW = viewModel.realRefWidth,
+                imgH = viewModel.realRefHeight,
+                step = viewModel.lastStep,
+                refName = viewModel.refName,
+                refPath = viewModel.lastRefPath ?: "",
+                batchDirPath = viewModel.lastBatchDirPath,
+                frameNames = frameNames,
+                stopCode = viewModel.lastStopCode,
+                plannedFrames = viewModel.lastPlannedFrames,
+                sessionId = viewModel.currentSessionId,
+                sessionLocalId = viewModel.workingLocalId,
+                subsetSize = subsetSize,
+                strainWindow = strainWindow,
+                engineStats = viewModel.engineStatsArray,
+                roiX = viewModel.roiX,
+                roiY = viewModel.roiY,
+                roiW = viewModel.roiW,
+                roiH = viewModel.roiH,
+                sweep = if (sweep) {
+                    ViewerSweepArgs(
+                        subsets = plan.map { it.subset },
+                        steps = plan.map { it.step },
+                        strainWindows = plan.map { it.strainWindow },
+                        lineCutHorizontal = viewModel.lineCutHorizontal,
+                        skippedJson = SkippedNode.encodeJson(viewModel.sweepSkippedNodes),
+                    )
+                } else {
+                    null
+                },
+                defPath = viewModel.lastDefPath,
+                defFilePaths = viewModel.defFilePaths,
+            ).toIntent(host),
+        )
     }
 }

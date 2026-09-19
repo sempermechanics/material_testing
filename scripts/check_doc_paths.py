@@ -73,7 +73,7 @@ def _skipped(target: Path, root: Path) -> bool:
     if not target.is_relative_to(root):
         return False
     relative = target.relative_to(root)
-    return bool(_SKIP_DIRS.intersection(relative.parts)) or str(relative) in _EXPECTED_ABSENT
+    return bool(_SKIP_DIRS.intersection(relative.parts)) or relative.as_posix() in _EXPECTED_ABSENT
 
 
 def _references(doc: Path, root: Path):

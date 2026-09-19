@@ -1,13 +1,15 @@
 """HTTP authz tests with DEV_INSECURE_AUTH off — 401/403 trust boundaries."""
 import base64
 import hashlib
+import io
+import zipfile
 
 import fake_firestore
 import pytest
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app import audit, deps, firestore_repo as repo
+from app import audit, deps, drive, firestore_repo as repo, statuses
 from app.config import settings
 
 
@@ -105,15 +107,16 @@ async def test_cross_user_session_is_404(secure, client, monkeypatch):
     assert r.json()["detail"] == "session_not_found"
 
 
-@pytest.mark.asyncio
-async def test_admin_mutation_requires_device_attestation(secure, client, monkeypatch):
+def _admin_token(secure, monkeypatch, claims: dict):
+    """An admin signing in with exactly these extra token claims."""
     monkeypatch.setattr(
         deps, "verify_id_token",
-        lambda _t: {"sub": "admin-1", "email": "admin@sempermechanics.com", "email_verified": True},
+        lambda _t: {"sub": "admin-1", "email": "admin@sempermechanics.com",
+                    "email_verified": True, **claims},
     )
     monkeypatch.setattr(
         repo, "get_or_create_user",
-        lambda claims, device_id=None: {
+        lambda c, device_id=None: {
             "uid": "admin-1", "email": "admin@sempermechanics.com",
             "role": "admin", "access_status": "APPROVED", "activeDeviceId": "adev",
         },
@@ -124,12 +127,99 @@ async def test_admin_mutation_requires_device_attestation(secure, client, monkey
         },
         "target": {"email": "t@e.com", "role": "user", "access_status": "PENDING"},
     }
-    # ID token alone — no device headers — must not mutate.
+
+
+@pytest.mark.asyncio
+async def test_admin_mutation_rejects_a_bare_id_token(secure, client, monkeypatch):
+    """The property that must survive the console: a token on its own is not
+    enough to change anything, however it was obtained.
+
+    The staff console replaced device attestation with a second factor for
+    browser callers, so the *code* changed — but a password-only session, which
+    is what a stolen or replayed token usually is, still gets nowhere.
+    """
+    _admin_token(secure, monkeypatch, {})
     r = await client.post(
         "/v1/admin/users/target/approve",
         headers={"Authorization": "Bearer ok"},
     )
-    assert r.status_code in (400, 401, 409)
+    assert r.status_code == 403
+    assert r.json()["detail"] == "mfa_required"
+    assert secure._data["users"]["target"]["access_status"] == "PENDING"
+
+
+@pytest.mark.asyncio
+async def test_admin_mutation_rejects_a_stale_second_factor(secure, client, monkeypatch):
+    """Enrolling in MFA once does not buy authority for the token's whole
+    lifetime. The freshness window is what bounds a leaked token."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    _admin_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "phone"},
+        "auth_time": _time.time() - 3600,
+    })
+    r = await client.post(
+        "/v1/admin/users/target/approve",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "reauth_required"
+    assert secure._data["users"]["target"]["access_status"] == "PENDING"
+
+
+@pytest.mark.asyncio
+async def test_admin_mutation_rejects_a_token_that_will_not_state_its_age(
+    secure, client, monkeypatch,
+):
+    """No auth_time is treated as too old, not as fresh — a token that will not
+    say when it was minted cannot satisfy a freshness requirement."""
+    _admin_token(secure, monkeypatch, {"firebase": {"sign_in_second_factor": "phone"}})
+    r = await client.post(
+        "/v1/admin/users/target/approve",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "reauth_required"
+    assert secure._data["users"]["target"]["access_status"] == "PENDING"
+
+
+@pytest.mark.asyncio
+async def test_admin_mutation_accepts_a_fresh_second_factor(secure, client, monkeypatch):
+    """The console path itself: 2FA plus a recent sign-in, from a browser that
+    can produce no device signature at all."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    _admin_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "phone"},
+        "auth_time": _time.time() - 60,
+    })
+    r = await client.post(
+        "/v1/admin/users/target/approve",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 200, r.text
+    assert secure._data["users"]["target"]["access_status"] == "APPROVED"
+
+
+@pytest.mark.asyncio
+async def test_the_browser_path_can_be_withdrawn_entirely(secure, client, monkeypatch):
+    """ADMIN_WEB_MFA_ENABLED=0 restores attestation-only admin, so a deployment
+    that does not use the console is not carrying its weaker tier."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", False)
+    _admin_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "phone"},
+        "auth_time": _time.time(),
+    })
+    r = await client.post(
+        "/v1/admin/users/target/approve",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 400
     assert secure._data["users"]["target"]["access_status"] == "PENDING"
 
 
@@ -174,3 +264,300 @@ async def test_admin_mutation_with_valid_device_attestation(secure, client, monk
     )
     assert r.status_code == 200
     assert secure._data["users"]["target"]["access_status"] == "APPROVED"
+
+
+# --- the same step-up, one tier down -----------------------------------------
+# Changing which device a licence is bound to is the holder's own operation,
+# not staff work, and it is reachable from a browser. It therefore sits on
+# `attested_or_mfa_user`: the step-up machinery of the admin cases above with
+# `current_user` beneath it instead of `admin_user`.
+
+
+def _holder_token(secure, monkeypatch, claims: dict) -> str:
+    """An ordinary licence holder signing in with exactly these extra claims.
+
+    Returns the id of the individual licence they hold, bound to `old-phone`.
+    """
+    secure._data["users"] = {
+        "holder-1": {"uid": "holder-1", "email": "holder@lab.org",
+                     "access_status": "APPROVED", "emailVerified": True},
+    }
+    minted = repo.create_individual_license(
+        email_lock="holder@lab.org", created_by_uid="admin",
+    )
+    license_id = minted["license"]["id"]
+    user = repo.ensure_entitlement(dict(secure._data["users"]["holder-1"]), None)
+    repo.revalidate_device_lock(user, "old-phone")
+    stored = dict(secure._data["users"]["holder-1"])
+    monkeypatch.setattr(
+        deps, "verify_id_token",
+        lambda _t: {"sub": "holder-1", "email": "holder@lab.org",
+                    "email_verified": True, **claims},
+    )
+    monkeypatch.setattr(repo, "get_or_create_user", lambda c, device_id=None: stored)
+    return license_id
+
+
+@pytest.mark.asyncio
+async def test_device_change_rejects_a_bare_id_token(secure, client, monkeypatch):
+    """A stolen token must not be able to move a licence onto the thief's
+    device — which is the whole reason this route is not plain USER tier."""
+    license_id = _holder_token(secure, monkeypatch, {})
+
+    r = await client.post("/v1/licenses/unbind", headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 403
+    assert r.json()["detail"] == "mfa_required"
+    assert secure._data["licenses"][license_id]["deviceIdLock"] == "old-phone"
+
+
+@pytest.mark.asyncio
+async def test_device_change_rejects_a_stale_second_factor(secure, client, monkeypatch):
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    license_id = _holder_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 3600,
+    })
+
+    r = await client.post("/v1/licenses/unbind", headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 403
+    assert r.json()["detail"] == "reauth_required"
+    assert secure._data["licenses"][license_id]["deviceIdLock"] == "old-phone"
+
+
+@pytest.mark.asyncio
+async def test_device_change_accepts_a_fresh_second_factor(secure, client, monkeypatch):
+    """The account dashboard's path: 2FA plus a recent sign-in, from a browser
+    that can produce no device signature at all."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    license_id = _holder_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 60,
+    })
+
+    r = await client.post("/v1/licenses/unbind", headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["previousDeviceId"] == "old-phone"
+    assert secure._data["licenses"][license_id]["deviceIdLock"] == ""
+
+
+@pytest.mark.asyncio
+async def test_the_holder_step_up_authorises_nothing_staff_can_do(secure, client, monkeypatch):
+    """The tier below the step-up is what differs, and it still binds: a
+    holder who has proved a second factor is still not an operator."""
+    import time as _time
+
+    license_id = _holder_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 60,
+    })
+
+    r = await client.patch(
+        f"/v1/admin/licenses/{license_id}",
+        json={"clearDeviceLock": True},
+        headers={"Authorization": "Bearer ok"},
+    )
+
+    assert r.status_code == 403
+    assert r.json()["detail"] == "not_admin"
+    assert secure._data["licenses"][license_id]["deviceIdLock"] == "old-phone"
+
+
+# --- the second thing that tier exists for -----------------------------------
+# Pulling an analysis out through a browser. `GET /v1/files/{id}/content` is
+# device-attested and stays that way; the bundle route is the same bytes at
+# the step-up tier, so the pair below is what stops a bare token draining an
+# account from anywhere.
+
+
+def _holder_with_an_analysis(secure, monkeypatch, claims: dict) -> str:
+    """The holder above, plus one uploaded analysis they own."""
+    _holder_token(secure, monkeypatch, claims)
+    sid = "sess-h1"
+    secure._data["sessions"] = {sid: {"uid": "holder-1", "specimen": "coupon-1",
+                                      "status": statuses.SESSION_COMPLETED}}
+    secure._data["files"] = {f"{sid}_bundle_Session.zip": {
+        "sessionId": sid, "uid": "holder-1", "role": "bundle", "name": "Session.zip",
+        "sizeBytes": 4, "sha256": "aa", "status": statuses.FILE_COMPLETED,
+        "driveFileId": "drive-1",
+    }}
+    monkeypatch.setattr(drive, "access_token", lambda: "tok")
+    monkeypatch.setattr(drive, "open_download",
+                        lambda token, fid, **kw: _Chunks(b"DATA"))
+    return sid
+
+
+class _Chunks:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def iter_chunks(self, chunk_size: int = 0):
+        yield self._payload
+
+
+@pytest.mark.asyncio
+async def test_a_bundle_is_refused_to_a_bare_id_token(secure, client, monkeypatch):
+    sid = _holder_with_an_analysis(secure, monkeypatch, {})
+
+    r = await client.get(f"/v1/sessions/{sid}/bundle",
+                         headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 403
+    assert r.json()["detail"] == "mfa_required"
+
+
+@pytest.mark.asyncio
+async def test_a_bundle_reaches_a_browser_that_proved_a_second_factor(
+    secure, client, monkeypatch,
+):
+    """No device signature is possible here at all — that is the point."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    sid = _holder_with_an_analysis(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 60,
+    })
+
+    r = await client.get(f"/v1/sessions/{sid}/bundle",
+                         headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 200, r.text
+    assert zipfile.ZipFile(io.BytesIO(r.content)).read("bundle/Session.zip") == b"DATA"
+
+
+# --- whole-licence revoke: tighter freshness window --------------------------
+# Ordinary admin mutations accept ADMIN_WEB_REAUTH_SECONDS; revoke uses
+# ADMIN_WEB_REVOKE_REAUTH_SECONDS so a long-lived MFA session cannot wipe a
+# customer without a fresh password/Google re-auth plus TOTP.
+
+
+def _license_for_revoke(secure, monkeypatch, claims: dict) -> str:
+    _admin_token(secure, monkeypatch, claims)
+    minted = repo.create_individual_license(
+        email_lock="revoke-target@lab.org", created_by_uid="admin-1",
+    )
+    return minted["license"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_license_revoke_rejects_a_bare_id_token(secure, client, monkeypatch):
+    license_id = _license_for_revoke(secure, monkeypatch, {})
+    r = await client.post(
+        f"/v1/admin/licenses/{license_id}/revoke",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "mfa_required"
+    assert secure._data["licenses"][license_id]["status"] != "revoked"
+
+
+@pytest.mark.asyncio
+async def test_license_revoke_rejects_mfa_that_is_only_dashboard_fresh(
+    secure, client, monkeypatch,
+):
+    """Five minutes old is fine for mint/approve; revoke demands a tighter
+    window so the console's password+TOTP step-up is not optional."""
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REVOKE_REAUTH_SECONDS", 120)
+    license_id = _license_for_revoke(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 300,
+    })
+    r = await client.post(
+        f"/v1/admin/licenses/{license_id}/revoke",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "reauth_required"
+    assert secure._data["licenses"][license_id]["status"] != "revoked"
+
+
+@pytest.mark.asyncio
+async def test_license_revoke_accepts_a_fresh_second_factor(secure, client, monkeypatch):
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REVOKE_REAUTH_SECONDS", 120)
+    license_id = _license_for_revoke(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 30,
+    })
+    r = await client.post(
+        f"/v1/admin/licenses/{license_id}/revoke",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 200, r.text
+    assert secure._data["licenses"][license_id]["status"] == "revoked"
+
+
+# --- institution IT console: same MFA as other dashboards --------------------
+
+
+def _institution_it_token(secure, monkeypatch, claims: dict) -> str:
+    """IT for one institution licence; returns that licence id."""
+    license_id = "lic-it-mfa"
+    secure._data["licenses"] = {
+        license_id: {
+            "kind": "institution", "plan": "professional", "status": "active",
+            "domainLock": "university.edu", "adminEmails": ["it@university.edu"],
+            "keyPrefix": "SEMP-IT01", "seatsUsed": 0, "maxSeats": 5,
+        },
+    }
+    secure._data[f"licenses/{license_id}/seats"] = {}
+    monkeypatch.setattr(
+        deps, "verify_id_token",
+        lambda _t: {
+            "sub": "it-1", "email": "it@university.edu", "email_verified": True,
+            **claims,
+        },
+    )
+    monkeypatch.setattr(
+        repo, "get_or_create_user",
+        lambda c, device_id=None: {
+            "uid": "it-1", "email": "it@university.edu", "role": "user",
+            "access_status": "APPROVED", "emailVerified": True,
+        },
+    )
+    return license_id
+
+
+@pytest.mark.asyncio
+async def test_institution_seats_reject_a_bare_id_token(secure, client, monkeypatch):
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    license_id = _institution_it_token(secure, monkeypatch, {})
+    r = await client.get(
+        f"/v1/institutions/licenses/{license_id}/seats",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "mfa_required"
+
+
+@pytest.mark.asyncio
+async def test_institution_seats_accept_a_fresh_second_factor(secure, client, monkeypatch):
+    import time as _time
+
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    license_id = _institution_it_token(secure, monkeypatch, {
+        "firebase": {"sign_in_second_factor": "totp"},
+        "auth_time": _time.time() - 60,
+    })
+    r = await client.get(
+        f"/v1/institutions/licenses/{license_id}/seats",
+        headers={"Authorization": "Bearer ok"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["seats"] == []

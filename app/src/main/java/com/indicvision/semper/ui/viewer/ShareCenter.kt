@@ -22,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
@@ -65,7 +66,14 @@ class ShareCenter(private val host: ResultViewerActivity) {
     private fun requireSnapshot(): Snapshot =
         snap ?: error("Share snapshot unavailable")
 
+    private fun ensureShareAllowed(): Boolean {
+        if (LicenseEntitlements.shareEnabled(host)) return true
+        CrispToast.show(host, host.getString(R.string.share_licensed_only), long = true)
+        return false
+    }
+
     fun show() {
+        if (!ensureShareAllowed()) return
         val s = snap ?: return
         val sheet = BottomSheetDialog(host)
         val v = host.layoutInflater.inflate(R.layout.sheet_share, null)

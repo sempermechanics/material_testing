@@ -37,7 +37,7 @@ def normalize_route_template(path: str) -> str:
         if part in {
             "v1", "healthz", "readyz", "me", "config", "devices", "register",
             "challenge", "sessions", "uploads", "files", "content", "complete",
-            "admin", "users", "export", "tasks", "provision-session",
+            "admin", "users", "export", "tasks", "provision-session", "bundle",
         }:
             out.append(part)
         elif _ID_SEGMENT.match(part):
@@ -87,6 +87,10 @@ def classify_route(method: str, path: str) -> tuple[str, str]:
     if template.endswith("/files") and "/sessions/" in template and method_u == "GET":
         return "restore", template
     if template.endswith("/content") and "/files/" in template and method_u == "GET":
+        return "restore", template
+    # Pulling the whole analysis out through a browser is the same act as
+    # restoring it onto a phone, one request instead of many.
+    if template.endswith("/bundle") and "/sessions/" in template and method_u == "GET":
         return "restore", template
     return "other", template
 

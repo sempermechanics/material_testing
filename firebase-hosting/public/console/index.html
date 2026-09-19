@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- This page is also served at a rewritten address (see firebase.json), where the browser's own base would be the site root and every relative path here — the stylesheet, auth.js, the links onward — would resolve one directory too high. Naming the base makes both addresses behave identically. -->
+  <base href="/console/" />
+  <title>Sign in · Semper DIC</title>
+  <link rel="stylesheet" href="console.css" />
+</head>
+<body>
+  <header>
+    <span class="brand">Semper&nbsp;DIC</span>
+    <h1>Sign in</h1>
+    <span class="spacer"></span>
+    <span id="who" class="muted"></span>
+    <button id="signIn">Sign in with Google</button>
+    <button id="signOut" class="secondary" hidden>Sign out</button>
+  </header>
+
+  <main>
+    <div id="app" hidden>
+      <p id="status" class="muted"></p>
+
+      <!-- Shown only when the account can open more than one dashboard, or
+           when we could not establish which it should be. -->
+      <section class="card" id="choices" hidden>
+        <h2 id="choicesTitle">Where would you like to go?</h2>
+        <p class="muted" id="choicesHelp"></p>
+        <div id="links"></div>
+      </section>
+    </div>
+
+    <p id="signedOut" class="muted">
+      Sign in and you will be taken to the right place: your own licence and
+      analyses, your institution's seats, or the operator console.
+    </p>
+  </main>
+
+  <script type="module" src="router.js"></script>
+</body>
+</html>

@@ -44,11 +44,13 @@ import com.google.android.material.textfield.TextInputEditText
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
 import com.indicvision.semper.report.VisualizationEngine
+import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.Dispatchers
@@ -268,6 +270,11 @@ class ResultViewerActivity : AppCompatActivity() {
         glassShield = findViewById(R.id.glassShield)
 
         inspect = ViewerInspectHelper(this)
+        // Warm [sessionRecord] here rather than at the share tap that needs it:
+        // the lazy reads the session index off disk, and by lazy is synchronized,
+        // so a tap arriving mid-read waits on the read it would have done itself
+        // and never on a second one.
+        lifecycleScope.launch(Dispatchers.IO) { sessionRecord }
 
         if (savedInstanceState != null) {
             val savedProbe = savedInstanceState.getInt("LAST_CLOSEST_IDX", -1)
@@ -388,7 +395,16 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         findViewById<View>(R.id.btnViewerBack).setOnClickListener { finish() }
-        findViewById<View>(R.id.btnViewerShare).setOnClickListener { showShareSheet() }
+        val shareBtn = findViewById<View>(R.id.btnViewerShare)
+        val canShare = LicenseEntitlements.shareEnabled(this)
+        shareBtn.alpha = if (canShare) 1f else LicenseEntitlements.BLOCKED_ALPHA
+        shareBtn.setOnClickListener {
+            if (!LicenseEntitlements.shareEnabled(this)) {
+                CrispToast.show(this, getString(R.string.share_licensed_only), long = true)
+                return@setOnClickListener
+            }
+            showShareSheet()
+        }
         findViewById<View>(R.id.btnViewerHome).setOnClickListener { goHome() }
         findViewById<View>(R.id.btnViewerSettingsInfo).setOnClickListener {
             bumpChrome()

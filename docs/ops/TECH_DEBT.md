@@ -7,8 +7,6 @@ Baselines stay empty: `app/lint-baseline.xml` and `app/detekt-baseline.xml`.
 
 - `OldTargetApi` — disabled in `app/build.gradle.kts` lint config until a
   deliberate `targetSdk` 36→37 bump PR. Do not re-enable casually.
-- Capture `screenOrientation="portrait"` keeps `tools:ignore` for
-  `LockedOrientationActivity` / `DiscouragedApi` (camera UX).
 
 Inherent size/complexity in a few UI orchestration files uses targeted
 `@file:Suppress` — prefer extracting over widening those lists.
@@ -36,20 +34,32 @@ Priority = (Impact + Risk) × (6 − Effort).
 
 | ID | Category | Item | I | R | E | P | Status |
 |----|----------|------|---|---|---|---|--------|
-| TD-3 | Architecture | `ViewerSession` extras bag (FI-1) | 4 | 4 | 5 | **8** | Deferred |
-| TD-4 | Code | Capture orchestrators ~1k lines | 3 | 2 | 4 | **10** | Deferred — audited 2026-08-31, no repro |
-| TD-5 | Test | No capture instrumented/E2E | 3 | 3 | 4 | **12** | Deferred — no `androidTest` capture fixtures in CI |
-| TD-18 | Efficiency | `GrayPngEncoder` full-buffer + `toByteArray()` on hot path | 3 | 2 | 4 | **9** | Deferred |
-| TD-20 | Reuse | `LockedCameraSession` duplicate `captureStill` / `captureLuma` bodies | 2 | 2 | 4 | **8** | Deferred — audited 2026-08-31, no repro |
-| TD-21 | Efficiency | ImageReader listener re-registered every capture | 2 | 2 | 3 | **8** | Deferred — audited 2026-08-31, no repro |
+| TD-3 | Architecture | `ViewerSession` extras bag (FI-1) — **write half done**: `ViewerArgs` is the one packer and `ViewerArgsTest` pins both entry points' key sets. What is left is the unpack half, across four readers | 3 | 2 | 4 | **10** | Deferred — a parsed-object read side has to keep working for an Intent already in the back stack across an update |
+| TD-22 | Test | Consoles have no behavioural test — `check_console.py` reads their structure, nothing exercises a sign-in, a step-up or a revoke | 3 | 3 | 4 | **12** | Deferred — same Firebase Auth fixture blocker as auth-gated UI E2E |
+| TD-24 | Architecture | No `@MainThread` on UI entry points, so `SessionStore`'s `@WorkerThread` contract is documentation rather than a gate — lint's `WrongThread` fires only when the *calling* method is annotated | 2 | 2 | 3 | **12** | Deferred — annotating ~27 Activities needs a lint run to land against an empty baseline |
+| TD-25 | Test | `AuthRepository` cannot be unit-tested against a fake backend: `IndicApi` is final with a private constructor, so a defaulted constructor parameter would be a seam that admits only the real client | 2 | 2 | 2 | **16** | Deferred — needs an interface extracted from `IndicApi` and threaded through every worker and repository; that is the DI proposal CONTRIBUTING defers to its own PR |
+| TD-26 | Architecture | Wizard/viewer UI state lives on the Activity as fields rather than hoisted into `AnalysisViewModel` as `StateFlow`, so a rotation reconstructs it from intent extras and `onSaveInstanceState` | 3 | 2 | 5 | **5** | Deferred — a 1.8k-line native-solve screen with bit-exact `.dat` oracles; the run itself is on `viewModelScope`, which is the part that was losing work |
+
+### Closed as obsolete, 2026-09-14
+
+TD-4, TD-5, TD-18, TD-20 and TD-21 all described the in-app camera: the
+capture orchestrators, their missing instrumented tier, `GrayPngEncoder`,
+`LockedCameraSession`'s duplicated bodies, and the per-capture `ImageReader`
+re-registration. `449c9da` removed the feature, so `ui/capture/` is gone from
+both this branch and `main` and none of those symbols resolves anywhere in
+`app/src`. They are struck rather than carried as permanently deferred — a
+register row that cannot be worked is noise. TD-23 is closed by work, not by
+deletion: the revoke now stamps a check-in checkpoint the `lastSeenAt` throttle
+honours.
 
 ## External / deferred (not blocked on code alone)
 
 | Item | Why deferred |
 |------|----------------|
 | Auth-gated UI E2E | Needs Firebase secrets / fixtures in CI |
-| `ViewerSession` extras bag | `DicKeys` packed in two places (`SessionOpenHelper.intentFor`, `AnalysisNavHelper.openResults`); grill before deepening |
+| `ViewerSession` unpack half | `DicKeys` is now packed in one place (`ViewerArgs`); the four readers still parse the bundle themselves |
 | firebase-admin / hashed lock | Lock is regenerated from txt on each bump (`pip-compile --generate-hashes` on Python 3.12). Direct-dep versions in the lock must match `requirements.txt`. |
+| Identity Platform upgrade | The consoles' second factor is Firebase MFA (TOTP), which needs the project upgraded to Identity Platform — a project-wide Auth change shared with the mobile app, and a change to the Auth pricing model. Until it is done the consoles sign in and every write fails `mfa_required`. |
 
 ## Perf / quality gates (do not loosen)
 

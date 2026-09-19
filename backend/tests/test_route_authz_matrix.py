@@ -26,11 +26,15 @@ from app.config import settings
 from app.deps import (
     admin_user,
     any_status_user,
+    attested_or_mfa_admin,
+    attested_or_mfa_admin_fresh,
+    attested_or_mfa_user,
     current_user,
     device_or_legacy_reader,
     verified_device,
 )
 from app.main import app
+from app.routers.institutions import institution_admin_context, institution_admin_stepup
 from app.tasks import tasks_caller
 
 NONE, USER, ADMIN, DEVICE, DEVICE_ADMIN = "none", "user", "admin", "device", "device+admin"
@@ -45,6 +49,29 @@ TASK = "cloud-task"
 # window). Recorded explicitly so the compatibility gap is visible in the table
 # rather than masquerading as a plain USER or DEVICE route. Delete with the flag.
 DEVICE_MIGRATING = "device-migrating"
+# Institution IT self-service: membership in adminEmails plus dashboard MFA
+# (institution_admin_stepup). Membership is checked before MFA so a foreign
+# licence still 404s. Deliberately distinct from ADMIN/DEVICE_ADMIN.
+INSTITUTION_ADMIN = "institution-admin"
+INSTITUTION_STEPUP = "institution-stepup"
+# Semper staff changing state. Satisfied EITHER by a device attestation (the
+# phone admin screen, unchanged) OR by an admin whose ID token records a
+# completed second factor and a recent sign-in (the browser console, which
+# cannot produce an attestation). Recorded as its own tier rather than folded
+# into DEVICE_ADMIN because it is genuinely weaker: a phished live MFA session
+# inside the freshness window can do what a stolen token alone could not. The
+# table below is where that trade is visible.
+ADMIN_STEPUP = "admin-stepup"
+# Whole-licence revoke: same machinery, tighter ADMIN_WEB_REVOKE_REAUTH_SECONDS.
+ADMIN_STEPUP_FRESH = "admin-stepup-fresh"
+# The same step-up one tier down: an account holder acting on their own
+# licence, proved by an attested device or by a second factor on a recent
+# sign-in. It authorises nothing beyond what the holder already holds — it
+# only refuses to take a bare ID token as proof that they are present. Used
+# for the operations that are reachable from a browser and worth more than a
+# token: changing which device the licence is bound to, and pulling an
+# analysis out.
+USER_STEPUP = "user-stepup"
 
 # (method, path) -> required tier. Keep in sync deliberately, not automatically:
 # the point is that a human decides.
@@ -64,12 +91,64 @@ EXPECTED = {
     ("DELETE", "/v1/sessions/{sid}"): DEVICE,
     ("GET", "/v1/sessions/{sid}/uploads"): DEVICE_MIGRATING,    # returns Drive upload URIs
     ("GET", "/v1/sessions/{sid}/files"): USER,
+    # The whole analysis out through a browser. USER_STEPUP because the
+    # device-attested single-file route it stands in for is DEVICE, and the
+    # data is the same data — a bare ID token must not be enough to drain an
+    # account from anywhere.
+    ("GET", "/v1/sessions/{sid}/bundle"): USER_STEPUP,
     ("GET", "/v1/files/{file_id}/content"): DEVICE,
     ("POST", "/v1/files/{file_id}/complete"): DEVICE,
     ("GET", "/v1/admin/users"): ADMIN,                          # read-only: no device needed
-    ("POST", "/v1/admin/users/{uid}/approve"): DEVICE_ADMIN,
-    ("POST", "/v1/admin/users/{uid}/revoke"): DEVICE_ADMIN,
-    ("PATCH", "/v1/admin/users/{uid}/config"): DEVICE_ADMIN,
+    ("POST", "/v1/admin/users/{uid}/approve"): ADMIN_STEPUP,
+    ("POST", "/v1/admin/users/{uid}/revoke"): ADMIN_STEPUP,
+    ("PATCH", "/v1/admin/users/{uid}/config"): ADMIN_STEPUP,
+    ("GET", "/v1/admin/licenses"): ADMIN,
+    ("POST", "/v1/admin/licenses"): ADMIN_STEPUP,
+    ("PATCH", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP,
+    ("POST", "/v1/admin/licenses/{license_id}/revoke"): ADMIN_STEPUP_FRESH,
+    # A read, so plain ADMIN like GET /v1/admin/licenses: it changes
+    # nothing and the second factor gates state changes.
+    ("GET", "/v1/admin/licenses/{license_id}/reconcile"): ADMIN,
+    # Staff unbinding one institution seat. The same operation IT has on its
+    # own route, at the staff tier, because staff are not in a customer's
+    # adminEmails and that route 404s for them.
+    ("PATCH", "/v1/admin/licenses/{license_id}/seats/{uid}/device"): ADMIN_STEPUP,
+    # Read-only device-move history for support. ADMIN (token) not step-up —
+    # same tier as listing licences.
+    ("GET", "/v1/admin/licenses/{license_id}/device-history"): ADMIN,
+    ("POST", "/v1/licenses/activate"): USER,
+    # Lease routes are USER, not INSTITUTION_ADMIN: the member takes their own
+    # seat. Eligibility is the seat document, checked inside the transaction —
+    # a caller with no seat gets `not_eligible`, so a bare token buys nothing.
+    ("POST", "/v1/licenses/checkout"): USER,
+    ("POST", "/v1/licenses/release"): USER,
+    # The holder's own device change. USER_STEPUP and not USER: a bare token
+    # is exactly what a stolen one is, and this decides which device the
+    # licence follows.
+    ("POST", "/v1/licenses/unbind"): USER_STEPUP,
+    # "Which licences do I administer" — USER, not INSTITUTION_ADMIN, because
+    # it is the question that finds the licence id every other route here
+    # already requires. It cannot be scoped to a licence the caller has not
+    # named yet; the handler scopes it to the caller's own verified address
+    # instead, and answers an empty list for everybody else.
+    ("GET", "/v1/institutions/licenses"): USER,
+    ("POST", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
+    ("GET", "/v1/institutions/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
+    ("PATCH", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
+    ("DELETE", "/v1/institutions/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
+    # Withdrawing an unclaimed invite. Same tier as the seat routes: an invite
+    # is a roster decision, and it is scoped to one licence by the same
+    # adminEmails check — the handler additionally refuses an invite whose
+    # licenseId is not this one, so a guessed id reaches nothing.
+    ("DELETE", "/v1/institutions/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_STEPUP,
+    # Pre-rename aliases of the routes above. Same handler, same tier —
+    # declared explicitly so a deprecation that drops them has to come through
+    # this table, and so an alias can never quietly gain a weaker tier.
+    ("POST", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
+    ("GET", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
+    ("PATCH", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
+    ("DELETE", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
+    ("DELETE", "/v1/campus/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_STEPUP,
     ("POST", "/v1/tasks/provision-session"): TASK,
 }
 
@@ -89,6 +168,25 @@ def _tier(route) -> str:
     # it never appears in the flattened deps — detect the wrapper itself.
     if device_or_legacy_reader in calls:
         return DEVICE_MIGRATING
+    # Also calls verified_device directly rather than through Depends, so the
+    # flattened dependency set shows only admin_user — without this branch the
+    # route would silently read as plain ADMIN and the step-up would vanish
+    # from the table it is supposed to be visible in.
+    if attested_or_mfa_admin_fresh in calls:
+        return ADMIN_STEPUP_FRESH
+    if attested_or_mfa_admin in calls:
+        return ADMIN_STEPUP
+    # Same reason as above: the shared step-up calls verified_device directly
+    # rather than through Depends, so without this branch a step-up route
+    # would read as a plain USER one.
+    if attested_or_mfa_user in calls:
+        return USER_STEPUP
+    # institution_admin_stepup wraps membership then MFA; check before the
+    # bare membership dependency used by list_my_licenses routing helpers.
+    if institution_admin_stepup in calls:
+        return INSTITUTION_STEPUP
+    if institution_admin_context in calls:
+        return INSTITUTION_ADMIN
     has_device = verified_device in calls
     has_admin = admin_user in calls
     if has_device and has_admin:
@@ -255,6 +353,10 @@ async def test_attested_user_cannot_complete_another_users_file(attacker, client
     ("POST", "/v1/admin/users/victim-uid/approve"),
     ("POST", "/v1/admin/users/victim-uid/revoke"),
     ("PATCH", "/v1/admin/users/victim-uid/config"),
+    ("GET", "/v1/admin/licenses"),
+    ("POST", "/v1/admin/licenses"),
+    ("POST", "/v1/admin/licenses/abc/revoke"),
+    ("GET", "/v1/admin/licenses/abc/reconcile"),
 ])
 async def test_non_admin_is_refused_every_admin_route(attacker, client, method, path):
     attacker._data["users"] = {VICTIM: {"email": "v@e.com", "access_status": "PENDING"}}
@@ -263,6 +365,128 @@ async def test_non_admin_is_refused_every_admin_route(attacker, client, method, 
     assert r.status_code == 403, r.text
     assert r.json()["detail"] == "not_admin"
     assert attacker._data["users"][VICTIM]["access_status"] == "PENDING"
+
+
+# ---------------------------------------------------------- institution IT routes
+#
+# Token + APPROVED + verified email in that license's adminEmails — no device
+# attestation, no Semper role=admin. Cross-tenant isolation is the critical
+# property: institution A's IT contact must not learn anything about institution B's
+# seats, not even that the license id exists.
+
+INSTITUTION_A = "license-institution-a"
+INSTITUTION_B = "license-institution-b"
+
+
+@pytest.fixture
+def institution_it(monkeypatch):
+    """An APPROVED, verified-email user who is IT for INSTITUTION_A only.
+
+    Carries a fresh second-factor claim so own-licence seat routes (now
+    institution_admin_stepup) still succeed; foreign-licence tests still
+    404 on membership before MFA is consulted.
+    """
+    import time as _time
+
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", False)
+    monkeypatch.setattr(settings, "ADMIN_WEB_MFA_ENABLED", True)
+    monkeypatch.setattr(settings, "ADMIN_WEB_REAUTH_SECONDS", 900)
+    monkeypatch.setattr(audit, "record", lambda *a, **k: None)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+
+    uid = "it-admin-a"
+    monkeypatch.setattr(
+        deps, "verify_id_token",
+        lambda _t: {
+            "sub": uid,
+            "email": "it@university-a.edu",
+            "email_verified": True,
+            "firebase": {"sign_in_second_factor": "totp"},
+            "auth_time": _time.time() - 60,
+        },
+    )
+    profile = {
+        "uid": uid, "email": "it@university-a.edu", "role": "user",
+        "access_status": "APPROVED", "emailVerified": True,
+    }
+    monkeypatch.setattr(repo, "get_or_create_user", lambda claims, device_id=None: dict(profile))
+
+    store._data["licenses"] = {
+        INSTITUTION_A: {
+            "kind": "institution", "plan": "professional", "status": "active",
+            "domainLock": "university-a.edu", "adminEmails": ["it@university-a.edu"],
+            "keyPrefix": "SEMP-AAAA", "seatsUsed": 1,
+        },
+        INSTITUTION_B: {
+            "kind": "institution", "plan": "professional", "status": "active",
+            "domainLock": "university-b.edu", "adminEmails": ["it@university-b.edu"],
+            "keyPrefix": "SEMP-BBBB", "seatsUsed": 1,
+        },
+    }
+    store._data[f"licenses/{INSTITUTION_B}/seats"] = {
+        "student-b": {
+            "uid": "student-b", "email": "student@university-b.edu",
+            "deviceIdLock": "dev-b", "status": "active",
+        },
+    }
+    store.bearer = {"Authorization": "Bearer ok"}
+    return store
+
+
+async def test_institution_it_cannot_reach_another_institutions_seats(institution_it, client):
+    r = await client.get(f"/v1/institutions/licenses/{INSTITUTION_B}/seats", headers=institution_it.bearer)
+    assert r.status_code == 404, r.text
+    assert r.json()["detail"] == "license_not_found"
+    # Nothing about institution B's roster was disclosed, and nothing was touched.
+    assert institution_it._data[f"licenses/{INSTITUTION_B}/seats"]["student-b"]["status"] == "active"
+
+
+async def test_institution_it_cannot_patch_another_institutions_seat(institution_it, client):
+    r = await client.patch(
+        f"/v1/institutions/licenses/{INSTITUTION_B}/seats/student-b",
+        json={"enabled": False},
+        headers=institution_it.bearer,
+    )
+    assert r.status_code == 404, r.text
+    assert institution_it._data[f"licenses/{INSTITUTION_B}/seats"]["student-b"]["status"] == "active"
+
+
+async def test_institution_it_cannot_revoke_another_institutions_seat(institution_it, client):
+    r = await client.delete(
+        f"/v1/institutions/licenses/{INSTITUTION_B}/seats/student-b", headers=institution_it.bearer,
+    )
+    assert r.status_code == 404, r.text
+    assert institution_it._data[f"licenses/{INSTITUTION_B}/seats"]["student-b"]["status"] == "active"
+
+
+async def test_institution_it_can_manage_its_own_institutions_seats(institution_it, client):
+    institution_it._data[f"licenses/{INSTITUTION_A}/seats"] = {
+        "student-a": {
+            "uid": "student-a", "email": "student@university-a.edu",
+            "deviceIdLock": "dev-a", "status": "active",
+        },
+    }
+    r = await client.get(f"/v1/institutions/licenses/{INSTITUTION_A}/seats", headers=institution_it.bearer)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["seats"][0]["uid"] == "student-a"
+    assert "key" not in body["license"]  # never leaks plaintext or the raw hash-keyed record
+
+
+async def test_institution_route_rejects_a_bare_token_from_a_non_member(institution_it, client):
+    """A verified, approved caller who is simply not on adminEmails for ANY
+    license must not learn that INSTITUTION_A even exists."""
+    monkeypatch_email = {"uid": "it-admin-a", "email": "outsider@example.com",
+                          "role": "user", "access_status": "APPROVED", "emailVerified": True}
+    import app.firestore_repo as repo_mod
+    orig = repo_mod.get_or_create_user
+    repo_mod.get_or_create_user = lambda claims, device_id=None: dict(monkeypatch_email)
+    try:
+        r = await client.get(f"/v1/institutions/licenses/{INSTITUTION_A}/seats", headers=institution_it.bearer)
+        assert r.status_code == 404
+    finally:
+        repo_mod.get_or_create_user = orig
 
 
 @pytest.mark.parametrize("method,path", [

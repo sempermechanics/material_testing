@@ -6,9 +6,10 @@ import com.indicvision.semper.data.net.TokenStore
 import timber.log.Timber
 
 /**
- * Analysis-quota gate for new local sessions. Cloud-backed accounts use the
- * server quota; [SessionStore.upsert] stays CRUD-only and consults this gate
- * when inserting a new id (unless [allowOverLimit] on the caller).
+ * Analysis-quota gate for new local sessions. Demo accounts stop at
+ * [LicenseEntitlements.DEMO_MAX_ANALYSES]. Professional has no local cap.
+ * [SessionStore.upsert] stays CRUD-only and consults this gate when inserting
+ * a new id (unless [allowOverLimit] on the caller).
  */
 object SessionQuotaGate {
 
@@ -23,15 +24,13 @@ object SessionQuotaGate {
      * @param existingCount current index size (used as a floor on "used").
      * @return false if the insert must be refused.
      */
-    @Suppress("ReturnCount") // early-outs for disabled / unknown / full / allow
+    @Suppress("ReturnCount") // early-outs for disabled / unlimited / full / allow
     fun allowNewSession(context: Context, existingCount: Int): Boolean {
         if (!IndicApi.get(context).enabled) return true
-        val max = TokenStore.quotaMax(context)
-        if (max <= 0) return true
+        if (LicenseEntitlements.unlimitedAnalysis(context)) return true
+        val max = LicenseEntitlements.analysisCap(context)
         val used = maxOf(TokenStore.quotaUsed(context), existingCount)
         if (used >= max) {
-            // Persist the used count; isSessionLimitReached recomputes
-            // the hard stop live (used >= max) from this.
             TokenStore.setQuota(context, used, existingCount)
             Timber.w("Hard stop: refusing new session (at %d/%d)", used, max)
             return false

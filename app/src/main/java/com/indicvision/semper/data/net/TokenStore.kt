@@ -6,6 +6,7 @@ package com.indicvision.semper.data.net
 
 import android.content.Context
 import androidx.core.content.edit
+import com.indicvision.semper.data.LicenseEntitlements
 
 /**
  * Local session cache alongside Firebase Auth: the signed-in identity plus the
@@ -108,15 +109,16 @@ object TokenStore {
     }
 
     /**
-     * True when the account may not create another analysis (hard stop): either a
-     * forced stop is set, or the ceiling is known and the used count has reached
-     * it. An unknown ceiling is never a hard stop — analysis is on-device; only
-     * its upload is gated (see [com.indicvision.semper.data.CloudSync]).
+     * True when the account may not create another analysis (hard stop).
+     * Professional has no local analysis cap. Demo uses the 25-run ceiling
+     * even before [AppRemoteConfig] has been fetched.
      */
+    @Suppress("ReturnCount")
     fun isSessionLimitReached(context: Context): Boolean {
+        if (LicenseEntitlements.unlimitedAnalysis(context)) return false
         if (prefs(context).getBoolean(K_LIMIT_FORCED, false)) return true
-        val max = quotaMax(context)
-        return max > 0 && quotaUsed(context) >= max
+        val max = LicenseEntitlements.analysisCap(context)
+        return quotaUsed(context) >= max
     }
 
     /**

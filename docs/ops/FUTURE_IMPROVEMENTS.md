@@ -24,21 +24,27 @@ is scheduled; take one deliberately, with its own PR.
 
 **Affects** A7, A8 · §E2.1 · *accuracy, debuggability*
 
-~25 `DicKeys` extras are packed in two places — `AnalysisNavHelper.openResults`
-(fresh run) and `ui/home/SessionOpenHelper.intentFor` (reopen) — and read in four
-(`ResultViewerActivity`, `VsgLatticeActivity`, `ViewerSettingsSheet`,
-`ViewerReportFactory`). The two packers do not write the same set, and a missing
+~25 `DicKeys` extras were packed in two places — `AnalysisNavHelper.openResults`
+(fresh run) and `ui/home/SessionOpenHelper.intentFor` (reopen) — and are read in
+four (`ResultViewerActivity`, `VsgLatticeActivity`, `ViewerSettingsSheet`,
+`ViewerReportFactory`). The two packers did not write the same set, and a missing
 extra silently defaults, so the ⓘ sheet, the report header and the export
-filename can differ by entry path with nothing logged.
+filename could differ by entry path with nothing logged.
 
-**Fix.** A `ViewerSession` value type with `fun toIntent()` / `fun from(intent)`
-as the only pack and unpack. Both current packers construct it; the four readers
-take the parsed object. Missing required fields fail loudly (or resolve from the
-session record) instead of defaulting.
+**Half of it has landed.** `ViewerArgs` (`ui/viewer/`) is now the only writer:
+both entry points construct it and call `toIntent`, and `ViewerArgsTest` asserts
+their key sets against each other, so the two cannot drift apart again. Only the
+post-run launch's two extra keys differ, and the test names them.
 
-**Blast radius.** Touches five UI files and the lattice→viewer hop. No format,
-no `.dat`, no wire change. A JVM test can assert round-trip equality for both
-entry paths, which is the thing nothing checks today.
+**Fix, what remains.** The unpack half: `fun from(intent)` on the same type, with
+the four readers taking the parsed object and a missing required field failing
+loudly (or resolving from the session record) instead of defaulting. Kept
+separate deliberately — the write side is one file and no format change, while
+the read side also has to keep working for an Intent already sitting in the back
+stack when the app updates.
+
+**Blast radius.** Four UI files and the lattice→viewer hop. No format, no
+`.dat`, no wire change.
 
 Already flagged as "next architecture" in [../../CONTEXT.md](../../CONTEXT.md)
 and in [TECH_DEBT.md](TECH_DEBT.md) — this is the concrete shape.
@@ -129,6 +135,43 @@ twice.
 - **`routers/sessions.py`** repeats the session-ownership guard, the page-size
   clamp and the `page` response dict three times each; `routers/files.py` has the
   file-doc variant of the guard twice.
+
+## FI-16 Licensing: the three things scale will find first
+
+**Affects** §9 · *accuracy, cost*
+
+Licensing landed after the traceability pass that produced this file, so it has
+no `A*`/`B*`/`C*` id. Nothing below is wrong today; all three are answers that
+hold at the size we are now and stop holding at some larger one, recorded here
+so the first customer to hit one is not the first person to think about it.
+
+**The bundle download is bounded by a request, not by its size.**
+`GET /v1/sessions/{sid}/bundle` already streams — it never buffers the archive —
+but Cloud Run still ends the request on its own timeout, and
+`MAX_FILES_PER_SESSION` is 600. A slow client on a large analysis can therefore
+be cut off with no partial result and no way to resume. The pattern for this is
+already in the tree: mint the archive out of band through Cloud Tasks
+([`backend/app/tasks.py`](../../backend/app/tasks.py), which provisions sessions the
+same way) and answer with a link. Worth doing when a real download first fails,
+not before — the failure is visible and costs the user only a retry.
+
+**Reconciliation costs one user read per seat.**
+`reconcile_institution_seats` is admin-tier and on demand, so a 40-seat roster
+is 40 reads when a human asks. A 2000-seat one is 2000, and the operator
+console offers the button per licence with nothing between it and the click.
+The cheap fix is a cap with a "showing the first N" note; the durable one is to
+denormalise the answer — stamp the seat when the holder is next seen, so the
+report is a subcollection scan and no user reads at all.
+
+**Four hours is the worst case for a revoke reaching an idle device.**
+`LicenseConfigWorker` refreshes `/v1/config` every four hours, so an account
+that is revoked and then does nothing keeps working until that fires — by
+design, and `revokedStillRunning` in the operator console is precisely the
+window made visible (§20.12 of
+[CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md)). If a
+customer ever needs a revoke to land faster than that, the interval is not the
+lever to reach for first: shortening it costs every device every day. A push
+message to the revoked account is the targeted version of the same thing.
 
 ## FI-15 Lower-value efficiency items
 

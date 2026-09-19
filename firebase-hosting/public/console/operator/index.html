@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Licences · Semper DIC</title>
+  <link rel="stylesheet" href="../console.css" />
+</head>
+<body>
+  <header>
+    <span class="brand">Semper&nbsp;DIC</span>
+    <h1>Operator</h1>
+    <span class="spacer"></span>
+    <span id="who" class="muted"></span>
+    <span id="mfaPill" class="pill" hidden></span>
+    <button id="signIn">Sign in with Google</button>
+    <button id="signOut" class="secondary" hidden>Sign out</button>
+  </header>
+
+  <main>
+    <div id="app" hidden>
+      <p id="status" class="muted"></p>
+
+      <!-- Shown only while the account has no second factor. Everything
+           below it is read-only until one is enrolled, because the backend
+           refuses every state change without one. -->
+      <section class="card" id="enrolCard" hidden>
+        <h2>Set up two-factor authentication</h2>
+        <div class="note">
+          Minting, renewing and revoking a licence all change what customers
+          can do, so they need a second factor and a recent sign-in. Until you
+          enrol one, this page can look but not touch.
+        </div>
+        <div class="row">
+          <button id="enrolStart">Enrol an authenticator app</button>
+        </div>
+        <div id="enrolStep" hidden>
+          <p class="muted">
+            Add this key to your authenticator app by hand ("enter setup key"),
+            then type the 6-digit code it shows.
+          </p>
+          <!-- Deliberately no QR image. Every QR service is somebody else's
+               server, and the thing being encoded is the TOTP secret itself —
+               posting it to a third party to get a picture back would hand
+               away the second factor protecting licence issuance. Generating
+               one in-page would need an encoder we cannot visually verify, so
+               manual entry it is; every authenticator app supports it. -->
+          <p class="mono key" id="enrolSecret"></p>
+          <p class="muted">Account: <span id="enrolAccount" class="mono"></span> · Issuer: Semper DIC</p>
+          <div class="row">
+            <input id="enrolCode" inputmode="numeric" autocomplete="one-time-code"
+                   placeholder="6-digit code" size="12" />
+            <button id="enrolFinish">Confirm</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------- mint -->
+      <section class="card">
+        <h2>Issue a licence</h2>
+        <div class="row">
+          <label><input type="radio" name="kind" value="individual" checked /> Individual</label>
+          <label><input type="radio" name="kind" value="institution" /> Institution</label>
+        </div>
+
+        <div id="individualFields" class="grid">
+          <label>Email lock
+            <input id="emailLock" type="email" placeholder="person@lab.org" />
+            <span class="muted">
+              The licence attaches when this address signs in, and binds to the
+              first device it signs in on. Nothing to send, nothing to type.
+            </span>
+          </label>
+        </div>
+
+        <div id="institutionFields" class="grid" hidden>
+          <label>Domain lock
+            <input id="domainLock" placeholder="university.edu" />
+          </label>
+          <label>IT contacts <span class="muted">(comma separated)</span>
+            <input id="adminEmails" placeholder="it@university.edu" />
+          </label>
+          <label>Seats
+            <input id="maxSeats" type="number" min="1" placeholder="unlimited" />
+          </label>
+          <label>Seating
+            <select id="seating">
+              <option value="assigned">Assigned — everyone on the roster</option>
+              <option value="floating">Floating — shared pool of seats</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid">
+          <label>Term
+            <select id="duration">
+              <option value="perpetual">Perpetual</option>
+              <option value="timed">Time limited</option>
+            </select>
+          </label>
+          <label>Expires
+            <input id="expiresAt" type="date" disabled />
+          </label>
+          <label>Grace days <span class="muted">(after expiry)</span>
+            <input id="graceDays" type="number" min="0" max="365" placeholder="fleet default" disabled />
+          </label>
+          <label>Analysis cap
+            <input id="maxAnalyses" type="number" min="1" placeholder="unlimited" />
+          </label>
+          <label class="wide">Note <span class="muted">(who it is for, PO number)</span>
+            <input id="note" placeholder="Prof. Chen, PO 4471" />
+          </label>
+        </div>
+
+        <div class="row">
+          <button id="mint">Issue licence</button>
+          <span id="mintHint" class="muted"></span>
+        </div>
+
+        <!-- The key is shown once and never again: only its hash is stored. -->
+        <div id="mintedBox" class="note" hidden>
+          <strong>Copy this key now.</strong> It is shown once — only a hash is
+          stored, so it cannot be recovered, only replaced. Keep it for support
+          recovery; the customer does not need it, and should not be sent it.
+          <p class="mono key" id="mintedKey"></p>
+          <button id="copyKey" class="secondary">Copy</button>
+        </div>
+      </section>
+
+      <!-- --------------------------------------------------- licences -->
+      <section class="card">
+        <div class="row">
+          <h2 style="margin:0">Licences</h2>
+          <span class="spacer"></span>
+          <input id="filter" placeholder="Filter by key, domain or email" size="28" />
+          <button id="reload" class="secondary">Refresh</button>
+        </div>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Key</th><th>Kind</th><th>Seats</th><th>Term</th>
+                <th>Status</th><th>Institution</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="licenceRows"></tbody>
+          </table>
+        </div>
+        <p class="muted" id="licencePaging"></p>
+      </section>
+
+      <!-- ------------------------------------------------------ roster -->
+      <section class="card" id="rosterCard" hidden>
+        <div class="row">
+          <h2 style="margin:0">Roster · <span id="rosterName" class="mono"></span></h2>
+          <span class="spacer"></span>
+          <button id="rosterClose" class="secondary">Close</button>
+        </div>
+        <div class="row">
+          <input id="memberEmail" type="email" placeholder="person@university.edu" size="28" />
+          <button id="addMember">Add to roster</button>
+          <span id="rosterHint" class="muted"></span>
+        </div>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr><th>Member</th><th>State</th><th>Device</th><th>Seat held until</th><th></th></tr>
+            </thead>
+            <tbody id="rosterRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- -------------------------------------------------- reconcile -->
+      <!-- The roster above is what IT believes. This is what the licence
+           actually entitles, which is not the same thing and cannot be made
+           the same thing: a revoke reaches the seat at once, the holder's
+           account a moment later, and the holder's device only when it next
+           checks in. -->
+      <section class="card" id="verifyCard" hidden>
+        <div class="row">
+          <h2 style="margin:0">Verified seats · <span id="verifyName" class="mono"></span></h2>
+          <span class="spacer"></span>
+          <button id="verifyReload" class="secondary">Re-check</button>
+          <button id="verifyClose" class="secondary">Close</button>
+        </div>
+        <p id="verifySummary"></p>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr><th>Member</th><th>Seat</th><th>What that means</th><th>Last seen</th></tr>
+            </thead>
+            <tbody id="verifyRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------ people -->
+      <section class="card">
+        <div class="row">
+          <h2 style="margin:0">Accounts awaiting approval</h2>
+          <span class="spacer"></span>
+          <button id="reloadUsers" class="secondary">Refresh</button>
+        </div>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr><th>Account</th><th>Name</th><th>Device</th><th></th></tr>
+            </thead>
+            <tbody id="userRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <p id="signedOut" class="muted">
+      Sign in with a Semper staff account to manage licences.
+    </p>
+  </main>
+
+  <script type="module" src="operator.js"></script>
+</body>
+</html>

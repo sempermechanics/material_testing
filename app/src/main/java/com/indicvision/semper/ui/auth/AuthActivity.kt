@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.lifecycleScope
+import com.google.firebase.auth.MultiFactorResolver
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.AUTH_HOST
@@ -58,6 +59,12 @@ class AuthActivity : AppCompatActivity() {
     /** The email/password just submitted, pending the outcome that validates it. */
     private var pendingCredential: Pair<String, String>? = null
 
+    /**
+     * Open TOTP challenge after first factor. Null until Firebase reports MFA.
+     * Cleared when the challenge succeeds or the user backs to first-factor form.
+     */
+    private var pendingTotp: Pair<MultiFactorResolver, String>? = null
+
     private lateinit var progressBar: ProgressBar
     private lateinit var layoutEmail: View
     private lateinit var etEmail: EditText
@@ -74,6 +81,10 @@ class AuthActivity : AppCompatActivity() {
     private lateinit var tvPasswordRules: TextView
     private lateinit var tvRegisterTermsHint: TextView
     private lateinit var btnGeneratePassword: com.google.android.material.button.MaterialButton
+    private lateinit var cardCredentials: View
+    private lateinit var cardTotp: View
+    private lateinit var etTotp: EditText
+    private lateinit var tvSubtitle: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -95,6 +106,10 @@ class AuthActivity : AppCompatActivity() {
         tvPasswordRules = findViewById(R.id.tvPasswordRules)
         tvRegisterTermsHint = findViewById(R.id.tvRegisterTermsHint)
         btnGeneratePassword = findViewById(R.id.btnGeneratePassword)
+        cardCredentials = findViewById(R.id.cardCredentials)
+        cardTotp = findViewById(R.id.cardTotp)
+        etTotp = findViewById(R.id.etTotp)
+        tvSubtitle = findViewById(R.id.tvSubtitle)
 
         btnGeneratePassword.setOnClickListener {
             val generated = PasswordPolicy.generate()
@@ -254,6 +269,10 @@ class AuthActivity : AppCompatActivity() {
     }
 
     private fun onMainAction() {
+        if (pendingTotp != null) {
+            onSubmitTotp()
+            return
+        }
         if (resetPasswordMode) {
             onConfirmPasswordReset()
             return
@@ -427,7 +446,13 @@ class AuthActivity : AppCompatActivity() {
                 setResult(RESULT_OK)
                 finish()
             },
-            onFailure = { showSnackbar(it.message ?: getString(R.string.reauth_failed), isError = true) },
+            onFailure = { error ->
+                if (error is AuthRepository.MfaTotpRequired) {
+                    onTotpRequired(error)
+                } else {
+                    showSnackbar(error.message ?: getString(R.string.reauth_failed), isError = true)
+                }
+            },
         )
     }
 
@@ -447,19 +472,71 @@ class AuthActivity : AppCompatActivity() {
                 // this Activity, so navigating away first cancels it out from
                 // under the user — which is exactly what it reported.
                 pendingCredential?.let { (email, password) -> offerToSavePassword(email, password) }
+                pendingTotp = null
                 // Through the router so the Terms gate runs before Pending/Home
                 // for every provider: password, Google, email link alike.
                 startActivity(AccessRouter.intentFor(this, AccessRouter.afterSignIn(status)))
                 finish()
             },
             onFailure = { error ->
-                if (error is AuthRepository.EmailVerificationRequired) {
-                    onVerificationPending(error)
-                } else {
-                    showSnackbar(error.message ?: getString(R.string.auth_sign_in_failed), isError = true)
+                when (error) {
+                    is AuthRepository.EmailVerificationRequired -> onVerificationPending(error)
+                    is AuthRepository.MfaTotpRequired -> onTotpRequired(error)
+                    else -> showSnackbar(
+                        error.message ?: getString(R.string.auth_sign_in_failed),
+                        isError = true,
+                    )
                 }
             },
         )
+    }
+
+    /**
+     * First factor succeeded; show the authenticator field. Enrolment stays on
+     * the websites — the phone only completes a challenge already set up there.
+     */
+    internal fun onTotpRequired(error: AuthRepository.MfaTotpRequired) {
+        pendingTotp = error.resolver to error.enrollmentId
+        enterTotpChallengeUi()
+        etTotp.requestFocus()
+    }
+
+    private fun onSubmitTotp() {
+        val pending = pendingTotp
+        if (pending == null) {
+            showSnackbar(getString(R.string.auth_sign_in_failed), isError = true)
+            return
+        }
+        val code = etTotp.text.toString().trim()
+        if (code.isEmpty()) {
+            showSnackbar(getString(R.string.auth_totp_empty), isError = true)
+            return
+        }
+        val (resolver, enrollmentId) = pending
+        if (reauthMode) {
+            setLoading(true)
+            lifecycleScope.launch {
+                finishReauth(authRepo.resolveTotpChallenge(resolver, enrollmentId, code))
+            }
+            return
+        }
+        runAuth { authRepo.completeTotpChallenge(resolver, enrollmentId, code) }
+    }
+
+    /**
+     * Show the authenticator form without a live Firebase resolver. Used by
+     * unit tests that prove the prompt appears; a real [onTotpRequired] still
+     * supplies the resolver before submit can succeed.
+     */
+    internal fun enterTotpChallengeUi() {
+        cardCredentials.visibility = View.GONE
+        cardTotp.visibility = View.VISIBLE
+        btnGoogle.visibility = View.GONE
+        googleOrDivider.visibility = View.GONE
+        tvToggle.visibility = View.GONE
+        tvSubtitle.text = getString(R.string.auth_totp_subtitle)
+        btnMain.setText(R.string.auth_totp_verify)
+        etTotp.setText("")
     }
 
     /**

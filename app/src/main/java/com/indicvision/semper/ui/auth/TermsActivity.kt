@@ -44,7 +44,7 @@ class TermsActivity : AppCompatActivity() {
 
     /** Seam for tests: declining must sign out, and the JVM has no Firebase to sign out of. */
     @VisibleForTesting
-    internal var signOut: () -> Unit = { authRepo.signOut() }
+    internal var signOut: suspend () -> Unit = { authRepo.signOut() }
 
     private lateinit var cbAgree: CheckBox
     private lateinit var cbImprove: CheckBox
@@ -110,11 +110,20 @@ class TermsActivity : AppCompatActivity() {
     }
 
     private fun onDecline() {
-        signOut()
-        val intent = Intent(this, AuthActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        startActivity(intent)
-        finish()
+        // Sign-out releases a floating seat over the network first, so it is
+        // suspending; the local exit happens whether or not that succeeds.
+        lifecycleScope.launch {
+            try {
+                signOut()
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Timber.e(e, "Sign-out on decline failed, forcing local exit.")
+            } finally {
+                val intent = Intent(this@TermsActivity, AuthActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            }
+        }
     }
 
     private fun continueToDestination() {

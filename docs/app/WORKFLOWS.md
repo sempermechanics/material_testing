@@ -231,6 +231,7 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 |---|---|---|
 | [ ] 4.1 | Open Settings | All seven sections are collapsed; chevrons rotate on tap |
 | [ ] 4.2 | Expand **Account** | Your email and "Device ID · …" are shown; the device ID can be selected and copied |
+| [ ] 4.2a | Expand **Account** on a licensed account | "Licensed as SEMP-…" is shown below the device ID — the key prefix support asks for, never the key. Absent on demo |
 | [ ] 4.3 | Expand **Account** as a non-admin | No "Pending access requests" button |
 | [ ] 4.4 | Expand **Account** as an admin | The button appears and opens the admin list |
 | [ ] 4.5 | Turn **Save to cloud** on with local-only analyses present | A dialog offers to back up N of them |
@@ -731,6 +732,56 @@ sweep hitting the cap, or a background upload rejected with a quota error.
 | [ ] 9.4 | Tap **Re-check** while still at the cap | "Still at the limit" |
 | [ ] 9.5 | Delete an analysis elsewhere, then tap **Re-check** | The screen closes and you can start a new analysis |
 | [ ] 9.6 | Tap **Back to my analyses** | Home |
+
+**Where the cap (`M`) comes from.** `LicenseEntitlements.analysisCap()` reads
+`AppRemoteConfig`, which is populated from the backend's `GET /v1/config` (see
+[CLOUD_ARCHITECTURE_GCP.md §20](../backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements)):
+
+- **Demo** (the default for every account until activated): capped at 25
+  saved analyses, this screen included.
+- **Professional — individual key**: no local analysis cap
+  (`analysisCap()` returns unlimited); Semper staff mint and hand over the key.
+- **Professional — institution seat**: identical entitlement to an
+  individual key (uncapped) — an institution seat and an individual key resolve to
+  the exact same `mode=licensed` on device. What differs is only how the
+  seat is administered: institution IT self-service via backend routes (see
+  §20.4 of the doc above), not Semper staff, and not through this app.
+
+**Status at this revision.** There is no screen to type a key into, and there
+is not meant to be one. A licence is minted against the customer's email
+address and attaches at their next sign-in — an individual licence directly, an
+institution seat through the roster — so nothing is read off a phone, dictated,
+or typed. `POST /v1/licenses/activate` and `IndicApi.activateLicense()` remain
+for support recovery and have no caller in `app/src/`. What the app shows of a
+licence is its prefix, in Settings → Account (4.2a); the key itself never
+reaches the device. This screen's behaviour for a Professional account is
+unaffected either way: once `GET /v1/config` reports `mode=licensed`, the cap
+does not apply and 9.1 never triggers.
+
+**9.4 No seat right now (floating institution licence).** A separate gate from
+this screen, and not a limit: the account is on the roster but every seat is in
+use. It appears when starting new work — the Home **+** button, before the
+Import/Record menu opens, and again at Compute for a run started from inside an
+analysis. Saved analyses stay open throughout, and a run already in flight is
+never interrupted.
+
+The screen is one button that asks for a seat again. Unlike 9.1 it needs no
+email to support: seats free themselves as colleagues finish.
+
+**9.3 License expiry notice (Home).** Separate from this screen, and not a
+gate. A licensed account whose key expires within 14 days — or which is past
+expiry but still inside its grace window — shows a small chip under the Home
+title: "License expires in N days", or "License expired — still working, email
+support to renew". Nothing is withdrawn while it shows; during grace the
+account keeps cloud backup, share and the uncapped analysis count, and the only
+thing that ever changes entitlement is the backend flipping `mode` to `demo`
+once grace ends (at which point 9.1 applies exactly as it does for any Demo
+account).
+
+The chip is suppressed when the cached config is more than a week old. A
+renewal may have landed while the device was offline, and warning from a stale
+cache would be a false alarm the user cannot act on. A perpetual license never
+shows it.
 
 ---
 

@@ -12,8 +12,11 @@ import com.indicvision.semper.R
 import kotlinx.coroutines.launch
 
 /**
- * Observes [AnalysisViewModel] batch progress/outcome and routes terminal
- * results into UI callbacks owned by [StaticAnalysisActivity].
+ * Observes [AnalysisViewModel] batch and sweep progress/outcome and routes
+ * terminal results into UI callbacks owned by [StaticAnalysisActivity].
+ *
+ * Both runs live on the view model's scope, so this is the only place that
+ * knows whether an Activity is still around to be told how they ended.
  */
 @SuppressLint("SetTextI18n") // same result strings as the former Activity handlers
 @Suppress("LongParameterList") // Activity-bound callbacks; grouping would just rename the fan-out
@@ -29,6 +32,8 @@ class BatchRunController(
     private val engineFailureMessage: (code: Int, frameIndex: Int, frameName: String?) -> String,
     private val showEngineFailureDialog: (code: Int, titleRes: Int, frameIndex: Int, frameName: String?) -> Unit,
     private val clearEngineFailFaq: () -> Unit,
+    private val onSweepProgress: (VsgStudyRunner.Progress) -> Unit,
+    private val onSweepFinished: (AnalysisViewModel.BatchAnalysisOutcome?) -> Unit,
 ) {
 
     fun observe() {
@@ -51,8 +56,32 @@ class BatchRunController(
                         handleBatchOutcome(result)
                     }
                 }
+                launch {
+                    viewModel.sweepProgress.collect { progress ->
+                        if (progress != null) onSweepProgress(progress)
+                    }
+                }
+                launch {
+                    viewModel.sweepOutcome.collect { result ->
+                        handleSweepOutcome(result)
+                    }
+                }
             }
         }
+    }
+
+    /**
+     * A sweep ends with the same chrome teardown as a batch run but its own
+     * routing: the lattice, not the frame viewer, is what a finished sweep
+     * opens. A failure is reported as a null outcome, which is the shape
+     * [onSweepFinished] already branched on.
+     */
+    private fun handleSweepOutcome(result: Result<AnalysisViewModel.BatchAnalysisOutcome>) {
+        setProcessing(false)
+        overlayHelper.hide()
+        activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        checkReady()
+        onSweepFinished(result.getOrNull())
     }
 
     private fun handleBatchOutcome(result: Result<AnalysisViewModel.BatchAnalysisOutcome>) {

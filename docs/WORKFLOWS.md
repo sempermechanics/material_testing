@@ -433,7 +433,7 @@ pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access),
 | C3 | Mint a nonce | `POST /v1/challenge` | `firestore_repo.issue_nonce(uid, deviceId)` — single-use, bound to the pair |
 | C4 | Verify a device-signed call | `deps.verified_device` | ACTIVE device → `consume_nonce` (replay = 401) → ECDSA P-256 over `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → `bad_signature` audited on failure |
 | C4a | Legacy `/uploads` reader | `deps.device_or_legacy_reader` | Temporary window: an *unattested* read of the resume list is accepted while `REQUIRE_ATTESTED_UPLOADS` is unset, logged as `legacy_unattested_uploads`. Any device header, or the flag, forces the strict path. Retire per [ops/FUTURE_IMPROVEMENTS.md](ops/FUTURE_IMPROVEMENTS.md) |
-| C14 | Admin | `routers/admin.py` | Listing needs only an admin ID token; **approve / revoke / config-patch also require `verified_device`**, so a stolen ID token cannot change access. All audited |
+| C14 | Admin | `routers/admin.py` | Listing and **device-history** need only an admin ID token; **approve / revoke / config-patch / mint additionally require a step-up** — a device attestation, or a second factor plus a recent sign-in for the staff console — so a stolen ID token alone cannot change access. Whole-licence revoke uses a tighter freshness window. All audited |
 
 ### Account and identity routes
 

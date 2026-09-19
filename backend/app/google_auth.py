@@ -10,7 +10,7 @@ import functools
 
 import firebase_admin
 import google.auth
-from firebase_admin import auth as fb_auth
+from firebase_admin import app_check as fb_app_check, auth as fb_auth
 from google.auth import impersonated_credentials
 from google.auth.transport.requests import Request as GRequest
 
@@ -69,3 +69,18 @@ def verify_id_token(token: str) -> dict:
     and land PENDING.
     """
     return fb_auth.verify_id_token(token)
+
+
+def verify_app_check_token(token: str) -> dict:
+    """Verify a **Firebase App Check** token; raises on failure.
+
+    Proves the call came from a genuine, unmodified build of the app on a real
+    device (Play Integrity on Android), which an ID token cannot: the Web API
+    key that mints ID tokens ships inside the APK and is an identifier, not a
+    secret. Attests the *binary*; `verify_id_token` attests the *account*, and
+    `deps.verified_device` attests the *device*. Three separate questions.
+
+    Needs no extra credential — the same ADC app initialised above verifies
+    against the project's App Check public keys, which firebase-admin caches.
+    """
+    return fb_app_check.verify_token(token)

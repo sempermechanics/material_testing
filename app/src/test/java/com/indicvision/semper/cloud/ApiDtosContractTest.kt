@@ -1,8 +1,11 @@
 package com.indicvision.semper.cloud
 
+import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.DeviceRegisterRequest
 import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.FileSpecDto
+import com.indicvision.semper.data.net.LicenseActivateRequest
+import com.indicvision.semper.data.net.LicenseActivateResponse
 import com.indicvision.semper.data.net.ListSessionsResponse
 import com.indicvision.semper.data.net.MeResponse
 import com.indicvision.semper.data.net.SessionCreateRequest
@@ -12,6 +15,7 @@ import com.indicvision.semper.data.net.SessionUploadsResponse
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -153,6 +157,118 @@ class ApiDtosContractTest {
         )) {
             assertTrue("missing $key in $encoded", encoded.contains(key))
         }
+    }
+
+    // ---------------------------------------------------------- licensing
+
+    @Test
+    fun `config response decodes mode and licenseKind for an institution seat`() {
+        val cfg = json.decodeFromString<AppConfigDto>(
+            """
+            {"maxSessions":0,"maxFilesPerSession":0,"maxFrames":0,
+             "mode":"licensed","plan":"professional","cloudBackupEnabled":true,
+             "shareEnabled":true,"licensePrefix":"SEMP-AB12",
+             "licenseKind":"institution"}
+            """.trimIndent(),
+        )
+        assertEquals("licensed", cfg.mode)
+        assertEquals("professional", cfg.plan)
+        assertTrue(cfg.cloudBackupEnabled)
+        assertEquals("institution", cfg.licenseKind)
+    }
+
+    @Test
+    fun `config response missing mode still decodes the plan mirror`() {
+        // A backend deploy predating the plan->mode rename sends only `plan`.
+        // `mode` decodes blank, which AppRemoteConfig reads as "not told" and
+        // resolves from the mirror — not as demo.
+        val cfg = json.decodeFromString<AppConfigDto>("""{"plan":"professional"}""")
+        assertEquals("", cfg.mode)
+        assertEquals("professional", cfg.plan)
+    }
+
+    @Test
+    fun `config response missing plan mirror still decodes mode`() {
+        // The mirror is dropped once the fleet has moved; `mode` alone must
+        // keep decoding, and the mirror's own default must not contradict it.
+        val cfg = json.decodeFromString<AppConfigDto>("""{"mode":"licensed"}""")
+        assertEquals("licensed", cfg.mode)
+    }
+
+    @Test
+    fun `config response missing licenseKind fails closed to blank not campus or individual`() {
+        // An older backend deploy this app talks to may not send licenseKind
+        // yet — must not be misread as either shape.
+        val cfg = json.decodeFromString<AppConfigDto>("""{"plan":"professional"}""")
+        assertEquals("", cfg.licenseKind)
+    }
+
+    @Test
+    fun `config response decodes the license duration and grace fields`() {
+        val cfg = json.decodeFromString<AppConfigDto>(
+            """
+            {"mode":"licensed","licenseDuration":"timed",
+             "licenseExpiresAt":"2027-03-01T00:00:00Z",
+             "licenseGraceEndsAt":"2027-03-15T00:00:00Z","inGrace":true}
+            """.trimIndent(),
+        )
+        assertEquals("timed", cfg.licenseDuration)
+        assertEquals("2027-03-01T00:00:00Z", cfg.licenseExpiresAt)
+        assertEquals("2027-03-15T00:00:00Z", cfg.licenseGraceEndsAt)
+        assertTrue(cfg.inGrace)
+    }
+
+    @Test
+    fun `config response without duration fields decodes as a perpetual license`() {
+        // A backend deploy predating duration sends none of them. Null expiry
+        // and inGrace=false is exactly "nothing to warn about", which is the
+        // right reading — not "expired at the epoch".
+        val cfg = json.decodeFromString<AppConfigDto>("""{"mode":"licensed"}""")
+        assertEquals("", cfg.licenseDuration)
+        assertNull(cfg.licenseExpiresAt)
+        assertNull(cfg.licenseGraceEndsAt)
+        assertFalse(cfg.inGrace)
+    }
+
+    @Test
+    fun `config response decodes the floating seat fields`() {
+        val cfg = json.decodeFromString<AppConfigDto>(
+            """
+            {"mode":"licensed","licenseKind":"institution","licenseSeating":"floating",
+             "leaseExpiresAt":"2027-03-01T00:00:00Z","leaseHeartbeatMinutes":30}
+            """.trimIndent(),
+        )
+        assertEquals("floating", cfg.licenseSeating)
+        assertEquals("2027-03-01T00:00:00Z", cfg.leaseExpiresAt)
+        assertEquals(30, cfg.leaseHeartbeatMinutes)
+    }
+
+    @Test
+    fun `config response without seating decodes blank, which reads as assigned`() {
+        // A deploy predating floating seats sends nothing here. Blank must not
+        // be misread as floating, or every institution user would be gated.
+        val cfg = json.decodeFromString<AppConfigDto>("""{"mode":"licensed"}""")
+        assertEquals("", cfg.licenseSeating)
+        assertNull(cfg.leaseExpiresAt)
+        assertEquals(0, cfg.leaseHeartbeatMinutes)
+    }
+
+    @Test
+    fun `license activate request encodes the exact backend field name`() {
+        val encoded = json.encodeToString(LicenseActivateRequest(key = "SEMP-AAAA-BBBB-CCCC-DDDD"))
+        assertTrue(encoded.contains("\"key\""))
+        assertTrue(encoded.contains("SEMP-AAAA-BBBB-CCCC-DDDD"))
+    }
+
+    @Test
+    fun `license activate response decodes the nested config`() {
+        val resp = json.decodeFromString<LicenseActivateResponse>(
+            """{"config":{"mode":"licensed","plan":"professional","cloudBackupEnabled":true,
+                "shareEnabled":true,"licensePrefix":"SEMP-ZZ99","licenseKind":"individual"}}""",
+        )
+        assertEquals("licensed", resp.config.mode)
+        assertEquals("professional", resp.config.plan)
+        assertEquals("individual", resp.config.licenseKind)
     }
 
     @Test
