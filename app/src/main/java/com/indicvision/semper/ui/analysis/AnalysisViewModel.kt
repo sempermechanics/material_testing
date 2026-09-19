@@ -21,7 +21,7 @@ import androidx.lifecycle.viewModelScope
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
-import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionRecordSettings
 import com.indicvision.semper.data.SessionRepository
@@ -545,7 +545,7 @@ class AnalysisViewModel : ViewModel() {
             )
         }
 
-        val cloudEnabled = DicSettings.saveToCloud(appContext)
+        val cloudEnabled = CloudSync.uploadsEnabled(appContext)
         val first = result.runs.first().point
         val defDisplay = rawName.ifBlank {
             defOriginalNames.getOrNull(frameIndex) ?: File(defFilePaths[frameIndex]).name

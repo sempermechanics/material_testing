@@ -148,10 +148,31 @@ def test_revoke_professional_drops_user_to_demo(store):
     assert store._data["users"]["u1"]["plan"] == "demo"
 
 
-@pytest.mark.asyncio
-async def test_demo_cannot_create_session(client, monkeypatch):
-    fake_firestore.install(monkeypatch)
+def _recording_stubs(monkeypatch):
+    """Everything POST /v1/sessions touches besides Firestore, stubbed the way
+    test_async_provisioning does — this file only cares about the gate."""
+    from app import audit, drive, tasks
+
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    monkeypatch.setattr(audit, "record", lambda *a, **k: None)
+    monkeypatch.setattr(drive, "access_token", lambda: "tok")
+    monkeypatch.setattr(
+        drive, "ensure_session_folders",
+        lambda *a, **k: {"sessionFolderId": "sf", "userFolderId": "uf", "bundle": "sf"},
+    )
+    monkeypatch.setattr(drive, "init_resumable", lambda *a, **k: "https://drive/resumable")
+    monkeypatch.setattr(tasks, "enqueue_provision", lambda sid: True)
+
+
+@pytest.mark.asyncio
+async def test_demo_records_an_analysis(client, monkeypatch):
+    """Recording is open to demo. A demo account's frames and results are
+    stored; what it cannot do is read them back (see the content and bundle
+    tests). Installed builds that predate licensing retry a 403 from this
+    route forever, so the gate must never come back here."""
+    store = fake_firestore.install(monkeypatch)
+    store._data["users"] = {"dev-user": {"email": "dev@test", "access_status": "APPROVED"}}
+    _recording_stubs(monkeypatch)
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "mode": "demo", "plan": "demo"})
     resp = await client.post(
         "/v1/sessions",
@@ -160,6 +181,22 @@ async def test_demo_cannot_create_session(client, monkeypatch):
             "files": [{"name": "Session.zip", "role": "bundle", "bytes": 10, "sha256": "a" * 64}],
         },
     )
+    assert resp.status_code == 200
+    assert resp.json()["sessionId"] in store._data["sessions"]
+
+
+@pytest.mark.asyncio
+async def test_demo_cannot_read_a_stored_file_back(client, monkeypatch):
+    """The licensed half: retrieval. The file exists and belongs to the caller;
+    a demo account is refused before any Drive read."""
+    from app import drive
+
+    store = fake_firestore.install(monkeypatch)
+    store._data["files"] = {"f1": {"uid": "dev-user", "driveFileId": "d1", "name": "a.zip"}}
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    monkeypatch.setattr(drive, "access_token", lambda: "tok")
+    monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "mode": "demo", "plan": "demo"})
+    resp = await client.get("/v1/files/f1/content")
     assert resp.status_code == 403
     assert resp.json()["detail"] == "feature_not_licensed"
 
@@ -411,10 +448,10 @@ def test_activation_is_in_place_session_data_untouched(store):
         }
 
 
-def test_downgrade_preserves_data_blocks_creation_then_reactivation_restores(store, monkeypatch):
+def test_downgrade_preserves_data_blocks_retrieval_then_reactivation_restores(store, monkeypatch):
     """Seed >25 sessions as Professional, downgrade (revoke), assert nothing is
-    deleted and new cloud creation is blocked, then re-activate and confirm
-    creation is restored with zero data loss."""
+    deleted and retrieval (`cloudBackupEnabled`) is withdrawn, then re-activate
+    and confirm it comes back with zero data loss. Recording was never gated."""
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
         "u1": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
@@ -457,28 +494,33 @@ def test_downgrade_preserves_data_blocks_creation_then_reactivation_restores(sto
 
 
 @pytest.mark.asyncio
-async def test_demo_after_downgrade_still_blocked_from_new_cloud_session(client, monkeypatch):
+async def test_demo_after_downgrade_still_records_but_cannot_restore(client, monkeypatch):
     # DEV_INSECURE_AUTH's verified_device()/current_user() resolve the caller
     # from the literal deps._DEV_USER dict, not a Firestore read — so the
-    # gate under test (resolve_user_config(user)["cloudBackupEnabled"]) must
-    # be driven by patching that dict's plan, exactly like the pre-existing
-    # test_demo_cannot_create_session does. This simulates "the account was
-    # just downgraded" (see test_downgrade_preserves_data_... above for the
-    # repo-level proof that revoke never touches session data).
-    from app import deps
+    # entitlement under test must be driven by patching that dict's mode.
+    # This simulates "the account was just downgraded" (see
+    # test_downgrade_preserves_data_... above for the repo-level proof that
+    # revoke never touches session data): the next analysis is still
+    # recorded, and the stored one is refused on the way back out.
+    from app import deps, drive
 
-    fake_firestore.install(monkeypatch)
-    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    store = fake_firestore.install(monkeypatch)
+    store._data["users"] = {"dev-user": {"email": "dev@test", "access_status": "APPROVED"}}
+    store._data["files"] = {"f1": {"uid": "dev-user", "driveFileId": "d1", "name": "a.zip"}}
+    _recording_stubs(monkeypatch)
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "mode": "demo", "plan": "demo"})
-    resp = await client.post(
+    created = await client.post(
         "/v1/sessions",
         json={
             "specimen": "s",
             "files": [{"name": "Session.zip", "role": "bundle", "bytes": 10, "sha256": "a" * 64}],
         },
     )
-    assert resp.status_code == 403
-    assert resp.json()["detail"] == "feature_not_licensed"
+    assert created.status_code == 200
+    monkeypatch.setattr(drive, "access_token", lambda: "tok")
+    restored = await client.get("/v1/files/f1/content")
+    assert restored.status_code == 403
+    assert restored.json()["detail"] == "feature_not_licensed"
 
 
 def test_device_lock_is_revalidated_on_every_authed_call_not_just_at_activation(store):
@@ -1719,6 +1761,117 @@ def test_a_demo_key_minted_first_is_removed_when_the_licence_lands(store):
 
     assert store._data["users"]["solo-1"]["licenseId"] == license_id
     assert list(store._data["licenses"]) == [license_id]
+
+
+# ================================================ minting for an existing account
+# Every account that predates licensing holds a Demo key by the time ops mints
+# for it, and `claim_pending_invite` never runs for an account holding a
+# licence — so a mint against an address that has already signed in has to
+# attach directly, the way `add_institution_member` does for a seat.
+
+
+def test_minting_for_a_signed_in_demo_account_attaches_at_once(store):
+    store._data["users"] = {}
+    user = _signed_in(store, "solo-1", "solo@lab.org")
+    demo_id = repo.ensure_demo_license(user, "and-1")["licenseId"]
+
+    minted = _mint_individual()
+    license_id = minted["license"]["id"]
+
+    assert (minted["claimedByUid"], minted["claimError"]) == ("solo-1", "")
+    holder = store._data["users"]["solo-1"]
+    assert holder["licenseId"] == license_id
+    assert holder["mode"] == "licensed"
+    assert store._data["licenses"][license_id]["redeemedByUid"] == "solo-1"
+    assert store._data["licenses"][license_id]["status"] == "redeemed"
+    # The invite was consumed in the claim and the Demo key nobody holds is gone.
+    assert store._data["licenseInvites"] == {}
+    assert demo_id not in store._data["licenses"]
+    # And the sign-in path leaves it alone afterwards.
+    after = repo.ensure_entitlement({**holder, "uid": "solo-1"}, "and-1")
+    assert after["licenseId"] == license_id
+
+
+def test_minting_for_an_account_that_predates_licensing_attaches_too(store):
+    """The shape every user document has on the day licensing deploys: no
+    `mode`, no `licenseId`, nothing stamped yet."""
+    store._data["users"] = {"old-1": {
+        "email": "old@lab.org", "access_status": "APPROVED", "emailVerified": True,
+    }}
+    minted = _mint_individual(email="old@lab.org")
+    assert minted["claimedByUid"] == "old-1"
+    assert store._data["users"]["old-1"]["licenseId"] == minted["license"]["id"]
+    assert repo.effective_mode({**store._data["users"]["old-1"], "uid": "old-1"}) == "licensed"
+
+
+def test_minting_for_an_unverified_or_pending_account_leaves_the_invite(store):
+    """Fail closed exactly as sign-in does: the address is the whole claim.
+    Neither account holds a Demo key yet, so the invite still delivers the
+    moment they qualify."""
+    store._data["users"] = {
+        "p-1": {"email": "pending@lab.org", "access_status": "PENDING", "emailVerified": True},
+        "v-1": {"email": "unverified@lab.org", "access_status": "APPROVED",
+                "emailVerified": False},
+    }
+    for address, uid in (("pending@lab.org", "p-1"), ("unverified@lab.org", "v-1")):
+        minted = _mint_individual(email=address)
+        assert (minted["claimedByUid"], minted["claimError"]) == ("", "")
+        assert "licenseId" not in store._data["users"][uid]
+    assert len(store._data["licenseInvites"]) == 2
+
+    # Verification arrives; the invite is claimed on that request.
+    verified = {**store._data["users"]["v-1"], "uid": "v-1", "emailVerified": True}
+    store._data["users"]["v-1"]["emailVerified"] = True
+    claimed = repo.ensure_entitlement(verified, "and-1")
+    assert claimed["mode"] == "licensed"
+
+
+def test_minting_for_a_live_licence_holder_is_refused_not_overwritten(store):
+    store._data["users"] = {}
+    first = _mint_individual()
+    _signed_in(store, "solo-1", "solo@lab.org")
+    assert repo.ensure_entitlement(
+        {**store._data["users"]["solo-1"], "uid": "solo-1"}, "and-1",
+    )["licenseId"] == first["license"]["id"]
+
+    second = _mint_individual()
+
+    # The first invite was consumed when it was claimed, so the second mint
+    # records a fresh one — but the holder is not moved off a live licence.
+    # The invite stays for ops to resolve, and the response says why.
+    assert second["inviteError"] == ""
+    assert (second["claimedByUid"], second["claimError"]) == ("", "holder_already_licensed")
+    assert store._data["users"]["solo-1"]["licenseId"] == first["license"]["id"]
+    assert [i["licenseId"] for i in store._data["licenseInvites"].values()] ==         [second["license"]["id"]]
+
+
+def test_minting_again_for_a_revoked_holder_re_attaches(store):
+    """Revoke leaves the holder demoted in place, still pointing at the dead
+    licence. A fresh mint is how they come back."""
+    store._data["users"] = {}
+    first = _mint_individual()
+    _signed_in(store, "solo-1", "solo@lab.org")
+    repo.ensure_entitlement({**store._data["users"]["solo-1"], "uid": "solo-1"}, "and-1")
+    repo.revoke_license(first["license"]["id"], "admin")
+    assert store._data["users"]["solo-1"]["mode"] == "demo"
+
+    second = _mint_individual()
+
+    assert second["claimedByUid"] == "solo-1"
+    assert store._data["users"]["solo-1"]["licenseId"] == second["license"]["id"]
+    assert store._data["users"]["solo-1"]["mode"] == "licensed"
+
+
+def test_a_contended_direct_claim_is_reported_not_hidden(store, monkeypatch):
+    store._data["users"] = {}
+    user = _signed_in(store, "solo-1", "solo@lab.org")
+    repo.ensure_demo_license(user, "and-1")
+    _always_contended(monkeypatch)
+
+    minted = _mint_individual()
+
+    assert (minted["claimedByUid"], minted["claimError"]) == ("", "claim_contended")
+    assert minted["claimError"] != repo._CONTENDED
 
 
 def test_a_seat_also_clears_the_demo_key_it_replaces(store):

@@ -143,6 +143,100 @@ build that calls them ships, or every sign-in ends at an unrecordable gate.
       `X-Device-Id`; the web console has no consent UI yet. Either add one or
       note that withdrawal is app- or support-mailbox-only (the policy says both).
 
+### Licensing rollout (PR #100 → `feat/licensing-go-live`)
+
+Everything pending, deferred or delayed for taking licensing live. The hard
+constraint: **installed builds that predate licensing (v1.1-beta.5, v1.2-beta.0)
+must keep working** — every pre-existing account resolves to demo on the first
+request after the deploy, so demo must be able to do what those builds do.
+Product decision: *demo analyses are recorded (images and results are uploaded
+and stored) but demo has no backup/restore feature.* Recording is open;
+retrieval (`/content`, bundle) is licensed. Ops steps in order:
+
+**Before the deploy**
+
+- [x] Full CI green on the #100 tip (run `35433845913` after the E741 fix);
+      `gh pr merge 100 --merge`.
+- [ ] `feat/licensing-go-live` merged to `main` **before** any backend deploy
+      from `main` — it removes the `403` on `POST /v1/sessions` that would
+      make every old build's upload worker retry forever.
+- [ ] Create the five repository variables `deploy-backend.yml` now pins:
+      `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`,
+      `ADMIN_WEB_MFA_ENABLED` (`1`), `APP_CHECK_MODE` (`off`),
+      `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (`30`). Unset resolves to those
+      defaults, but set them so the value is a decision, not an accident.
+- [ ] Choose `DEMO_MAX_ANALYSES` from a read-only Firestore survey: it must be
+      ≥ max(live `MAX_SESSIONS_PER_USER`, the largest per-user `maxSessions`
+      override, the largest per-uid session count) or an existing user 409s on
+      the next upload. Confirm no user document already carries `mode` /
+      `licenseId`.
+- [ ] `gcloud run services describe indic-api --format=yaml > indic-api-before.yaml`;
+      note the serving revision (rollback target) and confirm
+      `REQUIRE_ATTESTED_UPLOADS=1`, no `DEV_INSECURE_AUTH`.
+- [ ] PITR on and a fresh export (`gh workflow run firestore-backup.yml`); note
+      the path. Firestore is never rolled back by the deploy.
+
+**Staging** (same project → same Firestore; migration 002 is a no-op on
+pre-licensing documents)
+
+- [ ] `deploy-backend.yml` with `environment=staging`; `migrate_schema.py`
+      dry-run (expect 0 changes) then `--apply`; ledger row written.
+- [ ] `GET /v1/config` with an ID token → `mode: demo`, `plan: demo`,
+      `cloudBackupEnabled: false`, `maxSessions: <DEMO_MAX_ANALYSES>`.
+- [ ] Old-APK pass (debug build from `bcc467a`, `INDIC_API_BASE_URL` = staging):
+      sign in, back up one analysis (201 + upload completes), **restore fails
+      once with "rejected" and does not loop**, delete, export.
+- [ ] Mint an individual licence against that account → response carries
+      `claimedByUid` → `/v1/config` flips to `mode: licensed` → restore
+      succeeds. Mint against an address with no account → invite retained.
+
+**Production**
+
+- [ ] `deploy-backend.yml` with `environment=production` (candidate → `/readyz`
+      → promote; auto-rollback on failure). Read the "Describe live env"
+      warning: after promote, `--remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER`.
+- [ ] Gateway: new `api-config` from the substituted spec, `gateways update`,
+      `PREV_CFG` recorded ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)
+      "Redeploying the gateway"). Unauthenticated `/v1/config` → **401**, not 404.
+- [ ] Verify with the **installed, unmodified** old app: sign-in, new backup,
+      delete, export succeed; restore shows one refusal.
+- [ ] Verify with a new-app build: Terms gate, one account receives a demo key
+      (`licenses/` gains a `createdByUid: system` document), Home shows no
+      sync badge and Settings shows no Cloud/Analyses-data section on demo.
+- [ ] Consoles last: Identity Platform + TOTP enabled
+      ([console README](../../console/README.md)), `firebase deploy --only
+      firestore:indexes`, `./scripts/deploy-console.sh`, hand-check `/login`.
+- [ ] 24 h log watch: `feature_not_licensed` only from restore/bundle by demo
+      accounts (never from `POST /v1/sessions`); `app_check_required` **= 0**;
+      `session_quota_exceeded`; `license_device_mismatch`; `mfa_required`;
+      5xx rate; Cloud Tasks backlog.
+
+**Deferred / risk-accepted for launch**
+
+- [ ] **Legal wording for demo recording.** Terms §7.2 licenses "syncing or
+      uploading Your Content" generically, but the Privacy Policy reads as
+      user-elected sync ("metrics you sync", "the cloud path is optional").
+      On demo the upload is automatic with no toggle. Add one sentence to
+      Privacy §2.3 and Terms §6.1 stating demo analyses are uploaded and
+      stored and cannot be restored on the Demo plan; regenerate with
+      `scripts/render_legal_pages.py`; deploy Hosting. **Before the next app
+      release**, together with the bracketed operator fields above.
+- [ ] Google Play **Data safety** form: demo analysis content (images,
+      results) is uploaded to the operator's cloud.
+- [ ] Floating institution pools: not minted at launch; the lease routes ship
+      dormant.
+- [ ] `APP_CHECK_MODE` stays `off`. Move to `monitor` only once an App Check
+      build is the fleet; **never** `enforce` while a pre-App-Check build is
+      installed (every request from it would 403).
+- [ ] §20.5 skew fallbacks (`plan` mirror, `/v1/campus/*` aliases) stay until
+      adoption of a `mode`-reading build is high enough; retire in that order.
+- [ ] Gateway deploy job (TD-27): manual runbook for now.
+- [ ] Per-user `maxSessions` override ignored in demo (TD-28): lifting one demo
+      account's cap means attaching a licence.
+- [ ] Old-app restore UX: a pre-licensing build shows a generic "rejected"
+      message on restore; there is no way to tell it "licence required".
+      Accepted — it fails once and stops.
+
 ## Contention fixes found by the emulator tier
 
 Wiring the Firestore emulator into CI immediately falsified three assumptions the

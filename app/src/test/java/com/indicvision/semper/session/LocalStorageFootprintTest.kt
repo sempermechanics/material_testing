@@ -10,6 +10,8 @@ import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.StorageBudget
+import com.indicvision.semper.data.net.AppConfigDto
+import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.analysis.FrameImportHelper
 import org.junit.After
@@ -43,12 +45,16 @@ class LocalStorageFootprintTest {
         SessionStore.deleteAll(ctx)
         DicSettings.setAutoFreeBudgetGb(ctx, DicSettings.AUTO_FREE_OFF)
         ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+        // Eviction presumes the cloud copy can be pulled back, which is the
+        // licensed half of cloud; the demo case has its own test below.
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
     }
 
     @After
     fun tearDown() {
         SessionStore.deleteAll(ctx)
         TokenStore.clear(ctx)
+        AppRemoteConfig.clear(ctx)
         ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
     }
 
@@ -218,6 +224,20 @@ class LocalStorageFootprintTest {
 
         assertEquals(0, outcome.sessionsDropped)
         assertTrue(SessionStore.get(ctx, "synced")!!.hasLocalData())
+    }
+
+    @Test
+    fun `a demo account never gives up a local copy it cannot restore`() {
+        // Demo analyses are recorded, so they do reach SYNCED — but demo has
+        // no restore, so this phone still holds the only reachable copy.
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo", cloudBackupEnabled = false))
+        val synced = seedSession("synced", SessionRecord.SyncState.SYNCED)
+        DicSettings.setAutoFreeBudgetGb(ctx, 1)
+
+        assertEquals(0L, StorageBudget.reclaimableBytes(ctx))
+        assertEquals(0, StorageBudget.freeAllBackedUp(ctx).sessionsDropped)
+        assertEquals(0, StorageBudget.enforce(ctx).sessionsDropped)
+        assertTrue(File(synced, "frame_0000.dat").exists())
     }
 
     @Test

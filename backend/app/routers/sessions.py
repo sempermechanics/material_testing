@@ -376,11 +376,19 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
 
 @router.post("/v1/sessions")
 def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_device)):
+    """Record an analysis: create the session and hand back its upload slots.
+
+    Open to every approved account, demo included. Recording is not the
+    licensed feature — retrieval is. A demo account's frames and results are
+    stored under the same quota (`DEMO_MAX_ANALYSES`) and are never deleted
+    on downgrade; what a licence buys is getting them back (`/content` and
+    the session bundle), so the `cloudBackupEnabled` gate lives on those two
+    routes and deliberately not here. Installed builds that predate licensing
+    retry a 403 from this route forever, which is one more reason the gate
+    would be the wrong shape.
+    """
     user, device = ctx["user"], ctx["device"]
     cfg = repo.resolve_user_config(user)
-
-    if not cfg["cloudBackupEnabled"]:
-        raise HTTPException(403, "feature_not_licensed")
 
     if not rate_limit.session_bucket.allow(user["uid"]):
         raise HTTPException(429, errors.RATE_LIMITED)

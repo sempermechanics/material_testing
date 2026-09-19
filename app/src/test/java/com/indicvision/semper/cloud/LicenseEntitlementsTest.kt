@@ -2,6 +2,8 @@ package com.indicvision.semper.cloud
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.indicvision.semper.data.CloudSync
+import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.AppRemoteConfig
@@ -42,6 +44,7 @@ class LicenseEntitlementsTest {
     @After
     fun tearDown() {
         AppRemoteConfig.clear(ctx)
+        DicSettings.setSaveToCloud(ctx, true)
     }
 
     @Test
@@ -403,5 +406,36 @@ class LicenseEntitlementsTest {
             .commit()
 
         assertFalse(LicenseEntitlements.isLicensed(ctx))
+    }
+
+    // ── Recording vs. backup ────────────────────────────────────────────
+    //
+    // Recording an analysis (upload) is open to every account; only restore
+    // is licensed. Demo therefore always uploads, whatever the Settings
+    // toggle says — the toggle is not even shown to a demo account.
+
+    @Test
+    fun `demo always records, even with the save-to-cloud toggle off`() {
+        DicSettings.setSaveToCloud(ctx, false)
+        assertFalse(LicenseEntitlements.cloudBackupEnabled(ctx))
+        assertTrue(CloudSync.uploadsEnabled(ctx))
+    }
+
+    @Test
+    fun `a licensed account records only when the toggle is on`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
+        DicSettings.setSaveToCloud(ctx, true)
+        assertTrue(CloudSync.uploadsEnabled(ctx))
+        DicSettings.setSaveToCloud(ctx, false)
+        assertFalse(CloudSync.uploadsEnabled(ctx))
+    }
+
+    @Test
+    fun `a downgrade to demo resumes recording regardless of the old toggle`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
+        DicSettings.setSaveToCloud(ctx, false)
+        assertFalse(CloudSync.uploadsEnabled(ctx))
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo", cloudBackupEnabled = false))
+        assertTrue(CloudSync.uploadsEnabled(ctx))
     }
 }

@@ -155,7 +155,11 @@ def admin_create_license(
         target={"type": "license", "id": minted["license"]["id"]},
         detail={"kind": KIND_INDIVIDUAL, "emailLock": body.emailLock,
                 "deviceIdLock": body.deviceIdLock,
-                "inviteError": minted.get("inviteError") or ""},
+                "inviteError": minted.get("inviteError") or "",
+                # Set when the address already had an account, which the
+                # mint attached to directly (see _attach_to_existing_holder).
+                "claimedByUid": minted.get("claimedByUid") or "",
+                "claimError": minted.get("claimError") or ""},
     )
     return minted
 

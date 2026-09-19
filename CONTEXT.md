@@ -131,7 +131,7 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-18)
+## Current state (2026-09-19)
 
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
@@ -244,8 +244,12 @@ wizard step/overlap + step-2/3 reorder
 Refresh with `gh pr list --state open` — anything named here will rot.
 
 **Licensing ([#100](https://github.com/sempermechanics/semperdic-app/pull/100),
-`feat/license-demo-pro`).** Feature-complete on the branch; what is left is ops,
-at the end of this section. It extends flat demo/licensed into two licensed
+`feat/license-demo-pro`; go-live follow-up on `feat/licensing-go-live`).**
+Feature-complete; #100 merges as-is once its full-CI run is green, and the
+follow-up branch must land **before** any backend deploy from `main` (see
+*Demo records* below). What is left after that is ops, at the end of this
+section and, checkbox by checkbox, in the "Licensing rollout" section of
+[docs/ops/PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md). It extends flat demo/licensed into two licensed
 shapes and one roster mechanism. Organised below by subject, not by the order
 the branch built it in. Full model:
 [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md)
@@ -432,6 +436,30 @@ key; opaque ids wait for the change that needs them, a licence with no key at
 all. `MAX_SESSIONS_PER_USER` is **deleted**, not merely unread: `mode` selects
 between `DEMO_MAX_ANALYSES` (25) and `LICENSED_MAX_SESSIONS_PER_USER`, so **a
 deployment still setting the old variable silently gets 25 instead of 4**.
+
+*Demo records; only retrieval is licensed (2026-09-19 decision).* A demo
+account's analyses are uploaded and stored — images and results — but demo has
+no backup/restore *feature*. On the backend that means `POST /v1/sessions` and
+the upload broker are open to every approved account and the
+`cloudBackupEnabled` gate sits only on `GET /v1/files/{id}/content` and the
+session bundle. The reason is the installed fleet: every pre-licensing account
+resolves to demo on its first request after the deploy, and the old
+`DicUploadWorker` retries a 403 from session creation forever, whereas the old
+restore worker gives up on 403 once. So the old app keeps backing up and shows
+a single "rejected" on restore. In the new app demo sees **nothing** of cloud:
+`CloudSync.uploadsEnabled` ignores the Save-to-cloud toggle for demo, Home
+paints no sync badge or row progress, Settings has no Cloud / Analyses-data
+section and no Free-up or auto-free control, and `StorageBudget` refuses to
+evict on demo because the copy could not come back. Minting an individual
+licence for an address that already has an approved, verified account attaches
+it at mint time (`_attach_to_existing_holder`) instead of leaving an invite
+that `claim_pending_invite` would skip over the stamped demo key.
+`deploy-backend.yml` now pins `DEMO_MAX_ANALYSES`,
+`LICENSED_MAX_SESSIONS_PER_USER`, `ADMIN_WEB_MFA_ENABLED`, `APP_CHECK_MODE` and
+`SELF_DEVICE_CHANGE_COOLDOWN_DAYS` with safe expression defaults and warns when
+the retired `MAX_SESSIONS_PER_USER` is still on the service. Still open: one
+sentence in the Privacy Policy / Terms saying demo analyses are uploaded, and
+the Play Data-safety form — both listed in the readiness gate.
 
 *Go-live is ops, not code.* Identity Platform has to be enabled with TOTP on and
 SMS off, or the consoles sign in and every write fails `mfa_required`; the API

@@ -738,7 +738,14 @@ sweep hitting the cap, or a background upload rejected with a quota error.
 [CLOUD_ARCHITECTURE_GCP.md §20](../backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements)):
 
 - **Demo** (the default for every account until activated): capped at 25
-  saved analyses, this screen included.
+  saved analyses, this screen included. Demo analyses are still **recorded** —
+  each finished analysis uploads silently (`CloudSync.uploadsEnabled` ignores
+  the Save-to-cloud toggle, which demo is not shown) — but demo has no
+  backup/restore *feature*: Home shows no sync badge or row progress (3.4,
+  3.7, 3.8 do not apply), Settings has no **Cloud backup**, **Analyses data
+  management**, **Free up space** or auto-free controls (4.5–4.18g do not
+  apply), and a stored copy is never pulled back. The upload is what the cap
+  counts.
 - **Professional — individual key**: no local analysis cap
   (`analysisCap()` returns unlimited); Semper staff mint and hand over the key.
 - **Professional — institution seat**: identical entitlement to an

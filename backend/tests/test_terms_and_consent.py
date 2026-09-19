@@ -130,5 +130,5 @@ def test_terms_version_matches_the_published_document():
     import pathlib
     doc = pathlib.Path(__file__).resolve().parents[2] / "docs" / "legal" / "TERMS_OF_SERVICE.md"
     text = doc.read_text(encoding="utf-8")
-    line = next(l for l in text.splitlines() if l.startswith("**Version:**"))
+    line = next(row for row in text.splitlines() if row.startswith("**Version:**"))
     assert line.split("**Version:**", 1)[1].strip() == legal.TERMS_VERSION

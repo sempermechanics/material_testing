@@ -356,6 +356,19 @@ object CloudSync {
     }
 
     /**
+     * Whether a finished analysis is uploaded.
+     *
+     * A licensed account chooses through the Settings "Save to cloud" toggle.
+     * A demo account has no such toggle — demo analyses are always recorded
+     * (images and results), which is the one cloud feature demo has; what it
+     * lacks is the licensed retrieval half (restore, bundle download). The
+     * pref is ignored rather than read so a toggle turned off under an earlier
+     * licence cannot silently stop demo recording.
+     */
+    fun uploadsEnabled(context: Context): Boolean =
+        !LicenseEntitlements.cloudBackupEnabled(context) || DicSettings.saveToCloud(context)
+
+    /**
      * Queue the upload for one analysis. Everything the worker needs lives in
      * [SessionStore], so only the id travels in the input Data.
      *
@@ -372,10 +385,8 @@ object CloudSync {
         context: Context,
         localSessionId: String,
     ) {
-        if (!LicenseEntitlements.cloudBackupEnabled(context)) {
-            Timber.i("Upload skipped for %s — cloud backup not entitled", localSessionId)
-            return
-        }
+        // Deliberately not gated on the licence: recording an analysis is open
+        // to every account (see [uploadsEnabled]); only restore is licensed.
         if (!TokenStore.isQuotaKnown(context)) {
             Timber.i("Upload deferred for %s — cloud quota not yet known", localSessionId)
             return

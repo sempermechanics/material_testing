@@ -19,7 +19,7 @@ import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.ProgressCallback
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
-import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionRecordSettings
 import com.indicvision.semper.data.SessionStore
@@ -322,7 +322,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
         lastRefPath = refPngPath
 
-        val cloudEnabled = DicSettings.saveToCloud(appContext)
+        val cloudEnabled = CloudSync.uploadsEnabled(appContext)
         val saved = sessions.saveSession(
             appContext,
             sessions.buildSessionRecord(
