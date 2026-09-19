@@ -1066,11 +1066,31 @@ guarantee as activation — never touches stored sessions/files. See
 | Disable a seat | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"enabled": false}` (institution IT) | Drops that member to Demo but **does not free the slot** — still counts against `maxSeats`. `{"enabled": true}` restores the licensed mode in place with no re-activation needed. |
 
 A downgrade to Demo — from any of the above, or a plan cap being exceeded —
-**never deletes or hides existing data**. It only blocks *new* cloud analysis
-creation (`POST /v1/sessions` → `403 feature_not_licensed` once
-`cloudBackupEnabled` is false). Existing sessions stay listable and
-downloadable; re-activating restores creation with zero data loss. See
-`test_downgrade_preserves_data_blocks_creation_then_reactivation_restores`.
+**never deletes or hides existing data**, and **never stops recording**.
+Recording an analysis (`POST /v1/sessions` plus the upload broker) is open to
+every approved account: a demo account's images and results are stored just
+like a licensed one's, under `DEMO_MAX_ANALYSES`. What `cloudBackupEnabled`
+gates is *retrieval* — `GET /v1/files/{id}/content` and
+`GET /v1/sessions/{sid}/bundle` answer `403 feature_not_licensed` while the
+mode is demo. Sessions stay listable throughout; re-activating restores
+retrieval with zero data loss. See
+`test_downgrade_preserves_data_blocks_retrieval_then_reactivation_restores`
+and `test_demo_after_downgrade_still_records_but_cannot_restore`.
+
+Two consequences follow. An installed build that predates licensing keeps
+backing up after the backend deploys — its upload worker retries a 403 from
+session creation forever, which is why the gate is on retrieval and not on
+creation. And the app shows a demo account **no** backup or restore surface at
+all: no sync badge, no pending-upload banner, no Settings backup/restore
+section. The upload is silent; the account's data is there for the day a
+licence attaches, and for the operator's own use under the Terms.
+
+Minting an individual licence for an address that already has an approved,
+verified account attaches it at once (`create_individual_license` →
+`_attach_to_existing_holder`), dropping the system demo key the first
+post-deploy request stamped. The invite is still written for the case where no
+such account exists yet, and a holder of a *live* non-demo licence is left
+untouched (`claimError: holder_already_licensed`).
 
 None of these reach the person instantly, and the counters IT reads move
 before they do. §20.12 is the read that measures the difference.
@@ -1119,6 +1139,7 @@ Both spellings are live at once, in every direction a version skew can go:
 | Skew | What holds it together |
 |---|---|
 | Old app, new backend | `/v1/config` and every license summary are **dual-keyed** — `mode` plus a `plan` mirror that always agrees with it. An installed build decodes `plan` and fails closed to demo when it is absent, so emitting only `mode` would demote the entire fleet. |
+| Pre-licensing app, new backend | Every pre-existing user document resolves to demo on the first request (`ensure_demo_license` stamps the system demo key). The old build never reads `mode`; it keeps recording because `POST /v1/sessions` is not gated (§20.3), and its restore fails **once** with a plain "rejected" message rather than looping — `DicRestoreWorker` gives up on 403. Its `maxSessions` comes from `DEMO_MAX_ANALYSES`, which must be set no lower than the largest live per-user count before the deploy. |
 | New app, old backend | `AppConfigDto.mode` defaults to empty rather than `demo`, and `AppRemoteConfig` resolves from the `plan` mirror when `mode` is missing. |
 | Upgrading the app | The `mode` pref does not exist on an install predating the rename, so `AppRemoteConfig.mode()` falls back to the old `plan` pref key rather than reading demo until the next config fetch. |
 | Old IT tooling | `/v1/campus/*` stays routed as a hidden alias of `/v1/institutions/*`, **declared in `gateway/openapi.yaml` as well as FastAPI** — ESPv2 rejects any path absent from the gateway spec, so an alias that exists only in the app is unreachable in production. |

@@ -238,14 +238,31 @@ Everything above is required (or near enough). These are the rest of what
 | `TASKS_QUEUE` · `TASKS_LOCATION` · `TASKS_TARGET_BASE_URL` · `TASKS_INVOKER_SA` | unset / `asia-south1` / unset / `SERVICE_ACCOUNT_EMAIL` | Async provisioning — see A6. Leave `TASKS_QUEUE` empty to provision inline |
 | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
 | `REQUIRE_ATTESTED_UPLOADS` | off locally / **`1` in production** | Production pilot keeps this at `1`. See the hardening note below |
-| `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup |
+| `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup. **Never `enforce` while a build without App Check is still installed** — every request from it would 403 |
+| `LICENSE_GRACE_DAYS_DEFAULT` | `14` | Grace applied at mint time when the request names none. A licence already stored without `graceDays` reads as zero, so changing this never reinstates an expired account |
+| `LICENSE_LEASE_HOURS` · `LICENSE_LEASE_HEARTBEAT_MINUTES` | `8` · `30` | Floating-seat lease length and how often the app renews it. A crashed client parks a seat for at most the lease |
+| `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` | `30` | Wait between self-service device changes on one licence. `0` disables the wait. Staff-initiated changes ignore it |
 
-> **`MAX_SESSIONS_PER_USER` is no longer read.** It was the single cloud cap
-> for every user, defaulting to 4; `mode` now selects between
-> `DEMO_MAX_ANALYSES` and `LICENSED_MAX_SESSIONS_PER_USER` instead. A service
-> that still sets it gets `DEMO_MAX_ANALYSES` for unlicensed users — six times
-> the old ceiling at the default — so **set that variable deliberately before
-> deploying** rather than inheriting it.
+> **`MAX_SESSIONS_PER_USER` and `PRO_MAX_SESSIONS_PER_USER` are no longer
+> read.** The first was the single cloud cap for every user, defaulting to 4;
+> `mode` now selects between `DEMO_MAX_ANALYSES` and
+> `LICENSED_MAX_SESSIONS_PER_USER` instead (the second is honoured only as a
+> fallback default for the licensed value). An unlicensed user gets
+> `DEMO_MAX_ANALYSES` — six times the old ceiling at the default — so **set that
+> variable deliberately before deploying** rather than inheriting it.
+>
+> [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml) pins
+> `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`, `ADMIN_WEB_MFA_ENABLED`,
+> `APP_CHECK_MODE` and `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` from repository
+> variables of the same name, with the defaults above when a variable is unset.
+> `deploy-cloudrun` *merges* env into the live revision, so a retired variable
+> stays on the service until removed by hand; the workflow's "Describe live
+> env" step warns when either stale name is still present. Remove them **after**
+> promote (the previous revision keeps its env for rollback):
+>
+> ```bash
+> gcloud run services update indic-api --region $REGION >   --remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER
+> ```
 
 **Production hardening: `REQUIRE_ATTESTED_UPLOADS=1` (live on pilot).**
 `GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While this
@@ -476,6 +493,46 @@ Leave Cloud Run **ingress at its default** (`all`) — the gateway calls the
 `run.app` URL and only its SA has `run.invoker`, so direct calls still 403; only
 the gateway gets through. In **C1**, set `INDIC_API_BASE_URL` to
 `https://<gateway defaultHostname>` (not the `run.app` URL).
+
+#### Redeploying the gateway after a route change
+
+CI never touches the gateway (a deploy job is tracked as TD-27 in
+[TECH_DEBT.md](../ops/TECH_DEBT.md)); `test_gateway_parity.py` only proves the
+committed spec matches the routers. Whenever `backend/gateway/openapi.yaml`
+changes — the licensing rollout added `/v1/licenses/*`, `/v1/me/terms`,
+`/v1/admin/licenses/*` and more — the live gateway must be moved to a new config
+by hand, **after** the Cloud Run revision that serves the new routes is promoted
+(a config that names a route the backend does not yet serve would 5xx, and the
+gateway 404s any route the config does not name).
+
+API configs are immutable: create a new one and point the gateway at it.
+
+```bash
+PROJECT=indicvision-dic-app REGION=asia-south1
+RUN_URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
+GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
+
+# Same substitution + placeholder guard as step 3 above.
+sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g"     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g"   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
+grep -q '__' backend/gateway/openapi.generated.yaml &&   echo "unsubstituted placeholder remains" && exit 1
+
+# Remember the config currently live — this is the rollback target.
+PREV_CFG=$(gcloud api-gateway gateways describe indic-gw --location $REGION   --format='value(apiConfig)' | sed 's|.*/||')
+echo "rollback: $PREV_CFG"
+
+# New config, named by date; then switch the gateway (takes a few minutes).
+NEW_CFG=v$(date +%Y%m%d)
+gcloud api-gateway api-configs create $NEW_CFG --api=indic-api   --openapi-spec=backend/gateway/openapi.generated.yaml   --backend-auth-service-account=$GW_SA
+gcloud api-gateway gateways update indic-gw --api=indic-api   --api-config=$NEW_CFG --location=$REGION
+gcloud api-gateway gateways describe indic-gw --location $REGION   --format='value(apiConfig,state)'
+```
+
+Verify from outside: an unauthenticated `GET https://<gateway>/v1/config` must
+answer **401** (route known, token missing), not 404 (route missing from the
+config). Roll back with
+`gcloud api-gateway gateways update indic-gw --api=indic-api --api-config=$PREV_CFG --location=$REGION`;
+old configs stay listed under `api-configs list --api=indic-api` and can be
+deleted once nothing points at them.
 
 ### C1. Point the app at the backend
 

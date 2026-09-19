@@ -258,7 +258,6 @@ paths:
         '200': { description: OK }
         '409': { description: session_quota_exceeded }
         '413': { description: too_many_files }
-        '403': { description: feature_not_licensed (demo mode) }
         '429': { description: Rate limited }
         '401': { description: Missing or invalid device attestation }
   /v1/sessions/{sid}:
@@ -384,7 +383,7 @@ paths:
         '200': { description: OK }
         '206': { description: Partial content }
         '401': { description: Missing or invalid device attestation }
-        '403': { description: feature_not_licensed (demo mode) }
+        '403': { description: feature_not_licensed (demo mode — recording is open, retrieval is licensed) }
         '416': { description: range_not_satisfiable }
         '429': { description: Rate limited }
         '502': { description: Drive download failed }

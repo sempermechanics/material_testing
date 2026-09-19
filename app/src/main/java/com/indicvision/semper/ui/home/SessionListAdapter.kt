@@ -48,6 +48,13 @@ class SessionListAdapter(
     /** Ids that are SYNCED but have no local `.dat`s — "Only in cloud" badge. */
     private var cloudOnlyIds: Set<String> = emptySet()
 
+    /**
+     * Whether rows show their sync badge and upload bar at all. False on a
+     * demo account: its analyses are recorded silently and it has no restore,
+     * so there is nothing for a badge to say or a tap to do.
+     */
+    private var syncVisible: Boolean = true
+
     /** Path → thumbnail; recycles evicted bitmaps. Cap keeps scroll GC mild. */
     private val thumbCache =
         object : LinkedHashMap<String, Bitmap>(THUMB_CACHE_MAX + 1, 0.75f, true) {
@@ -67,6 +74,12 @@ class SessionListAdapter(
     }
 
     fun allIds(): List<String> = items.map { it.id }
+
+    fun setSyncVisible(visible: Boolean) {
+        if (syncVisible == visible) return
+        syncVisible = visible
+        notifyDataSetChanged()
+    }
 
     /** Redraws one row by id — selection changes never touch the whole list. */
     fun rebindRow(id: String) {
@@ -165,10 +178,41 @@ class SessionListAdapter(
         holder.title.text = r.name
         holder.subtitle.text = subtitleFor(ctx, r)
 
-        // While a backup is running, the badge shows live progress and a bar
-        // appears under the subtitle; otherwise it's the normal sync-state badge.
+        bindSyncBadge(holder, r)
+        bindThumbnail(holder, r)
+
+        val selected = isSelected(r.id)
+        holder.check.isVisible = selected
+        holder.card.setCardBackgroundColor(
+            ctx.getColor(if (selected) R.color.sky_container else R.color.surface_muted),
+        )
+        holder.card.strokeColor =
+            ctx.getColor(if (selected) R.color.sky_primary else R.color.surface_outline)
+
+        // Outside selection mode a tap opens the analysis and a long-press
+        // starts selecting; inside it, every tap just toggles a row. That
+        // policy lives in the callbacks Home wires.
+        holder.itemView.setOnClickListener { onClick(r) }
+        holder.itemView.setOnLongClickListener {
+            onLongClick(r)
+            true
+        }
+    }
+
+    /**
+     * Sync badge and progress bar. While a backup is running, the badge shows
+     * live progress and a bar appears under the subtitle; otherwise it is the
+     * normal sync-state badge. Hidden entirely when [syncVisible] is false.
+     */
+    private fun bindSyncBadge(holder: Holder, r: SessionRecord) {
+        val ctx = holder.itemView.context
         val prog = progress[r.id]
-        if (prog != null) {
+        holder.badge.isVisible = syncVisible
+        if (!syncVisible) {
+            holder.progressBar.isIndeterminate = false
+            holder.progressBar.isVisible = false
+            holder.badge.setOnClickListener(null)
+        } else if (prog != null) {
             holder.progressBar.isVisible = true
             // Bundle restore reports 0% for most of the Session.zip download —
             // indeterminate reads as "working" instead of a stuck empty bar.
@@ -205,26 +249,7 @@ class SessionListAdapter(
                 },
             )
         }
-        holder.badge.setOnClickListener { onBadgeClick(r) }
-
-        bindThumbnail(holder, r)
-
-        val selected = isSelected(r.id)
-        holder.check.isVisible = selected
-        holder.card.setCardBackgroundColor(
-            ctx.getColor(if (selected) R.color.sky_container else R.color.surface_muted),
-        )
-        holder.card.strokeColor =
-            ctx.getColor(if (selected) R.color.sky_primary else R.color.surface_outline)
-
-        // Outside selection mode a tap opens the analysis and a long-press
-        // starts selecting; inside it, every tap just toggles a row. That
-        // policy lives in the callbacks Home wires.
-        holder.itemView.setOnClickListener { onClick(r) }
-        holder.itemView.setOnLongClickListener {
-            onLongClick(r)
-            true
-        }
+        if (syncVisible) holder.badge.setOnClickListener { onBadgeClick(r) }
     }
 
     private fun bindThumbnail(holder: Holder, r: SessionRecord) {

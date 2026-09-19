@@ -36,6 +36,7 @@ import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DicBundleDownloadWorker
 import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.CloudSessionDto
@@ -127,19 +128,31 @@ class SettingsActivity : AppCompatActivity() {
         analysesState = findViewById(R.id.tvAnalysesDataState)
 
         wireCollapsible(R.id.headerAccount, R.id.bodyAccount, R.id.ivAccountChevron)
-        wireCollapsible(R.id.headerCloud, R.id.bodyCloud, R.id.ivCloudChevron)
-        wireCollapsible(R.id.headerAnalysesData, R.id.bodyAnalysesData, R.id.ivAnalysesDataChevron)
         wireCollapsible(R.id.headerStorage, R.id.bodyStorage, R.id.ivStorageChevron)
         wireCollapsible(R.id.headerYourData, R.id.bodyYourData, R.id.ivYourDataChevron)
         wireCollapsible(R.id.headerAnalysisPrefs, R.id.bodyAnalysisPrefs, R.id.ivAnalysisPrefsChevron)
         wireCollapsible(R.id.headerHelpSupport, R.id.bodyHelpSupport, R.id.ivHelpSupportChevron)
 
-        observeRestoreOutcomes()
-        observeBundleDownloadOutcomes()
-
         SettingsAccountSection(this).wire()
-        wireCloudSection()
-        wireAnalysesDataSection()
+        // Backup and restore are the licensed half of cloud. A demo account
+        // records its analyses silently and cannot pull them back, so both
+        // sections are absent rather than shown disabled.
+        val cloudSections = listOf(
+            R.id.headerCloud,
+            R.id.bodyCloud,
+            R.id.headerAnalysesData,
+            R.id.bodyAnalysesData,
+        )
+        if (LicenseEntitlements.cloudBackupEnabled(this)) {
+            wireCollapsible(R.id.headerCloud, R.id.bodyCloud, R.id.ivCloudChevron)
+            wireCollapsible(R.id.headerAnalysesData, R.id.bodyAnalysesData, R.id.ivAnalysesDataChevron)
+            observeRestoreOutcomes()
+            observeBundleDownloadOutcomes()
+            wireCloudSection()
+            wireAnalysesDataSection()
+        } else {
+            cloudSections.forEach { findViewById<View>(it).isVisible = false }
+        }
         SettingsStorageSection(this).wire()
         yourDataSection.wire()
         SettingsPreferencesSection(this).wire()
@@ -214,6 +227,8 @@ class SettingsActivity : AppCompatActivity() {
     // ── Analyses data management ─────────────────────────────────────────
 
     internal fun wireAnalysesDataSection() {
+        // Storage cleanup re-enters here; the section does not exist on demo.
+        if (!LicenseEntitlements.cloudBackupEnabled(this)) return
         analysesProgress.isVisible = true
         analysesState.isVisible = false
 

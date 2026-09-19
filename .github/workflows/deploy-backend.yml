@@ -162,6 +162,33 @@ jobs:
             echo "First deploy of $SERVICE: allowing traffic on create (no_traffic unsupported)."
           fi
 
+      # deploy-cloudrun *merges* env_vars into the live revision's env, so a
+      # variable this workflow stopped setting stays on the service forever.
+      # MAX_SESSIONS_PER_USER / PRO_MAX_SESSIONS_PER_USER were retired by the
+      # licensing rollout (DEMO_MAX_ANALYSES / LICENSED_MAX_SESSIONS_PER_USER
+      # replace them); the code ignores them, but a stale value misleads anyone
+      # reading the console. Print the live env and warn — removal is a manual
+      # `gcloud run services update --remove-env-vars` after promote, so the
+      # previous revision keeps its env for rollback.
+      - name: Describe live env
+        if: steps.previous.outputs.revision != ''
+        env:
+          PROJECT: ${{ github.event.inputs.project }}
+          REGION: ${{ github.event.inputs.region }}
+          SERVICE: ${{ steps.meta.outputs.service }}
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$SERVICE" \
+            --project "$PROJECT" --region "$REGION" \
+            --format='value(spec.template.spec.containers[0].env)' \
+            | tr ';' '\n' | sed -E "s/'value': '[^']*'/'value': <redacted>/" \
+            | tee /tmp/live-env.txt
+          for stale in MAX_SESSIONS_PER_USER PRO_MAX_SESSIONS_PER_USER; do
+            if grep -q "'name': '$stale'" /tmp/live-env.txt; then
+              echo "::warning::$stale is still set on $SERVICE. It is ignored since the licensing rollout; remove it after promote with: gcloud run services update $SERVICE --project $PROJECT --region $REGION --remove-env-vars $stale"
+            fi
+          done
+
       # Deploy the candidate WITHOUT shifting live traffic when a prior revision
       # exists. A prior deploy with no_traffic=false still left 100% on the
       # previous revision while smoke ran (new revision Ready+Retired with zero
@@ -179,6 +206,10 @@ jobs:
           source: backend
           no_traffic: ${{ steps.previous.outputs.no_traffic }}
           tag: cand-${{ github.run_id }}-${{ github.run_attempt }}
+          # The licensing settings carry expression defaults: an unset repo
+          # variable must resolve to the safe value (demo cap 25, MFA on, App
+          # Check off — `enforce` would 403 every installed pre-App-Check build),
+          # never to an empty string the backend would parse as something else.
           env_vars: |-
             GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
             FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}
@@ -193,6 +224,11 @@ jobs:
             TASKS_TARGET_BASE_URL=${{ vars.TASKS_TARGET_BASE_URL }}
             TASKS_INVOKER_SA=${{ vars.TASKS_INVOKER_SA }}
             REQUIRE_ATTESTED_UPLOADS=${{ vars.REQUIRE_ATTESTED_UPLOADS }}
+            DEMO_MAX_ANALYSES=${{ vars.DEMO_MAX_ANALYSES || '25' }}
+            LICENSED_MAX_SESSIONS_PER_USER=${{ vars.LICENSED_MAX_SESSIONS_PER_USER || '999' }}
+            ADMIN_WEB_MFA_ENABLED=${{ vars.ADMIN_WEB_MFA_ENABLED || '1' }}
+            APP_CHECK_MODE=${{ vars.APP_CHECK_MODE || 'off' }}
+            SELF_DEVICE_CHANGE_COOLDOWN_DAYS=${{ vars.SELF_DEVICE_CHANGE_COOLDOWN_DAYS || '30' }}
           secrets: |-
             RESEND_API_KEY=resend-api-key:latest
           flags: >-

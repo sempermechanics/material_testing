@@ -53,7 +53,9 @@ USER_NOT_FOUND = "user_not_found"
 EMPTY_PATCH = "empty_patch"
 
 # --- licensing, seats and leases -------------------------------------------
-# `feature_not_licensed` gates a cloud feature behind a licensed mode. The
+# `feature_not_licensed` gates *retrieval* (file content, session bundle)
+# behind a licensed mode. Recording an analysis (`POST /v1/sessions` and the
+# upload broker) is open to every approved account, demo included. The
 # `license_*` family is returned by activation. The seat/lease codes describe a
 # floating pool: `no_floating_seat` in particular is the pool being FULL, not
 # a fault in the account — the caller stays eligible and may retry.

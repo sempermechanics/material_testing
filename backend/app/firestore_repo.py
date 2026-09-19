@@ -513,6 +513,13 @@ def resolve_user_config(user: dict) -> dict:
     updates everyone who has not been individually overridden. A missing mode
     is Demo. Licensed cloud/share flags stay off when the key has expired.
 
+    `cloudBackupEnabled` is the *retrieval* entitlement — restore and the
+    session bundle. Recording an analysis (session create + upload) is open to
+    every approved account under `maxSessions`, so a demo account's frames and
+    results are stored, and what a licence adds is getting them back. The app
+    reads the flag the same way: it decides whether backup/restore UI exists,
+    never whether an analysis is uploaded.
+
     The response is dual-keyed: `mode` is current, `plan` is the pre-rename
     mirror kept for installed clients. Both always describe the same state.
     """
@@ -593,6 +600,9 @@ def license_summary(user: dict) -> dict:
 
 
 def cloud_backup_enabled(user: dict) -> bool:
+    """May this account read its stored analyses back (restore, bundle)?
+
+    Not consulted on the recording path — see `resolve_user_config`."""
     return bool(resolve_user_config(user)["cloudBackupEnabled"])
 
 
@@ -886,8 +896,74 @@ def create_individual_license(
         # the address is already promised another licence — a real conflict
         # for ops to resolve, and one the returned licence makes visible.
         log.warning("individual licence %s minted without an invite: %s", license_id, err)
+        claimed_uid, claim_err = "", ""
+    else:
+        claimed_uid, claim_err = _attach_to_existing_holder(license_id, stored, email_lock)
     return {"key": key, "license": _license_public(license_id, stored),
-            "inviteError": err or ""}
+            "inviteError": err or "", "claimedByUid": claimed_uid,
+            "claimError": claim_err}
+
+
+def _holds_only_a_demo_key(user: dict) -> bool:
+    """True when this account can take a licence right now: it points at no
+    licence, at the auto-minted Demo key, or at one that is revoked or gone.
+
+    The discriminator is the licence document, as in `_drop_superseded_demo`:
+    a revoked holder is left demoted in place and still pointing at the real
+    licence, so its stored `mode` says nothing about whether a new grant is
+    welcome. A *live* non-demo licence is the one thing that must not be
+    overwritten — that is a support question, not a mint."""
+    license_id = user.get("licenseId") or ""
+    if not license_id:
+        return True
+    lic = get_license(license_id)
+    if not lic or (lic.get("status") or "") == "revoked":
+        return True
+    return _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system"
+
+
+def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[str, str]:
+    """Hand a freshly minted individual licence to the account that already
+    signed in at its address. Returns (uid, error) — both empty when nobody
+    holds the address yet and the invite alone will deliver.
+
+    The counterpart of `add_institution_member`'s existing-account branch, and
+    needed for the same reason: `claim_pending_invite` runs only for an
+    account holding no licence, and `ensure_demo_license` stamps one on the
+    first request an approved account makes. Every account that predates
+    licensing therefore holds a Demo key by the time ops mints for it, and an
+    invite left for it would never be read. The claim is the same transaction
+    the sign-in path uses (`claim_individual_license`), which consumes the
+    invite and drops the superseded Demo key.
+
+    Fail closed on an unverified address or an unapproved account: the address
+    is the whole claim to the licence, exactly as at sign-in, and neither of
+    those accounts holds a Demo key yet — so for them the invite still works
+    the moment they qualify. A holder of a live non-demo licence is left as
+    they are and reported, rather than silently moved between licences.
+    """
+    address = normalize_email(email)
+    holder = find_user_by_email(address) if address else None
+    if not holder:
+        return "", ""
+    if holder.get("access_status") != "APPROVED" or not holder.get("emailVerified"):
+        return "", ""
+    if not _holds_only_a_demo_key(holder):
+        return "", "holder_already_licensed"
+    err = claim_individual_license(
+        license_id, holder["uid"], address,
+        _individual_member_patch(license_id, lic), invite_ref=_invite_ref(address),
+    )
+    if err:
+        # A lost race here has no next request to fall back on — the holder's
+        # Demo key short-circuits the sign-in path — so say so plainly rather
+        # than leaking the private marker. The licence is minted and the key
+        # in hand redeems it through the support route.
+        public = _public_claim_error(err, "claim_contended")
+        log.warning("individual licence %s not attached to %s: %s",
+                    license_id, holder["uid"], public)
+        return "", public
+    return holder["uid"], ""
 
 
 def create_institution_license(

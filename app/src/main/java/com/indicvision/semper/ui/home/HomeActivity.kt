@@ -338,6 +338,7 @@ class HomeActivity : AppCompatActivity() {
      * The badge remains the place to deliberately re-attempt (see [retryOrBackup]).
      */
     private fun showUploadFailure(reason: String) {
+        if (!showsCloudState()) return
         CrispToast.show(
             this,
             getString(R.string.cloud_backup_failed_fmt, reason),
@@ -425,6 +426,9 @@ class HomeActivity : AppCompatActivity() {
             }
             adapter.submit(sessions)
             adapter.setCloudOnlyIds(cloudOnly)
+            // Demo: analyses are recorded silently and there is no restore, so
+            // the list carries no sync badge, bar or "only in cloud" state.
+            adapter.setSyncVisible(showsCloudState())
             emptyState.isVisible = sessions.isEmpty()
             updateQuotaIndicator(sessions.size)
             updateLicenseNotice()
@@ -537,6 +541,7 @@ class HomeActivity : AppCompatActivity() {
                     // The rows changed underneath us — show the corrected state.
                     val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
                     adapter.submit(sessions)
+                    if (!showsCloudState()) return
                     Toast.makeText(
                         this,
                         resources.getQuantityString(R.plurals.cloud_resync_fmt, outcome.repaired, outcome.repaired),
@@ -544,17 +549,25 @@ class HomeActivity : AppCompatActivity() {
                     ).show()
                 }
             }
-            is CloudSync.Outcome.Failed ->
+            is CloudSync.Outcome.Failed -> if (showsCloudState()) {
                 Toast.makeText(
                     this,
                     getString(R.string.cloud_check_failed_fmt, outcome.reason),
                     Toast.LENGTH_LONG,
                 ).show()
+            }
             // Normal for an offline-first app — don't nag. Skipped = checked
             // recently (reconcile is throttled to protect the Firestore budget).
             CloudSync.Outcome.Offline, CloudSync.Outcome.Disabled, CloudSync.Outcome.Skipped -> Unit
         }
     }
+
+    /**
+     * Whether this account sees any cloud state at all. Demo accounts record
+     * analyses silently and have no restore, so every badge, bar, toast and
+     * download offer tied to backup is withheld rather than shown greyed out.
+     */
+    private fun showsCloudState(): Boolean = LicenseEntitlements.cloudBackupEnabled(this)
 
     // ── Row actions ──────────────────────────────────────────────────────
 
@@ -565,7 +578,9 @@ class HomeActivity : AppCompatActivity() {
         }
         val hasCloud = record.syncState == SessionRecord.SyncState.SYNCED ||
             record.cloudSessionId.isNotBlank()
-        if (!hasCloud) {
+        // A demo account cannot pull its recorded copy back, so a row with
+        // no local data is simply unopenable — no download offer.
+        if (!hasCloud || !showsCloudState()) {
             SessionOpenHelper.openOrExplain(this, record)
             return
         }

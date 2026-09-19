@@ -715,8 +715,14 @@ backend sends nothing and says nothing, and the pending list is your only signal
 
 ## Appendix D — Licensing (demo / individual / institution)
 
-Every account is **Demo** (25 saved analyses, no cloud backup/restore, no
-share) until a licensed key is activated. There is no billing anywhere in
+Every account is **Demo** (25 saved analyses, no share, no backup/restore
+*feature*) until a licensed key is activated. A demo account's analyses are
+still **recorded** — images and results upload and are stored exactly as a
+licensed account's are — but the app shows demo no sync badge, banner or
+Settings backup section, and the backend refuses demo retrieval (`/content`,
+bundle → `feature_not_licensed`). Recording is open so that installed builds
+predating licensing keep backing up after the backend deploy; a licence turns
+retrieval on with nothing to re-upload. There is no billing anywhere in
 the product — a licensed key is issued by Semper staff or, for an
 institution, self-served by that institution's own IT once Semper staff mint
 the institution key. There is **no in-app screen to type a key in yet** in this
@@ -731,8 +737,13 @@ approves/revokes accounts):
 - **Individual**: `POST /v1/admin/licenses` with an `emailLock`. Minting also
   records a pending invite against that address, and **that is the delivery**:
   the customer signs in with it and the licence attaches on their first
-  request. It binds to the first device they sign in on, and stays on that
-  device. Nothing is sent to them and nothing is typed. `deviceIdLock` is
+  request. If that address **already has an approved, verified account** — a
+  demo user, or an account from before licensing — the licence attaches
+  immediately at mint time instead; the response carries `claimedByUid`, and
+  the system demo key is dropped. An address whose account holds a *live*
+  non-demo licence is left alone (`claimError: holder_already_licensed`) —
+  revoke first, then mint again. It binds to the first device they sign in
+  on, and stays on that device. Nothing is sent to them and nothing is typed. `deviceIdLock` is
   still accepted for the rare case where the device is known up front, but
   normal issuing leaves it empty.
 - **Institution**: `POST /v1/admin/licenses` with `kind: "institution"`, a
@@ -954,8 +965,9 @@ and reports together, ready to import back into the app on any device they are
 signed in on. It is `GET /v1/sessions/{sid}/bundle`, and it needs a second
 factor and a recent sign-in for the same reason the operator console does: a
 browser cannot produce the device attestation the phone uses, and this hands
-out data. Demo accounts are refused (`feature_not_licensed`); so is an
-analysis with nothing finished uploading (`file_not_uploaded`). A large
+out data. Demo accounts are refused (`feature_not_licensed`) — their analyses are
+stored, but retrieval is the licensed half; so is an analysis with nothing
+finished uploading (`file_not_uploaded`). A large
 analysis takes a while to arrive — the archive is streamed as it is built, so
 a download that begins is not yet a download that finished.
 
