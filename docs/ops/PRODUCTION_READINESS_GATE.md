@@ -204,7 +204,7 @@ pre-licensing documents)
       (`licenses/` gains a `createdByUid: system` document), Home shows no
       sync badge and Settings shows no Cloud/Analyses-data section on demo.
 - [ ] Consoles last: Identity Platform + TOTP enabled
-      ([console README](../../console/README.md)), `firebase deploy --only
+      ([console README](../../firebase-hosting/public/console/README.md)), `firebase deploy --only
       firestore:indexes`, `./scripts/deploy-console.sh`, hand-check `/login`.
 - [ ] 24 h log watch: `feature_not_licensed` only from restore/bundle by demo
       accounts (never from `POST /v1/sessions`); `app_check_required` **= 0**;
