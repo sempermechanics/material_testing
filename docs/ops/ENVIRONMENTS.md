@@ -64,7 +64,7 @@ Dispatch **from `main` only** — jobs no-op on other refs.
 | **`REQUIRE_ATTESTED_UPLOADS`** | var | Production **must** be `1`. Empty string on deploy clears the Cloud Run flag |
 | `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER` | vars | Cloud caps by `mode`. Unset → `25` / `999` (expression defaults in the workflow). Set `DEMO_MAX_ANALYSES` from the pre-deploy Firestore survey — every pre-licensing account is demo |
 | `ADMIN_WEB_MFA_ENABLED`, `APP_CHECK_MODE`, `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` | vars | Unset → `1` / `off` / `30`. `APP_CHECK_MODE` must stay `off` while a build without App Check is installed; `enforce` 403s it |
-| `CONSOLE_ORIGINS` | var | Browser origins the API answers CORS for. Unset → `https://app.sempermechanics.com,https://indicvision-dic-app-auth.firebaseapp.com`. Add a Hosting preview channel here while testing a console change |
+| `CONSOLE_ORIGINS` | var | Browser origins the API answers CORS for. Unset → `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com`. Space-separated, never commas (the deploy action splits `env_vars` on them). Add a Hosting preview channel here while testing a console change |
 
 ### Firestore backup / restore drill
 

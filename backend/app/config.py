@@ -1,4 +1,5 @@
 import os
+import re
 
 
 def _env_int(name: str, default: str) -> int:
@@ -107,16 +108,21 @@ class Settings:
     # is cross-origin and carries Authorization, which makes the browser
     # preflight it. Without a matching Access-Control-Allow-Origin the
     # response is discarded and the page silently does nothing. The phone
-    # never sends an Origin and is unaffected. Comma-separated, exact origins
-    # (scheme + host), no wildcard.
+    # never sends an Origin and is unaffected. Exact origins (scheme + host),
+    # no wildcard, separated by whitespace, `;` or `,`. Prefer spaces: the
+    # deploy action's env_vars block splits pairs on commas, so a
+    # comma-separated value arrives truncated with its tail as a stray key.
     CONSOLE_ORIGINS = [
-        o.strip().rstrip("/")
-        for o in os.environ.get(
-            "CONSOLE_ORIGINS",
-            "https://app.sempermechanics.com,"
-            "https://indicvision-dic-app-auth.firebaseapp.com",
-        ).split(",")
-        if o.strip()
+        o.rstrip("/")
+        for o in re.split(
+            r"[\s,;]+",
+            os.environ.get(
+                "CONSOLE_ORIGINS",
+                "https://app.sempermechanics.com "
+                "https://indicvision-dic-app-auth.firebaseapp.com",
+            ),
+        )
+        if o
     ]
 
     # --- staff console second factor ---------------------------------------
