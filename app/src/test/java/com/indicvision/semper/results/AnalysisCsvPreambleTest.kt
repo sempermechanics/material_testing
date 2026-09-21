@@ -57,7 +57,8 @@ class AnalysisCsvPreambleTest {
         )
         AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
         val text = out.readText()
-        assertTrue(text.contains("# semper_csv_version,1\n"))
+        assertTrue(text.contains("# semper_csv_version,2\n"))
+        assertTrue(!text.contains("# test_type"))
         assertTrue(text.contains("# reference,ref.jpg\n"))
         assertTrue(text.contains("# roi_x,10\n"))
         assertTrue(!text.contains("noise_floor"))
@@ -66,7 +67,7 @@ class AnalysisCsvPreambleTest {
         assertTrue(
             text.contains(
                 "\nimage,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd," +
-                    "shift_u_px,shift_v_px,shift_rot_deg\n",
+                    "shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa\n",
             ),
         )
         assertTrue(text.contains("\nframe_a.jpg,0,0,0.1,0.2,"))
@@ -101,11 +102,57 @@ class AnalysisCsvPreambleTest {
         assertTrue(
             text.contains(
                 "\nimage,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd," +
-                    "shift_u_px,shift_v_px,shift_rot_deg\n",
+                    "shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa\n",
             ),
         )
         assertTrue(text.contains("frame_a.jpg,0,0,1.5,-2.25,"))
         assertTrue(text.contains(",1.5000,-2.2500,"))
+        // No load log: the two mechanical cells are present and empty.
+        assertTrue(text.lines().any { it.startsWith("frame_a.jpg,") && it.endsWith(",,") })
+    }
+
+    @Test
+    fun `a typed session writes its test preamble and a load and stress per row`() {
+        val out = File.createTempFile("semper_csv_mech", ".csv")
+        out.deleteOnExit()
+        val data = translatedGrid()
+        val frames = listOf(
+            AnalysisCsvWriter.Frame(
+                image = "frame_a.jpg",
+                subset = 41,
+                step = 5,
+                strainWindow = 15,
+                data = { data },
+                loadN = -1250f,
+            ),
+        )
+        val metadata = AnalysisCsvWriter.Metadata(
+            referenceName = "ref.jpg",
+            strainMethod = "VSG",
+            imgW = 640,
+            imgH = 480,
+            roiX = 0,
+            roiY = 0,
+            roiW = 640,
+            roiH = 480,
+            testType = "compression",
+            crossSectionMm2 = 12.5f,
+            loadAxisX = false,
+        )
+        AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
+        val text = out.readText()
+        assertTrue(text.contains("# test_type,compression\n"))
+        assertTrue(text.contains("# cross_section_mm2,12.5000\n"))
+        assertTrue(text.contains("# load_axis,y\n"))
+        assertTrue(text.contains("# load_unit,N\n"))
+        assertTrue(text.lines().any { it.startsWith("frame_a.jpg,") && it.endsWith(",-1250.000,-100.0000") })
+    }
+
+    @Test
+    fun `mechanical cells are empty without a load and stress-less without an area`() {
+        assertEquals(",", AnalysisCsvWriter.mechanicalSuffixColumns(null, 12.5f))
+        assertEquals("10.000,", AnalysisCsvWriter.mechanicalSuffixColumns(10f, 0f))
+        assertEquals("10.000,0.8000", AnalysisCsvWriter.mechanicalSuffixColumns(10f, 12.5f))
     }
 
     /**
@@ -155,7 +202,10 @@ class AnalysisCsvPreambleTest {
         val lines = out.readLines()
             .filter { it.isNotBlank() && !it.startsWith("#") }
         val header = lines.first()
-        assertTrue("header should name the motion columns: $header", header.endsWith(",shift_rot_deg"))
+        assertTrue(
+            "header should end with the mechanical columns: $header",
+            header.endsWith(",shift_rot_deg,load_N,stress_MPa"),
+        )
         val expected = header.split(',').size
         val rows = lines.drop(1)
         assertTrue("no data rows were written", rows.isNotEmpty())

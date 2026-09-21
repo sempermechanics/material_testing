@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import java.io.OutputStream
+import java.util.Locale
 
 /**
  * Renders a [ReportData] into the multi-page PDF report (cover, field
@@ -47,6 +48,19 @@ object PdfReportGenerator {
     /** Raster width for the vector wordmark; PDF draws it at [PdfLayoutEngine.BRAND_LOGO_WIDTH]. */
     private const val BRAND_LOGO_RASTER_WIDTH = 1040
 
+    /** Height of the stress–strain plot block; the table starts under it. */
+    private const val STRESS_STRAIN_PLOT_HEIGHT = 1500f
+
+    /** Table rows per page, at [PdfLayoutEngine.drawTable]'s row pitch. */
+    private const val STRESS_STRAIN_ROWS_FIRST_PAGE = 14
+    private const val STRESS_STRAIN_ROWS_PER_PAGE = 34
+
+    /**
+     * The closing stress–strain page(s) of an all-frames report: the curve as
+     * rendered by the caller (null when it could not be drawn) and its points.
+     */
+    class StressStrainPage(val curve: StressStrain.Curve, val plot: Bitmap?)
+
     /**
      * The all-frames PDF: the single-frame report of [generate], repeated once
      * per frame and concatenated, with one engine-telemetry page at the end.
@@ -62,12 +76,14 @@ object PdfReportGenerator {
      * than one frame's images in memory. It returns null for a frame that
      * cannot be read, which is skipped.
      */
+    @Suppress("LongParameterList") // one call site; the report's full config, all named and defaulted
     fun generateBatch(
         frameCount: Int,
         dataAt: (Int) -> ReportData?,
         outputStream: OutputStream,
         frameTitle: (Int) -> String = { "DIC Analysis Report — Frame ${it + 1}" },
         resources: Resources? = null,
+        stressStrain: StressStrainPage? = null,
     ): Flow<Progress> = flow {
         val pdfDocument = PdfDocument()
         val brandLogo = decodeBrandLogo(resources)
@@ -89,6 +105,10 @@ object PdfReportGenerator {
                 recycleImages(data)
             }
 
+            if (stressStrain != null && !stressStrain.curve.isEmpty) {
+                emit(Progress.Status("Plotting stress–strain…", TELEMETRY_PROGRESS))
+                drawStressStrainPages(layout, stressStrain)
+            }
             telemetrySource?.let {
                 emit(Progress.Status("Compiling Engine Telemetry...", TELEMETRY_PROGRESS))
                 drawTelemetryPage(layout, it)
@@ -177,6 +197,8 @@ object PdfReportGenerator {
         layout.drawKeyValue("Strain Window:", "${data.strainWindow} px")
         layout.advanceY(40f)
 
+        data.mechanical?.let { drawMechanicalBlock(layout, it) }
+
         layout.drawSectionHeader("Analysis Region (ROI)")
         layout.drawKeyValue("Origin (X, Y):", "(${data.roiData.startX}, ${data.roiData.startY})")
         layout.drawKeyValue("Dimensions:", "${data.roiData.width} x ${data.roiData.height} px")
@@ -189,6 +211,60 @@ object PdfReportGenerator {
             data.deformedImage,
             data.deformedImageName,
         )
+    }
+
+    /** The cover's "Mechanical Test" block, only on a typed session. */
+    private fun drawMechanicalBlock(layout: PdfLayoutEngine, m: MechanicalCover) {
+        layout.drawSectionHeader("Mechanical Test")
+        layout.drawKeyValue("Test Type:", m.label)
+        if (m.crossSectionMm2 > 0f) {
+            layout.drawKeyValue("Cross-section:", "%.3f mm²".format(Locale.US, m.crossSectionMm2))
+        }
+        layout.drawKeyValue("Strain Axis:", if (m.loadAxisX) "X (Exx)" else "Y (Eyy)")
+        m.loadN?.let { layout.drawKeyValue("Machine Load:", "%.2f N".format(Locale.US, it)) }
+        m.stressMPa?.takeUnless { it.isNaN() }?.let {
+            layout.drawKeyValue("Engineering Stress:", "%.3f MPa".format(Locale.US, it))
+        }
+        layout.advanceY(40f)
+    }
+
+    /**
+     * Stress–strain curve then the table behind it, after the last frame and
+     * before telemetry. The plot shares its first page with the opening rows;
+     * the rest of the table is chunked over following pages.
+     */
+    private fun drawStressStrainPages(layout: PdfLayoutEngine, page: StressStrainPage) {
+        val curve = page.curve
+        layout.newPage()
+        layout.drawTitle("Stress–Strain Curve")
+        layout.drawKeyValue("Cross-section:", "%.3f mm²".format(Locale.US, curve.crossSectionMm2))
+        layout.drawKeyValue("Strain:", "mean ${if (curve.axisX) "Exx" else "Eyy"} over accepted points")
+        curve.peak?.let {
+            layout.drawKeyValue("Peak Stress:", "%.3f MPa at frame %d".format(Locale.US, it.stressMPa, it.frame + 1))
+        }
+        layout.advanceY(20f)
+        page.plot?.let {
+            layout.drawDiagnosticBlock("Engineering stress vs. mean strain", it, STRESS_STRAIN_PLOT_HEIGHT)
+        }
+
+        val rows = curve.points.map {
+            listOf(
+                "Frame ${it.frame + 1}",
+                "%.2f".format(Locale.US, it.loadN),
+                "%.3f".format(Locale.US, it.stressMPa),
+                "%.3f".format(Locale.US, it.strainMilli),
+            )
+        }
+        val headers = listOf("Frame", "Load (N)", "Stress (MPa)", "Strain (mε)")
+        val weights = listOf(0.31f, 0.23f, 0.23f, 0.23f)
+        val first = rows.take(STRESS_STRAIN_ROWS_FIRST_PAGE)
+        layout.drawSectionHeader("Per-frame values")
+        layout.drawTable(headers, first, weights)
+        rows.drop(STRESS_STRAIN_ROWS_FIRST_PAGE).chunked(STRESS_STRAIN_ROWS_PER_PAGE).forEach { chunk ->
+            layout.newPage()
+            layout.drawTitle("Stress–Strain Curve (continued)")
+            layout.drawTable(headers, chunk, weights)
+        }
     }
 
     /**

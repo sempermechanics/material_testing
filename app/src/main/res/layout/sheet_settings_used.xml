@@ -134,4 +134,38 @@
             android:textColor="@color/viewer_chrome_muted"
             android:textSize="12sp" />
     </LinearLayout>
+
+    <!-- Stress-strain curve; only for a session with a machine load per frame. -->
+    <LinearLayout
+        android:id="@+id/stressStrainSection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvStressStrainTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:letterSpacing="0.08"
+            android:textAllCaps="true"
+            android:textColor="@color/viewer_chrome_muted"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <com.indicvision.semper.ui.analysis.VsgPlotView
+            android:id="@+id/plotStressStrain"
+            android:layout_width="match_parent"
+            android:layout_height="190dp"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:id="@+id/tvStressStrainCaption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/viewer_chrome_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
 </LinearLayout>

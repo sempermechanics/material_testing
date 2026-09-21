@@ -44,7 +44,7 @@ class AnalysisCsvMotionTest {
     @Test
     fun `the point header carries the motion columns for every session`() {
         assertEquals(
-            "image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg",
+            "image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa",
             AnalysisCsvWriter.pointHeader(sweep = false),
         )
     }
@@ -53,6 +53,6 @@ class AnalysisCsvMotionTest {
     fun `a sweep header keeps its settings columns before the DIC ones`() {
         val header = AnalysisCsvWriter.pointHeader(sweep = true)
         assertTrue(header.startsWith("image,subset_px,step_px,strain_window,vsg_px,x_px"))
-        assertTrue(header.endsWith("znssd,shift_u_px,shift_v_px,shift_rot_deg"))
+        assertTrue(header.endsWith("znssd,shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa"))
     }
 }

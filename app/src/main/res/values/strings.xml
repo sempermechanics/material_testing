@@ -250,6 +250,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="viewer_edge_title_fmt">%1$s · %2$s</string>
     <string name="settings_used_title">Settings used</string>
     <string name="setting_test_type">Test type</string>
+    <string name="setting_cross_section">Cross-section</string>
+    <string name="setting_load">Machine load</string>
+    <string name="setting_stress">Stress</string>
+    <string name="setting_mm2_fmt">%1$s mm²</string>
+    <string name="setting_n_fmt">%1$s N</string>
+    <string name="setting_mpa_fmt">%1$s MPa</string>
     <string name="setting_subset">Subset size</string>
     <string name="setting_step">Step size</string>
     <string name="setting_strain_window">Strain window</string>
@@ -645,6 +651,15 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="load_err_non_numeric">Line %1$d, column %2$d is \"%3$s\", not a number.</string>
     <string name="load_err_too_large">The file is larger than %1$d MB.</string>
     <string name="load_err_read">The file could not be opened.</string>
+
+    <!-- Stress–strain (viewer Details sheet and the all-frames PDF) -->
+    <string name="stress_strain_title">Stress–strain</string>
+    <string name="stress_strain_axis_strain">Strain (mε)</string>
+    <string name="stress_strain_axis_stress">Stress (MPa)</string>
+    <string name="stress_strain_progress_fmt">Reading strain %1$d / %2$d…</string>
+    <string name="stress_strain_caption_fmt">Frame %1$d · %2$s N · %3$s MPa · %4$s mε</string>
+    <string name="stress_strain_frame_skipped">This frame has no accepted points, so it is not on the curve.</string>
+    <string name="stress_strain_empty">No frame has accepted points, so there is no curve.</string>
     <string name="step_of_fmt">Step %1$d of %2$d</string>
     <string name="reference_meta_fmt">Reference · %1$d × %2$d px</string>
     

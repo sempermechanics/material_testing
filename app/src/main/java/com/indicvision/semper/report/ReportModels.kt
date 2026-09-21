@@ -36,7 +36,26 @@ data class ReportData(
      * when too few points converged to fit it — see [RigidBodyFit.MIN_POINTS].
      */
     val rigidBody: RigidBodyFit.Fit? = null,
+
+    /**
+     * The mechanical test this frame belongs to, for the cover's "Mechanical
+     * Test" block. Null on a plain DIC session; [loadN] / [stressMPa] are null
+     * for a typed session without a load log (bending, torsion, a sweep).
+     */
+    val mechanical: MechanicalCover? = null,
 )
+
+/** Cover-page facts of a mechanical test, one frame's worth. */
+data class MechanicalCover(
+    /** Wire name, e.g. "tensile"; the cover capitalises it. */
+    val testType: String,
+    val crossSectionMm2: Float,
+    val loadAxisX: Boolean,
+    val loadN: Float? = null,
+    val stressMPa: Float? = null,
+) {
+    val label: String get() = testType.replaceFirstChar { it.uppercase() }
+}
 
 // Dedicated Data Class for ROI
 data class RoiData(

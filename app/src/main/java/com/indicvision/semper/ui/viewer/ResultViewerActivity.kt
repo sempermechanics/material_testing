@@ -144,6 +144,14 @@ class ResultViewerActivity : AppCompatActivity() {
     internal var roiW = 0
     internal var roiH = 0
 
+    // Mechanical-test facts ride the intent unchanged (ViewerArgs writes them
+    // for every session, empty for a plain DIC one) and are read on demand.
+    internal val testType: String get() = intent.getStringExtra(DicKeys.TEST_TYPE).orEmpty()
+    internal val crossSectionMm2: Float get() = intent.getFloatExtra(DicKeys.CROSS_SECTION_MM2, 0f)
+    internal val loadAxisX: Boolean get() = intent.getBooleanExtra(DicKeys.LOAD_AXIS_X, true)
+    internal val loadsN: FloatArray by lazy { intent.getFloatArrayExtra(DicKeys.LOADS_N) ?: FloatArray(0) }
+    internal val stressStrain: ViewerStressStrainHelper by lazy { ViewerStressStrainHelper(this, viewerVm) }
+
     internal var cachedBaseImage: Bitmap? = null
     private var cachedHeatmap: Bitmap? = null
     internal var currentTypeString: String
@@ -605,6 +613,7 @@ class ResultViewerActivity : AppCompatActivity() {
         scrubDebounceJob?.cancel()
         refDecodeJob?.cancel()
         summary.cancel()
+        stressStrain.cancel()
         scrubCache.clear(except = cachedHeatmap)
         inspect.clearSpatialIndex()
     }
@@ -1049,6 +1058,11 @@ class ResultViewerActivity : AppCompatActivity() {
             roiY = roiY,
             roiW = roiW,
             roiH = roiH,
+            testType = testType,
+            crossSectionMm2 = crossSectionMm2,
+            loadAxisX = loadAxisX,
+            loadsN = loadsN,
+            stressStrain = viewerVm.stressStrain,
         )
     }
 
