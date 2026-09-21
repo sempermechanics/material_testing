@@ -36,7 +36,7 @@ produces:
 #   # which can differ from GOOGLE_CLOUD_PROJECT (e.g. indicvision-dic-app).
 #   sed -e "s|__CLOUD_RUN_URL__|${CLOUD_RUN_URL}|g" \
 #       -e "s|__FIREBASE_PROJECT_ID__|${FIREBASE_PROJECT_ID}|g" \
-#       -e "s|__GATEWAY_HOST__|${GATEWAY_HOST}|g" \
+#       -e "s|__MANAGED_SERVICE__|${MANAGED_SERVICE}|g" \
 #       openapi.yaml > openapi.generated.yaml
 # Never commit a live Cloud Run hostname or project id here.
 # Never substitute GOOGLE_CLOUD_PROJECT into the Firebase audience/issuer.
@@ -49,12 +49,15 @@ produces:
 # with an Authorization header, so every call is preflighted. allowCors makes
 # ESPv2 pass the unauthenticated OPTIONS through to Cloud Run — where
 # app/main.py's CORSMiddleware answers it against CONSOLE_ORIGINS — instead of
-# refusing it under the `security` block below. `name` must be the gateway's
-# own hostname:
-#   GATEWAY_HOST=$(gcloud api-gateway gateways describe indic-gw --location REGION \
-#                    --format='value(defaultHostname)')
+# refusing it under the `security` block below. `name` must be the API's
+# managed service name (API_ID-hash.apigateway.PROJECT.cloud.goog) — ESPv2
+# matches it against its own service name and silently ignores allowCors on a
+# mismatch; the *.gateway.dev hostname is NOT it (that gave OPTIONS → 405).
+# It exists as soon as the API does, so no bootstrap pass is needed:
+#   MANAGED_SERVICE=$(gcloud api-gateway apis describe semper-api \
+#                       --format='value(managedService)')
 x-google-endpoints:
-  - name: __GATEWAY_HOST__
+  - name: __MANAGED_SERVICE__
     allowCors: true
 x-google-backend:
   address: __CLOUD_RUN_URL__

@@ -467,39 +467,40 @@ GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
 gcloud run services add-iam-policy-binding indic-api --region $REGION \
   --member="serviceAccount:$GW_SA" --role="roles/run.invoker"
 
-# 3. Spec is committed at backend/gateway/openapi.yaml (covers all current
+# 3. Create the API first: its managed service name is a placeholder input.
+#    API Gateway is not offered in asia-south1; the gateways live in
+#    asia-northeast1 (GW_REGION) in front of Cloud Run in asia-south1.
+GW_REGION=asia-northeast1
+gcloud api-gateway apis create semper-api
+MANAGED_SERVICE=$(gcloud api-gateway apis describe semper-api \
+  --format='value(managedService)')
+
+#    Spec is committed at backend/gateway/openapi.yaml (covers all current
 #    routes) with three placeholders. Substitute ALL into a generated copy —
 #    the generated file is gitignored because it carries the live hostname.
-#    __GATEWAY_HOST__ is the gateway's own hostname (x-google-endpoints /
-#    allowCors, which lets the browser dashboards' CORS preflights through).
-#    On FIRST creation it does not exist yet: generate without that block,
-#    create the gateway, then come back and switch to a config that names it
-#    ("Redeploying the gateway" below).
-GATEWAY_HOST=$(gcloud api-gateway gateways describe indic-gw --location $REGION \
-  --format='value(defaultHostname)' 2>/dev/null || true)
+#    __MANAGED_SERVICE__ goes into x-google-endpoints / allowCors, which lets
+#    the browser dashboards' CORS preflights through. It must be the managed
+#    service name, not the *.gateway.dev hostname (ESPv2 ignores allowCors on
+#    a mismatch and answers OPTIONS with 405).
 sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g" \
     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g" \
-    -e "s|__GATEWAY_HOST__|$GATEWAY_HOST|g" \
+    -e "s|__MANAGED_SERVICE__|$MANAGED_SERVICE|g" \
   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
-# First creation only — no gateway host yet, so drop the CORS block:
-[ -z "$GATEWAY_HOST" ] && sed -i '/^x-google-endpoints:/,/allowCors: true/d' \
-  backend/gateway/openapi.generated.yaml
 
 # Fail loudly rather than shipping a spec with a placeholder still in it.
 # Skip comment lines: the header comment of openapi.yaml names the placeholders.
 grep -v '^[[:space:]]*#' backend/gateway/openapi.generated.yaml | grep -qE '__[A-Z_]+__' && \
   echo "unsubstituted placeholder remains" && exit 1
 
-# 4. Create the API, config (with backend-auth SA), and gateway
-gcloud api-gateway apis create indic-api
-gcloud api-gateway api-configs create v1 --api=indic-api \
+# 4. Create the config (with backend-auth SA) and the gateway
+gcloud api-gateway api-configs create v1 --api=semper-api \
   --openapi-spec=backend/gateway/openapi.generated.yaml \
   --backend-auth-service-account=$GW_SA
-gcloud api-gateway gateways create indic-gw --api=indic-api \
-  --api-config=v1 --location=$REGION
+gcloud api-gateway gateways create semper-gw --api=semper-api \
+  --api-config=v1 --location=$GW_REGION
 
 # 5. The public gateway URL → this is what the app talks to (C1)
-gcloud api-gateway gateways describe indic-gw --location $REGION \
+gcloud api-gateway gateways describe semper-gw --location $GW_REGION \
   --format='value(defaultHostname)'
 ```
 Leave Cloud Run **ingress at its default** (`all`) — the gateway calls the
@@ -525,21 +526,21 @@ PROJECT=indicvision-dic-app REGION=asia-south1
 RUN_URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
 GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
 
-# Same substitution + placeholder guard as step 3 above. The gateway exists
-# now, so its hostname goes into x-google-endpoints (CORS for the dashboards).
-GATEWAY_HOST=$(gcloud api-gateway gateways describe indic-gw --location $REGION   --format='value(defaultHostname)')
-sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g"     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g"     -e "s|__GATEWAY_HOST__|$GATEWAY_HOST|g"   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
+# Same substitution + placeholder guard as step 3 above.
+GW_REGION=asia-northeast1
+MANAGED_SERVICE=$(gcloud api-gateway apis describe semper-api --format='value(managedService)')
+sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g"     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g"     -e "s|__MANAGED_SERVICE__|$MANAGED_SERVICE|g"   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
 grep -v '^[[:space:]]*#' backend/gateway/openapi.generated.yaml | grep -qE '__[A-Z_]+__' &&   echo "unsubstituted placeholder remains" && exit 1
 
 # Remember the config currently live — this is the rollback target.
-PREV_CFG=$(gcloud api-gateway gateways describe indic-gw --location $REGION   --format='value(apiConfig)' | sed 's|.*/||')
+PREV_CFG=$(gcloud api-gateway gateways describe semper-gw --location $GW_REGION   --format='value(apiConfig)' | sed 's|.*/||')
 echo "rollback: $PREV_CFG"
 
 # New config, named by date; then switch the gateway (takes a few minutes).
 NEW_CFG=v$(date +%Y%m%d)
-gcloud api-gateway api-configs create $NEW_CFG --api=indic-api   --openapi-spec=backend/gateway/openapi.generated.yaml   --backend-auth-service-account=$GW_SA
-gcloud api-gateway gateways update indic-gw --api=indic-api   --api-config=$NEW_CFG --location=$REGION
-gcloud api-gateway gateways describe indic-gw --location $REGION   --format='value(apiConfig,state)'
+gcloud api-gateway api-configs create $NEW_CFG --api=semper-api   --openapi-spec=backend/gateway/openapi.generated.yaml   --backend-auth-service-account=$GW_SA
+gcloud api-gateway gateways update semper-gw --api=semper-api   --api-config=$NEW_CFG --location=$GW_REGION
+gcloud api-gateway gateways describe semper-gw --location $GW_REGION   --format='value(apiConfig,state)'
 ```
 
 Verify from outside: an unauthenticated `GET https://<gateway>/v1/config` must
@@ -547,18 +548,20 @@ answer **401** (route known, token missing), not 404 (route missing from the
 config). Then the dashboards' preflight:
 `curl -si -X OPTIONS https://<gateway>/v1/me -H 'Origin: https://app.sempermechanics.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization'`
 must answer **200** with `access-control-allow-origin: https://app.sempermechanics.com`
-— a 401/403 here means the config lacks `x-google-endpoints … allowCors`, and
+— a 401/403/405 here means the config lacks `x-google-endpoints … allowCors` or
+names the wrong service (it must be the API's managed service name, not the
+`*.gateway.dev` host), and
 a 200 without the header means the Cloud Run revision lacks that origin in
 `CONSOLE_ORIGINS`. Roll back with
-`gcloud api-gateway gateways update indic-gw --api=indic-api --api-config=$PREV_CFG --location=$REGION`;
-old configs stay listed under `api-configs list --api=indic-api` and can be
+`gcloud api-gateway gateways update semper-gw --api=semper-api --api-config=$PREV_CFG --location=$GW_REGION`;
+old configs stay listed under `api-configs list --api=semper-api` and can be
 deleted once nothing points at them.
 
 ### C1. Point the app at the backend
 
 In `local.properties`:
 ```properties
-INDIC_API_BASE_URL=https://indic-gw-xxxx.an.gateway.dev
+INDIC_API_BASE_URL=https://semper-gw-xxxx.an.gateway.dev
 ```
 Blank `INDIC_API_BASE_URL` = offline-only (cloud disabled). Rebuild after editing.
 

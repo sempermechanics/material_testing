@@ -206,7 +206,7 @@ pre-licensing documents)
       → promote; auto-rollback on failure). Read the "Describe live env"
       warning: after promote, `--remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER`.
 - [ ] Gateway: new `api-config` from the substituted spec — all three
-      placeholders, `__GATEWAY_HOST__` included — `gateways update`,
+      placeholders, `__MANAGED_SERVICE__` included — `gateways update`,
       `PREV_CFG` recorded ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)
       "Redeploying the gateway"). Unauthenticated `/v1/config` → **401**, not
       404; the preflight above → **200** through the gateway.
