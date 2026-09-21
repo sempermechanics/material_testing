@@ -861,7 +861,8 @@ already promised a place on a different licence — withdraw the other
 invitation first) and `409 license_seats_exhausted` on an assigned key.
 
 **One address for everybody.** `sempermechanics.com/login` is the only web
-address anyone needs — a customer, an IT contact, or Semper staff. It signs
+address anyone needs — a customer, an IT contact, or Semper staff (it forwards
+to `app.sempermechanics.com/login`, where the dashboards actually live). It signs
 them in and forwards them to whichever dashboard is theirs: staff to the
 operator console, an address named in a licence's `adminEmails` to that
 roster, and everyone else to their own account page. Somebody who is both a

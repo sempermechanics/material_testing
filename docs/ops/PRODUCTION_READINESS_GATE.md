@@ -157,14 +157,21 @@ retrieval (`/content`, bundle) is licensed. Ops steps in order:
 
 - [x] Full CI green on the #100 tip (run `35433845913` after the E741 fix);
       `gh pr merge 100 --merge`.
-- [ ] `feat/licensing-go-live` merged to `main` **before** any backend deploy
-      from `main` — it removes the `403` on `POST /v1/sessions` that would
-      make every old build's upload worker retry forever.
-- [ ] Create the five repository variables `deploy-backend.yml` now pins:
+- [x] `feat/licensing-go-live` merged to `main` (#110, `08e959d`, 2026-09-19)
+      **before** any backend deploy from `main` — it removes the `403` on
+      `POST /v1/sessions` that would make every old build's upload worker
+      retry forever.
+- [ ] `feat/console-domain-cors` merged to `main` before the deploy: CORS
+      (`CONSOLE_ORIGINS` + gateway `allowCors`), the `/auth/*` rewrites, and
+      the app's second continue host. Without it the dashboards cannot call
+      the API from any origin.
+- [ ] Create the six repository variables `deploy-backend.yml` now pins:
       `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`,
       `ADMIN_WEB_MFA_ENABLED` (`1`), `APP_CHECK_MODE` (`off`),
-      `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (`30`). Unset resolves to those
-      defaults, but set them so the value is a decision, not an accident.
+      `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (`30`), `CONSOLE_ORIGINS`
+      (`https://app.sempermechanics.com,https://indicvision-dic-app-auth.firebaseapp.com`).
+      Unset resolves to those defaults, but set them so the value is a
+      decision, not an accident.
 - [ ] Choose `DEMO_MAX_ANALYSES` from a read-only Firestore survey: it must be
       ≥ max(live `MAX_SESSIONS_PER_USER`, the largest per-user `maxSessions`
       override, the largest per-uid session count) or an existing user 409s on
@@ -183,6 +190,9 @@ pre-licensing documents)
       dry-run (expect 0 changes) then `--apply`; ledger row written.
 - [ ] `GET /v1/config` with an ID token → `mode: demo`, `plan: demo`,
       `cloudBackupEnabled: false`, `maxSessions: <DEMO_MAX_ANALYSES>`.
+- [ ] `OPTIONS /v1/me` with `Origin: https://app.sempermechanics.com` and
+      `Access-Control-Request-Method: GET` against the staging Cloud Run URL →
+      200 with `access-control-allow-origin` echoed.
 - [ ] Old-APK pass (debug build from `bcc467a`, `INDIC_API_BASE_URL` = staging):
       sign in, back up one analysis (201 + upload completes), **restore fails
       once with "rejected" and does not loop**, delete, export.
@@ -195,17 +205,29 @@ pre-licensing documents)
 - [ ] `deploy-backend.yml` with `environment=production` (candidate → `/readyz`
       → promote; auto-rollback on failure). Read the "Describe live env"
       warning: after promote, `--remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER`.
-- [ ] Gateway: new `api-config` from the substituted spec, `gateways update`,
+- [ ] Gateway: new `api-config` from the substituted spec — all three
+      placeholders, `__GATEWAY_HOST__` included — `gateways update`,
       `PREV_CFG` recorded ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)
-      "Redeploying the gateway"). Unauthenticated `/v1/config` → **401**, not 404.
+      "Redeploying the gateway"). Unauthenticated `/v1/config` → **401**, not
+      404; the preflight above → **200** through the gateway.
 - [ ] Verify with the **installed, unmodified** old app: sign-in, new backup,
       delete, export succeed; restore shows one refusal.
 - [ ] Verify with a new-app build: Terms gate, one account receives a demo key
       (`licenses/` gains a `createdByUid: system` document), Home shows no
       sync badge and Settings shows no Cloud/Analyses-data section on demo.
-- [ ] Consoles last: Identity Platform + TOTP enabled
+- [ ] Custom domain `app.sempermechanics.com` on the `indicvision-dic-app-auth`
+      Hosting site: TXT verification + A records in **Netlify DNS**, certificate
+      issued, `https://app.sempermechanics.com/.well-known/assetlinks.json` 200.
+- [ ] Consoles last: Identity Platform + TOTP enabled and
+      `app.sempermechanics.com` an authorised domain
       ([console README](../../firebase-hosting/public/console/README.md)), `firebase deploy --only
-      firestore:indexes`, `./scripts/deploy-console.sh`, hand-check `/login`.
+      firestore:indexes`, `./scripts/deploy-console.sh`, hand-check `/login`
+      as staff (a licence list loading is the CORS proof) and as an account
+      holder.
+- [ ] Marketing site (`IndicVision/semper-website`, Netlify): "Sign in" in the
+      nav, `/dashboard/` page, `_redirects` for `/login`, `/account`,
+      `/terms/*` → `app.sempermechanics.com`. `curl -sI https://sempermechanics.com/terms/`
+      → 301 → 200 (it is 404 today, and `legal.py` links it).
 - [ ] 24 h log watch: `feature_not_licensed` only from restore/bundle by demo
       accounts (never from `POST /v1/sessions`); `app_check_required` **= 0**;
       `session_quota_exceeded`; `license_device_mismatch`; `mfa_required`;
@@ -236,6 +258,11 @@ pre-licensing documents)
 - [ ] Old-app restore UX: a pre-licensing build shows a generic "rejected"
       message on restore; there is no way to tell it "licence required".
       Accepted — it fails once and stops.
+- [ ] Password-reset custom action URL stays
+      `https://indicvision-dic-app-auth.firebaseapp.com/finishReset` (TD-29):
+      builds before `AUTH_HOST = app.sempermechanics.com` intercept only that
+      host. Switch it, and drop the legacy filters, once Play vitals show no
+      such build installed.
 
 ## Contention fixes found by the emulator tier
 

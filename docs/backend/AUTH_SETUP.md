@@ -74,11 +74,15 @@ email so the screen can't be used to probe which addresses are registered.
 
 The passwordless link only signs the user in if tapping it **reopens this app**.
 Firebase mails a link back to the continue URL
-`https://indicvision-dic-app-auth.firebaseapp.com/finishSignIn`
+`https://app.sempermechanics.com/auth/finishSignIn`
 (`EMAIL_LINK_CONTINUE_URL` in
 [AuthRepository.kt](../../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt)),
 and `AuthActivity` declares a matching App Link `intent-filter` for that
-host + path.
+host + path. Builds before that constant changed use
+`https://indicvision-dic-app-auth.firebaseapp.com/finishSignIn`; the manifest
+keeps a filter for that host too, `AuthActivity` accepts links on either
+(`AUTH_HOSTS`), and both hosts belong to the same Hosting site, so the same
+`assetlinks.json` verifies both. Retiring the old host is TD-29.
 
 **Procedure of record** (Digital Asset Links, deploy, `adb` verify): see
 [`firebase-hosting/README.md`](../../firebase-hosting/README.md). That folder

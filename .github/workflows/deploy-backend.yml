@@ -229,6 +229,7 @@ jobs:
             ADMIN_WEB_MFA_ENABLED=${{ vars.ADMIN_WEB_MFA_ENABLED || '1' }}
             APP_CHECK_MODE=${{ vars.APP_CHECK_MODE || 'off' }}
             SELF_DEVICE_CHANGE_COOLDOWN_DAYS=${{ vars.SELF_DEVICE_CHANGE_COOLDOWN_DAYS || '30' }}
+            CONSOLE_ORIGINS=${{ vars.CONSOLE_ORIGINS || 'https://app.sempermechanics.com,https://indicvision-dic-app-auth.firebaseapp.com' }}
           secrets: |-
             RESEND_API_KEY=resend-api-key:latest
           flags: >-

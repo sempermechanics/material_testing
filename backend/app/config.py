@@ -100,6 +100,25 @@ class Settings:
         if e.strip()
     }
 
+    # --- browser dashboards ---------------------------------------------------
+    # Origins allowed to call the API from a browser. The dashboards live on
+    # Firebase Hosting (app.sempermechanics.com, and the project's own
+    # firebaseapp.com host), never on the gateway host, so every console fetch
+    # is cross-origin and carries Authorization, which makes the browser
+    # preflight it. Without a matching Access-Control-Allow-Origin the
+    # response is discarded and the page silently does nothing. The phone
+    # never sends an Origin and is unaffected. Comma-separated, exact origins
+    # (scheme + host), no wildcard.
+    CONSOLE_ORIGINS = [
+        o.strip().rstrip("/")
+        for o in os.environ.get(
+            "CONSOLE_ORIGINS",
+            "https://app.sempermechanics.com,"
+            "https://indicvision-dic-app-auth.firebaseapp.com",
+        ).split(",")
+        if o.strip()
+    ]
+
     # --- staff console second factor ---------------------------------------
     # Every state-changing /v1/admin/* route requires a device attestation: an
     # ECDSA signature from a registered device keypair, which proves the call

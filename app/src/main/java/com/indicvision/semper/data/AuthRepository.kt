@@ -27,16 +27,38 @@ import timber.log.Timber
 import java.io.IOException
 
 /**
- * Host both Firebase auth continue links return to — the project's default
- * hosting domain. Must be an Authorized Domain in the Firebase project and
- * handled as an App Link by this app (see docs); keep in sync with the
- * backend's FIREBASE_PROJECT_ID.
+ * Host both Firebase auth continue links return to — the custom domain on the
+ * auth project's Hosting site. Must be an Authorized Domain in the Firebase
+ * project and handled as an App Link by this app (see docs).
  *
  * Top-level rather than on [AuthRepository]'s private companion because
  * `AuthActivity` checks arriving links against it, and one constant beats a
  * second copy of the domain drifting out of step with the manifest.
  */
-const val AUTH_HOST = "indicvision-dic-app-auth.firebaseapp.com"
+const val AUTH_HOST = "app.sempermechanics.com"
+
+/**
+ * The Hosting site's own domain, which every build before [AUTH_HOST] used as
+ * its continue host and which the password-reset action URL in Firebase
+ * Console still names. Links arriving on it are ours too.
+ */
+const val LEGACY_AUTH_HOST = "indicvision-dic-app-auth.firebaseapp.com"
+
+/**
+ * Every host an auth continue link may legitimately arrive on. The manifest
+ * declares an App Link filter for each; `AuthActivity` refuses the rest.
+ * Shrinks back to [AUTH_HOST] alone once no build declaring only the legacy
+ * host is installed (TD-29).
+ */
+val AUTH_HOSTS: Set<String> = setOf(AUTH_HOST, LEGACY_AUTH_HOST)
+
+/**
+ * True for an https link on one of [AUTH_HOSTS] — the only links
+ * `AuthActivity` hands to Firebase. Pure so the allow-list is unit-testable
+ * without an Android `Uri`.
+ */
+fun isTrustedAuthLink(scheme: String?, host: String?): Boolean =
+    scheme.equals("https", ignoreCase = true) && host?.lowercase() in AUTH_HOSTS
 
 /**
  * Authentication + access-gate.
@@ -635,9 +657,9 @@ class AuthRepository(context: Context) {
         const val K_PENDING_EMAIL = "pending_email"
 
         /** Email sign-in link continue URL — see [AUTH_HOST]. */
-        const val EMAIL_LINK_CONTINUE_URL = "https://$AUTH_HOST/finishSignIn"
+        const val EMAIL_LINK_CONTINUE_URL = "https://$AUTH_HOST/auth/finishSignIn"
 
         /** Password-reset App Link continue URL — keep in sync with the manifest filter. */
-        const val RESET_CONTINUE_URL = "https://$AUTH_HOST/finishReset"
+        const val RESET_CONTINUE_URL = "https://$AUTH_HOST/auth/finishReset"
     }
 }

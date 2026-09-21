@@ -62,8 +62,33 @@
             android:launchMode="singleTop">
             <!-- Firebase passwordless email-link sign-in returns to the app here as
                  an App Link. Host + path must match EMAIL_LINK_CONTINUE_URL in
-                 AuthRepository. autoVerify needs a Digital Asset Links file served
-                 at the host (see docs/backend/AUTH_SETUP.md). -->
+                 AuthRepository (AUTH_HOST). autoVerify needs a Digital Asset Links
+                 file served at the host (see docs/backend/AUTH_SETUP.md). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="app.sempermechanics.com"
+                    android:path="/auth/finishSignIn" />
+            </intent-filter>
+            <!-- Password-reset App Link. Host + path must match RESET_CONTINUE_URL
+                 in AuthRepository. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="app.sempermechanics.com"
+                    android:path="/auth/finishReset" />
+            </intent-filter>
+            <!-- The same two links on the Hosting site's own domain
+                 (LEGACY_AUTH_HOST). The password-reset custom action URL in
+                 Firebase Console still points here, because every build before
+                 AUTH_HOST declares only this host; both filters stay until no
+                 such build is installed (TD-29). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -73,9 +98,6 @@
                     android:host="indicvision-dic-app-auth.firebaseapp.com"
                     android:path="/finishSignIn" />
             </intent-filter>
-            <!-- Password-reset App Link. Host + path must match RESET_CONTINUE_URL
-                 in AuthRepository. Firebase Console must set this as the password-
-                 reset custom action URL. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

@@ -5,6 +5,8 @@
     <!-- Digital Asset Links for Credential Manager. Not user-facing. -->
     <string name="asset_statements" translatable="false">
         [{
+        \"include\": \"https://app.sempermechanics.com/.well-known/assetlinks.json\"
+        }, {
         \"include\": \"https://indicvision-dic-app-auth.firebaseapp.com/.well-known/assetlinks.json\"
         }]
     </string>

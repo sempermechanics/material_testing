@@ -101,12 +101,12 @@ then a `trap` puts the templates back.
 Same Firebase project as the app (`indicvision-dic-app-auth`). Do **not** open a
 second Auth directory.
 
-1. Confirm which Hosting site owns `sempermechanics.com` (`firebase hosting:sites:list`). `/login` is a rewrite on that site once console files are deployed.
-2. Upgrade the project to **Identity Platform**, enable the **TOTP** second factor, leave **SMS** off. Add `sempermechanics.com` (and any preview channel) to authorised domains.
+1. The dashboards live on **`app.sempermechanics.com`**, a custom domain of this Hosting site (`indicvision-dic-app-auth`). `sempermechanics.com` itself is the marketing site on Netlify, which only links here and redirects `/login`, `/account` and `/terms/` to this host. Add the custom domain in Firebase Console → Hosting (TXT verification, then the A records) — the DNS zone is Netlify DNS. Until the certificate is issued the site still answers on `indicvision-dic-app-auth.firebaseapp.com`.
+2. Upgrade the project to **Identity Platform**, enable the **TOTP** second factor, leave **SMS** off. Add `app.sempermechanics.com` (and any preview channel) to authorised domains.
 3. Put your address in `ADMIN_EMAILS` / `role: admin` for the operator desk.
 4. Deploy Cloud Run with the intended `DEMO_MAX_ANALYSES` (no lower than any live user's session count — every pre-licensing account becomes demo), keep `ADMIN_WEB_MFA_ENABLED=1` and `APP_CHECK_MODE=off`; `deploy-backend.yml` pins all three from repository variables. Then redeploy **API Gateway** from the committed spec (`api-configs create` + `gateways update`, see [BACKEND_SETUP_GCP.md](../../../docs/backend/BACKEND_SETUP_GCP.md) "Redeploying the gateway") so checkout / release / unbind / bundle / campus aliases are on the public surface — the backend workflow alone does not. The full ordered checklist is the "Licensing rollout" section of [PRODUCTION_READINESS_GATE.md](../../../docs/ops/PRODUCTION_READINESS_GATE.md).
 5. `firebase deploy --only firestore:indexes` from the backend indexes file.
-6. Run `./scripts/deploy-console.sh` with the live gateway and Auth domain.
+6. Run `./scripts/deploy-console.sh` with the live gateway and Auth domain. `AUTH_DOMAIN` stays `indicvision-dic-app-auth.firebaseapp.com`: it is the popup origin (`authDomain` from `/__/firebase/init.js`), not the page's own host.
 7. Hand-check: enrol TOTP at `/login` as staff, as institution IT, and as an account holder; revoke a test licence only after password + TOTP (+ key prefix); sign in on the phone and complete the authenticator challenge.
 
 Identity Platform itself is free to enable. Email/social stays free to the usual
@@ -123,6 +123,18 @@ same-origin. That is also why no page may carry an inline `<script>` body or an
 
 Firebase Auth must have this Hosting domain in its authorised domains, or the
 sign-in popup is rejected.
+
+### CORS
+
+The pages are served from Hosting and call the API Gateway on another origin
+with an `Authorization` header, so the browser preflights every request. Two
+things answer that preflight, and both must be in place or the page renders
+and every button silently does nothing: the gateway config carries
+`x-google-endpoints … allowCors: true` (so ESPv2 forwards the unauthenticated
+`OPTIONS` instead of refusing it), and Cloud Run's `CONSOLE_ORIGINS` names the
+page origin (`app.sempermechanics.com` and the `firebaseapp.com` host by
+default; add a preview channel while testing). The phone never sends an
+`Origin` and is untouched by either.
 
 ## Checking them
 
