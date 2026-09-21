@@ -359,6 +359,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                     }
                 },
                 engineStatsArray = engineStatsArray,
+                mechanical = mechanicalInputs(forSweep = false),
             ),
             enqueueCloudIfSaved = cloudEnabled,
         )

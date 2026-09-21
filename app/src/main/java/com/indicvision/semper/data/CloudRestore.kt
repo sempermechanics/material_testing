@@ -848,7 +848,7 @@ object CloudRestore {
         return dest
     }
 
-    private data class RestoreRecordTarget(
+    internal data class RestoreRecordTarget(
         val localId: String,
         val cloudSessionId: String,
         val sessionDir: File,
@@ -856,7 +856,7 @@ object CloudRestore {
         val existing: SessionRecord?,
     )
 
-    private fun recordFrom(meta: JSONObject, target: RestoreRecordTarget): SessionRecord {
+    internal fun recordFrom(meta: JSONObject, target: RestoreRecordTarget): SessionRecord {
         val engine = meta.optJSONObject("engine") ?: JSONObject()
         val roi = engine.optJSONObject("roi") ?: JSONObject()
         val metrics = meta.optJSONObject("metrics") ?: JSONObject()
@@ -908,7 +908,36 @@ object CloudRestore {
             sweepSkipCodes = legacySkip.codes,
             sweepSkippedNodes = skipNodes,
             renamedByUser = target.existing?.renamedByUser ?: false,
+        ).withRestoredTest(meta, defNames.size)
+    }
+
+    /**
+     * The mechanical test from a `/4` backup. Pre-`/4` backups have no `test`
+     * object, so every field stays at its "no test" default.
+     */
+    private fun SessionRecord.withRestoredTest(meta: JSONObject, frameCount: Int): SessionRecord {
+        val test = meta.optJSONObject("test") ?: return this
+        return copy(
+            testType = test.optString("type"),
+            crossSectionMm2 = test.optDouble("crossSectionMm2", 0.0).toFloat(),
+            loadAxisX = test.optString("loadAxis", "x") != "y",
+            loadsN = restoredLoads(meta, frameCount),
+            loadSource = test.optString("loadSource"),
+            loadMapping = test.optString("loadMapping"),
         )
+    }
+
+    /**
+     * One load per frame, or none: a backup where only some frames carry a
+     * `loadN` restores as a session without loads rather than a partial curve.
+     */
+    private fun restoredLoads(meta: JSONObject, frameCount: Int): List<Float> {
+        val frames = meta.optJSONArray("frames")
+        if (frames == null || frameCount == 0 || frames.length() != frameCount) return emptyList()
+        val loads = (0 until frameCount).map { i ->
+            frames.getJSONObject(i).optDouble("loadN", Double.NaN)
+        }
+        return if (loads.any { it.isNaN() }) emptyList() else loads.map { it.toFloat() }
     }
 
     private fun restoredFrameNames(meta: JSONObject): List<String> {

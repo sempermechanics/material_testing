@@ -67,5 +67,9 @@ object SessionOpenHelper {
             } else {
                 null
             },
+            testType = session.testType,
+            crossSectionMm2 = session.crossSectionMm2,
+            loadAxisX = session.loadAxisX,
+            loadsN = if (session.hasMachineLoads) session.loadsN.toFloatArray() else FloatArray(0),
         ).toIntent(context)
 }

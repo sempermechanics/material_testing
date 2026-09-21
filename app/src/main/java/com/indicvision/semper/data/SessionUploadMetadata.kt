@@ -30,10 +30,17 @@ object SessionUploadMetadata {
      * Bump it only when that distinction changes, and keep the parse tolerant:
      * pre-`/3` backups predate the field being read at all.
      */
-    const val SCHEMA = "indic.session.metadata/3"
+    const val SCHEMA = "indic.session.metadata/4"
 
     /** Layout version at which the restore payload was split out of the bundle. */
     const val SCHEMA_SPLIT_BUNDLE = 3
+
+    /**
+     * Version that added the `test` object and per-frame `loadN`. Purely
+     * additive: a `/3` reader ignores them and a `/4` reader of a `/3` file
+     * gets a session with no test type.
+     */
+    const val SCHEMA_MECHANICAL_TEST = 4
 
     /** One JSON object per frame: its label, files, and (for a sweep) its settings. */
     fun framesJson(record: SessionRecord): JSONArray {
@@ -51,6 +58,9 @@ object SessionUploadMetadata {
                 )
                 .put("image", name)
                 .put("dat", SessionPaths.frameDatName(index))
+            if (record.hasMachineLoads) {
+                frameObj.put("loadN", record.loadsN[index].toDouble())
+            }
             if (record.isSweep) {
                 val subset = record.sweepSubsets.getOrElse(index) { record.subset }
                 val step = record.sweepSteps.getOrElse(index) { record.step }
@@ -89,6 +99,7 @@ object SessionUploadMetadata {
             .put("capturedAtUtc", iso)
             .put("frameCount", record.frameCount)
             .put("analysisKind", if (record.isSweep) "vsg_study" else "batch")
+            .putOpt("test", testJson(record))
             // One combined CSV for the whole analysis (every frame's points, keyed
             // by the leading columns) rather than a file per frame.
             .put("csv", "analysis_data.csv")
@@ -109,6 +120,21 @@ object SessionUploadMetadata {
             .put("engine", engineJson(record))
             .put("metrics", metrics)
             .toString(2)
+    }
+
+    /**
+     * The mechanical test behind the session, or null when none was chosen so
+     * an untyped session's metadata is byte-identical to what it was before.
+     */
+    fun testJson(record: SessionRecord): JSONObject? {
+        if (record.testType.isBlank()) return null
+        return JSONObject()
+            .put("type", record.testType)
+            .put("crossSectionMm2", record.crossSectionMm2.toDouble())
+            .put("loadAxis", if (record.loadAxisX) "x" else "y")
+            .put("loadUnit", "N")
+            .put("loadSource", record.loadSource)
+            .put("loadMapping", record.loadMapping)
     }
 
     fun deviceJson(context: Context): JSONObject = JSONObject()

@@ -33,6 +33,7 @@ import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.TestType
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
@@ -43,6 +44,7 @@ import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
+import com.indicvision.semper.ui.common.TestTypeSheet
 import com.indicvision.semper.ui.limit.SessionLimitActivity
 import com.indicvision.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
@@ -99,10 +101,22 @@ class HomeActivity : AppCompatActivity() {
         }
 
     private var mediaPicker: MediaPickerSheet? = null
+
+    /**
+     * The test type picked on the sheet, waiting for the media picker to
+     * finish. Saved across recreation because the SAF picker can kill Home
+     * while it is open, and the wizard must not open typeless.
+     */
+    private var pendingTestType: TestType? = null
     private val requestMediaPermission =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             mediaPicker?.onPermissionResult()
         }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingTestType?.let { outState.putString(DicKeys.TEST_TYPE, it.wireName) }
+    }
 
     /**
      * Route a picked photo/video into the analysis screen. Shared by both source
@@ -114,6 +128,7 @@ class HomeActivity : AppCompatActivity() {
         if (uri == null) return
         val mime = contentResolver.getType(uri) ?: ""
         val intent = Intent(this, StaticAnalysisActivity::class.java)
+        pendingTestType?.let { intent.putExtra(DicKeys.TEST_TYPE, it.wireName) }
         if (mime.startsWith("video/")) {
             intent.putExtra(DicKeys.PICKED_VIDEO_URI, uri.toString())
         } else {
@@ -125,6 +140,7 @@ class HomeActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
+        pendingTestType = TestType.fromWire(savedInstanceState?.getString(DicKeys.TEST_TYPE))
         window.decorView.post { reportFullyDrawn() }
 
         // Edge-to-edge (enforced on API 35+): drop the header below the status
@@ -162,7 +178,12 @@ class HomeActivity : AppCompatActivity() {
                 openSessionLimitScreen()
                 return@setOnClickListener
             }
-            showSourceChooser()
+            // Which test first: the wizard decides on open whether to ask for
+            // machine loads, so it has to know before any media is picked.
+            TestTypeSheet.show(this) { type ->
+                pendingTestType = type
+                showSourceChooser()
+            }
         }
         findViewById<ImageButton>(R.id.btnHomeSettings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))

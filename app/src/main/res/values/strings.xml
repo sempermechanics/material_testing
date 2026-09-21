@@ -249,6 +249,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="viewer_details_home">Go to Home</string>
     <string name="viewer_edge_title_fmt">%1$s · %2$s</string>
     <string name="settings_used_title">Settings used</string>
+    <string name="setting_test_type">Test type</string>
     <string name="setting_subset">Subset size</string>
     <string name="setting_step">Step size</string>
     <string name="setting_strain_window">Strain window</string>
@@ -588,6 +589,16 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="next_reason_def">add at least one deformed frame to continue</string>
     <string name="run_analysis">Compute</string>
     <string name="new_analysis_title">New analysis</string>
+
+    <!-- Test type chooser -->
+    <string name="test_type_title">Which test?</string>
+    <string name="test_type_subtitle">Chosen once per analysis; it decides what the wizard asks for.</string>
+    <string name="test_type_tensile">Tensile test</string>
+    <string name="test_type_compression">Compression test</string>
+    <string name="test_type_bending">Bending test</string>
+    <string name="test_type_torsion">Torsion test</string>
+    <string name="test_type_sub_loads">Imports the machine’s load log and plots stress against strain.</string>
+    <string name="test_type_sub_record">Records the test type with the analysis.</string>
     <string name="step_of_fmt">Step %1$d of %2$d</string>
     <string name="reference_meta_fmt">Reference · %1$d × %2$d px</string>
     

@@ -53,6 +53,7 @@ import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.SkippedNode
+import com.indicvision.semper.data.TestType
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.FaqRedirect
@@ -346,6 +347,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
         goToStep(viewModel.wizardStep, animate = false)
 
+        // The test type stays on the Intent (not consumed): a recreation
+        // after process death re-reads it, and the ViewModel is authoritative
+        // once set.
+        TestType.fromWire(intent.getStringExtra(DicKeys.TEST_TYPE))?.let { viewModel.testType = it }
         // Hand-off from Home's media picker: the selection type already
         // decided the branch — image becomes the reference, video enters
         // the extract-frames flow. Consumed once.

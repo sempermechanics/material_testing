@@ -94,6 +94,7 @@ object AnalysisNavHelper {
         strainWindow: Int,
     ) {
         val plan = viewModel.sweepPlan
+        val mechanical = viewModel.mechanicalInputs(forSweep = sweep)
         host.startActivity(
             ViewerArgs(
                 imgW = viewModel.realRefWidth,
@@ -127,6 +128,10 @@ object AnalysisNavHelper {
                 },
                 defPath = viewModel.lastDefPath,
                 defFilePaths = viewModel.defFilePaths,
+                testType = mechanical.testType,
+                crossSectionMm2 = mechanical.crossSectionMm2,
+                loadAxisX = mechanical.loadAxisX,
+                loadsN = mechanical.loadsN.take(frameNames.size).toFloatArray(),
             ).toIntent(host),
         )
     }

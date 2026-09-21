@@ -138,6 +138,7 @@ class SessionRepository {
         engineStatsArray: FloatArray?,
         stopCode: Int = 0,
         plannedFrameCount: Int = 0,
+        mechanical: MechanicalTestInputs = MechanicalTestInputs.NONE,
     ): SessionRecord {
         val now = System.currentTimeMillis()
         val existing = SessionStore.get(appContext, localSessionId)
@@ -181,6 +182,14 @@ class SessionRepository {
             avgIterations = avgIterations,
             executionTimeMs = executionTimeMs,
             syncState = if (cloudEnabled) SessionRecord.SyncState.PENDING else SessionRecord.SyncState.LOCAL_ONLY,
+            testType = mechanical.testType,
+            crossSectionMm2 = mechanical.crossSectionMm2,
+            loadAxisX = mechanical.loadAxisX,
+            // Never more loads than frames: a run that stopped early solved
+            // fewer frames than the CSV was mapped to.
+            loadsN = mechanical.loadsN.take(defNames.size),
+            loadSource = mechanical.loadSource,
+            loadMapping = mechanical.loadMapping,
         )
     }
 
