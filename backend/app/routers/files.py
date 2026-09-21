@@ -50,7 +50,7 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     if not f or f.get("uid") != user["uid"]:
         raise HTTPException(404, errors.FILE_NOT_FOUND)
     if not repo.cloud_backup_enabled(user):
-        raise HTTPException(403, errors.FEATURE_NOT_LICENSED_DETAIL)
+        raise HTTPException(403, errors.feature_not_licensed_detail())
     drive_file_id = f.get("driveFileId")
     if not drive_file_id:
         raise HTTPException(409, errors.FILE_NOT_UPLOADED)

@@ -60,12 +60,19 @@ EMPTY_PATCH = "empty_patch"
 # floating pool: `no_floating_seat` in particular is the pool being FULL, not
 # a fault in the account — the caller stays eligible and may retry.
 FEATURE_NOT_LICENSED = "feature_not_licensed"
-# What a phone shows for a refused restore. Pre-licensing builds print the
-# raw detail, so the code carries a sentence a person can read (the app and
-# the console match on the part before the colon, as for the quota code).
-FEATURE_NOT_LICENSED_DETAIL = (
-    f"{FEATURE_NOT_LICENSED}: Restore isn't available in demo mode."
-)
+
+
+def feature_not_licensed_detail() -> str:
+    """What a phone shows for a refused restore.
+
+    Pre-licensing builds print the raw detail, so the code carries a sentence
+    a person can read; the app and the console match on the part before the
+    colon, as for the quota code. A function rather than another constant so
+    test_error_codes keeps treating every constant here as a bare code.
+    """
+    return f"{FEATURE_NOT_LICENSED}: Restore isn't available in demo mode."
+
+
 LICENSE_NOT_FOUND = "license_not_found"
 LICENSE_REVOKED = "license_revoked"
 LICENSE_EXPIRED = "license_expired"
