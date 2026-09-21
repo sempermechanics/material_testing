@@ -486,7 +486,8 @@ sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g" \
   backend/gateway/openapi.generated.yaml
 
 # Fail loudly rather than shipping a spec with a placeholder still in it.
-grep -q '__' backend/gateway/openapi.generated.yaml && \
+# Skip comment lines: the header comment of openapi.yaml names the placeholders.
+grep -v '^[[:space:]]*#' backend/gateway/openapi.generated.yaml | grep -qE '__[A-Z_]+__' && \
   echo "unsubstituted placeholder remains" && exit 1
 
 # 4. Create the API, config (with backend-auth SA), and gateway
@@ -528,7 +529,7 @@ GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
 # now, so its hostname goes into x-google-endpoints (CORS for the dashboards).
 GATEWAY_HOST=$(gcloud api-gateway gateways describe indic-gw --location $REGION   --format='value(defaultHostname)')
 sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g"     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g"     -e "s|__GATEWAY_HOST__|$GATEWAY_HOST|g"   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
-grep -q '__' backend/gateway/openapi.generated.yaml &&   echo "unsubstituted placeholder remains" && exit 1
+grep -v '^[[:space:]]*#' backend/gateway/openapi.generated.yaml | grep -qE '__[A-Z_]+__' &&   echo "unsubstituted placeholder remains" && exit 1
 
 # Remember the config currently live — this is the rollback target.
 PREV_CFG=$(gcloud api-gateway gateways describe indic-gw --location $REGION   --format='value(apiConfig)' | sed 's|.*/||')
