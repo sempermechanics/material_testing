@@ -198,7 +198,7 @@ async def test_demo_cannot_read_a_stored_file_back(client, monkeypatch):
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "mode": "demo", "plan": "demo"})
     resp = await client.get("/v1/files/f1/content")
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "feature_not_licensed"
+    assert resp.json()["detail"].startswith("feature_not_licensed: ")
 
 
 @pytest.mark.asyncio
@@ -520,7 +520,7 @@ async def test_demo_after_downgrade_still_records_but_cannot_restore(client, mon
     monkeypatch.setattr(drive, "access_token", lambda: "tok")
     restored = await client.get("/v1/files/f1/content")
     assert restored.status_code == 403
-    assert restored.json()["detail"] == "feature_not_licensed"
+    assert restored.json()["detail"].startswith("feature_not_licensed: ")
 
 
 def test_device_lock_is_revalidated_on_every_authed_call_not_just_at_activation(store):

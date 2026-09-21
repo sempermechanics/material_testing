@@ -164,7 +164,7 @@ async def test_demo_cannot_pull_a_bundle(client, stored, monkeypatch):
                                             "plan": "demo"})
     resp, _ = await _bundle(client)
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "feature_not_licensed"
+    assert resp.json()["detail"].startswith("feature_not_licensed: ")
 
 
 @pytest.mark.asyncio
