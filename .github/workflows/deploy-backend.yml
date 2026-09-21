@@ -210,6 +210,8 @@ jobs:
           # variable must resolve to the safe value (demo cap 25, MFA on, App
           # Check off — `enforce` would 403 every installed pre-App-Check build),
           # never to an empty string the backend would parse as something else.
+          # CONSOLE_ORIGINS is space-separated: this block splits pairs on
+          # commas, so a comma inside a value truncates it.
           env_vars: |-
             GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
             FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}
@@ -229,7 +231,7 @@ jobs:
             ADMIN_WEB_MFA_ENABLED=${{ vars.ADMIN_WEB_MFA_ENABLED || '1' }}
             APP_CHECK_MODE=${{ vars.APP_CHECK_MODE || 'off' }}
             SELF_DEVICE_CHANGE_COOLDOWN_DAYS=${{ vars.SELF_DEVICE_CHANGE_COOLDOWN_DAYS || '30' }}
-            CONSOLE_ORIGINS=${{ vars.CONSOLE_ORIGINS || 'https://app.sempermechanics.com,https://indicvision-dic-app-auth.firebaseapp.com' }}
+            CONSOLE_ORIGINS=${{ vars.CONSOLE_ORIGINS || 'https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com' }}
           secrets: |-
             RESEND_API_KEY=resend-api-key:latest
           flags: >-
