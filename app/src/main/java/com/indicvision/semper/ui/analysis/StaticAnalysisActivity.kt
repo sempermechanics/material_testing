@@ -146,6 +146,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var btnBack: Button
     private lateinit var wizardChrome: AnalysisWizardChrome
     private lateinit var wizardSlots: AnalysisWizardSlots
+
+    /** Only inflated for tests that take a load per frame; see [setupLoadCard]. */
+    private var loadCard: AnalysisLoadCard? = null
+    private val pickLoadCsv = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) loadCard?.onCsvPicked(uri)
+    }
     private lateinit var wizardCoach: AnalysisWizardCoach
     private lateinit var sweepHelper: SweepSetupHelper
     private lateinit var settingsSheetHelper: AnalysisSettingsSheetHelper
@@ -351,6 +357,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // after process death re-reads it, and the ViewModel is authoritative
         // once set.
         TestType.fromWire(intent.getStringExtra(DicKeys.TEST_TYPE))?.let { viewModel.testType = it }
+        setupLoadCard()
         // Hand-off from Home's media picker: the selection type already
         // decided the branch — image becomes the reference, video enters
         // the extract-frames flow. Consumed once.
@@ -1732,7 +1739,27 @@ class StaticAnalysisActivity : AppCompatActivity() {
         wizardCoach.maybeShow(target)
     }
 
+    /**
+     * The machine-load card exists only for tensile and compression. It sits
+     * in a ViewStub so the other tests never pay for its views, and so the
+     * host layout stays under lint's TooManyViews cap.
+     */
+    private fun setupLoadCard() {
+        if (!viewModel.testType.hasMachineLoad) return
+        val root = findViewById<ViewStub>(R.id.stubLoadCard).inflate()
+        loadCard = AnalysisLoadCard(
+            activity = this,
+            viewModel = viewModel,
+            root = root,
+            onPickCsv = { pickLoadCsv.launch(AnalysisLoadCard.CSV_MIME_TYPES) },
+            onChanged = ::checkReady,
+            confirmOpenFaq = ::confirmOpenFaq,
+        )
+    }
+
     private fun checkReady() {
+        // The deformed frames may have changed since the log was matched.
+        loadCard?.refresh()
         AnalysisReadyGate.apply(
             activity = this,
             viewModel = viewModel,

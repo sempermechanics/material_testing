@@ -93,6 +93,8 @@ object VideoFrameExtractor {
         val refName: String,
         val refPreview: Bitmap?,
         val batch: ImportedBatch,
+        /** Time of each deformed frame after the reference, aligned with [batch]. */
+        val defTimesMs: List<Long> = emptyList(),
     )
 
     /**
@@ -121,6 +123,7 @@ object VideoFrameExtractor {
             val count = ((span / stepMs).toInt() + 1).coerceIn(1, maxFrames)
 
             val defPaths = mutableListOf<String>()
+            val defTimesMs = mutableMapOf<String, Long>()
             var refPng: ByteArray? = null
             var refWidth = 0
             var refHeight = 0
@@ -145,6 +148,7 @@ object VideoFrameExtractor {
                         }
                         currentCoroutineContext().ensureActive()
                         defPaths.add(f.absolutePath)
+                        defTimesMs[f.absolutePath] = (timeMs - startMs).toLong()
                     }
                 } finally {
                     frame.recycle()
@@ -170,6 +174,9 @@ object VideoFrameExtractor {
             val batch = requireNotNull(
                 FrameImportHelper.commitStagedBatch(cacheDir, stagingDir, stagedBatch),
             )
+            // The commit moves the files but keeps their order, so the staged
+            // paths' times line up with the committed batch index for index.
+            val defTimes = sortedDefPaths.map { defTimesMs.getValue(it) }
 
             val result = ExtractionResult(
                 refPng = pngBytes,
@@ -178,6 +185,7 @@ object VideoFrameExtractor {
                 refName = "video @ ${formatClock(startMs)}",
                 refPreview = refPreview,
                 batch = batch,
+                defTimesMs = defTimes,
             )
             completed = true
             return result

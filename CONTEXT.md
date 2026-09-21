@@ -154,8 +154,18 @@ in the parent repo and still applies.
 in `metadata.json` as schema `/4` (`test` object + `frames[i].loadN`), which
 `CloudRestore` reads back. Backend and DTOs are untouched. Bending and torsion
 are complete after this PR (type only); tensile and compression wait on the
-load CSV card (`feat/load-csv`) and the stress–strain outputs
-(`feat/stress-strain`). Not yet done: bending / torsion inputs (span, moment
+stress–strain outputs (`feat/stress-strain`).
+
+**Machine load import (PR #3, `feat/load-csv`).** Step 1 gains a load card
+for tensile / compression: `AnalysisLoadCard` (ViewStub `stubLoadCard`) with
+an `OpenDocument` launcher on the Activity, 8 MB cap, UTF-8 / Latin-1.
+`data/MachineLoadCsv` infers delimiter, decimal comma, header, units row, and
+the load / time columns; `data/MachineLoadMapper` matches rows to frames
+(one-to-one, drop-first, nearest-time for video via the new
+`AnalysisViewModel.defFrameTimesMs`, else linear resample) and keeps the sign.
+Loads + cross-section are **mandatory** for those tests (`AnalysisReadyGate`).
+The parsed log is cached on the ViewModel and re-matched from `checkReady()`
+whenever the frames change. Not yet done: bending / torsion inputs (span, moment
 arm, angle) — plug them into `MechanicalTestInputs`; a Home row badge for the
 test type.
 

@@ -93,6 +93,7 @@ object AnalysisVideoExtractHelper {
                     viewModel.defOrderMode = FrameOrderMode.PICKER
                     viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
                     viewModel.defFromVideo = result.batch.fromVideo
+                    viewModel.defFrameTimesMs = result.defTimesMs
 
                     onApplied(
                         AppliedResult(

@@ -27,7 +27,7 @@ object AnalysisReadyGate {
         btnBack: Button,
         sweepHelper: SweepSetupHelper?,
     ) {
-        val ready = viewModel.isReadyToCompute()
+        val ready = viewModel.isReadyToCompute() && viewModel.mechanicalInputsReady()
 
         val nextEnabled = ready && !isProcessing
         btnNext.isEnabled = nextEnabled
@@ -35,6 +35,10 @@ object AnalysisReadyGate {
         tvNextReason.text = when {
             viewModel.refBytes == null -> activity.getString(R.string.next_reason_ref)
             viewModel.defFilePaths.isEmpty() -> activity.getString(R.string.next_reason_def)
+            viewModel.testType.hasMachineLoad && viewModel.machineLoads == null ->
+                activity.getString(R.string.next_reason_load)
+            viewModel.testType.hasMachineLoad && viewModel.crossSectionMm2 <= 0f ->
+                activity.getString(R.string.next_reason_cross_section)
             else -> ""
         }
 

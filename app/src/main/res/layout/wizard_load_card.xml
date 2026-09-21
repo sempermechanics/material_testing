@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Machine load card: step 1 of the wizard, below the deformed frames, only
+     for tests that take a load per frame (tensile, compression). Inflated
+     through a ViewStub so the host layout stays under lint's TooManyViews cap. -->
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/loadCard"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="12dp"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:strokeColor="@color/viewer_glass_stroke">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="14dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvLoadTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/load_card_title"
+                android:textColor="@color/viewer_chrome_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btnLoadInfo"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_marginStart="6dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/info"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_info_min"
+                app:tint="@color/viewer_chrome_muted" />
+        </LinearLayout>
+
+        <!-- Empty state: nothing imported yet. -->
+        <LinearLayout
+            android:id="@+id/loadDropzone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_dropzone_dashed"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:contentDescription="@string/load_import"
+                android:src="@drawable/ic_doc_share"
+                app:tint="@color/viewer_chrome_muted" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/load_import"
+                android:textColor="@color/viewer_chrome_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/load_import_hint"
+                android:textColor="@color/viewer_chrome_muted"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Imported state: file, rows, unit, how rows were matched to frames. -->
+        <LinearLayout
+            android:id="@+id/loadSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@color/viewer_canvas"
+                android:contentDescription="@string/load_import"
+                android:padding="9dp"
+                android:src="@drawable/ic_doc_share"
+                app:tint="@color/viewer_chrome_muted" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvLoadName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="middle"
+                    android:maxLines="1"
+                    android:textColor="@color/viewer_chrome_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    tools:text="utm_export.csv" />
+
+                <TextView
+                    android:id="@+id/tvLoadMeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/viewer_chrome_muted"
+                    android:textSize="12sp"
+                    tools:text="120 rows · N · one per frame" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/btnLoadClear"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/load_clear"
+                android:padding="10dp"
+                android:src="@drawable/ic_close"
+                app:tint="@color/viewer_chrome_muted" />
+        </LinearLayout>
+
+        <include
+            android:id="@+id/loadWarnRow"
+            layout="@layout/warn_chip_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:visibility="gone" />
+
+        <!-- Specimen: cross-section for stress, strain axis for the curve. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/load_cross_section"
+                android:textColor="@color/viewer_chrome_text"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etCrossSection"
+                android:layout_width="84dp"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:gravity="end"
+                android:hint="@string/load_cross_section_hint"
+                android:imeOptions="actionDone"
+                android:importantForAutofill="no"
+                android:includeFontPadding="false"
+                android:inputType="numberDecimal"
+                android:maxLength="9"
+                android:paddingTop="0dp"
+                android:paddingBottom="0dp"
+                android:textColor="@color/sky_primary"
+                android:textColorHint="@color/viewer_chrome_muted"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="@string/unit_mm2"
+                android:textColor="@color/viewer_chrome_muted"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/load_axis"
+                android:textColor="@color/viewer_chrome_text"
+                android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/toggleLoadAxis"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:checkedButton="@+id/btnLoadAxisX"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnLoadAxisX"
+                    style="@style/Widget.Semper.SegmentedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="56dp"
+                    android:text="@string/axis_x" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnLoadAxisY"
+                    style="@style/Widget.Semper.SegmentedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="56dp"
+                    android:text="@string/axis_y" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </LinearLayout>
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

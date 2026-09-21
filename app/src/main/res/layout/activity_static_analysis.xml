@@ -275,6 +275,15 @@
                     </com.google.android.material.card.MaterialCardView>
                 </FrameLayout>
 
+                <!-- Machine load card (tensile / compression only): inflated by
+                     the Activity when the test takes a load per frame. -->
+                <ViewStub
+                    android:id="@+id/stubLoadCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inflatedId="@+id/loadCard"
+                    android:layout="@layout/wizard_load_card" />
+
                 <!-- Inline lossy-format accuracy warning (non-blocking) -->
                 <include
                     android:id="@+id/formatWarnRow"

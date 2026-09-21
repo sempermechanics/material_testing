@@ -238,6 +238,7 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
 | Change how exports are handed off | `ui/viewer/ShareCenter.kt`, `SendToSheet.kt`, `SaveExportActivity.kt` |
 | Change transfer progress UI | `ui/common/TransferBannerController.kt` (Settings + viewer), `data/TransferNotifications.kt` (the one channel) |
 | Change the test-type chooser or add a test type | `data/TestType.kt` (wire names are on-disk), `ui/common/TestTypeSheet.kt`; per-test inputs go through `data/MechanicalTestInputs.kt` → `SessionRecord` → `SessionUploadMetadata.testJson` / `CloudRestore.recordFrom` |
+| Change how a machine load log is read or matched to frames | `data/MachineLoadCsv.kt` (pure parser: delimiter, decimal mark, header, units, columns) and `data/MachineLoadMapper.kt` (rows → frames; signed, never abs). Card UI: `ui/analysis/AnalysisLoadCard.kt` + `wizard_load_card.xml` (ViewStub `stubLoadCard`); the SAF launcher stays on `StaticAnalysisActivity` |
 | Change the new-analysis media sheet | `ui/common/MediaPickerSheet.kt` / `MediaSourceChooser.kt` — shared by the Home **+** and both wizard dropzones |
 | Add an analytics event | `analytics/SemperAnalytics.kt` — keep params PII-free and consent-gated |
 | Change storage reclaim behaviour | `data/StorageBudget.kt`, `data/CacheJanitor.kt` |

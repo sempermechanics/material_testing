@@ -26,6 +26,7 @@ publishers; live links use the section ids below.
 | Wizard import | Deformed batch load failed | `error_loading_images` snackbar **Why?** | `url_faq_import_deformed` | `#loading` |
 | Wizard video | Meta read failed | `video_read_failed` snackbar **Why?** | `url_faq_video_read` | `#loading` |
 | Wizard video | Extract produced too few frames / error | `video_extract_insufficient` / `video_read_error` snackbar **Why?** | `url_faq_video_extract` | `#loading` |
+| Wizard step 1 | Machine-load card chip (resampled / time-matched / first row / units / column / sign) | `load_warn_*` + chip FAQ | `url_faq_load_csv` | `#loading` |
 | Result viewer | No `.dat` batch on open | `no_batch_data` snackbar **Why?** | `url_faq_no_batch_data` | `#reading` |
 | Result viewer | OOM while loading a frame | `viewer_frame_oom` snackbar **Why?** | `url_faq_viewer_oom` | `#reading` |
 | Result viewer | Custom scale min ≥ max | `invalid_scale_inputs` snackbar **Why?** | `url_faq_custom_scale` | `#reading` |
