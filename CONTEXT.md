@@ -478,7 +478,8 @@ URL (TD-29). Found on the way: the API had **no CORS at all** — no middleware,
 no `allowCors` on the gateway — so a console `fetch` carrying `Authorization`
 was preflighted and refused at the edge from any origin. `CONSOLE_ORIGINS`
 (Cloud Run, pinned by the workflow) plus `x-google-endpoints … allowCors` with
-the new `__GATEWAY_HOST__` placeholder in `gateway/openapi.yaml` close that;
+the `__MANAGED_SERVICE__` placeholder in `gateway/openapi.yaml` (the API's
+managed service name — not the gateway hostname, which ESPv2 ignores) close that;
 `test_security_controls.py` pins the preflight. The gateway must be redeployed
 from the new spec before the consoles are usable.
 

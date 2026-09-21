@@ -230,7 +230,7 @@ the next deploy and re-opens ID-token-only upload targets. See
 [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md).
 
 API Gateway OpenAPI uses the placeholders `__CLOUD_RUN_URL__`,
-`__FIREBASE_PROJECT_ID__` and `__GATEWAY_HOST__` — substitute all three at config-create time (see
+`__FIREBASE_PROJECT_ID__` and `__MANAGED_SERVICE__` — substitute all three at config-create time (see
 `backend/gateway/openapi.yaml`). The substituted output goes to
 `backend/gateway/openapi.generated.yaml`, which is **gitignored**: never commit a
 live hostname or project id.
