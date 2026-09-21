@@ -395,7 +395,7 @@ paths:
         '200': { description: OK }
         '206': { description: Partial content }
         '401': { description: Missing or invalid device attestation }
-        '403': { description: feature_not_licensed (demo mode — recording is open, retrieval is licensed) }
+        '403': { description: "feature_not_licensed (demo mode — recording is open, retrieval is licensed)" }
         '416': { description: range_not_satisfiable }
         '429': { description: Rate limited }
         '502': { description: Drive download failed }
@@ -646,8 +646,6 @@ paths:
         '400': { description: "Not an institution license, so there is no roster to reconcile (kind_not_institution)" }
         '401': { description: Missing or invalid ID token }
         '403': { description: Not an admin }
-        '404': { description: License not found }
-        '429': { description: Rate limited }
         '404': { description: License not found }
         '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}/revoke:

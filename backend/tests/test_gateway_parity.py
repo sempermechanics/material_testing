@@ -109,3 +109,47 @@ def test_the_deprecated_aliases_are_published_too():
     for method, path in sorted(_app_surface()):
         if "/v1/campus/" in path:
             assert (method, path) in gateway, f"unpublished alias: {method} {path}"
+
+
+# --- spec validity ---------------------------------------------------------
+# API Gateway validates the document against the Swagger 2.0 schema and its
+# YAML loader rejects duplicate keys. PyYAML's safe_load does neither: it keeps
+# the last duplicate and happily splits an unquoted flow-mapping description at
+# a comma into a second, nonsense key. Both slipped through once and failed at
+# `api-configs create`, which is the worst place to find out.
+
+_RESPONSE_KEYS = {"description", "schema", "headers", "examples", "$ref"}
+
+
+class _StrictLoader(yaml.SafeLoader):
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            assert key not in seen, f"duplicate key {key!r} at line {key_node.start_mark.line + 1}"
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
+def _spec_text() -> str:
+    return (pathlib.Path(__file__).resolve().parents[1] / "gateway" / "openapi.yaml").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_gateway_spec_has_no_duplicate_keys():
+    yaml.load(_spec_text(), Loader=_StrictLoader)
+
+
+def test_gateway_responses_carry_only_swagger_keys():
+    spec = yaml.safe_load(_spec_text())
+    bad = []
+    for path, operations in spec["paths"].items():
+        for method, op in operations.items():
+            if method.upper() not in _HTTP_METHODS:
+                continue
+            for status, response in (op.get("responses") or {}).items():
+                extra = set(response) - _RESPONSE_KEYS
+                if extra:
+                    bad.append(f"{method.upper()} {path} {status}: {sorted(extra)}")
+    assert not bad, "unquoted description with a comma? " + "; ".join(bad)
