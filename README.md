@@ -1,10 +1,24 @@
 <p align="center">
   <img src="docs/images/semper-mark.png" width="72" alt="Semper mark">
   <br><br>
-  <strong>Semper</strong> — Digital Image Correlation on Android
+  <strong>Material Testing</strong> — Semper DIC for tensile, compression, bending and torsion tests
   <br>
-  <a href="https://github.com/sempermechanics/semperdic-app/actions/workflows/ci.yml"><img src="https://github.com/sempermechanics/semperdic-app/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/sempermechanics/material_testing/actions/workflows/ci.yml"><img src="https://github.com/sempermechanics/material_testing/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
+
+> **Lineage.** This repository was created by pushing the full history of
+> [`sempermechanics/semperdic-app`](https://github.com/sempermechanics/semperdic-app)
+> at `bfe00e5` (2026-09-21). It keeps the same `applicationId`
+> (`com.indicvision.semper`), `google-services.json`, backend and CI, so a build
+> **replaces** Semper on a device rather than installing beside it. The backend is
+> deployed from the parent repo only; the deploy and Firestore workflows here have
+> no environments configured and will fail if dispatched. Branch rulesets are not
+> available on this private repo's plan, so `CI OK` on `main` is by convention.
+>
+> What this repo adds: **New analysis** first asks for the test type — Tensile,
+> Compression, Bending, Torsion — and, for tensile and compression, imports the
+> testing machine's load log (CSV) plus the specimen cross-section to produce an
+> engineering **stress–strain curve** in the viewer, CSV and PDF.
 
 <p align="center">
   <img src="docs/images/result-viewer.png" width="220" alt="Interactive strain heatmap in the result viewer">
@@ -52,8 +66,8 @@ PRs target **`main`**. UI and docs work need no C++ toolchain. Issues tagged
 ## How — build & run
 
 ```bash
-git clone https://github.com/sempermechanics/semperdic-app
-cd semperdic-app
+git clone --recurse-submodules https://github.com/sempermechanics/material_testing
+cd material_testing
 git submodule update --init --recursive   # engine + Eigen/OpenCV (large, one-time)
 cd native && ./scripts/sparse-opencv.sh && cd ..   # Windows: .\scripts\sparse-opencv.ps1
 ```

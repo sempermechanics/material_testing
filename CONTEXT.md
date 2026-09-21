@@ -131,7 +131,17 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-19)
+## Current state (2026-09-21)
+
+**This is `material_testing`, pushed from `semperdic-app` `main` at `bfe00e5` on
+2026-09-21.** Same `applicationId`, Firebase app and backend as the parent; only
+`app_name` ("Material Testing"), `rootProject.name` and the README changed. The
+parent repo owns backend deploys. Scope of this repo: a test-type chooser
+(Tensile / Compression / Bending / Torsion) ahead of the wizard, machine-load CSV
+import with cross-section for tensile and compression, and stress–strain outputs
+in the viewer ⓘ sheet, CSV and PDF. Everything below this paragraph was written
+in the parent repo and still applies.
+
 
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).

@@ -25,7 +25,7 @@ gives you an empty `native/` and a confusing CMake failure on first build.
 
 ```bash
 git clone <repo-url>
-cd semperdic-app
+cd material_testing
 git submodule update --init --recursive
 ```
 
