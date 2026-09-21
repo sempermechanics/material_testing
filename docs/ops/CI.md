@@ -229,8 +229,8 @@ the Cloud Run env var from that GitHub var. Leaving it empty clears the flag on
 the next deploy and re-opens ID-token-only upload targets. See
 [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md).
 
-API Gateway OpenAPI uses the placeholders `__CLOUD_RUN_URL__` and
-`__FIREBASE_PROJECT_ID__` — substitute both at config-create time (see
+API Gateway OpenAPI uses the placeholders `__CLOUD_RUN_URL__`,
+`__FIREBASE_PROJECT_ID__` and `__GATEWAY_HOST__` — substitute all three at config-create time (see
 `backend/gateway/openapi.yaml`). The substituted output goes to
 `backend/gateway/openapi.generated.yaml`, which is **gitignored**: never commit a
 live hostname or project id.

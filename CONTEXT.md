@@ -244,10 +244,11 @@ wizard step/overlap + step-2/3 reorder
 Refresh with `gh pr list --state open` — anything named here will rot.
 
 **Licensing ([#100](https://github.com/sempermechanics/semperdic-app/pull/100),
-`feat/license-demo-pro`; go-live follow-up on `feat/licensing-go-live`).**
-Feature-complete; #100 merges as-is once its full-CI run is green, and the
-follow-up branch must land **before** any backend deploy from `main` (see
-*Demo records* below). What is left after that is ops, at the end of this
+merged 2026-09-19; go-live follow-up
+[#110](https://github.com/sempermechanics/semperdic-app/pull/110) and the
+link fix #111 merged the same day).** `main` is deployable; nothing has been
+deployed yet — production Cloud Run is still `bcc467a` and the gateway config
+predates licensing. What is left is ops, at the end of this
 section and, checkbox by checkbox, in the "Licensing rollout" section of
 [docs/ops/PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md). It extends flat demo/licensed into two licensed
 shapes and one roster mechanism. Organised below by subject, not by the order
@@ -419,7 +420,8 @@ renew in-process on `seatHeartbeatMinutes` and release on sign-out, and a
 four-hour `LicenseConfigWorker` refreshes `/v1/config` so an idle phone learns a
 remote revoke (FI-16: four hours is the worst case, and shortening the interval
 is the wrong lever — it costs every device every day to reach one). Demo
-accounts no longer enqueue cloud backup or open the share sheet; restore maps
+accounts upload silently (see *Demo records* below) but never open the share
+sheet; restore maps
 `license_device_mismatch` to a bind-first message. Settings → Account shows the
 licence **prefix**, which is what support asks for; the key itself never
 reaches the device.
@@ -460,6 +462,25 @@ that `claim_pending_invite` would skip over the stamped demo key.
 the retired `MAX_SESSIONS_PER_USER` is still on the service. Still open: one
 sentence in the Privacy Policy / Terms saying demo analyses are uploaded, and
 the Play Data-safety form — both listed in the readiness gate.
+
+*Dashboards on `app.sempermechanics.com`; CORS (`feat/console-domain-cors`).*
+The consoles are hard-bound to Firebase Hosting (`auth.js` imports the SDK and
+`firebaseConfig` from the reserved `/__/firebase/` namespace; `/login` and
+`/account` are Hosting rewrites), and `sempermechanics.com` is the Netlify
+marketing site, so the dashboards get a **custom domain** on the auth Hosting
+site rather than a copy: `app.sempermechanics.com`. The marketing site links
+"Sign in" there and redirects `/login`, `/account` and `/terms/` — the last
+fixes a live 404 that `backend/app/legal.py` and the Terms clickwrap were
+already pointing at. The same host carries the app's auth continue links under
+`/auth/` (`AUTH_HOST`), with the `firebaseapp.com` host kept as
+`LEGACY_AUTH_HOST` for every installed build and for the password-reset action
+URL (TD-29). Found on the way: the API had **no CORS at all** — no middleware,
+no `allowCors` on the gateway — so a console `fetch` carrying `Authorization`
+was preflighted and refused at the edge from any origin. `CONSOLE_ORIGINS`
+(Cloud Run, pinned by the workflow) plus `x-google-endpoints … allowCors` with
+the new `__GATEWAY_HOST__` placeholder in `gateway/openapi.yaml` close that;
+`test_security_controls.py` pins the preflight. The gateway must be redeployed
+from the new spec before the consoles are usable.
 
 *Go-live is ops, not code.* Identity Platform has to be enabled with TOTP on and
 SMS off, or the consoles sign in and every write fails `mfa_required`; the API

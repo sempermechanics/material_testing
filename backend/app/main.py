@@ -4,6 +4,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import errors
@@ -93,6 +94,20 @@ app = FastAPI(
     docs_url="/docs" if _docs_enabled else None,
     redoc_url="/redoc" if _docs_enabled else None,
     openapi_url="/openapi.json" if _docs_enabled else None,
+)
+
+
+# Browser dashboards only. Bearer tokens, no cookies, so no credentials mode;
+# the phone sends no Origin and never hits this. add_middleware stacks
+# outward, so the decorators below wrap this one: a preflight answered here
+# still passes through security_headers and access_log on the way out.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CONSOLE_ORIGINS,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+    allow_credentials=False,
+    max_age=600,
 )
 
 

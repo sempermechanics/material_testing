@@ -20,8 +20,8 @@ import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.MultiFactorResolver
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.data.AUTH_HOST
 import com.indicvision.semper.data.AuthRepository
+import com.indicvision.semper.data.isTrustedAuthLink
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
@@ -177,9 +177,7 @@ class AuthActivity : AppCompatActivity() {
      * cannot actually reset anything; the check is so we never hand a code from
      * an unrelated host to Firebase, nor show a reset form a stranger opened.
      */
-    private fun isTrustedAuthLink(data: Uri): Boolean =
-        data.scheme.equals("https", ignoreCase = true) &&
-            data.host.equals(AUTH_HOST, ignoreCase = true)
+    private fun isTrustedAuthLink(data: Uri): Boolean = isTrustedAuthLink(data.scheme, data.host)
 
     private fun maybeCompleteEmailLink(intent: Intent?) {
         val data = intent?.data ?: return

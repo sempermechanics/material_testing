@@ -242,6 +242,7 @@ Everything above is required (or near enough). These are the rest of what
 | `LICENSE_GRACE_DAYS_DEFAULT` | `14` | Grace applied at mint time when the request names none. A licence already stored without `graceDays` reads as zero, so changing this never reinstates an expired account |
 | `LICENSE_LEASE_HOURS` · `LICENSE_LEASE_HEARTBEAT_MINUTES` | `8` · `30` | Floating-seat lease length and how often the app renews it. A crashed client parks a seat for at most the lease |
 | `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` | `30` | Wait between self-service device changes on one licence. `0` disables the wait. Staff-initiated changes ignore it |
+| `CONSOLE_ORIGINS` | `https://app.sempermechanics.com,https://indicvision-dic-app-auth.firebaseapp.com` | Browser origins the API answers CORS for. The dashboards live on Firebase Hosting, never on the gateway host, so every console call is cross-origin and preflighted; an origin missing here renders a page whose every button silently does nothing. Exact origins, comma-separated, no wildcard. The phone sends no `Origin` and is unaffected. The gateway must also carry `allowCors` (step 3 below) or the preflight never reaches Cloud Run |
 
 > **`MAX_SESSIONS_PER_USER` and `PRO_MAX_SESSIONS_PER_USER` are no longer
 > read.** The first was the single cloud cap for every user, defaulting to 4;
@@ -253,7 +254,7 @@ Everything above is required (or near enough). These are the rest of what
 >
 > [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml) pins
 > `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`, `ADMIN_WEB_MFA_ENABLED`,
-> `APP_CHECK_MODE` and `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` from repository
+> `APP_CHECK_MODE`, `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` and `CONSOLE_ORIGINS` from repository
 > variables of the same name, with the defaults above when a variable is unset.
 > `deploy-cloudrun` *merges* env into the live revision, so a retired variable
 > stays on the service until removed by hand; the workflow's "Describe live
@@ -467,11 +468,22 @@ gcloud run services add-iam-policy-binding indic-api --region $REGION \
   --member="serviceAccount:$GW_SA" --role="roles/run.invoker"
 
 # 3. Spec is committed at backend/gateway/openapi.yaml (covers all current
-#    routes) with two placeholders. Substitute BOTH into a generated copy —
+#    routes) with three placeholders. Substitute ALL into a generated copy —
 #    the generated file is gitignored because it carries the live hostname.
+#    __GATEWAY_HOST__ is the gateway's own hostname (x-google-endpoints /
+#    allowCors, which lets the browser dashboards' CORS preflights through).
+#    On FIRST creation it does not exist yet: generate without that block,
+#    create the gateway, then come back and switch to a config that names it
+#    ("Redeploying the gateway" below).
+GATEWAY_HOST=$(gcloud api-gateway gateways describe indic-gw --location $REGION \
+  --format='value(defaultHostname)' 2>/dev/null || true)
 sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g" \
     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g" \
+    -e "s|__GATEWAY_HOST__|$GATEWAY_HOST|g" \
   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
+# First creation only — no gateway host yet, so drop the CORS block:
+[ -z "$GATEWAY_HOST" ] && sed -i '/^x-google-endpoints:/,/allowCors: true/d' \
+  backend/gateway/openapi.generated.yaml
 
 # Fail loudly rather than shipping a spec with a placeholder still in it.
 grep -q '__' backend/gateway/openapi.generated.yaml && \
@@ -512,8 +524,10 @@ PROJECT=indicvision-dic-app REGION=asia-south1
 RUN_URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
 GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
 
-# Same substitution + placeholder guard as step 3 above.
-sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g"     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g"   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
+# Same substitution + placeholder guard as step 3 above. The gateway exists
+# now, so its hostname goes into x-google-endpoints (CORS for the dashboards).
+GATEWAY_HOST=$(gcloud api-gateway gateways describe indic-gw --location $REGION   --format='value(defaultHostname)')
+sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g"     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g"     -e "s|__GATEWAY_HOST__|$GATEWAY_HOST|g"   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
 grep -q '__' backend/gateway/openapi.generated.yaml &&   echo "unsubstituted placeholder remains" && exit 1
 
 # Remember the config currently live — this is the rollback target.
@@ -529,7 +543,12 @@ gcloud api-gateway gateways describe indic-gw --location $REGION   --format='val
 
 Verify from outside: an unauthenticated `GET https://<gateway>/v1/config` must
 answer **401** (route known, token missing), not 404 (route missing from the
-config). Roll back with
+config). Then the dashboards' preflight:
+`curl -si -X OPTIONS https://<gateway>/v1/me -H 'Origin: https://app.sempermechanics.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization'`
+must answer **200** with `access-control-allow-origin: https://app.sempermechanics.com`
+— a 401/403 here means the config lacks `x-google-endpoints … allowCors`, and
+a 200 without the header means the Cloud Run revision lacks that origin in
+`CONSOLE_ORIGINS`. Roll back with
 `gcloud api-gateway gateways update indic-gw --api=indic-api --api-config=$PREV_CFG --location=$REGION`;
 old configs stay listed under `api-configs list --api=indic-api` and can be
 deleted once nothing points at them.

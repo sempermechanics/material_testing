@@ -22,6 +22,15 @@
         "destination": "/finishReset/index.html"
       },
       {
+        "//": "The same two pages under /auth/ for app.sempermechanics.com, the custom domain builds from AUTH_HOST onwards use as their continue host. The bare /finishSignIn and /finishReset stay: every installed build before that host declares only them, and the password-reset action URL in Firebase Console still points at the old one.",
+        "source": "/auth/finishSignIn",
+        "destination": "/finishSignIn/index.html"
+      },
+      {
+        "source": "/auth/finishReset",
+        "destination": "/finishReset/index.html"
+      },
+      {
         "source": "/console",
         "destination": "/console/index.html"
       },
