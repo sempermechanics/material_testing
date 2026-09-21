@@ -44,6 +44,23 @@ class LicenseErrorsTest {
     }
 
     @Test
+    fun `refused bundle download says demo mode, anything else keeps the connection hint`() {
+        val refused = LicenseErrors.downloadMessage(
+            ctx,
+            """{"detail":"${ApiErrors.FEATURE_NOT_LICENSED}: Restore isn't available in demo mode."}""",
+        )
+        assertEquals(ctx.getString(com.indicvision.semper.R.string.download_not_licensed), refused)
+        assertEquals(
+            ctx.getString(com.indicvision.semper.R.string.download_analysis_failed),
+            LicenseErrors.downloadMessage(ctx, "HTTP 502: upstream request timeout"),
+        )
+        assertEquals(
+            ctx.getString(com.indicvision.semper.R.string.download_analysis_failed),
+            LicenseErrors.downloadMessage(ctx, null),
+        )
+    }
+
+    @Test
     fun `unknown detail stays formatted rather than blank`() {
         val msg = LicenseErrors.restoreMessage(ctx, "something_else")
         assertEquals(

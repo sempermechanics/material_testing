@@ -20,4 +20,20 @@ object LicenseErrors {
             else -> context.getString(R.string.restore_failed_fmt, detail)
         }
     }
+
+    /**
+     * Same for a refused bundle download. Anything that is not a licence
+     * refusal keeps the generic connection hint — a 5xx or a dropped link is
+     * still the common case there.
+     */
+    fun downloadMessage(context: Context, detailOrMessage: String?): String {
+        val detail = detailOrMessage?.let { ApiErrors.detailOf(it) }.orEmpty()
+        return when {
+            ApiErrors.hasCode(detail, ApiErrors.FEATURE_NOT_LICENSED) ->
+                context.getString(R.string.download_not_licensed)
+            ApiErrors.hasCode(detail, ApiErrors.LICENSE_DEVICE_MISMATCH) ->
+                context.getString(R.string.restore_device_mismatch)
+            else -> context.getString(R.string.download_analysis_failed)
+        }
+    }
 }

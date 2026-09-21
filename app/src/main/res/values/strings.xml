@@ -381,6 +381,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
     <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the device to bind, then try restore again — or move the licence from the Semper account page first.</string>
     <string name="restore_not_licensed">Restore isn\'t available in demo mode.</string>
+    <string name="download_not_licensed">Downloading from the cloud isn\'t available in demo mode.</string>
     <string name="share_licensed_only">Sharing exports needs an active licence.</string>
     <string name="sync_status_up_to_date">Cloud backups up to date</string>
     <string name="home_empty_restore">Restore from cloud</string>

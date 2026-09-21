@@ -37,6 +37,7 @@ import com.indicvision.semper.data.DicBundleDownloadWorker
 import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.LicenseEntitlements
+import com.indicvision.semper.data.LicenseErrors
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.CloudSessionDto
@@ -622,7 +623,10 @@ class SettingsActivity : AppCompatActivity() {
                                 syncDownloadingKeys()
                                 Toast.makeText(
                                     this,
-                                    R.string.download_analysis_failed,
+                                    LicenseErrors.downloadMessage(
+                                        this,
+                                        info.outputData.getString(DicBundleDownloadWorker.KEY_ERROR),
+                                    ),
                                     Toast.LENGTH_LONG,
                                 ).show()
                             }
