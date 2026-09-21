@@ -271,7 +271,10 @@ async function download(sid, button) {
   }
 }
 
-function downloadError(code) {
+function downloadError(detail) {
+  // The backend may suffix a code with ": <sentence>" (feature_not_licensed
+  // does, for pre-licensing phones); the map is keyed on the code alone.
+  const code = String(detail).split(":")[0].trim();
   return {
     mfa_required:
       "Set up two-factor authentication first — downloads from a browser need it.",

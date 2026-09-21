@@ -28,9 +28,19 @@ class LicenseErrorsTest {
     }
 
     @Test
-    fun `demo feature refusal maps to a licensed-only restore message`() {
+    fun `demo feature refusal maps to the demo-mode restore message`() {
         val msg = LicenseErrors.restoreMessage(ctx, ApiErrors.FEATURE_NOT_LICENSED)
-        assertTrue(msg.contains("licence") || msg.contains("license"))
+        assertEquals(ctx.getString(com.indicvision.semper.R.string.restore_not_licensed), msg)
+        assertTrue(msg.contains("demo"))
+    }
+
+    @Test
+    fun `demo feature refusal with the backend's readable suffix still maps by code`() {
+        // The backend sends "feature_not_licensed: <sentence>" so pre-licensing
+        // builds, which print the raw detail, show something readable.
+        val body = """{"detail":"${ApiErrors.FEATURE_NOT_LICENSED}: Restore isn't available in demo mode."}"""
+        val msg = LicenseErrors.restoreMessage(ctx, body)
+        assertEquals(ctx.getString(com.indicvision.semper.R.string.restore_not_licensed), msg)
     }
 
     @Test

@@ -304,7 +304,7 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     if not session or session.get("uid") != user["uid"]:
         raise HTTPException(404, errors.SESSION_NOT_FOUND)
     if not repo.cloud_backup_enabled(user):
-        raise HTTPException(403, errors.FEATURE_NOT_LICENSED)
+        raise HTTPException(403, errors.feature_not_licensed_detail())
     artifacts = repo.list_session_artifacts(sid)
     if not artifacts:
         # The session exists but nothing finished uploading, so there is
