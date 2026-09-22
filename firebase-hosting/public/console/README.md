@@ -106,7 +106,7 @@ second Auth directory.
 3. Put your address in `ADMIN_EMAILS` / `role: admin` for the operator desk.
 4. Deploy Cloud Run with the intended `DEMO_MAX_ANALYSES` (no lower than any live user's session count — every pre-licensing account becomes demo), keep `ADMIN_WEB_MFA_ENABLED=1` and `APP_CHECK_MODE=off`; `deploy-backend.yml` pins all three from repository variables. Then redeploy **API Gateway** from the committed spec (`api-configs create` + `gateways update`, see [BACKEND_SETUP_GCP.md](../../../docs/backend/BACKEND_SETUP_GCP.md) "Redeploying the gateway") so checkout / release / unbind / bundle / campus aliases are on the public surface — the backend workflow alone does not. The full ordered checklist is the "Licensing rollout" section of [PRODUCTION_READINESS_GATE.md](../../../docs/ops/PRODUCTION_READINESS_GATE.md).
 5. `firebase deploy --only firestore:indexes` from the backend indexes file.
-6. Run `./scripts/deploy-console.sh` with the live gateway and Auth domain. `AUTH_DOMAIN` stays `indicvision-dic-app-auth.firebaseapp.com`: it is the popup origin (`authDomain` from `/__/firebase/init.js`), not the page's own host.
+6. Run `./scripts/deploy-console.sh` with the live gateway and Auth domain. `AUTH_DOMAIN` stays `indicvision-dic-app-auth.firebaseapp.com`: it is the popup origin (`authDomain` from `/__/firebase/init.json`), not the page's own host.
 7. Hand-check: enrol TOTP at `/login` as staff, as institution IT, and as an account holder; revoke a test licence only after password + TOTP (+ key prefix); sign in on the phone and complete the authenticator challenge.
 
 Identity Platform itself is free to enable. Email/social stays free to the usual
