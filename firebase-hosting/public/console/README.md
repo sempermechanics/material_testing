@@ -115,11 +115,15 @@ MAU tier; TOTP has no SMS charge when SMS stays off.
 The console's Content-Security-Policy is scoped to `/console/**` and the two
 addresses that rewrite into it. Every other page — the legal pages, the auth
 continue-URLs — keeps the strict
-`default-src 'self'` policy. Only `connect-src` is widened, for the API and
-Firebase Auth's token endpoints; `script-src` is **not**, because the Firebase
-SDK is served from Hosting's own `/__/firebase/` namespace, which is
-same-origin. That is also why no page may carry an inline `<script>` body or an
-`onclick=` attribute: `'self'` admits the module files and nothing else.
+`default-src 'self'` policy. `connect-src` is widened for the API and
+Firebase Auth's token endpoints. `script-src` is `'self'` plus two Google
+origins: Hosting's `/__/firebase/<ver>/firebase-*.js` files are same-origin
+stubs that `import … from "https://www.gstatic.com/firebasejs/…"`, and the
+popup sign-in loads gapi from `https://apis.google.com` — without both the page
+renders and *Sign in* does nothing (the first production deploy proved it).
+There is still no `'unsafe-inline'`, which is why no page may carry an inline
+`<script>` body or an `onclick=` attribute: the policy admits module files from
+those three origins and nothing else.
 
 Firebase Auth must have this Hosting domain in its authorised domains, or the
 sign-in popup is rejected.
