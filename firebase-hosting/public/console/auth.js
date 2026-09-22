@@ -1,10 +1,10 @@
 /* Sign-in, second factor, and API access shared by both consoles.
  *
- * The Firebase SDK is loaded from Firebase Hosting's own reserved namespace
- * (/__/firebase/...), which is served from THIS origin. That is what lets the
- * strict `script-src 'self'` policy stay as it is — a CDN script would have
- * needed it relaxed. Only `connect-src` has to be widened, and only for the
- * console paths (see firebase-hosting/firebase.json).
+ * The Firebase SDK is loaded from www.gstatic.com — the console CSP's
+ * `script-src` names that origin (and apis.google.com for the popup); see
+ * firebase-hosting/firebase.json. Only the project config comes from Hosting's
+ * reserved namespace (/__/firebase/init.json); the SDK copies under
+ * /__/firebase/<ver>/ are not used, for the reason at the imports below.
  *
  * There is no build step and no framework here on purpose: the site is static
  * files, and a toolchain for two pages would cost more than it saves.
@@ -22,7 +22,11 @@
  * transparently: on `reauth_required` it re-authenticates once and retries,
  * so an operator sees a popup rather than an error.
  */
-import { initializeApp } from "/__/firebase/12.4.0/firebase-app.js";
+// Both SDK modules from one origin. Hosting's /__/firebase/12.4.0/firebase-app.js
+// is a full copy of the package while its firebase-auth.js imports @firebase/app
+// from www.gstatic.com, so mixing them puts initializeApp and getAuth on two
+// different registries: "Component auth has not been registered yet".
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -35,7 +39,7 @@ import {
   multiFactor,
   getMultiFactorResolver,
   TotpMultiFactorGenerator,
-} from "/__/firebase/12.4.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { API_BASE_URL } from "./config.js";
 
 // Hosting's /__/firebase/init.js is the classic-SDK script

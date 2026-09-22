@@ -117,10 +117,15 @@ addresses that rewrite into it. Every other page — the legal pages, the auth
 continue-URLs — keeps the strict
 `default-src 'self'` policy. `connect-src` is widened for the API and
 Firebase Auth's token endpoints. `script-src` is `'self'` plus two Google
-origins: Hosting's `/__/firebase/<ver>/firebase-*.js` files are same-origin
-stubs that `import … from "https://www.gstatic.com/firebasejs/…"`, and the
-popup sign-in loads gapi from `https://apis.google.com` — without both the page
-renders and *Sign in* does nothing (the first production deploy proved it).
+origins: the SDK modules come from `https://www.gstatic.com/firebasejs/<ver>/`
+and the popup sign-in loads gapi from `https://apis.google.com` — without both
+the page renders and *Sign in* does nothing (the first production deploy
+proved it). `auth.js` imports **both** `firebase-app.js` and `firebase-auth.js`
+from gstatic, never Hosting's `/__/firebase/<ver>/` copies: Hosting's
+`firebase-app.js` is a full copy of the package while its `firebase-auth.js`
+imports `@firebase/app` from gstatic, so mixing the two leaves `initializeApp`
+and `getAuth` on different registries ("Component auth has not been registered
+yet"). Only `/__/firebase/init.json` (the project config) is read from Hosting.
 There is still no `'unsafe-inline'`, which is why no page may carry an inline
 `<script>` body or an `onclick=` attribute: the policy admits module files from
 those three origins and nothing else.
