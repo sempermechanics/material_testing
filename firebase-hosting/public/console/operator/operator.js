@@ -13,12 +13,15 @@ let roster = null;      // { id, label } of the licence whose roster is open
 let verified = {};
 let enrolment = null;
 
-requireSignIn(async (user) => {
+requireSignIn(async (user, resume) => {
   $("signedOut").hidden = true;
   if (!(await isOperator(user))) return;
   renderFactorState(user);
-  loadLicences();
   loadUsers();
+  await loadLicences();
+  // Back from the Google re-authentication a revoke asked for: finish it
+  // now, while the fresh sign-in is inside the backend's window.
+  if (resume && resume.action === "revoke") resumeRevoke(resume.id);
 });
 
 /**
@@ -489,8 +492,32 @@ async function revokeLicence(id) {
     setStatus("Revoke cancelled — the key did not match.");
     return;
   }
+  await sendRevoke(id, label);
+}
+
+/**
+ * The return leg of a revoke that went to Google for a fresh sign-in. The
+ * operator already named who is affected and typed the key on the way out;
+ * one plain confirmation here says which licence this page is about to
+ * revoke, because a page acting on load without any gesture is a page that
+ * revokes on a stale tab restored by the browser.
+ */
+async function resumeRevoke(id) {
+  const label = labelOf(id);
+  if (!licences.some((l) => l.id === id)) {
+    setStatus(`Re-authenticated, but ${label} is no longer listed — nothing revoked.`);
+    return;
+  }
+  if (!window.confirm(`Re-authenticated. Revoke ${label} now?`)) {
+    setStatus("Revoke cancelled.");
+    return;
+  }
+  await sendRevoke(id, label);
+}
+
+async function sendRevoke(id, label) {
   try {
-    await stepUpForRevoke();
+    await stepUpForRevoke({ action: "revoke", id });
     await api(`/v1/admin/licenses/${encodeURIComponent(id)}/revoke`, { method: "POST" });
     setStatus(`${label} revoked.`);
     loadLicences();
