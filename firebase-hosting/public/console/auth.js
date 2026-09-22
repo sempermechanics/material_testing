@@ -1,10 +1,26 @@
 /* Sign-in, second factor, and API access shared by both consoles.
  *
  * The Firebase SDK is loaded from www.gstatic.com — the console CSP's
- * `script-src` names that origin (and apis.google.com for the popup); see
- * firebase-hosting/firebase.json. Only the project config comes from Hosting's
- * reserved namespace (/__/firebase/init.json); the SDK copies under
- * /__/firebase/<ver>/ are not used, for the reason at the imports below.
+ * `script-src` names that origin (and apis.google.com, which the auth iframe
+ * loads); see firebase-hosting/firebase.json. Only the project config comes
+ * from Hosting's reserved namespace (/__/firebase/init.json); the SDK copies
+ * under /__/firebase/<ver>/ are not used, for the reason at the imports below.
+ *
+ * ── Redirect, never popup ─────────────────────────────────────────────────
+ * Google sign-in and every Google re-authentication go through
+ * signInWithRedirect / reauthenticateWithRedirect. A popup needs a user
+ * gesture that is still fresh when the SDK opens the window, and two of the
+ * places this file re-authenticates have none: straight after sign-in, to
+ * enrol the second factor, and inside an API retry after `reauth_required`.
+ * Browsers block those popups silently — the first staff sign-in on the live
+ * domain did exactly that. A redirect has no such rule.
+ *
+ * The redirect flow needs the auth handler on the page's own origin, or the
+ * browsers that partition third-party storage lose the result on the way
+ * back. Every Hosting host — the firebaseapp.com default and a custom domain
+ * alike — serves /__/auth/handler, so `authDomain` is set to the page's host
+ * rather than the project default from init.json. The Google OAuth client
+ * must list https://<host>/__/auth/handler as a redirect URI (README).
  *
  * There is no build step and no framework here on purpose: the site is static
  * files, and a toolchain for two pages would cost more than it saves.
@@ -19,8 +35,9 @@
  * "Recent" is the part that shapes this file. The backend rejects a token
  * whose auth_time is older than its window, so a console left open for an
  * hour must re-authenticate before it can act. `api()` handles that
- * transparently: on `reauth_required` it re-authenticates once and retries,
- * so an operator sees a popup rather than an error.
+ * transparently: on `reauth_required` it re-authenticates once — a redirect
+ * round-trip through Google — and the operator repeats the action; a
+ * `sessionStorage` note tells them so when the page comes back.
  */
 // Both SDK modules from one origin. Hosting's /__/firebase/12.4.0/firebase-app.js
 // is a full copy of the package while its firebase-auth.js imports @firebase/app
@@ -31,8 +48,9 @@ import {
   getAuth,
   GoogleAuthProvider,
   EmailAuthProvider,
-  signInWithPopup,
-  reauthenticateWithPopup,
+  signInWithRedirect,
+  reauthenticateWithRedirect,
+  getRedirectResult,
   reauthenticateWithCredential,
   signOut,
   onAuthStateChanged,
@@ -51,7 +69,9 @@ const firebaseConfig = await fetch("/__/firebase/init.json").then((r) => {
   return r.json();
 });
 
-const app = initializeApp(firebaseConfig);
+// Own host as authDomain: see "Redirect, never popup" above. The default
+// firebaseapp.com host also serves /__/auth/*, so this is a no-op there.
+const app = initializeApp({ ...firebaseConfig, authDomain: window.location.host });
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
@@ -59,6 +79,52 @@ const provider = new GoogleAuthProvider();
 export const ERR_NO_SECOND_FACTOR = "console_no_second_factor";
 export const ERR_CANCELLED = "console_cancelled";
 export const ERR_NO_PASSWORD = "console_no_password";
+export const ERR_REAUTH_INCOMPLETE = "console_reauth_incomplete";
+
+/* Redirect bookkeeping. `REAUTH_STARTED` stops a step-up that keeps failing
+   from bouncing the tab to Google forever; `AFTER_REAUTH` carries the one line
+   the operator should read when the page comes back. sessionStorage is
+   per-tab and may be unavailable (private mode), so every access is guarded. */
+const REAUTH_STARTED = "semper.reauthStarted";
+const AFTER_REAUTH = "semper.afterReauth";
+const REAUTH_RETRY_SECONDS = 120;
+
+function stash(key, value) {
+  try {
+    if (value == null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, value);
+  } catch (_) { /* no storage: the guard degrades to "always redirect" */ }
+}
+
+function unstash(key) {
+  try {
+    const value = window.sessionStorage.getItem(key);
+    window.sessionStorage.removeItem(key);
+    return value;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Seconds since this session's sign-in (the token's auth_time), or Infinity. */
+async function authAge(user = auth.currentUser) {
+  if (!user) return Infinity;
+  const result = await user.getIdTokenResult();
+  const at = Date.parse(result.authTime);
+  return Number.isFinite(at) ? (Date.now() - at) / 1000 : Infinity;
+}
+
+/**
+ * Leave for Google and never come back to this promise: the page unloads.
+ * Holding the caller here stops an `api()` retry from firing with the stale
+ * token in the moment between the SDK's navigation and the actual unload.
+ */
+async function leaveForGoogle(start, note) {
+  stash(REAUTH_STARTED, String(Date.now()));
+  stash(AFTER_REAUTH, note);
+  await start();
+  await new Promise(() => {});
+}
 
 /* ---------------------------------------------------------------- challenge */
 
@@ -91,13 +157,27 @@ async function resolveChallenge(error) {
   );
 }
 
-/** Sign in, resolving a second-factor challenge if one is raised. */
-async function signIn() {
+/** Sign in. The result — and any second-factor challenge — arrives in
+ * `finishRedirect()` after the round-trip. */
+function signIn() {
+  return signInWithRedirect(auth, provider);
+}
+
+/**
+ * Collect the result of a sign-in or re-authentication redirect, resolving
+ * the second-factor challenge it raises for an enrolled account. Null when
+ * this page load is not the return leg of a redirect.
+ */
+async function finishRedirect() {
   try {
-    return await signInWithPopup(auth, provider);
+    const result = await getRedirectResult(auth);
+    if (result) stash(REAUTH_STARTED, null);
+    return result;
   } catch (e) {
-    if (e.code === "auth/multi-factor-auth-required") return resolveChallenge(e);
-    throw e;
+    if (e.code !== "auth/multi-factor-auth-required") throw e;
+    const result = await resolveChallenge(e);
+    stash(REAUTH_STARTED, null);
+    return result;
   }
 }
 
@@ -112,10 +192,14 @@ async function signIn() {
  * identically to the call that triggered it — an infinite-looking loop that
  * looks like a backend bug.
  *
- * Google accounts re-auth via popup; email/password accounts may pass
- * `password` to avoid a second Google prompt they cannot complete.
+ * Google accounts re-auth by redirect, which unloads the page: this function
+ * then never returns, the operator comes back signed in afresh and repeats
+ * what they were doing. Email/password accounts may pass `password`, which
+ * re-authenticates in place. A redirect that came back without a fresh
+ * session is not retried — `ERR_REAUTH_INCOMPLETE` instead of a tab that
+ * bounces to Google until closed.
  */
-export async function stepUp({ password } = {}) {
+export async function stepUp({ password, note } = {}) {
   const user = auth.currentUser;
   if (!user) throw new Error("not_signed_in");
   try {
@@ -126,7 +210,15 @@ export async function stepUp({ password } = {}) {
         EmailAuthProvider.credential(user.email, password),
       );
     } else {
-      await reauthenticateWithPopup(user, provider);
+      const started = Number(unstash(REAUTH_STARTED));
+      if (started && Date.now() - started < REAUTH_RETRY_SECONDS * 1000) {
+        throw new Error(ERR_REAUTH_INCOMPLETE);
+      }
+      await leaveForGoogle(
+        () => reauthenticateWithRedirect(user, provider),
+        note || "Re-authenticated. Repeat what you were doing — the request " +
+          "that asked for it was not sent.",
+      );
     }
   } catch (e) {
     if (e.code === "auth/multi-factor-auth-required") await resolveChallenge(e);
@@ -175,7 +267,8 @@ export async function ensureDashboardMfa() {
     setStatus("Authenticator enrolled.");
   }
   if (!(await sessionHasSecondFactor())) {
-    await stepUp();
+    setStatus("Confirming your second factor with Google…");
+    await stepUp({ note: "Second factor confirmed." });
   }
 }
 
@@ -190,11 +283,18 @@ export async function ensureDashboardMfa() {
  * than elsewhere, because this factor is what stands between a stolen password
  * and the ability to mint licences.
  *
- * Enrolment needs a recent sign-in, so this steps up first rather than letting
- * Firebase throw `auth/requires-recent-login` at the operator.
+ * Enrolment needs a recent sign-in (Firebase's window is five minutes), so
+ * this steps up first rather than letting Firebase throw
+ * `auth/requires-recent-login` at the operator — but only when the sign-in is
+ * not already fresh. It almost always is: enrolment runs straight after the
+ * first sign-in, and a redirect there would loop.
  */
+const ENROL_FRESH_SECONDS = 240;
+
 export async function beginTotpEnrolment(accountLabel) {
-  await stepUp();
+  if ((await authAge()) > ENROL_FRESH_SECONDS) {
+    await stepUp({ note: "Re-authenticated. Enrol your authenticator app now." });
+  }
   const user = auth.currentUser;
   const session = await multiFactor(user).getSession();
   const secret = await TotpMultiFactorGenerator.generateSecret(session);
@@ -223,14 +323,30 @@ export function requireSignIn(onReady) {
   const appEl = document.getElementById("app");
 
   signInBtn.addEventListener("click", () => {
-    signIn().catch((e) => {
-      if (e.message === ERR_CANCELLED) return;
-      setStatus(`Sign-in failed: ${e.code || e.message}`, true);
-    });
+    signIn().catch((e) => setStatus(`Sign-in failed: ${e.code || e.message}`, true));
   });
   signOutBtn.addEventListener("click", () => signOut(auth));
 
+  // The return leg of a redirect resolves here. The auth listener below
+  // waits for it: after a re-authentication the SDK reports the persisted
+  // user before the second-factor prompt is answered, and judging that stale
+  // token would send the page back to Google (or trip the loop guard). A
+  // cancelled TOTP prompt during sign-in simply leaves nobody signed in.
+  const afterReauth = unstash(AFTER_REAUTH);
+  const redirectDone = finishRedirect()
+    .then((result) => {
+      if (result && afterReauth) setStatus(afterReauth);
+    })
+    .catch((e) => {
+      if (e.message === ERR_CANCELLED) {
+        setStatus("Sign-in cancelled — the authenticator code was not entered.");
+        return;
+      }
+      setStatus(`Sign-in failed: ${e.code || e.message}`, true);
+    });
+
   onAuthStateChanged(auth, async (user) => {
+    await redirectDone;
     const signedIn = Boolean(user);
     signInBtn.hidden = signedIn;
     signOutBtn.hidden = !signedIn;
@@ -250,6 +366,11 @@ export function requireSignIn(onReady) {
         return;
       }
       appEl.hidden = true;
+      if (e.message === ERR_REAUTH_INCOMPLETE) {
+        setStatus("Re-authentication with Google did not complete. Sign out, " +
+          "then sign in again.", true);
+        return;
+      }
       setStatus(`Could not open the dashboard: ${e.code || e.message}`, true);
     }
   });
@@ -405,15 +526,24 @@ export function confirmByTyping(label, what) {
  * Fresh password (or Google re-auth) plus TOTP before whole-licence revoke.
  *
  * The backend refuses a revoke on a stale MFA session
- * (ADMIN_WEB_REVOKE_REAUTH_SECONDS). Always step up here so the token's
+ * (ADMIN_WEB_REVOKE_REAUTH_SECONDS, 120 s). Step up here so the token's
  * auth_time is new, then the typed key-prefix confirm still runs in the page.
+ * A Google account steps up by redirect, so the operator lands back on the
+ * desk and clicks Revoke a second time; that second pass finds the sign-in
+ * fresh and goes straight to the request.
  */
+const REVOKE_FRESH_SECONDS = 90;
+
 export async function stepUpForRevoke() {
+  if ((await authAge()) < REVOKE_FRESH_SECONDS) return;
   const password = ask(
     "Re-enter your account password to revoke this licence.\n\n" +
       "Leave blank to re-authenticate with Google, then enter your " +
       "authenticator code when asked.",
   );
   if (password === null) throw new Error(ERR_CANCELLED);
-  await stepUp({ password: password || undefined });
+  await stepUp({
+    password: password || undefined,
+    note: "Re-authenticated. Click Revoke again to complete it.",
+  });
 }

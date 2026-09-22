@@ -85,16 +85,39 @@ placeholders are always restored, even if deploy fails mid-way. Never commit a
 live hostname.
 
 ```bash
-# From the repo root. The API Gateway host the app talks to, and the Firebase
-# Auth domain (must be an authorised domain on the project).
-API_BASE_URL="https://your-gateway-host" \
-AUTH_DOMAIN="your-project.firebaseapp.com" \
-./scripts/deploy-console.sh
+# From the repo root. The API Gateway host the app talks to.
+API_BASE_URL="https://your-gateway-host" ./scripts/deploy-console.sh
 ```
 
-The script copies `config.js` / `firebase.json`, substitutes `__API_BASE_URL__`,
-`__API_ORIGIN__`, and `__AUTH_DOMAIN__`, runs `firebase deploy --only hosting`,
-then a `trap` puts the templates back.
+The script copies `config.js` / `firebase.json`, substitutes `__API_BASE_URL__`
+and `__API_ORIGIN__`, runs `firebase deploy --only hosting`, then a `trap` puts
+the templates back.
+
+### Sign-in flow: redirect, own host as `authDomain`
+
+Google sign-in and every Google re-authentication use
+`signInWithRedirect` / `reauthenticateWithRedirect`, never a popup. Two of
+the places `auth.js` re-authenticates have no user gesture to open a popup
+with — straight after the first sign-in, to enrol TOTP, and inside an API
+retry after `reauth_required` — and browsers block those silently; the first
+staff sign-in on the live domain found that out.
+
+The redirect result only survives the round-trip when the auth handler is on
+the page's own origin (browsers partition third-party storage), so `auth.js`
+sets `authDomain` to `window.location.host` instead of the project default
+from `init.json`. Every Hosting host serves `/__/auth/handler`, custom domain
+included, so nothing is deployed for that — but the **Google OAuth client**
+must list the handler as a redirect URI (checklist step 2), or Google answers
+`redirect_uri_mismatch`. The CSP's `frame-src` is `'self'` for the same
+reason: the SDK's auth iframe is now same-origin.
+
+A Google re-authentication unloads the page. The operator comes back signed
+in afresh with a one-line status saying what to repeat; the request that
+asked for the step-up was not sent. A revoke therefore takes two clicks the
+first time in two minutes (`stepUpForRevoke` skips the step-up when the
+sign-in is under 90 s old), and a mint form left for more than
+`ADMIN_WEB_REAUTH_SECONDS` is re-entered. Email/password accounts step up in
+place with their password.
 
 ### Go-live checklist (Identity Platform + consoles)
 
@@ -102,11 +125,11 @@ Same Firebase project as the app (`indicvision-dic-app-auth`). Do **not** open a
 second Auth directory.
 
 1. The dashboards live on **`app.sempermechanics.com`**, a custom domain of this Hosting site (`indicvision-dic-app-auth`). `sempermechanics.com` itself is the marketing site on Netlify, which only links here and redirects `/login`, `/account` and `/terms/` to this host. Add the custom domain in Firebase Console → Hosting (TXT verification, then the A records) — the DNS zone is Netlify DNS. Until the certificate is issued the site still answers on `indicvision-dic-app-auth.firebaseapp.com`.
-2. Upgrade the project to **Identity Platform**, enable the **TOTP** second factor, leave **SMS** off. Add `app.sempermechanics.com` (and any preview channel) to authorised domains.
+2. Upgrade the project to **Identity Platform**, enable the **TOTP** second factor, leave **SMS** off. Add `app.sempermechanics.com` (and any preview channel) to authorised domains. Then, in the Auth project's Google Cloud console → APIs & Services → Credentials → the OAuth 2.0 client Firebase created for Google sign-in ("Web client (auto created by Google Service)"), add `https://app.sempermechanics.com/__/auth/handler` to **Authorised redirect URIs** — the consoles use the page's own host as `authDomain` (see "Sign-in flow" above), and Google refuses a redirect to a URI it was not told about.
 3. Put your address in `ADMIN_EMAILS` / `role: admin` for the operator desk.
 4. Deploy Cloud Run with the intended `DEMO_MAX_ANALYSES` (no lower than any live user's session count — every pre-licensing account becomes demo), keep `ADMIN_WEB_MFA_ENABLED=1` and `APP_CHECK_MODE=off`; `deploy-backend.yml` pins all three from repository variables. Then redeploy **API Gateway** from the committed spec (`api-configs create` + `gateways update`, see [BACKEND_SETUP_GCP.md](../../../docs/backend/BACKEND_SETUP_GCP.md) "Redeploying the gateway") so checkout / release / unbind / bundle / campus aliases are on the public surface — the backend workflow alone does not. The full ordered checklist is the "Licensing rollout" section of [PRODUCTION_READINESS_GATE.md](../../../docs/ops/PRODUCTION_READINESS_GATE.md).
 5. `firebase deploy --only firestore:indexes` from the backend indexes file.
-6. Run `./scripts/deploy-console.sh` with the live gateway and Auth domain. `AUTH_DOMAIN` stays `indicvision-dic-app-auth.firebaseapp.com`: it is the popup origin (`authDomain` from `/__/firebase/init.json`), not the page's own host.
+6. Run `./scripts/deploy-console.sh` with the live gateway host.
 7. Hand-check: enrol TOTP at `/login` as staff, as institution IT, and as an account holder; revoke a test licence only after password + TOTP (+ key prefix); sign in on the phone and complete the authenticator challenge.
 
 Identity Platform itself is free to enable. Email/social stays free to the usual
@@ -118,7 +141,7 @@ continue-URLs — keeps the strict
 `default-src 'self'` policy. `connect-src` is widened for the API and
 Firebase Auth's token endpoints. `script-src` is `'self'` plus two Google
 origins: the SDK modules come from `https://www.gstatic.com/firebasejs/<ver>/`
-and the popup sign-in loads gapi from `https://apis.google.com` — without both
+and the auth iframe loads gapi from `https://apis.google.com` — without both
 the page renders and *Sign in* does nothing (the first production deploy
 proved it). `auth.js` imports **both** `firebase-app.js` and `firebase-auth.js`
 from gstatic, never Hosting's `/__/firebase/<ver>/` copies: Hosting's
@@ -130,8 +153,8 @@ There is still no `'unsafe-inline'`, which is why no page may carry an inline
 `<script>` body or an `onclick=` attribute: the policy admits module files from
 those three origins and nothing else.
 
-Firebase Auth must have this Hosting domain in its authorised domains, or the
-sign-in popup is rejected.
+Firebase Auth must have this Hosting domain in its authorised domains, or
+sign-in is rejected.
 
 ### CORS
 
@@ -173,7 +196,8 @@ that reads them instead, and runs as the **Console pages** CI job:
 | No inline script or `on*=` handler | The CSP above forbids both; such code never executes |
 | Every module loads and parses as an ES module | A typo in one is otherwise found by a browser, in production |
 | Every `$("id")` is an id its own page defines | Renaming an element silently unwires the code that used it |
-| `__API_BASE_URL__`, `__API_ORIGIN__`, `__AUTH_DOMAIN__` still hold placeholders | A deploy that fails to restore them commits a live hostname |
+| `__API_BASE_URL__`, `__API_ORIGIN__` still hold placeholders | A deploy that fails to restore them commits a live hostname |
+| Both console CSPs carry `frame-src 'self'` | `authDomain` is the page's own host; the auth iframe is same-origin |
 | Every rewrite destination exists | `/login` pointing at a missing file 404s |
 | The two console CSPs are identical | The rewrite addresses would otherwise be served a different policy |
 | Every `/v1` path a console calls is in `gateway/openapi.yaml` | ESPv2 is an allowlist; an undeclared route 404s in production |

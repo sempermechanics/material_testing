@@ -155,12 +155,16 @@ def check_placeholders(policies: dict[str, str]) -> None:
 
     path = os.path.join(HOSTING, "firebase.json")
     for source, policy in policies.items():
-        for token in ("__API_ORIGIN__", "https://__AUTH_DOMAIN__"):
-            if token not in policy:
-                fail(path, f"the {source} CSP no longer carries {token} — "
-                           "either it was substituted and not restored, or the "
-                           "policy stopped naming it and the consoles can no "
-                           "longer reach that origin")
+        if "__API_ORIGIN__" not in policy:
+            fail(path, f"the {source} CSP no longer carries __API_ORIGIN__ — "
+                       "either it was substituted and not restored, or the "
+                       "policy stopped naming it and the consoles can no "
+                       "longer reach the API")
+        if "frame-src 'self'" not in policy:
+            fail(path, f"the {source} CSP's frame-src is not 'self' — auth.js "
+                       "sets authDomain to the page's own host, so the SDK's "
+                       "auth iframe is same-origin and sign-in cannot complete "
+                       "without it")
 
 
 # ---------------- 5 & 6: hosting rewrites and the two console CSPs --------
