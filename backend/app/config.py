@@ -92,13 +92,18 @@ class Settings:
         "DAT_CODEC_ENCODING_ENABLED", "false",
     ).strip().lower() == "true"
 
-    # Comma-separated emails that are treated as admins (role=admin, always
-    # approved) — they can call the /v1/admin/* endpoints. e.g.
-    # "support@indicvision.com,damodar@indicvision.com".
+    # Emails treated as admins (role=admin, always approved) — they can call
+    # the /v1/admin/* endpoints. e.g.
+    # "support@indicvision.com damodar@indicvision.com".
+    # Separated by whitespace, `;` or `,`. Prefer spaces, for the reason
+    # CONSOLE_ORIGINS gives below: the deploy action's env_vars block splits
+    # pairs on commas, so a comma-separated list of operators arrives
+    # truncated to the first address — and the operator desk is exactly where
+    # losing the second name is least visible until someone is locked out.
     ADMIN_EMAILS = {
-        e.strip().lower()
-        for e in os.environ.get("ADMIN_EMAILS", "").split(",")
-        if e.strip()
+        e.lower()
+        for e in re.split(r"[\s,;]+", os.environ.get("ADMIN_EMAILS", ""))
+        if e
     }
 
     # --- browser dashboards ---------------------------------------------------

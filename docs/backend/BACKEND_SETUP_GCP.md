@@ -621,7 +621,8 @@ gcloud run services update indic-api --region asia-south1 \
   an admin approves them individually.
 - `AUTO_APPROVE` (blanket approve-everyone) **removed**.
 
-Designate admins with `ADMIN_EMAILS` (comma-separated) — they're always
+Designate admins with `ADMIN_EMAILS` (space-separated; `,` and `;` also
+parse) — they're always
 approved and can call the admin API:
 ```bash
 gcloud run services update indic-api --region asia-south1 \

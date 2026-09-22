@@ -59,7 +59,7 @@ Dispatch **from `main` only** — jobs no-op on other refs.
 |------|------|-------|
 | `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` | secrets | Workload Identity Federation |
 | `FIREBASE_PROJECT_ID`, `SHARED_DRIVE_ID`, `SERVICE_ACCOUNT_EMAIL` | vars | Runtime identity |
-| `AUTO_APPROVE_HD`, `ADMIN_EMAILS`, `SUPPORT_EMAIL`, `NOTIFY_FROM` | vars | Access / mail |
+| `AUTO_APPROVE_HD`, `ADMIN_EMAILS`, `SUPPORT_EMAIL`, `NOTIFY_FROM` | vars | Access / mail. `ADMIN_EMAILS` holds several addresses **space-separated**, like `CONSOLE_ORIGINS`: `deploy-backend.yml` passes it through an `env_vars` block that splits pairs on commas. |
 | `TASKS_QUEUE`, `TASKS_LOCATION`, `TASKS_TARGET_BASE_URL`, `TASKS_INVOKER_SA` | vars | Async provisioning; leave empty for inline |
 | **`REQUIRE_ATTESTED_UPLOADS`** | var | Production **must** be `1`. Empty string on deploy clears the Cloud Run flag |
 | `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER` | vars | Cloud caps by `mode`. Unset → `25` / `999` (expression defaults in the workflow). Set `DEMO_MAX_ANALYSES` from the pre-deploy Firestore survey — every pre-licensing account is demo |

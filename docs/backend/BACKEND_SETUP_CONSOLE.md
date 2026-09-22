@@ -142,7 +142,7 @@ manual create or labs, not the pilot CD path:
      | `GOOGLE_CLOUD_PROJECT` | your Project ID |
      | `FIREBASE_PROJECT_ID` | the Firebase project id from step 7 — omit if it is the same as above |
      | `AUTO_APPROVE_HD` | your domain, e.g. `yourdomain.com` — verified emails there are approved on first sign-in |
-     | `ADMIN_EMAILS` | comma-separated admin addresses |
+     | `ADMIN_EMAILS` | admin addresses, space-separated (commas and `;` also parse) |
      | `SUPPORT_EMAIL` | where "a new user is waiting for approval" mail goes — defaults to `support@sempermechanics.com` |
      | `NOTIFY_FROM` | verified Resend sender, e.g. `Semper <noreply@yourdomain.com>` — leave unset to disable notification mail |
 
