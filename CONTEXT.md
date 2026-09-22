@@ -145,16 +145,17 @@ parent repo owns backend deploys. Scope of this repo: a test-type chooser
 (Tensile / Compression / Bending / Torsion) ahead of the wizard, machine-load CSV
 import with cross-section for tensile and compression, and stress–strain outputs
 in the viewer ⓘ sheet, CSV and PDF. Everything below this paragraph was written
-in the parent repo and still applies.
+in the parent repo and still applies. All four PRs (#1, #5, #3, #4) are merged;
+`main` carries the full scope as of 2026-09-22.
 
-**Test type (PR #2, `feat/test-type`).** `TestTypeSheet` sits between the Home
-**+** and the media picker. The choice is stored inline on `SessionRecord`
-(`testType`, `crossSectionMm2`, `loadAxisX`, `loadsN`, `loadSource`,
-`loadMapping` — all defaulted, so pre-fork indexes load unchanged) and shipped
-in `metadata.json` as schema `/4` (`test` object + `frames[i].loadN`), which
-`CloudRestore` reads back. Backend and DTOs are untouched. Bending and torsion
-are complete after this PR (type only); tensile and compression are complete
-with PRs #3 and #4.
+**Test type (PR #5, `feat/test-type`; first opened as #2).** `TestTypeSheet`
+sits between the Home **+** and the media picker. The choice is stored inline
+on `SessionRecord` (`testType`, `crossSectionMm2`, `loadAxisX`, `loadsN`,
+`loadSource`, `loadMapping` — all defaulted, so pre-fork indexes load
+unchanged) and shipped in `metadata.json` as schema `/4` (`test` object +
+`frames[i].loadN`), which `CloudRestore` reads back. Backend and DTOs are
+untouched. Bending and torsion are complete after this PR (type only); tensile
+and compression are complete with PRs #3 and #4.
 
 **Machine load import (PR #3, `feat/load-csv`).** Step 1 gains a load card
 for tensile / compression: `AnalysisLoadCard` (ViewStub `stubLoadCard`) with
