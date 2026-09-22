@@ -34,6 +34,7 @@ after reporting all of them.
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import re
@@ -193,6 +194,27 @@ def check_hosting() -> dict[str, str]:
                    "a Hosting header matches the request path, so the aliases "
                    "would be served a different policy than the pages they "
                    "rewrite to")
+
+    # The console pages resolve their stylesheet, module script and onward
+    # links through <base href="/console/…">, so the same page works at its
+    # rewritten address (/login, /account). A CSP `base-uri 'none'` makes the
+    # browser drop that element — the page then loads no CSS and no script,
+    # and "Sign in" does nothing. First production deploy shipped exactly
+    # that. `'self'` keeps the injected-off-site-base defence.
+    if console is not None:
+        directive = re.search(r"base-uri\s+([^;]+)", console)
+        allowed = directive.group(1).split() if directive else []
+        pages_with_base = [
+            os.path.relpath(page, HOSTING)
+            for page in glob.glob(os.path.join(PUBLIC, "console", "**", "*.html"), recursive=True)
+            if "<base " in read(page)
+        ]
+        if pages_with_base and "'self'" not in allowed:
+            fail(path, "the console CSP's base-uri is "
+                       f"{' '.join(allowed) or 'unset'!r}, but these pages rely "
+                       f"on <base>: {', '.join(pages_with_base)} — the browser "
+                       "blocks the element, every relative asset 404s and the "
+                       "sign-in button is dead")
 
     return {
         source: value
