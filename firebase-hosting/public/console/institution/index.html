@@ -21,6 +21,9 @@
   </header>
 
   <main>
+    <!-- Outside #app: enrolment, step-up and sign-in errors report here while
+         the dashboard is still hidden. -->
+    <p id="status" class="muted"></p>
     <div id="app" hidden>
       <section class="card">
         <h2>Licence</h2>
@@ -33,7 +36,6 @@
                  autocomplete="off" spellcheck="false" />
           <button id="load">Open</button>
         </div>
-        <p id="status" class="muted"></p>
         <div id="summary"></div>
       </section>
 
