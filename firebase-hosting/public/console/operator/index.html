@@ -4,11 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Licences · Semper DIC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&amp;family=Plus+Jakarta+Sans:wght@600;700;800&amp;display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/webp" href="../semper-icon.webp" />
   <link rel="stylesheet" href="../console.css" />
 </head>
 <body>
   <header>
-    <span class="brand">Semper&nbsp;DIC</span>
+    <a class="brand" href="https://sempermechanics.com/"><img src="../semper-mark.webp" alt="" width="28" height="28" />semper</a>
     <h1>Operator</h1>
     <span class="spacer"></span>
     <span id="who" class="muted"></span>
@@ -217,6 +221,16 @@
       Sign in with a Semper staff account to manage licences.
     </p>
   </main>
+  <footer>
+    <span>&copy; <span id="year"></span> sempermechanics</span>
+    <nav>
+      <a href="https://sempermechanics.com/">sempermechanics.com</a>
+      <a href="https://sempermechanics.com/support/">Support</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="/terms/">Terms</a>
+    </nav>
+  </footer>
+  <script type="module" src="../chrome.js"></script>
 
   <script type="module" src="operator.js"></script>
 </body>

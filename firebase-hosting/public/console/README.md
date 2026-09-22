@@ -136,6 +136,22 @@ page origin (`app.sempermechanics.com` and the `firebaseapp.com` host by
 default; add a preview channel while testing). The phone never sends an
 `Origin` and is untouched by either.
 
+### Chrome
+
+`console.css` is the marketing site's theme (`semper-website/css/style.css`:
+its `:root` tokens, DM Sans / Plus Jakarta Sans, the `.btn-primary` /
+`.btn-secondary` shapes, the footer-meta strip) at console density, so
+`sempermechanics.com` → *Sign in* reads as one product. Take a value from
+there before inventing one here. The brand mark and favicon are copies of the
+site's `assets/semper/semper-mark.webp` / `semper-icon.webp`; the fonts come
+from Google Fonts, which is why the console CSP names
+`fonts.googleapis.com` (`style-src`) and `fonts.gstatic.com` (`font-src`) — the
+site-wide policy does not. Every page declares `<base href="/console/…">` so it
+works at its rewritten address too, which is why the console CSP's `base-uri`
+is `'self'` rather than `'none'`; `check_console.py` refuses the pair any other
+way. `chrome.js` holds the footer year: the CSP is `script-src 'self'`, so an
+inline one-liner would never run.
+
 ## Checking them
 
 There is no compiler here, so nothing else in the repository fails when a
