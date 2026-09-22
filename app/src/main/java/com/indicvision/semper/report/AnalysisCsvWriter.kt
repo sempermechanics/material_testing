@@ -18,9 +18,11 @@ import java.util.Locale
  * starting with `#` (e.g. `pandas.read_csv(..., comment='#')`).
  *
  * Point rows lead with `image` and the eight DIC columns (`x_px`…`znssd`), then
- * the three rigid-body motion columns. Those trail every session: the motion fit
- * is read off the solved field itself, so it is there whatever the frames came
- * from.
+ * the three rigid-body motion columns, then the frame's machine load and
+ * engineering stress. All six trail every session — the motion fit is read off
+ * the solved field itself, and the two mechanical columns are simply empty for
+ * a session without a load log — so a reader never has to guess which value
+ * went missing from a short row.
  */
 object AnalysisCsvWriter {
 
@@ -34,6 +36,10 @@ object AnalysisCsvWriter {
         val roiY: Int,
         val roiW: Int,
         val roiH: Int,
+        /** Wire name of the mechanical test, or blank for a plain DIC session. */
+        val testType: String = "",
+        val crossSectionMm2: Float = 0f,
+        val loadAxisX: Boolean = true,
     )
 
     /** One frame: its identity columns plus a lazy provider of its decoded field. */
@@ -43,11 +49,15 @@ object AnalysisCsvWriter {
         val step: Int,
         val strainWindow: Int,
         val data: () -> FloatArray?,
+        /** The machine load logged for this frame, or null without a load log. */
+        val loadN: Float? = null,
     )
 
-    private const val CSV_VERSION = 1
+    /** 2: `load_N,stress_MPa` trail every point row; typed sessions add `# test_type…`. */
+    private const val CSV_VERSION = 2
     private const val POINT_HEADER_BASE = "x_px,y_px,u_px,v_px,exx,eyy,exy,znssd"
     private const val MOTION_SUFFIX_HEADER = "shift_u_px,shift_v_px,shift_rot_deg"
+    private const val MECHANICAL_SUFFIX_HEADER = "load_N,stress_MPa"
     private const val SWEEP_SETTINGS_HEADER = "subset_px,step_px,strain_window,vsg_px,"
 
     private val FIELD_STATS = listOf(
@@ -102,13 +112,24 @@ object AnalysisCsvWriter {
         )
     }
 
+    /**
+     * The frame's load and stress, without the leading comma. Empty cells when
+     * the session has no load log, so the column count never changes.
+     */
+    internal fun mechanicalSuffixColumns(loadN: Float?, crossSectionMm2: Float): String {
+        if (loadN == null) return ","
+        val stress = StressStrain.stressMPa(loadN, crossSectionMm2)
+        val stressText = if (stress.isNaN()) "" else String.format(Locale.US, "%.4f", stress)
+        return String.format(Locale.US, "%.3f,", loadN) + stressText
+    }
+
     internal fun pointHeader(sweep: Boolean): String {
         val base = if (sweep) {
             "image,$SWEEP_SETTINGS_HEADER$POINT_HEADER_BASE"
         } else {
             "image,$POINT_HEADER_BASE"
         }
-        return "$base,$MOTION_SUFFIX_HEADER"
+        return "$base,$MOTION_SUFFIX_HEADER,$MECHANICAL_SUFFIX_HEADER"
     }
 
     private fun writeGlobalPreamble(w: Writer, metadata: Metadata) {
@@ -121,6 +142,13 @@ object AnalysisCsvWriter {
         w.append("# roi_y,${metadata.roiY}\n")
         w.append("# roi_w,${metadata.roiW}\n")
         w.append("# roi_h,${metadata.roiH}\n")
+        if (metadata.testType.isNotBlank()) {
+            w.append("# test_type,").append(escape(metadata.testType)).append('\n')
+            w.append("# cross_section_mm2,")
+                .append(String.format(Locale.US, "%.4f", metadata.crossSectionMm2)).append('\n')
+            w.append("# load_axis,").append(if (metadata.loadAxisX) "x" else "y").append('\n')
+            w.append("# load_unit,N\n")
+        }
     }
 
     private fun writeFieldStatsRow(
@@ -186,6 +214,7 @@ object AnalysisCsvWriter {
                 prefix(frame, sweep),
                 row,
                 formatter,
+                mechanicalSuffixColumns(frame.loadN, metadata.crossSectionMm2),
             )
         }
 
@@ -201,9 +230,10 @@ object AnalysisCsvWriter {
         prefix: String,
         row: StringBuffer,
         formatter: DicResult.CsvPointFormatter,
+        mechanical: String,
     ) {
         val data = frame.data() ?: return
-        val suffix = motionSuffixColumns(RigidBodyFit.fit(data))
+        val suffix = motionSuffixColumns(RigidBodyFit.fit(data)) + "," + mechanical
         var i = 0
         while (i < data.size) {
             if (DicResult.isSolvedPoint(data[i + DicResult.IDX_ZNSSD])) {

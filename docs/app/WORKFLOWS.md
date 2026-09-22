@@ -703,6 +703,11 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.4.7 | Look for **Go to Home** in the sheet | It is not there any more — Home is a chrome icon in the top bar (§8.6.1) |
 | [ ] 8.4.8 | Tap a histogram bar | Caption under the plot names that bin's count and value range, in px or millistrain |
 | [ ] 8.4.9 | Compare the histogram with the colour bar | The histogram includes the outliers the colour bar has clamped; its ends are the true min and max |
+| [ ] 8.4.10 | Open it on a tensile / compression run with a load log | Rows **Cross-section**, **Machine load** (this frame, signed as logged) and **Stress** (MPa) after Test type; a **Stress–strain** section with a caption "Reading strain n / N…" that fills every frame, then the curve (mean Exx or Eyy along the chosen axis vs stress) with this frame highlighted and a caption "Frame n · load N · stress MPa · strain mε" |
+| [ ] 8.4.11 | Close and reopen the sheet | The curve is there at once (cached in the ViewModel); rotating keeps it |
+| [ ] 8.4.12 | Compression run logged negative | The curve sits in the third quadrant; nothing is made positive |
+| [ ] 8.4.13 | Scrub to a frame with no accepted points | Caption says that frame is not on the curve; the rows still show its load |
+| [ ] 8.4.14 | Open it on a bending / torsion run, or a sweep | Test type row only; no load rows, no curve |
 
 ### 8.5 Share and export
 
@@ -714,7 +719,9 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.5.3a | **Animations** `[single]` | Five GIFs, one per field, zipped; each loops when opened in a gallery app. Row is absent on a parameter sweep |
 | [ ] 8.5.3b | Same, immediately on entering the viewer `[single]` | Fields not built yet are built under the progress dialog — never silently missing |
 | [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
-| [ ] 8.5.5 | **CSV data** | `#` preamble (version, reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg` — the three motion columns are written for every session, empty when a frame admits no fit; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image` |
+| [ ] 8.5.4a | Same, on a tensile / compression run | Each cover has a **Mechanical Test** block (type, cross-section, strain axis, this frame's load and stress); before telemetry a **Stress–Strain Curve** page with the plot, peak stress, and a per-frame Load / Stress / Strain table continued over as many pages as needed. Progress shows "Stress–strain n / N…" first if the ⓘ sheet has not built the curve yet |
+| [ ] 8.5.4b | Same, on bending / torsion | Cover block shows the type and axis only; no curve page |
+| [ ] 8.5.5 | **CSV data** | `# semper_csv_version,2` preamble (reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean; typed sessions add `# test_type`, `# cross_section_mm2`, `# load_axis`, `# load_unit,N`), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa` — the three motion columns and the two mechanical columns are written for every session, empty when a frame admits no fit / has no load; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image`. `pandas.read_csv(path, comment='#')` reads it |
 | [ ] 8.5.6 | **Everything (.zip)** | Raw photos, per-frame results for all five fields, the CSV and the PDF; single-setting also includes the five field GIFs under `animations/` |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
 | [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |

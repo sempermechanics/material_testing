@@ -96,6 +96,7 @@ object ViewerSettingsSheet {
                 host.getString(R.string.setting_strain_method) to
                     (host.intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG"),
             )
+            addAll(host.stressStrain.rows())
             addAll(stopRows(host))
             // ROI is only meaningful when one was actually recorded.
             if (roiW > 0 && roiH > 0) {
@@ -146,6 +147,7 @@ object ViewerSettingsSheet {
             rows.addView(settingsRow(host, label, value))
         }
         if (host.isSweep) populateLineCut(host, view)
+        host.stressStrain.populate(view)
 
         sheet.show()
     }

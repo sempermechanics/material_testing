@@ -17,9 +17,11 @@ import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.FieldResult
+import com.indicvision.semper.report.MechanicalCover
 import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.RoiData
+import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.viewer.HeatmapFit
 import com.indicvision.semper.ui.viewer.SummaryAnimation
@@ -130,6 +132,9 @@ object SessionUploadBundler {
             roiY = record.roiY,
             roiW = record.roiW,
             roiH = record.roiH,
+            testType = record.testType,
+            crossSectionMm2 = record.crossSectionMm2,
+            loadAxisX = record.loadAxisX,
         )
         val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, csvMetadata) }
         try {
@@ -155,6 +160,7 @@ object SessionUploadBundler {
                     step = record.sweepSteps.getOrElse(index) { record.step },
                     strainWindow = record.sweepStrainWindows.getOrElse(index) { record.strainWindow },
                     data = { data },
+                    loadN = record.frameLoadN(index),
                 )
                 csvAppender?.appendFieldStats(frame, data)
                 csvAppender?.append(frame)
@@ -339,7 +345,7 @@ object SessionUploadBundler {
                 deformedImageName = frameName,
                 drawMinMarker = false,
             ),
-        )
+        ).copy(mechanical = record.mechanicalCover(frameIndex))
 
         var ok = true
         try {
@@ -394,4 +400,21 @@ object SessionUploadBundler {
     }
 
     private const val ENGINE_STATS_SIZE = 16
+
+    /** The load logged for frame [index], only when every frame has one. */
+    private fun SessionRecord.frameLoadN(index: Int): Float? =
+        if (hasMachineLoads) loadsN.getOrNull(index) else null
+
+    /** The cover's mechanical block, or null on a plain DIC session. */
+    private fun SessionRecord.mechanicalCover(index: Int): MechanicalCover? {
+        if (testType.isBlank()) return null
+        val loadN = frameLoadN(index)
+        return MechanicalCover(
+            testType = testType,
+            crossSectionMm2 = crossSectionMm2,
+            loadAxisX = loadAxisX,
+            loadN = loadN,
+            stressMPa = loadN?.let { StressStrain.stressMPa(it, crossSectionMm2) },
+        )
+    }
 }

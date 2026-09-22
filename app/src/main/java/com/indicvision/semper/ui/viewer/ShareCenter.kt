@@ -28,7 +28,9 @@ import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
+import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.report.VisualizationEngine
+import com.indicvision.semper.ui.analysis.VsgPlotView
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeterminateProgressDialog
 import com.indicvision.semper.ui.common.TransferBannerController
@@ -500,6 +502,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 step = s.stepPerFrame?.getOrNull(index) ?: s.step,
                 strainWindow = s.strainWindowPerFrame?.getOrNull(index) ?: s.strainWindow,
                 data = { DicResult.decodeDatFile(file) },
+                loadN = s.loadAt(index),
             )
         }
         val metadata = AnalysisCsvWriter.Metadata(
@@ -511,6 +514,9 @@ class ShareCenter(private val host: ResultViewerActivity) {
             roiY = s.roiY,
             roiW = s.roiW,
             roiH = s.roiH,
+            testType = s.testType,
+            crossSectionMm2 = s.crossSectionMm2,
+            loadAxisX = s.loadAxisX,
         )
         val f = File(shareDir(), "${s.baseName}_data.csv")
         AnalysisCsvWriter.write(f, sweep, frames, metadata)
@@ -525,6 +531,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
     private suspend fun allFramesPdf(report: (Int, String) -> Unit = { _, _ -> }): File {
         val s = requireSnapshot()
         val f = File(shareDir(), "${s.baseName}_report.pdf")
+        val stressStrain = stressStrainPage(s, report)
         f.outputStream().use { out ->
             PdfReportGenerator.generateBatch(
                 frameCount = s.batchFiles.size,
@@ -532,6 +539,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 outputStream = out,
                 frameTitle = { index -> frameTitle(index) },
                 resources = host.resources,
+                stressStrain = stressStrain,
             ).collect { progress ->
                 when (progress) {
                     // generateBatch reports failures as a Flow event rather than
@@ -544,6 +552,47 @@ class ShareCenter(private val host: ResultViewerActivity) {
             }
         }
         return f
+    }
+
+    /**
+     * The report's closing stress–strain page, or null for a session without
+     * loads. Reuses the curve the viewer already built when it has one;
+     * otherwise walks the batch here (one decode per frame, before the report
+     * starts its own). The plot is a [VsgPlotView] drawn off screen, which
+     * must happen on the main thread.
+     */
+    private suspend fun stressStrainPage(
+        s: Snapshot,
+        report: (Int, String) -> Unit,
+    ): PdfReportGenerator.StressStrainPage? {
+        if (s.loadsN.isEmpty() || s.stepPerFrame != null) return null
+        val curve = s.stressStrain ?: withContext(Dispatchers.Default) {
+            StressStrain.build(
+                loadsN = s.loadsN.toList(),
+                areaMm2 = s.crossSectionMm2,
+                axisX = s.loadAxisX,
+                frameData = { index -> s.batchFiles.getOrNull(index)?.let { DicResult.decodeDatFile(it) } },
+                onProgress = { done -> report(0, "Stress–strain $done / ${s.loadsN.size}…") },
+            )
+        }
+        if (curve.isEmpty) return null
+        val plot = withContext(Dispatchers.Main) {
+            VsgPlotView(host).run {
+                setData(
+                    listOf(
+                        VsgPlotView.Series(
+                            label = host.getString(R.string.stress_strain_title),
+                            color = VsgPlotView.paletteColor(host, 0),
+                            points = curve.plotPoints(),
+                        ),
+                    ),
+                    host.getString(R.string.stress_strain_axis_strain),
+                    host.getString(R.string.stress_strain_axis_stress),
+                )
+                renderToBitmap(STRESS_STRAIN_PLOT_W, STRESS_STRAIN_PLOT_H)
+            }
+        }
+        return PdfReportGenerator.StressStrainPage(curve, plot)
     }
 
     /**
@@ -734,13 +783,27 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val roiY: Int = 0,
         val roiW: Int = 0,
         val roiH: Int = 0,
+        /** Mechanical test, as the viewer intent carries it; blank / empty on a plain DIC session. */
+        val testType: String = "",
+        val crossSectionMm2: Float = 0f,
+        val loadAxisX: Boolean = true,
+        val loadsN: FloatArray = FloatArray(0),
+        /** The viewer's already-built curve, if the Details sheet has been opened. */
+        val stressStrain: StressStrain.Curve? = null,
     ) {
         /** Grid pitch of frame [index] — what rendering that frame depends on. */
         fun stepAt(index: Int): Int = stepPerFrame?.getOrNull(index) ?: step
+
+        /** The machine load of frame [index], or null without a load per frame. */
+        fun loadAt(index: Int): Float? = if (loadsN.size == batchFiles.size) loadsN.getOrNull(index) else null
     }
 
     private companion object {
         const val HEATMAP_ALPHA = 180
+
+        /** Off-screen render size of the report's stress–strain plot (3:2, downscaled onto the page). */
+        const val STRESS_STRAIN_PLOT_W = 1800
+        const val STRESS_STRAIN_PLOT_H = 1200
 
         val FIELDS = listOf(
             "U" to DicResult.IDX_U,

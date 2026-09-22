@@ -9,9 +9,11 @@ import androidx.core.graphics.scale
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.EngineStats
+import com.indicvision.semper.report.MechanicalCover
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
 import com.indicvision.semper.report.RoiData
+import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.report.VisualizationEngine
 
 /**
@@ -128,6 +130,19 @@ object ViewerReportFactory {
                 deformedImageName = host.originalDefNames.getOrNull(frameIndex)
                     ?: "Frame_${frameIndex + 1}",
             ),
+        ).copy(mechanical = mechanicalCover(host, frameIndex))
+    }
+
+    /** The cover's mechanical block for one frame, or null on a plain DIC session. */
+    private fun mechanicalCover(host: ResultViewerActivity, frameIndex: Int): MechanicalCover? {
+        val type = host.testType.ifBlank { return null }
+        val loadN = host.loadsN.getOrNull(frameIndex)
+        return MechanicalCover(
+            testType = type,
+            crossSectionMm2 = host.crossSectionMm2,
+            loadAxisX = host.loadAxisX,
+            loadN = loadN,
+            stressMPa = loadN?.let { StressStrain.stressMPa(it, host.crossSectionMm2) },
         )
     }
 }
