@@ -72,7 +72,7 @@
         "//": "The consoles are the only pages that talk to anything but this origin: Firebase Auth to sign in, and the Semper API to read and change seats. connect-src is widened for them ALONE — every other page, including the legal pages and the auth continue-URLs, keeps the default-src 'self' policy above. script-src is deliberately NOT relaxed: the Firebase SDK is served from Hosting's own /__/firebase/ namespace, which is same-origin, so no CDN exception is needed. __API_ORIGIN__ is substituted at deploy time alongside __CLOUD_RUN_URL__ in gateway/openapi.yaml — see public/console/README.md.",
         "source": "/console/**",
         "headers": [
-          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://__AUTH_DOMAIN__; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
+          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://__AUTH_DOMAIN__; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
           { "key": "Referrer-Policy", "value": "no-referrer" }
         ]
       },
@@ -80,7 +80,7 @@
         "//": "/login and /account rewrite into /console/, but a Hosting header is matched against the REQUEST path, so without this they would be served the strict global policy above and could reach neither Firebase Auth nor the API. The value must stay character-for-character identical to the /console/** policy; the deploy-time substitution of __API_ORIGIN__ and __AUTH_DOMAIN__ rewrites both together.",
         "source": "{/login,/account}",
         "headers": [
-          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://__AUTH_DOMAIN__; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
+          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://__AUTH_DOMAIN__; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
           { "key": "Referrer-Policy", "value": "no-referrer" }
         ]
       },
