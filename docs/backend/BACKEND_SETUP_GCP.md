@@ -272,8 +272,18 @@ Everything above is required (or near enough). These are the rest of what
 > promote (the previous revision keeps its env for rollback):
 >
 > ```bash
-> gcloud run services update indic-api --region $REGION >   --remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER
+> gcloud run services update indic-api --region $REGION \
+>   --remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER
+> gcloud run services update-traffic indic-api --region $REGION --to-latest
 > ```
+>
+> The `update-traffic` is not optional: the deploy workflow pins 100 % of
+> traffic to the candidate revision by name, so any later `services update`
+> creates a new revision that serves **0 %** until traffic is moved. Check
+> with `gcloud run services describe indic-api --region $REGION
+> --format='value(status.traffic)'`. Every promote also leaves its `cand-*`
+> traffic tag behind; prune them now and then with
+> `--remove-tags` or they accumulate (a dozen by the licensing rollout).
 
 **Production hardening: `REQUIRE_ATTESTED_UPLOADS=1` (live on pilot).**
 `GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While this
@@ -323,7 +333,11 @@ Grab the URL:
 export URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
 echo $URL
 ```
-**Check:** `curl -s $URL/healthz` → `{"ok":true}`.
+**Check:** `curl -s $URL/readyz` → `{"ok":true}`. (`/healthz` on the
+`*.run.app` URL answers a Google-frontend 404 in this project without
+reaching the container — the deploy workflow and the gateway use `/readyz`;
+the route exists and `test_health.py` covers it, but do not use it as the
+smoke check.)
 
 ### B2. Redeploy in **insecure dev mode** to smoke-test Drive + Firestore
 
