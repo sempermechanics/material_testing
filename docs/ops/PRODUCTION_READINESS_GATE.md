@@ -212,6 +212,12 @@ pre-licensing documents)
       from the operator desk once the consoles are up) → response carries
       `claimedByUid` → `/v1/config` flips to `mode: licensed` → restore
       succeeds. Mint against an address with no account → invite retained.
+      **Attempted 2026-09-22 and it answered 500** — `_write_license` returned
+      the `SERVER_TIMESTAMP` sentinel it had just written, which the response
+      cannot serialise, so both attempts created a licence and reported
+      failure (#131). Two time-limited keys from that are on the desk:
+      `SEMP-EQUZ` (redeemed) and the unused duplicate `SEMP-5MZP`. Revoke the
+      duplicate, then re-issue perpetual and uncapped once #131 is deployed.
 
 **Production**
 
@@ -239,6 +245,10 @@ pre-licensing documents)
 - [x] Custom domain `app.sempermechanics.com` on the `indicvision-dic-app-auth`
       Hosting site: TXT verification + A records in **Netlify DNS**, certificate
       issued, `https://app.sempermechanics.com/.well-known/assetlinks.json` 200.
+- [x] Repository made public (2026-09-22) so Actions minutes stop being
+      billed; the engine submodule already was. Nothing else changed — 0
+      repository secrets are exposed by it, the 19 Actions variables hold no
+      credential, and deploys authenticate by Workload Identity Federation.
 - [x] Consoles: Identity Platform + TOTP enabled (TOTP is the only factor;
       `mfa.providerConfigs[0].totpProviderConfig.adjacentIntervals: 5`,
       `enabledProviders` empty so no SMS) and `app.sempermechanics.com` an
@@ -249,9 +259,23 @@ pre-licensing documents)
       (`/login`, `/account`, `/auth/finishSignIn`, `/terms/`,
       `assetlinks.json` all 200 on the custom domain; preflight from that
       origin through `semper-gw` → 200 with the origin echoed).
-- [ ] Hand-check `/login` as staff (TOTP enrolment, then a licence list
-      loading is the CORS proof from a real browser) and as an account
-      holder.
+- [x] Hand-check `/login` as staff: TOTP enrolment (QR, #129) and the
+      operator desk listing licences — the CORS proof from a real browser.
+      What the first staff sign-in cost, all merged: `<base>` href, theme,
+      CSP origins, `init.json`, one SDK origin, no-cache (#120–#128); the
+      role gate, so a non-operator sees where they *can* go rather than a
+      mint form that refuses (#130); and the re-authentication loop that made
+      revoke unusable — firebase-auth resolves a redirect's second-factor
+      challenge against `auth.redirectUser`, never making it current, so the
+      fresh `auth_time` was invisible and every revoke bounced back to Google
+      (#132, which also resumes the revoke on the return leg).
+- [ ] Deploy #131 (mint 500) to production: `deploy-backend.yml`
+      `environment=production project=indicvision-dic-app region=asia-south1`.
+      The workflow pins env from the repository variables, so this is also the
+      first deploy to carry `ADMIN_EMAILS` for both operators — space-separated
+      since #134, because the deploy action splits `env_vars` pairs on commas.
+      Rollback: `update-traffic --to-revisions=indic-api-00067-mbp=100`.
+- [ ] Hand-check `/login` as an ordinary account holder (`/account` only).
 - [x] Marketing site (`IndicVision/semper-website`, Netlify): "Sign in" in the
       nav, `/dashboard/` page, `_redirects` for `/login`, `/account`,
       `/terms/*` → `app.sempermechanics.com`. `curl -sI https://sempermechanics.com/terms/`

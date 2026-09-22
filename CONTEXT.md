@@ -145,13 +145,37 @@ against production (backup, delete, export work; restore is refused once
 with a readable sentence). The dashboards are deployed on
 `app.sempermechanics.com` (Firebase Hosting custom domain, Netlify DNS) with
 Identity Platform + TOTP-only MFA, and `sempermechanics.com/login|account|terms`
-redirect there. `main` since then: #117 (refused cloud download says why)
-and #118 (the Firestore index file kept only the one real composite —
-production had none before this rollout). Still open in
+redirect there.
+
+Everything since is the staff console meeting a real browser, plus one
+backend bug it found. The consoles: #117–#118 (refused cloud download says
+why; the Firestore index file kept only the one real composite — production
+had none before this rollout), then #120–#128 — `<base>` href, theme, CSP
+origins, `init.json`, one SDK origin, no-cache — and #129 the TOTP QR,
+#130 the role gate (a non-operator is told where they *can* go instead of
+being shown a mint form that refuses), #132 the re-authentication loop
+(firebase-auth resolves a redirect's second-factor challenge against
+`auth.redirectUser`, so the fresh `auth_time` never reached `currentUser`
+and a revoke bounced to Google forever; the desk now also resumes the
+revoke itself on the return leg). The backend: #131 — the mint routes
+returned the `SERVER_TIMESTAMP` sentinel they had just written, so a
+successful mint answered 500 and the licence existed anyway — and #134,
+`ADMIN_EMAILS` parsed like `CONSOLE_ORIGINS` because the deploy action
+splits `env_vars` pairs on commas and the list now names two operators.
+#133 made the emulator tier's two invite races deterministic: a round the
+emulator starves grants nothing, so it is re-raced rather than asserted on.
+The repository is public as of 2026-09-22 (CI minutes; the engine submodule
+was already public), and `damodar@indicvision.com` is the second operator.
+
+**#131 is merged but not deployed**: production still serves `d6b1b64`
+(revision `indic-api-00067-mbp`, which carries the two-operator
+`ADMIN_EMAILS` set by hand), so minting still answers 500 after writing the
+licence. Still open in
 [docs/ops/PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md)
-"Licensing rollout": the staff hand-check of `/login` with TOTP enrolment,
-the first minted licence, the new-build demo-key check, and the 24 h log
-watch. Rollback targets: Cloud Run revision `indic-api-31896308319-1`,
+"Licensing rollout": that deploy, the first minted licence, the staff
+hand-check of `/login` as an ordinary account holder, the new-build
+demo-key check, and the 24 h log watch. Rollback targets: Cloud Run
+revision `indic-api-00067-mbp` (pre-licensing `indic-api-31896308319-1`),
 gateway config `v202608081145`.
 
 **Terms clickwrap (merged to `main` in #109, and into `feat/license-demo-pro`
