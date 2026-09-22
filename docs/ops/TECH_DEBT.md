@@ -43,8 +43,9 @@ Priority = (Impact + Risk) × (6 − Effort).
 | TD-28 | Backend | A per-user `maxSessions` override (`PATCH /v1/admin/users/{uid}/config`) is ignored while the account is demo: `resolve_user_config` takes `DEMO_MAX_ANALYSES` for every unlicensed user, so an operator cannot lift one demo account's cap | 2 | 2 | 2 | **16** | Deferred — decide whether the override should win in demo or whether "lift the cap" means "attach a licence"; today the docs say the latter |
 | TD-29 | App | Two auth continue hosts: `app.sempermechanics.com/auth/*` (current `AUTH_HOST`) and `indicvision-dic-app-auth.firebaseapp.com/*` (`LEGACY_AUTH_HOST`). The manifest carries four App Link filters, `AUTH_HOSTS` accepts both, the Hosting site rewrites both path shapes, and the Firebase Console password-reset action URL still names the legacy host because pre-`/auth` builds intercept only it | 1 | 2 | 2 | **8** | Deferred until no build declaring only the legacy host is installed (Play vitals). Then: action URL → `https://app.sempermechanics.com/auth/finishReset`, drop the two legacy filters and `LEGACY_AUTH_HOST`, drop the bare rewrites in `firebase.json` |
 | TD-30 | Ops | The API Gateway (`semper-gw`, asia-northeast1) sits in a different region from Cloud Run (`indic-api`, asia-south1) because API Gateway is not offered in asia-south1: every request takes a Tokyo→Mumbai hop, and the legacy `indic-gw` / `indic-api` pair from the first deploy is still provisioned | 2 | 1 | 3 | **9** | Deferred — a regional external HTTPS load balancer with a serverless NEG in asia-south1 would replace the gateway (JWT check moves to Cloud Run / IAP); measure the hop first. Delete the legacy pair as soon as nothing resolves its host |
-| TD-31 | Test | `test_an_individual_invite_is_consumed_once_under_concurrency` (Tier 4, emulator) is flaky: failed on the first run of #114 and #116, passed on `gh run rerun --failed` both times | 2 | 2 | 2 | **16** | Open — the Firestore emulator serialises transactions differently from production; either pin the contention with a barrier in the test or mark it `xfail(strict=False)` on the emulator and keep the assertion for the real-project run |
 | TD-32 | Ops | `deploy-backend.yml` promotes by pinning traffic to the candidate revision **by name** and never removes the `cand-*` tag, so tags accumulate (11 on staging, 8 on production at the licensing rollout) and any post-deploy `gcloud run services update` creates a 0 % revision that needs a manual `update-traffic` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) "Environment variables") | 2 | 2 | 2 | **16** | Open — promote with `--to-latest` after the candidate passes `/readyz`, and `--remove-tags cand-<sha>` in the same step |
+| TD-33 | Backend | A contended invite claim that starves out completely leaves the account on the Demo key it then mints, and `claim_pending_invite` returns early for anyone already holding a licence — so the invite stays pending until ops mints for the address again (which attaches directly) | 2 | 1 | 3 | **9** | Open — either re-check invites for an account whose only licence is a `createdByUid: system` Demo key, or have the Demo mint skip an address that still has an invite. It needs every request in one burst to exhaust the client's five ABORTED retries: seen against the emulator (#133), never in production |
+| TD-34 | Console | The operator desk still carries the pre-#129 enrolment card (`enrolCard`, `enrolSecret`, and its two handlers): `requireSignIn` → `ensureDashboardMfa` enrols in-page with a QR before any desk code runs, so `hasSecondFactor(user)` is always true by the time `renderFactorState` reads it and the card never shows | 1 | 1 | 2 | **2** | Open — delete the card from `operator/index.html` and `operator.js`; keep `renderFactorState` only for displaying which factor is enrolled |
 
 ### Closed as obsolete, 2026-09-14
 
@@ -57,6 +58,13 @@ both this branch and `main` and none of those symbols resolves anywhere in
 register row that cannot be worked is noise. TD-23 is closed by work, not by
 deletion: the revoke now stamps a check-in checkpoint the `lastSeenAt` throttle
 honours.
+
+**TD-31 is closed by #133.** The flaky emulator invite race was not asserting a
+real guarantee: a round the emulator starves grants nothing, and with no grant
+there is no grant for a loser to stamp a Demo key over. `_race_entitlement`
+re-races such a round instead of failing on it — 32 consecutive runs, the retry
+path firing in four of them. What that starvation costs an account outlives the
+test and is now TD-33.
 
 ## External / deferred (not blocked on code alone)
 
