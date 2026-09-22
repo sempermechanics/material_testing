@@ -502,8 +502,10 @@ def test_an_invite_is_redeemed_at_most_once(emulator_repo):
     uid = f"emu-{tag}"
     user = _emu_user(emulator_repo, uid, address)
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        list(pool.map(lambda _: emulator_repo.ensure_entitlement(dict(user), None), range(6)))
+    _race_entitlement(
+        emulator_repo, user,
+        settled=lambda: bool(emulator_repo.list_institution_seats(license_id)),
+    )
 
     seats = emulator_repo.list_institution_seats(license_id)
     stored = emulator_repo.get_license(license_id)
@@ -528,6 +530,44 @@ def test_a_revoked_invite_loses_the_race_cleanly(emulator_repo):
     assert out.get("licenseId") is None
     assert emulator_repo.list_institution_seats(license_id) == []
     assert int(emulator_repo.get_license(license_id).get("seatsUsed") or 0) == 0
+
+
+#: How many times `_race_entitlement` will re-run a race that granted nothing.
+#: Four starved rounds in a row has never been seen; the cap is there so a
+#: genuinely stuck claim fails the test instead of spinning.
+_RACE_ROUNDS = 4
+
+
+def _race_entitlement(repo_, user, settled, workers: int = 6, rounds: int = _RACE_ROUNDS):
+    """Race `workers` simultaneous `ensure_entitlement` calls until one claim
+    commits, and say how many rounds that took.
+
+    Repeating the race is not a weaker test, because a round that grants
+    nothing proves nothing. The emulator serialises contention and aborts the
+    losers, so all six requests can exhaust the client's five retries and
+    every one of them answer `_contended`; production reads that round the
+    same way — `_drop_superseded_demo` records "six concurrent sign-ins
+    starved out completely and the account landed on Demo", and the claim is
+    left for a later request. With no grant, there is no grant for a loser to
+    stamp a Demo key over, which is the invariant these tests are here for. So
+    race again, with the same pre-race copy of the account every request would
+    have held, rather than assert on a round where nothing happened.
+
+    Each round is a real n-way race, and the assertions afterwards still cover
+    the losers of every round that ran: a Demo key minted by a starved round
+    survives in `licenses` until a claim commits and `_drop_superseded_demo`
+    clears it, so "exactly one licence redeemed by this account" is asserted
+    against everything all the rounds left behind.
+    """
+    for attempt in range(1, rounds + 1):
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(lambda _: repo_.ensure_entitlement(dict(user), None), range(workers)))
+        if settled():
+            return attempt
+    pytest.fail(
+        f"no request claimed the licence in {rounds} rounds of {workers} — "
+        "contention should not starve that long",
+    )
 
 
 def _emu_individual(repo_, email: str):
@@ -572,7 +612,8 @@ def test_an_individual_invite_is_consumed_once_under_concurrency(emulator_repo):
     which is what six requests in flight at app launch actually see. The losers
     fall through to the Demo mint holding that stale copy; the assertion is
     that none of them stamps a Demo key over the licence a sibling just
-    granted.
+    granted — see `_race_entitlement` for why the race may be run more than
+    once before that assertion means anything.
     """
     tag = uuid.uuid4().hex[:8]
     address = f"invited-{tag}@lab.org"
@@ -580,10 +621,10 @@ def test_an_individual_invite_is_consumed_once_under_concurrency(emulator_repo):
     uid = f"emu-{tag}"
     user = _emu_user(emulator_repo, uid, address, activeDeviceId=f"dev-{tag}")
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        list(pool.map(
-            lambda _: emulator_repo.ensure_entitlement(dict(user), None), range(6),
-        ))
+    _race_entitlement(
+        emulator_repo, user,
+        settled=lambda: (emulator_repo.get_license(license_id) or {}).get("redeemedByUid") == uid,
+    )
 
     stored_user = emulator_repo.db().collection("users").document(uid).get().to_dict()
     assert stored_user["licenseId"] == license_id
