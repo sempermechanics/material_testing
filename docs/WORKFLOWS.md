@@ -176,6 +176,7 @@ stays on the Activity.
 |---|---|---|---|
 | A5.1 | Load frames | `StaticAnalysisActivity` + `AnalysisWizardSlots` / `AnalysisWizardCoach` | `ui/common/MediaPickerSheet` → `ui/analysis/FrameImportHelper` → `imaging/BitmapDecode`; ordering via `AnalysisFrameOrderMenuHelper` + `FrameOrderHelper` / `FrameOrderAdapter` |
 | A5.1a | Video source | same | `AnalysisVideoExtractHelper` → `VideoFrameExtractor` |
+| A5.1b | Machine load log (tensile / compression) | same, `AnalysisLoadCard` (ViewStub `stubLoadCard`) | `data/DocumentText` → `data/MachineLoadCsv` (parse) → `data/MachineLoadMapper` (rows → frames, re-run from `checkReady()`); gate in `AnalysisReadyGate`; tests `MachineLoadCsvTest`, `MachineLoadMapperTest` |
 | A5.2 | Confirm settings | same | `AnalysisSettingsSheetHelper`, `SubsetRecommender` (SSSIG seed), `data/ParamClipboard` (Paste params), ROI card → A6, `AnalysisReadyGate` |
 | A5.3 | Sweep summary `[sweep]` | same | `SweepSetupHelper` + `VsgStudy` (plan) + `LineCutPreviewView` |
 | A5.4 | Running | `BatchRunController` + `ComputeOverlayHelper` | `AnalysisViewModel.launchBatchAnalysis` → `runBatchAnalysis` → `DicBatchRunner` → `DicFieldIo` → JNI `SemperNativeLib.computeFullFieldDirect`; sweeps go `runVsgSweep` → `VsgStudyRunner` |

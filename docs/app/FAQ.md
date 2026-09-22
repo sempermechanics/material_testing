@@ -33,6 +33,7 @@ App ↔ FAQ map: [FAQ_LINKS.md](FAQ_LINKS.md).
 | Import deformed batch | [import-deformed](#import-deformed) | Wizard import snackbar **Why?** |
 | Video read | [video-read](#video-read) | Wizard video snackbar **Why?** |
 | Video extract | [video-extract](#video-extract) | Wizard video snackbar **Why?** |
+| Machine load log | [machine-loads](#machine-loads) | Wizard step 1 load-card chip ⓘ |
 | No batch data | [no-batch-data](#no-batch-data) | Result viewer snackbar **Why?** |
 | Viewer out of memory | [viewer-oom](#viewer-oom) | Result viewer snackbar **Why?** |
 | Custom colour scale | [custom-scale](#custom-scale) | Result viewer snackbar **Why?** |
@@ -303,6 +304,40 @@ supported on this device.
 
 **What to do:** Widen the segment, lower sampling interval, or raise max frames in
 Settings.
+
+---
+
+## machine-loads {#machine-loads}
+
+**When you see it:** A chip on the **Machine load** card (tensile and
+compression tests) saying the log was *resampled*, *matched by time*, had its
+*first row skipped*, had *no unit* or *no load column*, or that every load has
+an unexpected sign.
+
+**What it means:** The app reads the load log the testing machine exported and
+matches one load to each deformed frame:
+
+- **One row per frame** — the log has exactly as many rows as frames. Nothing
+  to check.
+- **First row skipped** — one more row than frames, and the first row is the
+  smallest load: it is taken as the unloaded reference.
+- **Matched by time** — video frames only. Each frame takes the row nearest in
+  time, assuming the video and the log started together. Start the recording
+  and the machine at the same moment, or trim the video to that moment.
+- **Resampled** — any other row count. Frames are spread evenly through the
+  log (reference ↔ first row, last frame ↔ last row). This is right when
+  photos were taken at a steady rate through the whole test; otherwise export
+  the log at the photo rate, or shoot video.
+- **No unit** — the header did not say N, kN or lbf, so the column is taken as
+  newtons. Add the unit to the header if that is wrong.
+- **No load column** — no header named a load or force column; the last
+  numeric column is used. Name the column `Load (N)` in the export.
+- **Sign** — loads are kept exactly as logged. A compression test whose loads
+  are all positive (or a tensile test whose loads are all negative) most likely
+  reflects the machine's sign convention; the curve is plotted as logged.
+
+**What to do:** Remove the log with ✕ and import a corrected export, or accept
+the chip — it never blocks the analysis.
 
 ---
 

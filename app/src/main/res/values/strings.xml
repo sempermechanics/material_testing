@@ -587,6 +587,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="speckle_subset_span_fmt">A %1$d px subset spans too few speckles on this pattern to be unambiguous. Good practice asks for at least %2$d px here.</string>
     <string name="next_reason_ref">add a reference image to continue</string>
     <string name="next_reason_def">add at least one deformed frame to continue</string>
+    <string name="next_reason_load">import the machine load log to continue</string>
+    <string name="next_reason_cross_section">enter the specimen cross-section to continue</string>
     <string name="run_analysis">Compute</string>
     <string name="new_analysis_title">New analysis</string>
 
@@ -599,6 +601,50 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="test_type_torsion">Torsion test</string>
     <string name="test_type_sub_loads">Imports the machine’s load log and plots stress against strain.</string>
     <string name="test_type_sub_record">Records the test type with the analysis.</string>
+
+    <!-- Machine load import (wizard step 1, tensile / compression) -->
+    <string name="load_card_title">Machine load</string>
+    <string name="load_import">Import load log</string>
+    <string name="load_import_hint">CSV export from the testing machine — load per row, any unit</string>
+    <string name="load_clear">Remove load log</string>
+    <string name="load_reading">Reading load log…</string>
+    <!-- rows · unit · mapping, e.g. "120 rows · N · one row per frame" -->
+    <plurals name="load_meta_rows_fmt">
+        <item quantity="one">%1$d row · %2$s · %3$s</item>
+        <item quantity="other">%1$d rows · %2$s · %3$s</item>
+    </plurals>
+    <plurals name="load_meta_waiting_fmt">
+        <item quantity="one">%1$d row · %2$s · add deformed frames to match</item>
+        <item quantity="other">%1$d rows · %2$s · add deformed frames to match</item>
+    </plurals>
+    <string name="load_mapping_one_to_one">one row per frame</string>
+    <string name="load_mapping_drop_first">one row per frame, first row skipped</string>
+    <string name="load_mapping_time">matched by time</string>
+    <string name="load_mapping_resampled">resampled onto frames</string>
+    <string name="load_cross_section">Cross-section</string>
+    <string name="load_cross_section_hint">area</string>
+    <string name="unit_mm2">mm²</string>
+    <string name="load_axis">Strain axis</string>
+    <string name="info_load_title">Machine load</string>
+    <string name="info_load_body">Import the load log the testing machine exported (CSV). One load per deformed frame is ideal; a longer log is matched by time for video frames, or resampled evenly for photos. Loads keep their sign — compression stays negative. Cross-section is the specimen area the load acts on, so stress = load ÷ area. The strain axis is the direction of loading in the image.</string>
+    <plurals name="load_warn_resampled_fmt">
+        <item quantity="one">%1$d row resampled onto %2$d frames — the curve assumes frames were taken evenly through the log.</item>
+        <item quantity="other">%1$d rows resampled onto %2$d frames — the curve assumes frames were taken evenly through the log.</item>
+    </plurals>
+    <string name="load_warn_first_row_dropped">The log has one more row than frames; the first (unloaded) row is taken as the reference.</string>
+    <string name="load_warn_units_assumed">No unit found in the log — loads are taken as newtons.</string>
+    <string name="load_warn_column_guessed">No load column named in the log — the last numeric column is used.</string>
+    <string name="load_warn_time_aligned">Frames matched to the log by time, assuming the video and the log started together.</string>
+    <string name="load_warn_time_ignored">The log’s time column does not increase, so it was ignored.</string>
+    <string name="load_warn_sign_tensile">All loads are negative for a tensile test — check the machine’s sign convention.</string>
+    <string name="load_warn_sign_compression">All loads are positive for a compression test — check the machine’s sign convention.</string>
+    <string name="load_err_title">Couldn’t read the load log</string>
+    <string name="load_err_empty">The file has no load rows.</string>
+    <string name="load_err_too_many_rows">The file has more than %1$s rows.</string>
+    <string name="load_err_no_load_column">No column of numbers was found. Export the load channel as CSV.</string>
+    <string name="load_err_non_numeric">Line %1$d, column %2$d is \"%3$s\", not a number.</string>
+    <string name="load_err_too_large">The file is larger than %1$d MB.</string>
+    <string name="load_err_read">The file could not be opened.</string>
     <string name="step_of_fmt">Step %1$d of %2$d</string>
     <string name="reference_meta_fmt">Reference · %1$d × %2$d px</string>
     
@@ -761,6 +807,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="url_faq_no_batch_data" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
     <string name="url_faq_viewer_oom" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
     <string name="url_faq_custom_scale" translatable="false">https://sempermechanics.com/support/troubleshooting/#reading</string>
+    <string name="url_faq_load_csv" translatable="false">https://sempermechanics.com/support/troubleshooting/#loading</string>
     <string name="url_report_bug">https://sempermechanics.com/support/</string>
     <string name="url_request_feature">https://sempermechanics.com/support/</string>
 

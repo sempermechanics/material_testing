@@ -353,6 +353,30 @@ Lattice, Session limit, or back to Home.
 | [ ] 5.1.20 | Press Back on step 1 with inputs loaded | "Exit analysis?" confirmation. On steps 2 and 3 Back walks back a step instead — the confirm is step 1 only |
 | [ ] 5.1.21 | Open step 1 for the first time | Coach marks point at the reference dropzone, then the deformed one |
 
+#### 5.1b Machine load card (tensile and compression only)
+
+Below the deformed frames. Not shown for bending or torsion.
+
+| # | Action | Expected |
+|---|---|---|
+| [ ] 5.1b.1 | Start a **Tensile** analysis | A **Machine load** card with an **Import load log** dropzone, a **Cross-section** field (mm²) and an X / Y **Strain axis** toggle |
+| [ ] 5.1b.2 | Start a **Bending** analysis | No load card; Next depends only on the frames |
+| [ ] 5.1b.3 | Load reference + frames, no log | **Next** is disabled with "import the machine load log to continue" |
+| [ ] 5.1b.4 | Import a comma CSV with a `Load (N)` header and one row per frame | Card shows the filename, "N rows · N · one row per frame", no chip; **Next** now says "enter the specimen cross-section to continue" |
+| [ ] 5.1b.5 | Type a cross-section | **Next** enables |
+| [ ] 5.1b.6 | Import a semicolon CSV with decimal commas and a `kN` header | Rows read; unit shows **kN**; loads stored in N |
+| [ ] 5.1b.7 | Import a log with one more row than frames, first row 0 | Chip: first (unloaded) row taken as the reference |
+| [ ] 5.1b.8 | Import a log with many more rows than frames (photos) | Chip: "resampled onto N frames"; ⓘ on the chip offers the FAQ |
+| [ ] 5.1b.9 | Same log after video extraction with a time column | Chip: matched by time |
+| [ ] 5.1b.10 | Import a log with no header | Chips: column guessed, newtons assumed |
+| [ ] 5.1b.11 | Import a file with a text cell in the load column | Dialog "Couldn't read the load log" naming the line and column; card unchanged |
+| [ ] 5.1b.12 | Import a file over 8 MB | Dialog: the file is larger than 8 MB |
+| [ ] 5.1b.13 | Compression test, all loads positive | Sign chip; loads keep their sign (viewer shows positive stress) |
+| [ ] 5.1b.14 | Change the deformed frames after importing | Meta line and chips update to the new frame count without re-picking the file |
+| [ ] 5.1b.15 | Tap ✕ on the log | Dropzone returns; **Next** disabled again |
+| [ ] 5.1b.16 | Rotate with a log imported | Card, cross-section and axis survive |
+| [ ] 5.1b.17 | Finish the run and reopen from Home | Session carries the loads (PR3 shows them) |
+
 #### 5.1a Video source
 
 Reached whenever the file picked — from the grid or through Files — is a video.

@@ -129,6 +129,7 @@ object AnalysisDeformedBatchHelper {
                         viewModel.defFrameDates = ordered.dates
                         viewModel.defFrameSizes = sizes
                         viewModel.defFromVideo = batch.fromVideo
+                        viewModel.defFrameTimesMs = emptyList()
                         viewModel.defOrderMode = FrameOrderMode.NAME
                     } else {
                         viewModel.defOrderMode = FrameOrderMode.NAME
@@ -137,6 +138,7 @@ object AnalysisDeformedBatchHelper {
                         viewModel.defFrameSizes = emptyMap()
                         viewModel.defFrameDates = emptyList()
                         viewModel.defFromVideo = false
+                        viewModel.defFrameTimesMs = emptyList()
                     }
                     tvResult.text = ""
                     onApplied()

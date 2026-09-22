@@ -22,7 +22,10 @@ import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.CloudSync
+import com.indicvision.semper.data.MachineLoadMapper
+import com.indicvision.semper.data.MachineLoadTable
 import com.indicvision.semper.data.MechanicalTestInputs
+import com.indicvision.semper.data.ParsedLoadCsv
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionRecordSettings
 import com.indicvision.semper.data.SessionRepository
@@ -147,6 +150,50 @@ class AnalysisViewModel : ViewModel() {
     var loadAxisX: Boolean = true
 
     /**
+     * The machine's load log as read from the file, kept so a change to the
+     * deformed frames re-runs the match without re-reading the document.
+     * Null until a file is imported (or after Clear).
+     */
+    var parsedLoadCsv: ParsedLoadCsv? = null
+
+    /** Display name of the imported log; blank when none. */
+    var loadCsvName: String = ""
+
+    /** [parsedLoadCsv] matched to the current deformed frames; null when either is missing. */
+    var machineLoads: MachineLoadTable? = null
+        private set
+
+    /**
+     * Time of each deformed frame after the reference, index-aligned with
+     * [defFilePaths]. Only video extraction knows these; image batches leave
+     * it empty and the load log is resampled instead of time-matched.
+     */
+    var defFrameTimesMs: List<Long> = emptyList()
+
+    /** Re-matches the load log to the frames as they are now. Cheap; call after either changes. */
+    fun refreshMachineLoads() {
+        val parsed = parsedLoadCsv
+        machineLoads = if (parsed == null) {
+            null
+        } else {
+            MachineLoadMapper.map(parsed, defFilePaths.size, defFrameTimesMs, testType)
+        }
+    }
+
+    fun clearMachineLoads() {
+        parsedLoadCsv = null
+        loadCsvName = ""
+        machineLoads = null
+    }
+
+    /**
+     * Tensile and compression need a load per frame and a cross-section
+     * before the wizard can go on; the other tests need nothing extra.
+     */
+    fun mechanicalInputsReady(): Boolean =
+        !testType.hasMachineLoad || (machineLoads != null && crossSectionMm2 > 0f)
+
+    /**
      * Everything the session record stores about the test. A sweep varies
      * settings on one frame pair, so it records the type and area but never
      * per-frame loads — there is no load-per-combination to plot.
@@ -155,17 +202,10 @@ class AnalysisViewModel : ViewModel() {
         testType = testType.wireName,
         crossSectionMm2 = crossSectionMm2,
         loadAxisX = loadAxisX,
-        loadsN = if (forSweep) emptyList() else machineLoadsN(),
-        loadSource = if (forSweep) "" else machineLoadSource,
-        loadMapping = if (forSweep) "" else machineLoadMapping,
+        loadsN = if (forSweep) emptyList() else machineLoads?.loadsN.orEmpty(),
+        loadSource = if (forSweep) "" else loadCsvName,
+        loadMapping = if (forSweep) "" else machineLoads?.mapping?.name.orEmpty(),
     )
-
-    // Until the load CSV import lands there are no loads to record; these are
-    // the seams it fills in (the file the loads came from and how its rows
-    // were matched to frames).
-    private fun machineLoadsN(): List<Float> = emptyList()
-    private var machineLoadSource: String = ""
-    private var machineLoadMapping: String = ""
 
     val defCount: Int get() = defFilePaths.size
 
