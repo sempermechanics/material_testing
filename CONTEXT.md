@@ -505,7 +505,7 @@ from the new spec before the consoles are usable.
 SMS off, or the consoles sign in and every write fails `mfa_required`; the API
 Gateway has to be redeployed, since the backend workflow does not touch it; then
 [`scripts/deploy-console.sh`](scripts/deploy-console.sh), whose trap restores
-the `__API_BASE_URL__` / `__API_ORIGIN__` / `__AUTH_DOMAIN__` placeholders that
+the `__API_BASE_URL__` / `__API_ORIGIN__` placeholders that
 `check_console.py` insists stay placeholders. Steps and failure symptoms are in
 [firebase-hosting/public/console/README.md](firebase-hosting/public/console/README.md).
 

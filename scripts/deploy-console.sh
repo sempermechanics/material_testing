@@ -2,9 +2,9 @@
 # Substitute console placeholders, deploy Hosting, always restore templates.
 #
 # Usage (from repo root or firebase-hosting/):
-#   API_BASE_URL=https://your-gateway-host \
-#   AUTH_DOMAIN=your-project.firebaseapp.com \
-#   ./scripts/deploy-console.sh
+#   API_BASE_URL=https://your-gateway-host ./scripts/deploy-console.sh
+#
+# There is no AUTH_DOMAIN: auth.js uses the page's own host as authDomain.
 #
 # Optional: FIREBASE_PROJECT=indicvision-dic-app-auth
 set -euo pipefail
@@ -15,7 +15,6 @@ CFG="${HOSTING}/public/console/config.js"
 JSON="${HOSTING}/firebase.json"
 
 : "${API_BASE_URL:?set API_BASE_URL to the API Gateway origin (no trailing slash)}"
-: "${AUTH_DOMAIN:?set AUTH_DOMAIN to the Firebase Auth domain, e.g. project.firebaseapp.com}"
 
 PROJECT_FLAG=()
 if [[ -n "${FIREBASE_PROJECT:-}" ]]; then
@@ -51,7 +50,6 @@ PY
 
 subst "${CFG}" "__API_BASE_URL__" "${API_BASE_URL}"
 subst "${JSON}" "__API_ORIGIN__" "${API_BASE_URL}"
-subst "${JSON}" "__AUTH_DOMAIN__" "${AUTH_DOMAIN}"
 
 (
   cd "${HOSTING}"

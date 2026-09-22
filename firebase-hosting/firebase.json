@@ -74,15 +74,15 @@
         "//": "no-cache, not no-store: the browser revalidates by ETag on every load, so a console fix is live on the next reload instead of after Hosting's default max-age=3600 — the first three production fixes each looked undeployed for an hour. Four small files; the revalidation is a 304.",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache" },
-          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://__AUTH_DOMAIN__; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
+          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
           { "key": "Referrer-Policy", "value": "no-referrer" }
         ]
       },
       {
-        "//": "/login and /account rewrite into /console/, but a Hosting header is matched against the REQUEST path, so without this they would be served the strict global policy above and could reach neither Firebase Auth nor the API. The value must stay character-for-character identical to the /console/** policy; the deploy-time substitution of __API_ORIGIN__ and __AUTH_DOMAIN__ rewrites both together.",
+        "//": "/login and /account rewrite into /console/, but a Hosting header is matched against the REQUEST path, so without this they would be served the strict global policy above and could reach neither Firebase Auth nor the API. The value must stay character-for-character identical to the /console/** policy; the deploy-time substitution of __API_ORIGIN__ rewrites both together. frame-src is 'self' because auth.js sets authDomain to the page's own host, so the SDK's auth iframe is same-origin.",
         "source": "{/login,/account}",
         "headers": [
-          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://__AUTH_DOMAIN__; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
+          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
           { "key": "Referrer-Policy", "value": "no-referrer" }
         ]
       },
