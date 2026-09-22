@@ -3,6 +3,7 @@ package com.indicvision.semper.ui.viewer
 import android.content.Context
 import android.content.Intent
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.ui.analysis.VsgLatticeActivity
 
 /**
@@ -68,6 +69,7 @@ data class ViewerArgs(
     val crossSectionMm2: Float = 0f,
     val loadAxisX: Boolean = true,
     val loadsN: FloatArray = FloatArray(0),
+    val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
 ) {
 
     fun toIntent(context: Context): Intent {
@@ -111,6 +113,7 @@ data class ViewerArgs(
             putExtra(DicKeys.CROSS_SECTION_MM2, crossSectionMm2)
             putExtra(DicKeys.LOAD_AXIS_X, loadAxisX)
             putExtra(DicKeys.LOADS_N, loadsN)
+            putExtra(DicKeys.SPECIMEN_GEOMETRY, geometry.toArray())
         }
     }
 }

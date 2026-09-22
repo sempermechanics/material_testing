@@ -46,9 +46,11 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionPaths
+import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
+import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.FaqRedirect
@@ -150,6 +152,12 @@ class ResultViewerActivity : AppCompatActivity() {
     internal val crossSectionMm2: Float get() = intent.getFloatExtra(DicKeys.CROSS_SECTION_MM2, 0f)
     internal val loadAxisX: Boolean get() = intent.getBooleanExtra(DicKeys.LOAD_AXIS_X, true)
     internal val loadsN: FloatArray by lazy { intent.getFloatArrayExtra(DicKeys.LOADS_N) ?: FloatArray(0) }
+    internal val geometry: SpecimenGeometry
+        get() = SpecimenGeometry.fromArray(intent.getFloatArrayExtra(DicKeys.SPECIMEN_GEOMETRY))
+
+    /** How this session's loads become stress; axial for a plain DIC session. */
+    internal val stressModel: StressStrain.Model
+        get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry)
     internal val stressStrain: ViewerStressStrainHelper by lazy { ViewerStressStrainHelper(this, viewerVm) }
 
     internal var cachedBaseImage: Bitmap? = null
@@ -1062,6 +1070,7 @@ class ResultViewerActivity : AppCompatActivity() {
             crossSectionMm2 = crossSectionMm2,
             loadAxisX = loadAxisX,
             loadsN = loadsN,
+            geometry = geometry,
             stressStrain = viewerVm.stressStrain,
         )
     }

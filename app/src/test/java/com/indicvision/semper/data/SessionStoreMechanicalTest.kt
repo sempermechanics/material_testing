@@ -43,8 +43,21 @@ class SessionStoreMechanicalTest {
         assertEquals("", record.testType)
         assertEquals(0f, record.crossSectionMm2, 0f)
         assertTrue(record.loadAxisX)
+        assertEquals(SpecimenGeometry.NONE, record.geometry)
         assertTrue(record.loadsN.isEmpty())
         assertFalse(record.hasMachineLoads)
+    }
+
+    @Test
+    fun `a bending record keeps its geometry through the store`() {
+        val geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10.5f, thicknessMm = 4f)
+        val record = typedRecord(loadsN = listOf(0f, 100f, 200f)).copy(testType = "bending", geometry = geometry)
+
+        assertTrue(SessionStore.upsert(context, record))
+        val back = SessionStore.get(context, record.id)
+
+        assertNotNull(back)
+        assertEquals(geometry, back!!.geometry)
     }
 
     @Test

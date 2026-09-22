@@ -217,13 +217,16 @@ object PdfReportGenerator {
     private fun drawMechanicalBlock(layout: PdfLayoutEngine, m: MechanicalCover) {
         layout.drawSectionHeader("Mechanical Test")
         layout.drawKeyValue("Test Type:", m.label)
-        if (m.crossSectionMm2 > 0f) {
-            layout.drawKeyValue("Cross-section:", "%.3f mm²".format(Locale.US, m.crossSectionMm2))
+        layout.drawDimensions(m.model)
+        layout.drawKeyValue("Strain:", m.model.strainName)
+        m.loadN?.let { loadN ->
+            layout.drawKeyValue("Machine Load:", "%.2f N".format(Locale.US, loadN))
+            (m.model as? StressStrain.Model.Torsional)?.let {
+                layout.drawKeyValue("Torque:", "%.2f N·mm".format(Locale.US, it.torqueNmm(loadN)))
+            }
         }
-        layout.drawKeyValue("Strain Axis:", if (m.loadAxisX) "X (Exx)" else "Y (Eyy)")
-        m.loadN?.let { layout.drawKeyValue("Machine Load:", "%.2f N".format(Locale.US, it)) }
-        m.stressMPa?.takeUnless { it.isNaN() }?.let {
-            layout.drawKeyValue("Engineering Stress:", "%.3f MPa".format(Locale.US, it))
+        m.stressMPa?.let {
+            layout.drawKeyValue("${m.model.stressName}:", "%.3f MPa".format(Locale.US, it))
         }
         layout.advanceY(40f)
     }
@@ -237,14 +240,18 @@ object PdfReportGenerator {
         val curve = page.curve
         layout.newPage()
         layout.drawTitle("Stress–Strain Curve")
-        layout.drawKeyValue("Cross-section:", "%.3f mm²".format(Locale.US, curve.crossSectionMm2))
-        layout.drawKeyValue("Strain:", "mean ${if (curve.axisX) "Exx" else "Eyy"} over accepted points")
+        layout.drawDimensions(curve.model)
+        layout.drawKeyValue("Strain:", "${curve.model.strainName} over accepted points")
         curve.peak?.let {
             layout.drawKeyValue("Peak Stress:", "%.3f MPa at frame %d".format(Locale.US, it.stressMPa, it.frame + 1))
         }
         layout.advanceY(20f)
         page.plot?.let {
-            layout.drawDiagnosticBlock("Engineering stress vs. mean strain", it, STRESS_STRAIN_PLOT_HEIGHT)
+            layout.drawDiagnosticBlock(
+                "${curve.model.stressName} vs. ${curve.model.strainName}",
+                it,
+                STRESS_STRAIN_PLOT_HEIGHT,
+            )
         }
 
         val rows = curve.points.map {
@@ -376,5 +383,17 @@ object PdfReportGenerator {
 
     private fun recycleLogo(logo: Bitmap?) {
         if (logo != null && !logo.isRecycled) logo.recycle()
+    }
+}
+
+/**
+ * One key-value per entered dimension of a test's stress model. A file-level
+ * extension rather than a member: the object is at detekt's function cap.
+ */
+private fun PdfLayoutEngine.drawDimensions(model: StressStrain.Model) {
+    model.dimensions.forEach { (dimension, value) ->
+        if (value > 0f) {
+            drawKeyValue("${dimension.label}:", "%.3f %s".format(Locale.US, value, dimension.unit))
+        }
     }
 }

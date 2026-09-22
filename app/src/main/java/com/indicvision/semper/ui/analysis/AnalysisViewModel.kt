@@ -31,9 +31,11 @@ import com.indicvision.semper.data.SessionRecordSettings
 import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.SkippedNode
+import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.TestType
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
+import com.indicvision.semper.report.StressStrain
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
@@ -149,6 +151,13 @@ class AnalysisViewModel : ViewModel() {
     /** Strain axis for the stress–strain curve: Exx (true) or Eyy. */
     var loadAxisX: Boolean = true
 
+    /** Bending / torsion dimensions typed on the load card; [SpecimenGeometry.NONE] until they are. */
+    var geometry: SpecimenGeometry = SpecimenGeometry.NONE
+
+    /** How the logged loads will become stress, given what is entered so far. */
+    fun stressModel(): StressStrain.Model =
+        StressStrain.Model.of(testType.wireName, crossSectionMm2, loadAxisX, geometry)
+
     /**
      * The machine's load log as read from the file, kept so a change to the
      * deformed frames re-runs the match without re-reading the document.
@@ -187,21 +196,22 @@ class AnalysisViewModel : ViewModel() {
     }
 
     /**
-     * Tensile and compression need a load per frame and a cross-section
-     * before the wizard can go on; the other tests need nothing extra.
+     * A test with a load log needs a load per frame and every dimension its
+     * stress model uses before the wizard can go on.
      */
     fun mechanicalInputsReady(): Boolean =
-        !testType.hasMachineLoad || (machineLoads != null && crossSectionMm2 > 0f)
+        !testType.hasMachineLoad || (machineLoads != null && stressModel().isComplete)
 
     /**
      * Everything the session record stores about the test. A sweep varies
-     * settings on one frame pair, so it records the type and area but never
+     * settings on one frame pair, so it records the type and dimensions but never
      * per-frame loads — there is no load-per-combination to plot.
      */
     fun mechanicalInputs(forSweep: Boolean): MechanicalTestInputs = MechanicalTestInputs(
         testType = testType.wireName,
         crossSectionMm2 = crossSectionMm2,
         loadAxisX = loadAxisX,
+        geometry = geometry,
         loadsN = if (forSweep) emptyList() else machineLoads?.loadsN.orEmpty(),
         loadSource = if (forSweep) "" else loadCsvName,
         loadMapping = if (forSweep) "" else machineLoads?.mapping?.name.orEmpty(),

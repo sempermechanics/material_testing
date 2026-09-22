@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.ui.analysis.VsgLatticeActivity
 import com.indicvision.semper.ui.home.SessionOpenHelper
 import org.junit.Assert.assertEquals
@@ -158,6 +159,10 @@ class ViewerArgsTest {
         assertEquals(0f, intent.getFloatExtra(DicKeys.CROSS_SECTION_MM2, -1f), 0f)
         assertTrue(intent.getBooleanExtra(DicKeys.LOAD_AXIS_X, false))
         assertEquals(0, intent.getFloatArrayExtra(DicKeys.LOADS_N)!!.size)
+        assertEquals(
+            SpecimenGeometry.NONE,
+            SpecimenGeometry.fromArray(intent.getFloatArrayExtra(DicKeys.SPECIMEN_GEOMETRY)),
+        )
     }
 
     @Test
@@ -180,6 +185,20 @@ class ViewerArgsTest {
             assertEquals(12.5f, intent.getFloatExtra(DicKeys.CROSS_SECTION_MM2, 0f), 1e-4f)
             assertFalse(intent.getBooleanExtra(DicKeys.LOAD_AXIS_X, true))
             assertTrue(floatArrayOf(0f, -950f).contentEquals(intent.getFloatArrayExtra(DicKeys.LOADS_N)))
+        }
+    }
+
+    @Test
+    fun `bending geometry rides the intent from both entry points`() {
+        val geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f)
+        val fromHome = SessionOpenHelper.intentFor(
+            context,
+            record(testType = "bending", loadsN = listOf(0f, 100f)).copy(geometry = geometry),
+        )
+        val fromRun = args().copy(testType = "bending", geometry = geometry).toIntent(context)
+
+        for (intent in listOf(fromHome, fromRun)) {
+            assertEquals(geometry, SpecimenGeometry.fromArray(intent.getFloatArrayExtra(DicKeys.SPECIMEN_GEOMETRY)))
         }
     }
 

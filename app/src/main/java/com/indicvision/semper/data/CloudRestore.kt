@@ -912,8 +912,9 @@ object CloudRestore {
     }
 
     /**
-     * The mechanical test from a `/4` backup. Pre-`/4` backups have no `test`
-     * object, so every field stays at its "no test" default.
+     * The mechanical test from a `/4` backup, plus the specimen geometry a
+     * `/5` one adds. Pre-`/4` backups have no `test` object, so every field
+     * stays at its "no test" default.
      */
     private fun SessionRecord.withRestoredTest(meta: JSONObject, frameCount: Int): SessionRecord {
         val test = meta.optJSONObject("test") ?: return this
@@ -924,6 +925,19 @@ object CloudRestore {
             loadsN = restoredLoads(meta, frameCount),
             loadSource = test.optString("loadSource"),
             loadMapping = test.optString("loadMapping"),
+            geometry = restoredGeometry(test.optJSONObject("geometry")),
+        )
+    }
+
+    private fun restoredGeometry(json: JSONObject?): SpecimenGeometry {
+        if (json == null) return SpecimenGeometry.NONE
+        fun mm(key: String) = json.optDouble(key, 0.0).toFloat().coerceAtLeast(0f)
+        return SpecimenGeometry(
+            spanMm = mm("spanMm"),
+            widthMm = mm("widthMm"),
+            thicknessMm = mm("thicknessMm"),
+            momentArmMm = mm("momentArmMm"),
+            diameterMm = mm("diameterMm"),
         )
     }
 

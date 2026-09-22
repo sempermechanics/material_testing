@@ -132,6 +132,7 @@ object AnalysisNavHelper {
                 crossSectionMm2 = mechanical.crossSectionMm2,
                 loadAxisX = mechanical.loadAxisX,
                 loadsN = mechanical.loadsN.take(frameNames.size).toFloatArray(),
+                geometry = mechanical.geometry,
             ).toIntent(host),
         )
     }

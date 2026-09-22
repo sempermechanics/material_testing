@@ -28,11 +28,13 @@ import java.io.IOException
 import java.util.Locale
 
 /**
- * The machine-load card on wizard step 1: import / clear the load log,
- * cross-section, strain axis, and the chips explaining how the log's rows
- * were matched to the frames. Owns nothing the ViewModel does not already
- * hold; [refresh] redraws from it. The document picker itself stays on the
- * Activity (Activity Result launchers must be registered there).
+ * The machine-load card on wizard step 1: import / clear the load log, the
+ * specimen dimensions the test's stress needs (cross-section, or the
+ * bending / torsion rows of [SpecimenGeometryFields]), strain axis, and the
+ * chips explaining how the log's rows were matched to the frames. Owns
+ * nothing the ViewModel does not already hold; [refresh] redraws from it.
+ * The document picker itself stays on the Activity (Activity Result
+ * launchers must be registered there).
  *
  * Readiness stays in [AnalysisReadyGate].
  */
@@ -65,10 +67,16 @@ class AnalysisLoadCard(
         root.findViewById<ImageButton>(R.id.btnLoadInfo).setOnClickListener {
             MaterialAlertDialogBuilder(activity)
                 .setTitle(R.string.info_load_title)
-                .setMessage(R.string.info_load_body)
+                .setMessage(infoBodyRes(viewModel.testType))
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
         }
+        // Tensile / compression enter an area; bending and torsion their own
+        // dimensions. Torsion pairs shear stress with Exy, so it has no axis.
+        val axial = viewModel.testType == TestType.TENSILE || viewModel.testType == TestType.COMPRESSION
+        root.findViewById<View>(R.id.rowCrossSection).isVisible = axial
+        root.findViewById<View>(R.id.rowLoadAxis).isVisible = viewModel.testType != TestType.TORSION
+        SpecimenGeometryFields(root, viewModel, onChanged)
         warnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
             confirmOpenFaq(activity.getString(R.string.url_faq_load_csv))
         }
@@ -211,6 +219,12 @@ class AnalysisLoadCard(
                 R.string.load_warn_sign_tensile
             },
         )
+    }
+
+    private fun infoBodyRes(testType: TestType): Int = when (testType) {
+        TestType.TENSILE, TestType.COMPRESSION -> R.string.info_load_body
+        TestType.BENDING -> R.string.info_load_body_bending
+        TestType.TORSION -> R.string.info_load_body_torsion
     }
 
     private fun mappingRes(mapping: LoadMapping): Int = when (mapping) {

@@ -1,7 +1,9 @@
 package com.indicvision.semper.results
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.report.AnalysisCsvWriter
+import com.indicvision.semper.report.StressStrain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -142,6 +144,7 @@ class AnalysisCsvPreambleTest {
         AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
         val text = out.readText()
         assertTrue(text.contains("# test_type,compression\n"))
+        assertTrue(text.contains("# stress_model,axial\n"))
         assertTrue(text.contains("# cross_section_mm2,12.5000\n"))
         assertTrue(text.contains("# load_axis,y\n"))
         assertTrue(text.contains("# load_unit,N\n"))
@@ -150,9 +153,83 @@ class AnalysisCsvPreambleTest {
 
     @Test
     fun `mechanical cells are empty without a load and stress-less without an area`() {
-        assertEquals(",", AnalysisCsvWriter.mechanicalSuffixColumns(null, 12.5f))
-        assertEquals("10.000,", AnalysisCsvWriter.mechanicalSuffixColumns(10f, 0f))
-        assertEquals("10.000,0.8000", AnalysisCsvWriter.mechanicalSuffixColumns(10f, 12.5f))
+        val axial = StressStrain.Model.Axial(12.5f, axisX = true)
+        assertEquals(",", AnalysisCsvWriter.mechanicalSuffixColumns(null, axial))
+        assertEquals("10.000,", AnalysisCsvWriter.mechanicalSuffixColumns(10f, StressStrain.Model.Axial(0f, true)))
+        assertEquals("10.000,0.8000", AnalysisCsvWriter.mechanicalSuffixColumns(10f, axial))
+    }
+
+    @Test
+    fun `a bending session writes its dimensions and model and a flexural stress per row`() {
+        val out = File.createTempFile("semper_csv_bend", ".csv")
+        out.deleteOnExit()
+        val data = translatedGrid()
+        val frames = listOf(
+            AnalysisCsvWriter.Frame(
+                image = "frame_a.jpg",
+                subset = 41,
+                step = 5,
+                strainWindow = 15,
+                data = { data },
+                loadN = 200f,
+            ),
+        )
+        val metadata = AnalysisCsvWriter.Metadata(
+            referenceName = "ref.jpg",
+            strainMethod = "VSG",
+            imgW = 640,
+            imgH = 480,
+            roiX = 0,
+            roiY = 0,
+            roiW = 640,
+            roiH = 480,
+            testType = "bending",
+            geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f),
+        )
+        AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
+        val text = out.readText()
+        assertTrue(text.contains("# test_type,bending\n"))
+        assertTrue(text.contains("# stress_model,flexural\n"))
+        assertTrue(text.contains("# span_mm,80.0000\n# width_mm,10.0000\n# thickness_mm,4.0000\n"))
+        assertTrue(!text.contains("cross_section_mm2"))
+        assertTrue(!text.contains("moment_arm_mm"))
+        // 3 · 200 · 80 / (2 · 10 · 16) = 150 MPa
+        assertTrue(text.lines().any { it.startsWith("frame_a.jpg,") && it.endsWith(",200.000,150.0000") })
+    }
+
+    @Test
+    fun `a torsion session writes moment arm and diameter and a shear stress per row`() {
+        val out = File.createTempFile("semper_csv_tors", ".csv")
+        out.deleteOnExit()
+        val data = translatedGrid()
+        val frames = listOf(
+            AnalysisCsvWriter.Frame(
+                image = "frame_a.jpg",
+                subset = 41,
+                step = 5,
+                strainWindow = 15,
+                data = { data },
+                loadN = 100f,
+            ),
+        )
+        val metadata = AnalysisCsvWriter.Metadata(
+            referenceName = "ref.jpg",
+            strainMethod = "VSG",
+            imgW = 640,
+            imgH = 480,
+            roiX = 0,
+            roiY = 0,
+            roiW = 640,
+            roiH = 480,
+            testType = "torsion",
+            geometry = SpecimenGeometry(momentArmMm = 50f, diameterMm = 10f),
+        )
+        AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
+        val text = out.readText()
+        assertTrue(text.contains("# stress_model,torsional\n"))
+        assertTrue(text.contains("# moment_arm_mm,50.0000\n# diameter_mm,10.0000\n"))
+        assertTrue(!text.contains("span_mm"))
+        assertTrue(text.lines().any { it.startsWith("frame_a.jpg,") && it.endsWith(",100.000,25.4648") })
     }
 
     /**

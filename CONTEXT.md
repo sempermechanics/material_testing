@@ -57,8 +57,8 @@ Home → TestTypeSheet → StaticAnalysisActivity (wizard) → ResultViewerActiv
 
 The test type (`data/TestType`: tensile / compression / bending / torsion) is
 chosen on Home and rides `DicKeys.TEST_TYPE` into the wizard; the run commits
-it (plus, later, cross-section and per-frame machine loads) through
-`MechanicalTestInputs` → `SessionRecord` → `metadata.json` schema `/4`.
+it, the specimen dimensions and the per-frame machine loads through
+`MechanicalTestInputs` → `SessionRecord` → `metadata.json` schema `/5`.
 
 Access routing is `AccessRouter` + `AccessStatus`. Intent extras are `DicKeys`.
 Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`).
@@ -143,10 +143,12 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 `app_name` ("Material Testing"), `rootProject.name` and the README changed. The
 parent repo owns backend deploys. Scope of this repo: a test-type chooser
 (Tensile / Compression / Bending / Torsion) ahead of the wizard, machine-load CSV
-import with cross-section for tensile and compression, and stress–strain outputs
-in the viewer ⓘ sheet, CSV and PDF. Everything below this paragraph was written
-in the parent repo and still applies. All four PRs (#1, #5, #3, #4) are merged;
-`main` carries the full scope as of 2026-09-22.
+import with the specimen dimensions each test's stress needs, and stress–strain
+outputs in the viewer ⓘ sheet, CSV and PDF. Everything below this paragraph was written
+in the parent repo and still applies. The first four PRs (#1, #5, #3, #4) are
+merged, the fork's branches are swept (only `main` remains on the remote), and
+the repo is public with a `main` ruleset requiring `CI OK` and a pull request.
+Bending and torsion inputs follow in `feat/bending-torsion-inputs`.
 
 **Test type (PR #5, `feat/test-type`; first opened as #2).** `TestTypeSheet`
 sits between the Home **+** and the media picker. The choice is stored inline
@@ -154,34 +156,53 @@ on `SessionRecord` (`testType`, `crossSectionMm2`, `loadAxisX`, `loadsN`,
 `loadSource`, `loadMapping` — all defaulted, so pre-fork indexes load
 unchanged) and shipped in `metadata.json` as schema `/4` (`test` object +
 `frames[i].loadN`), which `CloudRestore` reads back. Backend and DTOs are
-untouched. Bending and torsion are complete after this PR (type only); tensile
-and compression are complete with PRs #3 and #4.
+untouched. This PR recorded the type only; the inputs each test needs came
+with PRs #3 / #4 (tensile, compression) and `feat/bending-torsion-inputs`.
 
-**Machine load import (PR #3, `feat/load-csv`).** Step 1 gains a load card
-for tensile / compression: `AnalysisLoadCard` (ViewStub `stubLoadCard`) with
+**Machine load import (PR #3, `feat/load-csv`).** Step 1 gains a load card:
+`AnalysisLoadCard` (ViewStub `stubLoadCard`) with
 an `OpenDocument` launcher on the Activity, 8 MB cap, UTF-8 / Latin-1.
 `data/MachineLoadCsv` infers delimiter, decimal comma, header, units row, and
 the load / time columns; `data/MachineLoadMapper` matches rows to frames
 (one-to-one, drop-first, nearest-time for video via the new
 `AnalysisViewModel.defFrameTimesMs`, else linear resample) and keeps the sign.
-Loads + cross-section are **mandatory** for those tests (`AnalysisReadyGate`).
-The parsed log is cached on the ViewModel and re-matched from `checkReady()`
-whenever the frames change.
+Loads + dimensions are **mandatory** (`AnalysisReadyGate`). The parsed log is
+cached on the ViewModel and re-matched from `checkReady()` whenever the frames
+change.
 
 **Stress–strain outputs (PR #4, `feat/stress-strain`).** `report/StressStrain`
-is the one model (stress = load / area in MPa, strain = mean Exx or Eyy over
-accepted points in mε, signed as logged). Viewer ⓘ: `ViewerStressStrainHelper`
-adds cross-section / load / stress rows and the curve, built on first sheet
+is the one model (stress in MPa, strain = mean strain over accepted points in
+mε, signed as logged). Viewer ⓘ: `ViewerStressStrainHelper` adds the
+dimension / load / stress rows and the curve, built on first sheet
 open — never on viewer open — and cached in `ResultViewerViewModel`. CSV is
 `semper_csv_version,2`: `load_N,stress_MPa` trail every point row (empty
 without a log), typed sessions add `# test_type` / `# cross_section_mm2` /
 `# load_axis` / `# load_unit`. PDF: `ReportData.mechanical` draws a
 **Mechanical Test** cover block; `generateBatch(stressStrain = …)` closes the
 all-frames report with the curve (rendered off screen by `ShareCenter`) and a
-per-frame table. `.dat` is untouched. Not yet done: bending / torsion inputs
-(span, moment arm, angle) — plug them into `MechanicalTestInputs`; a Home row
-badge for the test type; virtual-extensometer strain (mean-over-ROI understates
-strain after necking).
+per-frame table. `.dat` is untouched.
+
+**Bending and torsion inputs (`feat/bending-torsion-inputs`).** Every test now
+imports a load log; what differs is how the load becomes a stress, which is a
+`StressStrain.Model`: `Axial` (σ = P/A, strain along the load axis) for tensile
+and compression, `Flexural` (three-point, σ = 3PL/2bh² from span / width /
+thickness) for bending, and `Torsional` (T = P·r, τ = 16T/πd³ on a solid round
+bar, paired with the engineering shear strain γ = 2·Exy) for torsion. The two
+new dimension sets live in `data/SpecimenGeometry` — one defaulted field per
+dimension, carried inline on `SessionRecord`, as a `FloatArray` extra
+(`DicKeys.SPECIMEN_GEOMETRY`) and as `test.geometry` in `metadata.json` schema
+`/5` (entered dimensions only, so a tensile backup is byte-identical to `/4`).
+The wizard reuses the load card: `ui/analysis/SpecimenGeometryFields` shows the
+rows the chosen model needs (`row_specimen_dimension` includes), the ready gate
+turns on `Model.isComplete`, and the ⓘ dialog gives that test's formula. The
+model also names its own rows, axes and CSV keys, so the viewer sheet, the CSV
+preamble (`# stress_model` plus that model's dimensions) and the PDF cover /
+curve page read "Flexural stress" or "Shear stress" — and torsion's cover adds
+the frame's torque — without a second code path.
+
+Not yet done: a Home row badge for the test type; virtual-extensometer strain
+(mean-over-ROI understates strain after necking); a manual load / time column
+override on the card.
 
 
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),

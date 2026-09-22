@@ -207,15 +207,15 @@ so test it once here.
 ### 3b. Which test? — the test-type sheet
 
 Not an Activity: `TestTypeSheet`, a short bottom sheet the Home **+** opens
-before the media picker. Bending and torsion only record the type; tensile and
-compression add the machine-load card in the wizard (§5.1, once `feat/load-csv`
-lands).
+before the media picker. Every test imports the machine's load log in the
+wizard (§5.1b); the type decides which specimen dimensions the card asks for
+and how a load becomes a stress.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 3b.1 | Tap **+** on Home | **Which test?** with four rows — Tensile, Compression, Bending, Torsion — and one caption under the first two saying they take machine loads |
+| [ ] 3b.1 | Tap **+** on Home | **Which test?** with four rows — Tensile, Compression, Bending, Torsion — each with a caption: stress against strain for the first two, three-point flexural stress for bending, round-bar shear for torsion |
 | [ ] 3b.2 | Swipe the sheet down | Nothing opens; Home is unchanged |
-| [ ] 3b.3 | Pick **Bending** | The **New analysis** sheet (§3a) opens; the wizard runs exactly as before |
+| [ ] 3b.3 | Pick **Bending** | The **New analysis** sheet (§3a) opens; the wizard's load card asks for span, width and thickness (§5.1b) |
 | [ ] 3b.4 | Rotate the phone between picking a test and picking media | The test survives — the resulting session still carries it |
 | [ ] 3b.5 | Finish any run, open the viewer, tap ⓘ | **Test type** is the first row of Settings used, naming the test picked in 3b.1 |
 | [ ] 3b.6 | Reopen that session from Home; back it up, delete it locally, restore it | The ⓘ row still shows the test after each reopen |
@@ -353,14 +353,18 @@ Lattice, Session limit, or back to Home.
 | [ ] 5.1.20 | Press Back on step 1 with inputs loaded | "Exit analysis?" confirmation. On steps 2 and 3 Back walks back a step instead — the confirm is step 1 only |
 | [ ] 5.1.21 | Open step 1 for the first time | Coach marks point at the reference dropzone, then the deformed one |
 
-#### 5.1b Machine load card (tensile and compression only)
+#### 5.1b Machine load card
 
-Below the deformed frames. Not shown for bending or torsion.
+Below the deformed frames, on every test. The log and its chips are the same
+throughout; the dimension rows under it follow the test — cross-section for
+tensile and compression, **Support span** / **Width** / **Thickness** for
+bending, **Moment arm** / **Diameter** for torsion. Torsion pairs shear stress
+with Exy, so it has no strain-axis toggle.
 
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.1b.1 | Start a **Tensile** analysis | A **Machine load** card with an **Import load log** dropzone, a **Cross-section** field (mm²) and an X / Y **Strain axis** toggle |
-| [ ] 5.1b.2 | Start a **Bending** analysis | No load card; Next depends only on the frames |
+| [ ] 5.1b.2 | Start a **Bending** analysis | Same card, with **Support span**, **Width** and **Thickness** (mm) in place of the cross-section |
 | [ ] 5.1b.3 | Load reference + frames, no log | **Next** is disabled with "import the machine load log to continue" |
 | [ ] 5.1b.4 | Import a comma CSV with a `Load (N)` header and one row per frame | Card shows the filename, "N rows · N · one row per frame", no chip; **Next** now says "enter the specimen cross-section to continue" |
 | [ ] 5.1b.5 | Type a cross-section | **Next** enables |
@@ -376,6 +380,10 @@ Below the deformed frames. Not shown for bending or torsion.
 | [ ] 5.1b.15 | Tap ✕ on the log | Dropzone returns; **Next** disabled again |
 | [ ] 5.1b.16 | Rotate with a log imported | Card, cross-section and axis survive |
 | [ ] 5.1b.17 | Finish the run and reopen from Home | Session carries the loads (PR3 shows them) |
+| [ ] 5.1b.18 | Bending, log imported, one dimension left empty | **Next** disabled with "enter the specimen dimensions to continue"; it enables once span, width and thickness are all in |
+| [ ] 5.1b.19 | Torsion analysis | Rows are **Moment arm** and **Diameter**; there is no strain-axis toggle |
+| [ ] 5.1b.20 | Tap ⓘ on the card, per test | The dialog gives that test's formula: load ÷ area, 3 P L / (2 b h²), or 16 T / (π d³) with T = load × arm |
+| [ ] 5.1b.21 | Rotate with dimensions typed | The dimensions survive |
 
 #### 5.1a Video source
 
@@ -707,7 +715,9 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.4.11 | Close and reopen the sheet | The curve is there at once (cached in the ViewModel); rotating keeps it |
 | [ ] 8.4.12 | Compression run logged negative | The curve sits in the third quadrant; nothing is made positive |
 | [ ] 8.4.13 | Scrub to a frame with no accepted points | Caption says that frame is not on the curve; the rows still show its load |
-| [ ] 8.4.14 | Open it on a bending / torsion run, or a sweep | Test type row only; no load rows, no curve |
+| [ ] 8.4.14 | Open it on a sweep | Test type row only; no load rows, no curve |
+| [ ] 8.4.15 | Open it on a bending run | Rows **Support span**, **Width**, **Thickness**, **Machine load**, **Flexural stress**; the curve's y-axis reads "Flexural stress (MPa)" |
+| [ ] 8.4.16 | Open it on a torsion run | Rows **Moment arm**, **Diameter**, **Machine load**, **Torque** (N·mm), **Shear stress**; axes read "Shear strain γ (mε)" and "Shear stress (MPa)" |
 
 ### 8.5 Share and export
 
@@ -719,9 +729,10 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.5.3a | **Animations** `[single]` | Five GIFs, one per field, zipped; each loops when opened in a gallery app. Row is absent on a parameter sweep |
 | [ ] 8.5.3b | Same, immediately on entering the viewer `[single]` | Fields not built yet are built under the progress dialog — never silently missing |
 | [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
-| [ ] 8.5.4a | Same, on a tensile / compression run | Each cover has a **Mechanical Test** block (type, cross-section, strain axis, this frame's load and stress); before telemetry a **Stress–Strain Curve** page with the plot, peak stress, and a per-frame Load / Stress / Strain table continued over as many pages as needed. Progress shows "Stress–strain n / N…" first if the ⓘ sheet has not built the curve yet |
-| [ ] 8.5.4b | Same, on bending / torsion | Cover block shows the type and axis only; no curve page |
-| [ ] 8.5.5 | **CSV data** | `# semper_csv_version,2` preamble (reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean; typed sessions add `# test_type`, `# cross_section_mm2`, `# load_axis`, `# load_unit,N`), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa` — the three motion columns and the two mechanical columns are written for every session, empty when a frame admits no fit / has no load; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image`. `pandas.read_csv(path, comment='#')` reads it |
+| [ ] 8.5.4a | Same, on a tensile / compression run | Each cover has a **Mechanical Test** block (type, cross-section, strain, this frame's load and engineering stress); before telemetry a **Stress–Strain Curve** page with the plot, peak stress, and a per-frame Load / Stress / Strain table continued over as many pages as needed. Progress shows "Stress–strain n / N…" first if the ⓘ sheet has not built the curve yet |
+| [ ] 8.5.4b | Same, on bending / torsion | The cover block names that test's dimensions and stress (flexural, or shear plus the frame's torque); the curve page is titled the same way |
+| [ ] 8.5.4c | Same, on a sweep | Cover block shows the type and dimensions only; no curve page |
+| [ ] 8.5.5 | **CSV data** | `# semper_csv_version,2` preamble (reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean; typed sessions add `# test_type`, `# stress_model` (`axial` / `flexural` / `torsional`), that model's dimensions — `# cross_section_mm2`, or `# span_mm` / `# width_mm` / `# thickness_mm`, or `# moment_arm_mm` / `# diameter_mm` — then `# load_axis`, `# load_unit,N`), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa` — the three motion columns and the two mechanical columns are written for every session, empty when a frame admits no fit / has no load; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image`. `pandas.read_csv(path, comment='#')` reads it |
 | [ ] 8.5.6 | **Everything (.zip)** | Raw photos, per-frame results for all five fields, the CSV and the PDF; single-setting also includes the five field GIFs under `animations/` |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
 | [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |

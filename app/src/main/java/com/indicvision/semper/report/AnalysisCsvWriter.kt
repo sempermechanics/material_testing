@@ -4,6 +4,7 @@
 package com.indicvision.semper.report
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.data.SpecimenGeometry
 import java.io.File
 import java.io.Writer
 import java.util.Locale
@@ -40,7 +41,12 @@ object AnalysisCsvWriter {
         val testType: String = "",
         val crossSectionMm2: Float = 0f,
         val loadAxisX: Boolean = true,
-    )
+        val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
+    ) {
+        /** How this session's loads become the `stress_MPa` column. */
+        val stressModel: StressStrain.Model
+            get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry)
+    }
 
     /** One frame: its identity columns plus a lazy provider of its decoded field. */
     class Frame(
@@ -53,7 +59,12 @@ object AnalysisCsvWriter {
         val loadN: Float? = null,
     )
 
-    /** 2: `load_N,stress_MPa` trail every point row; typed sessions add `# test_type…`. */
+    /**
+     * 2: `load_N,stress_MPa` trail every point row; typed sessions add `# test_type…`.
+     * Bending / torsion sessions add `# stress_model` and their dimensions to
+     * the preamble without a version bump: `stress_MPa` is the model's stress
+     * either way, and a reader that ignores unknown `#` lines is unaffected.
+     */
     private const val CSV_VERSION = 2
     private const val POINT_HEADER_BASE = "x_px,y_px,u_px,v_px,exx,eyy,exy,znssd"
     private const val MOTION_SUFFIX_HEADER = "shift_u_px,shift_v_px,shift_rot_deg"
@@ -116,9 +127,9 @@ object AnalysisCsvWriter {
      * The frame's load and stress, without the leading comma. Empty cells when
      * the session has no load log, so the column count never changes.
      */
-    internal fun mechanicalSuffixColumns(loadN: Float?, crossSectionMm2: Float): String {
+    internal fun mechanicalSuffixColumns(loadN: Float?, model: StressStrain.Model): String {
         if (loadN == null) return ","
-        val stress = StressStrain.stressMPa(loadN, crossSectionMm2)
+        val stress = model.stressMPa(loadN)
         val stressText = if (stress.isNaN()) "" else String.format(Locale.US, "%.4f", stress)
         return String.format(Locale.US, "%.3f,", loadN) + stressText
     }
@@ -143,9 +154,17 @@ object AnalysisCsvWriter {
         w.append("# roi_w,${metadata.roiW}\n")
         w.append("# roi_h,${metadata.roiH}\n")
         if (metadata.testType.isNotBlank()) {
+            val model = metadata.stressModel
             w.append("# test_type,").append(escape(metadata.testType)).append('\n')
-            w.append("# cross_section_mm2,")
-                .append(String.format(Locale.US, "%.4f", metadata.crossSectionMm2)).append('\n')
+            w.append("# stress_model,").append(model.wireName).append('\n')
+            // Cross-section is written even at 0, as the first version-2 files
+            // did; the bending / torsion dimensions only once entered.
+            model.dimensions.forEach { (dimension, value) ->
+                if (dimension == StressStrain.Dimension.CROSS_SECTION || value > 0f) {
+                    w.append("# ").append(dimension.csvKey).append(',')
+                        .append(String.format(Locale.US, "%.4f", value)).append('\n')
+                }
+            }
             w.append("# load_axis,").append(if (metadata.loadAxisX) "x" else "y").append('\n')
             w.append("# load_unit,N\n")
         }
@@ -214,7 +233,7 @@ object AnalysisCsvWriter {
                 prefix(frame, sweep),
                 row,
                 formatter,
-                mechanicalSuffixColumns(frame.loadN, metadata.crossSectionMm2),
+                mechanicalSuffixColumns(frame.loadN, metadata.stressModel),
             )
         }
 

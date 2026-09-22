@@ -30,7 +30,7 @@ object SessionUploadMetadata {
      * Bump it only when that distinction changes, and keep the parse tolerant:
      * pre-`/3` backups predate the field being read at all.
      */
-    const val SCHEMA = "indic.session.metadata/4"
+    const val SCHEMA = "indic.session.metadata/5"
 
     /** Layout version at which the restore payload was split out of the bundle. */
     const val SCHEMA_SPLIT_BUNDLE = 3
@@ -41,6 +41,13 @@ object SessionUploadMetadata {
      * gets a session with no test type.
      */
     const val SCHEMA_MECHANICAL_TEST = 4
+
+    /**
+     * Version that added `test.geometry` (bending span / width / thickness,
+     * torsion moment arm / diameter). Additive like `/4`: absent on other
+     * tests and on every earlier file, and read back as "not entered".
+     */
+    const val SCHEMA_SPECIMEN_GEOMETRY = 5
 
     /** One JSON object per frame: its label, files, and (for a sweep) its settings. */
     fun framesJson(record: SessionRecord): JSONArray {
@@ -135,6 +142,22 @@ object SessionUploadMetadata {
             .put("loadUnit", "N")
             .put("loadSource", record.loadSource)
             .put("loadMapping", record.loadMapping)
+            .apply { geometryJson(record.geometry)?.let { put("geometry", it) } }
+    }
+
+    /** The entered dimensions only, or null when none — every other test stays byte-identical to `/4`. */
+    private fun geometryJson(geometry: SpecimenGeometry): JSONObject? {
+        if (geometry.isNone) return null
+        val json = JSONObject()
+        fun putIf(key: String, value: Float) {
+            if (value > 0f) json.put(key, value.toDouble())
+        }
+        putIf("spanMm", geometry.spanMm)
+        putIf("widthMm", geometry.widthMm)
+        putIf("thicknessMm", geometry.thicknessMm)
+        putIf("momentArmMm", geometry.momentArmMm)
+        putIf("diameterMm", geometry.diameterMm)
+        return json
     }
 
     fun deviceJson(context: Context): JSONObject = JSONObject()

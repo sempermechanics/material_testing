@@ -35,6 +35,12 @@ object DicKeys {
     /** Signed machine load per frame in newtons; empty when none were imported. */
     const val LOADS_N = "LOADS_N"
 
+    /**
+     * [com.indicvision.semper.data.SpecimenGeometry.toArray] — the bending /
+     * torsion dimensions; all zero on other tests.
+     */
+    const val SPECIMEN_GEOMETRY = "SPECIMEN_GEOMETRY"
+
     // ── StaticAnalysisActivity  RoiDrawActivity
     const val IMAGE_FILE_PATH = "IMAGE_FILE_PATH"
     const val MASK_FILE_PATH = "MASK_FILE_PATH"

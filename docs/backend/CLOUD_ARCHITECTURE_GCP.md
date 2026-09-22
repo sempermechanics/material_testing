@@ -382,8 +382,9 @@ changing `gateway/openapi.yaml` deadlines, recreate the API Gateway **api-config
 uploads a single `bundle`-role `Session.zip` holding `raw/`, `dat/`, `csv/` and
 the report archives (plus a small `metadata.json` at the session root), so a
 session costs ~1–2 Firestore file docs instead of 3F+4. `metadata.json` is
-schema `indic.session.metadata/4`: `/3` plus an optional `test` object (type,
-cross-section, load axis / unit / source / mapping) and a `loadN` per frame
+schema `indic.session.metadata/5`: `/3` plus an optional `test` object (type,
+cross-section, load axis / unit / source / mapping, and from `/5` a `geometry`
+object holding the bending or torsion dimensions) and a `loadN` per frame
 when the session has machine loads. The backend stores it verbatim; only the
 app's restore reads the additions. This trades in-Drive
 browsability of individual frames for far fewer resumable inits and Firestore

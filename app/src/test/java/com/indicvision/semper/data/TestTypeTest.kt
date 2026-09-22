@@ -1,7 +1,6 @@
 package com.indicvision.semper.data
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,11 +21,8 @@ class TestTypeTest {
     }
 
     @Test
-    fun `only tensile and compression take machine loads`() {
-        assertTrue(TestType.TENSILE.hasMachineLoad)
-        assertTrue(TestType.COMPRESSION.hasMachineLoad)
-        assertFalse(TestType.BENDING.hasMachineLoad)
-        assertFalse(TestType.TORSION.hasMachineLoad)
+    fun `every test type takes machine loads`() {
+        TestType.entries.forEach { assertTrue(it.name, it.hasMachineLoad) }
     }
 
     @Test

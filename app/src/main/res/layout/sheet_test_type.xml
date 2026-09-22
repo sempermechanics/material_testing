@@ -63,19 +63,27 @@
         android:layout_height="wrap_content"
         android:text="@string/test_type_bending" />
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="8dp"
+        android:text="@string/test_type_sub_flexural"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnTestTorsion"
         style="@style/Widget.Semper.Button.Outlined"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
         android:text="@string/test_type_torsion" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="@string/test_type_sub_record"
+        android:text="@string/test_type_sub_torsional"
         android:textColor="@color/text_secondary"
         android:textSize="12sp" />
 </LinearLayout>

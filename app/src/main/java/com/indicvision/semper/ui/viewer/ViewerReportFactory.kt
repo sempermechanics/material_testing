@@ -13,7 +13,6 @@ import com.indicvision.semper.report.MechanicalCover
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
 import com.indicvision.semper.report.RoiData
-import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.report.VisualizationEngine
 
 /**
@@ -136,13 +135,10 @@ object ViewerReportFactory {
     /** The cover's mechanical block for one frame, or null on a plain DIC session. */
     private fun mechanicalCover(host: ResultViewerActivity, frameIndex: Int): MechanicalCover? {
         val type = host.testType.ifBlank { return null }
-        val loadN = host.loadsN.getOrNull(frameIndex)
         return MechanicalCover(
             testType = type,
-            crossSectionMm2 = host.crossSectionMm2,
-            loadAxisX = host.loadAxisX,
-            loadN = loadN,
-            stressMPa = loadN?.let { StressStrain.stressMPa(it, host.crossSectionMm2) },
+            model = host.stressModel,
+            loadN = host.loadsN.getOrNull(frameIndex),
         )
     }
 }
