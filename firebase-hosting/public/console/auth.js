@@ -50,6 +50,7 @@ import {
   EmailAuthProvider,
   signInWithRedirect,
   reauthenticateWithRedirect,
+  updateCurrentUser,
   getRedirectResult,
   reauthenticateWithCredential,
   signOut,
@@ -88,6 +89,7 @@ export const ERR_REAUTH_INCOMPLETE = "console_reauth_incomplete";
    per-tab and may be unavailable (private mode), so every access is guarded. */
 const REAUTH_STARTED = "semper.reauthStarted";
 const AFTER_REAUTH = "semper.afterReauth";
+const RESUME = "semper.resume";
 const REAUTH_RETRY_SECONDS = 120;
 
 function stash(key, value) {
@@ -119,12 +121,26 @@ async function authAge(user = auth.currentUser) {
  * Leave for Google and never come back to this promise: the page unloads.
  * Holding the caller here stops an `api()` retry from firing with the stale
  * token in the moment between the SDK's navigation and the actual unload.
+ *
+ * `resume` is what the page was in the middle of, handed back to
+ * `requireSignIn`'s callback on the return leg so the operator does not
+ * start over inside the backend's freshness window.
  */
-async function leaveForGoogle(start, note) {
+async function leaveForGoogle(start, note, resume) {
   stash(REAUTH_STARTED, String(Date.now()));
   stash(AFTER_REAUTH, note);
+  stash(RESUME, resume == null ? null : JSON.stringify(resume));
   await start();
   await new Promise(() => {});
+}
+
+/** The `resume` stashed by `leaveForGoogle`, or null. */
+function unstashResume() {
+  try {
+    return JSON.parse(unstash(RESUME));
+  } catch (_) {
+    return null;
+  }
 }
 
 /* ---------------------------------------------------------------- challenge */
@@ -153,9 +169,20 @@ async function resolveChallenge(error) {
 
   const code = ask("Enter the 6-digit code from your authenticator app:");
   if (!code) throw new Error(ERR_CANCELLED);
-  return resolver.resolveSignIn(
+  const result = await resolver.resolveSignIn(
     TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code),
   );
+  // After a re-authentication *redirect* the SDK resolves the challenge
+  // against the user it stashed for the round trip, not the one it restored
+  // as `currentUser` on this page load. The fresh tokens then land on an
+  // object nobody holds, `currentUser` keeps the old auth_time, and every
+  // step-up looks as if it never happened. Adopt the user that actually
+  // re-authenticated. (A plain sign-in is already current; a same-page
+  // password re-auth resolves against `currentUser` itself.)
+  if (result.user && result.user !== auth.currentUser) {
+    await updateCurrentUser(auth, result.user);
+  }
+  return result;
 }
 
 /** Sign in. The result — and any second-factor challenge — arrives in
@@ -200,7 +227,7 @@ async function finishRedirect() {
  * session is not retried — `ERR_REAUTH_INCOMPLETE` instead of a tab that
  * bounces to Google until closed.
  */
-export async function stepUp({ password, note } = {}) {
+export async function stepUp({ password, note, resume } = {}) {
   const user = auth.currentUser;
   if (!user) throw new Error("not_signed_in");
   try {
@@ -219,6 +246,7 @@ export async function stepUp({ password, note } = {}) {
         () => reauthenticateWithRedirect(user, provider),
         note || "Re-authenticated. Repeat what you were doing — the request " +
           "that asked for it was not sent.",
+        resume,
       );
     }
   } catch (e) {
@@ -371,9 +399,11 @@ function enrolInPage(enrolment, account) {
 /* ------------------------------------------------------------------- shell */
 
 /**
- * Run `onReady(user)` once someone is signed in *and* has completed dashboard
- * MFA (enrolled TOTP + this session's second factor). Called by every console
- * before it fetches anything.
+ * Run `onReady(user, resume)` once someone is signed in *and* has completed
+ * dashboard MFA (enrolled TOTP + this session's second factor). Called by
+ * every console before it fetches anything. `resume` is whatever the page
+ * stashed before a re-authentication redirect that has just completed, or
+ * null.
  */
 export function requireSignIn(onReady) {
   const signInBtn = document.getElementById("signIn");
@@ -392,22 +422,30 @@ export function requireSignIn(onReady) {
   // token would send the page back to Google (or trip the loop guard). A
   // cancelled TOTP prompt during sign-in simply leaves nobody signed in.
   const afterReauth = unstash(AFTER_REAUTH);
+  const stashedResume = unstashResume();
   const redirectDone = finishRedirect()
     .then((result) => {
       if (result && afterReauth) setStatus(afterReauth);
+      return result ? stashedResume : null;
     })
     .catch((e) => {
       if (e.message === ERR_CANCELLED) {
         setStatus("Sign-in cancelled — the authenticator code was not entered.");
-        return;
+        return null;
       }
       setStatus(`Sign-in failed: ${e.code || e.message}`, true);
+      return null;
     });
 
   const signedOut = document.getElementById("signedOut");
 
-  onAuthStateChanged(auth, async (user) => {
-    await redirectDone;
+  let resumeHanded = false;
+  onAuthStateChanged(auth, async () => {
+    // Whatever was stashed is handed over once, on the first ready state.
+    const resume = resumeHanded ? null : await redirectDone;
+    // Read after the redirect settled: a resolved re-authentication may have
+    // replaced the user object the listener was called with.
+    const user = auth.currentUser;
     const signedIn = Boolean(user);
     signInBtn.hidden = signedIn;
     signOutBtn.hidden = !signedIn;
@@ -420,7 +458,8 @@ export function requireSignIn(onReady) {
     try {
       await ensureDashboardMfa();
       appEl.hidden = false;
-      onReady(user);
+      resumeHanded = true;
+      onReady(user, resume);
     } catch (e) {
       if (e.message === ERR_CANCELLED) {
         setStatus("Two-factor authentication is required for every dashboard.");
@@ -589,14 +628,14 @@ export function confirmByTyping(label, what) {
  *
  * The backend refuses a revoke on a stale MFA session
  * (ADMIN_WEB_REVOKE_REAUTH_SECONDS, 120 s). Step up here so the token's
- * auth_time is new, then the typed key-prefix confirm still runs in the page.
- * A Google account steps up by redirect, so the operator lands back on the
- * desk and clicks Revoke a second time; that second pass finds the sign-in
- * fresh and goes straight to the request.
+ * auth_time is new. A Google account steps up by redirect, which unloads the
+ * page: `resume` is handed back to the desk on the return leg so it can
+ * finish the revoke with one confirmation, inside the window, rather than
+ * asking the operator to find the row and retype the key.
  */
 const REVOKE_FRESH_SECONDS = 90;
 
-export async function stepUpForRevoke() {
+export async function stepUpForRevoke(resume) {
   if ((await authAge()) < REVOKE_FRESH_SECONDS) return;
   const password = ask(
     "Re-enter your account password to revoke this licence.\n\n" +
@@ -606,6 +645,7 @@ export async function stepUpForRevoke() {
   if (password === null) throw new Error(ERR_CANCELLED);
   await stepUp({
     password: password || undefined,
-    note: "Re-authenticated. Click Revoke again to complete it.",
+    note: "Re-authenticated.",
+    resume,
   });
 }

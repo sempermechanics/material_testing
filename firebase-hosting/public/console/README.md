@@ -126,11 +126,24 @@ reason: the SDK's auth iframe is now same-origin.
 
 A Google re-authentication unloads the page. The operator comes back signed
 in afresh with a one-line status saying what to repeat; the request that
-asked for the step-up was not sent. A revoke therefore takes two clicks the
-first time in two minutes (`stepUpForRevoke` skips the step-up when the
-sign-in is under 90 s old), and a mint form left for more than
-`ADMIN_WEB_REAUTH_SECONDS` is re-entered. Email/password accounts step up in
-place with their password.
+asked for the step-up was not sent. A revoke is the exception: the desk
+stashes the licence id in sessionStorage before leaving (`resume` in
+`stepUp`), and on the return leg `requireSignIn` hands it back so the desk
+finishes the revoke after one plain confirmation — the who-is-affected
+dialog and the typed key already happened on the way out, and the backend's
+120 s revoke window is too short for finding the row and typing it again. A
+mint form left for more than `ADMIN_WEB_REAUTH_SECONDS` is re-entered.
+Email/password accounts step up in place with their password.
+
+One SDK detail makes the redirect re-auth work at all. When the return leg
+raises the TOTP challenge, firebase-auth resolves it against the user it
+stashed for the round trip (`auth.redirectUser`), not the one it restored as
+`currentUser`, so the fresh tokens land on an object nobody holds and
+`currentUser` keeps the old `auth_time` — every step-up looks as if it never
+happened and the page bounces back to Google. `resolveChallenge` therefore
+adopts the re-authenticated user with `updateCurrentUser`. A plain sign-in
+does not need this (the SDK makes that user current itself), and neither does
+a same-page password re-auth.
 
 ### Go-live checklist (Identity Platform + consoles)
 
