@@ -125,7 +125,7 @@ separate decision made in `get_or_create_user`
 
 | Env var | Effect |
 |---|---|
-| `ADMIN_EMAILS` | Comma-separated. A **verified** email in this list gets `role=admin` and is always approved |
+| `ADMIN_EMAILS` | Addresses separated by whitespace, `;` or `,` — **prefer spaces**, because the deploy workflow's `env_vars` block splits pairs on commas and would ship only the first address. A **verified** email in this list gets `role=admin` and is always approved |
 | `AUTO_APPROVE_HD` | A **verified** email at this domain is created `APPROVED` |
 | `AUTO_APPROVE` | `1` = every new user is created `APPROVED`. Pilot convenience; turn off for production |
 

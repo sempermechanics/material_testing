@@ -63,6 +63,30 @@ def test_console_origins_accept_any_delimiter(monkeypatch, raw):
     assert reloaded.settings.CONSOLE_ORIGINS == ["https://a.example", "https://b.example"]
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "ops@corp.com staff@corp.com",
+        "ops@corp.com,staff@corp.com",
+        "ops@corp.com; staff@corp.com",
+        "  Ops@Corp.com\nstaff@corp.com  ",
+    ],
+)
+def test_admin_emails_accept_any_delimiter(monkeypatch, raw):
+    # Same reason as CONSOLE_ORIGINS: shipped space-separated because the
+    # deploy action splits env_vars on commas, and a truncated operator list
+    # locks the second operator out of the desk.
+    monkeypatch.setenv("ADMIN_EMAILS", raw)
+    reloaded = importlib.reload(config_module)
+    assert reloaded.settings.ADMIN_EMAILS == {"ops@corp.com", "staff@corp.com"}
+
+
+def test_admin_emails_default_to_nobody(monkeypatch):
+    monkeypatch.delenv("ADMIN_EMAILS", raising=False)
+    reloaded = importlib.reload(config_module)
+    assert reloaded.settings.ADMIN_EMAILS == set()
+
+
 def test_console_origins_default_lists_both_hosts(monkeypatch):
     monkeypatch.delenv("CONSOLE_ORIGINS", raising=False)
     reloaded = importlib.reload(config_module)
