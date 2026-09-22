@@ -781,8 +781,13 @@ def _write_license(
     if redeemed_by_uid:
         stored["redeemedByUid"] = redeemed_by_uid
         stored["redeemedAt"] = firestore.SERVER_TIMESTAMP
-    db().collection("licenses").document(license_id).set(stored)
-    return key, license_id, stored
+    ref = db().collection("licenses").document(license_id)
+    ref.set(stored)
+    # Read back rather than return what was written: `createdAt` (and
+    # `redeemedAt`) above are the SERVER_TIMESTAMP sentinel, and the mint
+    # routes hand this dict to the response, where the sentinel cannot be
+    # serialised — the licence was written and the request still failed.
+    return key, license_id, (ref.get().to_dict() or stored)
 
 
 def ensure_demo_license(user: dict, device_id: str | None) -> dict:
