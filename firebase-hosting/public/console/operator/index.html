@@ -22,9 +22,10 @@
   </header>
 
   <main>
+    <!-- Outside #app: enrolment, step-up and sign-in errors report here while
+         the dashboard is still hidden. -->
+    <p id="status" class="muted"></p>
     <div id="app" hidden>
-      <p id="status" class="muted"></p>
-
       <!-- Shown only while the account has no second factor. Everything
            below it is read-only until one is enrolled, because the backend
            refuses every state change without one. -->

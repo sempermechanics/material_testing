@@ -65,9 +65,14 @@ and challenges that factor before it loads. Consequential account actions
 (moving a licence, downloading an analysis) and institution roster changes
 also require a fresh second factor on the API side.
 
-Enrolment shows the secret for manual entry rather than a QR code. Every QR
-service is somebody else's server and the payload is the TOTP secret itself, so fetching a picture would hand away the factor that protects
-licence issuance. The CSP forbids third-party images in any case.
+Enrolment shows a QR code drawn **in the page** (`qr.js`, over a vendored
+copy of qrcode-generator under `vendor/`) from the `otpauth://` URI the SDK
+builds, with the key beneath it for anyone who cannot scan. It is never
+fetched: every QR *service* is somebody else's server and the payload is the
+TOTP secret itself, so a picture from one would hand away the factor that
+protects licence issuance. The CSP's `img-src` names no such origin and must
+not start to. Every console uses the same card (`enrolInPage` in `auth.js`);
+the account page hosts it in its own section.
 
 ## Confirming destructive actions
 

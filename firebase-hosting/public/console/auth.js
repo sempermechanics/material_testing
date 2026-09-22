@@ -59,6 +59,7 @@ import {
   TotpMultiFactorGenerator,
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { API_BASE_URL } from "./config.js";
+import { qrSvg } from "./qr.js";
 
 // Hosting's /__/firebase/init.js is the classic-SDK script
 // (`firebase.initializeApp({...})`), not a module — there is nothing to
@@ -253,17 +254,9 @@ export async function ensureDashboardMfa() {
   const user = auth.currentUser;
   if (!user) throw new Error("not_signed_in");
   if (!hasSecondFactor(user)) {
-    setStatus(
-      "Enrol an authenticator app to open any Semper dashboard. " +
-        "Add the secret by hand — there is no QR code on purpose.",
-    );
+    setStatus("Enrol an authenticator app to open any Semper dashboard.");
     const enrolment = await beginTotpEnrolment(user.email);
-    const shown = window.prompt(
-      "Add this secret to your authenticator app, then enter the 6-digit code:\n\n" +
-        enrolment.secret,
-    );
-    if (shown == null) throw new Error(ERR_CANCELLED);
-    await enrolment.finish(shown.trim());
+    await enrolInPage(enrolment, user.email);
     setStatus("Authenticator enrolled.");
   }
   if (!(await sessionHasSecondFactor())) {
@@ -309,6 +302,72 @@ export async function beginTotpEnrolment(accountLabel) {
   };
 }
 
+/**
+ * The enrolment card: a QR code to scan, the key for anyone who cannot, and
+ * the code box. Built here rather than in each page's HTML because every
+ * console needs it and the account page is the only one with a place of its
+ * own for it. Resolves once Firebase accepts a code; rejects ERR_CANCELLED.
+ *
+ * The secret and the account go in as text nodes — never through innerHTML —
+ * and the SVG is the library's own output for a URI we built, so the one
+ * innerHTML below carries nothing a user typed.
+ */
+function enrolInPage(enrolment, account) {
+  const card = document.createElement("section");
+  card.className = "card enrol";
+  card.innerHTML = `
+    <h2>Set up two-factor authentication</h2>
+    <p class="muted">Scan this with Google Authenticator, Microsoft
+      Authenticator, Authy, 1Password or any authenticator app, then enter
+      the 6-digit code it shows.</p>
+    <div class="qr"></div>
+    <details>
+      <summary>Can't scan? Enter the key by hand</summary>
+      <p class="mono key"></p>
+      <p class="muted">Account: <span class="mono account"></span> · Issuer:
+        Semper DIC · Time-based, 6 digits, 30 seconds</p>
+    </details>
+    <div class="row">
+      <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*"
+             placeholder="6-digit code" size="12" />
+      <button class="confirm">Confirm</button>
+      <button class="secondary cancel">Cancel</button>
+    </div>
+    <p class="muted err feedback"></p>`;
+  card.querySelector(".qr").innerHTML = qrSvg(enrolment.qrUrl);
+  card.querySelector(".key").textContent = enrolment.secret;
+  card.querySelector(".account").textContent = account;
+
+  const anchor = document.getElementById("status") || document.querySelector("main");
+  anchor.insertAdjacentElement("afterend", card);
+  const input = card.querySelector("input");
+  const feedback = card.querySelector(".feedback");
+  input.focus();
+
+  return new Promise((resolve, reject) => {
+    const done = (fn, value) => { card.remove(); fn(value); };
+    const confirm = async () => {
+      const code = input.value.trim();
+      if (!code) return;
+      feedback.textContent = "";
+      card.querySelector(".confirm").disabled = true;
+      try {
+        await enrolment.finish(code);
+        done(resolve);
+      } catch (e) {
+        card.querySelector(".confirm").disabled = false;
+        feedback.textContent =
+          `That code was not accepted (${e.code || e.message}). ` +
+          "Check the phone's clock is set automatically, then try the next code.";
+      }
+    };
+    card.querySelector(".confirm").addEventListener("click", confirm);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") confirm(); });
+    card.querySelector(".cancel").addEventListener("click", () =>
+      done(reject, new Error(ERR_CANCELLED)));
+  });
+}
+
 /* ------------------------------------------------------------------- shell */
 
 /**
@@ -345,11 +404,14 @@ export function requireSignIn(onReady) {
       setStatus(`Sign-in failed: ${e.code || e.message}`, true);
     });
 
+  const signedOut = document.getElementById("signedOut");
+
   onAuthStateChanged(auth, async (user) => {
     await redirectDone;
     const signedIn = Boolean(user);
     signInBtn.hidden = signedIn;
     signOutBtn.hidden = !signedIn;
+    if (signedOut) signedOut.hidden = signedIn;
     who.textContent = signedIn ? user.email : "";
     if (!signedIn) {
       appEl.hidden = true;

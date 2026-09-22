@@ -9,6 +9,7 @@ import {
   requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when,
   hasSecondFactor, beginTotpEnrolment, ERR_CANCELLED,
 } from "../auth.js";
+import { qrSvg } from "../qr.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,6 +40,7 @@ $("enrolStart").addEventListener("click", async () => {
   try {
     setStatus("Re-authenticating…");
     enrolment = await beginTotpEnrolment();
+    $("enrolQr").innerHTML = qrSvg(enrolment.qrUrl);
     $("enrolSecret").textContent = enrolment.secret;
     $("enrolAccount").textContent = $("who").textContent || "your Semper account";
     $("enrolStep").hidden = false;

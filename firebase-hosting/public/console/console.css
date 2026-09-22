@@ -131,6 +131,16 @@ td.actions { text-align: right; white-space: nowrap; }
 .grid label.wide { grid-column: 1 / -1; }
 .row label { flex-direction: row; align-items: center; gap: .35rem; }
 
+/* The TOTP QR code. White behind it whatever the theme: a scanner wants
+   dark modules on a light ground, and 11rem is large enough for a phone
+   held at arm's length from a laptop screen. */
+.qr { margin: .75rem 0; }
+.qr svg { display: block; width: 11rem; height: 11rem; border-radius: 8px; background: #fff; }
+.enrol details { margin: .5rem 0 .75rem; }
+.enrol summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+.enrol summary:hover { color: var(--accent); }
+.enrol .key { margin: .6rem 0 .25rem; }
+
 /* Keys, secrets and device ids: fixed width so a transposed character is
    visible, and selectable in one gesture because both are meant to be copied. */
 .mono {

@@ -23,9 +23,10 @@
   </header>
 
   <main>
+    <!-- Outside #app: enrolment, step-up and sign-in errors report here while
+         the dashboard is still hidden. -->
+    <p id="status" class="muted"></p>
     <div id="app" hidden>
-      <p id="status" class="muted"></p>
-
       <!-- Shown only when the account can open more than one dashboard, or
            when we could not establish which it should be. -->
       <section class="card" id="choices" hidden>
