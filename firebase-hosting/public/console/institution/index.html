@@ -24,6 +24,19 @@
     <!-- Outside #app: enrolment, step-up and sign-in errors report here while
          the dashboard is still hidden. -->
     <p id="status" class="muted"></p>
+
+    <!-- Shown instead of the seat manager when no licence names this
+         address as an administrator (institution.js decides). -->
+    <section class="card" id="notAdmin" hidden>
+      <h2>No institution licence to manage</h2>
+      <p class="muted">
+        No institution licence names <span id="notAdminWho" class="mono"></span>
+        as an administrator. If your institution has one, ask your Semper
+        contact to add this address to it.
+      </p>
+      <p><a href="../account/">Your account</a></p>
+    </section>
+
     <div id="app" hidden>
       <section class="card">
         <h2>Licence</h2>
