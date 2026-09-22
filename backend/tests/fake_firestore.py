@@ -11,6 +11,12 @@ from google.api_core.exceptions import AlreadyExists, NotFound
 
 
 class _Sentinel:
+    # No __dict__, so that jsonable_encoder rejects a sentinel that leaks into
+    # a response the way it rejects the real one (the real client's sentinel
+    # is likewise not encodable); with a __dict__ it would encode as {} and a
+    # write's return value reaching a response would pass here, 500 in prod.
+    __slots__ = ("name",)
+
     def __init__(self, name):
         self.name = name
 

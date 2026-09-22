@@ -237,6 +237,9 @@ async def test_admin_mint_and_list(client, monkeypatch):
     assert body["key"].startswith("SEMP-")
     assert body["license"]["emailLock"] == "pro@co.com"
     assert body["license"]["deviceIdLock"] == "and-12345678"
+    # The stored document, not the dict that was written: the latter carries
+    # the SERVER_TIMESTAMP sentinel, which no response can serialise.
+    assert isinstance(body["license"]["createdAt"], str)
     listed = await client.get("/v1/admin/licenses")
     assert listed.status_code == 200
     assert listed.json()["page"]["count"] == 1
