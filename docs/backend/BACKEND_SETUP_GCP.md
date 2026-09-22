@@ -96,17 +96,27 @@ shows `expireAt` in state `ACTIVE` (may take a few minutes to apply).
 
 ### A2b. Deploy the composite indexes
 
-`backend/firestore.indexes.json` declares four composite indexes that the
-paginated session listing and the admin pending-user query need. A missing index
-does not fail at deploy time — it fails at runtime with `FAILED_PRECONDITION`, so
-deploy them before the first real client.
+`backend/firestore.indexes.json` declares the one composite index the
+duplicate-session lookup needs (`sessions`: `uid`, `localSessionId`, `status`).
+Every other query the backend and the consoles run is a single-field equality or
+`array-contains`, optionally ordered by `__name__`, and Firestore serves those
+from its automatic single-field indexes — do not add `field + __name__` entries
+to the file; the index API refuses them ("this index is not necessary") and
+aborts the whole deploy. A missing composite does not fail at deploy time — it
+fails at runtime with `FAILED_PRECONDITION`, so deploy before the first real
+client.
+
+The file has no `firebase.json` of its own; point one at it from a scratch
+directory:
 
 ```bash
-firebase deploy --only firestore:indexes --project $PROJECT
+mkdir -p /tmp/fs-indexes && cp backend/firestore.indexes.json /tmp/fs-indexes/   && printf '{"firestore":{"indexes":"firestore.indexes.json"}}
+' > /tmp/fs-indexes/firebase.json   && (cd /tmp/fs-indexes && firebase deploy --only firestore:indexes --project $PROJECT --non-interactive)
 ```
 
-**Check:** `gcloud firestore indexes composite list` shows four indexes in state
-`READY` (building can take a few minutes on a populated database).
+**Check:** `gcloud firestore indexes composite list --project $PROJECT` shows
+that one index in state `READY` (building can take a few minutes on a populated
+database).
 
 ### A3. Create the runtime service account
 ```bash

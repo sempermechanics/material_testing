@@ -1,74 +1,23 @@
 {
   "//": "Firestore index source of truth. Deploy with `firebase deploy --only firestore:indexes`. Single-field equality queries are automatic; composites are listed below.",
-  "//ttl": "Nonce cleanup is NOT expressed here — Firestore TTL is a field policy, not an index. `challenges.expireAt` must have a TTL policy enabled (see docs/backend/BACKEND_SETUP_GCP.md step A2a: `gcloud firestore fields ttls update expireAt --collection-group=challenges --enable-ttl`), otherwise consumed/expired challenge docs accumulate. consume_nonce deletes on use; TTL reclaims the ones never consumed.",
+  "//ttl": "Nonce cleanup is NOT expressed here \u2014 Firestore TTL is a field policy, not an index. `challenges.expireAt` must have a TTL policy enabled (see docs/backend/BACKEND_SETUP_GCP.md step A2a: `gcloud firestore fields ttls update expireAt --collection-group=challenges --enable-ttl`), otherwise consumed/expired challenge docs accumulate. consume_nonce deletes on use; TTL reclaims the ones never consumed.",
   "indexes": [
     {
       "collectionGroup": "sessions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "uid", "order": "ASCENDING" },
-        { "fieldPath": "localSessionId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "sessions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "uid", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "access_status", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "files",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "sessionId", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "//": "list_institution_invites — IT opens the roster and the outstanding invites are listed beside the seats. Single equality on licenseId, which Firestore serves from the automatic single-field index; declared anyway so every query in firestore_repo.py has an entry here. Ordering by createdAt is done in Python precisely so this stays single-clause (see the docstring).",
-      "collectionGroup": "licenseInvites",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "licenseId", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "//": "_sweep_expired_leases — floating-seat reclaim walks one licence's seats subcollection for leases that have lapsed. A single-field inequality, served by the automatic single-field index; declared anyway so every query in firestore_repo.py has an entry here. COLLECTION scope, not COLLECTION_GROUP: the sweep is always scoped to the licence whose pool is being counted.",
-      "collectionGroup": "seats",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "leaseExpiresAt", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "//": "list_licenses_administered_by — a single sign-in page has an address and has to work out whether it belongs to institution IT. array_contains on a repeated field is served by the automatic single-field index; declared anyway so every query in firestore_repo.py has an entry here. kind and status are filtered in Python precisely so this stays a single-clause query and needs no composite.",
-      "collectionGroup": "licenses",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "adminEmails", "arrayConfig": "CONTAINS" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "//": "find_user_by_email — institution IT adds a roster member by email, and seats are keyed by uid. Single equality, which Firestore can serve from automatic single-field indexes; declared anyway so every query in firestore_repo.py has an entry here.",
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "email", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "localSessionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],
