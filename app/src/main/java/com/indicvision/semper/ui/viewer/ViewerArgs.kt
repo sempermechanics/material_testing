@@ -34,8 +34,8 @@ data class ViewerSweepArgs(
  * `VsgLatticeActivity`, and break any Intent already in the back stack across
  * an update. This is the write side alone; the wire format is untouched.
  *
- * Holds an array, so do not compare instances — the generated `equals` is
- * reference-based for [engineStats].
+ * Holds arrays, so do not compare instances — the generated `equals` is
+ * reference-based for [engineStats] and [loadsN].
  */
 data class ViewerArgs(
     val imgW: Int,
@@ -62,6 +62,12 @@ data class ViewerArgs(
     // anyway, and an absent extra and an empty one read the same there.
     val defPath: String? = null,
     val defFilePaths: List<String> = emptyList(),
+    // Mechanical test. Written unconditionally (blank / 0 / empty when the
+    // session has none) so the two builders' key sets stay identical.
+    val testType: String = "",
+    val crossSectionMm2: Float = 0f,
+    val loadAxisX: Boolean = true,
+    val loadsN: FloatArray = FloatArray(0),
 ) {
 
     fun toIntent(context: Context): Intent {
@@ -101,6 +107,10 @@ data class ViewerArgs(
             putExtra(DicKeys.ROI_Y, roiY)
             putExtra(DicKeys.ROI_W, roiW)
             putExtra(DicKeys.ROI_H, roiH)
+            putExtra(DicKeys.TEST_TYPE, testType)
+            putExtra(DicKeys.CROSS_SECTION_MM2, crossSectionMm2)
+            putExtra(DicKeys.LOAD_AXIS_X, loadAxisX)
+            putExtra(DicKeys.LOADS_N, loadsN)
         }
     }
 }

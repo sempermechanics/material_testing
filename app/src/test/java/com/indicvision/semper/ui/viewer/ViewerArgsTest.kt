@@ -53,7 +53,11 @@ class ViewerArgsTest {
         sweep = sweep,
     )
 
-    private fun record(sweepSteps: List<Int> = emptyList()) = SessionRecord(
+    private fun record(
+        sweepSteps: List<Int> = emptyList(),
+        testType: String = "",
+        loadsN: List<Float> = emptyList(),
+    ) = SessionRecord(
         id = "local-1",
         name = "Session 1",
         createdAt = 0L,
@@ -77,6 +81,10 @@ class ViewerArgsTest {
         sweepSteps = sweepSteps,
         sweepStrainWindows = if (sweepSteps.isEmpty()) emptyList() else listOf(15, 21),
         sweepLabels = if (sweepSteps.isEmpty()) emptyList() else listOf("41/5", "51/7"),
+        testType = testType,
+        crossSectionMm2 = if (testType.isBlank()) 0f else 12.5f,
+        loadAxisX = testType.isBlank(),
+        loadsN = loadsN,
     )
 
     @Test
@@ -139,5 +147,50 @@ class ViewerArgsTest {
 
         assertEquals(VsgLatticeActivity::class.java.name, intent.component!!.className)
         assertEquals(listOf("41/5", "51/7"), intent.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES))
+    }
+
+    @Test
+    fun `an untyped session still registers the mechanical keys, as empty`() {
+        val intent = args().toIntent(context)
+
+        assertTrue(intent.hasExtra(DicKeys.TEST_TYPE))
+        assertEquals("", intent.getStringExtra(DicKeys.TEST_TYPE))
+        assertEquals(0f, intent.getFloatExtra(DicKeys.CROSS_SECTION_MM2, -1f), 0f)
+        assertTrue(intent.getBooleanExtra(DicKeys.LOAD_AXIS_X, false))
+        assertEquals(0, intent.getFloatArrayExtra(DicKeys.LOADS_N)!!.size)
+    }
+
+    @Test
+    fun `a typed session carries its test and loads from both entry points`() {
+        val fromHome = SessionOpenHelper.intentFor(
+            context,
+            record(testType = "compression", loadsN = listOf(0f, -950f)),
+        )
+        val fromRun = args()
+            .copy(
+                testType = "compression",
+                crossSectionMm2 = 12.5f,
+                loadAxisX = false,
+                loadsN = floatArrayOf(0f, -950f),
+            )
+            .toIntent(context)
+
+        for (intent in listOf(fromHome, fromRun)) {
+            assertEquals("compression", intent.getStringExtra(DicKeys.TEST_TYPE))
+            assertEquals(12.5f, intent.getFloatExtra(DicKeys.CROSS_SECTION_MM2, 0f), 1e-4f)
+            assertFalse(intent.getBooleanExtra(DicKeys.LOAD_AXIS_X, true))
+            assertTrue(floatArrayOf(0f, -950f).contentEquals(intent.getFloatArrayExtra(DicKeys.LOADS_N)))
+        }
+    }
+
+    @Test
+    fun `loads that do not cover every frame are not handed to the viewer`() {
+        val intent = SessionOpenHelper.intentFor(
+            context,
+            record(testType = "tensile", loadsN = listOf(0f)),
+        )
+
+        assertEquals("tensile", intent.getStringExtra(DicKeys.TEST_TYPE))
+        assertEquals(0, intent.getFloatArrayExtra(DicKeys.LOADS_N)!!.size)
     }
 }

@@ -113,7 +113,38 @@ data class SessionRecord(
      */
     val renamedByUser: Boolean = false,
 
+    // ── Mechanical test
+    // Which test the frames were photographed under and, for tensile and
+    // compression, the machine's load per frame. Blank / empty on every
+    // record written before test types existed, and readers treat blank as
+    // "no test type" rather than defaulting to one.
+
+    /** [TestType.wireName], or "" when none was chosen. */
+    val testType: String = "",
+
+    /** Specimen cross-section in mm²; 0 when not entered. */
+    val crossSectionMm2: Float = 0f,
+
+    /** Strain axis for the stress–strain curve: Exx when true, Eyy when false. */
+    val loadAxisX: Boolean = true,
+
+    /** Signed load in newtons per deformed frame, index-aligned with [defNames]. */
+    val loadsN: List<Float> = emptyList(),
+
+    /** Display name of the CSV the loads came from. */
+    val loadSource: String = "",
+
+    /** How CSV rows were matched to frames (a `MachineLoadMapping` name). */
+    val loadMapping: String = "",
+
 ) {
+
+    /**
+     * True when every frame has a load. A count that disagrees with [defNames]
+     * is treated as no loads at all: half a curve is worse than none.
+     */
+    val hasMachineLoads: Boolean
+        get() = loadsN.isNotEmpty() && loadsN.size == defNames.size
 
     /** True when the run stopped itself before working through every frame. */
     val stoppedEarly: Boolean get() = stopCode != 0

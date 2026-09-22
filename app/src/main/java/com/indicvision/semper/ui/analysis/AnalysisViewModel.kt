@@ -22,11 +22,13 @@ import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.CloudSync
+import com.indicvision.semper.data.MechanicalTestInputs
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionRecordSettings
 import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.SkippedNode
+import com.indicvision.semper.data.TestType
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
 import kotlinx.coroutines.CancellationException
@@ -132,6 +134,39 @@ class AnalysisViewModel : ViewModel() {
     var realRefHeight: Int = 0
     var refName: String = "No image selected"
 
+    // ── Mechanical test
+    // Chosen on Home before the media picker, so the wizard knows on open
+    // whether to ask for machine loads. Tensile is the fallback for a wizard
+    // reached without the extra, which only a stale launcher shortcut can do.
+    var testType: TestType = TestType.TENSILE
+
+    /** Specimen cross-section in mm², typed on the load card; 0 until it is. */
+    var crossSectionMm2: Float = 0f
+
+    /** Strain axis for the stress–strain curve: Exx (true) or Eyy. */
+    var loadAxisX: Boolean = true
+
+    /**
+     * Everything the session record stores about the test. A sweep varies
+     * settings on one frame pair, so it records the type and area but never
+     * per-frame loads — there is no load-per-combination to plot.
+     */
+    fun mechanicalInputs(forSweep: Boolean): MechanicalTestInputs = MechanicalTestInputs(
+        testType = testType.wireName,
+        crossSectionMm2 = crossSectionMm2,
+        loadAxisX = loadAxisX,
+        loadsN = if (forSweep) emptyList() else machineLoadsN(),
+        loadSource = if (forSweep) "" else machineLoadSource,
+        loadMapping = if (forSweep) "" else machineLoadMapping,
+    )
+
+    // Until the load CSV import lands there are no loads to record; these are
+    // the seams it fills in (the file the loads came from and how its rows
+    // were matched to frames).
+    private fun machineLoadsN(): List<Float> = emptyList()
+    private var machineLoadSource: String = ""
+    private var machineLoadMapping: String = ""
+
     val defCount: Int get() = defFilePaths.size
 
     var hasCustomRoi: Boolean = false
@@ -208,6 +243,7 @@ class AnalysisViewModel : ViewModel() {
                 mapOf(
                     "mode" to "batch",
                     "frames" to SemperAnalytics.frameCountBucket(defFilePaths.size),
+                    "testType" to testType.wireName,
                 ),
             )
             try {
@@ -411,6 +447,7 @@ class AnalysisViewModel : ViewModel() {
             mapOf(
                 "mode" to "sweep",
                 "frames" to SemperAnalytics.frameCountBucket(request.plan.size),
+                "testType" to testType.wireName,
             ),
         )
         val plan = request.plan
@@ -577,6 +614,7 @@ class AnalysisViewModel : ViewModel() {
             frameCount = result.runs.size,
             defNames = result.runs.map { rawName },
             engineStatsArray = engineStatsArray,
+            mechanical = mechanicalInputs(forSweep = true),
         ).copy(
             name = summary.name,
             // What makes a reopened session a sweep again: without these the

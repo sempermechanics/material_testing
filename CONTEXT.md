@@ -51,9 +51,14 @@ the pin still **links** (emulator x86_64, release arm64).
 
 ```
 Splash → Auth / Pending / Home
-Home → StaticAnalysisActivity (wizard) → ResultViewerActivity
+Home → TestTypeSheet → StaticAnalysisActivity (wizard) → ResultViewerActivity
      → open session → ResultViewerActivity | VsgLatticeActivity
 ```
+
+The test type (`data/TestType`: tensile / compression / bending / torsion) is
+chosen on Home and rides `DicKeys.TEST_TYPE` into the wizard; the run commits
+it (plus, later, cross-section and per-frame machine loads) through
+`MechanicalTestInputs` → `SessionRecord` → `metadata.json` schema `/4`.
 
 Access routing is `AccessRouter` + `AccessStatus`. Intent extras are `DicKeys`.
 Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`).
@@ -141,6 +146,18 @@ parent repo owns backend deploys. Scope of this repo: a test-type chooser
 import with cross-section for tensile and compression, and stress–strain outputs
 in the viewer ⓘ sheet, CSV and PDF. Everything below this paragraph was written
 in the parent repo and still applies.
+
+**Test type (PR #2, `feat/test-type`).** `TestTypeSheet` sits between the Home
+**+** and the media picker. The choice is stored inline on `SessionRecord`
+(`testType`, `crossSectionMm2`, `loadAxisX`, `loadsN`, `loadSource`,
+`loadMapping` — all defaulted, so pre-fork indexes load unchanged) and shipped
+in `metadata.json` as schema `/4` (`test` object + `frames[i].loadN`), which
+`CloudRestore` reads back. Backend and DTOs are untouched. Bending and torsion
+are complete after this PR (type only); tensile and compression wait on the
+load CSV card (`feat/load-csv`) and the stress–strain outputs
+(`feat/stress-strain`). Not yet done: bending / torsion inputs (span, moment
+arm, angle) — plug them into `MechanicalTestInputs`; a Home row badge for the
+test type.
 
 
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),

@@ -14,7 +14,8 @@ SplashActivity
     ├─ (no session / error) → AuthActivity
     ├─ PENDING              → PendingApprovalActivity
     └─ APPROVED / offline   → HomeActivity
-                                ├─ Import → StaticAnalysisActivity
+                                ├─ + → TestTypeSheet → MediaPickerSheet
+                                │        → StaticAnalysisActivity
                                 │              └─ ResultViewerActivity
                                 └─ open session → ResultViewerActivity
                                                      (or VsgLatticeActivity for sweeps)
@@ -41,7 +42,7 @@ Intent extras shared across Activities live in
 | `ui/settings/` | Settings screen; scroll body inflates via `SettingsScrollContentView`; account/storage/prefs/your-data/help live in `Settings*Section`; restore/download/delete stay on `SettingsActivity` |
 | `ui/admin/` | Admin screen — approve/revoke users via `/v1/admin/*` |
 | `ui/limit/` | Session-quota screen |
-| `ui/common/` | Insets, motion, `MediaPickerSheet` (Import / wizard dropzones), `CrispToast`, `TransferBannerController` |
+| `ui/common/` | Insets, motion, `TestTypeSheet` (Home **+**), `MediaPickerSheet` (Import / wizard dropzones), `CrispToast`, `TransferBannerController` |
 | `data/` | Auth, session store, cloud sync/upload/restore/download, storage budget, param clipboard |
 | `data/net/` | Backend HTTP client (`IndicApi`), its two OkHttp interceptors (`RetryOnTransient`, `AppCheckHeader`), token store/provider |
 | `report/` | PDF / CSV / visualization |
@@ -236,6 +237,7 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
 | Change heatmap / probe | `ui/viewer/ResultViewerActivity.kt` + `Viewer*` helpers |
 | Change how exports are handed off | `ui/viewer/ShareCenter.kt`, `SendToSheet.kt`, `SaveExportActivity.kt` |
 | Change transfer progress UI | `ui/common/TransferBannerController.kt` (Settings + viewer), `data/TransferNotifications.kt` (the one channel) |
+| Change the test-type chooser or add a test type | `data/TestType.kt` (wire names are on-disk), `ui/common/TestTypeSheet.kt`; per-test inputs go through `data/MechanicalTestInputs.kt` → `SessionRecord` → `SessionUploadMetadata.testJson` / `CloudRestore.recordFrom` |
 | Change the new-analysis media sheet | `ui/common/MediaPickerSheet.kt` / `MediaSourceChooser.kt` — shared by the Home **+** and both wizard dropzones |
 | Add an analytics event | `analytics/SemperAnalytics.kt` — keep params PII-free and consent-gated |
 | Change storage reclaim behaviour | `data/StorageBudget.kt`, `data/CacheJanitor.kt` |

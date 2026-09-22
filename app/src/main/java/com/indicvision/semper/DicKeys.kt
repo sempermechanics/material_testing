@@ -18,6 +18,23 @@ object DicKeys {
     /** Deformed-frame URI strings; consumed once on wizard open. */
     const val PICKED_DEF_URIS = "PICKED_DEF_URIS"
 
+    /**
+     * [com.indicvision.semper.data.TestType.wireName] chosen on Home. Left on
+     * the wizard's Intent (not consumed) so a recreation after process death
+     * still knows which test it is building; the viewer carries it too.
+     */
+    const val TEST_TYPE = "TEST_TYPE"
+
+    // ── Mechanical test → ResultViewerActivity
+    /** Specimen cross-section in mm²; 0 when not entered. */
+    const val CROSS_SECTION_MM2 = "CROSS_SECTION_MM2"
+
+    /** True when strain for the stress–strain curve is Exx; false for Eyy. */
+    const val LOAD_AXIS_X = "LOAD_AXIS_X"
+
+    /** Signed machine load per frame in newtons; empty when none were imported. */
+    const val LOADS_N = "LOADS_N"
+
     // ── StaticAnalysisActivity  RoiDrawActivity
     const val IMAGE_FILE_PATH = "IMAGE_FILE_PATH"
     const val MASK_FILE_PATH = "MASK_FILE_PATH"

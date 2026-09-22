@@ -17,10 +17,12 @@ import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.FieldHistogram
 import com.indicvision.semper.R
+import com.indicvision.semper.data.TestType
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.ui.analysis.EngineFailure
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import com.indicvision.semper.ui.analysis.VsgStudy
+import com.indicvision.semper.ui.common.TestTypeSheet
 import kotlin.math.roundToInt
 
 /**
@@ -77,6 +79,11 @@ object ViewerSettingsSheet {
         val strainWin = host.sweepStrainWins?.getOrNull(frame)
             ?: host.intent.getIntExtra(DicKeys.STRAIN_WINDOW, 0)
         return buildList {
+            // A session recorded before test types existed has none, and says
+            // nothing rather than claiming a default.
+            TestType.fromWire(host.intent.getStringExtra(DicKeys.TEST_TYPE))?.let { type ->
+                add(host.getString(R.string.setting_test_type) to host.getString(TestTypeSheet.labelRes(type)))
+            }
             add(host.getString(R.string.setting_subset) to host.getString(R.string.setting_px_fmt, subset))
             add(host.getString(R.string.setting_step) to host.getString(R.string.setting_px_fmt, host.step))
             add(

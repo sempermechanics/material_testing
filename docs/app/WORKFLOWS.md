@@ -137,6 +137,7 @@ The session list and the only entry point to a new analysis.
    ├── Empty state → "Start analysis"   (same as the FAB — no longer Settings)
    ├── Start new analysis (FAB)
    │   ├── quota gate .................. → 9. Session limit
+   │   ├── test-type sheet ............. → 3b. Which test?
    │   └── opens the source chooser .... → 3a. Media picker sheet
    ├── Settings (gear)
    └── Exit-app confirm on Back
@@ -176,7 +177,7 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.17 | Reach the quota cap | The chip turns red |
 | [ ] 3.18 | Pull to refresh | Cloud reconcile runs; a repair or failure is reported by toast |
 | [ ] 3.19 | Open Home with no sessions | Empty state reading "Import photos or a video to start an analysis." with a **Start analysis** button — it does what the FAB does; it no longer opens Settings |
-| [ ] 3.20 | Tap **+** below the quota | The **New analysis** sheet (§3a) opens straight away — there is no intermediate menu |
+| [ ] 3.20 | Tap **+** below the quota | The **Which test?** sheet (§3b) opens; picking a test opens the **New analysis** sheet (§3a) |
 | [ ] 3.21 | Tap **+** at the quota cap | Session limit screen instead of the sheet |
 | [ ] 3.22 | Look for a transfer banner, feedback prompt or upgrade prompt on Home | There is none. Home's only progress surface is the per-row badge and bar; the transfer banner lives in Settings and the result viewer |
 | [ ] 3.24 | Press Back on Home | "Exit app?" confirmation |
@@ -190,7 +191,7 @@ so test it once here.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 3a.1 | Tap **+** on Home | The **New analysis** sheet opens **full height**; for ~1 s the grid is dimmed behind a large centred hint ("Select the reference image"), then tiles unlock |
+| [ ] 3a.1 | Tap **+** on Home and pick a test | The **New analysis** sheet opens **full height**; for ~1 s the grid is dimmed behind a large centred hint ("Select the reference image"), then tiles unlock |
 | [ ] 3a.1a | Tap a tile during the dim | Nothing is selected until the hint ends |
 | [ ] 3a.1b | Open the deformed-frames picker | Multi-select works immediately — no dim, no delay |
 | [ ] 3a.2 | First open, having never granted media access | An empty state with an **Allow access** button; granting fills the grid without reopening the sheet |
@@ -202,6 +203,23 @@ so test it once here.
 | [ ] 3a.8 | Tap the **Files** tab | The sheet dismisses and the system SAF browser opens for images *and* video — this is still the only route to DNG/RAW |
 | [ ] 3a.9 | Open the sheet the first time in each mode | Coach marks run once for the reference pick and once for the deformed pick, then never again |
 | [ ] 3a.10 | Check what permission is asked for, and when | `READ_MEDIA_IMAGES` (and `READ_MEDIA_VIDEO` from Home) is requested when the **Images** tab needs it — never on the Files path |
+
+### 3b. Which test? — the test-type sheet
+
+Not an Activity: `TestTypeSheet`, a short bottom sheet the Home **+** opens
+before the media picker. Bending and torsion only record the type; tensile and
+compression add the machine-load card in the wizard (§5.1, once `feat/load-csv`
+lands).
+
+| # | Action | Expected |
+|---|---|---|
+| [ ] 3b.1 | Tap **+** on Home | **Which test?** with four rows — Tensile, Compression, Bending, Torsion — and one caption under the first two saying they take machine loads |
+| [ ] 3b.2 | Swipe the sheet down | Nothing opens; Home is unchanged |
+| [ ] 3b.3 | Pick **Bending** | The **New analysis** sheet (§3a) opens; the wizard runs exactly as before |
+| [ ] 3b.4 | Rotate the phone between picking a test and picking media | The test survives — the resulting session still carries it |
+| [ ] 3b.5 | Finish any run, open the viewer, tap ⓘ | **Test type** is the first row of Settings used, naming the test picked in 3b.1 |
+| [ ] 3b.6 | Reopen that session from Home; back it up, delete it locally, restore it | The ⓘ row still shows the test after each reopen |
+| [ ] 3b.7 | Open a session made before this build | No **Test type** row; nothing else changes |
 
 ## 4. Settings
 
