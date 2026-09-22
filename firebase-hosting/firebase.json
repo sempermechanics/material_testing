@@ -81,7 +81,9 @@
       {
         "//": "/login and /account rewrite into /console/, but a Hosting header is matched against the REQUEST path, so without this they would be served the strict global policy above and could reach neither Firebase Auth nor the API. The value must stay character-for-character identical to the /console/** policy; the deploy-time substitution of __API_ORIGIN__ rewrites both together. frame-src is 'self' because auth.js sets authDomain to the page's own host, so the SDK's auth iframe is same-origin.",
         "source": "{/login,/account}",
+        "//": "no-cache here too, and it matters more than on /console/**: these are the addresses people open, and a cached /login carries the CSP it was cached WITH. A normal reload revalidates to a 304 that does not resend custom headers, so the stale policy survives; the frame-src change for same-origin sign-in left a browser blocking the auth iframe for an hour with no error to see.",
         "headers": [
+          { "key": "Cache-Control", "value": "no-cache" },
           { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
           { "key": "Referrer-Policy", "value": "no-referrer" }
         ]
