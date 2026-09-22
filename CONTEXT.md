@@ -131,10 +131,28 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-19)
+## Current state (2026-09-22)
 
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
+
+**Licensing is live in production (2026-09-21/22).** `indic-api` serves
+`d6b1b64` (`main` after #116) behind the `semper-gw` gateway config
+`v202609211150`; `MAX_SESSIONS_PER_USER` is gone from the service env and
+`DEMO_MAX_ANALYSES=25` is the demo cap. Every pre-existing account resolved to
+demo on its first request; the installed pre-licensing build was verified
+against production (backup, delete, export work; restore is refused once
+with a readable sentence). The dashboards are deployed on
+`app.sempermechanics.com` (Firebase Hosting custom domain, Netlify DNS) with
+Identity Platform + TOTP-only MFA, and `sempermechanics.com/login|account|terms`
+redirect there. `main` since then: #117 (refused cloud download says why)
+and #118 (the Firestore index file kept only the one real composite —
+production had none before this rollout). Still open in
+[docs/ops/PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md)
+"Licensing rollout": the staff hand-check of `/login` with TOTP enrolment,
+the first minted licence, the new-build demo-key check, and the 24 h log
+watch. Rollback targets: Cloud Run revision `indic-api-31896308319-1`,
+gateway config `v202608081145`.
 
 **Terms clickwrap (merged to `main` in #109, and into `feat/license-demo-pro`
 on 2026-09-18).** The Terms of

@@ -161,73 +161,101 @@ retrieval (`/content`, bundle) is licensed. Ops steps in order:
       **before** any backend deploy from `main` — it removes the `403` on
       `POST /v1/sessions` that would make every old build's upload worker
       retry forever.
-- [ ] `feat/console-domain-cors` merged to `main` before the deploy: CORS
+- [x] `feat/console-domain-cors` merged to `main` before the deploy (#112,
+      then #113 for the space-separated `CONSOLE_ORIGINS`): CORS
       (`CONSOLE_ORIGINS` + gateway `allowCors`), the `/auth/*` rewrites, and
       the app's second continue host. Without it the dashboards cannot call
       the API from any origin.
-- [ ] Create the six repository variables `deploy-backend.yml` now pins:
+- [x] Create the six repository variables `deploy-backend.yml` now pins:
       `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`,
       `ADMIN_WEB_MFA_ENABLED` (`1`), `APP_CHECK_MODE` (`off`),
       `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (`30`), `CONSOLE_ORIGINS`
       (`https://app.sempermechanics.com,https://indicvision-dic-app-auth.firebaseapp.com`).
       Unset resolves to those defaults, but set them so the value is a
       decision, not an accident.
-- [ ] Choose `DEMO_MAX_ANALYSES` from a read-only Firestore survey: it must be
+- [x] Choose `DEMO_MAX_ANALYSES` from a read-only Firestore survey (**25**): it must be
       ≥ max(live `MAX_SESSIONS_PER_USER`, the largest per-user `maxSessions`
       override, the largest per-uid session count) or an existing user 409s on
       the next upload. Confirm no user document already carries `mode` /
       `licenseId`.
-- [ ] `gcloud run services describe indic-api --format=yaml > indic-api-before.yaml`;
+- [x] `gcloud run services describe indic-api --format=yaml > indic-api-before.yaml`
+      (rollback revision `indic-api-31896308319-1`);
       note the serving revision (rollback target) and confirm
       `REQUIRE_ATTESTED_UPLOADS=1`, no `DEV_INSECURE_AUTH`.
-- [ ] PITR on and a fresh export (`gh workflow run firestore-backup.yml`); note
+- [x] PITR on and a fresh export (`gh workflow run firestore-backup.yml`); note
       the path. Firestore is never rolled back by the deploy.
 
 **Staging** (same project → same Firestore; migration 002 is a no-op on
 pre-licensing documents)
 
-- [ ] `deploy-backend.yml` with `environment=staging`; `migrate_schema.py`
+- [x] `deploy-backend.yml` with `environment=staging`; `migrate_schema.py`
       dry-run (expect 0 changes) then `--apply`; ledger row written.
-- [ ] `GET /v1/config` with an ID token → `mode: demo`, `plan: demo`,
+- [x] `GET /v1/config` with an ID token → `mode: demo`, `plan: demo`,
       `cloudBackupEnabled: false`, `maxSessions: <DEMO_MAX_ANALYSES>`.
-- [ ] `OPTIONS /v1/me` with `Origin: https://app.sempermechanics.com` and
+- [x] `OPTIONS /v1/me` with `Origin: https://app.sempermechanics.com` and
       `Access-Control-Request-Method: GET` against the staging Cloud Run URL →
-      200 with `access-control-allow-origin` echoed.
-- [ ] Old-APK pass (debug build from `bcc467a`, `INDIC_API_BASE_URL` = staging):
+      200 with `access-control-allow-origin` echoed. Through the staging
+      gateway it was **405** until `x-google-endpoints.name` was the API's
+      managed service name (#114, #115) — ESPv2 ignores `allowCors` on any
+      other name.
+- [x] Old-APK pass (debug build from `bcc467a`, `INDIC_API_BASE_URL` = staging):
       sign in, back up one analysis (201 + upload completes), **restore fails
-      once with "rejected" and does not loop**, delete, export.
-- [ ] Mint an individual licence against that account → response carries
+      once with "rejected" and does not loop**, delete, export. Two things
+      the pass taught: the old build shows the raw `detail`, so the refusal
+      now carries a sentence (`feature_not_licensed: Restore isn't available
+      in demo mode.`, #116) and the same for a refused bundle download in the
+      current build (#117); and **on-device export stays ungated on every
+      installed pre-licensing build** — it never touched the backend, and
+      the backend has no forced-update gate. Accepted: share gating arrives
+      with the next app release, not the deploy.
+- [ ] Mint an individual licence against that account (`damodardatta1@gmail.com`,
+      from the operator desk once the consoles are up) → response carries
       `claimedByUid` → `/v1/config` flips to `mode: licensed` → restore
       succeeds. Mint against an address with no account → invite retained.
 
 **Production**
 
-- [ ] `deploy-backend.yml` with `environment=production` (candidate → `/readyz`
+- [x] `deploy-backend.yml` with `environment=production` (candidate → `/readyz`
       → promote; auto-rollback on failure). Read the "Describe live env"
-      warning: after promote, `--remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER`.
-- [ ] Gateway: new `api-config` from the substituted spec — all three
+      warning: after promote, `--remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER`
+      **and then `update-traffic`** — the deploy pins traffic to the
+      candidate revision, so the env change lands in a revision serving 0 %
+      until moved (2026-09-21: `indic-api-00066-x2r`, image `d6b1b64`).
+- [x] Gateway: new `api-config` from the substituted spec — all three
       placeholders, `__MANAGED_SERVICE__` included — `gateways update`,
       `PREV_CFG` recorded ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md)
       "Redeploying the gateway"). Unauthenticated `/v1/config` → **401**, not
-      404; the preflight above → **200** through the gateway.
-- [ ] Verify with the **installed, unmodified** old app: sign-in, new backup,
-      delete, export succeed; restore shows one refusal.
+      404; the preflight above → **200** through the gateway. Done
+      2026-09-21 on `semper-gw` (`v202609211150`, rollback `v202608081145`).
+      The legacy `indic-gw` / `indic-api` pair is still deployed and unused;
+      delete it once nothing resolves the old host.
+- [x] Verify with the **installed, unmodified** old app: sign-in, new backup,
+      delete, export succeed; restore shows one refusal. (Prod log 2026-09-21:
+      `POST /v1/sessions` 200, uploads complete, `DELETE /v1/sessions/…` 200,
+      one `403 feature_not_licensed` from restore.)
 - [ ] Verify with a new-app build: Terms gate, one account receives a demo key
       (`licenses/` gains a `createdByUid: system` document), Home shows no
       sync badge and Settings shows no Cloud/Analyses-data section on demo.
-- [ ] Custom domain `app.sempermechanics.com` on the `indicvision-dic-app-auth`
+- [x] Custom domain `app.sempermechanics.com` on the `indicvision-dic-app-auth`
       Hosting site: TXT verification + A records in **Netlify DNS**, certificate
       issued, `https://app.sempermechanics.com/.well-known/assetlinks.json` 200.
-- [ ] Consoles last: Identity Platform + TOTP enabled and
-      `app.sempermechanics.com` an authorised domain
-      ([console README](../../firebase-hosting/public/console/README.md)), `firebase deploy --only
-      firestore:indexes`, `./scripts/deploy-console.sh`, hand-check `/login`
-      as staff (a licence list loading is the CORS proof) and as an account
+- [x] Consoles: Identity Platform + TOTP enabled (TOTP is the only factor;
+      `mfa.providerConfigs[0].totpProviderConfig.adjacentIntervals: 5`,
+      `enabledProviders` empty so no SMS) and `app.sempermechanics.com` an
+      authorised domain
+      ([console README](../../firebase-hosting/public/console/README.md)); `firebase deploy --only
+      firestore:indexes` (production had **no** composite index before; the
+      file held seven entries Firestore refuses, #118); `./scripts/deploy-console.sh`
+      (`/login`, `/account`, `/auth/finishSignIn`, `/terms/`,
+      `assetlinks.json` all 200 on the custom domain; preflight from that
+      origin through `semper-gw` → 200 with the origin echoed).
+- [ ] Hand-check `/login` as staff (TOTP enrolment, then a licence list
+      loading is the CORS proof from a real browser) and as an account
       holder.
-- [ ] Marketing site (`IndicVision/semper-website`, Netlify): "Sign in" in the
+- [x] Marketing site (`IndicVision/semper-website`, Netlify): "Sign in" in the
       nav, `/dashboard/` page, `_redirects` for `/login`, `/account`,
       `/terms/*` → `app.sempermechanics.com`. `curl -sI https://sempermechanics.com/terms/`
-      → 301 → 200 (it is 404 today, and `legal.py` links it).
+      → 301 → 200 (was 404, and `legal.py` links it; live 2026-09-22).
 - [ ] 24 h log watch: `feature_not_licensed` only from restore/bundle by demo
       accounts (never from `POST /v1/sessions`); `app_check_required` **= 0**;
       `session_quota_exceeded`; `license_device_mismatch`; `mfa_required`;
