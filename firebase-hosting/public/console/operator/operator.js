@@ -13,12 +13,36 @@ let roster = null;      // { id, label } of the licence whose roster is open
 let verified = {};
 let enrolment = null;
 
-requireSignIn((user) => {
+requireSignIn(async (user) => {
   $("signedOut").hidden = true;
+  if (!(await isOperator(user))) return;
   renderFactorState(user);
   loadLicences();
   loadUsers();
 });
+
+/**
+ * Whether this account may see the desk at all. Anyone can be sent here by
+ * a link, and the backend refuses every call from a non-operator, so the
+ * page used to show a full mint form under a one-line refusal. Now the desk
+ * stays hidden and the account is told where it can go instead.
+ */
+async function isOperator(user) {
+  let me;
+  try {
+    me = await api("/v1/me");
+  } catch (e) {
+    $("app").hidden = true;
+    setStatus(`Could not check whether ${user.email} is an operator: ${e.message}`, true);
+    return false;
+  }
+  if (me.role === "admin") return true;
+  $("app").hidden = true;
+  $("notOperatorWho").textContent = user.email;
+  $("notOperator").hidden = false;
+  setStatus("");
+  return false;
+}
 
 /* ------------------------------------------------------ second factor */
 

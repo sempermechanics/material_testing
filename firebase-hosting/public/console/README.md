@@ -27,6 +27,14 @@ roster (deep-linked when there is exactly one), and everyone else to their own
 account. Somebody who is both gets a switcher rather than a guess, and
 `/login?stay=1` always shows it.
 
+The two restricted pages make the same check themselves, because a link can
+land anyone on them: the operator desk asks `/v1/me` and shows nothing of the
+desk to an account without `role=admin`, and the institution page asks
+`/v1/institutions/licenses` and shows nothing of the seat manager to an address
+no licence names. Each says so in a card with a link to the account page. The
+backend refuses the calls anyway; the gate only spares people a form that every
+submit would refuse.
+
 Nothing is inferred from the email domain and nothing is remembered in the
 browser, so an account that changes hands routes correctly the first time.
 

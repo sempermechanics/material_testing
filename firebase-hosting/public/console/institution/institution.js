@@ -4,8 +4,9 @@ let licenseId = "";
 
 const $ = (id) => document.getElementById(id);
 
-requireSignIn(() => {
+requireSignIn(async (user) => {
   $("signedOut").hidden = true;
+  if (!(await administersSomething(user))) return;
   // Deep-link support: ?license=... so IT can bookmark their own licence
   // rather than pasting the id every time.
   const fromUrl = new URLSearchParams(location.search).get("license");
@@ -14,6 +15,31 @@ requireSignIn(() => {
     load();
   }
 });
+
+/**
+ * Whether any institution licence names this address as an administrator.
+ * With none, the id box is a form that can only ever answer "not found",
+ * so the page says that instead and points at the account page. A fault
+ * in the check leaves the page usable: the backend still decides.
+ */
+async function administersSomething(user) {
+  let licenses;
+  try {
+    licenses = (await api("/v1/institutions/licenses")).licenses || [];
+  } catch (e) {
+    if (e.message !== "email_not_verified") {
+      setStatus(`Could not list your institution licences: ${e.message}`, true);
+      return true;
+    }
+    licenses = [];
+  }
+  if (licenses.length) return true;
+  $("app").hidden = true;
+  $("notAdminWho").textContent = user.email;
+  $("notAdmin").hidden = false;
+  setStatus("");
+  return false;
+}
 
 $("load").addEventListener("click", load);
 $("licenseId").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });

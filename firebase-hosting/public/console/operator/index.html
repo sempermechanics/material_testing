@@ -25,6 +25,18 @@
     <!-- Outside #app: enrolment, step-up and sign-in errors report here while
          the dashboard is still hidden. -->
     <p id="status" class="muted"></p>
+
+    <!-- The whole desk is for Semper staff; everyone else sees this and
+         nothing of the desk (operator.js decides from /v1/me). -->
+    <section class="card" id="notOperator" hidden>
+      <h2>Not an operator account</h2>
+      <p class="muted">
+        The operator desk is for Semper staff.
+        <span id="notOperatorWho" class="mono"></span> can open:
+      </p>
+      <p><a href="../account/">Your account</a> &middot; <a href="../institution/">Institution seats</a></p>
+    </section>
+
     <div id="app" hidden>
       <!-- Shown only while the account has no second factor. Everything
            below it is read-only until one is enrolled, because the backend
