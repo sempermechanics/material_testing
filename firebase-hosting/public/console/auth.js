@@ -36,8 +36,16 @@ import {
   getMultiFactorResolver,
   TotpMultiFactorGenerator,
 } from "/__/firebase/12.4.0/firebase-auth.js";
-import { firebaseConfig } from "/__/firebase/init.js";
 import { API_BASE_URL } from "./config.js";
+
+// Hosting's /__/firebase/init.js is the classic-SDK script
+// (`firebase.initializeApp({...})`), not a module — there is nothing to
+// import from it. The same config as JSON is one fetch away; top-level await
+// holds every page's module until it is here, which is what they want anyway.
+const firebaseConfig = await fetch("/__/firebase/init.json").then((r) => {
+  if (!r.ok) throw new Error(`hosting/init-error: /__/firebase/init.json ${r.status}`);
+  return r.json();
+});
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
