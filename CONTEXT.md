@@ -207,11 +207,11 @@ failed said nothing and one that worked stayed listed until a reload,
 because redirect re-authentication started the page twice and the list
 reload cleared the result. It also makes a duplicate mint for one address
 ask first — the backend is licence-first by design, so the 500 retry had
-left `SEMP-5MZP` beside `SEMP-EQUZ`
+left `SEMP-5MZP` beside `SEMP-EQUZ` (revoked 2026-09-23)
 ([CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md) §20.3,
 §20.8, now with the browser and gateway in §1). Still open in
 [docs/ops/PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md)
-"Licensing rollout": revoking `SEMP-5MZP`, the first minted licence, the staff
+"Licensing rollout": the first minted licence, the staff
 hand-check of `/login` as an ordinary account holder, the new-build
 demo-key check, and the 24 h log watch. Rollback targets: Cloud Run
 revision `indic-api-00067-mbp` (pre-licensing `indic-api-31896308319-1`),

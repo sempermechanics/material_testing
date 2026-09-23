@@ -283,7 +283,8 @@ pre-licensing documents)
       the gateway host, `operator.js` matches `main`, `/login`, `/account`,
       `/auth/finishSignIn`, `/terms/` and `assetlinks.json` 200, preflight from
       the custom domain through `semper-gw` 200.
-- [ ] Revoke `SEMP-5MZP` from the desk (the 500-retry duplicate beside `SEMP-EQUZ`).
+- [x] Revoke `SEMP-5MZP` from the desk (the 500-retry duplicate beside `SEMP-EQUZ`).
+      **Done 2026-09-23** by the operator on the deployed #138 desk.
 - [ ] Hand-check `/login` as an ordinary account holder (`/account` only).
 - [x] Marketing site (`IndicVision/semper-website`, Netlify): "Sign in" in the
       nav, `/dashboard/` page, `_redirects` for `/login`, `/account`,
