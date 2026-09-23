@@ -84,7 +84,7 @@ private const val CHUNK_MEMORY_BUDGET_FRACTION = 0.10
 
 /**
  * The server declares [serverChunkSize] (currently a flat 32 MiB —
- * `firestore_repo.py:489`) without knowing what device will receive it.
+ * `backend/app/repo/sessions.py`) without knowing what device will receive it.
  * `isLowRamDevice` alone is a blunt signal: it is a fixed, device-class boolean,
  * unaware of what else is resident right now (a memory-heavy DIC batch still in
  * the session directory, another foreground app) — where [concurrency] may

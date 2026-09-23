@@ -1,7 +1,7 @@
 """A small in-memory Firestore double.
 
-Enough of the client surface for firestore_repo.py to run in tests without a
-live backend: documents, `.set/.update/.get/.delete`, `==` queries, `.count()`,
+Enough of the client surface for the repo package (`app/repo/`) to run in
+tests without a live backend: documents, `.set/.update/.get/.delete`, `==` queries, `.count()`,
 batches, and a pass-through transaction. Install it with `install(monkeypatch)`.
 """
 import operator

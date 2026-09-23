@@ -34,6 +34,7 @@ Engine tests are **not** this CI. From the submodule: see [docs/engine/TESTING.m
 | Settings sections | `Settings*Section`; restore/delete stay on `SettingsActivity` |
 | Session paths | `SessionPaths` only |
 | Backend routes | `backend/app/routers/`; app/middleware in `main.py` |
+| Firestore access | `backend/app/repo/<aggregate>.py`; routers call it through `firestore_repo` ([ADR-001](docs/adr/ADR-001-firestore-repo-package.md)) |
 | Engine math / solver | `native/` submodule + [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
 
 ## Guardrails

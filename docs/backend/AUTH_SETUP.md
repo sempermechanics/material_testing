@@ -121,7 +121,7 @@ purely a verifier.
 
 Verification proves *who* someone is. Whether they may use the system is a
 separate decision made in `get_or_create_user`
-([firestore_repo.py](../../backend/app/firestore_repo.py)):
+([repo/users.py](../../backend/app/repo/users.py)):
 
 | Env var | Effect |
 |---|---|

@@ -182,9 +182,9 @@ is 40 reads when a human asks. A 2000-seat one is 2000, and the operator
 console offers the button per licence with nothing between it and the click.
 The cheap fix is a cap with a "showing the first N" note; the durable one is to
 denormalise the answer — stamp the seat when the holder is next seen, so the
-report is a subcollection scan and no user reads at all. The reads are also
-issued serially today (`firestore_repo.py` `reconcile_institution_seats`);
-batching them with `db().get_all()` cuts latency at no extra cost (TD-62).
+report is a subcollection scan and no user reads at all. The reads are one
+`db().get_all()` batch since TD-62 (`backend/app/repo/reconcile.py`), so the
+cost is documents read, not round trips.
 
 **Four hours is the worst case for a revoke reaching an idle device.**
 `LicenseConfigWorker` refreshes `/v1/config` every four hours, so an account
@@ -214,4 +214,4 @@ shipped):
   once in `session_provision.py:51` and again by `list_pending_uploads` in
   `routers/sessions.py:469` — not twice inside `session_provision` as previously
   written. Each page also costs one extra document read to resolve its cursor
-  (`firestore_repo.py:2985-2987`).
+  (`backend/app/repo/_base.py:227-228`, `_cursor_page`).

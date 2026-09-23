@@ -249,7 +249,7 @@ Everything above is required (or near enough). These are the rest of what
 
 | Variable | Default | What it does |
 |---|---|---|
-| `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. **Not** overridable per user: `resolve_user_config` applies it to every demo account and ignores a `maxSessions` override (`firestore_repo.py`, the `else` branch of `resolve_user_config`). Lifting one demo account's cap means attaching a licence (decided 2026-09-23, TD-28) |
+| `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. **Not** overridable per user: `resolve_user_config` applies it to every demo account and ignores a `maxSessions` override (`backend/app/repo/user_config.py`, the `else` branch of `resolve_user_config`). Lifting one demo account's cap means attaching a licence (decided 2026-09-23, TD-28) |
 | `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. The first positive value wins, in this order: the per-user `maxSessions` override, then the licence's `maxAnalyses` (mirrored onto the user as `licenseMaxAnalyses`), then this variable — so an override of 999 beats a key's cap of 10, and a key's cap of 2000 beats this default. It is **not** "whichever is tighter". Falls back to the retired `PRO_MAX_SESSIONS_PER_USER` when unset (`config.py`) |
 | `ADMIN_WEB_MFA_ENABLED` | `1` | Whether browser dashboards may act via MFA at all. `0` restores attestation-only admin — every state change then needs the phone |
 | `ADMIN_WEB_REAUTH_SECONDS` | `900` | How old a console sign-in may be and still authorise an ordinary state change. Sudo mode, not a session length |

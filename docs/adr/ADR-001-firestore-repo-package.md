@@ -116,14 +116,46 @@ function body before and after must match, with only its module changing.
 ## Consequences
 
 - Easier: reviewing licensing changes; finding the one place a rule lives.
-- Harder: a test that patches an internal now names the submodule.
+- Harder: a name now has two bindings (the facade's and the submodule's), which
+  the facade hides from tests; see "As built".
 - Revisit: if `licensing.py` itself passes ~1,000 lines, split mint / claims /
-  invites along the same acyclic edges.
+  invites along the same acyclic edges. It is about 1,300 as built (TD-64).
+
+## As built (2026-09-23)
+
+Three departures from the decision above, each smaller than what it replaced:
+
+- **`repo/user_config.py`, not `repo/config.py`.** Inside the package
+  `from ..config import settings` and `from .config import …` would sit one
+  dot apart and mean different modules.
+- **`_base` holds only what two or more modules read.** Helpers with one
+  consumer (`_license_public`, `_invite_ref`, `find_user_by_email`, the member
+  patches, …) live in that consumer; `get_device` lives in `devices`. The
+  edges are users → devices → licensing → devlock → user_config, with seats →
+  licensing and leases / reconcile → user_config; no cycle.
+- **No test was retargeted.** After the split a caller inside `licensing`
+  holds its own binding of `claim_seat`, so `monkeypatch.setattr(repo,
+  "claim_seat", …)` on a plain re-export would reach the router but not
+  `ensure_entitlement` — and the same test file needs the router path
+  elsewhere (`list_user_sessions`). Instead the facade's module class
+  propagates an assignment to every package module holding the same object,
+  and a module `__getattr__` reads through for names it does not list
+  (`_DB`, `firestore`). That is the monolith's meaning of a patch, for the
+  526 tests written against it. Production never assigns to the module.
+
+Proof: an `ast.dump` of every top-level definition before and after is equal
+for all 159, after undoing only `firestore` → `_base.firestore` and one
+function-local `from . import audit` → `from .. import audit`.
+`tests/test_repo_facade.py` pins the propagation, the one-way imports, the
+facade's public names, and that only `_base` binds `firestore`.
 
 ## Action items
 
-1. [ ] `_run_tx` at the ten sites; the ten `noqa: BLE001` go with it (TD-53).
-2. [ ] Move into `repo/` with the facade; AST-equality script in the PR.
-3. [ ] Update `fake_firestore.install`, the emulator fixture, and the tests
-       patching `_now`, `_BIND_BACKOFF_S`, `_drop_user_to_demo_if_licensed`.
-4. [ ] Full pytest, emulator tier, `test_gateway_parity`, `test_route_authz_matrix`.
+1. [x] `_run_tx` at the ten sites; the ten `noqa: BLE001` go with it (TD-53).
+2. [x] Move into `repo/` with the facade; AST-equality check (see As built).
+3. [x] ~~Update `fake_firestore.install`, the emulator fixture, and the tests
+       patching `_now`, `_BIND_BACKOFF_S`, `_drop_user_to_demo_if_licensed`.~~
+       Not needed: the facade propagates patches (As built).
+4. [x] Full pytest (532 with the facade tests), emulator tier (23),
+       `test_gateway_parity`, `test_route_authz_matrix`.
+5. [ ] Split `licensing.py` (TD-64).

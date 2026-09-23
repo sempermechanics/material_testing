@@ -166,7 +166,7 @@ SA's public JWKS) — still keyless. Not needed at pilot scale.
 
 **Access control is a separate decision from authentication.** Verification
 proves identity; it does not grant entry. `get_or_create_user`
-([firestore_repo.py](../../backend/app/firestore_repo.py)) assigns:
+([repo/users.py](../../backend/app/repo/users.py)) assigns:
 
 1. `role = admin` if a **verified** email is in `ADMIN_EMAILS`;
 2. `access_status = APPROVED` if admin, or `AUTO_APPROVE=1`, or a **verified**
@@ -231,7 +231,7 @@ record rather than leaving it `ACTIVE` and unreachable:
 
 | Event | What happens to the device docs |
 |---|---|
-| Admin revokes or suspends a user | **Every** device of that uid moves to `REVOKED` with a `revokedAt`, and `users/{uid}.activeDeviceId` is cleared (`set_user_status` in `firestore_repo.py`) |
+| Admin revokes or suspends a user | **Every** device of that uid moves to `REVOKED` with a `revokedAt`, and `users/{uid}.activeDeviceId` is cleared (`set_user_status` in `backend/app/repo/users.py`) |
 | A new device is registered after that | The previous device moves to `SUPERSEDED` with a `revokedAt`, so history shows *why* it stopped being usable rather than just vanishing |
 
 Admin revoke itself requires a `verified_device` caller — an admin cannot revoke
@@ -624,16 +624,16 @@ the way it does.
 | FastAPI app, middleware, lifespan | [`backend/app/main.py`](../../backend/app/main.py) | App factory; includes routers below |
 | Routes by prefix | [`backend/app/routers/`](../../backend/app/routers/) | `health`, `account`, `devices`, `sessions`, `files`, `provision_tasks`, `admin`, `licenses`, `institutions` |
 | License key format, hashing, `mode`/`kind` vocabulary | [`backend/app/licenses.py`](../../backend/app/licenses.py) | `SEMP-XXXX-XXXX-XXXX-XXXX`; sha256 hash is the Firestore doc id; `normalize_mode` / `normalize_kind` / `legacy_plan` (§20.5) |
-| Floating seats, leases, pool accounting | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `checkout_lease`, `release_lease`, `claim_seat`, `_sweep_expired_leases` (§20.7) |
-| Duration, grace, renewal fan-out | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
-| Individual + institution license logic | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
+| Floating seats, leases, pool accounting | [`backend/app/repo/leases.py`](../../backend/app/repo/leases.py), `claim_seat` in [`repo/licensing.py`](../../backend/app/repo/licensing.py) | `checkout_lease`, `release_lease`, `claim_seat`, `_sweep_expired_leases` (§20.7) |
+| Duration, grace, renewal fan-out | [`backend/app/repo/user_config.py`](../../backend/app/repo/user_config.py), [`repo/licensing.py`](../../backend/app/repo/licensing.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
+| Individual + institution license logic | [`backend/app/repo/licensing.py`](../../backend/app/repo/licensing.py), [`repo/seats.py`](../../backend/app/repo/seats.py), [`repo/devlock.py`](../../backend/app/repo/devlock.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
 | Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth; the surface behind `/console/institution`, and equally usable from a script. Also serves the `/v1/campus/*` aliases (§20.4, §20.5) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
 | Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check, `device_or_legacy_reader` (§4) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
 | Drive folders, resumable init, blob probe | [`backend/app/drive.py`](../../backend/app/drive.py) | Returns the opaque upload URI, and `ALIVE`/`MISSING`/`UNKNOWN` (§4) |
 | Async provisioning | [`backend/app/tasks.py`](../../backend/app/tasks.py) | Cloud Tasks enqueue + OIDC callback auth (§4.1) |
-| Firestore access | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | Schema in §5; contention retries; device settlement (§3) |
+| Firestore access | [`backend/app/repo/`](../../backend/app/repo/__init__.py), one module per aggregate behind the [`firestore_repo.py`](../../backend/app/firestore_repo.py) facade ([ADR-001](../adr/ADR-001-firestore-repo-package.md)) | Schema in §5; contention retries (`_run_tx` in `repo/_base.py`); device settlement (§3) |
 | Input validation | [`backend/app/validation.py`](../../backend/app/validation.py) | Page cursors and document ids — see below |
 | Rate limiting | [`backend/app/rate_limit.py`](../../backend/app/rate_limit.py) | Per-uid token buckets (§12) |
 | Structured logging | [`backend/app/observability.py`](../../backend/app/observability.py) | JSON log records with request correlation (§17) |
@@ -671,7 +671,7 @@ still on the service. `deploy-cloudrun` merges env rather than replacing it,
 so removal is a manual `--remove-env-vars` after promote.
 
 **Firestore contention is retried, not returned.** Concurrent writes to the same
-session document used to surface as a `500`. `firestore_repo.py` now retries the
+session document used to surface as a `500`. `_run_tx` (`backend/app/repo/_base.py`) now retries the
 contended transaction, so a burst of `:complete` calls for one session settles
 instead of failing the client.
 
@@ -847,7 +847,7 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
 | Provisioning task fails | task marks `PROVISION_FAILED` | Cloud Tasks retries the task; a polling client sees the status and stops waiting instead of hanging on `PROVISIONING` |
 | Cloud Tasks unavailable / unconfigured | `enqueue_provision` returns `False` | Provision inline in the request — slower, same result (§4.1) |
 | Drive unreachable during a verifying refresh | probe yields `UNKNOWN` | **Purge nothing.** Report an `indeterminate` count and log at WARNING (§4) |
-| Concurrent writes to one session doc | Firestore contention | Retried inside `firestore_repo.py` rather than returned as `500` |
+| Concurrent writes to one session doc | Firestore contention | Retried inside `_run_tx` (`backend/app/repo/_base.py`) rather than returned as `500` |
 
 **Idempotency** is the backbone: deterministic `fileId` / `sessionId` mean every
 mutation is safely retryable.
