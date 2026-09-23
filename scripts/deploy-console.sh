@@ -16,6 +16,22 @@ JSON="${HOSTING}/firebase.json"
 
 : "${API_BASE_URL:?set API_BASE_URL to the API Gateway origin (no trailing slash)}"
 
+# The first Python 3 that actually runs. On Windows `python3` (and often
+# `python`) is the Microsoft Store alias: it exists on PATH but only prints an
+# install hint, so probe by running each candidate rather than by lookup.
+PYTHON=()
+for candidate in "python3" "python" "py -3"; do
+  read -r -a cmd <<< "${candidate}"
+  if "${cmd[@]}" -c 'import sys; sys.exit(sys.version_info < (3,))' >/dev/null 2>&1; then
+    PYTHON=("${cmd[@]}")
+    break
+  fi
+done
+if [[ ${#PYTHON[@]} -eq 0 ]]; then
+  echo "No working Python 3 found (tried python3, python, py -3)." >&2
+  exit 1
+fi
+
 PROJECT_FLAG=()
 if [[ -n "${FIREBASE_PROJECT:-}" ]]; then
   PROJECT_FLAG=(--project "${FIREBASE_PROJECT}")
@@ -38,7 +54,7 @@ cp "${JSON}" "${JSON}.bak"
 # Portable in-place substitute (GNU and BSD sed differ on -i).
 subst() {
   local file="$1" from="$2" to="$3"
-  python3 - "$file" "$from" "$to" <<'PY'
+  "${PYTHON[@]}" - "$file" "$from" "$to" <<'PY'
 import pathlib, sys
 path, old, new = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 text = path.read_text(encoding="utf-8")
