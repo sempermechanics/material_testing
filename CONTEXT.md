@@ -145,10 +145,19 @@ Same fix as material_testing #9.
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
-**Backend names standardised (2026-09-23, `chore/semper-names`).** Cloud Run
+**Quicker session setup (branch `perf/inline-provision`, 2026-09-23).** Two
+Pixel 6 backups spent 5.37 s and 3.43 s provisioning inline (a bundle is 3
+files, under the queue threshold). The folder step made three Drive calls in a
+row; now the cached `session/` check and the new session folder's create run
+together, with no name search for an id minted in the same request, and a
+retry reuses the stored folder. `session_provisioned` logs `folderMs`.
+
+**Backend names standardised (2026-09-23, #146, deployed).** Cloud Run
 services are rebuilt as `semper-api` / `semper-api-staging` with queues
 `semper-provision` / `semper-provision-staging`; the gateways point at them and
-the old `indic-api*` services and `indic-provision` queue are removed once idle.
+the old `indic-api*` services, their images and the `indic-provision` queue are
+deleted. Rollback images: `semper-api:rollback-c0c0ce3`,
+`semper-api-staging:rollback-prev`.
 Staging now has its own queue and task target (environment-scoped GitHub vars).
 The legacy `indic-gw` gateway is deleted. Service-account emails and project IDs
 keep their `indic-*` names — see the names table in
