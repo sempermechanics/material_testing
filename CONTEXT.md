@@ -146,6 +146,10 @@ it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
   `semper-gw` (staging `semper-api-staging`); #146 renamed services and queues,
   project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
+- **Merged, deploy pending check.** #154: signed routes take their rate-limit
+  bucket as `dependencies=[deps.rate_limited(...)]`, resolved before
+  `verified_device`, so a 429 no longer spends the nonce; 429s send
+  `Retry-After`. No app change ([§12](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
 - **In flight.** Tech-debt burn-down: [TECH_DEBT.md](docs/ops/TECH_DEBT.md)
   register, [docs/adr/](docs/adr/README.md) ADR-001..006. Video/AVI import
   (#136–#139) has run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
@@ -167,6 +171,7 @@ it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 - `check_console.py` requires `__API_BASE_URL__` / `__API_ORIGIN__` to stay placeholders; deploy through `scripts/deploy-console.sh` — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `SCHEMA_VERSION` is 2 and every `campus` / `plan` skew fallback is temporary; retire in the stated order — [§20.5](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Backup stamps PENDING before `CloudSync.enqueueUpload`; reversing it lets a late PENDING overwrite SYNCED — [§8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- A 429 that consumes the nonce makes the app's retry a 401 replay: keep a signed route's bucket in `dependencies=[deps.rate_limited(...)]`, never in the handler — `test_rate_limit_before_nonce.py`.
 - `SessionStore`'s parser uses `ignoreUnknownKeys` so old `index.json` fields load; keep it — [SessionStoreLegacyFloorTest](app/src/test/java/com/indicvision/semper/data/SessionStoreLegacyFloorTest.kt).
 - `SubsetRecommender` runs on the paper's `NOISE_VARIANCE`; no import supplies a measured floor — [SubsetRecommender.kt](app/src/main/java/com/indicvision/semper/ui/analysis/SubsetRecommender.kt).
 - `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/indicvision/semper/ui/analysis/ConvergenceGate.kt).

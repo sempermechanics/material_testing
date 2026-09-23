@@ -14,7 +14,13 @@ from .. import observability as obs
 from .. import rate_limit
 from .. import tasks
 from ..config import settings
-from ..deps import attested_or_mfa_user, current_user, device_or_legacy_reader, verified_device
+from ..deps import (
+    attested_or_mfa_user,
+    current_user,
+    device_or_legacy_reader,
+    rate_limited,
+    verified_device,
+)
 from ..models import SessionCreate
 from ..session_provision import provision_session
 from ..validation import PageToken, SessionId
@@ -103,7 +109,7 @@ def list_sessions(
     }
 
 
-@router.delete("/v1/sessions/{sid}")
+@router.delete("/v1/sessions/{sid}", dependencies=[rate_limited(rate_limit.erase_bucket)])
 def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     """Erase one analysis from the cloud (GDPR right to erasure).
 
@@ -113,8 +119,6 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     only trace kept is the audit record that the erasure happened.
     """
     user, device = ctx["user"], ctx["device"]
-    if not rate_limit.erase_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
         raise HTTPException(404, errors.SESSION_NOT_FOUND)
@@ -131,7 +135,7 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     return {"deleted": sid, "filesRemoved": removed}
 
 
-@router.get("/v1/sessions/{sid}/uploads")
+@router.get("/v1/sessions/{sid}/uploads", dependencies=[rate_limited(rate_limit.listing_bucket)])
 def session_uploads(
     sid: SessionId,
     page_size: int = 1000,
@@ -156,8 +160,6 @@ def session_uploads(
     A client that attests is always held to the strict path — see the wrapper.
     """
     user = ctx["user"]
-    if not rate_limit.listing_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
         raise HTTPException(404, errors.SESSION_NOT_FOUND)
@@ -271,7 +273,7 @@ def _zip_time(value) -> tuple:
     return _ZIP_EPOCH
 
 
-@router.get("/v1/sessions/{sid}/bundle")
+@router.get("/v1/sessions/{sid}/bundle", dependencies=[rate_limited(rate_limit.download_bucket)])
 def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     """One analysis as a single zip — how the data leaves through a browser.
 
@@ -299,8 +301,6 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     signal that the transfer completed.
     """
     user = ctx["user"]
-    if not rate_limit.download_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     session = repo.get_session(sid)
     if not session or session.get("uid") != user["uid"]:
         raise HTTPException(404, errors.SESSION_NOT_FOUND)
@@ -375,7 +375,7 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     )
 
 
-@router.post("/v1/sessions")
+@router.post("/v1/sessions", dependencies=[rate_limited(rate_limit.session_bucket)])
 def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_device)):
     """Record an analysis: create the session and hand back its upload slots.
 
@@ -390,9 +390,6 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     """
     user, device = ctx["user"], ctx["device"]
     cfg = repo.resolve_user_config(user)
-
-    if not rate_limit.session_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
 
     # Idempotent retry: same localSessionId + still in flight → return existing.
     existing = repo.find_incomplete_session(user["uid"], body.localSessionId)

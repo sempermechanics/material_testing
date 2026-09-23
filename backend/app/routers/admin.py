@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
-from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh
+from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
 from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
 from ..models import AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
 from ..validation import AccessStatus, DocumentId, PageToken, Uid
@@ -39,32 +39,26 @@ def admin_list_users(
     }
 
 
-@router.post("/v1/admin/users/{uid}/approve")
+@router.post("/v1/admin/users/{uid}/approve", dependencies=[rate_limited(rate_limit.admin_bucket)])
 def admin_approve_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     if not repo.set_user_status(uid, "APPROVED"):
         raise HTTPException(404, errors.USER_NOT_FOUND)
     audit.record(admin["uid"], action="ADMIN_APPROVE", target={"type": "user", "id": uid})
     return {"uid": uid, "access_status": "APPROVED"}
 
 
-@router.post("/v1/admin/users/{uid}/revoke")
+@router.post("/v1/admin/users/{uid}/revoke", dependencies=[rate_limited(rate_limit.admin_bucket)])
 def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     if not repo.set_user_status(uid, "SUSPENDED"):
         raise HTTPException(404, errors.USER_NOT_FOUND)
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
     return {"uid": uid, "access_status": "SUSPENDED"}
 
 
-@router.patch("/v1/admin/users/{uid}/config")
+@router.patch("/v1/admin/users/{uid}/config", dependencies=[rate_limited(rate_limit.admin_bucket)])
 def admin_patch_user_config(uid: Uid, body: UserConfigPatch,
                             ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
     """Set or clear per-user product-limit overrides on the Firestore user doc."""
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     # model_dump(exclude_unset=True) keeps omitted fields out; explicit nulls
     # remain so set_user_config can DELETE_FIELD them.
     patch = body.model_dump(exclude_unset=True)
@@ -99,7 +93,7 @@ def admin_list_licenses(
     }
 
 
-@router.post("/v1/admin/licenses")
+@router.post("/v1/admin/licenses", dependencies=[rate_limited(rate_limit.admin_bucket)])
 def admin_create_license(
     body: AdminLicenseCreate,
     ctx=Depends(attested_or_mfa_admin),
@@ -121,8 +115,6 @@ def admin_create_license(
     Only Semper staff (this device-attested admin path) may mint or whole-key
     revoke; institution IT never reaches this route.
     """
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     if body.kind == KIND_INSTITUTION:
         minted = repo.create_institution_license(
             domain_lock=body.domainLock,
@@ -164,7 +156,10 @@ def admin_create_license(
     return minted
 
 
-@router.patch("/v1/admin/licenses/{license_id}")
+@router.patch(
+    "/v1/admin/licenses/{license_id}",
+    dependencies=[rate_limited(rate_limit.admin_bucket)],
+)
 def admin_update_license(
     license_id: DocumentId,
     body: AdminLicenseUpdate,
@@ -185,8 +180,6 @@ def admin_update_license(
     the next device to sign in binds. Use the seat route below for an
     institution member.
     """
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     patch = body.model_dump(exclude_none=True)
     clear_lock = patch.pop("clearDeviceLock", False)
     cleared = {}
@@ -213,7 +206,10 @@ def admin_update_license(
     return updated
 
 
-@router.patch("/v1/admin/licenses/{license_id}/seats/{uid}/device")
+@router.patch(
+    "/v1/admin/licenses/{license_id}/seats/{uid}/device",
+    dependencies=[rate_limited(rate_limit.admin_bucket)],
+)
 def admin_clear_seat_device_lock(
     license_id: DocumentId,
     uid: Uid,
@@ -232,8 +228,6 @@ def admin_clear_seat_device_lock(
     Clearing is not revoking: the seat, its lease and the member's data are
     untouched, and the next device that signs in binds.
     """
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     err, cleared = repo.clear_device_lock(license_id, uid, actor=repo.ACTOR_STAFF)
     if err:
         raise HTTPException(404, err)
@@ -295,7 +289,10 @@ def admin_reconcile_license_seats(
     return report
 
 
-@router.post("/v1/admin/licenses/{license_id}/revoke")
+@router.post(
+    "/v1/admin/licenses/{license_id}/revoke",
+    dependencies=[rate_limited(rate_limit.admin_bucket)],
+)
 def admin_revoke_license(
     license_id: DocumentId,
     ctx=Depends(attested_or_mfa_admin_fresh),
@@ -305,8 +302,6 @@ def admin_revoke_license(
     re-auth plus TOTP (ADMIN_WEB_REVOKE_REAUTH_SECONDS), tighter than ordinary
     dashboard mutations — the console forces step-up before this call.
     """
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     revoked = repo.revoke_license(license_id, admin["uid"])
     if revoked is None:
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)

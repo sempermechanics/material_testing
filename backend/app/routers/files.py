@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from .. import audit, drive, errors, firestore_repo as repo, statuses
 from .. import rate_limit
-from ..deps import verified_device
+from ..deps import rate_limited, verified_device
 from ..models import FileComplete
 from ..validation import DocumentId
 
@@ -25,7 +25,7 @@ def _is_first_byte_request(byte_range: str | None) -> bool:
     return bool(match) and match.group(1) == "0"
 
 
-@router.get("/v1/files/{file_id}/content")
+@router.get("/v1/files/{file_id}/content", dependencies=[rate_limited(rate_limit.download_bucket)])
 def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_device)):
     """Stream one file back from Drive (restore).
 
@@ -41,11 +41,6 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     edge usually means that budget was exhausted mid-stream.
     """
     user = ctx["user"]
-    # Check the bucket before the audit write: audit.record is a Firestore
-    # .add(), so limiting afterwards still charges a write per rejected request
-    # and files a FILE_DOWNLOAD entry for a download that never happened.
-    if not rate_limit.download_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     f = repo.get_file(file_id)
     if not f or f.get("uid") != user["uid"]:
         raise HTTPException(404, errors.FILE_NOT_FOUND)
@@ -101,11 +96,12 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     )
 
 
-@router.post("/v1/files/{file_id}/complete")
+@router.post(
+    "/v1/files/{file_id}/complete",
+    dependencies=[rate_limited(rate_limit.file_complete_bucket)],
+)
 def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_device)):
     user = ctx["user"]
-    if not rate_limit.file_complete_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     rec = repo.get_file(file_id)
     if not rec or rec.get("uid") != user["uid"]:
         raise HTTPException(404, errors.FILE_NOT_FOUND)

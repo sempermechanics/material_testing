@@ -814,7 +814,13 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
   Run instance rather than the fleet — the cross-instance layer is API Gateway
   quotas in `openapi.yaml`, with Cloud Armor still to come when the service is
   public. [PRODUCTION_READINESS_GATE.md](../ops/PRODUCTION_READINESS_GATE.md)
-  tracks this as PARTIAL for that reason.
+  tracks this as PARTIAL for that reason. On a device-signed route the bucket is
+  declared as `dependencies=[deps.rate_limited(bucket)]`, which FastAPI resolves
+  before `verified_device`: a 429 spends no nonce, so the app's unchanged retry
+  is accepted rather than refused as a replay. Every such 429 carries
+  `Retry-After` (seconds to the next token), which the app honours up to 8 s.
+  `tests/test_rate_limit_before_nonce.py` fails if a signed route checks its
+  bucket inside the handler again.
 - **Attested upload targets:** `/uploads` hands out capability URLs and is gated
   by `device_or_legacy_reader`; production keeps `REQUIRE_ATTESTED_UPLOADS=1`
   (§4).
