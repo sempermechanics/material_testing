@@ -122,6 +122,33 @@ internal fun uploadChunkBytes(context: Context, serverChunkSize: Int, concurrenc
         .toInt()
 }
 
+/**
+ * After a prepare pass left the report bundle incomplete: decide with
+ * [UploadWorkOutcomes.classifyIncompleteStaging] whether [record]'s inputs are
+ * gone for good. If so, mark the row FAILED, drop its staging and return true
+ * (the caller fails with a reason); false means retry.
+ *
+ * Top-level, like [uploadChunkBytes], so `doWork` stays one flow without
+ * growing [DicUploadWorker] past detekt's class size.
+ */
+private fun abandonIfInputsGone(context: Context, record: SessionRecord, stagingDir: File): Boolean {
+    val sessionDir = File(record.sessionDir)
+    val now = System.currentTimeMillis()
+    val onDisk = UploadWorkOutcomes.stagingInputsOnDisk(sessionDir, record.defNames.size, File(record.refPath))
+    val verdict = UploadWorkOutcomes.classifyIncompleteStaging(
+        inputsOnDisk = onDisk,
+        sessionAgeMs = now - record.updatedAt,
+        missingForMs = UploadWorkOutcomes.inputsMissingForMs(sessionDir, onDisk, record.updatedAt, now),
+    )
+    if (verdict == UploadWorkOutcomes.IncompleteStaging.RETRY) return false
+    Timber.e("Session files missing on disk — failing backup (no retry loop)")
+    TransferLog.phase(TransferLog.PhaseFields(phase = "upload", outcome = "inputs_missing"))
+    SessionStore.setSyncState(context, record.id, SessionRecord.SyncState.FAILED)
+    stagingDir.deleteRecursively()
+    SemperAnalytics.event(context, SemperAnalytics.CLOUD_UPLOAD_FAILED, mapOf("reason" to "inputs_missing"))
+    return true
+}
+
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun getForegroundInfo(): ForegroundInfo =
@@ -515,14 +542,20 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     } else if (needBundles) {
                         // Do not upload a raw+dat-only zip as "synced". Sweeps
                         // hit this when report bake skips (bad dims / undecodable
-                        // base image / every .dat missing) — retry so a later
-                        // pass can succeed, or WorkManager exhausts attempts.
+                        // base image / every .dat missing). Retry while a later
+                        // pass can still succeed; once the inputs are gone for
+                        // good, fail so Home shows why instead of "pending" forever.
                         Timber.e(
-                            "Bundle staging incomplete (csv=%dB, reports/processed missing) — retrying",
+                            "Bundle staging incomplete (csv=%dB, reports/processed missing)",
                             analysisCsv.length(),
                         )
-                        return@withContext retryLater(
-                            "bundle staging incomplete — reports/csv/processed not ready",
+                        if (!abandonIfInputsGone(applicationContext, record, stagingDir)) {
+                            return@withContext retryLater(
+                                "bundle staging incomplete — reports/csv/processed not ready",
+                            )
+                        }
+                        return@withContext failure(
+                            applicationContext.getString(R.string.cloud_backup_failed_missing_files),
                         )
                     }
                 }
