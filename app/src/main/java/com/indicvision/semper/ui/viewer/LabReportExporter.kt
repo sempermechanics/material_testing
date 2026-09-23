@@ -45,21 +45,24 @@ class LabReportExporter(private val context: Context) {
         graphs.values.forEach { it.recycle() }
     }
 
-    private fun render(graph: LabReport.Block.Graph): Bitmap = VsgPlotView(context).run {
-        setData(
-            graph.series.map { series ->
-                VsgPlotView.Series(
-                    label = graph.title,
-                    color = VsgPlotView.paletteColor(context, if (series.isFit) 1 else 0),
-                    points = series.points,
-                    markers = !series.isFit,
-                    muted = series.isFit,
-                )
-            },
-            graph.xLabel,
-            graph.yLabel,
-        )
-        renderToBitmap(PLOT_W, PLOT_H)
+    private fun render(graph: LabReport.Block.Graph): Bitmap {
+        val print = ViewerStressStrainHelper.printContext(context)
+        return VsgPlotView(print).run {
+            setData(
+                graph.series.map { series ->
+                    VsgPlotView.Series(
+                        label = graph.title,
+                        color = VsgPlotView.paletteColor(print, if (series.isFit) 1 else 0),
+                        points = series.points,
+                        markers = !series.isFit,
+                        muted = series.isFit,
+                    )
+                },
+                graph.xLabel,
+                graph.yLabel,
+            )
+            renderToBitmap(PLOT_W, PLOT_H)
+        }
     }
 
     companion object {

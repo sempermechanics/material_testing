@@ -590,9 +590,10 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val axisLabels = ViewerStressStrainHelper.axisLabels(host, curve.model)
         val modulus = ViewerStressStrainHelper.modulusOf(curve)
         val plot = withContext(Dispatchers.Main) {
-            VsgPlotView(host).run {
+            val print = ViewerStressStrainHelper.printContext(host)
+            VsgPlotView(print).run {
                 setData(
-                    ViewerStressStrainHelper.plotSeries(host, curve, modulus),
+                    ViewerStressStrainHelper.plotSeries(print, curve, modulus),
                     axisLabels.first,
                     axisLabels.second,
                 )

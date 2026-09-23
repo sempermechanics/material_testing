@@ -225,6 +225,10 @@ class ResultViewerActivity : AppCompatActivity() {
     /** True while the looping summary GIF is the thing on screen. */
     internal val isShowingSummary: Boolean get() = showingSummary
 
+    /** The summary slot is showing a test's Results, where field and colour scale do not apply. */
+    private val resultsOnScreen: Boolean
+        get() = showingSummary && ::summary.isInitialized && summary.showsResults
+
     internal fun summaryBatchFiles(): List<File> = batchFiles
 
     /** How many frames this analysis actually holds. */
@@ -540,9 +544,24 @@ class ResultViewerActivity : AppCompatActivity() {
         return true
     }
 
+    /** Field picker and colour scale: gone on the summary's Results, else following the chrome. */
+    private fun syncFieldBars() {
+        listOf(btnFieldFab, layoutColorScale).forEach { bar ->
+            bar.animate().cancel()
+            bar.visibility = when {
+                resultsOnScreen -> View.GONE
+                chromeVisible -> View.VISIBLE
+                else -> View.INVISIBLE
+            }
+            bar.alpha = 1f
+        }
+    }
+
     private fun fadeChrome(visible: Boolean) {
         chromeVisible = visible
-        listOf(chromeTop, layoutScrubber, btnFieldFab, layoutColorScale).forEach { bar ->
+        // Results on the summary have no field or colour scale; keep those two out of the fade.
+        val fieldBars = if (resultsOnScreen) emptyList() else listOf(btnFieldFab, layoutColorScale)
+        (listOf(chromeTop, layoutScrubber) + fieldBars).forEach { bar ->
             bar.animate().cancel()
             if (visible) {
                 bar.visibility = View.VISIBLE
@@ -1100,7 +1119,11 @@ class ResultViewerActivity : AppCompatActivity() {
         } else {
             "${currentFrameIndex + 1} / ${batchFiles.size.coerceAtLeast(1)}"
         }
-        tvFinding.text = getString(R.string.viewer_edge_title_fmt, currentTypeString, frameBit)
+        tvFinding.text = if (resultsOnScreen) {
+            getString(R.string.results_title)
+        } else {
+            getString(R.string.viewer_edge_title_fmt, currentTypeString, frameBit)
+        }
 
         if (showingSummary) {
             val seq = summary.boundsFor(index)
@@ -1185,11 +1208,12 @@ class ResultViewerActivity : AppCompatActivity() {
         summary.show()
         tvFrameCounter.text = summary.counterText()
         layoutFrameJump.visibility = View.GONE
-        tvFinding.text = getString(
-            R.string.viewer_edge_title_fmt,
-            currentTypeString,
-            getString(R.string.summary_title),
-        )
+        syncFieldBars()
+        tvFinding.text = if (resultsOnScreen) {
+            getString(R.string.results_title)
+        } else {
+            getString(R.string.viewer_edge_title_fmt, currentTypeString, getString(R.string.summary_title))
+        }
         updateNavButtons()
         bumpChrome()
     }
@@ -1197,6 +1221,7 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun leaveSummary() {
         showingSummary = false
         summary.hide()
+        syncFieldBars()
         layoutFrameJump.visibility = View.VISIBLE
         updateNavButtons()
         // Re-apply the frame's own labels and heatmap after the summary's.

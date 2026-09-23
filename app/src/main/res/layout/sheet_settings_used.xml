@@ -1,180 +1,186 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Details sheet: max/min (+ mean on a frame), then the frame histogram, then settings used. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Details sheet: max/min (+ mean on a frame), then the frame histogram, then settings used,
+     then Results. Scrolls: with a load log the Results section runs past a phone screen. -->
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_viewer_peek_sheet"
     android:forceDarkAllowed="false"
-    android:orientation="vertical"
-    android:paddingHorizontal="22dp"
-    android:paddingTop="10dp"
-    android:paddingBottom="28dp"
     tools:targetApi="29">
 
-    <View
-        android:layout_width="36dp"
-        android:layout_height="4dp"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="16dp"
-        android:background="@drawable/bg_viewer_peek_handle" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:letterSpacing="0.01"
-        android:text="@string/viewer_details_title"
-        android:textColor="@color/viewer_chrome_text"
-        android:textSize="20sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/tvSettingsUsedSpecimen"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="middle"
-        android:maxLines="1"
-        android:textColor="@color/viewer_chrome_muted"
-        android:textSize="12sp" />
-
-    <TextView
-        android:id="@+id/tvSheetStats"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:fontFamily="monospace"
-        android:lineSpacingExtra="4dp"
-        android:textColor="@color/viewer_chrome_text"
-        android:textSize="14sp" />
-
     <LinearLayout
-        android:id="@+id/distributionSection"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
         android:orientation="vertical"
-        android:visibility="gone">
+        android:paddingHorizontal="22dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="28dp">
+
+        <View
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/bg_viewer_peek_handle" />
 
         <TextView
-            android:id="@+id/tvHistogramTitle"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:letterSpacing="0.08"
-            android:textAllCaps="true"
-            android:textColor="@color/viewer_chrome_muted"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
-        <com.indicvision.semper.ui.viewer.FieldHistogramView
-            android:id="@+id/plotFieldHistogram"
-            android:layout_width="match_parent"
-            android:layout_height="150dp"
-            android:layout_marginTop="8dp"
-            android:contentDescription="@string/viewer_histogram_desc" />
-
-        <TextView
-            android:id="@+id/tvHistogramCaption"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:accessibilityLiveRegion="polite"
-            android:fontFamily="monospace"
-            android:textColor="@color/viewer_chrome_muted"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="22dp"
-        android:letterSpacing="0.08"
-        android:text="@string/settings_used_title"
-        android:textAllCaps="true"
-        android:textColor="@color/viewer_chrome_muted"
-        android:textSize="11sp"
-        android:textStyle="bold" />
-
-    <LinearLayout
-        android:id="@+id/settingsUsedRows"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:orientation="vertical" />
-
-    <LinearLayout
-        android:id="@+id/lineCutSection"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:orientation="vertical"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/tvLineCutTitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:letterSpacing="0.08"
-            android:textAllCaps="true"
-            android:textColor="@color/viewer_chrome_muted"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
-        <com.indicvision.semper.ui.analysis.VsgPlotView
-            android:id="@+id/plotLineCut"
-            android:layout_width="match_parent"
-            android:layout_height="190dp"
-            android:layout_marginTop="8dp" />
-
-        <TextView
-            android:id="@+id/tvLineCutLegend"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="@color/viewer_chrome_muted"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-    <!-- Stress-strain curve; only for a session with a machine load per frame. -->
-    <LinearLayout
-        android:id="@+id/stressStrainSection"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:orientation="vertical"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/tvStressStrainTitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:letterSpacing="0.08"
-            android:textAllCaps="true"
-            android:textColor="@color/viewer_chrome_muted"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
-        <com.indicvision.semper.ui.analysis.VsgPlotView
-            android:id="@+id/plotStressStrain"
-            android:layout_width="match_parent"
-            android:layout_height="190dp"
-            android:layout_marginTop="8dp" />
-
-        <TextView
-            android:id="@+id/tvStressStrainCaption"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="@color/viewer_chrome_muted"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/tvStressStrainResult"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:letterSpacing="0.01"
+            android:text="@string/viewer_details_title"
             android:textColor="@color/viewer_chrome_text"
-            android:textSize="13sp"
-            android:visibility="gone" />
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvSettingsUsedSpecimen"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="middle"
+            android:maxLines="1"
+            android:textColor="@color/viewer_chrome_muted"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tvSheetStats"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:fontFamily="monospace"
+            android:lineSpacingExtra="4dp"
+            android:textColor="@color/viewer_chrome_text"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:id="@+id/distributionSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvHistogramTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.08"
+                android:textAllCaps="true"
+                android:textColor="@color/viewer_chrome_muted"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <com.indicvision.semper.ui.viewer.FieldHistogramView
+                android:id="@+id/plotFieldHistogram"
+                android:layout_width="match_parent"
+                android:layout_height="150dp"
+                android:layout_marginTop="8dp"
+                android:contentDescription="@string/viewer_histogram_desc" />
+
+            <TextView
+                android:id="@+id/tvHistogramCaption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:accessibilityLiveRegion="polite"
+                android:fontFamily="monospace"
+                android:textColor="@color/viewer_chrome_muted"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:letterSpacing="0.08"
+            android:text="@string/settings_used_title"
+            android:textAllCaps="true"
+            android:textColor="@color/viewer_chrome_muted"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/settingsUsedRows"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="vertical" />
+
+        <LinearLayout
+            android:id="@+id/lineCutSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvLineCutTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.08"
+                android:textAllCaps="true"
+                android:textColor="@color/viewer_chrome_muted"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <com.indicvision.semper.ui.analysis.VsgPlotView
+                android:id="@+id/plotLineCut"
+                android:layout_width="match_parent"
+                android:layout_height="190dp"
+                android:layout_marginTop="8dp" />
+
+            <TextView
+                android:id="@+id/tvLineCutLegend"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/viewer_chrome_muted"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Stress-strain curve; only for a session with a machine load per frame. -->
+        <LinearLayout
+            android:id="@+id/stressStrainSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvStressStrainTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.08"
+                android:textAllCaps="true"
+                android:textColor="@color/viewer_chrome_muted"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <com.indicvision.semper.ui.analysis.VsgPlotView
+                android:id="@+id/plotStressStrain"
+                android:layout_width="match_parent"
+                android:layout_height="190dp"
+                android:layout_marginTop="8dp" />
+
+            <TextView
+                android:id="@+id/tvStressStrainCaption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/viewer_chrome_muted"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tvStressStrainResult"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:textColor="@color/viewer_chrome_text"
+                android:textSize="13sp"
+                android:visibility="gone" />
+        </LinearLayout>
     </LinearLayout>
-</LinearLayout>
+</androidx.core.widget.NestedScrollView>

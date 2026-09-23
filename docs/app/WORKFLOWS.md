@@ -671,6 +671,10 @@ node. **Exit:** Home, or back to the Lattice.
 Single-setting analyses only (not parameter sweeps — those open from the lattice
 onto a combination, with no summary slot and no Animations share target).
 
+**A test with a load log shows Results in this slot instead** (8.2a.10–8.2a.13):
+for a student the summary of the experiment is the stress–strain curve, not a
+heatmap loop. The field animations are still built for Share → Animations.
+
 | # | Action | Expected |
 |---|---|---|
 | [ ] 8.2a.1 | Open a result | It lands on the summary, which builds and then loops. The **counter** reads "Summary GIF"; the **edge title** carries "<field> · Summary" |
@@ -681,6 +685,10 @@ onto a combination, with no summary slot and no Animations share target).
 | [ ] 8.2a.4 | Compare early and late frames of a growing test | Colour rises through the sequence — one scale throughout, no per-frame renormalising |
 | [ ] 8.2a.5 | Read the scale labels beside it | The widest bounds in the whole sequence, not the current frame's |
 | [ ] 8.2a.5a | Open ⓘ on the summary | Max and min of that GIF scale, no mean, and no histogram |
+| [ ] 8.2a.10 | Open a tensile result with a load log | It lands on **Results**: edge title and counter read "Results"; the page shows the stress–strain curve with its elastic-fit line, a caption "The whole test: n of N photos on the curve…", then E (frames, R², approximate) and peak stress. "Reading strain n / N…" shows while the curve builds |
+| [ ] 8.2a.11 | Look for the field picker and colour scale on Results | Neither is there, including after the chrome fades and comes back |
+| [ ] 8.2a.12 | Tap › to frame 1, then ‹ back | Frame 1 has the field picker and colour scale again; back on Results they are gone again. Opening ⓘ on Results shows the same curve with no frame highlighted |
+| [ ] 8.2a.13 | Open a result without loads, or a sweep | The summary animation as before (8.2a.1) |
 | [ ] 8.2a.6 | Switch field | The animation rebuilds in that field; switching back replays from cache |
 | [ ] 8.2a.7 | Set a custom scale for one field | Only that field's animation rebuilds |
 | [ ] 8.2a.8 | Tap **Next** on the summary, then **Prev** on frame 1 | Leaves to frame 1 and comes back |

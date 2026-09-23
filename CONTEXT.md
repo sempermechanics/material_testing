@@ -156,8 +156,12 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 student (Product, above). `report/ElasticModulus` fits Young's modulus to the
 longest leading run of frames before the peak whose line keeps R² ≥ 0.995,
 free intercept, reference left out (a preloaded gauge otherwise reads 218 GPa
-for 194). The viewer ⓘ section is now **Results**: the curve with its fitted
-line, E with the frames it used, and peak stress. **Share → Lab report
+for 194). **Results** — the curve with its fitted line, E with the frames it
+used, and peak stress — replaces the heatmap loop in the viewer's summary
+slot (the page it opens on) for any session with loads, and closes the ⓘ
+sheet; both surfaces share one curve build (`ViewerStressStrainHelper.fill`).
+PDF plots render with the day palette (`printContext`) so dark mode does not
+print pale axes. **Share → Lab report
 (PDF)** (`LabReport` → `LabReportPdf`, offered for tensile sessions with
 loads) lays the session out as the handwritten Experiment 2 write-up: same
 sections and order, row 1 worked through, Elastic / Plastic / Break point
@@ -243,7 +247,8 @@ change.
 is the one model (stress in MPa, strain = mean strain over accepted points in
 mε, signed as logged). Viewer ⓘ: `ViewerStressStrainHelper` adds the
 dimension / load / stress rows and the curve, built on first sheet
-open — never on viewer open — and cached in `ResultViewerViewModel`. CSV is
+open and cached in `ResultViewerViewModel` (since the tensile PR the summary
+slot's Results builds it on viewer open instead). CSV is
 `semper_csv_version,2`: `load_N,stress_MPa` trail every point row (empty
 without a log), typed sessions add `# test_type` / `# cross_section_mm2` /
 `# load_axis` / `# load_unit`. PDF: `ReportData.mechanical` draws a

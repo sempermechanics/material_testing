@@ -64,8 +64,10 @@ surface says so.
 
 ## Where the results appear
 
-- **Viewer ⓘ → Results**: the curve with the fitted line, E with the photos
-  it came from, peak stress.
+- **Viewer → Results**: the page the viewer opens on (the summary slot before
+  frame 1) — the curve with the fitted line, E with the photos it came from,
+  peak stress. The same block closes the ⓘ sheet. The heatmap animation that
+  slot shows for other sessions is still under Share → Animations.
 - **Share → Lab report (PDF)**: the write-up in the handwritten report's own
   layout, filled with the session's data. Tensile sections, in order:
   experiment and title, Aim, Materials required, Theory, figure (the

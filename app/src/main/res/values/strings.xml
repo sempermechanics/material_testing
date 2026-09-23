@@ -672,6 +672,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="stress_strain_caption_fmt">Frame %1$d · %2$s N · %3$s MPa · %4$s mε</string>
     <string name="stress_strain_frame_skipped">This frame has no accepted points, so it is not on the curve.</string>
     <string name="stress_strain_empty">No frame has accepted points, so there is no curve.</string>
+    <plurals name="results_summary_caption_fmt">
+        <item quantity="one">The whole test: %1$d of %2$d photo on the curve. Tap › to see its strain.</item>
+        <item quantity="other">The whole test: %1$d of %2$d photos on the curve. Tap › to see each photo’s strain.</item>
+    </plurals>
     <string name="results_peak_stress_fmt">Peak stress: %1$s MPa (frame %2$d)</string>
     <string name="modulus_fit_label">Elastic fit</string>
     <string name="modulus_tensile_fmt">Young’s modulus E ≈ %1$s GPa, from the straight part of the curve (frames %2$d–%3$d, R² %4$s). Approximate: the strain comes from the camera, not an extensometer.</string>

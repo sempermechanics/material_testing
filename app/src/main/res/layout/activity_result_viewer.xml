@@ -57,6 +57,52 @@
                 android:contentDescription="@string/summary_title"
                 android:scaleType="matrix" />
 
+            <!-- A test with loads shows its Results here instead of the heatmap
+                 animation; the empty image underneath still takes the swipes. -->
+            <LinearLayout
+                android:id="@+id/summaryResults"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:orientation="vertical"
+                android:paddingHorizontal="22dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.08"
+                    android:text="@string/results_title"
+                    android:textAllCaps="true"
+                    android:textColor="@color/viewer_chrome_muted"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <com.indicvision.semper.ui.analysis.VsgPlotView
+                    android:id="@+id/plotSummaryResults"
+                    android:layout_width="match_parent"
+                    android:layout_height="280dp"
+                    android:layout_marginTop="8dp" />
+
+                <TextView
+                    android:id="@+id/tvSummaryResultsCaption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@color/viewer_chrome_muted"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tvSummaryResultsText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="@color/viewer_chrome_text"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
             <LinearLayout
                 android:id="@+id/summaryStatus"
                 android:layout_width="wrap_content"
