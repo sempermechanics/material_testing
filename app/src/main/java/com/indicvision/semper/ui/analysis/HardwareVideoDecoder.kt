@@ -29,7 +29,9 @@ internal class HardwareVideoDecoder private constructor(
 
     companion object {
         private const val TIMEOUT_US = 10_000L
-        private const val MAX_DRAIN_ATTEMPTS = 60
+
+        // Enough to decode forward across a long GOP (e.g. 2 s at 60 fps) after a sync seek.
+        private const val MAX_DRAIN_ATTEMPTS = 600
 
         /**
          * Creates and starts a [HardwareVideoDecoder] for [uri], or returns null if hardware
@@ -83,7 +85,8 @@ internal class HardwareVideoDecoder private constructor(
     }
 
     /**
-     * Decodes the sync frame at or immediately before [timeUs] and extracts the raw Y plane.
+     * Decodes the first frame presented at or after [timeUs] (seeking to the previous sync
+     * frame and decoding forward) and extracts the raw Y plane.
      * Returns null if decoding fails or output image cannot be acquired.
      */
     fun decodeFrameAt(timeUs: Long): GrayPngEncoder.Luma? {
@@ -103,9 +106,14 @@ internal class HardwareVideoDecoder private constructor(
 
                 val outIndex = codec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
                 if (outIndex >= 0) {
-                    val luma = extractLumaFromOutputBuffer(outIndex)
+                    // The seek lands on the previous sync frame; decode forward past it so
+                    // uniform-interval samples are the requested frame, not a repeated I-frame.
+                    val isEos = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
+                    val reached = bufferInfo.presentationTimeUs >= timeUs || isEos
+                    val luma = if (reached) extractLumaFromOutputBuffer(outIndex) else null
                     codec.releaseOutputBuffer(outIndex, false)
                     if (luma != null) return luma
+                    if (isEos) break
                 }
             }
         } catch (e: Exception) {
