@@ -139,6 +139,10 @@ DRIVE_UNREACHABLE = "drive_unreachable"
 DRIVE_UNHEALTHY = "drive_unhealthy"
 FIRESTORE_UNREACHABLE = "firestore_unreachable"
 READYZ_FAILED = "readyz_failed"
+# 503: every attempt to bind an empty device lock lost to contention and the
+# lock is still empty. Nobody holds the licence, so the caller retries; it is
+# never reported as `license_device_mismatch`.
+DEVICE_LOCK_CONTENDED = "device_lock_contended"
 
 #: Codes the Android client branches on or surfaces by name. Changing
 #: one of these needs the matching edit in ApiErrors.kt in the same commit --

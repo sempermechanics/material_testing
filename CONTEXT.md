@@ -133,8 +133,19 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-09-23)
 
+**A starved device-lock bind is not a loss (`fix/deflake-device-lock-test`).**
+The emulator test `test_the_first_device_wins_an_unbound_lock` flaked (2 in 10
+locally, and on PR #148) with **zero** winners: all eight binds exhausted their
+transaction retries and `bind_device_lock` read that as "another device won",
+returning False with the lock still empty — which `_activate_individual` then
+answered as `license_device_mismatch`. A starved round now re-reads the lock
+and binds again (three jittered rounds); if every round starves it raises
+`DeviceLockContended` (`503 device_lock_contended` on activate; swallowed on
+the request path, leaving the licence unbound for the next request). Details:
+[CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md) §20.1.
+
 **Upload stops retrying a session whose files are gone
-(`fix/upload-missing-inputs`).** `DicUploadWorker` returned `Result.retry()`
+(#148, merged 2026-09-23).** `DicUploadWorker` returned `Result.retry()`
 forever when report staging came out incomplete, so a session whose `.dat`
 files had been deleted sat on "upload pending" for days (Pixel 6, since
 2026-09-21). `UploadWorkOutcomes.classifyIncompleteStaging` now keeps retrying
