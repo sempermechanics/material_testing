@@ -3,8 +3,10 @@ package com.indicvision.semper.data
 import android.content.Context
 import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.data.net.CloudApi
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.util.suspendRunCatching
 import timber.log.Timber
 
@@ -29,12 +31,16 @@ object SeatLease {
      * failure leaves the seat until the lease TTL, which the product already
      * tolerates.
      */
-    suspend fun releaseBestEffort(context: Context) {
+    suspend fun releaseBestEffort(
+        context: Context,
+        api: CloudApi = IndicApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ) {
         release(
             shouldRelease = { holdsFloatingSeat(context) },
-            token = { TokenProvider.usableIdToken() },
-            apiEnabled = { IndicApi.get(context).enabled },
-            release = { token -> IndicApi.get(context).releaseLease(token) },
+            token = tokens::usableIdToken,
+            apiEnabled = { api.enabled },
+            release = api::releaseLease,
             applyConfig = { AppRemoteConfig.apply(context, it) },
         )
     }
@@ -43,12 +49,16 @@ object SeatLease {
      * Renew a held floating seat. Same best-effort contract as release — a
      * failure just means the next cycle (or a lapsed TTL) will demote.
      */
-    suspend fun heartbeatBestEffort(context: Context) {
+    suspend fun heartbeatBestEffort(
+        context: Context,
+        api: CloudApi = IndicApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ) {
         heartbeat(
             shouldHeartbeat = { holdsFloatingSeat(context) },
-            token = { TokenProvider.usableIdToken() },
-            apiEnabled = { IndicApi.get(context).enabled },
-            checkout = { token -> IndicApi.get(context).checkoutLease(token) },
+            token = tokens::usableIdToken,
+            apiEnabled = { api.enabled },
+            checkout = api::checkoutLease,
             applyConfig = { AppRemoteConfig.apply(context, it) },
         )
     }
@@ -58,9 +68,12 @@ object SeatLease {
      * looks licensed on a floating seat. Used by the background worker so an
      * idle phone learns a remote revoke without an open screen.
      */
-    suspend fun refreshConfigAndSeatBestEffort(context: Context) {
-        val api = IndicApi.get(context)
-        val token = if (api.enabled) TokenProvider.usableIdToken() else null
+    suspend fun refreshConfigAndSeatBestEffort(
+        context: Context,
+        api: CloudApi = IndicApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ) {
+        val token = if (api.enabled) tokens.usableIdToken() else null
         if (token == null) return
         val refreshed = suspendRunCatching { api.getConfig(token) }
             .onSuccess { AppRemoteConfig.apply(context, it) }
@@ -70,7 +83,7 @@ object SeatLease {
             }
             .isSuccess
         if (refreshed && holdsFloatingSeat(context)) {
-            heartbeatBestEffort(context)
+            heartbeatBestEffort(context, api, tokens)
         }
     }
 
