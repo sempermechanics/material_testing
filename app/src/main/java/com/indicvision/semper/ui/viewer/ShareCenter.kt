@@ -23,6 +23,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.LicenseEntitlements
+import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
@@ -517,6 +518,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             testType = s.testType,
             crossSectionMm2 = s.crossSectionMm2,
             loadAxisX = s.loadAxisX,
+            geometry = s.geometry,
         )
         val f = File(shareDir(), "${s.baseName}_data.csv")
         AnalysisCsvWriter.write(f, sweep, frames, metadata)
@@ -569,13 +571,13 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val curve = s.stressStrain ?: withContext(Dispatchers.Default) {
             StressStrain.build(
                 loadsN = s.loadsN.toList(),
-                areaMm2 = s.crossSectionMm2,
-                axisX = s.loadAxisX,
+                model = s.stressModel,
                 frameData = { index -> s.batchFiles.getOrNull(index)?.let { DicResult.decodeDatFile(it) } },
                 onProgress = { done -> report(0, "Stress–strain $done / ${s.loadsN.size}…") },
             )
         }
         if (curve.isEmpty) return null
+        val axisLabels = ViewerStressStrainHelper.axisLabels(host, curve.model)
         val plot = withContext(Dispatchers.Main) {
             VsgPlotView(host).run {
                 setData(
@@ -586,8 +588,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
                             points = curve.plotPoints(),
                         ),
                     ),
-                    host.getString(R.string.stress_strain_axis_strain),
-                    host.getString(R.string.stress_strain_axis_stress),
+                    axisLabels.first,
+                    axisLabels.second,
                 )
                 renderToBitmap(STRESS_STRAIN_PLOT_W, STRESS_STRAIN_PLOT_H)
             }
@@ -788,9 +790,13 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val crossSectionMm2: Float = 0f,
         val loadAxisX: Boolean = true,
         val loadsN: FloatArray = FloatArray(0),
+        val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
         /** The viewer's already-built curve, if the Details sheet has been opened. */
         val stressStrain: StressStrain.Curve? = null,
     ) {
+        val stressModel: StressStrain.Model
+            get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry)
+
         /** Grid pitch of frame [index] — what rendering that frame depends on. */
         fun stepAt(index: Int): Int = stepPerFrame?.getOrNull(index) ?: step
 

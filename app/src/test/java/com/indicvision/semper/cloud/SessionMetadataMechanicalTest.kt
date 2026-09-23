@@ -5,6 +5,7 @@ package com.indicvision.semper.cloud
 import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionUploadMetadata
+import com.indicvision.semper.data.SpecimenGeometry
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,7 +22,8 @@ import java.io.File
 /**
  * `metadata.json` is the only place a cloud backup keeps the test type and the
  * machine loads, so these pin both halves: what an upload writes for a typed
- * and an untyped session, and what a restore reads back from `/3` and `/4`.
+ * and an untyped session, and what a restore reads back from `/3`, `/4`
+ * and `/5` (which adds the bending geometry).
  */
 @RunWith(RobolectricTestRunner::class)
 // Robolectric supplies org.json; sdk pinned like every other Robolectric test.
@@ -31,11 +33,56 @@ class SessionMetadataMechanicalTest {
     @get:Rule
     val temp = TemporaryFolder()
 
+    private var targets = 0
+
     @Test
-    fun `schema is 4 and still counts as a split layout`() {
-        assertEquals("indic.session.metadata/4", SessionUploadMetadata.SCHEMA)
+    fun `schema is 5 and still counts as a split layout`() {
+        assertEquals("indic.session.metadata/5", SessionUploadMetadata.SCHEMA)
         assertEquals(4, SessionUploadMetadata.SCHEMA_MECHANICAL_TEST)
+        assertEquals(5, SessionUploadMetadata.SCHEMA_SPECIMEN_GEOMETRY)
         assertTrue(CloudRestore.isSplitLayout(SessionUploadMetadata.SCHEMA))
+    }
+
+    @Test
+    fun `a tensile session writes no geometry object, as a schema-4 file would`() {
+        val test = SessionUploadMetadata.testJson(record(testType = "tensile", loadsN = listOf(0f, 1f, 2f)))!!
+
+        assertFalse(test.has("geometry"))
+    }
+
+    @Test
+    fun `bending geometry round-trips through metadata and restore, entered dimensions only`() {
+        val geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10.5f, thicknessMm = 4f)
+        val record = record(testType = "bending", loadsN = listOf(0f, 100f, 200f)).copy(geometry = geometry)
+
+        val test = SessionUploadMetadata.testJson(record)!!
+        val json = test.getJSONObject("geometry")
+        assertEquals(setOf("spanMm", "widthMm", "thicknessMm"), json.keys().asSequence().toSet())
+        val meta = JSONObject()
+            .put("schema", SessionUploadMetadata.SCHEMA)
+            .put("test", test)
+            .put("frames", SessionUploadMetadata.framesJson(record))
+        val restored = CloudRestore.recordFrom(meta, target())
+
+        assertEquals("bending", restored.testType)
+        assertEquals(geometry, restored.geometry)
+        assertEquals(listOf(0f, 100f, 200f), restored.loadsN)
+    }
+
+    @Test
+    fun `a half-entered geometry round-trips and a schema-4 test object restores as no geometry`() {
+        val geometry = SpecimenGeometry(spanMm = 50f)
+        val record = record(testType = "bending", loadsN = listOf(0f, 10f, 20f)).copy(geometry = geometry)
+        val test = SessionUploadMetadata.testJson(record)!!
+        assertEquals(setOf("spanMm"), test.getJSONObject("geometry").keys().asSequence().toSet())
+
+        val restored = CloudRestore.recordFrom(JSONObject().put("test", test), target())
+        assertEquals(geometry, restored.geometry)
+
+        test.remove("geometry")
+        val older = CloudRestore.recordFrom(JSONObject().put("test", test), target())
+        assertEquals("bending", older.testType)
+        assertEquals(SpecimenGeometry.NONE, older.geometry)
     }
 
     @Test
@@ -113,7 +160,8 @@ class SessionMetadataMechanicalTest {
     }
 
     private fun target(): CloudRestore.RestoreRecordTarget {
-        val dir = temp.newFolder("sess")
+        // One folder per call: a test that restores twice must not collide.
+        val dir = temp.newFolder("sess-${targets++}")
         return CloudRestore.RestoreRecordTarget(
             localId = "local-1",
             cloudSessionId = "cloud-1",

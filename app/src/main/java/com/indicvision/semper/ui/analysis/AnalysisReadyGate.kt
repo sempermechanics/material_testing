@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import com.indicvision.semper.R
+import com.indicvision.semper.report.StressStrain
 
 /**
  * Wizard readiness / Compute / Sweep enablement extracted from
@@ -37,8 +38,14 @@ object AnalysisReadyGate {
             viewModel.defFilePaths.isEmpty() -> activity.getString(R.string.next_reason_def)
             viewModel.testType.hasMachineLoad && viewModel.machineLoads == null ->
                 activity.getString(R.string.next_reason_load)
-            viewModel.testType.hasMachineLoad && viewModel.crossSectionMm2 <= 0f ->
-                activity.getString(R.string.next_reason_cross_section)
+            viewModel.testType.hasMachineLoad && !viewModel.stressModel().isComplete ->
+                activity.getString(
+                    if (viewModel.stressModel() is StressStrain.Model.Axial) {
+                        R.string.next_reason_cross_section
+                    } else {
+                        R.string.next_reason_dimensions
+                    },
+                )
             else -> ""
         }
 

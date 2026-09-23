@@ -185,6 +185,7 @@ class SessionRepository {
             testType = mechanical.testType,
             crossSectionMm2 = mechanical.crossSectionMm2,
             loadAxisX = mechanical.loadAxisX,
+            geometry = mechanical.geometry,
             // Never more loads than frames: a run that stopped early solved
             // fewer frames than the CSV was mapped to.
             loadsN = mechanical.loadsN.take(defNames.size),

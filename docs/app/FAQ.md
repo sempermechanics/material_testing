@@ -317,8 +317,8 @@ Settings.
 
 ## machine-loads {#machine-loads}
 
-**When you see it:** A chip on the **Machine load** card (tensile and
-compression tests) saying the log was *resampled*, *matched by time*, had its
+**When you see it:** A chip on the **Machine load** card saying the log was
+*resampled*, *matched by time*, had its
 *first row skipped*, had *no unit* or *no load column*, or that every load has
 an unexpected sign.
 
@@ -340,9 +340,9 @@ matches one load to each deformed frame:
   newtons. Add the unit to the header if that is wrong.
 - **No load column** — no header named a load or force column; the last
   numeric column is used. Name the column `Load (N)` in the export.
-- **Sign** — loads are kept exactly as logged. A compression test whose loads
-  are all positive (or a tensile test whose loads are all negative) most likely
-  reflects the machine's sign convention; the curve is plotted as logged.
+- **Sign** — loads are kept exactly as logged. A tensile test whose loads are
+  all negative most likely reflects the machine's sign convention; the curve is
+  plotted as logged.
 
 **What to do:** Remove the log with ✕ and import a corrected export, or accept
 the chip — it never blocks the analysis.

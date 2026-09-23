@@ -1754,9 +1754,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     /**
-     * The machine-load card exists only for tensile and compression. It sits
-     * in a ViewStub so the other tests never pay for its views, and so the
-     * host layout stays under lint's TooManyViews cap.
+     * The machine-load card exists only for tests with a load log (every type
+     * today). It sits in a ViewStub so a type without one never pays for its
+     * views, and so the host layout stays under lint's TooManyViews cap.
      */
     private fun setupLoadCard() {
         if (!viewModel.testType.hasMachineLoad) return

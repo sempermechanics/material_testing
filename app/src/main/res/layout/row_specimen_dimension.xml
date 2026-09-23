@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One specimen dimension on the load card (span, width, thickness, moment
+     thickness): label, number field, unit. Included once per dimension;
+     the card shows only the rows the chosen test's stress model needs. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <TextView
+        android:id="@+id/tvDimensionLabel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/viewer_chrome_text"
+        android:textSize="14sp"
+        tools:text="Support span" />
+
+    <EditText
+        android:id="@+id/etDimension"
+        android:layout_width="84dp"
+        android:layout_height="wrap_content"
+        android:background="@android:color/transparent"
+        android:gravity="end"
+        android:hint="@string/load_dimension_hint"
+        android:imeOptions="actionNext"
+        android:importantForAutofill="no"
+        android:includeFontPadding="false"
+        android:inputType="numberDecimal"
+        android:maxLength="9"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        android:textColor="@color/sky_primary"
+        android:textColorHint="@color/viewer_chrome_muted"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:text="@string/unit_mm"
+        android:textColor="@color/viewer_chrome_muted"
+        android:textSize="14sp" />
+</LinearLayout>
