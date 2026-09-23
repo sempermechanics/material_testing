@@ -27,6 +27,9 @@ internal class HardwareVideoDecoder private constructor(
     val rotationDegrees: Int,
 ) : AutoCloseable {
 
+    /** Whether any input has reached the codec, so a flush can no longer drop its config. */
+    private var fedSinceStart = false
+
     companion object {
         private const val TIMEOUT_US = 10_000L
 
@@ -91,8 +94,13 @@ internal class HardwareVideoDecoder private constructor(
      */
     fun decodeFrameAt(timeUs: Long): GrayPngEncoder.Luma? {
         try {
-            extractor.seekTo(timeUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
-            codec.flush()
+            // A segment ending at the container duration asks for a time past the last
+            // frame; decoding forward would then run into end of stream with no frame.
+            val target = timeUs.coerceAtMost(lastSampleTimeUs)
+            extractor.seekTo(target, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            // Flushing before the codec's first output discards the codec-specific data
+            // from the format (SPS/PPS), and every frame after it then fails to decode.
+            if (fedSinceStart) codec.flush()
 
             val bufferInfo = MediaCodec.BufferInfo()
             var attempts = 0
@@ -109,7 +117,7 @@ internal class HardwareVideoDecoder private constructor(
                     // The seek lands on the previous sync frame; decode forward past it so
                     // uniform-interval samples are the requested frame, not a repeated I-frame.
                     val isEos = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
-                    val reached = bufferInfo.presentationTimeUs >= timeUs || isEos
+                    val reached = bufferInfo.presentationTimeUs >= target || isEos
                     val luma = if (reached) extractLumaFromOutputBuffer(outIndex) else null
                     codec.releaseOutputBuffer(outIndex, false)
                     if (luma != null) return luma
@@ -118,8 +126,30 @@ internal class HardwareVideoDecoder private constructor(
             }
         } catch (e: Exception) {
             Timber.w(e, "Error during hardware frame decode at %d us", timeUs)
+            return null
         }
+        Timber.w("No frame decoded at %d us", timeUs)
         return null
+    }
+
+    /**
+     * Presentation time of the last frame: the largest sample time in the final GOP
+     * (B-frames reorder, so the last sample read is not always the last shown).
+     */
+    private val lastSampleTimeUs: Long by lazy {
+        val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
+            format.getLong(MediaFormat.KEY_DURATION)
+        } else {
+            0L
+        }
+        extractor.seekTo(durationUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+        if (extractor.sampleTime < 0) extractor.seekTo(0, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+        var last = -1L
+        while (extractor.sampleTime >= 0) {
+            last = maxOf(last, extractor.sampleTime)
+            extractor.advance()
+        }
+        if (last >= 0) last else Long.MAX_VALUE
     }
 
     private fun feedInput(): Boolean {
@@ -128,6 +158,7 @@ internal class HardwareVideoDecoder private constructor(
 
         val inBuf = codec.getInputBuffer(inIndex) ?: return false
         val sampleSize = extractor.readSampleData(inBuf, 0)
+        fedSinceStart = true
         if (sampleSize < 0) {
             codec.queueInputBuffer(inIndex, 0, 0, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
             return true

@@ -144,10 +144,14 @@ for every sample (the decoder now decodes forward to the requested timestamp);
 `AviLuma` reads the uncompressed layouts losslessly, `MjpegHuffman` repairs
 tableless motion-JPEG frames and `AviCodecDecoder` hands Xvid/H.264 samples to
 the platform codecs — no new dependency, no APK growth. A codec the device
-cannot decode is now named in the error instead of failing blank. Neither path
-has run on a device yet — the MediaCodec Y-plane decode (vendor strides, crop,
-portrait rotation) nor a real AVI: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md)
-§5.1a rows 7-9. The same change is being ported to `sempermechanics/material_testing`.
+cannot decode is now named in the error instead of failing blank. On an emulator
+(`VideoFrameExtractionDeviceTest`) two more decoder faults surfaced and are fixed on
+`test/video-extraction-emulator`: a fixed-interval segment ending at the clip's
+duration asked for a time past the last frame, failed, and dropped the whole batch
+to the retriever's I-frame seek; and a flush before the codec's first output lost
+its SPS/PPS, so an extraction intermittently fell back the same way. Neither path
+has run on a physical device yet (vendor strides, crop; a real camera AVI):
+[docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a. The same change is being ported to `sempermechanics/material_testing`.
 
 **Licensing is live in production (2026-09-21/22).** `indic-api` serves
 `d6b1b64` (`main` after #116) behind the `semper-gw` gateway config
