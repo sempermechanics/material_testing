@@ -318,11 +318,13 @@ pre-licensing documents)
 
 **Latency and failure visibility (`perf/backend-latency-and-failures`)**
 
-- [ ] Grant the runtime SA `iam.serviceAccountUser` **on itself only**, so
+- [x] Grant the runtime SA `iam.serviceAccountUser` **on itself only**, so
       Cloud Tasks accepts its OIDC tasks. Without it every enqueue 403s
       (`iam.serviceAccounts.actAs`) and large sessions provision inline:
       `gcloud iam service-accounts add-iam-policy-binding indic-api@indicvision-dic-app.iam.gserviceaccount.com --member=serviceAccount:indic-api@indicvision-dic-app.iam.gserviceaccount.com --role=roles/iam.serviceAccountUser --project indicvision-dic-app`.
-      Check: no `provision_enqueue_failed` events after the next large upload.
+      Granted 2026-09-23 (verified with `get-iam-policy`). Check still owed:
+      the next backup's session reaches `UPLOADING` through the queue, and no
+      `provision_enqueue_failed` events once this branch is deployed.
 - [ ] Give `indic-deployer@` `run.invoker` on `indic-api-staging` before the
       next staging deploy: the workflow now deploys staging private
       (`--no-allow-unauthenticated`), so the candidate smoke needs it.
