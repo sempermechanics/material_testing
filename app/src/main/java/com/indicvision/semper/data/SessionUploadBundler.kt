@@ -135,6 +135,7 @@ object SessionUploadBundler {
             testType = record.testType,
             crossSectionMm2 = record.crossSectionMm2,
             loadAxisX = record.loadAxisX,
+            geometry = record.geometry,
         )
         val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, csvMetadata) }
         try {
@@ -408,13 +409,10 @@ object SessionUploadBundler {
     /** The cover's mechanical block, or null on a plain DIC session. */
     private fun SessionRecord.mechanicalCover(index: Int): MechanicalCover? {
         if (testType.isBlank()) return null
-        val loadN = frameLoadN(index)
         return MechanicalCover(
             testType = testType,
-            crossSectionMm2 = crossSectionMm2,
-            loadAxisX = loadAxisX,
-            loadN = loadN,
-            stressMPa = loadN?.let { StressStrain.stressMPa(it, crossSectionMm2) },
+            model = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry),
+            loadN = frameLoadN(index),
         )
     }
 }

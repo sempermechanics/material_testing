@@ -1,7 +1,6 @@
 package com.indicvision.semper.data
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,18 +14,14 @@ class TestTypeTest {
     @Test
     fun `wire names are stable and round-trip`() {
         assertEquals("tensile", TestType.TENSILE.wireName)
-        assertEquals("compression", TestType.COMPRESSION.wireName)
         assertEquals("bending", TestType.BENDING.wireName)
-        assertEquals("torsion", TestType.TORSION.wireName)
+        assertEquals(2, TestType.entries.size)
         TestType.entries.forEach { assertEquals(it, TestType.fromWire(it.wireName)) }
     }
 
     @Test
-    fun `only tensile and compression take machine loads`() {
-        assertTrue(TestType.TENSILE.hasMachineLoad)
-        assertTrue(TestType.COMPRESSION.hasMachineLoad)
-        assertFalse(TestType.BENDING.hasMachineLoad)
-        assertFalse(TestType.TORSION.hasMachineLoad)
+    fun `every test type takes machine loads`() {
+        TestType.entries.forEach { assertTrue(it.name, it.hasMachineLoad) }
     }
 
     @Test
@@ -35,5 +30,8 @@ class TestTypeTest {
         assertNull(TestType.fromWire(""))
         assertNull(TestType.fromWire("Tensile"))
         assertNull(TestType.fromWire("shear"))
+        // Types this build no longer offers read as "no type", not as another test.
+        assertNull(TestType.fromWire("compression"))
+        assertNull(TestType.fromWire("torsion"))
     }
 }

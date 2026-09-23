@@ -124,14 +124,14 @@ class MachineLoadMapperTest {
     }
 
     @Test
-    fun `loads keep their sign and a compression log that is all positive is flagged`() {
-        val negative = map(listOf(-10f, -20f), frames = 2, testType = TestType.COMPRESSION)!!
+    fun `loads keep their sign and bending has no sign to be surprised by`() {
+        val negative = map(listOf(-10f, -20f), frames = 2, testType = TestType.BENDING)!!
         assertEquals(listOf(-10f, -20f), negative.loadsN)
         assertFalse(LoadMapWarning.SIGN_UNEXPECTED in negative.warnings)
 
-        val positive = map(listOf(10f, 20f), frames = 2, testType = TestType.COMPRESSION)!!
+        val positive = map(listOf(10f, 20f), frames = 2, testType = TestType.BENDING)!!
         assertEquals(listOf(10f, 20f), positive.loadsN)
-        assertTrue(LoadMapWarning.SIGN_UNEXPECTED in positive.warnings)
+        assertFalse(LoadMapWarning.SIGN_UNEXPECTED in positive.warnings)
     }
 
     @Test

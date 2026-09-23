@@ -114,8 +114,8 @@ data class SessionRecord(
     val renamedByUser: Boolean = false,
 
     // ── Mechanical test
-    // Which test the frames were photographed under and, for tensile and
-    // compression, the machine's load per frame. Blank / empty on every
+    // Which test the frames were photographed under, the specimen dimensions
+    // its stress needs, and the machine's load per frame. Blank / empty on every
     // record written before test types existed, and readers treat blank as
     // "no test type" rather than defaulting to one.
 
@@ -127,6 +127,9 @@ data class SessionRecord(
 
     /** Strain axis for the stress–strain curve: Exx when true, Eyy when false. */
     val loadAxisX: Boolean = true,
+
+    /** Bending dimensions; [SpecimenGeometry.NONE] on every other session. */
+    val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
 
     /** Signed load in newtons per deformed frame, index-aligned with [defNames]. */
     val loadsN: List<Float> = emptyList(),

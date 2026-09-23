@@ -26,9 +26,7 @@ object TestTypeSheet {
         sheet.setContentView(root)
         val rows = listOf(
             R.id.btnTestTensile to TestType.TENSILE,
-            R.id.btnTestCompression to TestType.COMPRESSION,
             R.id.btnTestBending to TestType.BENDING,
-            R.id.btnTestTorsion to TestType.TORSION,
         )
         rows.forEach { (id, type) ->
             root.findViewById<View>(id).setOnClickListener {
@@ -44,8 +42,6 @@ object TestTypeSheet {
 
     fun labelRes(type: TestType): Int = when (type) {
         TestType.TENSILE -> R.string.test_type_tensile
-        TestType.COMPRESSION -> R.string.test_type_compression
         TestType.BENDING -> R.string.test_type_bending
-        TestType.TORSION -> R.string.test_type_torsion
     }
 }

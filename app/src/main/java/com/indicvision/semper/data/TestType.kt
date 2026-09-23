@@ -6,15 +6,19 @@ package com.indicvision.semper.data
  * [wireName] is what `index.json`, `metadata.json` and Intent extras carry —
  * lowercase and stable, never the enum name, so a rename here cannot orphan a
  * stored session. [hasMachineLoad] marks the tests whose wizard takes the
- * testing machine's load log, and so can produce a stress–strain curve.
- * Bending and torsion only record which test ran for now; the seam for their
- * own inputs is [MechanicalTestInputs].
+ * testing machine's load log, and so can produce a stress–strain curve — both
+ * types today, each with its own stress model (see `report/StressStrain.Model`)
+ * and dimensions ([SpecimenGeometry] for bending, the cross-section for
+ * tensile). The flag stays so a type without a load log can be added without
+ * touching the wizard.
+ *
+ * Compression and torsion are deliberately not here: the app ships tensile and
+ * bending for now. Their wire names stay reserved, so a session stored by an
+ * earlier build reads as "no type" rather than being mistaken for another test.
  */
 enum class TestType(val wireName: String, val hasMachineLoad: Boolean) {
     TENSILE("tensile", true),
-    COMPRESSION("compression", true),
-    BENDING("bending", false),
-    TORSION("torsion", false),
+    BENDING("bending", true),
     ;
 
     companion object {

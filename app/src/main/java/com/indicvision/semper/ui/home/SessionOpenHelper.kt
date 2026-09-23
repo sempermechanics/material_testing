@@ -71,5 +71,6 @@ object SessionOpenHelper {
             crossSectionMm2 = session.crossSectionMm2,
             loadAxisX = session.loadAxisX,
             loadsN = if (session.hasMachineLoads) session.loadsN.toFloatArray() else FloatArray(0),
+            geometry = session.geometry,
         ).toIntent(context)
 }

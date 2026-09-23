@@ -39,8 +39,8 @@ data class ReportData(
 
     /**
      * The mechanical test this frame belongs to, for the cover's "Mechanical
-     * Test" block. Null on a plain DIC session; [loadN] / [stressMPa] are null
-     * for a typed session without a load log (bending, torsion, a sweep).
+     * Test" block. Null on a plain DIC session; [MechanicalCover.loadN] is
+     * null for a typed session without a load log (a sweep).
      */
     val mechanical: MechanicalCover? = null,
 )
@@ -49,12 +49,14 @@ data class ReportData(
 data class MechanicalCover(
     /** Wire name, e.g. "tensile"; the cover capitalises it. */
     val testType: String,
-    val crossSectionMm2: Float,
-    val loadAxisX: Boolean,
+    /** How the load becomes stress, and the dimensions that went into it. */
+    val model: StressStrain.Model,
     val loadN: Float? = null,
-    val stressMPa: Float? = null,
 ) {
     val label: String get() = testType.replaceFirstChar { it.uppercase() }
+
+    /** The frame's stress, or null without a load or with a NaN (incomplete dimensions). */
+    val stressMPa: Float? get() = loadN?.let(model::stressMPa)?.takeUnless { it.isNaN() }
 }
 
 // Dedicated Data Class for ROI

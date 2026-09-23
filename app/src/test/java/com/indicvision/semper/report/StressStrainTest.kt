@@ -3,7 +3,9 @@
 package com.indicvision.semper.report
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.data.SpecimenGeometry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,19 +26,21 @@ class StressStrainTest {
     }
 
     @Test
-    fun `stress is load over area in megapascals and NaN without an area`() {
-        assertEquals(100f, StressStrain.stressMPa(1250f, 12.5f), 1e-4f)
-        assertEquals(-8f, StressStrain.stressMPa(-100f, 12.5f), 1e-4f)
-        assertTrue(StressStrain.stressMPa(100f, 0f).isNaN())
+    fun `axial stress is load over area in megapascals and NaN without an area`() {
+        val model = StressStrain.Model.Axial(areaMm2 = 12.5f, axisX = true)
+
+        assertEquals(100f, model.stressMPa(1250f), 1e-4f)
+        assertEquals(-8f, model.stressMPa(-100f), 1e-4f)
+        assertTrue(StressStrain.Model.Axial(areaMm2 = 0f, axisX = true).stressMPa(100f).isNaN())
     }
 
     @Test
-    fun `strain is the mean of the load-axis component in millistrain`() {
+    fun `axial strain is the mean of the load-axis component in millistrain`() {
         val data = field(exx = 0.002f, eyy = -0.0006f)
 
-        assertEquals(2f, StressStrain.strainMilli(data, axisX = true)!!, 1e-3f)
-        assertEquals(-0.6f, StressStrain.strainMilli(data, axisX = false)!!, 1e-3f)
-        assertNull(StressStrain.strainMilli(field(0.1f, 0.1f, accepted = false), axisX = true))
+        assertEquals(2f, StressStrain.Model.Axial(1f, axisX = true).strainMilli(data)!!, 1e-3f)
+        assertEquals(-0.6f, StressStrain.Model.Axial(1f, axisX = false).strainMilli(data)!!, 1e-3f)
+        assertNull(StressStrain.Model.Axial(1f, axisX = true).strainMilli(field(0.1f, 0.1f, accepted = false)))
     }
 
     @Test
@@ -46,8 +50,7 @@ class StressStrainTest {
 
         val curve = StressStrain.build(
             loadsN = listOf(-100f, -200f, -300f),
-            areaMm2 = 10f,
-            axisX = true,
+            model = StressStrain.Model.Axial(areaMm2 = 10f, axisX = true),
             frameData = { fields[it] },
             onProgress = { visited += it },
         )
@@ -66,12 +69,48 @@ class StressStrainTest {
     fun `plot points start at the origin and are strain then stress`() {
         val curve = StressStrain.build(
             loadsN = listOf(50f),
-            areaMm2 = 5f,
-            axisX = false,
+            model = StressStrain.Model.Axial(areaMm2 = 5f, axisX = false),
             frameData = { field(0f, 0.0015f) },
         )
 
         assertEquals(listOf(0f to 0f, 1.5f to 10f), curve.plotPoints())
-        assertTrue(StressStrain.Curve(1f, true, 0, emptyList()).isEmpty)
+        assertTrue(StressStrain.Curve(StressStrain.Model.Axial(1f, true), 0, emptyList()).isEmpty)
+    }
+
+    @Test
+    fun `flexural stress is three-point bending at the outer fibre`() {
+        // σ = 3 P L / (2 b h²): 3 · 200 · 80 / (2 · 10 · 4²) = 48000 / 320 = 150 MPa
+        val model = StressStrain.Model.Flexural(spanMm = 80f, widthMm = 10f, thicknessMm = 4f, axisX = true)
+
+        assertTrue(model.isComplete)
+        assertEquals(150f, model.stressMPa(200f), 1e-3f)
+        assertEquals(-150f, model.stressMPa(-200f), 1e-3f)
+        assertEquals(2f, model.strainMilli(field(exx = 0.002f, eyy = -0.0006f))!!, 1e-3f)
+        assertEquals(listOf(80f, 10f, 4f), model.dimensions.map { it.second })
+    }
+
+    @Test
+    fun `a model with a missing dimension is incomplete and gives NaN, never a stress`() {
+        assertFalse(StressStrain.Model.Axial(0f, true).isComplete)
+        assertTrue(StressStrain.Model.Axial(0f, true).stressMPa(10f).isNaN())
+        assertFalse(StressStrain.Model.Flexural(80f, 0f, 4f, true).isComplete)
+        assertTrue(StressStrain.Model.Flexural(80f, 0f, 4f, true).stressMPa(10f).isNaN())
+    }
+
+    @Test
+    fun `the model follows the stored test type and falls back to axial`() {
+        val geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f)
+
+        assertEquals(
+            StressStrain.Model.Flexural(80f, 10f, 4f, axisX = false),
+            StressStrain.Model.of("bending", 12.5f, loadAxisX = false, geometry),
+        )
+        assertEquals(StressStrain.Model.Axial(12.5f, true), StressStrain.Model.of("tensile", 12.5f, true, geometry))
+        assertEquals(StressStrain.Model.Axial(12.5f, true), StressStrain.Model.of("", 12.5f, true, geometry))
+        // A session stored as a test this build no longer offers is not mistaken
+        // for another test: it reads as no type, which is axial.
+        assertEquals(StressStrain.Model.Axial(12.5f, true), StressStrain.Model.of("torsion", 12.5f, true, geometry))
+        assertEquals("axial", StressStrain.Model.of("", 0f, true, SpecimenGeometry.NONE).wireName)
+        assertEquals("flexural", StressStrain.Model.of("bending", 0f, true, geometry).wireName)
     }
 }
