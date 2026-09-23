@@ -439,10 +439,17 @@ export function requireSignIn(onReady) {
 
   const signedOut = document.getElementById("signedOut");
 
+  // The page is started once per signed-in account. The return leg of a
+  // re-authentication fires this listener twice — once for the user restored
+  // from storage, again when `resolveChallenge` makes the re-authenticated
+  // object current — and both calls wait on the same redirect, so without
+  // this the page loaded twice and both copies were handed the same `resume`:
+  // two revoke confirmations, and the second load wiping whatever the first
+  // reported.
+  let readyUid = null;
   let resumeHanded = false;
   onAuthStateChanged(auth, async () => {
-    // Whatever was stashed is handed over once, on the first ready state.
-    const resume = resumeHanded ? null : await redirectDone;
+    const stashed = await redirectDone;
     // Read after the redirect settled: a resolved re-authentication may have
     // replaced the user object the listener was called with.
     const user = auth.currentUser;
@@ -452,15 +459,21 @@ export function requireSignIn(onReady) {
     if (signedOut) signedOut.hidden = signedIn;
     who.textContent = signedIn ? user.email : "";
     if (!signedIn) {
+      readyUid = null;
       appEl.hidden = true;
       return;
     }
+    if (user.uid === readyUid) return;
+    readyUid = user.uid;
+    // Whatever was stashed is handed over once, on the first ready state.
+    const resume = resumeHanded ? null : stashed;
+    resumeHanded = true;
     try {
       await ensureDashboardMfa();
       appEl.hidden = false;
-      resumeHanded = true;
       onReady(user, resume);
     } catch (e) {
+      readyUid = null;
       if (e.message === ERR_CANCELLED) {
         setStatus("Two-factor authentication is required for every dashboard.");
         await signOut(auth);
