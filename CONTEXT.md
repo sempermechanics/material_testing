@@ -133,6 +133,18 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-09-23)
 
+**Upload stops retrying a session whose files are gone
+(`fix/upload-missing-inputs`).** `DicUploadWorker` returned `Result.retry()`
+forever when report staging came out incomplete, so a session whose `.dat`
+files had been deleted sat on "upload pending" for days (Pixel 6, since
+2026-09-21). `UploadWorkOutcomes.classifyIncompleteStaging` now keeps retrying
+only while the inputs are on disk, the row was saved under 15 min ago, or they
+have been missing for under 10 min (timed by an `upload_inputs_missing_since`
+marker in the session folder and restarted whenever the row is re-saved, so a
+re-run's brief `.dat` gap does not count). Otherwise the worker fails with
+`cloud_backup_failed_missing_files`, which shows on the Home FAILED badge and
+its dialog.
+
 **Video sampling and long snackbars (`fix/video-estimate-snackbar`).** The
 sampling sheet promised one frame more than a fixed-interval extraction
 delivered whenever the segment reached the clip's end: it sampled at the end

@@ -267,7 +267,7 @@ CloudSync.enqueueUpload → DicUploadWorker.doWork
 | Field | Value |
 |---|---|
 | Triggered by | `SessionRepository.saveSession` after a run, the Home badge retry, Settings **Back up now**, and turning **Save to cloud** on |
-| Decisions | `data/UploadWorkOutcomes` — HTTP → retry/fail, resume classification, staging reuse, verified `Session.zip` |
+| Decisions | `data/UploadWorkOutcomes` — HTTP → retry/fail, resume classification, staging reuse, verified `Session.zip`, incomplete staging (`classifyIncompleteStaging`: retry while the reference/`.dat` inputs exist, the row was saved < 15 min ago, or they have been missing < 10 min by the `<sessionDir>/upload_inputs_missing_since` marker; else terminal `inputs_missing`) |
 | Writes | `<sessionDir>/upload_staging/`, sync state + `cloudSessionId` on the index row; `StorageBudget.enforce` runs at the end |
 | Fails as | Terminal: `DicKeys.UPLOAD_FAIL_REASON` in the worker output → Home pill + badge dialog. Retryable: `Result.retry()` with a Timber `Upload RETRY` line |
 | Signals | `data/TransferNotifications` foreground notification; `DicKeys.UPLOAD_PHASE` / `UPLOAD_PERCENT` progress; `SemperAnalytics` cloud_upload_* buckets; the backend's `X-Request-Id` appended by `UploadWorkOutcomes.withRef` |

@@ -161,7 +161,7 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.7c | Watch a row during a restore or download | Same row progress. The bundle phase is deliberately **indeterminate** until the backend reports a percentage |
 | [ ] 3.7d | Let a restore fail terminally while on Home | A message pill names the reason here too, not only in Settings |
 | [ ] 3.8 | Tap a "Pending" sync badge | Upload is retried / queued |
-| [ ] 3.8a | Tap a "Failed" sync badge | A dialog names *why* the last backup failed (device conflict, too large, render ran out of memory) with a **Try again** action — not a silent re-queue |
+| [ ] 3.8a | Tap a "Failed" sync badge | A dialog names *why* the last backup failed (device conflict, too large, render ran out of memory, result files no longer on the device) with a **Try again** action — not a silent re-queue |
 | [ ] 3.8b | Let a background backup fail terminally while on Home | A message pill surfaces the reason once (quota-full is excluded — it has its own screen) |
 | [ ] 3.9 | Tap a badge with cloud backup switched off | Settings opens |
 | [ ] 3.10 | Long-press a row | Selection bar with count, select-all, rename, delete, close |
@@ -833,6 +833,7 @@ carries exports and anything started from those screens.
 |---|---|---|
 | [ ] 10.1 | Finish an analysis with cloud backup on | Upload is queued; the Home badge moves Pending → Synced, with live progress on the row |
 | [ ] 10.2 | Queue an upload with no network | It retries and eventually succeeds once you reconnect |
+| [ ] 10.2a | Queue an upload for an analysis older than 15 min whose `.dat` files were deleted from its session folder | After about 15 minutes of retries the badge turns Failed ("not backed up") and its dialog says the results are no longer on the device — it does not sit on Pending forever |
 | [ ] 10.3 | Restore from Settings and leave the screen | It completes anyway; the analysis appears on Home / in the list |
 | [ ] 10.3a | Cause a terminal upload or restore failure | The reason is surfaced on return (Home message pill / badge dialog, or the same pill in Settings) — not swallowed |
 | [ ] 10.3b | Start a restore, then sit on Home while it runs | That row shows a progress bar and badge throughout — you are not left guessing |
