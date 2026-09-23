@@ -21,6 +21,8 @@ import com.indicvision.semper.data.net.MeResponse
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -396,6 +398,25 @@ class AuthRepository(context: Context) {
 
     fun hasSession(): Boolean = auth.currentUser != null
 
+    /**
+     * True when this device was approved and bound the last time it asked, so
+     * the launch can open Home at once and confirm in the background. The
+     * server still checks access on every call; this only picks the first
+     * screen.
+     */
+    fun canOpenFromCache(): Boolean =
+        auth.currentUser != null &&
+            TokenStore.cachedStatus(appContext) == AccessStatus.APPROVED &&
+            TokenStore.isDeviceRegistered(appContext)
+
+    /**
+     * The cached approval turned out to be wrong: forget it, so the next launch
+     * asks the server before showing Home.
+     */
+    fun forgetCachedApproval() {
+        TokenStore.setStatus(appContext, "")
+    }
+
     // ------------------------------------------------------------------ internal
 
     /** Run a Firebase sign-in, cache identity, then resolve backend access status. */
@@ -564,12 +585,17 @@ class AuthRepository(context: Context) {
     private suspend fun resolveStatus(): Result<String> {
         val token = TokenProvider.usableIdToken() ?: return offlineOrExpired()
         return try {
-            val me = api.me(token) // 200 = APPROVED
+            // /v1/me and /v1/config are independent reads: in parallel they cost
+            // one round-trip instead of two. A failed /me cancels the config call.
+            val (me, config) = coroutineScope {
+                val config = async { runCatching { api.getConfig(token) } }
+                api.me(token) to config.await() // 200 = APPROVED
+            }
             TokenStore.setStatus(appContext, AccessStatus.APPROVED)
             TokenStore.setRole(appContext, me.role ?: "user")
             cacheLegalState(me)
             syncPendingTermsAcceptance(token)
-            runCatching { api.getConfig(token) }
+            config
                 .onSuccess { AppRemoteConfig.apply(appContext, it) }
                 .onFailure {
                     AppRemoteConfig.recordFetchFailure(appContext)
@@ -599,7 +625,7 @@ class AuthRepository(context: Context) {
                 } else {
                     "Session expired. Please sign in again."
                 }
-                Result.failure(Exception(message))
+                Result.failure(AccessLostException(message))
             } else {
                 Result.failure(Exception("Could not verify account (server error ${e.code})."))
             }
@@ -640,12 +666,19 @@ class AuthRepository(context: Context) {
 
     private fun deviceBindingFailure(cause: IOException): Result<String> =
         Result.failure(
-            Exception(
+            AccessLostException(
                 "This device is already linked to another account, or this account to " +
                     "another device. Sign in with that account, or ask an admin to reset the binding.",
                 cause,
             ),
         )
+
+    /**
+     * The server definitively refused this sign-in (401, or the device binding
+     * belongs elsewhere). Distinct from a 5xx or no network, which must not
+     * throw someone already in the app back to the sign-in screen.
+     */
+    class AccessLostException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
     private companion object {
         /** HTTP 401 from the backend: the session token is no longer valid. */

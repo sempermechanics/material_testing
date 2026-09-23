@@ -16,6 +16,8 @@ object LicenseErrors {
                 context.getString(R.string.restore_device_mismatch)
             ApiErrors.hasCode(detail, ApiErrors.FEATURE_NOT_LICENSED) ->
                 context.getString(R.string.restore_not_licensed)
+            ApiErrors.hasCode(detail, ApiErrors.DRIVE_FILE_GONE) ->
+                context.getString(R.string.restore_backup_gone)
             detail.isBlank() -> context.getString(R.string.restore_failed_generic)
             else -> context.getString(R.string.restore_failed_fmt, detail)
         }
@@ -33,6 +35,8 @@ object LicenseErrors {
                 context.getString(R.string.download_not_licensed)
             ApiErrors.hasCode(detail, ApiErrors.LICENSE_DEVICE_MISMATCH) ->
                 context.getString(R.string.restore_device_mismatch)
+            ApiErrors.hasCode(detail, ApiErrors.DRIVE_FILE_GONE) ->
+                context.getString(R.string.restore_backup_gone)
             else -> context.getString(R.string.download_analysis_failed)
         }
     }
