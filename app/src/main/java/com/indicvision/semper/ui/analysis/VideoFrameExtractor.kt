@@ -271,9 +271,8 @@ object VideoFrameExtractor {
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(context, uri)
-            val stepMs = 1000.0 / fpsExtract
-            val span = (endMs - startMs).coerceAtLeast(0L)
-            val count = ((span / stepMs).toInt() + 1).coerceIn(1, maxFrames)
+            val timesUs = VideoKeyframeHelper.uniformTimestampsUs(startMs, endMs, fpsExtract, maxFrames)
+            val count = timesUs.size
 
             val defPaths = mutableListOf<String>()
             var refPng: ByteArray? = null
@@ -281,11 +280,9 @@ object VideoFrameExtractor {
             var refHeight = 0
             var refPreview: Bitmap? = null
 
-            for (i in 0 until count) {
+            for ((i, timeUs) in timesUs.withIndex()) {
                 currentCoroutineContext().ensureActive()
-                val timeMs = startMs + i * stepMs
-                if (timeMs > endMs + stepMs / 2) break
-                val frame = getFrameHybrid(retriever, (timeMs * 1000).toLong()) ?: continue
+                val frame = getFrameHybrid(retriever, timeUs) ?: continue
                 try {
                     currentCoroutineContext().ensureActive()
                     if (i == 0) {

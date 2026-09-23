@@ -107,4 +107,23 @@ class VideoFrameExtractorTest {
         assertEquals(keyframes.first(), plan.timestampsUs.first())
         assertEquals(keyframes.last(), plan.timestampsUs.last())
     }
+
+    @Test
+    fun `a whole clip samples every frame once, the last at its own start`() {
+        // 20 frames at 5 fps start at 0, 200 … 3800 ms; nothing starts at 4000.
+        val last = VideoKeyframeHelper.lastFrameStartMs(durationMs = 4000, fps = 5.0, fpsKnown = true)
+        val timesUs = VideoKeyframeHelper.uniformTimestampsUs(0, last, 5.0, maxFrames = 50)
+
+        assertEquals(3800L, last)
+        assertEquals(20, timesUs.size)
+        assertEquals(3_800_000L, timesUs.last())
+    }
+
+    @Test
+    fun `an NTSC rate rounds to its frame length and an unknown rate stops a millisecond short`() {
+        // 300 frames at 29.97 fps last 10 010 ms; a frame lasts 33.37 ms.
+        assertEquals(9977L, VideoKeyframeHelper.lastFrameStartMs(10_010, 29.97, fpsKnown = true))
+        assertEquals(3999L, VideoKeyframeHelper.lastFrameStartMs(4000, 30.0, fpsKnown = false))
+        assertEquals(0L, VideoKeyframeHelper.lastFrameStartMs(10, 5.0, fpsKnown = true))
+    }
 }

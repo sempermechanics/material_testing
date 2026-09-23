@@ -10,6 +10,7 @@ package com.indicvision.semper.ui.analysis
 import android.media.MediaExtractor
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 /**
  * Pure helper functions for video timestamp calculation, keyframe extraction planning,
@@ -103,7 +104,22 @@ internal object VideoKeyframeHelper {
     }
 
     /**
+     * Start of the clip's last frame in ms — the latest instant a sample can
+     * land on a frame of its own. A clip of duration D holds frames that start
+     * at 0 … D − 1/fps; nothing starts at D. Sampling at D lands past every
+     * frame, so the retriever hands the last frame back twice and the AVI path
+     * drops it as a repeat, and the sheet promised one frame more than either
+     * delivered. Without a known rate, one millisecond short of the end.
+     */
+    fun lastFrameStartMs(durationMs: Long, fps: Double, fpsKnown: Boolean): Long {
+        val frameMs = if (fpsKnown && fps > 0.0) (MILLIS_PER_SECOND / fps).roundToLong() else 1L
+        return (durationMs - frameMs).coerceAtLeast(0L)
+    }
+
+    /**
      * Generates uniform sampling timestamps between [startMs] and [endMs].
+     * The sampling sheet's estimate and every extraction path count these, so
+     * they cannot disagree.
      */
     fun uniformTimestampsUs(
         startMs: Long,

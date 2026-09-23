@@ -882,11 +882,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
             this@StaticAnalysisActivity,
             AppRemoteConfig.maxFrames(this@StaticAnalysisActivity),
         )
+        // The slider reaches the clip's end, where no frame starts; sampling
+        // stops at the last frame's start so the estimate is what extraction
+        // delivers (see VideoKeyframeHelper.lastFrameStartMs).
+        val lastFrameMs = VideoKeyframeHelper.lastFrameStartMs(meta.durationMs, meta.fps, meta.fpsKnown)
+        fun segmentMs(): Pair<Long, Long> =
+            (range.values.first() * 1000).toLong().coerceAtMost(lastFrameMs) to
+                (range.values.last() * 1000).toLong().coerceAtMost(lastFrameMs)
         fun estimate(): Int {
-            val startS = range.values.first()
-            val endS = range.values.last()
-            val segSec = (endS - startS).coerceAtLeast(0f)
-            return (segSec * sliderFps.value + 1f).toInt().coerceIn(1, maxFrames)
+            val (startMs, endMs) = segmentMs()
+            val fps = sliderFps.value.toDouble()
+            return VideoKeyframeHelper.uniformTimestampsUs(startMs, endMs, fps, maxFrames).size
         }
         val btnExtract = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnExtractFrames)
         fun refreshEstimate() {
@@ -928,8 +934,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             sheet.dismiss()
             val preferKeyframes = toggleMode.checkedButtonId == R.id.btnModeKeyframes
             val fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1)
-            val startMs = (range.values.first() * 1000).toLong()
-            val endMs = (range.values.last() * 1000).toLong()
+            val (startMs, endMs) = segmentMs()
             extractVideoFrames(uri, fpsExtract, startMs, endMs, preferKeyframes)
         }
         sheet.show()
