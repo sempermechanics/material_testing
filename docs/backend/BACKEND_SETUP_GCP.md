@@ -96,17 +96,27 @@ shows `expireAt` in state `ACTIVE` (may take a few minutes to apply).
 
 ### A2b. Deploy the composite indexes
 
-`backend/firestore.indexes.json` declares four composite indexes that the
-paginated session listing and the admin pending-user query need. A missing index
-does not fail at deploy time — it fails at runtime with `FAILED_PRECONDITION`, so
-deploy them before the first real client.
+`backend/firestore.indexes.json` declares the one composite index the
+duplicate-session lookup needs (`sessions`: `uid`, `localSessionId`, `status`).
+Every other query the backend and the consoles run is a single-field equality or
+`array-contains`, optionally ordered by `__name__`, and Firestore serves those
+from its automatic single-field indexes — do not add `field + __name__` entries
+to the file; the index API refuses them ("this index is not necessary") and
+aborts the whole deploy. A missing composite does not fail at deploy time — it
+fails at runtime with `FAILED_PRECONDITION`, so deploy before the first real
+client.
+
+The file has no `firebase.json` of its own; point one at it from a scratch
+directory:
 
 ```bash
-firebase deploy --only firestore:indexes --project $PROJECT
+mkdir -p /tmp/fs-indexes && cp backend/firestore.indexes.json /tmp/fs-indexes/   && printf '{"firestore":{"indexes":"firestore.indexes.json"}}
+' > /tmp/fs-indexes/firebase.json   && (cd /tmp/fs-indexes && firebase deploy --only firestore:indexes --project $PROJECT --non-interactive)
 ```
 
-**Check:** `gcloud firestore indexes composite list` shows four indexes in state
-`READY` (building can take a few minutes on a populated database).
+**Check:** `gcloud firestore indexes composite list --project $PROJECT` shows
+that one index in state `READY` (building can take a few minutes on a populated
+database).
 
 ### A3. Create the runtime service account
 ```bash
@@ -227,13 +237,53 @@ Everything above is required (or near enough). These are the rest of what
 
 | Variable | Default | What it does |
 |---|---|---|
-| `MAX_SESSIONS_PER_USER` | `4` | How many analyses a user may keep in the cloud. Overridable per user via `PATCH /v1/admin/users/{uid}/config` |
+| `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. Overridable per user via `PATCH /v1/admin/users/{uid}/config` |
+| `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. A key's own `maxAnalyses`, or a per-user override, takes precedence when tighter |
+| `ADMIN_WEB_MFA_ENABLED` | `1` | Whether browser dashboards may act via MFA at all. `0` restores attestation-only admin — every state change then needs the phone |
+| `ADMIN_WEB_REAUTH_SECONDS` | `900` | How old a console sign-in may be and still authorise an ordinary state change. Sudo mode, not a session length |
+| `ADMIN_WEB_REVOKE_REAUTH_SECONDS` | `120` | Tighter window for whole-licence revoke; the operator page forces password/Google re-auth plus TOTP before that call |
 | `MAX_FILES_PER_SESSION` | `600` | Upper bound on files in one analysis |
 | `MAX_FRAMES_PER_ANALYSIS` | `150` | Deformed-frame ceiling the app enforces |
 | `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |
 | `TASKS_QUEUE` · `TASKS_LOCATION` · `TASKS_TARGET_BASE_URL` · `TASKS_INVOKER_SA` | unset / `asia-south1` / unset / `SERVICE_ACCOUNT_EMAIL` | Async provisioning — see A6. Leave `TASKS_QUEUE` empty to provision inline |
 | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
 | `REQUIRE_ATTESTED_UPLOADS` | off locally / **`1` in production** | Production pilot keeps this at `1`. See the hardening note below |
+| `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup. **Never `enforce` while a build without App Check is still installed** — every request from it would 403 |
+| `LICENSE_GRACE_DAYS_DEFAULT` | `14` | Grace applied at mint time when the request names none. A licence already stored without `graceDays` reads as zero, so changing this never reinstates an expired account |
+| `LICENSE_LEASE_HOURS` · `LICENSE_LEASE_HEARTBEAT_MINUTES` | `8` · `30` | Floating-seat lease length and how often the app renews it. A crashed client parks a seat for at most the lease |
+| `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` | `30` | Wait between self-service device changes on one licence. `0` disables the wait. Staff-initiated changes ignore it |
+| `CONSOLE_ORIGINS` | `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com` | Browser origins the API answers CORS for. The dashboards live on Firebase Hosting, never on the gateway host, so every console call is cross-origin and preflighted; an origin missing here renders a page whose every button silently does nothing. Exact origins, **space-separated** (the deploy action splits its `env_vars` on commas, so a comma-separated value is truncated), no wildcard. The phone sends no `Origin` and is unaffected. The gateway must also carry `allowCors` (step 3 below) or the preflight never reaches Cloud Run |
+
+> **`MAX_SESSIONS_PER_USER` and `PRO_MAX_SESSIONS_PER_USER` are no longer
+> read.** The first was the single cloud cap for every user, defaulting to 4;
+> `mode` now selects between `DEMO_MAX_ANALYSES` and
+> `LICENSED_MAX_SESSIONS_PER_USER` instead (the second is honoured only as a
+> fallback default for the licensed value). An unlicensed user gets
+> `DEMO_MAX_ANALYSES` — six times the old ceiling at the default — so **set that
+> variable deliberately before deploying** rather than inheriting it.
+>
+> [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml) pins
+> `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`, `ADMIN_WEB_MFA_ENABLED`,
+> `APP_CHECK_MODE`, `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` and `CONSOLE_ORIGINS` from repository
+> variables of the same name, with the defaults above when a variable is unset.
+> `deploy-cloudrun` *merges* env into the live revision, so a retired variable
+> stays on the service until removed by hand; the workflow's "Describe live
+> env" step warns when either stale name is still present. Remove them **after**
+> promote (the previous revision keeps its env for rollback):
+>
+> ```bash
+> gcloud run services update indic-api --region $REGION \
+>   --remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER
+> gcloud run services update-traffic indic-api --region $REGION --to-latest
+> ```
+>
+> The `update-traffic` is not optional: the deploy workflow pins 100 % of
+> traffic to the candidate revision by name, so any later `services update`
+> creates a new revision that serves **0 %** until traffic is moved. Check
+> with `gcloud run services describe indic-api --region $REGION
+> --format='value(status.traffic)'`. Every promote also leaves its `cand-*`
+> traffic tag behind; prune them now and then with
+> `--remove-tags` or they accumulate (a dozen by the licensing rollout).
 
 **Production hardening: `REQUIRE_ATTESTED_UPLOADS=1` (live on pilot).**
 `GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While this
@@ -283,7 +333,11 @@ Grab the URL:
 export URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
 echo $URL
 ```
-**Check:** `curl -s $URL/healthz` → `{"ok":true}`.
+**Check:** `curl -s $URL/readyz` → `{"ok":true}`. (`/healthz` on the
+`*.run.app` URL answers a Google-frontend 404 in this project without
+reaching the container — the deploy workflow and the gateway use `/readyz`;
+the route exists and `test_health.py` covers it, but do not use it as the
+smoke check.)
 
 ### B2. Redeploy in **insecure dev mode** to smoke-test Drive + Firestore
 
@@ -437,27 +491,40 @@ GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
 gcloud run services add-iam-policy-binding indic-api --region $REGION \
   --member="serviceAccount:$GW_SA" --role="roles/run.invoker"
 
-# 3. Spec is committed at backend/gateway/openapi.yaml (covers all current
-#    routes) with two placeholders. Substitute BOTH into a generated copy —
+# 3. Create the API first: its managed service name is a placeholder input.
+#    API Gateway is not offered in asia-south1; the gateways live in
+#    asia-northeast1 (GW_REGION) in front of Cloud Run in asia-south1.
+GW_REGION=asia-northeast1
+gcloud api-gateway apis create semper-api
+MANAGED_SERVICE=$(gcloud api-gateway apis describe semper-api \
+  --format='value(managedService)')
+
+#    Spec is committed at backend/gateway/openapi.yaml (covers all current
+#    routes) with three placeholders. Substitute ALL into a generated copy —
 #    the generated file is gitignored because it carries the live hostname.
+#    __MANAGED_SERVICE__ goes into x-google-endpoints / allowCors, which lets
+#    the browser dashboards' CORS preflights through. It must be the managed
+#    service name, not the *.gateway.dev hostname (ESPv2 ignores allowCors on
+#    a mismatch and answers OPTIONS with 405).
 sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g" \
     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g" \
+    -e "s|__MANAGED_SERVICE__|$MANAGED_SERVICE|g" \
   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
 
 # Fail loudly rather than shipping a spec with a placeholder still in it.
-grep -q '__' backend/gateway/openapi.generated.yaml && \
+# Skip comment lines: the header comment of openapi.yaml names the placeholders.
+grep -v '^[[:space:]]*#' backend/gateway/openapi.generated.yaml | grep -qE '__[A-Z_]+__' && \
   echo "unsubstituted placeholder remains" && exit 1
 
-# 4. Create the API, config (with backend-auth SA), and gateway
-gcloud api-gateway apis create indic-api
-gcloud api-gateway api-configs create v1 --api=indic-api \
+# 4. Create the config (with backend-auth SA) and the gateway
+gcloud api-gateway api-configs create v1 --api=semper-api \
   --openapi-spec=backend/gateway/openapi.generated.yaml \
   --backend-auth-service-account=$GW_SA
-gcloud api-gateway gateways create indic-gw --api=indic-api \
-  --api-config=v1 --location=$REGION
+gcloud api-gateway gateways create semper-gw --api=semper-api \
+  --api-config=v1 --location=$GW_REGION
 
 # 5. The public gateway URL → this is what the app talks to (C1)
-gcloud api-gateway gateways describe indic-gw --location $REGION \
+gcloud api-gateway gateways describe semper-gw --location $GW_REGION \
   --format='value(defaultHostname)'
 ```
 Leave Cloud Run **ingress at its default** (`all`) — the gateway calls the
@@ -465,11 +532,60 @@ Leave Cloud Run **ingress at its default** (`all`) — the gateway calls the
 the gateway gets through. In **C1**, set `INDIC_API_BASE_URL` to
 `https://<gateway defaultHostname>` (not the `run.app` URL).
 
+#### Redeploying the gateway after a route change
+
+CI never touches the gateway (a deploy job is tracked as TD-27 in
+[TECH_DEBT.md](../ops/TECH_DEBT.md)); `test_gateway_parity.py` only proves the
+committed spec matches the routers. Whenever `backend/gateway/openapi.yaml`
+changes — the licensing rollout added `/v1/licenses/*`, `/v1/me/terms`,
+`/v1/admin/licenses/*` and more — the live gateway must be moved to a new config
+by hand, **after** the Cloud Run revision that serves the new routes is promoted
+(a config that names a route the backend does not yet serve would 5xx, and the
+gateway 404s any route the config does not name).
+
+API configs are immutable: create a new one and point the gateway at it.
+
+```bash
+PROJECT=indicvision-dic-app REGION=asia-south1
+RUN_URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
+GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
+
+# Same substitution + placeholder guard as step 3 above.
+GW_REGION=asia-northeast1
+MANAGED_SERVICE=$(gcloud api-gateway apis describe semper-api --format='value(managedService)')
+sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g"     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g"     -e "s|__MANAGED_SERVICE__|$MANAGED_SERVICE|g"   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
+grep -v '^[[:space:]]*#' backend/gateway/openapi.generated.yaml | grep -qE '__[A-Z_]+__' &&   echo "unsubstituted placeholder remains" && exit 1
+
+# Remember the config currently live — this is the rollback target.
+PREV_CFG=$(gcloud api-gateway gateways describe semper-gw --location $GW_REGION   --format='value(apiConfig)' | sed 's|.*/||')
+echo "rollback: $PREV_CFG"
+
+# New config, named by date; then switch the gateway (takes a few minutes).
+NEW_CFG=v$(date +%Y%m%d)
+gcloud api-gateway api-configs create $NEW_CFG --api=semper-api   --openapi-spec=backend/gateway/openapi.generated.yaml   --backend-auth-service-account=$GW_SA
+gcloud api-gateway gateways update semper-gw --api=semper-api   --api-config=$NEW_CFG --location=$GW_REGION
+gcloud api-gateway gateways describe semper-gw --location $GW_REGION   --format='value(apiConfig,state)'
+```
+
+Verify from outside: an unauthenticated `GET https://<gateway>/v1/config` must
+answer **401** (route known, token missing), not 404 (route missing from the
+config). Then the dashboards' preflight:
+`curl -si -X OPTIONS https://<gateway>/v1/me -H 'Origin: https://app.sempermechanics.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization'`
+must answer **200** with `access-control-allow-origin: https://app.sempermechanics.com`
+— a 401/403/405 here means the config lacks `x-google-endpoints … allowCors` or
+names the wrong service (it must be the API's managed service name, not the
+`*.gateway.dev` host), and
+a 200 without the header means the Cloud Run revision lacks that origin in
+`CONSOLE_ORIGINS`. Roll back with
+`gcloud api-gateway gateways update semper-gw --api=semper-api --api-config=$PREV_CFG --location=$GW_REGION`;
+old configs stay listed under `api-configs list --api=semper-api` and can be
+deleted once nothing points at them.
+
 ### C1. Point the app at the backend
 
 In `local.properties`:
 ```properties
-INDIC_API_BASE_URL=https://indic-gw-xxxx.an.gateway.dev
+INDIC_API_BASE_URL=https://semper-gw-xxxx.an.gateway.dev
 ```
 Blank `INDIC_API_BASE_URL` = offline-only (cloud disabled). Rebuild after editing.
 
@@ -505,7 +621,8 @@ gcloud run services update indic-api --region asia-south1 \
   an admin approves them individually.
 - `AUTO_APPROVE` (blanket approve-everyone) **removed**.
 
-Designate admins with `ADMIN_EMAILS` (comma-separated) — they're always
+Designate admins with `ADMIN_EMAILS` (space-separated; `,` and `;` also
+parse) — they're always
 approved and can call the admin API:
 ```bash
 gcloud run services update indic-api --region asia-south1 \

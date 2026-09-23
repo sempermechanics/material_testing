@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- This page is also served at a rewritten address (see firebase.json), where the browser's own base would be the site root and every relative path here — the stylesheet, auth.js, the links onward — would resolve one directory too high. Naming the base makes both addresses behave identically. -->
+  <base href="/console/account/" />
+  <title>Your account · Semper DIC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&amp;family=Plus+Jakarta+Sans:wght@600;700;800&amp;display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/webp" href="../semper-icon.webp" />
+  <link rel="stylesheet" href="../console.css" />
+</head>
+<body>
+  <header>
+    <a class="brand" href="https://sempermechanics.com/"><img src="../semper-mark.webp" alt="" width="28" height="28" />semper</a>
+    <h1>Your account</h1>
+    <span class="spacer"></span>
+    <span id="who" class="muted"></span>
+    <span id="mfaPill" class="pill" hidden></span>
+    <button id="signIn">Sign in with Google</button>
+    <button id="signOut" class="secondary" hidden>Sign out</button>
+  </header>
+
+  <main>
+    <!-- Outside #app: enrolment, step-up and sign-in errors report here while
+         the dashboard is still hidden. -->
+    <p id="status" class="muted"></p>
+    <div id="app" hidden>
+      <!-- ---------------------------------------------------- licence -->
+      <section class="card">
+        <h2>Licence</h2>
+        <div id="pills"></div>
+        <p class="muted" id="explain"></p>
+        <p class="muted" id="quota"></p>
+        <div class="row">
+          <button id="release" class="secondary" hidden>Give up my seat</button>
+          <button id="unbind" class="secondary" hidden>Use Semper on a different device</button>
+        </div>
+      </section>
+
+      <!-- Only while no second factor is enrolled. Downloading an analysis
+           and moving to a new device both need one, and both are refused by
+           the backend without it, so say so before the button is pressed
+           rather than after. -->
+      <section class="card enrol" id="enrolCard" hidden>
+        <h2>Set up two-factor authentication</h2>
+        <div class="note">
+          Downloading an analysis, and moving your licence to a new device,
+          both hand something out that a stolen password should not reach. The
+          app proves itself with the device it is installed on; a browser
+          cannot, so it proves itself with a second factor instead.
+        </div>
+        <div class="row">
+          <button id="enrolStart">Enrol an authenticator app</button>
+        </div>
+        <div id="enrolStep" hidden>
+          <p class="muted">
+            Scan this with Google Authenticator, Microsoft Authenticator,
+            Authy, 1Password or any authenticator app, then type the 6-digit
+            code it shows.
+          </p>
+          <!-- Drawn in the page by qr.js, never fetched; see ../README.md. -->
+          <div class="qr" id="enrolQr"></div>
+          <details>
+            <summary>Can't scan? Enter the key by hand</summary>
+            <p class="mono key" id="enrolSecret"></p>
+            <p class="muted">Account: <span id="enrolAccount" class="mono"></span> · Issuer: Semper DIC · Time-based, 6 digits, 30 seconds</p>
+          </details>
+          <div class="row">
+            <input id="enrolCode" inputmode="numeric" autocomplete="one-time-code"
+                   placeholder="6-digit code" size="12" />
+            <button id="enrolFinish">Confirm</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- --------------------------------------------------- analyses -->
+      <section class="card">
+        <h2>Saved analyses</h2>
+        <p class="muted">
+          Everything this account has backed up. A download is the whole
+          analysis as one zip — images, results and reports together — which
+          the app can import again on any device you are signed in on.
+        </p>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Analysis</th><th>State</th><th>Files</th><th>Size</th>
+                <th class="actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="row">
+          <button id="more" class="secondary" hidden>Show more</button>
+        </div>
+      </section>
+    </div>
+
+    <p id="signedOut" class="muted">Sign in to see your licence and your saved analyses.</p>
+  </main>
+  <footer>
+    <span>&copy; <span id="year"></span> sempermechanics</span>
+    <nav>
+      <a href="https://sempermechanics.com/">sempermechanics.com</a>
+      <a href="https://sempermechanics.com/support/">Support</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="/terms/">Terms</a>
+    </nav>
+  </footer>
+  <script type="module" src="../chrome.js"></script>
+
+  <script type="module" src="account.js"></script>
+</body>
+</html>

@@ -7,8 +7,6 @@ Baselines stay empty: `app/lint-baseline.xml` and `app/detekt-baseline.xml`.
 
 - `OldTargetApi` — disabled in `app/build.gradle.kts` lint config until a
   deliberate `targetSdk` 36→37 bump PR. Do not re-enable casually.
-- Capture `screenOrientation="portrait"` keeps `tools:ignore` for
-  `LockedOrientationActivity` / `DiscouragedApi` (camera UX).
 
 Inherent size/complexity in a few UI orchestration files uses targeted
 `@file:Suppress` — prefer extracting over widening those lists.
@@ -36,20 +34,46 @@ Priority = (Impact + Risk) × (6 − Effort).
 
 | ID | Category | Item | I | R | E | P | Status |
 |----|----------|------|---|---|---|---|--------|
-| TD-3 | Architecture | `ViewerSession` extras bag (FI-1) | 4 | 4 | 5 | **8** | Deferred |
-| TD-4 | Code | Capture orchestrators ~1k lines | 3 | 2 | 4 | **10** | Deferred — audited 2026-08-31, no repro |
-| TD-5 | Test | No capture instrumented/E2E | 3 | 3 | 4 | **12** | Deferred — no `androidTest` capture fixtures in CI |
-| TD-18 | Efficiency | `GrayPngEncoder` full-buffer + `toByteArray()` on hot path | 3 | 2 | 4 | **9** | Deferred |
-| TD-20 | Reuse | `LockedCameraSession` duplicate `captureStill` / `captureLuma` bodies | 2 | 2 | 4 | **8** | Deferred — audited 2026-08-31, no repro |
-| TD-21 | Efficiency | ImageReader listener re-registered every capture | 2 | 2 | 3 | **8** | Deferred — audited 2026-08-31, no repro |
+| TD-3 | Architecture | `ViewerSession` extras bag (FI-1) — **write half done**: `ViewerArgs` is the one packer and `ViewerArgsTest` pins both entry points' key sets. What is left is the unpack half, across four readers | 3 | 2 | 4 | **10** | Deferred — a parsed-object read side has to keep working for an Intent already in the back stack across an update |
+| TD-22 | Test | Consoles have no behavioural test — `check_console.py` reads their structure, nothing exercises a sign-in, a step-up or a revoke | 3 | 3 | 4 | **12** | Deferred — same Firebase Auth fixture blocker as auth-gated UI E2E |
+| TD-24 | Architecture | No `@MainThread` on UI entry points, so `SessionStore`'s `@WorkerThread` contract is documentation rather than a gate — lint's `WrongThread` fires only when the *calling* method is annotated | 2 | 2 | 3 | **12** | Deferred — annotating ~27 Activities needs a lint run to land against an empty baseline |
+| TD-25 | Test | `AuthRepository` cannot be unit-tested against a fake backend: `IndicApi` is final with a private constructor, so a defaulted constructor parameter would be a seam that admits only the real client | 2 | 2 | 2 | **16** | Deferred — needs an interface extracted from `IndicApi` and threaded through every worker and repository; that is the DI proposal CONTRIBUTING defers to its own PR |
+| TD-26 | Architecture | Wizard/viewer UI state lives on the Activity as fields rather than hoisted into `AnalysisViewModel` as `StateFlow`, so a rotation reconstructs it from intent extras and `onSaveInstanceState` | 3 | 2 | 5 | **5** | Deferred — a 1.8k-line native-solve screen with bit-exact `.dat` oracles; the run itself is on `viewModelScope`, which is the part that was losing work |
+| TD-27 | Ops | The API Gateway is never deployed by CI: `test_gateway_parity.py` proves `gateway/openapi.yaml` matches the routers, but moving the live gateway to a new config is a by-hand `api-configs create` + `gateways update` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) "Redeploying the gateway"). A route can be merged, tested and deployed to Cloud Run while the gateway still 404s it | 3 | 3 | 3 | **18** | Deferred — a workflow job needs `apigateway.*` on the WIF principal and an ordering guarantee against the Cloud Run promote; the runbook covers the licensing rollout |
+| TD-28 | Backend | A per-user `maxSessions` override (`PATCH /v1/admin/users/{uid}/config`) is ignored while the account is demo: `resolve_user_config` takes `DEMO_MAX_ANALYSES` for every unlicensed user, so an operator cannot lift one demo account's cap | 2 | 2 | 2 | **16** | Deferred — decide whether the override should win in demo or whether "lift the cap" means "attach a licence"; today the docs say the latter |
+| TD-29 | App | Two auth continue hosts: `app.sempermechanics.com/auth/*` (current `AUTH_HOST`) and `indicvision-dic-app-auth.firebaseapp.com/*` (`LEGACY_AUTH_HOST`). The manifest carries four App Link filters, `AUTH_HOSTS` accepts both, the Hosting site rewrites both path shapes, and the Firebase Console password-reset action URL still names the legacy host because pre-`/auth` builds intercept only it | 1 | 2 | 2 | **8** | Deferred until no build declaring only the legacy host is installed (Play vitals). Then: action URL → `https://app.sempermechanics.com/auth/finishReset`, drop the two legacy filters and `LEGACY_AUTH_HOST`, drop the bare rewrites in `firebase.json` |
+| TD-30 | Ops | The API Gateway (`semper-gw`, asia-northeast1) sits in a different region from Cloud Run (`indic-api`, asia-south1) because API Gateway is not offered in asia-south1: every request takes a Tokyo→Mumbai hop, and the legacy `indic-gw` / `indic-api` pair from the first deploy is still provisioned | 2 | 1 | 3 | **9** | Deferred — a regional external HTTPS load balancer with a serverless NEG in asia-south1 would replace the gateway (JWT check moves to Cloud Run / IAP); measure the hop first. Delete the legacy pair as soon as nothing resolves its host |
+| TD-32 | Ops | `deploy-backend.yml` promotes by pinning traffic to the candidate revision **by name** and never removes the `cand-*` tag, so tags accumulate (11 on staging, 8 on production at the licensing rollout) and any post-deploy `gcloud run services update` creates a 0 % revision that needs a manual `update-traffic` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) "Environment variables") | 2 | 2 | 2 | **16** | Open — promote with `--to-latest` after the candidate passes `/readyz`, and `--remove-tags cand-<sha>` in the same step |
+| TD-33 | Backend | A contended invite claim that starves out completely leaves the account on the Demo key it then mints, and `claim_pending_invite` returns early for anyone already holding a licence — so the invite stays pending until ops mints for the address again (which attaches directly) | 2 | 1 | 3 | **9** | Open — either re-check invites for an account whose only licence is a `createdByUid: system` Demo key, or have the Demo mint skip an address that still has an invite. It needs every request in one burst to exhaust the client's five ABORTED retries: seen against the emulator (#133), never in production |
+| TD-34 | Console | The operator desk still carries the pre-#129 enrolment card (`enrolCard`, `enrolSecret`, and its two handlers): `requireSignIn` → `ensureDashboardMfa` enrols in-page with a QR before any desk code runs, so `hasSecondFactor(user)` is always true by the time `renderFactorState` reads it and the card never shows | 1 | 1 | 2 | **2** | Open — delete the card from `operator/index.html` and `operator.js`; keep `renderFactorState` only for displaying which factor is enrolled |
+
+### Closed as obsolete, 2026-09-14
+
+TD-4, TD-5, TD-18, TD-20 and TD-21 all described the in-app camera: the
+capture orchestrators, their missing instrumented tier, `GrayPngEncoder`,
+`LockedCameraSession`'s duplicated bodies, and the per-capture `ImageReader`
+re-registration. `449c9da` removed the feature, so `ui/capture/` is gone from
+both this branch and `main` and none of those symbols resolves anywhere in
+`app/src`. They are struck rather than carried as permanently deferred — a
+register row that cannot be worked is noise. TD-23 is closed by work, not by
+deletion: the revoke now stamps a check-in checkpoint the `lastSeenAt` throttle
+honours.
+
+**TD-31 is closed by #133.** The flaky emulator invite race was not asserting a
+real guarantee: a round the emulator starves grants nothing, and with no grant
+there is no grant for a loser to stamp a Demo key over. `_race_entitlement`
+re-races such a round instead of failing on it — 32 consecutive runs, the retry
+path firing in four of them. What that starvation costs an account outlives the
+test and is now TD-33.
 
 ## External / deferred (not blocked on code alone)
 
 | Item | Why deferred |
 |------|----------------|
 | Auth-gated UI E2E | Needs Firebase secrets / fixtures in CI |
-| `ViewerSession` extras bag | `DicKeys` packed in two places (`SessionOpenHelper.intentFor`, `AnalysisNavHelper.openResults`); grill before deepening |
+| `ViewerSession` unpack half | `DicKeys` is now packed in one place (`ViewerArgs`); the four readers still parse the bundle themselves |
 | firebase-admin / hashed lock | Lock is regenerated from txt on each bump (`pip-compile --generate-hashes` on Python 3.12). Direct-dep versions in the lock must match `requirements.txt`. |
+| Identity Platform upgrade | The consoles' second factor is Firebase MFA (TOTP), which needs the project upgraded to Identity Platform — a project-wide Auth change shared with the mobile app, and a change to the Auth pricing model. Until it is done the consoles sign in and every write fails `mfa_required`. |
 
 ## Perf / quality gates (do not loosen)
 

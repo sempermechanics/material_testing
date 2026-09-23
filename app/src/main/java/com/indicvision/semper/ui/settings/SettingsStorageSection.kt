@@ -5,12 +5,14 @@ package com.indicvision.semper.ui.settings
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.StorageBudget
 import kotlinx.coroutines.Dispatchers
@@ -25,8 +27,23 @@ class SettingsStorageSection(
     private val activity: SettingsActivity,
 ) {
     fun wire() {
-        activity.findViewById<View>(R.id.btnStorageFreeUp).setOnClickListener { confirmFreeUpSpace() }
         activity.findViewById<View>(R.id.btnStorageClearCache).setOnClickListener { clearTemporaryFiles() }
+        // Free-up and the auto-free budget evict local copies the cloud can
+        // give back — the licensed half of cloud. A demo account has no
+        // restore, so neither control exists for it (StorageBudget itself
+        // also refuses, so a stale budget pref cannot drop anything).
+        if (!LicenseEntitlements.cloudBackupEnabled(activity)) {
+            listOf(
+                R.id.tvStorageFreeUpSub,
+                R.id.btnStorageFreeUp,
+                R.id.rowAutoFreeHeader,
+                R.id.tvAutoFreeValue,
+                R.id.sliderAutoFree,
+            ).forEach { activity.findViewById<View>(it).isVisible = false }
+            refreshStorageTotals()
+            return
+        }
+        activity.findViewById<View>(R.id.btnStorageFreeUp).setOnClickListener { confirmFreeUpSpace() }
         activity.findViewById<ImageButton>(R.id.btnAutoFreeInfo).setOnClickListener {
             MaterialAlertDialogBuilder(activity)
                 .setTitle(R.string.storage_auto_free)

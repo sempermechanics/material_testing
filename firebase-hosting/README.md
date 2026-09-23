@@ -1,13 +1,16 @@
 # Firebase Hosting — auth domain (`indicvision-dic-app-auth`)
 
-This site serves two things on `https://indicvision-dic-app-auth.firebaseapp.com`
-that the passwordless **email-link sign-in** depends on:
+This site answers on **`https://app.sempermechanics.com`** (custom domain) and
+on its own `https://indicvision-dic-app-auth.firebaseapp.com`. It serves the
+dashboards ([`public/console/`](public/console/README.md)), the legal pages,
+and two things the passwordless **email-link sign-in** depends on:
 
 | Path | Purpose |
 |---|---|
 | `/.well-known/assetlinks.json` | Digital Asset Links — lets Android verify the App Link and route the sign-in link to the app instead of a browser. |
-| `/finishSignIn` | The email link's continue URL (`EMAIL_LINK_CONTINUE_URL` in [`AuthRepository.kt`](../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt)). On-device the app's App Link intercepts it; in a plain browser it shows a "finish on your phone" page. |
-| `/finishReset` | Password-reset continue URL (`RESET_CONTINUE_URL`). App Link opens the in-app reset screen; browser falls through to Firebase's `/__/auth/action` handler. Set this as the **custom action URL** in Firebase Console → Authentication → Templates → Password reset. |
+| `/auth/finishSignIn` | The email link's continue URL (`EMAIL_LINK_CONTINUE_URL` in [`AuthRepository.kt`](../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt)) on `app.sempermechanics.com`. On-device the app's App Link intercepts it; in a plain browser it shows a "finish on your phone" page. |
+| `/auth/finishReset` | Password-reset continue URL (`RESET_CONTINUE_URL`) on `app.sempermechanics.com`. App Link opens the in-app reset screen; browser falls through to Firebase's `/__/auth/action` handler. |
+| `/finishSignIn`, `/finishReset` | The same two pages at the paths every build before `AUTH_HOST = app.sempermechanics.com` uses, on the `firebaseapp.com` host. The **custom action URL** in Firebase Console → Authentication → Templates → Password reset stays `https://indicvision-dic-app-auth.firebaseapp.com/finishReset` until no such build is installed (TD-29): those builds intercept only that host. |
 | `/privacy/` | Public Privacy Policy summary (canonical markdown in `docs/legal/PRIVACY_POLICY.md`). |
 | `/terms/` | Public Terms of Service summary (canonical markdown in `docs/legal/TERMS_OF_SERVICE.md`). |
 
@@ -84,7 +87,8 @@ firebase deploy --only hosting
 ## Verify the App Link
 
 ```bash
-# Confirm the file is live and served as JSON
+# Confirm the file is live and served as JSON on both hosts
+curl -s https://app.sempermechanics.com/.well-known/assetlinks.json
 curl -s https://indicvision-dic-app-auth.firebaseapp.com/.well-known/assetlinks.json
 
 # On a connected device/emulator (Android 12+):

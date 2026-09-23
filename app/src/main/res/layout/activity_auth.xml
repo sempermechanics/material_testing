@@ -89,6 +89,7 @@
 
         <!-- Credentials card -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardCredentials"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
@@ -217,6 +218,51 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Second-factor challenge after password/Google. Hidden until Firebase
+             reports the account has an authenticator enrolled. -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardTotp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="4dp">
+
+                <TextView
+                    android:id="@+id/tvTotpHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:paddingHorizontal="4dp"
+                    android:text="@string/auth_totp_body"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutTotp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/auth_totp_hint"
+                    app:boxStrokeColor="@color/sky_primary"
+                    app:hintTextColor="@color/sky_primary">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etTotp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:importantForAutofill="no"
+                        android:inputType="number"
+                        android:maxLength="8"
+                        android:textColor="@color/text_primary" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -240,6 +286,16 @@
                 android:indeterminateTint="@color/text_on_primary"
                 android:visibility="gone" />
         </FrameLayout>
+
+        <TextView
+            android:id="@+id/tvRegisterTermsHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/terms_register_hint"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:visibility="gone" />
 
 
 

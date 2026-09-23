@@ -44,3 +44,53 @@ def test_auto_approve_hd_is_lowercased(monkeypatch):
     monkeypatch.setenv("AUTO_APPROVE_HD", "Corp.COM")
     reloaded = importlib.reload(config_module)
     assert reloaded.settings.AUTO_APPROVE_HD == "corp.com"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "https://a.example https://b.example",
+        "https://a.example,https://b.example",
+        "https://a.example; https://b.example/",
+        "  https://a.example\nhttps://b.example  ",
+    ],
+)
+def test_console_origins_accept_any_delimiter(monkeypatch, raw):
+    # The deploy action splits env_vars on commas, so the value is shipped
+    # space-separated; commas and semicolons still parse for hand-set envs.
+    monkeypatch.setenv("CONSOLE_ORIGINS", raw)
+    reloaded = importlib.reload(config_module)
+    assert reloaded.settings.CONSOLE_ORIGINS == ["https://a.example", "https://b.example"]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "ops@corp.com staff@corp.com",
+        "ops@corp.com,staff@corp.com",
+        "ops@corp.com; staff@corp.com",
+        "  Ops@Corp.com\nstaff@corp.com  ",
+    ],
+)
+def test_admin_emails_accept_any_delimiter(monkeypatch, raw):
+    # Same reason as CONSOLE_ORIGINS: shipped space-separated because the
+    # deploy action splits env_vars on commas, and a truncated operator list
+    # locks the second operator out of the desk.
+    monkeypatch.setenv("ADMIN_EMAILS", raw)
+    reloaded = importlib.reload(config_module)
+    assert reloaded.settings.ADMIN_EMAILS == {"ops@corp.com", "staff@corp.com"}
+
+
+def test_admin_emails_default_to_nobody(monkeypatch):
+    monkeypatch.delenv("ADMIN_EMAILS", raising=False)
+    reloaded = importlib.reload(config_module)
+    assert reloaded.settings.ADMIN_EMAILS == set()
+
+
+def test_console_origins_default_lists_both_hosts(monkeypatch):
+    monkeypatch.delenv("CONSOLE_ORIGINS", raising=False)
+    reloaded = importlib.reload(config_module)
+    assert reloaded.settings.CONSOLE_ORIGINS == [
+        "https://app.sempermechanics.com",
+        "https://indicvision-dic-app-auth.firebaseapp.com",
+    ]

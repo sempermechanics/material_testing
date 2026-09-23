@@ -4,12 +4,23 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import errors
 from . import observability as obs
 from .config import settings
-from .routers import account, admin, devices, files, health, provision_tasks, sessions
+from .routers import (
+    account,
+    admin,
+    devices,
+    files,
+    health,
+    institutions,
+    licenses,
+    provision_tasks,
+    sessions,
+)
 from .routers.account import json_dumps  # noqa: F401
 from .routers.files import _is_first_byte_request, download_file  # noqa: F401
 from .routers.health import _client_key  # noqa: F401
@@ -55,6 +66,14 @@ def _startup_checks():
             "legacy callers. Temporary migration window — set it to 1 once the "
             "fleet has moved. ==="
         )
+    if settings.APP_CHECK_MODE not in ("off", "monitor", "enforce"):
+        # A misspelt mode must not read as "off". Silently ignoring it would
+        # leave an operator believing enforcement is on when nothing is checked,
+        # which is the one failure this setting cannot afford.
+        raise RuntimeError(
+            f"APP_CHECK_MODE={settings.APP_CHECK_MODE!r} is not one of "
+            "off / monitor / enforce."
+        )
 
 
 @asynccontextmanager
@@ -75,6 +94,20 @@ app = FastAPI(
     docs_url="/docs" if _docs_enabled else None,
     redoc_url="/redoc" if _docs_enabled else None,
     openapi_url="/openapi.json" if _docs_enabled else None,
+)
+
+
+# Browser dashboards only. Bearer tokens, no cookies, so no credentials mode;
+# the phone sends no Origin and never hits this. add_middleware stacks
+# outward, so the decorators below wrap this one: a preflight answered here
+# still passes through security_headers and access_log on the way out.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CONSOLE_ORIGINS,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+    allow_credentials=False,
+    max_age=600,
 )
 
 
@@ -171,10 +204,12 @@ async def dependency_error_handler(request: Request, exc: obs.DependencyError):
 app.include_router(health.router)
 app.include_router(account.router)
 app.include_router(devices.router)
+app.include_router(licenses.router)
 app.include_router(sessions.router)
 app.include_router(files.router)
 app.include_router(provision_tasks.router)
 app.include_router(admin.router)
+app.include_router(institutions.router)
 
 # Re-exports so existing tests keep `from app.main import …`.
 __all__ = [

@@ -5,6 +5,8 @@
     <!-- Digital Asset Links for Credential Manager. Not user-facing. -->
     <string name="asset_statements" translatable="false">
         [{
+        \"include\": \"https://app.sempermechanics.com/.well-known/assetlinks.json\"
+        }, {
         \"include\": \"https://indicvision-dic-app-auth.firebaseapp.com/.well-known/assetlinks.json\"
         }]
     </string>
@@ -309,6 +311,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="setting_wifi_only_sub">Wait for unmetered Wi‑Fi before uploading</string>
     <string name="account_section">Account</string>
     <string name="account_device_id_fmt">Device ID · %1$s</string>
+    <!-- The key prefix, never the key. It is what support asks for on the
+         phone, so it has to be readable somewhere in the app. -->
+    <string name="account_license_prefix_fmt">Licensed as %1$s</string>
     <string name="cloud_section">Cloud backup</string>
     <string name="analyses_data_management">Analyses data management</string>
     <string name="analyses_data_empty">No analyses on this phone or in the cloud yet.</string>
@@ -374,6 +379,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_api_off">Cloud backup is not configured on this build.</string>
     <string name="restore_failed_fmt">Restore failed. %1$s</string>
     <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
+    <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the device to bind, then try restore again — or move the licence from the Semper account page first.</string>
+    <string name="restore_not_licensed">Restore isn\'t available in demo mode.</string>
+    <string name="download_not_licensed">Downloading from the cloud isn\'t available in demo mode.</string>
+    <string name="share_licensed_only">Sharing exports needs an active licence.</string>
     <string name="sync_status_up_to_date">Cloud backups up to date</string>
     <string name="home_empty_restore">Restore from cloud</string>
     <string name="home_empty_start">Start analysis</string>
@@ -390,6 +399,26 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Public legal pages on the product site. -->
     <string name="legal_privacy_url" translatable="false">https://sempermechanics.com/privacy/</string>
     <string name="legal_terms_url" translatable="false">https://sempermechanics.com/terms/</string>
+
+    <!-- Clickwrap gate (TermsActivity) and the separate improvement consent -->
+    <string name="terms_title">Before you continue</string>
+    <string name="terms_version_fmt">Terms version %1$s</string>
+    <string name="terms_summary">Semper is a professional tool for digital image correlation. To use an account you need to agree to the Terms of Service and the Privacy Policy. In short: the app and engine stay our property and must not be reverse-engineered or shared; you are responsible for validating your own results; the service is provided as is; and Indian law applies, with disputes resolved in Chennai.</string>
+    <string name="terms_read_full_terms">Read the Terms</string>
+    <string name="terms_read_privacy">Privacy Policy</string>
+    <string name="terms_checkbox_agree">I have read and agree to the Terms of Service and the Privacy Policy</string>
+    <string name="terms_checkbox_improve">Use data to improve Semper</string>
+    <string name="terms_checkbox_improve_hint">Optional. Lets us use images, results and reports you sync to test and tune the engine. Untick to opt out; you can change this any time in Settings \u2192 Your data.</string>
+    <string name="terms_action_agree">Agree and continue</string>
+    <string name="terms_action_decline">Decline</string>
+    <string name="terms_error_update_app">This version of the app is out of date. Please update Semper to accept the current Terms.</string>
+    <string name="terms_error_generic">Could not record your acceptance. Please try again.</string>
+    <string name="terms_register_hint">You\u2019ll be asked to accept the Terms next.</string>
+    <string name="settings_improve_title">Use my data to improve Semper</string>
+    <string name="settings_improve_summary">Optional. Synced images, results and reports may be used to test and tune the engine. Withdrawing stops future use and removes your data from improvement datasets within 30 days.</string>
+    <string name="settings_terms_accepted_fmt">Terms accepted: version %1$s</string>
+    <string name="settings_terms_not_accepted">Terms not yet accepted on this device</string>
+    <string name="settings_view_terms">View Terms</string>
     
     <string name="advanced_parameters">Advanced parameters</string>
     
@@ -626,6 +655,19 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="stat_empty">--</string>
     <string name="viewer_stats_fmt">max %1$s at (%2$d, %3$d)\nmin %4$s at (%5$d, %6$d)\nmean %7$s %8$s</string>
     <string name="viewer_stats_plain_fmt">max %1$s · min %2$s · mean %3$s %4$s</string>
+    <!-- Summary colour bar is a whole-sequence scale; the ⓘ sheet must quote
+         those same ends, not the hidden first frame's extrema. -->
+    <string name="viewer_stats_sequence_fmt">max %1$s · min %2$s %3$s</string>
+    <string name="viewer_histogram_title_fmt">%1$s distribution</string>
+    <plurals name="viewer_histogram_bin_fmt">
+        <item quantity="one">%1$d point · %2$s–%3$s %4$s</item>
+        <item quantity="other">%1$d points · %2$s–%3$s %4$s</item>
+    </plurals>
+    <string name="viewer_histogram_desc">Distribution of accepted field values</string>
+    <plurals name="viewer_histogram_desc_fmt">
+        <item quantity="one">Distribution of %1$d accepted point</item>
+        <item quantity="other">Distribution of %1$d accepted points</item>
+    </plurals>
     <string name="probe_reading_fmt">%1$s: %2$s %3$s\n(%4$d, %5$d)</string>
     <string name="probe_no_data">No data</string>
     
@@ -726,6 +768,30 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="limit_subject">Semper — request higher analysis limit</string>
     <string name="limit_still_full">Still at the limit. Delete an analysis or email support@sempermechanics.com.</string>
     <string name="limit_cleared">You\'re under the limit again.</string>
+
+    <!-- Floating-seat gate. Not a paywall and not a block on the app: the
+         account is eligible and everything already saved stays open. Only
+         starting new work waits for a colleague to finish. -->
+    <string name="seat_title">All seats are in use</string>
+    <string name="seat_body">Your institution\'s licence has a set number of seats, and they\'re all taken right now. Your saved analyses are still here — only starting a new one has to wait.\n\nSeats free up as colleagues finish, so try again in a moment.</string>
+    <string name="seat_take">Try for a seat</string>
+    <string name="seat_back">Back to my analyses</string>
+    <string name="seat_taken">You\'ve got a seat.</string>
+    <string name="seat_still_full">Still no free seat. Try again shortly.</string>
+    <string name="seat_error">Couldn\'t check for a seat. Check your connection and try again.</string>
+    <string name="seat_offline">You\'re offline — connect to take a seat.</string>
+
+    <!-- Shown only after the client has already retried: a limit that is still
+         refusing is a server-side throttle, not the user's connection. -->
+    <string name="error_rate_limited">The server is busy right now. Wait a moment and try again.</string>
+    <!-- App Check refused the build, not the account. Nothing the user can fix
+         except installing the real thing, so say only that. -->
+    <string name="error_app_check_required">This copy of Semper could not be verified. Reinstall it from the Play Store.</string>
+
+    <!-- License expiry notice on Home. Advisory only — nothing is withdrawn
+         while the renewal is outstanding. -->
+    <string name="license_expiring_today">License expires today — email %1$s to renew</string>
+    <string name="license_grace">License expired — still working, email %1$s to renew</string>
     <string name="request_access_none">No email app found. Please email %1$s to request access.</string>
     <string name="dot_separator">" · "</string>
     <string name="error_email_invalid">That does not look like an email address</string>
@@ -750,6 +816,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="auth_google_failed">Google sign-in failed.</string>
     <string name="auth_sign_in_failed">Sign-in failed.</string>
     <string name="auth_verify_first">Check your email for the verification link.</string>
+    <string name="auth_totp_body">Enter the 6-digit code from your authenticator app. There is no text-message option.</string>
+    <string name="auth_totp_hint">Authenticator code</string>
+    <string name="auth_totp_verify">Verify</string>
+    <string name="auth_totp_empty">Enter the code from your authenticator app.</string>
+    <string name="auth_totp_subtitle">Two-factor authentication</string>
 
     <!-- Auth: startup routing -->
     <string name="status_offline_mode">Offline Mode</string>
@@ -808,6 +879,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">1 subset</item>
         <item quantity="other">%1$d subsets</item>
     </plurals>
+    <plurals name="license_expiring_fmt">
+        <item quantity="one">License expires tomorrow</item>
+        <item quantity="other">License expires in %1$d days</item>
+    </plurals>
+
     <plurals name="home_quota_fmt">
         <item quantity="one">1 / 1 analyses used</item>
         <item quantity="other">%1$d / %2$d analyses used</item>

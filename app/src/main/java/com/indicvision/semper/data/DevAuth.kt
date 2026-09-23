@@ -57,6 +57,10 @@ object DevAuth {
                 maxSessions = DEV_QUOTA_MAX,
                 maxFilesPerSession = 600,
                 maxFrames = DicSettings.MAX_MAX_FRAMES,
+                mode = "licensed",
+                plan = "professional",
+                cloudBackupEnabled = true,
+                shareEnabled = true,
             ),
         )
         TokenStore.setSessionLimitReached(context, false)

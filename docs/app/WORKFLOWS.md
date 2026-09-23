@@ -231,6 +231,7 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 |---|---|---|
 | [ ] 4.1 | Open Settings | All seven sections are collapsed; chevrons rotate on tap |
 | [ ] 4.2 | Expand **Account** | Your email and "Device ID · …" are shown; the device ID can be selected and copied |
+| [ ] 4.2a | Expand **Account** on a licensed account | "Licensed as SEMP-…" is shown below the device ID — the key prefix support asks for, never the key. Absent on demo |
 | [ ] 4.3 | Expand **Account** as a non-admin | No "Pending access requests" button |
 | [ ] 4.4 | Expand **Account** as an admin | The button appears and opens the admin list |
 | [ ] 4.5 | Turn **Save to cloud** on with local-only analyses present | A dialog offers to back up N of them |
@@ -571,7 +572,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.2b | Check fit at rest | Heatmap (ROI or accepted points) is contained between the top bar and scrub bar; the colour scale may overlay the right edge and stays put while the figure pans |
 | [ ] 8.1.2c | Zoom, pan a region that was under the scale into the open area, then tap to probe | Probe readout shows a real point; tapping the scale itself still opens the custom-scale dialog, not a probe |
 | [ ] 8.1.3 | Check the scale units | `px` for U and V, `mε` for the strain fields |
-| [ ] 8.1.3b | Compare the scale labels with the ⓘ sheet's max/min | Scale labels read "≤ x" / "≥ y" and may be narrower — that's the display clamp, disclosed rather than hidden; the ⓘ sheet's numbers are the field's true extrema |
+| [ ] 8.1.3b | Compare the scale labels with the ⓘ sheet's max/min | On a frame, scale labels read "≤ x" / "≥ y" and may be narrower than the ⓘ sheet (display clamp vs true extrema). On the summary, the colour bar and ⓘ both quote the lowest scale-min and highest scale-max across frames (those two ends may come from different frames) |
 | [ ] 8.1.4 | Pinch to zoom | Zooms smoothly up to about 10×; panning is clamped to the image |
 | [ ] 8.1.5 | Zoom in and pan | The heatmap stays registered to the reference — no drift |
 | [ ] 8.1.6 | Zoom, then switch field | Zoom and pan are preserved |
@@ -580,7 +581,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.9 | Enter valid bounds and apply | The heatmap and the scale labels both change |
 | [ ] 8.1.10 | Switch field, then switch back | The custom bounds are remembered *per field* |
 | [ ] 8.1.11 | Reopen the dialog and tap **Auto scale** | The override is dropped; the scale returns to this frame's clamped bounds — not to its true extrema |
-| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the specimen name, max / min with coordinates, mean, and settings used |
+| [ ] 8.1.12 | Open ⓘ | Peek sheet shows the specimen name, max / min with coordinates, mean, a histogram of this field, and settings used |
 | [ ] 8.1.13 | Scrub frames without a custom scale | Scale labels follow each frame's own 2nd/98th-percentile clamp |
 
 ### 8.2 Frames
@@ -618,6 +619,7 @@ onto a combination, with no summary slot and no Animations share target).
 | [ ] 8.2a.3 | Watch a 150-frame analysis | Every frame is there and the loop still finishes inside 10 s |
 | [ ] 8.2a.4 | Compare early and late frames of a growing test | Colour rises through the sequence — one scale throughout, no per-frame renormalising |
 | [ ] 8.2a.5 | Read the scale labels beside it | The widest bounds in the whole sequence, not the current frame's |
+| [ ] 8.2a.5a | Open ⓘ on the summary | Max and min of that GIF scale, no mean, and no histogram |
 | [ ] 8.2a.6 | Switch field | The animation rebuilds in that field; switching back replays from cache |
 | [ ] 8.2a.7 | Set a custom scale for one field | Only that field's animation rebuilds |
 | [ ] 8.2a.8 | Tap **Next** on the summary, then **Prev** on frame 1 | Leaves to frame 1 and comes back |
@@ -641,21 +643,24 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.3.4 | Pinch while a probe is up | Zoom works; the crosshair stays glued to the image point |
 | [ ] 8.3.5 | Switch field or frame with a probe up | The value updates for the same image location (or "No data") |
 | [ ] 8.3.6 | Tap the readout chip | The probe dismisses |
-| [ ] 8.3.7 | Open ⓘ | Stats list max and min with coordinates, plus mean — no Max/Min toggle |
+| [ ] 8.3.7 | Open ⓘ | Stats list max and min with coordinates, plus mean and a histogram — no Max/Min toggle |
 | [ ] 8.3.8 | Rotate with a probe up | Frame, field and probe survive |
 
 ### 8.4 Details (ⓘ peek sheet)
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.4.1 | Tap the info button | Peek sheet titled **Details** with the specimen name under it, then max / min (coordinates) / mean, then subset, step, strain window, strain method, ROI and image size |
+| [ ] 8.4.1 | Tap the info button | Peek sheet titled **Details** with the specimen name under it, then max / min (coordinates) / mean, a histogram of this field's accepted values, then subset, step, strain window, strain method, ROI and image size |
 | [ ] 8.4.1a | Open it on a run that stopped early | Two extra rows: **Stopped early** and **Frames solved (n of N)** — the provenance survives a restart |
+| [ ] 8.4.1b | Open it on the summary GIF | Max and min of the GIF colour-bar ends, no mean, and no histogram |
 | [ ] 8.4.2 | Compare against what you entered in the wizard | They match |
 | [ ] 8.4.3 | Look for a **virtual strain gauge** row | There is none, deliberately: VSG is `(strain window − 1) × step + 1`, and both of those are already rows above it |
 | [ ] 8.4.4 | Scrub to another combination and reopen | The values follow the new frame, not the run's first |
 | [ ] 8.4.5 | Open it on a sweep | A line-cut plot with colour-matched Exx / Eyy / Exy and the cut axis named |
 | [ ] 8.4.6 | Open it on a single-setting run | No line-cut section |
 | [ ] 8.4.7 | Look for **Go to Home** in the sheet | It is not there any more — Home is a chrome icon in the top bar (§8.6.1) |
+| [ ] 8.4.8 | Tap a histogram bar | Caption under the plot names that bin's count and value range, in px or millistrain |
+| [ ] 8.4.9 | Compare the histogram with the colour bar | The histogram includes the outliers the colour bar has clamped; its ends are the true min and max |
 
 ### 8.5 Share and export
 
@@ -727,6 +732,63 @@ sweep hitting the cap, or a background upload rejected with a quota error.
 | [ ] 9.4 | Tap **Re-check** while still at the cap | "Still at the limit" |
 | [ ] 9.5 | Delete an analysis elsewhere, then tap **Re-check** | The screen closes and you can start a new analysis |
 | [ ] 9.6 | Tap **Back to my analyses** | Home |
+
+**Where the cap (`M`) comes from.** `LicenseEntitlements.analysisCap()` reads
+`AppRemoteConfig`, which is populated from the backend's `GET /v1/config` (see
+[CLOUD_ARCHITECTURE_GCP.md §20](../backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements)):
+
+- **Demo** (the default for every account until activated): capped at 25
+  saved analyses, this screen included. Demo analyses are still **recorded** —
+  each finished analysis uploads silently (`CloudSync.uploadsEnabled` ignores
+  the Save-to-cloud toggle, which demo is not shown) — but demo has no
+  backup/restore *feature*: Home shows no sync badge or row progress (3.4,
+  3.7, 3.8 do not apply), Settings has no **Cloud backup**, **Analyses data
+  management**, **Free up space** or auto-free controls (4.5–4.18g do not
+  apply), and a stored copy is never pulled back. The upload is what the cap
+  counts.
+- **Professional — individual key**: no local analysis cap
+  (`analysisCap()` returns unlimited); Semper staff mint and hand over the key.
+- **Professional — institution seat**: identical entitlement to an
+  individual key (uncapped) — an institution seat and an individual key resolve to
+  the exact same `mode=licensed` on device. What differs is only how the
+  seat is administered: institution IT self-service via backend routes (see
+  §20.4 of the doc above), not Semper staff, and not through this app.
+
+**Status at this revision.** There is no screen to type a key into, and there
+is not meant to be one. A licence is minted against the customer's email
+address and attaches at their next sign-in — an individual licence directly, an
+institution seat through the roster — so nothing is read off a phone, dictated,
+or typed. `POST /v1/licenses/activate` and `IndicApi.activateLicense()` remain
+for support recovery and have no caller in `app/src/`. What the app shows of a
+licence is its prefix, in Settings → Account (4.2a); the key itself never
+reaches the device. This screen's behaviour for a Professional account is
+unaffected either way: once `GET /v1/config` reports `mode=licensed`, the cap
+does not apply and 9.1 never triggers.
+
+**9.4 No seat right now (floating institution licence).** A separate gate from
+this screen, and not a limit: the account is on the roster but every seat is in
+use. It appears when starting new work — the Home **+** button, before the
+Import/Record menu opens, and again at Compute for a run started from inside an
+analysis. Saved analyses stay open throughout, and a run already in flight is
+never interrupted.
+
+The screen is one button that asks for a seat again. Unlike 9.1 it needs no
+email to support: seats free themselves as colleagues finish.
+
+**9.3 License expiry notice (Home).** Separate from this screen, and not a
+gate. A licensed account whose key expires within 14 days — or which is past
+expiry but still inside its grace window — shows a small chip under the Home
+title: "License expires in N days", or "License expired — still working, email
+support to renew". Nothing is withdrawn while it shows; during grace the
+account keeps cloud backup, share and the uncapped analysis count, and the only
+thing that ever changes entitlement is the backend flipping `mode` to `demo`
+once grace ends (at which point 9.1 applies exactly as it does for any Demo
+account).
+
+The chip is suppressed when the cached config is more than a week old. A
+renewal may have landed while the device was offline, and warning from a stale
+cache would be a false alarm the user cannot act on. A perpetual license never
+shows it.
 
 ---
 

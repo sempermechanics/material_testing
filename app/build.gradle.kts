@@ -300,6 +300,14 @@ dependencies {
     implementation(libs.firebase.analytics)
     // Firebase Authentication (email/password, email-link, Google) — the identity layer.
     implementation(libs.firebase.auth)
+    // App Check: proves to the backend that a device caller is a genuine,
+    // unmodified build of this app. The Web API key that mints ID tokens ships
+    // inside the APK and is an identifier, not a secret, so an ID token alone
+    // cannot make that claim. Play Integrity is the only provider installed —
+    // the debug provider would need a per-install secret registered by hand in
+    // the Firebase console, and the interceptor fails open, so a developer
+    // build simply sends no header against APP_CHECK_MODE=off / monitor.
+    implementation(libs.firebase.appcheck.playintegrity)
     // Crash + non-fatal reporting (field visibility for release builds). The
     // Crashlytics Gradle plugin (applied above) injects the build-ID resource the
     // SDK requires at startup; mapping-file upload is disabled below so no build-time

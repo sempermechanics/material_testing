@@ -11,6 +11,10 @@ you are changing `backend/` or the sync path in `app/.../data/`.
 | Follow a request end to end | [§2 auth](#2-authentication-flow) → [§4 upload](#4-upload-sequence-5-gb-resumable-keyless) |
 | Find the code for a concept | [§7 backend map](#7-implementation-map) · [§8 Android map](#8-android-client-map) |
 | Know the data shape | [§5 Firestore](#5-firestore-schema) · [§6 Drive layout](#6-google-drive-folder-hierarchy) |
+| Understand demo / individual / institution licensing | [§20 Licensing & entitlements](#20-licensing--entitlements) |
+| Renew or extend a license, or reason about expiry | [§20.6 Duration, grace, and renewal](#206-duration-grace-and-renewal) |
+| Understand shared/concurrent institution seats | [§20.7 Floating seats](#207-floating-seats) |
+| Use or deploy the web consoles | [§20.8 The consoles](#208-the-consoles-and-what-a-browser-may-do) |
 | Fix sign-in | [AUTH_SETUP.md](AUTH_SETUP.md) |
 
 > **Status / scope.** This document specifies the **GCP-native** backend:
@@ -336,6 +340,18 @@ signature *or* an ID token alone (startup warning). **Production keeps
 var of the same name — an empty var clears the flag on redeploy. Every other
 write and mint path already requires a device signature.
 
+**A device signature is not a binary attestation.** It proves the caller holds
+the account's registered device key; it says nothing about which build is
+holding it, and the Firebase Web API key that mints ID tokens ships inside the
+APK as an identifier rather than a secret. `APP_CHECK_MODE` (`off` default /
+`monitor` / `enforce`) closes that in `deps.current_user`: a caller sending
+`X-Device-Id` must also carry a valid Firebase App Check token, which the four
+consoles never trip because a browser sends no device id. Checked *before*
+`get_or_create_user`, so a refusal creates no account row and moves no device
+lock, and refused as `app_check_required` rather than `not_approved` — the
+account may be perfectly entitled. Rollout and the client's fail-open half:
+[AUTH_SETUP.md §3.2](AUTH_SETUP.md).
+
 **A Drive outage must never erase session metadata.** `GET /v1/sessions?verify=true`
 probes whether each session's blobs still exist, and purges Firestore metadata
 for ones that are gone. The probe returns three states, not two:
@@ -386,8 +402,25 @@ users/{uid}                       (uid = Google 'sub')
   activeDeviceId: string | null
   driveFolderId                   (…/user/{uid} folder)
   maxSessions, maxFilesPerSession, maxFrames   (optional per-user quota overrides)
+  # License terms, mirrored from licenses/{id} at activation so the read path
+  # needs no second lookup. A snapshot: PATCH /v1/admin/licenses/{id} fans new
+  # values back out here (§20.6). Absent entirely until a license attaches.
+  mode: "licensed" | "demo"       (`plan` mirror kept for older clients; §20.5)
+  licenseId, licenseKind, licensePrefix
+  licenseDuration: "perpetual" | "timed"
+  licenseSeating: "assigned" | "floating"
+  leaseExpiresAt                  (floating only; written by checkout, cleared
+                                   by release. Mirrored here so effective_mode
+                                   stays a pure function — §20.7)
+  licenseExpiresAt                (Timestamp; absent when perpetual)
+  licenseGraceDays: number        (absent reads as ZERO, not the fleet default; §20.6)
+  licenseMaxAnalyses: number      (optional per-license cloud cap)
   schemaVersion                   (stamped by backend/scripts/migrate_schema.py)
   createdAt, updatedAt, lastSeenAt (Timestamp)
+  seenCheckpointAt                (Timestamp; stamped by a revoke — the instant
+                                   seat reconciliation measures check-in against,
+                                   and overrides the lastSeenAt write throttle
+                                   once, on the next request; §20.12)
 
 devices/{deviceId}                (deviceId = client UUID)
   uid, publicKeyPem
@@ -421,10 +454,55 @@ files/{fileId}                    (fileId = deterministic sid_role_name)
   driveFileId, driveMd5
   createdAt, updatedAt
 
+licenses/{id}                     (id = sha256(key) — the key hash IS the doc id)
+  kind: "individual" | "institution"
+  mode: "licensed" | "demo"       (`plan` mirror kept for older clients; see §20)
+  keyPrefix                       (first segment, e.g. "SEMP-AB12"; plaintext key never stored)
+  keyHash                         (same value as the doc id; see §20.5)
+  status: "unused" | "redeemed" | "active" | "revoked"
+                                   (individual starts "unused"; institution starts "active")
+  # individual only:
+  emailLock                       (required at mint; the address the licence
+                                   is delivered to)
+  deviceIdLock                    (empty at mint in normal issuing; bound to
+                                   the first device that signs in — §20.1)
+  redeemedByUid
+  # institution only:
+  domainLock                      (verified-email domain required to join, e.g. "university.edu")
+  adminEmails: string[]           (verified emails allowed to manage this license's seats)
+  seating: "assigned" | "floating"   (absent reads as assigned; §20.7)
+  maxSeats: number | null         (assigned: caps the ROSTER. floating: caps
+                                   CONCURRENT LEASES, and the roster is
+                                   deliberately uncapped. null = unlimited,
+                                   which floating rejects at mint.)
+  seatsUsed: number               (roster size; kept in sync with the seats
+                                   subcollection below)
+  leasesActive: number            (floating only — who is using it right now)
+  # duration is orthogonal to kind — either kind may be either shape.
+  duration: "perpetual" | "timed"
+  expiresAt                       (Timestamp; required when timed, absent when perpetual)
+  graceDays: number               (entitlement continues UNCHANGED this long past
+                                   expiresAt; 0 is a hard cliff. §20.6)
+  supportUntil                    (Timestamp, optional; informational — never gates)
+  maxAnalyses                      (optional, either kind)
+  createdByUid, createdAt, updatedAt
+  updatedByUid, updatedAt         (set by the renewal route)
+
+licenses/{id}/seats/{uid}         (institution only — one doc per roster member)
+  uid, email, deviceIdLock
+  status: "active" | "disabled" | "revoked"
+  # floating only — the lease. Absent means "holds no seat right now", which
+  # for most of a floating roster is the normal state.
+  leaseExpiresAt                  (Timestamp; compared to now, never trusted
+                                   to have been cleaned up — §20.7)
+  leaseDeviceId, lastHeartbeatAt
+  createdAt, updatedAt
+
 audit_logs/{autoId}               (append-only)
   ts (Timestamp), uid, deviceId, ip, ua
   action: "LOGIN" | "DEVICE_REGISTER" | "DEVICE_REBIND" |
-          "SESSION_CREATE" | "UPLOAD_COMPLETE" | "AUTH_DENIED" | ...
+          "SESSION_CREATE" | "UPLOAD_COMPLETE" | "AUTH_DENIED" |
+          "LICENSE_ACTIVATE" | "INSTITUTION_SEAT_PATCH" | "INSTITUTION_SEAT_REVOKE" | ...
   target: { type, id }
   outcome: "OK" | "DENIED" | "ERROR"
   detail: map
@@ -481,7 +559,12 @@ the way it does.
 | Concern | File | Notes |
 |---|---|---|
 | FastAPI app, middleware, lifespan | [`backend/app/main.py`](../../backend/app/main.py) | App factory; includes routers below |
-| Routes by prefix | [`backend/app/routers/`](../../backend/app/routers/) | `health`, `account`, `devices`, `sessions`, `files`, `provision_tasks`, `admin` |
+| Routes by prefix | [`backend/app/routers/`](../../backend/app/routers/) | `health`, `account`, `devices`, `sessions`, `files`, `provision_tasks`, `admin`, `licenses`, `institutions` |
+| License key format, hashing, `mode`/`kind` vocabulary | [`backend/app/licenses.py`](../../backend/app/licenses.py) | `SEMP-XXXX-XXXX-XXXX-XXXX`; sha256 hash is the Firestore doc id; `normalize_mode` / `normalize_kind` / `legacy_plan` (§20.5) |
+| Floating seats, leases, pool accounting | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `checkout_lease`, `release_lease`, `claim_seat`, `_sweep_expired_leases` (§20.7) |
+| Duration, grace, renewal fan-out | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
+| Individual + institution license logic | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
+| Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth; the surface behind `/console/institution`, and equally usable from a script. Also serves the `/v1/campus/*` aliases (§20.4, §20.5) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
 | Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check, `device_or_legacy_reader` (§4) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
@@ -494,7 +577,7 @@ the way it does.
 | Outbound mail | [`backend/app/notify.py`](../../backend/app/notify.py) | Resend, fire-and-forget |
 | Pydantic models | [`backend/app/models.py`](../../backend/app/models.py) | |
 | Audit trail | [`backend/app/audit.py`](../../backend/app/audit.py) | |
-| Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `REQUIRE_ATTESTED_UPLOADS`, `TASKS_*` |
+| Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `REQUIRE_ATTESTED_UPLOADS`, `APP_CHECK_MODE`, `TASKS_*` |
 | Schema migrations | [`backend/scripts/migrate_schema.py`](../../backend/scripts/migrate_schema.py) | Versioned steps in `backend/scripts/migrations/` — see [FIRESTORE_SCHEMA_RUNBOOK.md](FIRESTORE_SCHEMA_RUNBOOK.md) |
 | Container | [`backend/Dockerfile`](../../backend/Dockerfile) | Installs from `requirements.lock` with `--require-hashes`. `requirements.txt` is the pin list; lock versions of direct deps must match txt. |
 | API Gateway spec | [`backend/gateway/openapi.yaml`](../../backend/gateway/openapi.yaml) | Covers all current routes; `__CLOUD_RUN_URL__` is substituted at deploy |
@@ -506,7 +589,8 @@ collection reference and read across the collection tree. Treat any new
 client-supplied identifier that reaches Firestore as needing the same treatment.
 
 **Per-user quota overrides.** `resolve_user_config` merges the fleet defaults
-(`MAX_SESSIONS_PER_USER`, `MAX_FILES_PER_SESSION`, `MAX_FRAMES_PER_ANALYSIS`)
+(`DEMO_MAX_ANALYSES` / `LICENSED_MAX_SESSIONS_PER_USER`, `MAX_FILES_PER_SESSION`,
+`MAX_FRAMES_PER_ANALYSIS`)
 with optional per-user values on `users/{uid}`, so one tester can be raised
 without redeploying. Admins set them via
 `PATCH /v1/admin/users/{uid}/config`, and the app reads the resolved numbers
@@ -872,3 +956,813 @@ become direct signed URLs, eliminating the Drive download-brokering problem.
 (opaque upload URL + standard resumable protocol) is the *same* abstraction that
 makes the GCS migration a config flag tomorrow.
 
+---
+
+## 20. Licensing & entitlements
+
+Three shapes, all resolved server-side by `resolve_user_config` — the app
+never decides its own entitlement, it reads `GET /v1/config` (and the
+`activate` response) and renders around what the backend says.
+
+Each shape is independently perpetual or timed, and a timed one keeps working
+through a grace window after its expiry — see [§20.6](#206-duration-grace-and-renewal).
+An institution license is additionally assigned or floating: floating shares a
+fixed number of concurrent seats across a larger roster —
+see [§20.7](#207-floating-seats).
+
+| Shape | How you get it | Locked to | Managed by |
+|---|---|---|---|
+| **Demo** | Default for every approved account; `ensure_demo_license` issues a Demo-plan license on first verified+device-bound login | email + device (so a Demo key can't be shared) | nobody — it's the floor |
+| **Licensed, individual** | Semper staff mint against one address (`POST /v1/admin/licenses`, `kind=individual`); it attaches when that address signs in and binds to the first device it signs in on | one email + one device | Semper staff only (`admin_user` + `verified_device`) |
+| **Licensed, institution** | Semper staff mint a key (`kind=institution`) with a `domainLock` and a list of `adminEmails`; any verified `@domainLock` member self-activates and claims a seat | a verified-email **domain**, per-member seat locked to one device | Institution IT, self-service, via the three `/v1/institutions/licenses/{id}/seats*` routes — from `/console/institution` (§20.8) or their own tooling |
+
+**Institution IT has a console** at `/console/institution` (§20.8); the routes
+below remain the whole API surface behind it, and are equally usable from a
+script. The institution seat-management routes
+(`GET`/`PATCH`/`DELETE /v1/institutions/licenses/{licenseId}/seats...`, documented in
+[`gateway/openapi.yaml`](../../backend/gateway/openapi.yaml)) are the entire
+self-service surface. `GET /v1/institutions/licenses` answers the question
+that comes before all of them — *which* licences does this address administer
+— so nobody has to be told an id before they can open the console (§20.11).
+
+### 20.1 Delivery, and activation as the fallback
+
+Neither licence kind is delivered by handing someone a key. An individual mint
+writes a **pending invite** against `emailLock` alongside the licence; an
+institution roster addition writes one for an address with no account yet.
+Either way the person signs in and `ensure_entitlement` attaches what they are
+owed on their first request — see
+[§20.7](#joining-it-adds-an-address-whether-or-not-it-has-an-account).
+
+The key still exists and still redeems, and `POST /v1/licenses/activate` is
+still the route that does it. It is the **support-recovery** path: re-attaching
+a licence whose invite has been consumed but whose account has lost it. Nothing
+in the app calls it, and nothing should have to.
+
+#### The device lock is bound, not declared
+
+A licence minted against an address alone carries `deviceIdLock: ""`, and a
+seat created from an invite or by IT carries the same. `_device_lock_state`
+answers **unbound** rather than *matches* or *violates* for those, and
+`revalidate_device_lock` — which already runs on every authed request carrying
+`X-Device-Id` — writes the lock the first time a real device presents itself.
+
+Binding is a transaction, not an update. Two devices signing in together both
+read an empty lock; a plain write would let the later one win, so the licence
+would silently follow whichever request Firestore ordered second. First writer
+wins, and the other device is a mismatch from its next request onward, which
+is the answer a device lock exists to give.
+
+The same rule makes the Demo mint a compare-and-set. Several requests arrive at
+app launch; the one that loses the race to claim a real licence is still
+holding the copy of the account it read beforehand, and a blind write there
+would stamp a Demo key over the entitlement a sibling request granted
+milliseconds earlier.
+
+#### Activation
+
+```mermaid
+sequenceDiagram
+    participant A as Android
+    participant R as Cloud Run
+    participant F as Firestore
+    A->>R: POST /v1/licenses/activate {key} (ID token, X-Device-Id)
+    R->>F: licenses/{sha256(key)}
+    alt kind = individual
+        R->>R: emailLock == caller email? deviceIdLock unset, or == X-Device-Id?
+        R->>F: licenses/{id}.deviceIdLock = X-Device-Id (if unset)
+        R->>F: users/{uid}.mode = licensed, licenseKind = individual
+    else kind = institution
+        R->>R: verified-email domain == license.domainLock?
+        R->>F: licenses/{id}/seats/{uid} — create (maxSeats check) or re-bind device
+        R->>F: users/{uid}.mode = licensed, licenseKind = institution
+    end
+    R-->>A: 200 {config} | 403/404/409 (see openapi.yaml)
+```
+
+Activation is **in-place**: same `uid`, same user doc, only plan/license
+fields change. It never migrates, copies, or touches `sessions`/`files` — a
+dedicated test (`test_activation_is_in_place_session_data_untouched` in
+`backend/tests/test_licenses.py`) asserts session docs are byte-identical
+before and after.
+
+### 20.2 Not "activate once, trust forever"
+
+Every authed request that carries `X-Device-Id` re-validates the license/seat
+device lock, not just the one that activated it —
+`deps.current_user`/`deps.verified_device` both call
+`firestore_repo.revalidate_device_lock` on every such request. If the key was
+revoked, the seat was disabled/revoked, or the device no longer matches the
+lock, the account drops to Demo **immediately**, fails closed, and — same
+guarantee as activation — never touches stored sessions/files. See
+`test_device_lock_is_revalidated_on_every_authed_call_not_just_at_activation`.
+
+### 20.3 Revoke semantics differ by scope
+
+| Action | Route | Effect |
+|---|---|---|
+| Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff, device-attested) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0. |
+| Single-seat revoke | `DELETE /v1/institutions/licenses/{id}/seats/{uid}` (institution IT) | Only that member drops to Demo; **frees the slot** for another domain member (including, after re-admission, the same member re-entering the key). |
+| Disable a seat | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"enabled": false}` (institution IT) | Drops that member to Demo but **does not free the slot** — still counts against `maxSeats`. `{"enabled": true}` restores the licensed mode in place with no re-activation needed. |
+
+A downgrade to Demo — from any of the above, or a plan cap being exceeded —
+**never deletes or hides existing data**, and **never stops recording**.
+Recording an analysis (`POST /v1/sessions` plus the upload broker) is open to
+every approved account: a demo account's images and results are stored just
+like a licensed one's, under `DEMO_MAX_ANALYSES`. What `cloudBackupEnabled`
+gates is *retrieval* — `GET /v1/files/{id}/content` and
+`GET /v1/sessions/{sid}/bundle` answer `403 feature_not_licensed` while the
+mode is demo. Sessions stay listable throughout; re-activating restores
+retrieval with zero data loss. See
+`test_downgrade_preserves_data_blocks_retrieval_then_reactivation_restores`
+and `test_demo_after_downgrade_still_records_but_cannot_restore`.
+
+Two consequences follow. An installed build that predates licensing keeps
+backing up after the backend deploys — its upload worker retries a 403 from
+session creation forever, which is why the gate is on retrieval and not on
+creation. And the app shows a demo account **no** backup or restore surface at
+all: no sync badge, no pending-upload banner, no Settings backup/restore
+section. The upload is silent; the account's data is there for the day a
+licence attaches, and for the operator's own use under the Terms.
+
+Minting an individual licence for an address that already has an approved,
+verified account attaches it at once (`create_individual_license` →
+`_attach_to_existing_holder`), dropping the system demo key the first
+post-deploy request stamped. The invite is still written for the case where no
+such account exists yet, and a holder of a *live* non-demo licence is left
+untouched (`claimError: holder_already_licensed`).
+
+None of these reach the person instantly, and the counters IT reads move
+before they do. §20.12 is the read that measures the difference.
+
+### 20.4 Institution IT auth is deliberately narrow
+
+`institution_admin_stepup` (`backend/app/routers/institutions.py`) wraps
+membership in `adminEmails` with the same browser MFA step-up every other
+dashboard uses. Worth naming precisely because it is easy to over- or
+under-scope:
+
+- **Not** `verified_device` — institution IT manages seats from a browser, not
+  from the licensed device itself. The browser path still requires a completed
+  second factor and a recent `auth_time` (`ADMIN_WEB_REAUTH_SECONDS`).
+- **Not** Semper `role=admin` — an institution admin has zero authority
+  outside the license(s) that name their verified email in `adminEmails`.
+  Semper staff mint/revoke stays on `attested_or_mfa_admin` /
+  `attested_or_mfa_admin_fresh`.
+- **Membership before MFA**: a foreign licence id still returns the identical
+  `404 license_not_found` without disclosing that a second factor would have
+  been the next gate.
+- **Fails closed at every step**: unverified caller email → 403. A license id
+  that does not exist, or exists but is not `kind=institution`, or is
+  `kind=institution` but the caller's email is absent from `adminEmails` — **all
+  three return the identical `404 license_not_found`**. This is intentional:
+  a foreign institution's real license id must be indistinguishable from one
+  that doesn't exist, so probing ids learns nothing about other tenants.
+  `test_institution_it_cannot_reach_another_institutions_seats` and its `PATCH`/`DELETE`
+  siblings assert this cross-tenant isolation directly.
+- **No key plaintext ever leaves mint time.** Every institution IT response
+  (`institution_license_summary`, `list_institution_seats`) is built from
+  `_license_public`, the same redaction the Semper-staff admin listing uses.
+- **Rate-limited and audited** like every other mutation: `institution_bucket` in
+  `rate_limit.py`, `INSTITUTION_SEAT_PATCH`/`INSTITUTION_SEAT_REVOKE` in `audit_logs`.
+
+### 20.5 Vocabulary: `campus` -> `institution`, `plan` -> `mode`
+
+The wire used to say `campus` (the `kind` value, the route prefix, the audit
+action prefix) and `plan` with values `demo`/`professional`. It now says
+`institution` and `mode` with values `demo`/`licensed`. `mode` is the account's
+enforcement state; the entitlement *values* it resolves to are separate fields
+in the same response.
+
+Both spellings are live at once, in every direction a version skew can go:
+
+| Skew | What holds it together |
+|---|---|
+| Old app, new backend | `/v1/config` and every license summary are **dual-keyed** — `mode` plus a `plan` mirror that always agrees with it. An installed build decodes `plan` and fails closed to demo when it is absent, so emitting only `mode` would demote the entire fleet. |
+| Pre-licensing app, new backend | Every pre-existing user document resolves to demo on the first request (`ensure_demo_license` stamps the system demo key). The old build never reads `mode`; it keeps recording because `POST /v1/sessions` is not gated (§20.3), and its restore fails **once** with a plain "rejected" message rather than looping — `DicRestoreWorker` gives up on 403. Its `maxSessions` comes from `DEMO_MAX_ANALYSES`, which must be set no lower than the largest live per-user count before the deploy. |
+| New app, old backend | `AppConfigDto.mode` defaults to empty rather than `demo`, and `AppRemoteConfig` resolves from the `plan` mirror when `mode` is missing. |
+| Upgrading the app | The `mode` pref does not exist on an install predating the rename, so `AppRemoteConfig.mode()` falls back to the old `plan` pref key rather than reading demo until the next config fetch. |
+| Old IT tooling | `/v1/campus/*` stays routed as a hidden alias of `/v1/institutions/*`, **declared in `gateway/openapi.yaml` as well as FastAPI** — ESPv2 rejects any path absent from the gateway spec, so an alias that exists only in the app is unreachable in production. |
+| Old ops tooling | `AdminLicenseCreate` accepts `kind="campus"`; `PATCH .../config` accepts a `plan` patch and folds it onto `mode`. |
+| Unmigrated documents | `normalize_mode` / `normalize_kind` read either spelling, so a user or license document migration 002 has not reached still resolves and still activates. |
+
+Retiring the compatibility is two later changes, in this order: drop the `plan`
+mirror from the response once adoption of a `mode`-reading app build is high
+enough (the same judgement `DAT_CODEC_ENCODING_ENABLED` needs), then drop the
+`/v1/campus/*` aliases from **both** the FastAPI router and the gateway spec.
+
+Migration `002_rename_campus_to_institution` rewrites `users` and `licenses`,
+keeping both field spellings consistent rather than deleting the old ones. It
+is also what brings `licenses` into the migration chain at all — migration
+001's collection list omits it. Seat documents carry neither renamed field, so
+they need no transform; the runner walks only top-level collections and has no
+collection-group support, so a seat transform would have needed new machinery.
+
+**Still on the key hash as the document id.** `licenses/{id}` is keyed by
+`sha256(canonical key)`. `keyHash` is now also written as a field, so licenses
+can later move to opaque ids — required once a license may be issued with *no
+key at all*. That re-keying is not migration 002: the runner hands `transform`
+only a document body and `batch.update` cannot re-key a document, so it needs a
+bespoke copy/delete script that also rewrites every `users.licenseId`.
+
+### 20.6 Duration, grace, and renewal
+
+`duration` is orthogonal to `kind`: an individual or an institution license may
+be either shape.
+
+| Shape | Behaviour |
+|---|---|
+| **perpetual** | Never stops granting use. May carry `supportUntil`, which is informational — a perpetual license whose support has lapsed still grants full use, and nothing reads that field to gate anything. |
+| **timed** | Stops at `expiresAt` **plus `graceDays`**. Validated at mint: timed requires a future `expiresAt`, perpetual must not carry one, so neither shape can be created by accident. |
+
+**Grace withdraws nothing.** It sits inside the licensed branch of
+`effective_mode`, not beside it as a reduced tier. The point is that a renewal
+in flight does not interrupt work, so cloud backup, share and the uncapped
+analysis count all continue; the only change is `inGrace: true` on
+`/v1/config` and `/v1/me`, which the app renders as a notice on Home. A
+`graceDays` of 0 is a hard cliff, which is what the behaviour was before this
+existed.
+
+**A license already in Firestore with no `graceDays` reads as zero**, not as
+`LICENSE_GRACE_DAYS_DEFAULT`. That default is stamped onto a license at mint.
+Applying it at read time instead would have retroactively reinstated every
+account that expired inside the window the moment the feature deployed.
+
+`duration` absent on an older license is inferred from whether an `expiresAt`
+exists — the same distinction the field makes explicit, so the inference is
+lossless. That is why this needed no migration and `SCHEMA_VERSION` stayed at 2.
+
+#### Renewal fans out
+
+`PATCH /v1/admin/licenses/{id}` (device-attested staff, same tier as mint and
+revoke) changes terms in place. Before it existed a timed license could only be
+replaced — a new key, and every holder re-activating.
+
+It cannot be a simple document write. License terms are **mirrored onto each
+user at activation** (`_license_mirror_patch`) precisely so `effective_mode`
+and `resolve_user_config` stay pure functions of the user document, with no
+Firestore read on paths that run per session and per file. The cost of that is
+that editing the license alone reaches nobody. So `update_license` writes the
+document and then re-stamps every current holder: the individual redeemer, or
+every non-revoked institution seat.
+
+- **Revoked seats are skipped.** They hold no entitlement to refresh, and
+  re-stamping one would resurrect a removed member on the next resolve.
+- **A holder who moved to another license is skipped**, guarded on `licenseId`
+  — the same guard `_drop_user_to_demo_if_licensed` uses.
+- The fan-out is bounded by `seatsUsed`, and renewal is rare. That is what
+  makes it the right side of the trade against a per-request read.
+
+Terms only: `kind`, the email/device/domain locks and the key itself are fixed
+at mint. Changing *who* a license is for under existing holders is a different
+operation with different consequences.
+
+Audited as `ADMIN_LICENSE_EXTEND`. Declared in `gateway/openapi.yaml` as well
+as FastAPI — ESPv2 rejects any path absent from the gateway spec.
+
+#### Activating an expired key is refused
+
+`activate_license` returns `license_expired` (403) once a key is past
+`expiresAt + graceDays`. It used to "succeed": the past expiry was mirrored
+onto the user, `effective_mode` immediately resolved demo, and the caller got
+`err == ""` with a demo config and no explanation. A key still *inside* its
+grace window activates normally and lands the redeemer in grace — grace is
+entitlement, not a warning state.
+
+#### The app warns, it does not gate
+
+`/v1/me` and `/v1/config` carry `licenseExpiresAt`, `licenseGraceEndsAt` and
+`inGrace`. The app shows a Home notice inside 14 days of expiry, or whenever in
+grace, and **never gates on those values**: a cached date can be arbitrarily
+stale, and a renewal may have landed while the device was offline. `mode`
+remains the only thing that changes what the app will do. The client suppresses
+the notice entirely once its cached config is over a week old, which is what
+the fetched-at timestamp added alongside this exists to make possible.
+
+### 20.7 Floating seats
+
+`seating` is orthogonal to `kind` and `duration`, and applies to institution
+licenses.
+
+| | Roster | `maxSeats` caps | A member holds entitlement |
+|---|---|---|---|
+| **assigned** | every member is entitled | the **roster** | always |
+| **floating** | every member is eligible | **concurrent leases** | only while holding a live lease |
+
+Floating exists for the shape assigned cannot express: fifty people in a
+teaching lab sharing ten slots. So the floating roster is deliberately
+**uncapped** — capping it would make the license assigned with extra steps —
+and a member between leases is **demo**, which is the ordinary state for most
+of the roster at any moment, not a failure and not a revocation.
+
+`assigned` is the default, and it is what every license minted before this
+already meant, so **no migration ships with this**: an absent `seating` reads
+as assigned because that is what those documents say.
+
+#### The lease is on the seat document
+
+Not in a `leases` collection, as first sketched. `check_device_lock` already
+reads `licenses/{id}/seats/{uid}` on every institution request, and license
+terms are already mirrored onto the user so `effective_mode` and
+`resolve_user_config` touch no Firestore at all (§20.6). A separate collection
+would have bought a composite index and a per-request query on paths including
+`GET /v1/files/{id}/content` — which the client hits **once per range window**
+of a download. On the seat document it costs nothing extra.
+
+Lease expiry is mirrored onto the user as `leaseExpiresAt` and compared to
+`now`, exactly as `licenseExpiresAt` is. So a lapsed lease resolves demo
+whether or not anything has released it, and `effective_mode` stays a pure
+function of the user document.
+
+`_lease_live` fails **closed**, unlike `_expiry_state`. An unreadable license
+expiry keeps a paying customer working; an unreadable lease frees the slot,
+because on a floating pool "no lease" is the common case and treating an
+unparseable one as live would hand out the pool for free.
+
+#### Joining: IT adds an address, whether or not it has an account
+
+`POST /v1/institutions/licenses/{id}/seats` takes an **email**. There is no key
+for a member to type. Seats are uid-keyed — they have to be, since a uid is
+what every entitlement check has in hand — so the backend resolves the address
+first:
+
+- **the address has an account** → a seat is claimed immediately;
+- **it does not** → a **pending invite** is written instead, and redeemed
+  automatically the first time that person signs in.
+
+The invite path exists because IT works from a list of addresses and cannot
+make people sign up on cue. Refusing with `user_not_found` until they had was
+pushing a scheduling problem onto the wrong person.
+
+The same collection carries individual licences. An individual mint writes an
+invite against `emailLock`, and `claim_pending_invite` reads the licence the
+invite points at to decide what to grant — a seat for an institution key, the
+licence itself for an individual one, through `claim_individual_license`
+(`claim_seat`'s counterpart, transactional for the same reason: `redeemedByUid`
+names one account). The invite record carries no notion of kind, which is why
+there is one collection and not two.
+
+Invites live in a top-level `licenseInvites/{sha256(email)}` collection.
+**Top-level** so redemption is a single document read: a subcollection of the
+licence would need a collection-group query, and its index, on a path that runs
+for every account not yet holding a key. **Hashed** because an email is not a
+legal Firestore document id in general (`.` and `..` are reserved, `/` is a
+path separator) and a plaintext id would make the invite list enumerable by
+guessing addresses.
+
+An invite holds **no seat and no slot**. There is no uid to entitle until it is
+claimed, so counting it against `maxSeats` would mean decrementing a count for
+someone who may never arrive. An invite is a promise; the seat is taken when it
+is kept.
+
+Redemption happens in `ensure_entitlement`, which tries the invite **before**
+`ensure_demo_license`. The order is load-bearing: the latter stamps a
+`licenseId` that every later call short-circuits on, so minting demo first
+would strand the invite permanently. It also requires a **verified** email —
+the address is the entire claim to the seat, and honouring an unverified one
+would let anyone who can type someone else's address take the seat meant for
+them. The claim runs inside `claim_seat`'s transaction, so the seat write and
+the invite delete commit together or neither does.
+
+Adding a member consumes **no floating slot**. A slot is taken by checking out
+a lease.
+
+Revoking a licence withdraws the invites it issued — one keyed delete for an
+individual licence, guarded on `licenseId` exactly as `revoke_institution_invite`
+is, and the `licenseId` query for an institution one. Without it the most
+ordinary correction there is — mint against the wrong address, revoke, mint
+again — produced a licence nobody could receive, because `_write_invite`
+refuses an address already promised elsewhere. That refusal now applies only
+to a promise still worth keeping: an invite whose licence is revoked or gone
+is overwritten, since `claim_pending_invite` discards such an invite on sight
+and it therefore entitles no one.
+
+A claim also deletes the auto-minted Demo key it supersedes. Several requests
+arrive at one account together at app launch; `ensure_demo_license` is a
+compare-and-set, so a loser cannot stamp Demo *over* a licence, but a loser
+that commits first would otherwise leave a redeemed Demo record pointing at
+nobody — indistinguishable in `GET /v1/admin/licenses` from a live key, and
+one more per raced sign-in. `claim_seat` and `claim_individual_license` call
+`_drop_superseded_demo` once their transaction has committed: it re-reads the
+account, confirms the pointer is theirs, and deletes any other licence
+redeemed by that uid carrying `mode: demo` **and** `createdByUid: "system"` —
+the pair only `ensure_demo_license` writes.
+
+Two choices in that sentence are load-bearing. **After the commit, not
+inside it**: putting the account read in the claim's transaction makes it
+read *and* write one document, which takes a lock, and concurrent requests
+for one account then abort each other rather than queueing — measured
+against the emulator, six concurrent sign-ins starved out completely and the
+account landed on Demo. The sweep is a plain query and a guarded delete, so
+it takes no locks, and the worst a lost race costs is a record surviving to
+the next claim. **The licence and not the holder's mode mirror**: revocation
+demotes in place and leaves the pointer alone, so a mirror test would delete
+revocation records.
+
+#### Checkout, and why there is no heartbeat route
+
+`POST /v1/licenses/checkout` claims or extends. Re-calling it **is** the
+heartbeat: renewing an existing lease must not consume a second slot, which is
+the same code path, so a separate route would only be a way to get that wrong.
+It is deliberately **unaudited** — a client calls it every half hour per active
+user, and both `FILE_DOWNLOAD` and `lastSeenAt` record what an unconditional
+write on that kind of path costs. `POST /v1/licenses/release` is audited; it is
+a discrete act, not a heartbeat.
+
+`409 no_floating_seat` is the pool being full, not a problem with the account:
+the member stays eligible and in demo, and the app offers to retry.
+
+Defaults: an 8-hour lease renewed every 30 minutes
+(`LICENSE_LEASE_HOURS`, `LICENSE_LEASE_HEARTBEAT_MINUTES`). Long enough that a
+tunnel or a lunch break never costs someone their seat — which would be worse
+than a crashed client parking one — and the heartbeat is what actually keeps it
+alive. A client that dies holds its slot for up to the lease length, which
+costs nothing unless the pool is full, and the sweep reclaims it with nobody
+intervening.
+
+#### Counters, and the race this fixed
+
+Seat claim used to be a read followed by a `WriteBatch`. A batch is atomic for
+its writes but carries no reads and no preconditions, so two members activating
+at once on a pool of ten both saw nine free and the count landed at **eleven**;
+revoke had the mirror-image undercount. Tolerable while a seat was a soft
+allocation — a pool makes the count the actual boundary.
+
+Claim, revoke, checkout and release now run under real transactions on the
+`consume_nonce` shape: every read before every write, `_TX_ATTEMPTS`, and
+**failing closed** on contention, because granting a seat that could not be
+committed is the one outcome that breaks the cap.
+
+`leasesActive` still drifts upward whenever an app is killed, uninstalled or
+goes offline mid-lease, so the counter alone cannot say whether the pool is
+full. `_sweep_expired_leases` reconciles it before a claim reads it: a
+single-field inequality on one subcollection, so no composite index. It runs
+outside the transaction because a transaction may not query, and that is safe —
+releasing a genuinely expired lease is correct regardless of who wins the claim
+that follows.
+
+**TTL is not involved.** As the `challenges` precedent already states in
+`firestore.indexes.json`, Firestore TTL is storage hygiene with up to a day of
+lag; it can never be what frees a seat. An expired lease is expired because the
+timestamp says so.
+
+> The fake Firestore used by the unit tests applies transactions immediately
+> with no isolation, so the over-claim race is **invisible** there — it gained
+> inequality operators for the sweep, not isolation. Race coverage belongs in
+> `tests/test_firestore_emulator_integration.py`; `bump_session_progress`
+> records the same lesson.
+
+### 20.8 The consoles, and what a browser may do
+
+Static pages on the existing auth Hosting site
+(`firebase-hosting/public/console/`). No build step, no framework, no
+`package.json` — the site is served as files, and a toolchain for four pages
+would cost more than it saves.
+
+| Path | Who | What it can do |
+|---|---|---|
+| `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs (§20.11) |
+| `/account` (`/console/account`) | Anyone with an account | Read the licence, its term, the seat and the stored analyses; return a floating seat, move the licence to another device, download an analysis. The last two need a second factor |
+| `/console/institution` | IT named in a licence's `adminEmails` | Add/remove roster members, withdraw an unclaimed invitation, see who holds a seat, hold a member, clear a device lock |
+| `/console/operator` | Semper staff **with a second factor** | Issue individual and institution licences, extend a term, revoke a key, unbind a licence or a seat from its device, drive any roster, approve accounts |
+
+**The operator console was read-only, and the reason was real.** Every
+state-changing `/v1/admin/*` route requires proof beyond an ID token. On the
+phone that proof is `verified_device` — an ECDSA signature from a device
+keypair registered in Firestore — and a browser cannot produce one. The
+control's whole purpose is that a stolen session cookie or ID token must not
+mint a licence, revoke a key or approve an account.
+
+It has not been removed. `attested_or_mfa_admin` adds a second, narrower door
+for browser callers, and both halves of it are checked server-side:
+
+- the ID token records a **completed second factor**
+  (`firebase.sign_in_second_factor`, which Firebase sets only after an MFA
+  challenge actually succeeded — enrolment alone does not), so a stolen
+  password-only token is still refused; **and**
+- the sign-in behind it is newer than `ADMIN_WEB_REAUTH_SECONDS` (default 15
+  minutes), so a token that leaks later stops working. Sudo mode, not a
+  session length. A token that declines to state its own `auth_time` is
+  treated as too old rather than as fresh.
+
+Any request carrying device headers is still held to the full `verified_device`
+check, so the phone path is untouched.
+
+**This is weaker than device binding and the code says so rather than implying
+equivalence.** Someone who phishes a live MFA session inside the freshness
+window can mint a licence, which attestation made impossible. That is the
+trade: staff need to administer licences from a computer.
+`ADMIN_WEB_MFA_ENABLED=0` withdraws the browser path entirely and restores
+attestation-only admin. The route authz table records it as its own tier,
+`ADMIN_STEPUP`, rather than folding it into `DEVICE_ADMIN`, so the trade stays
+visible to a reviewer.
+
+Console enrolment is **TOTP only**. No SMS factor is enabled on the project,
+so `auth.js` challenges TOTP and reports anything else rather than
+half-handling a factor it cannot complete — which is why the phone branch, the
+invisible reCAPTCHA and two SDK imports are gone from it. Leaving SMS off in
+the Firebase console is part of the configuration, not an oversight: a factor
+nobody can be challenged for is a factor somebody can be locked out by.
+
+The page shows the secret for manual entry
+rather than a QR code: every QR service is somebody else's server and the
+payload is the TOTP secret itself, so fetching a picture would hand away the
+factor protecting licence issuance.
+
+Destructive actions confirm twice — a dialog naming who is affected, then
+typing the key prefix. Revoking withdraws entitlement; it deletes nothing.
+
+The institution console, the account page, and the operator desk all require
+the same TOTP enrolment and session second factor before they load
+(`ensureDashboardMfa` in `auth.js`). Backend routes used by those pages refuse
+a password-only token the same way: institution seat/invite work sits on
+`institution_admin_stepup`; account unbind and bundle download sit on
+`attested_or_mfa_user`; staff mutations sit on `attested_or_mfa_admin`, with
+whole-licence revoke on the tighter `attested_or_mfa_admin_fresh`
+(`ADMIN_WEB_REVOKE_REAUTH_SECONDS`).
+
+**CSP is relaxed for `/console/**` and the two addresses that rewrite into
+it.** A Hosting header is matched against the *request* path and knows nothing
+about a rewrite, so `/login` and `/account` would otherwise be served the
+strict global policy and could reach neither Firebase Auth nor the API; the
+policy is restated for them verbatim in `firebase.json`. For the same reason
+both pages carry a `<base href>`: a relative path in them would resolve
+against the site root at the pretty address and one directory too high.
+Every other page — the legal pages,
+the auth continue-URLs — keeps the strict `default-src 'self'`. Only
+`connect-src` is widened, for the API and Firebase Auth's token endpoints;
+`script-src` is **not**, because the Firebase SDK is served from Hosting's own
+`/__/firebase/` namespace, which is same-origin. `__API_ORIGIN__` and
+`__API_BASE_URL__` are substituted at deploy exactly as
+`gateway/openapi.yaml` substitutes `__CLOUD_RUN_URL__`; no live hostname is
+committed. See `firebase-hosting/public/console/README.md`.
+
+### 20.9 Structural guard
+
+`backend/tests/test_route_authz_matrix.py` inspects every route's FastAPI
+dependency tree and asserts it maps to exactly one expected auth tier —
+`INSTITUTION_ADMIN` is a tier in that matrix alongside `USER`/`ADMIN`/`DEVICE`, so a
+future change that accidentally widens (or narrows) an institution route's auth
+fails CI rather than shipping quietly.
+
+### 20.10 Changing device
+
+Three people can legitimately need a licence moved to a different phone, and
+until now only one of them could do it. The table is the whole feature:
+
+| Who | Route | Tier |
+|---|---|---|
+| Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}` | `INSTITUTION_ADMIN` |
+| Semper staff, a seat | `PATCH /v1/admin/licenses/{id}/seats/{uid}/device` | `ADMIN_STEPUP` |
+| Semper staff, an individual licence | `PATCH /v1/admin/licenses/{id}` `{"clearDeviceLock": true}` | `ADMIN_STEPUP` |
+| The holder | `POST /v1/licenses/unbind` | `USER_STEPUP` |
+
+All four reach one primitive, `firestore_repo.clear_device_lock`, which takes
+an `actor` — `ACTOR_STAFF`, `ACTOR_IT`, `ACTOR_SELF` — and selects the seat or
+the licence document by kind. The staff seat route exists because the operator
+console previously called the institution-tier one, which returns
+`404 license_not_found` for staff who are not in that licence's `adminEmails`
+(§20.4) — that is, for every licence Semper does not itself administer.
+
+**Clearing the lock is the whole change.** Since binding happens on first use
+(§20.1), an empty lock is `_LOCK_UNBOUND` and `revalidate_device_lock` binds
+it to whichever device signs in next, first writer wins. Nothing is
+re-activated, no key is re-issued, and nothing is typed on the new device.
+
+**Clearing is not revoking.** Entitlement, seat, lease, quota and every stored
+analysis are untouched; only the lock goes empty.
+
+#### The half that is easy to miss
+
+A device change is normally *preceded* by the holder trying the new phone. That
+request hits `revalidate_device_lock`, finds a mismatch, and demotes the
+account in place — `mode: demo` written onto the user document. Clearing the
+lock afterwards would not undo that on its own: `revalidate_device_lock`
+returns early for an account that reads as demo, so it would never reach the
+bind branch and the holder would sit on Demo holding a live licence, with no
+route that fixes it. `_restore_holder_mode` re-stamps the mode as part of the
+clear, guarded so that nothing is resurrected — skipped for a revoked licence,
+a revoked or disabled seat, and an account that has since moved to a different
+licence, with `effective_mode` still re-applying expiry, grace and the
+floating-lease check on top. It runs *outside* the transaction: reading
+`users/{uid}` and then writing it inside one takes a lock on that document,
+which is the contention that starved out concurrent claims before
+`_drop_superseded_demo` moved the same guarded read out of `claim_seat`
+(§20.1).
+
+#### Why the holder's own change is rate-limited and the others are not
+
+Self-service re-binding is a licence-sharing vector. A second factor proves
+*who* is asking, not *how often*, so one person could re-bind daily and pass a
+single licence round a lab. `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30)
+is counted against a `deviceChangedAt` stamp that only the self-service path
+writes; a second change inside the window answers
+`429 device_change_too_soon`, carrying `nextChangeAllowedAt`. Staff and IT
+neither read nor write that stamp, so a support request always works — a lost
+phone does not wait 30 days.
+
+`POST /v1/licenses/unbind` sits on `attested_or_mfa_user`, the same step-up
+machinery as `attested_or_mfa_admin` with `current_user` beneath it instead of
+`admin_user`; both delegate to one `_attested_or_mfa` so the browser path can
+only ever be withdrawn (`ADMIN_WEB_MFA_ENABLED=0`) for both at once. The route
+authz matrix records it as its own tier, `USER_STEPUP`.
+
+#### Both ends are audited
+
+A clear writes the device that was given up (`previousDeviceId`) —
+`ADMIN_DEVICE_LOCK_CLEAR`, `INSTITUTION_SEAT_PATCH` or
+`LICENSE_DEVICE_UNBIND` by caller — and `revalidate_device_lock` writes
+`LICENSE_DEVICE_BIND` with the device that took its place. Neither half is the
+change on its own; the pair is what an operator reads back.
+
+#### The order on the new device
+
+Restore already works on a new device, but only in this order, and the app
+should sequence it rather than leaving it to chance:
+
+1. Sign in and register the device — `POST /v1/devices/register` is USER-tier,
+   so it works before any licence binds.
+2. The licence binds on the next authed request carrying `X-Device-Id`.
+3. Restore. `GET /v1/files/{id}/content` is device-attested and
+   `verified_device` re-validates the lock before the route checks
+   `cloud_backup_enabled`, so restoring first fails as *unlicensed* on a device
+   the user has legitimately just moved to.
+
+`test_restore_on_a_new_device_waits_for_the_lock_to_move` pins the ordering;
+it fails against a `clear_device_lock` without the mode restore above.
+
+### 20.11 One sign-in, and pulling an analysis out through a browser
+
+Three dashboards existed and nothing said which was yours. `/login` is the one
+address to hand to anybody: it signs the caller in, reads `GET /v1/me` and
+`GET /v1/institutions/licenses`, and forwards.
+
+| Signal | Destination |
+|---|---|
+| `role == admin` (kept in sync with `ADMIN_EMAILS` at sign-in) | operator |
+| the address is named in some live institution licence's `adminEmails` | that roster, deep-linked when there is exactly one |
+| otherwise | their own account page |
+
+Someone who is both gets a switcher rather than a guess, and so does a caller
+whose institution lookup failed for any reason other than an unverified
+address — routing on an answer we could not obtain would silently send an IT
+contact to the wrong page. Nothing is inferred from the email domain and
+nothing is cached in the browser, so an account that changes hands routes
+correctly the first time.
+
+**`GET /v1/institutions/licenses` is the inverse of `is_institution_admin`,**
+and it is a route rather than a field on `/v1/me` for a stated reason: `/v1/me`
+promises to cost no extra Firestore read, and the Android app calls it on every
+launch. Underneath, `list_licenses_administered_by` runs a single
+`array_contains` on `licenses.adminEmails` and filters kind and status in
+Python, so no composite index is needed; the index is declared in
+`firestore.indexes.json` anyway, per that file's own convention. It is
+`USER`-tier and requires a verified email — the same bar
+`institution_admin_context` sets, since an unverified address cannot be named
+as an administrator in the first place. Administering nothing is an empty list,
+not a refusal.
+
+#### The account page needs one call, not two
+
+`/v1/me`'s `license` block now carries `seating` and `leaseExpiresAt` alongside
+the term. Both were already in `license_summary`, and `/v1/config` already
+returned them — but `/v1/config` is the larger answer, and a browser asking
+"what am I?" should not have to fetch product limits to find out whether it
+holds a seat until 14:20.
+
+#### `GET /v1/sessions/{sid}/bundle`
+
+`GET /v1/files/{id}/content` and `GET /v1/me/export` are device-attested, so
+until now a browser could see that an analysis existed and not one byte of it.
+The bundle route is the browser's way out: one analysis as one zip, at the
+`USER_STEPUP` tier (§20.10) — a second factor and a recent sign-in stand in for
+the attestation a browser cannot produce.
+
+Four decisions in it are worth keeping:
+
+- **One archive over every completed artifact, not a proxy of the stored
+  `Session.zip`.** A modern session stores *two* Drive artifacts — the
+  `bundle`-role `Session.zip` and an `extras` zip — so proxying the first would
+  silently drop reports, CSV and processed images. Building the archive serves
+  modern and legacy sessions identically.
+- **`ZIP_STORED`, not deflate.** The contents are PNG and zip already;
+  compressing them again spends CPU per byte for nothing and throttles the
+  response to the compressor's speed.
+- **Streamed, never buffered.** `MAX_FILES_PER_SESSION` is 600.
+  `zipfile.ZipFile` writes into an unseekable sink that the `StreamingResponse`
+  generator drains after every Drive chunk, so memory stays flat whatever the
+  session's size; `zinfo.file_size` is set before `zf.open(…, "w")` so the
+  zip64 decision is right without a seek. `test_session_bundle.py` proves it by
+  counting drains rather than asserting it in a comment.
+- **Every refusal before the first byte.** Ownership, entitlement and the Drive
+  token are all resolved up front, because once a body has started there is no
+  status code left to send. The central directory, written last, is the
+  completion signal — a truncated transfer is detectable rather than looking
+  like a smaller but valid archive.
+
+`list_session_artifacts` is a second projection over the same `files`
+collection, deliberately kept apart from `list_session_files_all`. That one
+feeds `GET /v1/me/export`, where a Drive file id is a handle to bytes the
+caller is not being handed and is withheld on purpose; this one exists only for
+code about to fetch those bytes on the caller's behalf. Keeping them separate
+means adding a field here can never widen the GDPR export, and a test pins the
+split.
+
+The browser side is `apiBlob()` rather than `api()`, which reads every response
+as text and parses it as JSON — that would both corrupt an archive and throw on
+its first byte. It keeps the one behaviour that matters: the retry on
+`reauth_required`, so a tab left open past the re-authentication window does not
+report a refusal for a download the caller is entitled to.
+
+> **Cloud Run's request budget is the open risk.** The gateway declaration
+> gives this operation a 300s deadline, which a very large session on a slow
+> Drive could still exceed. The fallback if it becomes real is the pattern
+> already in the codebase for exactly this problem — Cloud Tasks async
+> provisioning ([`backend/app/tasks.py`](../../backend/app/tasks.py)) — minting the archive out of band and returning
+> a link.
+
+### 20.12 Two seat counts: what IT intends, and what the licence entitles
+
+A revoke does not land everywhere at once, and no amount of care makes it.
+It reaches three places on three different clocks:
+
+| Place | When it changes | Who reads it |
+|---|---|---|
+| The seat document and `seatsUsed` | Inside the revoke transaction, immediately | The institution console |
+| `users/{uid}.mode` | Just after that transaction commits, via `_drop_user_to_demo_if_licensed` — outside it, unretried | Every authed request |
+| The device | Whenever the app next fetches `/v1/config` | The person actually using Semper |
+
+So `seatsUsed` is a statement of *intent*. It is the only number institution
+IT has, and it moves the instant they act, which is why their console cannot
+tell them whether anything actually happened.
+
+`GET /v1/admin/licenses/{id}/reconcile` is the second number. It reads every
+seat, reads that seat holder's user document, and sorts each into one of three
+buckets with a reason attached:
+
+| Bucket | Reason | Means |
+|---|---|---|
+| `active` | — | On the roster and holding the licence. |
+| `active` | `never_claimed` | Invited, never signed in. Occupies a seat, entitles nobody. |
+| `revokedConfirmed` | `checked_in` | Demoted, and the account has made a request since the revoke — so its device has re-read `/v1/config`. |
+| `revokedConfirmed` | `moved_on` | The account is on a different licence now. |
+| `revokedConfirmed` | `no_account` | No user document behind the seat. |
+| `revokedStillRunning` | `still_licensed` | **A fault.** The demotion never landed; the backend itself would still answer `licensed`. |
+| `revokedStillRunning` | `no_checkin_since_revoke` | The record is right and the device has not been back to hear it. |
+
+Three decisions worth recording.
+
+**Confirmation takes two conditions, not one.** Because
+`_drop_user_to_demo_if_licensed` already runs at revoke time, a bucket keyed
+only on the stored mode would read clean almost always, and would hide the lag
+that a customer actually experiences — the app continuing to work off a cached
+entitlement. So a revoke counts as settled only when the record has caught up
+*and* `lastSeenAt > revokedAt`. The two still-running reasons want opposite
+responses: `still_licensed` is repaired by revoking the seat again, which is
+idempotent and re-runs the demotion; `no_checkin_since_revoke` is waited out,
+and the four-hourly background `/v1/config` refresh
+([`LicenseConfigWorker`](../../app/src/main/java/com/indicvision/semper/data/LicenseConfigWorker.kt))
+is what bounds it — §20.7's 30-minute lease heartbeat is a different clock,
+keeping a floating seat alive while the app is open.
+
+**The test is the stored mode, not `effective_mode`.** A floating member
+between leases reads as demo and is squarely on the roster, so the effective
+view would report a healthy pool as a licence entitling almost nobody.
+`test_a_floating_member_between_leases_is_not_mistaken_for_a_failed_revoke`
+pins this.
+
+**Both revoke paths stamp `revokedAt` separately from `updatedAt`.** The
+question the bucket turns on is "has the holder been back *since the
+revoke*?", and `updatedAt` moves for any later write to the seat — a staff
+device clear, for one — which would silently reset it. Seats revoked before
+this field existed fall back to `updatedAt`, which for them is the same
+instant.
+
+**The revoke stamps `seenCheckpointAt` on the holder too**, in the same write
+that demotes them, so it costs nothing extra. It exists because this read asks
+its question of `lastSeenAt`, which `_touch_user` throttles to
+`_LAST_SEEN_THROTTLE` (one hour): without a checkpoint, a holder last seen
+minutes before the revoke could make their next request, be demoted by it, and
+still read *not checked in* for the rest of the hour — an operator watching the
+verified count would see nothing move. `_touch_user` treats a `lastSeenAt`
+older than the checkpoint as stale whatever its age, so the account's first
+request after a revoke writes the stamp and this reads exactly. One
+un-throttled write per revoked account, once; the throttle governs every
+request after it.
+
+It still errs in one direction, deliberately in the safe one. A seat revoked
+before either field existed has no checkpoint, and a revoke whose holder had
+already moved to another licence performs no demotion write and so stamps
+none — but that seat is `moved_on`, already settled. Over-reporting a revoke as
+unlanded is the right way to be wrong; the opposite would tell an operator a
+device had been told when it had not.
+
+The report also carries `intendedRecounted` — `seatsUsed` recomputed from the
+seats themselves. A disagreement between it and `intended` is a counter drift,
+a different fault from anything the buckets describe, and the operator console
+calls it out separately.
+
+**Cost and tier.** One user read per seat, so it is admin-only and on demand
+rather than a field on the licence listing. It is a plain `ADMIN` read like
+`GET /v1/admin/licenses`: it writes nothing, so it does not take the
+second-factor tier the mutating routes do.

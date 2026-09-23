@@ -1,38 +1,23 @@
 {
   "//": "Firestore index source of truth. Deploy with `firebase deploy --only firestore:indexes`. Single-field equality queries are automatic; composites are listed below.",
-  "//ttl": "Nonce cleanup is NOT expressed here — Firestore TTL is a field policy, not an index. `challenges.expireAt` must have a TTL policy enabled (see docs/backend/BACKEND_SETUP_GCP.md step A2a: `gcloud firestore fields ttls update expireAt --collection-group=challenges --enable-ttl`), otherwise consumed/expired challenge docs accumulate. consume_nonce deletes on use; TTL reclaims the ones never consumed.",
+  "//ttl": "Nonce cleanup is NOT expressed here \u2014 Firestore TTL is a field policy, not an index. `challenges.expireAt` must have a TTL policy enabled (see docs/backend/BACKEND_SETUP_GCP.md step A2a: `gcloud firestore fields ttls update expireAt --collection-group=challenges --enable-ttl`), otherwise consumed/expired challenge docs accumulate. consume_nonce deletes on use; TTL reclaims the ones never consumed.",
   "indexes": [
     {
       "collectionGroup": "sessions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "uid", "order": "ASCENDING" },
-        { "fieldPath": "localSessionId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "sessions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "uid", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "access_status", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "files",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "sessionId", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "localSessionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

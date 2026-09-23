@@ -36,6 +36,8 @@ import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DicBundleDownloadWorker
 import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.LicenseEntitlements
+import com.indicvision.semper.data.LicenseErrors
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.CloudSessionDto
@@ -127,19 +129,31 @@ class SettingsActivity : AppCompatActivity() {
         analysesState = findViewById(R.id.tvAnalysesDataState)
 
         wireCollapsible(R.id.headerAccount, R.id.bodyAccount, R.id.ivAccountChevron)
-        wireCollapsible(R.id.headerCloud, R.id.bodyCloud, R.id.ivCloudChevron)
-        wireCollapsible(R.id.headerAnalysesData, R.id.bodyAnalysesData, R.id.ivAnalysesDataChevron)
         wireCollapsible(R.id.headerStorage, R.id.bodyStorage, R.id.ivStorageChevron)
         wireCollapsible(R.id.headerYourData, R.id.bodyYourData, R.id.ivYourDataChevron)
         wireCollapsible(R.id.headerAnalysisPrefs, R.id.bodyAnalysisPrefs, R.id.ivAnalysisPrefsChevron)
         wireCollapsible(R.id.headerHelpSupport, R.id.bodyHelpSupport, R.id.ivHelpSupportChevron)
 
-        observeRestoreOutcomes()
-        observeBundleDownloadOutcomes()
-
         SettingsAccountSection(this).wire()
-        wireCloudSection()
-        wireAnalysesDataSection()
+        // Backup and restore are the licensed half of cloud. A demo account
+        // records its analyses silently and cannot pull them back, so both
+        // sections are absent rather than shown disabled.
+        val cloudSections = listOf(
+            R.id.headerCloud,
+            R.id.bodyCloud,
+            R.id.headerAnalysesData,
+            R.id.bodyAnalysesData,
+        )
+        if (LicenseEntitlements.cloudBackupEnabled(this)) {
+            wireCollapsible(R.id.headerCloud, R.id.bodyCloud, R.id.ivCloudChevron)
+            wireCollapsible(R.id.headerAnalysesData, R.id.bodyAnalysesData, R.id.ivAnalysesDataChevron)
+            observeRestoreOutcomes()
+            observeBundleDownloadOutcomes()
+            wireCloudSection()
+            wireAnalysesDataSection()
+        } else {
+            cloudSections.forEach { findViewById<View>(it).isVisible = false }
+        }
         SettingsStorageSection(this).wire()
         yourDataSection.wire()
         SettingsPreferencesSection(this).wire()
@@ -214,6 +228,8 @@ class SettingsActivity : AppCompatActivity() {
     // ── Analyses data management ─────────────────────────────────────────
 
     internal fun wireAnalysesDataSection() {
+        // Storage cleanup re-enters here; the section does not exist on demo.
+        if (!LicenseEntitlements.cloudBackupEnabled(this)) return
         analysesProgress.isVisible = true
         analysesState.isVisible = false
 
@@ -539,7 +555,7 @@ class SettingsActivity : AppCompatActivity() {
                                     ?: getString(R.string.restore_failed_generic)
                                 CrispToast.show(
                                     this@SettingsActivity,
-                                    getString(R.string.restore_failed_fmt, reason),
+                                    reason,
                                     long = true,
                                 )
                             }
@@ -607,7 +623,10 @@ class SettingsActivity : AppCompatActivity() {
                                 syncDownloadingKeys()
                                 Toast.makeText(
                                     this,
-                                    R.string.download_analysis_failed,
+                                    LicenseErrors.downloadMessage(
+                                        this,
+                                        info.outputData.getString(DicBundleDownloadWorker.KEY_ERROR),
+                                    ),
                                     Toast.LENGTH_LONG,
                                 ).show()
                             }
@@ -654,10 +673,14 @@ class SettingsActivity : AppCompatActivity() {
     private fun startBackup(entry: AnalysisEntry) {
         val record = entry.record ?: return
         val label = backupLabel(entry) ?: return
-        SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-        CloudSync.enqueueUpload(this, record.id)
-        Toast.makeText(this, label, Toast.LENGTH_SHORT).show()
-        wireAnalysesDataSection()
+        // Same ordering as Home's: the PENDING stamp before the worker, so a
+        // fast upload cannot have its SYNCED stamp overwritten by this one.
+        lifecycleScope.launch {
+            SessionStore.setSyncStateAsync(this@SettingsActivity, record.id, SessionRecord.SyncState.PENDING)
+            CloudSync.enqueueUpload(this@SettingsActivity, record.id)
+            Toast.makeText(this@SettingsActivity, label, Toast.LENGTH_SHORT).show()
+            wireAnalysesDataSection()
+        }
     }
 
     private fun stateLine(entry: AnalysisEntry): String = when (entry.location) {
@@ -770,8 +793,10 @@ class SettingsActivity : AppCompatActivity() {
                 .setTitle(R.string.logout_confirm_title)
                 .setMessage(R.string.logout_confirm_body)
                 .setPositiveButton(R.string.action_sign_out) { _, _ ->
-                    AuthRepository(this).signOut()
-                    AuthRoute.toSignIn(this)
+                    lifecycleScope.launch {
+                        AuthRepository(this@SettingsActivity).signOut()
+                        AuthRoute.toSignIn(this@SettingsActivity)
+                    }
                 }
                 .setNegativeButton(R.string.action_cancel, null)
                 .show()

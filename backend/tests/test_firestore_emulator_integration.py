@@ -297,3 +297,407 @@ def test_page_token_cannot_escape_the_collection(emulator_repo):
 
     with pytest.raises(Exception):
         emulator_repo.list_user_sessions(uid, limit=10, page_token="a/b")
+
+
+# --------------------------------------------------------------- licensing
+# The seat count is the commercial boundary: it is what "ten seats" means on
+# an invoice. Against the fake store every one of these passes vacuously —
+# transactions there apply immediately with no isolation and no retries, so an
+# over-claim is not merely undetected, it is unrepresentable. These are the
+# only tests in the suite that can fail if the transactions are wrong.
+
+def _emu_user(repo_, uid: str, email: str, **extra) -> dict:
+    """A real user document, because claim_seat updates one inside its
+    transaction and Firestore rejects an update to a document that is not
+    there."""
+    data = {
+        "email": email,
+        "emailVerified": True,
+        "access_status": "APPROVED",
+        "role": "user",
+        **extra,
+    }
+    repo_.db().collection("users").document(uid).set(data)
+    return {**data, "uid": uid}
+
+
+def _emu_institution(repo_, *, max_seats, seating):
+    minted = repo_.create_institution_license(
+        domain_lock="university.edu",
+        admin_emails=["it@university.edu"],
+        created_by_uid="emu-admin",
+        max_seats=max_seats,
+        seating=seating,
+    )
+    return minted["license"]["id"]
+
+
+def test_an_assigned_roster_never_over_admits(emulator_repo):
+    """The race that made this tier necessary.
+
+    Seat claim used to be a read followed by a WriteBatch — atomic writes, but
+    no reads inside and no preconditions, so N callers all saw the same free
+    count and all passed. With a cap of 5 and 16 simultaneous claimants the old
+    code lands well above 5; the transaction must land exactly on it.
+    """
+    cap = 5
+    license_id = _emu_institution(emulator_repo, max_seats=cap, seating="assigned")
+    tag = uuid.uuid4().hex[:8]
+    users = [
+        _emu_user(emulator_repo, f"emu-{tag}-{i}", f"m{i}@university.edu")
+        for i in range(16)
+    ]
+
+    def claim(user):
+        return emulator_repo.claim_seat(
+            license_id, user["uid"], user["email"], "",
+            {"licenseId": license_id, "mode": "licensed"},
+        )
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        results = list(pool.map(claim, users))
+
+    admitted = sum(1 for err in results if err == "")
+    seats = emulator_repo.list_institution_seats(license_id)
+    stored = emulator_repo.get_license(license_id)
+
+    assert admitted <= cap, f"over-admitted: {admitted} claims succeeded against a cap of {cap}"
+    assert len(seats) == admitted, "seat documents disagree with the claims that succeeded"
+    assert int(stored.get("seatsUsed") or 0) == admitted, "seatsUsed drifted from the roster"
+    # Losing the race is a refusal, never an exception surfacing as a 500.
+    assert all(isinstance(err, str) for err in results)
+
+
+def test_a_floating_pool_never_hands_out_more_leases_than_it_has(emulator_repo):
+    """A fifty-person lab sharing ten slots is the whole point of floating
+    seating, so the roster is uncapped and the LEASE count is the boundary."""
+    cap = 3
+    license_id = _emu_institution(emulator_repo, max_seats=cap, seating="floating")
+    tag = uuid.uuid4().hex[:8]
+    users = []
+    for i in range(12):
+        user = _emu_user(emulator_repo, f"emu-{tag}-{i}", f"f{i}@university.edu")
+        # On the roster — eligible, holding nothing.
+        emulator_repo.claim_seat(
+            license_id, user["uid"], user["email"], "",
+            {"licenseId": license_id, "mode": "licensed"},
+        )
+        users.append({**user, "licenseId": license_id, "mode": "licensed"})
+
+    # Everyone on the roster, and nobody holding a lease yet.
+    assert len(emulator_repo.list_institution_seats(license_id)) == 12
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        results = list(pool.map(
+            lambda u: emulator_repo.checkout_lease(u, f"dev-{u['uid']}"), users,
+        ))
+
+    granted = [cfg for err, cfg in results if err == ""]
+    refused = [err for err, _ in results if err != ""]
+    stored = emulator_repo.get_license(license_id)
+
+    assert len(granted) <= cap, f"pool of {cap} handed out {len(granted)} leases"
+    assert int(stored.get("leasesActive") or 0) == len(granted), "leasesActive drifted"
+    assert all(err == "no_floating_seat" for err in refused), (
+        f"a full pool must refuse with no_floating_seat, got {sorted(set(refused))}"
+    )
+    # Being between leases is the ordinary state, not a broken account.
+    assert all(cfg["mode"] == "licensed" for cfg in granted)
+
+
+def test_renewing_a_lease_does_not_consume_a_second_slot(emulator_repo):
+    """Re-checkout IS the heartbeat, so it runs constantly. If it double-counted,
+    a pool would strangle itself within one lease period."""
+    license_id = _emu_institution(emulator_repo, max_seats=2, seating="floating")
+    tag = uuid.uuid4().hex[:8]
+    user = _emu_user(emulator_repo, f"emu-{tag}", "solo@university.edu")
+    emulator_repo.claim_seat(
+        license_id, user["uid"], user["email"], "",
+        {"licenseId": license_id, "mode": "licensed"},
+    )
+    holder = {**user, "licenseId": license_id, "mode": "licensed"}
+
+    for _ in range(5):
+        err, _cfg = emulator_repo.checkout_lease(holder, "dev-1")
+        assert err == ""
+
+    assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
+
+    # Concurrent heartbeats from the same holder must not inflate it either.
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        list(pool.map(lambda _: emulator_repo.checkout_lease(holder, "dev-1"), range(6)))
+    assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
+
+
+def test_releasing_a_lease_frees_exactly_one_slot(emulator_repo):
+    license_id = _emu_institution(emulator_repo, max_seats=1, seating="floating")
+    tag = uuid.uuid4().hex[:8]
+    holders = []
+    for i in range(2):
+        user = _emu_user(emulator_repo, f"emu-{tag}-{i}", f"r{i}@university.edu")
+        emulator_repo.claim_seat(
+            license_id, user["uid"], user["email"], "",
+            {"licenseId": license_id, "mode": "licensed"},
+        )
+        holders.append({**user, "licenseId": license_id, "mode": "licensed"})
+
+    first, second = holders
+    assert emulator_repo.checkout_lease(first, "dev-a")[0] == ""
+    assert emulator_repo.checkout_lease(second, "dev-b")[0] == "no_floating_seat"
+
+    assert emulator_repo.release_lease(first)[0] == ""
+    assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 0
+    assert emulator_repo.checkout_lease(second, "dev-b")[0] == ""
+
+    # Releasing a lease that already lapsed frees nothing and still succeeds.
+    assert emulator_repo.release_lease(first)[0] == ""
+    assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
+
+
+def test_an_expired_lease_is_reclaimed_by_the_next_claimant(emulator_repo):
+    """leasesActive drifts whenever a lease lapses without a release — a crashed
+    or uninstalled client does exactly that — so the counter alone can never be
+    the boundary. The sweep before each claim is what makes it true again."""
+    from datetime import timedelta
+
+    license_id = _emu_institution(emulator_repo, max_seats=1, seating="floating")
+    tag = uuid.uuid4().hex[:8]
+    holders = []
+    for i in range(2):
+        user = _emu_user(emulator_repo, f"emu-{tag}-{i}", f"x{i}@university.edu")
+        emulator_repo.claim_seat(
+            license_id, user["uid"], user["email"], "",
+            {"licenseId": license_id, "mode": "licensed"},
+        )
+        holders.append({**user, "licenseId": license_id, "mode": "licensed"})
+    crashed, waiting = holders
+
+    assert emulator_repo.checkout_lease(crashed, "dev-crash")[0] == ""
+    assert emulator_repo.checkout_lease(waiting, "dev-wait")[0] == "no_floating_seat"
+
+    # Backdate the lease without releasing it — what a crashed client leaves.
+    stale = emulator_repo._now() - timedelta(hours=1)
+    emulator_repo._seat_ref(license_id, crashed["uid"]).update({"leaseExpiresAt": stale})
+    # The counter is now wrong, which is the condition the sweep exists for.
+    assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
+
+    err, _cfg = emulator_repo.checkout_lease(waiting, "dev-wait")
+    assert err == "", "the expired lease was never reclaimed"
+    assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
+
+
+def test_an_invite_is_redeemed_at_most_once(emulator_repo):
+    """The app fires /v1/me and /v1/config back to back at launch, so a
+    newcomer's very first two requests race on exactly this path. Redeeming
+    twice would take two seats for one person."""
+    license_id = _emu_institution(emulator_repo, max_seats=10, seating="assigned")
+    tag = uuid.uuid4().hex[:8]
+    address = f"newcomer-{tag}@university.edu"
+
+    err, seat, invite = emulator_repo.add_institution_member(
+        license_id, address, invited_by_uid="emu-it",
+    )
+    assert err == "" and seat is None and invite is not None
+
+    uid = f"emu-{tag}"
+    user = _emu_user(emulator_repo, uid, address)
+
+    _race_entitlement(
+        emulator_repo, user,
+        settled=lambda: bool(emulator_repo.list_institution_seats(license_id)),
+    )
+
+    seats = emulator_repo.list_institution_seats(license_id)
+    stored = emulator_repo.get_license(license_id)
+    assert [s["uid"] for s in seats] == [uid]
+    assert int(stored.get("seatsUsed") or 0) == 1, "one invite bought more than one seat"
+    assert emulator_repo.list_institution_invites(license_id) == [], "invite was not consumed"
+
+
+def test_a_revoked_invite_loses_the_race_cleanly(emulator_repo):
+    """IT withdrawing an invite while the newcomer is signing in must not leave
+    a seat granted against an invite that no longer exists."""
+    license_id = _emu_institution(emulator_repo, max_seats=10, seating="assigned")
+    tag = uuid.uuid4().hex[:8]
+    address = f"racer-{tag}@university.edu"
+    _err, _seat, invite = emulator_repo.add_institution_member(license_id, address)
+    uid = f"emu-{tag}"
+    user = _emu_user(emulator_repo, uid, address)
+
+    emulator_repo.revoke_institution_invite(license_id, invite["id"])
+    out = emulator_repo.claim_pending_invite(dict(user))
+
+    assert out.get("licenseId") is None
+    assert emulator_repo.list_institution_seats(license_id) == []
+    assert int(emulator_repo.get_license(license_id).get("seatsUsed") or 0) == 0
+
+
+#: How many times `_race_entitlement` will re-run a race that granted nothing.
+#: Four starved rounds in a row has never been seen; the cap is there so a
+#: genuinely stuck claim fails the test instead of spinning.
+_RACE_ROUNDS = 4
+
+
+def _race_entitlement(repo_, user, settled, workers: int = 6, rounds: int = _RACE_ROUNDS):
+    """Race `workers` simultaneous `ensure_entitlement` calls until one claim
+    commits, and say how many rounds that took.
+
+    Repeating the race is not a weaker test, because a round that grants
+    nothing proves nothing. The emulator serialises contention and aborts the
+    losers, so all six requests can exhaust the client's five retries and
+    every one of them answer `_contended`; production reads that round the
+    same way — `_drop_superseded_demo` records "six concurrent sign-ins
+    starved out completely and the account landed on Demo", and the claim is
+    left for a later request. With no grant, there is no grant for a loser to
+    stamp a Demo key over, which is the invariant these tests are here for. So
+    race again, with the same pre-race copy of the account every request would
+    have held, rather than assert on a round where nothing happened.
+
+    Each round is a real n-way race, and the assertions afterwards still cover
+    the losers of every round that ran: a Demo key minted by a starved round
+    survives in `licenses` until a claim commits and `_drop_superseded_demo`
+    clears it, so "exactly one licence redeemed by this account" is asserted
+    against everything all the rounds left behind.
+    """
+    for attempt in range(1, rounds + 1):
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(lambda _: repo_.ensure_entitlement(dict(user), None), range(workers)))
+        if settled():
+            return attempt
+    pytest.fail(
+        f"no request claimed the licence in {rounds} rounds of {workers} — "
+        "contention should not starve that long",
+    )
+
+
+def _emu_individual(repo_, email: str):
+    return repo_.create_individual_license(
+        email_lock=email, created_by_uid="emu-admin",
+    )["license"]["id"]
+
+
+def test_one_individual_licence_reaches_exactly_one_account(emulator_repo):
+    """An individual licence names one redeemer. Two accounts signing in with
+    the same address at once — the same person on a phone and a tablet, or a
+    shared mailbox — must not both come away holding it."""
+    tag = uuid.uuid4().hex[:8]
+    address = f"solo-{tag}@lab.org"
+    license_id = _emu_individual(emulator_repo, address)
+    users = [_emu_user(emulator_repo, f"emu-{tag}-{i}", address) for i in range(8)]
+    patch = {"licenseId": license_id, "mode": "licensed"}
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(
+            lambda u: emulator_repo.claim_individual_license(
+                license_id, u["uid"], address, dict(patch),
+            ),
+            users,
+        ))
+
+    admitted = [u for u, err in zip(users, results) if err == ""]
+    stored = emulator_repo.get_license(license_id)
+
+    assert len(admitted) == 1, f"{len(admitted)} accounts claimed one individual licence"
+    assert stored["redeemedByUid"] == admitted[0]["uid"]
+    assert stored["status"] == "redeemed"
+    # Losing is a refusal, never an exception surfacing as a 500.
+    assert all(isinstance(err, str) for err in results)
+
+
+def test_an_individual_invite_is_consumed_once_under_concurrency(emulator_repo):
+    """The whole delivery path, raced: mint against an address, sign in, land
+    licensed — and only once, however many requests arrive together.
+
+    Every worker is handed the account as it looked before any of them ran,
+    which is what six requests in flight at app launch actually see. The losers
+    fall through to the Demo mint holding that stale copy; the assertion is
+    that none of them stamps a Demo key over the licence a sibling just
+    granted — see `_race_entitlement` for why the race may be run more than
+    once before that assertion means anything.
+    """
+    tag = uuid.uuid4().hex[:8]
+    address = f"invited-{tag}@lab.org"
+    license_id = _emu_individual(emulator_repo, address)
+    uid = f"emu-{tag}"
+    user = _emu_user(emulator_repo, uid, address, activeDeviceId=f"dev-{tag}")
+
+    _race_entitlement(
+        emulator_repo, user,
+        settled=lambda: (emulator_repo.get_license(license_id) or {}).get("redeemedByUid") == uid,
+    )
+
+    stored_user = emulator_repo.db().collection("users").document(uid).get().to_dict()
+    assert stored_user["licenseId"] == license_id
+    assert stored_user["mode"] == "licensed"
+    stored = emulator_repo.get_license(license_id)
+    assert stored["redeemedByUid"] == uid
+    assert emulator_repo.list_institution_invites(license_id) == [], "invite was not consumed"
+    # Strictly one record, of any mode. A loser that commits its Demo key
+    # before the winner claims the real one used to leave that Demo document
+    # behind — redeemed, pointed at by nobody, and indistinguishable in the
+    # operator listing from a live key. `_drop_superseded_demo` clears it once
+    # the claim has committed and the pointer is the claim's own.
+    held = [
+        doc.id for doc in emulator_repo.db().collection("licenses").stream()
+        if (doc.to_dict() or {}).get("redeemedByUid") == uid
+    ]
+    assert held == [license_id], f"{len(held)} licences redeemed by one account"
+
+
+def test_the_first_device_wins_an_unbound_lock(emulator_repo):
+    """Bind-on-first-use is what ties an emailed licence to a device. Two
+    devices signing in together both read an empty lock; a plain write would
+    let the later one win, so the licence would follow whichever request
+    Firestore happened to order second."""
+    tag = uuid.uuid4().hex[:8]
+    address = f"binder-{tag}@lab.org"
+    license_id = _emu_individual(emulator_repo, address)
+    uid = f"emu-{tag}"
+    user = _emu_user(emulator_repo, uid, address)
+    user = emulator_repo.ensure_entitlement(dict(user), None)
+    assert user["licenseId"] == license_id
+
+    ref = emulator_repo.db().collection("licenses").document(license_id)
+    devices = [f"dev-{tag}-{i}" for i in range(8)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        won = list(pool.map(lambda d: emulator_repo.bind_device_lock(ref, d), devices))
+
+    locked = emulator_repo.get_license(license_id)["deviceIdLock"]
+    assert sum(1 for w in won if w) == 1, "more than one device claimed the lock"
+    assert locked == devices[won.index(True)]
+    # Every other device is now a mismatch, which is the answer a lock exists
+    # to give: revalidation drops them to demo rather than re-binding.
+    loser = next(d for d in devices if d != locked)
+    demoted = emulator_repo.revalidate_device_lock(dict(user), loser)
+    assert demoted["mode"] == "demo"
+    assert emulator_repo.get_license(license_id)["deviceIdLock"] == locked
+
+
+def test_an_address_finds_the_licences_it_administers(emulator_repo):
+    """`array_contains` against a real Firestore, not the double.
+
+    The fake store answers membership queries in Python, so it would happily
+    serve a query the real index cannot. This is the one that proves the
+    single-clause shape works unaided — and that `kind` and `status` really
+    can be filtered afterwards without a composite index.
+    """
+    tag = uuid.uuid4().hex[:8]
+    address = f"it-{tag}@lab.org"
+    mine = emulator_repo.create_institution_license(
+        domain_lock=f"{tag}.lab.org", admin_emails=[address, f"other-{tag}@lab.org"],
+        created_by_uid="admin", max_seats=3,
+    )["license"]["id"]
+    revoked = emulator_repo.create_institution_license(
+        domain_lock=f"{tag}.old.org", admin_emails=[address],
+        created_by_uid="admin", max_seats=1,
+    )["license"]["id"]
+    emulator_repo.revoke_license(revoked, "admin")
+    emulator_repo.create_institution_license(
+        domain_lock=f"{tag}.other.org", admin_emails=[f"nobody-{tag}@lab.org"],
+        created_by_uid="admin", max_seats=1,
+    )
+
+    found = [lic["id"] for lic in emulator_repo.list_licenses_administered_by(address)]
+
+    assert found == [mine], "a revoked or foreign licence reached the listing"
+

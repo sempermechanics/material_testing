@@ -134,7 +134,7 @@ class PendingApprovalActivity : AppCompatActivity() {
                                 R.string.status_access_granted,
                                 Toast.LENGTH_SHORT,
                             ).show()
-                            startActivity(Intent(this@PendingApprovalActivity, target))
+                            startActivity(AccessRouter.intentFor(this@PendingApprovalActivity, target))
                             finish()
                         }
                         else -> {

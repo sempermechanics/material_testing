@@ -3,12 +3,13 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
-from .. import audit, drive, errors, firestore_repo as repo
+from .. import audit, drive, errors, firestore_repo as repo, legal
 from .. import rate_limit
-from ..deps import current_user, verified_device
+from ..deps import any_status_user, current_user, verified_device
 
 log = logging.getLogger("indic")
 router = APIRouter()
@@ -20,15 +21,127 @@ def json_dumps(value) -> str:
     return json.dumps(value, separators=(",", ":"), default=str)
 
 
+def _terms_block(user: dict) -> dict:
+    """What the app compares to decide whether to show the acceptance screen."""
+    accepted = user.get("termsAccepted") or {}
+    return {
+        "required_version": legal.TERMS_VERSION,
+        "accepted_version": accepted.get("version"),
+        "terms_url": legal.TERMS_URL,
+        "privacy_url": legal.PRIVACY_URL,
+    }
+
+
+def _improvement_consent(user: dict) -> bool | None:
+    """None until the user has answered; the app treats None as "not asked"."""
+    consent = user.get("improvementConsent")
+    return None if not consent else bool(consent.get("granted"))
+
+
 @router.get("/v1/me")
 def me(user=Depends(current_user)):
-    return {"uid": user["uid"], "email": user.get("email"),
-            "role": user.get("role"), "access_status": user["access_status"]}
+    """Who the caller is, and what their license currently grants.
+
+    The `license` block answers "am I entitled, and for how much longer" in the
+    same round trip as identity, so the app can warn about an approaching
+    expiry instead of only discovering it when `mode` silently flips to demo.
+    It costs no extra Firestore read — `current_user` already returns the whole
+    user document, and the summary is pure over it.
+
+    `/v1/config` remains the source of truth for limits and feature flags; this
+    is deliberately the smaller answer.
+    """
+    summary = repo.license_summary(user)
+    return {
+        "uid": user["uid"],
+        "email": user.get("email"),
+        "role": user.get("role"),
+        "access_status": user["access_status"],
+        "license": {
+            "mode": summary["mode"],
+            "kind": summary["licenseKind"],
+            "prefix": summary["prefix"],
+            "duration": summary["duration"],
+            # Both null when perpetual. inGrace is past expiry but still fully
+            # entitled — a warning, not a restriction.
+            "expiresAt": summary["expiresAt"],
+            "graceEndsAt": summary["graceEndsAt"],
+            "inGrace": summary["inGrace"],
+            # Seating and the lease are here so a page that renders "you hold
+            # a floating seat until 14:20" needs this call alone. `/v1/config`
+            # carries them too, but it is the larger answer and a browser
+            # asking "what am I?" should not have to fetch limits to find out.
+            "seating": summary["seating"],
+            "leaseExpiresAt": summary["leaseExpiresAt"],
+        },
+        "terms": _terms_block(user),
+        "improvement_consent": _improvement_consent(user),
+    }
+
+
+class TermsAcceptance(BaseModel):
+    version: str = Field(min_length=1, max_length=32)
+
+
+class ConsentUpdate(BaseModel):
+    improvement: bool
+
+
+def _consent_source(x_device_id: str) -> str:
+    return "app" if x_device_id else "console"
+
+
+@router.post("/v1/me/terms")
+def accept_terms(
+    body: TermsAcceptance,
+    user=Depends(any_status_user),
+    x_device_id: str = Header(default=""),
+):
+    """Record clickwrap acceptance of the current Terms of Service.
+
+    PENDING accounts may call this — the gate runs at registration, before
+    approval. The version is checked against the server's, not trusted from the
+    client: an app that ships an older document must not be able to record
+    agreement to terms the user never saw.
+    """
+    if body.version != legal.TERMS_VERSION:
+        raise HTTPException(409, errors.TERMS_VERSION_MISMATCH)
+    uid = user["uid"]
+    record = repo.record_terms_acceptance(
+        uid, body.version, x_device_id or None, _consent_source(x_device_id),
+    )
+    audit.record(uid, x_device_id or None, action="TERMS_ACCEPTED",
+                 target={"type": "user", "id": uid}, detail={"version": body.version})
+    return {"terms": {**_terms_block({"termsAccepted": record}),
+                      "accepted_at": record["acceptedAt"]}}
+
+
+@router.put("/v1/me/consents")
+def set_consents(
+    body: ConsentUpdate,
+    user=Depends(any_status_user),
+    x_device_id: str = Header(default=""),
+):
+    """Grant or withdraw the optional product-improvement consent.
+
+    Kept apart from Terms acceptance on purpose: consent to secondary use of the
+    user's content has to be a separate, freely revocable choice, not a
+    condition of the service.
+    """
+    uid = user["uid"]
+    record = repo.record_improvement_consent(
+        uid, body.improvement, legal.TERMS_VERSION, x_device_id or None,
+        _consent_source(x_device_id),
+    )
+    audit.record(uid, x_device_id or None, action="CONSENT_CHANGED",
+                 target={"type": "user", "id": uid},
+                 detail={"improvement": record["granted"], "version": record["version"]})
+    return {"improvement_consent": record["granted"], "updated_at": record["at"]}
 
 
 @router.get("/v1/config")
 def app_config(user=Depends(current_user)):
-    """Resolved product limits for the caller (per-user override → fleet default)."""
+    """Resolved plan, entitlements, and product limits for the caller."""
     return repo.resolve_user_config(user)
 
 
@@ -64,6 +177,9 @@ def export_account(ctx=Depends(verified_device)):
             "createdAt": str(profile.get("createdAt")),
             "lastSeenAt": str(profile.get("lastSeenAt")),
         },
+        # Contract and consent records are personal data too (right of access).
+        "termsAccepted": profile.get("termsAccepted"),
+        "improvementConsent": profile.get("improvementConsent"),
         "devices": repo.list_user_devices(uid),
         "artifactDownload": {
             "endpoint": "/v1/files/{fileId}/content",

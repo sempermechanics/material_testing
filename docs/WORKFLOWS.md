@@ -225,10 +225,10 @@ exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFL
 | Reads | `.dat` frames via `DicResult.decodeDatFile` (memory-mapped) and `data/DatCodec` |
 | Renders | `report/VisualizationEngine` heatmaps, `ui/viewer/HeatmapFit` rest-fit, `TouchImageView` zoom/pan, `ViewerFieldPills`, `ScrubFrameCache` look-ahead; single-setting only: `ViewerSummaryHelper` + `SummaryAnimation` + `report/GifEncoder` |
 | Probe | `ViewerInspectHelper` + `PointSpatialIndex` (built lazily on first tap) + `InspectOverlayView` |
-| Details | `ViewerSettingsSheet` (ⓘ), fed from the same `DicKeys` extras |
+| Details | `ViewerSettingsSheet` (ⓘ). On a frame: true extrema plus a Scott-binned histogram of accepted values (`FieldHistogramView`). On the summary: min of every frame's colour-bar min and max of every frame's colour-bar max, matching the GIF; no mean, no histogram |
 | Exports | `ShareCenter` → `ViewerReportFactory` / `report/ReportBuilder` / `PdfReportGenerator` / `AnalysisCsvWriter` / `data/SessionEverythingExporter` → `SendToSheet` → `SaveExportActivity` (SAF) |
 | Fails as | Snackbar + **Why?** FAQ (`no_batch_data`, OOM, scale) |
-| Tests | `results/*` (decode, CSV, heatmap, PDF, GIF, summary), `viewer/ScrubFrameCacheTest`, `viewer/FrameNumberEntryTest`, `HeatmapFitTest`, `ViewerFieldPillsTest` |
+| Tests | `results/*` (decode, histogram, CSV, heatmap, PDF, GIF, summary), `viewer/ScrubFrameCacheTest`, `viewer/FrameNumberEntryTest`, `HeatmapFitTest`, `ViewerFieldPillsTest` |
 
 **Memory invariants**: the scrub cache is byte-bounded and filled by one
 serialized worker; whole-batch passes (summary scan, spatial index) start on
@@ -433,7 +433,7 @@ pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access),
 | C3 | Mint a nonce | `POST /v1/challenge` | `firestore_repo.issue_nonce(uid, deviceId)` — single-use, bound to the pair |
 | C4 | Verify a device-signed call | `deps.verified_device` | ACTIVE device → `consume_nonce` (replay = 401) → ECDSA P-256 over `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → `bad_signature` audited on failure |
 | C4a | Legacy `/uploads` reader | `deps.device_or_legacy_reader` | Temporary window: an *unattested* read of the resume list is accepted while `REQUIRE_ATTESTED_UPLOADS` is unset, logged as `legacy_unattested_uploads`. Any device header, or the flag, forces the strict path. Retire per [ops/FUTURE_IMPROVEMENTS.md](ops/FUTURE_IMPROVEMENTS.md) |
-| C14 | Admin | `routers/admin.py` | Listing needs only an admin ID token; **approve / revoke / config-patch also require `verified_device`**, so a stolen ID token cannot change access. All audited |
+| C14 | Admin | `routers/admin.py` | Listing and **device-history** need only an admin ID token; **approve / revoke / config-patch / mint additionally require a step-up** — a device attestation, or a second factor plus a recent sign-in for the staff console — so a stolen ID token alone cannot change access. Whole-licence revoke uses a tighter freshness window. All audited |
 
 ### Account and identity routes
 

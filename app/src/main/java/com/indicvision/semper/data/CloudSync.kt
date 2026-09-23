@@ -151,7 +151,10 @@ object CloudSync {
     ) {
         if (throttled && AppRemoteConfig.isKnown(appContext)) return
         runCatching { api.getConfig(token) }
-            .onSuccess { AppRemoteConfig.apply(appContext, it) }
+            .onSuccess {
+                AppRemoteConfig.apply(appContext, it)
+                LicenseConfigWorker.enqueue(appContext)
+            }
             .onFailure {
                 AppRemoteConfig.recordFetchFailure(appContext)
                 Timber.d(it, "App remote config fetch failed during reconcile")
@@ -191,7 +194,7 @@ object CloudSync {
         val token = TokenProvider.usableIdToken()
             ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
         try {
-            val cloudId = resolveCloudId(api, token, record!!)
+            val cloudId = resolveCloudId(api, token, record)
             if (cloudId != null) api.deleteSession(token, cloudId)
             SessionStore.delete(appContext, localSessionId)
             Timber.i("Erased analysis %s locally and in the cloud", localSessionId)
@@ -247,7 +250,7 @@ object CloudSync {
         eraseCloud: suspend () -> Boolean,
         deleteIdentity: suspend () -> Boolean,
         wipeLocal: () -> Unit,
-        signOut: () -> Unit,
+        signOut: suspend () -> Unit,
     ): AccountDeletion {
         if (!eraseCloud()) return AccountDeletion.CLOUD_UNREACHABLE
         val identityGone = deleteIdentity()
@@ -353,6 +356,19 @@ object CloudSync {
     }
 
     /**
+     * Whether a finished analysis is uploaded.
+     *
+     * A licensed account chooses through the Settings "Save to cloud" toggle.
+     * A demo account has no such toggle — demo analyses are always recorded
+     * (images and results), which is the one cloud feature demo has; what it
+     * lacks is the licensed retrieval half (restore, bundle download). The
+     * pref is ignored rather than read so a toggle turned off under an earlier
+     * licence cannot silently stop demo recording.
+     */
+    fun uploadsEnabled(context: Context): Boolean =
+        !LicenseEntitlements.cloudBackupEnabled(context) || DicSettings.saveToCloud(context)
+
+    /**
      * Queue the upload for one analysis. Everything the worker needs lives in
      * [SessionStore], so only the id travels in the input Data.
      *
@@ -369,6 +385,8 @@ object CloudSync {
         context: Context,
         localSessionId: String,
     ) {
+        // Deliberately not gated on the licence: recording an analysis is open
+        // to every account (see [uploadsEnabled]); only restore is licensed.
         if (!TokenStore.isQuotaKnown(context)) {
             Timber.i("Upload deferred for %s — cloud quota not yet known", localSessionId)
             return

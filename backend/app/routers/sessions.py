@@ -1,16 +1,23 @@
+import io
 import logging
+import re
 import uuid
+import zipfile
+from datetime import datetime
 
+import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from .. import audit, drive, errors, firestore_repo as repo, statuses
 from .. import observability as obs
 from .. import rate_limit
 from .. import tasks
-from ..deps import current_user, device_or_legacy_reader, verified_device
+from ..deps import attested_or_mfa_user, current_user, device_or_legacy_reader, verified_device
 from ..models import SessionCreate
 from ..session_provision import provision_session
 from ..validation import PageToken, SessionId
+from .account import json_dumps
 
 log = logging.getLogger("indic")
 router = APIRouter()
@@ -209,8 +216,177 @@ def list_session_files(
     }
 
 
+#: Listed first in the archive so a reader has the inventory before the bytes,
+#: and can tell which entry is missing if the transfer died half way.
+_BUNDLE_MANIFEST = "manifest.json"
+
+#: Zip cannot represent a date before this.
+_ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
+
+
+class _ZipSink(io.RawIOBase):
+    """A write-only file object that hands each write straight back out.
+
+    `zipfile` wants something it can call `write()` on; `StreamingResponse`
+    wants a generator it can pull from. This is the join between the two: the
+    zip writer writes, the generator drains. Nothing accumulates beyond the
+    chunk in flight, which is the entire point — at the 600-file ceiling an
+    analysis must not be assembled in memory first.
+    """
+
+    def __init__(self):
+        self._buf = bytearray()
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, data) -> int:
+        self._buf += data
+        return len(data)
+
+    def drain(self) -> bytes:
+        out = bytes(self._buf)
+        del self._buf[:]
+        return out
+
+
+def _entry_name(artifact: dict) -> str:
+    """`<role>/<name>`, matching the app's own `SessionZip.entryName`.
+
+    The name is attacker-supplied in the sense that it came from a client
+    upload, so it is reduced to a bare leaf here: no directory components, no
+    drive letters, nothing that starts with a dot. A zip that unpacks outside
+    the directory it was extracted into is the oldest bug in the format.
+    """
+    role = re.sub(r"[^A-Za-z0-9_-]", "_", str(artifact.get("role") or "extras"))
+    leaf = str(artifact.get("name") or "").replace("\\", "/").rsplit("/", 1)[-1]
+    leaf = re.sub(r'[\r\n:"|?*]', "_", leaf).lstrip(". ")
+    return f"{role}/{leaf or artifact['fileId']}"
+
+
+def _zip_time(value) -> tuple:
+    if isinstance(value, datetime) and value.year >= 1980:
+        return (value.year, value.month, value.day, value.hour, value.minute, value.second)
+    return _ZIP_EPOCH
+
+
+@router.get("/v1/sessions/{sid}/bundle")
+def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
+    """One analysis as a single zip — how the data leaves through a browser.
+
+    `GET /v1/files/{id}/content` already serves the bytes, but it is
+    device-attested and one file at a time: the phone's restore path, useless
+    to someone sitting at a desk who has lost the phone. This route is the
+    same data at the step-up tier, which a browser can satisfy with a second
+    factor and a recent sign-in, and in one request instead of six hundred.
+
+    Every artifact goes in at `<role>/<name>`, the layout the app writes and
+    reads, so an archive pulled from the web unpacks into something the app
+    recognises. Modern analyses store two entries (`bundle/Session.zip` and
+    `extras/Extras.zip`); older ones store a file per artifact. Both are the
+    same loop — the archive is of whatever was stored, with no special case.
+
+    Stored, not deflated: the contents are already-compressed PNG and zip
+    data, so compressing again would spend CPU per byte to save nothing, and
+    the stream would run at the speed of the compressor rather than of Drive.
+
+    **Every refusal happens before the first byte.** Once a response body has
+    started there is no status code left to send, so the ownership check, the
+    entitlement check and the Drive token are all resolved up front. A failure
+    after that can only truncate the archive, which is why the manifest is
+    written first and why the zip's central directory — written last — is the
+    signal that the transfer completed.
+    """
+    user = ctx["user"]
+    if not rate_limit.download_bucket.allow(user["uid"]):
+        raise HTTPException(429, errors.RATE_LIMITED)
+    session = repo.get_session(sid)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(404, errors.SESSION_NOT_FOUND)
+    if not repo.cloud_backup_enabled(user):
+        raise HTTPException(403, errors.feature_not_licensed_detail())
+    artifacts = repo.list_session_artifacts(sid)
+    if not artifacts:
+        # The session exists but nothing finished uploading, so there is
+        # nothing to archive. Same code the single-file route uses for it.
+        raise HTTPException(409, errors.FILE_NOT_UPLOADED)
+    try:
+        token = drive.access_token()
+    except Exception:
+        log.exception("session_bundle_token_failed")
+        raise HTTPException(502, errors.DRIVE_DOWNLOAD_FAILED) from None
+
+    manifest = json_dumps({
+        "sessionId": sid,
+        "specimen": session.get("specimen"),
+        "createdAt": session.get("createdAt"),
+        "fileCount": len(artifacts),
+        "files": [{
+            "entry": _entry_name(a), "fileId": a["fileId"], "role": a.get("role"),
+            "name": a.get("name"), "sizeBytes": a.get("sizeBytes", 0),
+            "sha256": a.get("sha256"),
+        } for a in artifacts],
+    }).encode()
+
+    audit.record(
+        user["uid"], (ctx.get("device") or {}).get("deviceId"),
+        action="SESSION_BUNDLE_DOWNLOAD",
+        target={"type": "session", "id": sid},
+        detail={"fileCount": len(artifacts), "via": ctx.get("via") or ""},
+    )
+
+    def stream():
+        sink = _ZipSink()
+        with zipfile.ZipFile(sink, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
+            zf.writestr(_BUNDLE_MANIFEST, manifest)
+            if (chunk := sink.drain()):
+                yield chunk
+            for artifact in artifacts:
+                info = zipfile.ZipInfo(_entry_name(artifact),
+                                       date_time=_zip_time(artifact.get("createdAt")))
+                # Declared up front so zipfile can decide on zip64 headers
+                # before it has seen the bytes; it cannot seek back to fix
+                # them on an unseekable sink.
+                info.file_size = int(artifact.get("sizeBytes") or 0)
+                try:
+                    dl = drive.open_download(token, artifact["driveFileId"])
+                    with zf.open(info, "w") as dst:
+                        for part in dl.iter_chunks():
+                            dst.write(part)
+                            if (chunk := sink.drain()):
+                                yield chunk
+                except requests.RequestException:
+                    obs.log_event(log, logging.ERROR, "session_bundle_failed",
+                                  outcome="error", errorCode=errors.DRIVE_DOWNLOAD_FAILED,
+                                  dependency="drive")
+                    raise
+                if (chunk := sink.drain()):
+                    yield chunk
+        yield sink.drain()
+
+    return StreamingResponse(
+        stream(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="semper-analysis-{sid}.zip"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.post("/v1/sessions")
 def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_device)):
+    """Record an analysis: create the session and hand back its upload slots.
+
+    Open to every approved account, demo included. Recording is not the
+    licensed feature — retrieval is. A demo account's frames and results are
+    stored under the same quota (`DEMO_MAX_ANALYSES`) and are never deleted
+    on downgrade; what a licence buys is getting them back (`/content` and
+    the session bundle), so the `cloudBackupEnabled` gate lives on those two
+    routes and deliberately not here. Installed builds that predate licensing
+    retry a 403 from this route forever, which is one more reason the gate
+    would be the wrong shape.
+    """
     user, device = ctx["user"], ctx["device"]
     cfg = repo.resolve_user_config(user)
 

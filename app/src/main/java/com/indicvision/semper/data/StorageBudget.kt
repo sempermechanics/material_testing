@@ -16,6 +16,11 @@ import timber.log.Timber
  * Sessions that are LOCAL_ONLY, PENDING or FAILED are never touched: this
  * device holds the only copy, so dropping them would be data loss rather than
  * a cache eviction.
+ *
+ * Nor is anything touched on a demo account. Its analyses are recorded (so
+ * they reach SYNCED) but demo has no restore, so "the cloud has it" does not
+ * make the local copy an evictable cache — for demo, this phone still holds
+ * the only copy the user can reach.
  */
 object StorageBudget {
 
@@ -45,14 +50,19 @@ object StorageBudget {
         withContext(Dispatchers.IO) { freeAllBackedUp(context) }
 
     /** Bytes that could be reclaimed right now without touching the cloud. */
-    fun reclaimableBytes(context: Context): Long =
-        SessionStore.list(context)
+    fun reclaimableBytes(context: Context): Long {
+        if (!canRestore(context)) return 0L
+        return SessionStore.list(context)
             .filter { it.canDropLocally() }
             .sumOf { SessionStore.sizeOf(context, it.id) }
+    }
+
+    /** Whether a dropped local copy could be pulled back: the licensed half of cloud. */
+    private fun canRestore(context: Context): Boolean = LicenseEntitlements.cloudBackupEnabled(context)
 
     private fun freeDownTo(context: Context, target: Long): Outcome {
         var total = SessionStore.totalSize(context)
-        if (total <= target) return Outcome(0L, 0)
+        if (!canRestore(context) || total <= target) return Outcome(0L, 0)
 
         // Oldest first: the session the user is least likely to reopen next.
         val candidates = SessionStore.list(context)

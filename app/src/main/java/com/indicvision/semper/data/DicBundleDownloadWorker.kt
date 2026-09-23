@@ -101,7 +101,9 @@ class DicBundleDownloadWorker(
                     mapOf("kind" to "bundle_download", "reason" to "rejected"),
                 )
                 deleteDestDocument(destUri)
-                Result.failure(workDataOf(KEY_ERROR to (e.message ?: "rejected")))
+                // The body, not the message: LicenseErrors parses the `detail` code
+                // out of it to say *why* (demo mode) instead of "check your connection".
+                Result.failure(workDataOf(KEY_ERROR to e.body))
             } else {
                 Timber.w(e, "Bundle download failed; will retry")
                 TransferLog.phase(

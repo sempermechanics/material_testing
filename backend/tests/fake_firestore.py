@@ -4,12 +4,19 @@ Enough of the client surface for firestore_repo.py to run in tests without a
 live backend: documents, `.set/.update/.get/.delete`, `==` queries, `.count()`,
 batches, and a pass-through transaction. Install it with `install(monkeypatch)`.
 """
+import operator
 from datetime import datetime, timezone
 
 from google.api_core.exceptions import AlreadyExists, NotFound
 
 
 class _Sentinel:
+    # No __dict__, so that jsonable_encoder rejects a sentinel that leaks into
+    # a response the way it rejects the real one (the real client's sentinel
+    # is likewise not encodable); with a __dict__ it would encode as {} and a
+    # write's return value reaching a response would pass here, 500 in prod.
+    __slots__ = ("name",)
+
     def __init__(self, name):
         self.name = name
 
@@ -99,6 +106,13 @@ class _DocRef:
     def delete(self):
         self._bucket().pop(self.id, None)
 
+    def collection(self, name):
+        """Subcollection under this document (e.g. licenses/{id}/seats/{uid}),
+        stored as its own flat bucket keyed by the joined path — mirrors how
+        the real client addresses subcollections without needing a nested
+        document tree in this double."""
+        return _Collection(self._store, f"{self._collection}/{self.id}/{name}")
+
 
 class _AggResult:
     def __init__(self, value):
@@ -114,11 +128,27 @@ class _Query:
         self._order_by = order_by
         self._start_after = start_after
 
+    #: Positional `.where(field, op, value)` only — the production code uses
+    #: that legacy signature rather than FieldFilter precisely so this double
+    #: can implement it.
+    _OPS = {
+        "==": operator.eq,
+        "!=": operator.ne,
+        "<": operator.lt,
+        "<=": operator.le,
+        ">": operator.gt,
+        ">=": operator.ge,
+        # Membership, not comparison: the left side is the stored list.
+        "array_contains": lambda stored, wanted: (
+            isinstance(stored, (list, tuple)) and wanted in stored
+        ),
+    }
+
     def where(self, field, op, value):
-        assert op == "==", f"fake store only supports '==', got {op!r}"
+        assert op in self._OPS, f"fake store does not support {op!r}"
         return _Query(
             self._store, self._collection,
-            self._filters + [(field, value)], self._limit,
+            self._filters + [(field, op, value)], self._limit,
             self._order_by, self._start_after,
         )
 
@@ -140,11 +170,40 @@ class _Query:
             self._order_by, snapshot_or_doc,
         )
 
+    @classmethod
+    def _field_value(cls, data: dict, field: str):
+        """Resolve `a.b.c` the way Firestore document fields do for queries."""
+        cur = data
+        for part in field.split("."):
+            if not isinstance(cur, dict) or part not in cur:
+                return None, False
+            cur = cur[part]
+        return cur, True
+
+    @classmethod
+    def _passes(cls, data, field, op, value) -> bool:
+        """One filter clause.
+
+        A document missing the field never matches an inequality, matching
+        Firestore: a field that is absent is not indexed, so such documents
+        are simply not in the result set. Getting this wrong would make an
+        expired-lease sweep also pick up seats that hold no lease at all.
+        """
+        stored, present = cls._field_value(data, field)
+        if not present:
+            return op == "!=" if "!" in op else False
+        if op == "array_contains":
+            return cls._OPS[op](stored, value)
+        try:
+            return cls._OPS[op](stored, value)
+        except TypeError:
+            return False  # mismatched types are never comparable in Firestore
+
     def _matching(self):
         bucket = self._store._data.get(self._collection, {})
         rows = []
         for doc_id, data in bucket.items():
-            if all(data.get(f) == v for f, v in self._filters):
+            if all(self._passes(data, f, op, v) for f, op, v in self._filters):
                 rows.append(_Snapshot(doc_id, data, _DocRef(self._store, self._collection, doc_id)))
         if self._order_by == "__name__" or self._order_by is None:
             rows.sort(key=lambda snap: snap.id)

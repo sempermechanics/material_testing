@@ -22,6 +22,17 @@ object ApiErrors {
     /** The caller is not an admin (403 from an admin route). */
     const val NOT_ADMIN = "not_admin"
 
+    /**
+     * This build could not be attested (403), while the backend is enforcing
+     * App Check. It says nothing about the account — an entitled user on a
+     * sideloaded or tampered build lands here — so it is rendered as "update
+     * from the Play Store", never as a licence problem.
+     */
+    const val APP_CHECK_REQUIRED = "app_check_required"
+
+    /** The app tried to accept a Terms version the server no longer serves (409). */
+    const val TERMS_VERSION_MISMATCH = "terms_version_mismatch"
+
     /** This account is already bound to a different device (409). */
     const val DEVICE_CONFLICT = "device_conflict"
 
@@ -48,6 +59,24 @@ object ApiErrors {
 
     /** The account is at its stored-analysis cap (409). Carries a count tail. */
     const val SESSION_QUOTA_EXCEEDED = "session_quota_exceeded"
+
+    /**
+     * Every seat on the institution's floating licence is in use (409).
+     *
+     * Not a fault in the account: the caller stays on the roster and gets a
+     * seat as soon as a colleague finishes, so this is rendered as "try again",
+     * never as an error.
+     */
+    const val NO_FLOATING_SEAT = "no_floating_seat"
+
+    /** Cloud backup/share refused because the account is on demo (403). */
+    const val FEATURE_NOT_LICENSED = "feature_not_licensed"
+
+    /**
+     * This device is not the one the licence is bound to (403). Usually means
+     * restore was attempted before the lock moved, or on the wrong phone.
+     */
+    const val LICENSE_DEVICE_MISMATCH = "license_device_mismatch"
 
     /**
      * The `detail` of an error [body], or the trimmed body when it is not the

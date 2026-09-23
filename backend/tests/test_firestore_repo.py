@@ -145,6 +145,40 @@ def test_last_seen_write_happens_once_stale(monkeypatch, store):
     assert store._data["users"]["u4"]["lastSeenAt"] != stale
 
 
+def test_last_seen_write_ignores_the_throttle_after_a_revoke_checkpoint(
+    monkeypatch, store,
+):
+    """A revoke asks for one un-throttled write, and gets exactly one.
+
+    Seat reconciliation reads "has the holder been back since the revoke?" off
+    lastSeenAt. The throttle alone would keep that answer wrong for an hour,
+    so a stamp older than `seenCheckpointAt` is stale whatever its age — and
+    once the write lands, the throttle applies again.
+    """
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", False)
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE_HD", "")
+    claims = _claims(sub="u6", email="x@nowhere.com")
+    repo.get_or_create_user(claims)
+
+    doc = store._data["users"]["u6"]
+    fresh = datetime.now(timezone.utc) - timedelta(minutes=5)
+    doc["lastSeenAt"] = fresh
+    # The revoke ran a minute after the account was last seen.
+    doc["seenCheckpointAt"] = fresh + timedelta(minutes=1)
+
+    u = repo.get_or_create_user(claims)
+
+    assert u["lastSeenAt"] != fresh, "a stamp predating the checkpoint must refresh"
+    moved = store._data["users"]["u6"]["lastSeenAt"]
+    assert moved > doc["seenCheckpointAt"]
+
+    # Second request: the stamp is now past the checkpoint, so the ordinary
+    # throttle takes over and the restore's dozens of calls stay one write.
+    repo.get_or_create_user(claims)
+    assert store._data["users"]["u6"]["lastSeenAt"] == moved
+
+
 def test_last_seen_write_happens_when_another_field_changed(monkeypatch, store):
     # A real field change (role, access_status, provider, schema) must not be
     # swallowed by the throttle just because lastSeenAt itself is fresh.

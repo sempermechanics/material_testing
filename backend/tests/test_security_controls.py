@@ -36,6 +36,56 @@ async def test_hsts_only_on_cloud_run_https(client, monkeypatch):
     assert "includeSubDomains" in hsts
 
 
+CONSOLE_ORIGIN = "https://app.sempermechanics.com"
+
+
+@pytest.mark.asyncio
+async def test_console_preflight_is_answered_for_a_listed_origin(client):
+    # The dashboards send Authorization cross-origin, so the browser asks
+    # first. An unanswered preflight is a page that renders and does nothing.
+    response = await client.options(
+        "/v1/me",
+        headers={
+            "origin": CONSOLE_ORIGIN,
+            "access-control-request-method": "GET",
+            "access-control-request-headers": "authorization",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == CONSOLE_ORIGIN
+    allowed = response.headers["access-control-allow-headers"].lower()
+    assert "authorization" in allowed
+    assert "content-type" in allowed
+    assert "PATCH" in response.headers["access-control-allow-methods"]
+    # Bearer tokens only — a credentialed CORS grant would let a cookie ride.
+    assert "access-control-allow-credentials" not in response.headers
+    # The preflight still leaves through security_headers.
+    assert response.headers["x-frame-options"] == "DENY"
+
+
+@pytest.mark.asyncio
+async def test_console_preflight_refuses_an_unlisted_origin(client):
+    response = await client.options(
+        "/v1/me",
+        headers={
+            "origin": "https://evil.example",
+            "access-control-request-method": "GET",
+        },
+    )
+    assert "access-control-allow-origin" not in response.headers
+
+
+@pytest.mark.asyncio
+async def test_simple_request_from_console_origin_keeps_security_headers(
+    client, monkeypatch
+):
+    monkeypatch.setattr(rate_limit.health_bucket, "allow", lambda key: True)
+    response = await client.get("/healthz", headers={"origin": CONSOLE_ORIGIN})
+    assert response.headers["access-control-allow-origin"] == CONSOLE_ORIGIN
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["content-security-policy"] == "frame-ancestors 'none'"
+
+
 def test_firestore_rules_are_deny_all_and_wired_to_existing_hosting():
     rules = (ROOT / "firestore.rules").read_text(encoding="utf-8")
     assert "allow read, write: if false;" in rules

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Details sheet: max/min with coords + mean, then settings used. -->
+<!-- Details sheet: max/min (+ mean on a frame), then the frame histogram, then settings used. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -47,6 +47,42 @@
         android:lineSpacingExtra="4dp"
         android:textColor="@color/viewer_chrome_text"
         android:textSize="14sp" />
+
+    <LinearLayout
+        android:id="@+id/distributionSection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvHistogramTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:letterSpacing="0.08"
+            android:textAllCaps="true"
+            android:textColor="@color/viewer_chrome_muted"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <com.indicvision.semper.ui.viewer.FieldHistogramView
+            android:id="@+id/plotFieldHistogram"
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            android:layout_marginTop="8dp"
+            android:contentDescription="@string/viewer_histogram_desc" />
+
+        <TextView
+            android:id="@+id/tvHistogramCaption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:accessibilityLiveRegion="polite"
+            android:fontFamily="monospace"
+            android:textColor="@color/viewer_chrome_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
 
     <TextView
         android:layout_width="wrap_content"

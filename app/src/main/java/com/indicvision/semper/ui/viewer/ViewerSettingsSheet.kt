@@ -14,15 +14,20 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.DicResult
+import com.indicvision.semper.FieldHistogram
 import com.indicvision.semper.R
+import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.ui.analysis.EngineFailure
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import com.indicvision.semper.ui.analysis.VsgStudy
 import kotlin.math.roundToInt
 
 /**
- * Peek sheet for a result: max / min (with coordinates) / mean for the frame on
- * screen, then the parameter rows that produced it (and the sweep line-cut).
+ * Peek sheet for a result. On a still frame: true max / min (with coordinates) /
+ * mean, then a histogram of accepted values. On the summary GIF: the sequence
+ * colour-bar ends only — no mean, no histogram. Then the parameter rows that
+ * produced the result (and the sweep line-cut).
  */
 object ViewerSettingsSheet {
 
@@ -123,6 +128,7 @@ object ViewerSettingsSheet {
             host.intent.getStringExtra(DicKeys.REF_NAME).orEmpty()
 
         view.findViewById<TextView>(R.id.tvSheetStats).text = host.detailStatsText()
+        populateHistogram(host, view)
 
         val rows = view.findViewById<LinearLayout>(R.id.settingsUsedRows)
 
@@ -135,6 +141,50 @@ object ViewerSettingsSheet {
         if (host.isSweep) populateLineCut(host, view)
 
         sheet.show()
+    }
+
+    /**
+     * Accepted-value histogram for the frame on screen. Hidden on the summary
+     * GIF — that sheet quotes the sequence colour-bar ends, not this frame's
+     * population.
+     */
+    private fun populateHistogram(host: ResultViewerActivity, sheetView: View) {
+        val section = sheetView.findViewById<View>(R.id.distributionSection)
+        if (host.isShowingSummary) {
+            section.visibility = View.GONE
+            return
+        }
+        val data = host.rawData
+        val hist = data?.let { FieldHistogram.from(it, host.currentDataIndex) }
+        if (hist == null) {
+            section.visibility = View.GONE
+            return
+        }
+        section.visibility = View.VISIBLE
+        val unit = host.getString(
+            if (DicResult.isStrainFieldIndex(host.currentDataIndex)) {
+                R.string.scale_unit_strain
+            } else {
+                R.string.scale_unit_px
+            },
+        )
+        sheetView.findViewById<TextView>(R.id.tvHistogramTitle).text =
+            host.getString(R.string.viewer_histogram_title_fmt, host.currentTypeString)
+        val caption = sheetView.findViewById<TextView>(R.id.tvHistogramCaption)
+        val plot = sheetView.findViewById<FieldHistogramView>(R.id.plotFieldHistogram)
+        plot.setHistogram(hist, unit)
+        plot.onBinSelected = { index ->
+            val count = hist.counts[index]
+            val text = host.resources.getQuantityString(
+                R.plurals.viewer_histogram_bin_fmt,
+                count,
+                count,
+                ReportBuilder.formatMetric(hist.binStart(index)),
+                ReportBuilder.formatMetric(hist.binEnd(index)),
+                unit,
+            )
+            caption.text = text
+        }
     }
 
     /**

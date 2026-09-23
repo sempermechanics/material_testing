@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Filled primary button that visibly greys out while disabled -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:alpha="0.35" android:color="@color/sky_primary" android:state_enabled="false" />
+    <item android:color="@color/sky_primary" />
+</selector>

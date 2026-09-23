@@ -18,7 +18,26 @@ data class MeResponse(
     val email: String? = null,
     val role: String? = null,
     @SerialName("access_status") val accessStatus: String,
+    /** Absent on backends predating the clickwrap gate; the app then falls back to its own constant. */
+    val terms: TermsDto? = null,
+    /** null = never answered; the app treats that as "not asked", never as consent. */
+    @SerialName("improvement_consent") val improvementConsent: Boolean? = null,
 )
+
+/** Which Terms version the server requires, and which (if any) this account accepted. */
+@Serializable
+data class TermsDto(
+    @SerialName("required_version") val requiredVersion: String,
+    @SerialName("accepted_version") val acceptedVersion: String? = null,
+    @SerialName("terms_url") val termsUrl: String? = null,
+    @SerialName("privacy_url") val privacyUrl: String? = null,
+)
+
+@Serializable
+data class TermsAcceptanceBody(val version: String)
+
+@Serializable
+data class ConsentUpdateBody(val improvement: Boolean)
 
 /** Resolved product limits from GET /v1/config (per-user override → fleet default). */
 @Serializable
@@ -31,7 +50,68 @@ data class AppConfigDto(
      * backend deploy this app talks to → false (fail closed, matches the
      * default already used for every field here). */
     val datCodecEncodingEnabled: Boolean = false,
+    /** `demo` or `licensed`. Empty on a backend deploy predating the
+     * plan→mode rename; [AppRemoteConfig] falls back to [plan] in that case,
+     * so a blank here is "not told", not "demo". */
+    val mode: String = "",
+    /** Pre-rename spelling of [mode]: `demo` or `professional`. Still sent by
+     * the backend alongside `mode` for builds that predate the rename, and
+     * still read here as the fallback when `mode` is absent. Missing from both
+     * → demo (fail closed). */
+    val plan: String = "demo",
+    val cloudBackupEnabled: Boolean = false,
+    val shareEnabled: Boolean = false,
+    val licensePrefix: String = "",
+    /** `""`, `"individual"`, or `"institution"` — display/support metadata,
+     * so Settings can show e.g. "Activated via university.edu" and support
+     * tickets can tell the two shapes apart. A backend predating the rename
+     * sends `"campus"`; [AppRemoteConfig] normalises it.
+     *
+     * Not a gating input: entitlements are identical for an individual and an
+     * institution seat once [mode] is licensed. What differs on an institution
+     * license is [licenseSeating], and it is that field — not this one — that
+     * decides whether a seat has to be taken. */
+    val licenseKind: String = "",
+    /** `assigned` or `floating`, for an institution license. Empty on a
+     * backend predating floating seats, which the cache reads as assigned —
+     * every license that existed then entitled its members outright.
+     *
+     * `floating` plus [mode] `demo` is the one combination that means "you may
+     * work, but somebody else is holding the seat": eligible, not blocked. */
+    val licenseSeating: String = "",
+    /** ISO-8601 instant this account's floating seat lapses, or null when it
+     * holds none (and always null on an assigned license).
+     *
+     * Parsed so the contract stays honest, and deliberately not cached: the
+     * backend folds the lease into `mode`, so a local copy of the lapse time
+     * would only be a second, staler opinion of what `isLicensed` already
+     * answers. The account console shows it; the app has no use for it. */
+    val leaseExpiresAt: String? = null,
+    /** How often to renew the seat. Renewing IS the heartbeat — the backend
+     * has no separate route — so this is the interval between checkout calls
+     * while work is in progress. 0 until a backend that knows about seats
+     * answers. */
+    val leaseHeartbeatMinutes: Int = 0,
+    /** `perpetual` or `timed`. Empty on a backend predating duration; the
+     * cache infers it from whether an expiry arrived. */
+    val licenseDuration: String = "",
+    /** ISO-8601 instant the license stops, or null when perpetual. Advisory —
+     * the app warns from it but never gates on it, because a cached date can
+     * be arbitrarily stale and a renewal may have landed while offline. */
+    val licenseExpiresAt: String? = null,
+    /** ISO-8601 instant entitlement actually ends: expiry plus the grace
+     * window. Null when perpetual. */
+    val licenseGraceEndsAt: String? = null,
+    /** Past expiry but still fully entitled. Nothing is withdrawn — this only
+     * says a renewal is overdue. */
+    val inGrace: Boolean = false,
 )
+
+@Serializable
+data class LicenseActivateRequest(val key: String)
+
+@Serializable
+data class LicenseActivateResponse(val config: AppConfigDto)
 
 @Serializable
 data class DeviceRegisterRequest(

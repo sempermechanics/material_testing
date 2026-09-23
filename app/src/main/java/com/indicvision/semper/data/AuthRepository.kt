@@ -7,13 +7,17 @@ import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthMultiFactorException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.MultiFactorResolver
+import com.google.firebase.auth.TotpMultiFactorGenerator
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.net.MeResponse
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
@@ -23,16 +27,38 @@ import timber.log.Timber
 import java.io.IOException
 
 /**
- * Host both Firebase auth continue links return to — the project's default
- * hosting domain. Must be an Authorized Domain in the Firebase project and
- * handled as an App Link by this app (see docs); keep in sync with the
- * backend's FIREBASE_PROJECT_ID.
+ * Host both Firebase auth continue links return to — the custom domain on the
+ * auth project's Hosting site. Must be an Authorized Domain in the Firebase
+ * project and handled as an App Link by this app (see docs).
  *
  * Top-level rather than on [AuthRepository]'s private companion because
  * `AuthActivity` checks arriving links against it, and one constant beats a
  * second copy of the domain drifting out of step with the manifest.
  */
-const val AUTH_HOST = "indicvision-dic-app-auth.firebaseapp.com"
+const val AUTH_HOST = "app.sempermechanics.com"
+
+/**
+ * The Hosting site's own domain, which every build before [AUTH_HOST] used as
+ * its continue host and which the password-reset action URL in Firebase
+ * Console still names. Links arriving on it are ours too.
+ */
+const val LEGACY_AUTH_HOST = "indicvision-dic-app-auth.firebaseapp.com"
+
+/**
+ * Every host an auth continue link may legitimately arrive on. The manifest
+ * declares an App Link filter for each; `AuthActivity` refuses the rest.
+ * Shrinks back to [AUTH_HOST] alone once no build declaring only the legacy
+ * host is installed (TD-29).
+ */
+val AUTH_HOSTS: Set<String> = setOf(AUTH_HOST, LEGACY_AUTH_HOST)
+
+/**
+ * True for an https link on one of [AUTH_HOSTS] — the only links
+ * `AuthActivity` hands to Firebase. Pure so the allow-list is unit-testable
+ * without an Android `Uri`.
+ */
+fun isTrustedAuthLink(scheme: String?, host: String?): Boolean =
+    scheme.equals("https", ignoreCase = true) && host?.lowercase() in AUTH_HOSTS
 
 /**
  * Authentication + access-gate.
@@ -68,6 +94,53 @@ class AuthRepository(context: Context) {
     }
 
     /**
+     * Finish a sign-in that already passed the first factor and now needs the
+     * authenticator code. [resolver] and [enrollmentId] come from
+     * [MfaTotpRequired] — the exception Firebase throws after password/Google.
+     */
+    suspend fun completeTotpChallenge(
+        resolver: MultiFactorResolver,
+        enrollmentId: String,
+        code: String,
+    ): Result<String> = firebaseThen("totp") {
+        resolveTotpAssertion(resolver, enrollmentId, code)
+    }
+
+    /**
+     * Same second-factor proof for [reauthenticateWithPassword] /
+     * [reauthenticateWithGoogle], without resolving backend access status —
+     * the caller already has a session and only needs Firebase to accept the
+     * fresh proof.
+     */
+    suspend fun resolveTotpChallenge(
+        resolver: MultiFactorResolver,
+        enrollmentId: String,
+        code: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            resolveTotpAssertion(resolver, enrollmentId, code)
+            Result.success(Unit)
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
+            Result.failure(Exception("Incorrect authenticator code.", e))
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "TOTP challenge failed")
+            Result.failure(Exception(e.message ?: "Incorrect authenticator code."))
+        }
+    }
+
+    private suspend fun resolveTotpAssertion(
+        resolver: MultiFactorResolver,
+        enrollmentId: String,
+        code: String,
+    ) {
+        val assertion = TotpMultiFactorGenerator.getAssertionForSignIn(
+            enrollmentId,
+            code.trim(),
+        )
+        resolver.resolveSignIn(assertion).await()
+    }
+
+    /**
      * New account: email + password. Fires a verification email and stops there —
      * [firebaseThen] blocks the session until the address is confirmed, so a new
      * account never reaches the backend before its owner has proved the mailbox
@@ -91,6 +164,8 @@ class AuthRepository(context: Context) {
         try {
             user.reauthenticate(EmailAuthProvider.getCredential(email, password)).await()
             Result.success(Unit)
+        } catch (e: FirebaseAuthMultiFactorException) {
+            Result.failure(mfaRequired(e))
         } catch (e: FirebaseAuthInvalidCredentialsException) {
             Result.failure(Exception("Incorrect password.", e))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -105,6 +180,8 @@ class AuthRepository(context: Context) {
         try {
             user.reauthenticate(GoogleAuthProvider.getCredential(googleIdToken, null)).await()
             Result.success(Unit)
+        } catch (e: FirebaseAuthMultiFactorException) {
+            Result.failure(mfaRequired(e))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.w(e, "Google re-authentication failed")
             Result.failure(Exception(e.message ?: "Could not verify your identity."))
@@ -241,9 +318,78 @@ class AuthRepository(context: Context) {
         resolveStatus()
     }
 
-    fun signOut() {
+    /**
+     * End the Firebase session and clear local tokens.
+     *
+     * A floating seat is released first (best-effort) so the institution pool
+     * sees the slot free immediately rather than waiting for the lease TTL.
+     * Call from a coroutine — the release needs the ID token that this method
+     * then discards.
+     */
+    suspend fun signOut() = withContext(Dispatchers.IO) {
+        SeatLease.releaseBestEffort(appContext)
+        LicenseConfigWorker.cancel(appContext)
         auth.signOut()
         TokenStore.clear(appContext)
+    }
+
+    // ------------------------------------------------------------ legal / consent
+
+    /**
+     * Record clickwrap acceptance of [version] and the separate improvement
+     * choice. Local first, so the gate opens even when the backend cannot be
+     * reached right now; an unsynced acceptance is re-sent by [resolveStatus].
+     *
+     * Fails only for [IndicApi.TermsVersionMismatchException]: agreeing to
+     * terms the server no longer serves must not open the gate.
+     */
+    suspend fun acceptTerms(version: String, improvementConsent: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val token = if (api.enabled) TokenProvider.usableIdToken() else null
+            if (token == null) {
+                TokenStore.setTermsAccepted(appContext, version, synced = false)
+                TokenStore.setImprovementConsent(appContext, improvementConsent)
+                return@withContext Result.success(Unit)
+            }
+            try {
+                api.acceptTerms(token, version)
+                TokenStore.setTermsAccepted(appContext, version, synced = true)
+            } catch (e: IndicApi.TermsVersionMismatchException) {
+                Timber.w(e, "Server requires a newer Terms version than this build carries")
+                return@withContext Result.failure(e)
+            } catch (e: IOException) {
+                Timber.d(e, "Terms acceptance not synced; will retry on next status refresh")
+                TokenStore.setTermsAccepted(appContext, version, synced = false)
+            }
+            setImprovementConsent(improvementConsent)
+            Result.success(Unit)
+        }
+
+    /**
+     * Grant or withdraw the product-improvement consent. The local value is the
+     * one the UI shows; the server copy is what the improvement pipeline reads,
+     * so a failed sync is reported rather than hidden.
+     */
+    suspend fun setImprovementConsent(granted: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        TokenStore.setImprovementConsent(appContext, granted)
+        val token = (if (api.enabled) TokenProvider.usableIdToken() else null)
+            ?: return@withContext Result.success(Unit)
+        try {
+            api.setImprovementConsent(token, granted)
+            Result.success(Unit)
+        } catch (e: IOException) {
+            Timber.w(e, "Improvement consent not synced")
+            Result.failure(e)
+        }
+    }
+
+    /** Push a locally recorded acceptance the backend has not confirmed yet. */
+    private suspend fun syncPendingTermsAcceptance(token: String) {
+        if (TokenStore.isTermsAcceptanceSynced(appContext)) return
+        val version = TokenStore.termsAcceptedVersion(appContext) ?: return
+        runCatching { api.acceptTerms(token, version) }
+            .onSuccess { TokenStore.setTermsAccepted(appContext, version, synced = true) }
+            .onFailure { Timber.d(it, "Terms acceptance still not synced") }
     }
 
     fun cachedEmail(): String? = auth.currentUser?.email ?: TokenStore.cachedEmail(appContext)
@@ -270,6 +416,13 @@ class AuthRepository(context: Context) {
         }
         try {
             signIn()
+        } catch (e: FirebaseAuthMultiFactorException) {
+            SemperAnalytics.event(
+                appContext,
+                SemperAnalytics.SIGN_IN_FAILED,
+                mapOf("method" to method, "reason" to "mfa_required"),
+            )
+            return@withContext Result.failure(mfaRequired(e))
         } catch (e: FirebaseAuthWeakPasswordException) {
             SemperAnalytics.event(
                 appContext,
@@ -299,7 +452,12 @@ class AuthRepository(context: Context) {
                 SemperAnalytics.SIGN_IN_FAILED,
                 mapOf("method" to method, "reason" to "bad_credentials"),
             )
-            return@withContext Result.failure(Exception("Incorrect email or password.", e))
+            val message = if (method == "totp") {
+                "Incorrect authenticator code."
+            } else {
+                "Incorrect email or password."
+            }
+            return@withContext Result.failure(Exception(message, e))
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.w(e, "Firebase sign-in failed")
             SemperAnalytics.event(
@@ -330,6 +488,7 @@ class AuthRepository(context: Context) {
         val status = resolveStatus()
         if (status.isSuccess) {
             SemperAnalytics.event(appContext, SemperAnalytics.SIGN_IN, mapOf("method" to method))
+            LicenseConfigWorker.enqueue(appContext)
         } else {
             SemperAnalytics.event(
                 appContext,
@@ -371,6 +530,27 @@ class AuthRepository(context: Context) {
             "Verify your email first. We've sent a link to $email — open it, then sign in again.",
         )
 
+    /**
+     * First factor succeeded; the account needs the authenticator code before a
+     * session exists. [enrollmentId] is the TOTP factor Firebase already
+     * enrolled (usually on a dashboard); the phone only completes the challenge.
+     */
+    class MfaTotpRequired(
+        val resolver: MultiFactorResolver,
+        val enrollmentId: String,
+    ) : Exception("Enter the code from your authenticator app.")
+
+    /** Map Firebase's multi-factor exception to a TOTP challenge the UI can run. */
+    private fun mfaRequired(e: FirebaseAuthMultiFactorException): Exception {
+        val enrollmentId = TotpMfa.enrollmentId(e.resolver.hints)
+            ?: return Exception(
+                "This account needs an authenticator app. Open the Semper website, " +
+                    "enrol one, then try again on the phone.",
+                e,
+            )
+        return MfaTotpRequired(e.resolver, enrollmentId)
+    }
+
     /** True when this account signs in with a password and has not confirmed its address. */
     private suspend fun needsEmailVerification(user: FirebaseUser): Boolean {
         if (user.providerData.none { it.providerId == EmailAuthProvider.PROVIDER_ID }) return false
@@ -387,6 +567,8 @@ class AuthRepository(context: Context) {
             val me = api.me(token) // 200 = APPROVED
             TokenStore.setStatus(appContext, AccessStatus.APPROVED)
             TokenStore.setRole(appContext, me.role ?: "user")
+            cacheLegalState(me)
+            syncPendingTermsAcceptance(token)
             runCatching { api.getConfig(token) }
                 .onSuccess { AppRemoteConfig.apply(appContext, it) }
                 .onFailure {
@@ -427,6 +609,21 @@ class AuthRepository(context: Context) {
         }
     }
 
+    /**
+     * The server's view of the Terms wins over this device's: a version bump
+     * re-gates on the next launch, and an acceptance made on another device
+     * (or before a reinstall) is honoured without asking again.
+     */
+    private fun cacheLegalState(me: MeResponse) {
+        val terms = me.terms ?: return
+        TokenStore.setTermsRequiredVersion(appContext, terms.requiredVersion)
+        val accepted = terms.acceptedVersion
+        if (accepted != null && TokenStore.termsAcceptedVersion(appContext) != accepted) {
+            TokenStore.setTermsAccepted(appContext, accepted, synced = true)
+        }
+        me.improvementConsent?.let { TokenStore.setImprovementConsent(appContext, it) }
+    }
+
     private suspend fun ensureDeviceRegistered(idToken: String) {
         if (TokenStore.isDeviceRegistered(appContext)) return
         api.registerDevice(idToken) // throws DeviceConflictException on 409
@@ -460,9 +657,9 @@ class AuthRepository(context: Context) {
         const val K_PENDING_EMAIL = "pending_email"
 
         /** Email sign-in link continue URL — see [AUTH_HOST]. */
-        const val EMAIL_LINK_CONTINUE_URL = "https://$AUTH_HOST/finishSignIn"
+        const val EMAIL_LINK_CONTINUE_URL = "https://$AUTH_HOST/auth/finishSignIn"
 
         /** Password-reset App Link continue URL — keep in sync with the manifest filter. */
-        const val RESET_CONTINUE_URL = "https://$AUTH_HOST/finishReset"
+        const val RESET_CONTINUE_URL = "https://$AUTH_HOST/auth/finishReset"
     }
 }

@@ -25,6 +25,9 @@ private const val WRITE_TIMEOUT_S = 300L
 private const val READ_TIMEOUT_S = 60L
 private const val DOWNLOAD_READ_TIMEOUT_S = 300L
 
+/** Seat routes take no body; the backend reads the caller from the token. */
+private const val EMPTY_JSON = "{}"
+
 /**
  * Client for the Semper GCP backend (Cloud Run / FastAPI).
  *
@@ -84,6 +87,9 @@ class IndicApi private constructor(context: Context) {
 
     class NotApprovedException : IOException(ApiErrors.NOT_APPROVED)
 
+    /** The Terms this build carries are older than the ones the server publishes (409). */
+    class TermsVersionMismatchException(val requestId: String? = null) : IOException(ApiErrors.TERMS_VERSION_MISMATCH)
+
     /**
      * This account is bound to a *different* device (registration refused).
      * [requestId] is the backend's `X-Request-Id` when it answered — a device
@@ -95,6 +101,15 @@ class IndicApi private constructor(context: Context) {
      * This device is already bound to a different account (409 from `GET /v1/me`).
      */
     class DeviceInUseException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_IN_USE)
+
+    /**
+     * Every floating seat on the institution's license is in use right now.
+     *
+     * Not an account problem: the caller is still on the roster and still
+     * entitled to a seat as soon as one frees. Distinct from [ApiException] so
+     * callers cannot render it as a generic failure.
+     */
+    class NoSeatAvailableException : IOException(ApiErrors.NO_FLOATING_SEAT)
 
     /**
      * The backend has no ACTIVE device record for us — the record was revoked or
@@ -226,6 +241,113 @@ class IndicApi private constructor(context: Context) {
                 HttpStatus.CONFLICT -> throw DeviceConflictException(IndicApiHttp.requestIdOf(resp))
                 else -> throw IndicApiHttp.apiException(resp)
             }
+        }
+    }
+
+    /**
+     * POST /v1/licenses/activate — redeem a license key (individual or
+     * institution; the backend tells them apart by the key itself).
+     * Bearer + `X-Device-Id` like [registerDevice], **not** device-signed: the
+     * backend route is `current_user` + a plain `X-Device-Id` header, no
+     * challenge/nonce/signature. Every subsequent signed/bearer call still
+     * re-validates the resulting lock (see [AppRemoteConfig] /
+     * `revalidate_device_lock` in the backend) — this call only kicks it off.
+     *
+     * Throws [ApiException] with the backend's error code as `detail` for a
+     * mismatch/revoked/exhausted key (`license_email_mismatch`,
+     * `license_device_mismatch`, `license_revoked`, `license_seat_disabled`,
+     * `license_seats_exhausted`, `license_already_redeemed`, `license_not_found`).
+     */
+    suspend fun activateLicense(idToken: String, key: String): AppConfigDto = withContext(Dispatchers.IO) {
+        val body = LicenseActivateRequest(key = key)
+        val req = Request.Builder().url("$base/v1/licenses/activate")
+            .header("Authorization", "Bearer $idToken")
+            .header("X-Device-Id", device.getDeviceId())
+            .post(json.encodeToString(body).toRequestBody(jsonMedia)).build()
+        client.newCall(req).execute().use { resp ->
+            if (resp.code != HttpStatus.OK) {
+                throw ApiException(
+                    resp.code,
+                    IndicApiHttp.bodyText(resp),
+                    IndicApiHttp.requestIdOf(resp),
+                )
+            }
+            val decoded: LicenseActivateResponse = json.decodeFromString(resp.body.string())
+            decoded.config
+        }
+    }
+
+    /**
+     * POST /v1/licenses/checkout — take or renew a floating seat.
+     *
+     * Calling it again IS the heartbeat: renewing does not consume a second
+     * seat, so there is no separate route to get that wrong. Call it every
+     * [AppConfigDto.leaseHeartbeatMinutes] while work is in progress.
+     *
+     * Throws [NoSeatAvailableException] when the pool is full. That is not a
+     * problem with the account — the member is still eligible and still in
+     * demo — so it is a distinct type rather than a generic [ApiException],
+     * to stop a caller rendering "something went wrong" for it.
+     */
+    suspend fun checkoutLease(idToken: String): AppConfigDto = seatCall(idToken, "checkout")
+
+    /** POST /v1/licenses/release — give a floating seat back. Idempotent. */
+    suspend fun releaseLease(idToken: String): AppConfigDto = seatCall(idToken, "release")
+
+    private suspend fun seatCall(idToken: String, action: String): AppConfigDto =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder().url("$base/v1/licenses/$action")
+                .header("Authorization", "Bearer $idToken")
+                .header("X-Device-Id", device.getDeviceId())
+                .post(EMPTY_JSON.toRequestBody(jsonMedia)).build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.code != HttpStatus.OK) {
+                    val body = IndicApiHttp.bodyText(resp)
+                    if (resp.code == HttpStatus.CONFLICT &&
+                        ApiErrors.hasCode(body, ApiErrors.NO_FLOATING_SEAT)
+                    ) {
+                        throw NoSeatAvailableException()
+                    }
+                    throw ApiException(resp.code, body, IndicApiHttp.requestIdOf(resp))
+                }
+                val decoded: LicenseActivateResponse = json.decodeFromString(resp.body.string())
+                decoded.config
+            }
+        }
+
+    // ---------------------------------------------------------- legal / consent
+
+    /**
+     * POST /v1/me/terms — record clickwrap acceptance of [version].
+     *
+     * Plain bearer auth (like [registerDevice]): the gate runs at registration,
+     * before a device is registered and before an operator has approved the
+     * account, so it can require neither attestation nor APPROVED status.
+     * Throws [TermsVersionMismatchException] when the server no longer serves
+     * [version] — the app is older than the published Terms.
+     */
+    suspend fun acceptTerms(idToken: String, version: String): Unit = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url("$base/v1/me/terms")
+            .header("Authorization", "Bearer $idToken")
+            .header("X-Device-Id", device.getDeviceId())
+            .post(json.encodeToString(TermsAcceptanceBody(version)).toRequestBody(jsonMedia)).build()
+        client.newCall(req).execute().use { resp ->
+            when (resp.code) {
+                HttpStatus.OK -> Unit
+                HttpStatus.CONFLICT -> throw TermsVersionMismatchException(IndicApiHttp.requestIdOf(resp))
+                else -> throw IndicApiHttp.apiException(resp)
+            }
+        }
+    }
+
+    /** PUT /v1/me/consents — grant or withdraw the optional product-improvement consent. */
+    suspend fun setImprovementConsent(idToken: String, granted: Boolean): Unit = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url("$base/v1/me/consents")
+            .header("Authorization", "Bearer $idToken")
+            .header("X-Device-Id", device.getDeviceId())
+            .put(json.encodeToString(ConsentUpdateBody(granted)).toRequestBody(jsonMedia)).build()
+        client.newCall(req).execute().use { resp ->
+            if (resp.code != HttpStatus.OK) throw IndicApiHttp.apiException(resp)
         }
     }
 
@@ -527,6 +649,13 @@ class IndicApi private constructor(context: Context) {
             .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
             .writeTimeout(WRITE_TIMEOUT_S, TimeUnit.SECONDS) // large chunk PUTs to Drive
             .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
+            // Application interceptors, so each sees the logical call once
+            // rather than once per redirect hop. Retry first, so a retried
+            // request gets a freshly read App Check token rather than replaying
+            // the one that may have expired while it waited. downloadClient
+            // inherits both through newBuilder() below.
+            .addInterceptor(RetryOnTransient())
+            .addInterceptor(AppCheckHeader())
             .apply {
                 val pins = BuildConfig.INDIC_API_CERT_PINS.trim()
                 val host = runCatching {

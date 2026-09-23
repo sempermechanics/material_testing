@@ -30,11 +30,13 @@ import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.ui.analysis.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.CrispToast
@@ -62,6 +64,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var selection: SessionSelectionController
     private lateinit var fab: ImageButton
     private lateinit var tvHomeQuota: TextView
+    private lateinit var tvHomeLicense: TextView
 
     /** Upload WorkInfo ids already surfaced, so one failure isn't snackbar-spammed. */
     private val shownUploadFailures = mutableSetOf<java.util.UUID>()
@@ -134,6 +137,7 @@ class HomeActivity : AppCompatActivity() {
         emptyState = findViewById(R.id.emptyState)
         swipeRefresh = findViewById(R.id.swipeRefresh)
         tvHomeQuota = findViewById(R.id.tvHomeQuota)
+        tvHomeLicense = findViewById(R.id.tvHomeLicense)
         swipeRefresh.setColorSchemeResources(R.color.sky_primary)
         // Pull down = deep re-check: verify the blobs really exist in Drive,
         // not just that the backend's index says so.
@@ -143,6 +147,15 @@ class HomeActivity : AppCompatActivity() {
         fab = findViewById(R.id.fabNewAnalysis)
         positionFabAtNineTenths()
         fab.setOnClickListener {
+            // Two independent reasons new work cannot start. The seat check is
+            // first because an institution member is licensed, so the quota
+            // check below is false for them by definition and would wave them
+            // through. btnEmptyRestore delegates here via performClick(), so
+            // both entry points are covered by this one listener.
+            if (LicenseEntitlements.seatRequiredToStart(this)) {
+                AnalysisNavHelper.openSeatRequired(this)
+                return@setOnClickListener
+            }
             // At the account's analysis limit, block new work behind the persistent
             // limit screen (email support) instead of letting it fail on upload.
             if (TokenStore.isSessionLimitReached(this)) {
@@ -301,7 +314,7 @@ class HomeActivity : AppCompatActivity() {
                                 ?: getString(R.string.restore_failed_generic)
                             CrispToast.show(
                                 this@HomeActivity,
-                                getString(R.string.restore_failed_fmt, reason),
+                                reason,
                                 long = true,
                             )
                             refresh()
@@ -325,6 +338,7 @@ class HomeActivity : AppCompatActivity() {
      * The badge remains the place to deliberately re-attempt (see [retryOrBackup]).
      */
     private fun showUploadFailure(reason: String) {
+        if (!showsCloudState()) return
         CrispToast.show(
             this,
             getString(R.string.cloud_backup_failed_fmt, reason),
@@ -412,8 +426,12 @@ class HomeActivity : AppCompatActivity() {
             }
             adapter.submit(sessions)
             adapter.setCloudOnlyIds(cloudOnly)
+            // Demo: analyses are recorded silently and there is no restore, so
+            // the list carries no sync badge, bar or "only in cloud" state.
+            adapter.setSyncVisible(showsCloudState())
             emptyState.isVisible = sessions.isEmpty()
             updateQuotaIndicator(sessions.size)
+            updateLicenseNotice()
             // A refresh can drop rows out from under a selection.
             selection.updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
@@ -426,6 +444,46 @@ class HomeActivity : AppCompatActivity() {
                 swipeRefresh.isRefreshing = false
             }
         }
+    }
+
+    /**
+     * Warn that a timed license is running out, or has run out and is inside
+     * its grace window.
+     *
+     * Its own view rather than [tvHomeQuota]: a licensed account always has a
+     * known quota, so it never reaches that view's unknown-quota hint branch.
+     *
+     * Advisory only. Entitlement is decided by the backend and arrives as
+     * `mode`; this notice is suppressed entirely when the cached config is too
+     * old to trust, so a renewal that landed while the device was offline
+     * cannot show up here as a false alarm.
+     */
+    private fun updateLicenseNotice() {
+        val days = LicenseEntitlements.expiryNoticeDays(this)
+        if (days == null) {
+            tvHomeLicense.isVisible = false
+            return
+        }
+        val support = getString(R.string.support_email)
+        tvHomeLicense.isVisible = true
+        tvHomeLicense.text = when {
+            LicenseEntitlements.inGrace(this) -> getString(R.string.license_grace, support)
+            days <= 0L -> getString(R.string.license_expiring_today, support)
+            else -> resources.getQuantityString(
+                R.plurals.license_expiring_fmt,
+                days.toInt(),
+                days.toInt(),
+            )
+        }
+        tvHomeLicense.setTextColor(
+            getColor(
+                if (LicenseEntitlements.inGrace(this)) {
+                    R.color.semantic_danger
+                } else {
+                    R.color.text_secondary
+                },
+            ),
+        )
     }
 
     private fun updateQuotaIndicator(localSessionCount: Int) {
@@ -483,6 +541,7 @@ class HomeActivity : AppCompatActivity() {
                     // The rows changed underneath us — show the corrected state.
                     val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
                     adapter.submit(sessions)
+                    if (!showsCloudState()) return
                     Toast.makeText(
                         this,
                         resources.getQuantityString(R.plurals.cloud_resync_fmt, outcome.repaired, outcome.repaired),
@@ -490,17 +549,25 @@ class HomeActivity : AppCompatActivity() {
                     ).show()
                 }
             }
-            is CloudSync.Outcome.Failed ->
+            is CloudSync.Outcome.Failed -> if (showsCloudState()) {
                 Toast.makeText(
                     this,
                     getString(R.string.cloud_check_failed_fmt, outcome.reason),
                     Toast.LENGTH_LONG,
                 ).show()
+            }
             // Normal for an offline-first app — don't nag. Skipped = checked
             // recently (reconcile is throttled to protect the Firestore budget).
             CloudSync.Outcome.Offline, CloudSync.Outcome.Disabled, CloudSync.Outcome.Skipped -> Unit
         }
     }
+
+    /**
+     * Whether this account sees any cloud state at all. Demo accounts record
+     * analyses silently and have no restore, so every badge, bar, toast and
+     * download offer tied to backup is withheld rather than shown greyed out.
+     */
+    private fun showsCloudState(): Boolean = LicenseEntitlements.cloudBackupEnabled(this)
 
     // ── Row actions ──────────────────────────────────────────────────────
 
@@ -511,7 +578,9 @@ class HomeActivity : AppCompatActivity() {
         }
         val hasCloud = record.syncState == SessionRecord.SyncState.SYNCED ||
             record.cloudSessionId.isNotBlank()
-        if (!hasCloud) {
+        // A demo account cannot pull its recorded copy back, so a row with
+        // no local data is simply unopenable — no download offer.
+        if (!hasCloud || !showsCloudState()) {
             SessionOpenHelper.openOrExplain(this, record)
             return
         }
@@ -561,10 +630,16 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun enqueueBackup(record: SessionRecord, toastRes: Int) {
-        SessionStore.setSyncState(this, record.id, SessionRecord.SyncState.PENDING)
-        CloudSync.enqueueUpload(this, record.id)
-        adapter.rebindRow(record.id)
-        Toast.makeText(this, toastRes, Toast.LENGTH_SHORT).show()
+        // The index write is a file read-modify-write, and this runs from a tap.
+        // Order is preserved rather than made optimistic: the PENDING stamp has
+        // to land before the worker is queued, or an upload that finishes first
+        // would have its SYNCED stamp overwritten by this one.
+        lifecycleScope.launch {
+            SessionStore.setSyncStateAsync(this@HomeActivity, record.id, SessionRecord.SyncState.PENDING)
+            CloudSync.enqueueUpload(this@HomeActivity, record.id)
+            adapter.rebindRow(record.id)
+            Toast.makeText(this@HomeActivity, toastRes, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showFailedBackupDialog(record: SessionRecord) {

@@ -7,6 +7,15 @@ info:
     (ECDSA-P256 over nonce+METHOD+path+sha256(body)) in addition to the
     end-user Bearer ID token (Authorization or X-Forwarded-Authorization).
 
+    State-changing /v1/admin/* routes accept EITHER that attestation or, for
+    the staff web console, an admin ID token that records a completed second
+    factor (firebase.sign_in_second_factor) from a sign-in newer than
+    ADMIN_WEB_REAUTH_SECONDS. A browser cannot produce an attestation, which
+    is what previously kept the console read-only. The browser path is
+    genuinely weaker than device binding — a phished live MFA session inside
+    the freshness window can act — and is withdrawn entirely by setting
+    ADMIN_WEB_MFA_ENABLED=0. Admin *reads* require neither.
+
     POST /v1/tasks/provision-session is deliberately absent: it is the Cloud
     Tasks callback, delivered straight to the Cloud Run URL with an OIDC token
     for the task invoker service account, and must not be reachable through the
@@ -27,6 +36,7 @@ produces:
 #   # which can differ from GOOGLE_CLOUD_PROJECT (e.g. indicvision-dic-app).
 #   sed -e "s|__CLOUD_RUN_URL__|${CLOUD_RUN_URL}|g" \
 #       -e "s|__FIREBASE_PROJECT_ID__|${FIREBASE_PROJECT_ID}|g" \
+#       -e "s|__MANAGED_SERVICE__|${MANAGED_SERVICE}|g" \
 #       openapi.yaml > openapi.generated.yaml
 # Never commit a live Cloud Run hostname or project id here.
 # Never substitute GOOGLE_CLOUD_PROJECT into the Firebase audience/issuer.
@@ -35,6 +45,20 @@ produces:
 # forwarded request. That is what lets the service drop --allow-unauthenticated
 # and grant run.invoker to the gateway SA alone. Without it the Cloud Run URL is
 # directly reachable and every quota below is bypassable.
+# The browser dashboards (app.sempermechanics.com) call this host cross-origin
+# with an Authorization header, so every call is preflighted. allowCors makes
+# ESPv2 pass the unauthenticated OPTIONS through to Cloud Run — where
+# app/main.py's CORSMiddleware answers it against CONSOLE_ORIGINS — instead of
+# refusing it under the `security` block below. `name` must be the API's
+# managed service name (API_ID-hash.apigateway.PROJECT.cloud.goog) — ESPv2
+# matches it against its own service name and silently ignores allowCors on a
+# mismatch; the *.gateway.dev hostname is NOT it (that gave OPTIONS → 405).
+# It exists as soon as the API does, so no bootstrap pass is needed:
+#   MANAGED_SERVICE=$(gcloud api-gateway apis describe semper-api \
+#                       --format='value(managedService)')
+x-google-endpoints:
+  - name: __MANAGED_SERVICE__
+    allowCors: true
 x-google-backend:
   address: __CLOUD_RUN_URL__
   jwt_audience: __CLOUD_RUN_URL__
@@ -172,6 +196,19 @@ paths:
       responses:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
+  /v1/me/terms:
+    post:
+      operationId: acceptTerms
+      description: Record clickwrap acceptance of the current Terms version (PENDING accounts allowed).
+      responses:
+        '200': { description: OK }
+        '409': { description: Client sent a version other than the current one }
+  /v1/me/consents:
+    put:
+      operationId: setConsents
+      description: Grant or withdraw the optional product-improvement consent (PENDING accounts allowed).
+      responses:
+        '200': { description: OK }
   /v1/devices/register:
     post:
       operationId: registerDevice
@@ -276,6 +313,41 @@ paths:
           type: string
       responses:
         '200': { description: OK }
+  /v1/sessions/{sid}/bundle:
+    get:
+      operationId: downloadSessionBundle
+      description: >
+        The whole analysis as one zip, at the user step-up tier: a second
+        factor and a recent sign-in stand in for device attestation, so this
+        is reachable from a browser where /v1/files/{fileId}/content is not.
+        Entries are <role>/<name> plus a manifest.json, stored rather than
+        deflated. Streamed straight from Drive, so it needs the same longer
+        deadline as the single-file proxy rather than the 60s JSON budget.
+      produces:
+        - application/zip
+      # Operation-level backend MUST restate address + APPEND_PATH_TO_ADDRESS —
+      # omitting path_translation defaults to CONSTANT_ADDRESS and breaks routing.
+      x-google-backend:
+        address: __CLOUD_RUN_URL__
+        jwt_audience: __CLOUD_RUN_URL__
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 300.0
+      x-google-quota:
+        metricCosts:
+          download-requests: 1
+      parameters:
+        - name: sid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid ID token }
+        '403': { description: "mfa_required, reauth_required, or feature_not_licensed" }
+        '404': { description: session_not_found }
+        '409': { description: "file_not_uploaded — nothing in this analysis finished uploading" }
+        '429': { description: Rate limited }
+        '502': { description: Drive download failed }
   /v1/files/{fileId}/complete:
     post:
       operationId: completeFile
@@ -326,6 +398,7 @@ paths:
         '200': { description: OK }
         '206': { description: Partial content }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: "feature_not_licensed (demo mode — recording is open, retrieval is licensed)" }
         '416': { description: range_not_satisfiable }
         '429': { description: Rate limited }
         '502': { description: Drive download failed }
@@ -347,7 +420,9 @@ paths:
   /v1/admin/users/{uid}/approve:
     post:
       operationId: adminApproveUser
-      description: Device-attested admin mutation.
+      description: >
+        Admin state change: device attestation, or a second-factor admin
+        session from the console. See the step-up note in the API description.
       parameters:
         - name: uid
           in: path
@@ -356,10 +431,13 @@ paths:
       responses:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
   /v1/admin/users/{uid}/revoke:
     post:
       operationId: adminRevokeUser
-      description: Device-attested admin mutation.
+      description: >
+        Admin state change: device attestation, or a second-factor admin
+        session from the console. See the step-up note in the API description.
       parameters:
         - name: uid
           in: path
@@ -368,12 +446,14 @@ paths:
       responses:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
   /v1/admin/users/{uid}/config:
     patch:
       operationId: adminPatchUserConfig
       description: >
-        Device-attested. Set or clear per-user product-limit overrides
-        (maxSessions, maxFilesPerSession, maxFrames).
+        Admin state change (attestation or console second factor). Set or clear
+        per-user product-limit overrides (maxSessions, maxFilesPerSession,
+        maxFrames).
       parameters:
         - name: uid
           in: path
@@ -383,4 +463,429 @@ paths:
         '200': { description: OK }
         '400': { description: Empty patch }
         '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: User not found }
+  /v1/licenses/checkout:
+    post:
+      operationId: checkoutLease
+      description: >
+        Take or renew a floating seat on an institution license. Re-calling
+        this IS the heartbeat — renewing an existing lease extends it without
+        consuming a second slot, so there is no separate heartbeat route. The
+        response carries leaseExpiresAt and leaseHeartbeatMinutes so the client
+        knows when to call again. 409 no_floating_seat means the pool is
+        currently full; the caller stays eligible and in demo mode, and may
+        retry. Requires X-Device-Id.
+      responses:
+        '200': { description: OK }
+        '403': { description: "Not on the roster, revoked, or the license expired (not_eligible, license_revoked, license_expired)" }
+        '404': { description: "No license attached to this account" }
+        '409': { description: "Pool full, or the license is not floating (no_floating_seat, seating_not_floating)" }
+        '429': { description: Rate limited }
+  /v1/licenses/release:
+    post:
+      operationId: releaseLease
+      description: >
+        Give a floating seat back so another roster member can take it.
+        Idempotent — releasing a lease that already lapsed frees nothing and
+        still succeeds.
+      responses:
+        '200': { description: OK }
+        '403': { description: not_eligible }
+        '404': { description: "No license attached to this account" }
+        '429': { description: Rate limited }
+  /v1/licenses/unbind:
+    post:
+      operationId: unbindDevice
+      description: >
+        "Use Semper on a different device" — the holder unbinding their own
+        licence or seat. Clearing the lock is the whole device change: the
+        next device to sign in binds it, and nothing is typed. Clearing is not
+        revoking — entitlement, seat, lease and data are untouched. Requires
+        the user step-up (an attested device, or a second factor on a recent
+        sign-in), and is subject to SELF_DEVICE_CHANGE_COOLDOWN_DAYS, which
+        staff- and IT-initiated changes are not.
+      responses:
+        '200': { description: OK }
+        '403': { description: "No second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: "No license attached to this account, or no seat on it (no_license, seat_not_found)" }
+        '429': { description: "Rate limited, or another change is too soon (device_change_too_soon)" }
+  /v1/licenses/activate:
+    post:
+      operationId: activateLicense
+      description: >
+        Redeem a license key. For an individual key, locked to this account's
+        email and device. For an institution key (kind=institution), the
+        caller's verified email domain must match the license's domainLock;
+        a seat is created (or re-bound to this device) on first activation,
+        subject to maxSeats. Idempotent re-entry of the same key from the
+        already-bound uid/device succeeds without consuming a new seat.
+      responses:
+        '200': { description: OK }
+        '403': { description: "Lock mismatch, revoked, disabled seat, or domain mismatch (license_email_mismatch, license_device_mismatch, license_revoked, license_seat_disabled)" }
+        '404': { description: Unknown key }
+        '409': { description: "Already redeemed by another account, or institution seats exhausted (license_already_redeemed, license_seats_exhausted)" }
+        '429': { description: Rate limited }
+  /v1/admin/licenses:
+    get:
+      operationId: adminListLicenses
+      responses:
+        '200': { description: OK }
+    post:
+      operationId: adminCreateLicense
+      description: >
+        Device-attested, Semper-staff only. Mint a license key. `kind`
+        selects the shape: "individual" (default) locks to one email and one
+        device id, redeemed once. "institution" locks to a verified-email
+        domain (domainLock) with self-service seat management delegated to
+        adminEmails — see the /v1/institutions/licenses/{licenseId}/seats
+        routes below; Semper staff never touch individual seats on an
+        institution key. The plaintext key is returned once, either way.
+        "campus" is accepted as the pre-rename spelling of "institution".
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '422': { description: "kind=institution missing domainLock/adminEmails, or kind=individual missing emailLock" }
+  /v1/admin/licenses/{licenseId}:
+    patch:
+      operationId: adminUpdateLicense
+      description: >
+        Device-attested, Semper-staff only. Change an existing license's terms
+        in place — this is the renewal path. Extending expiresAt re-entitles
+        every current holder (the individual redeemer, or every non-revoked
+        institution seat) without issuing a new key or asking anyone to
+        re-activate; the new terms are pushed to their user documents before
+        the response returns. Terms only: kind, the email/device/domain locks
+        and the key itself are fixed at mint. Send only the fields that change.
+        clearDeviceLock=true is the one field that is not a term: it unbinds an
+        individual license from the device it is on so the customer can move to
+        a new one, and may be sent alone. Use
+        PATCH /v1/admin/licenses/{licenseId}/seats/{uid}/device for a member of
+        an institution license.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: License not found }
+        '422': { description: "No field set, or a value out of range" }
+        '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/seats/{uid}/device:
+    patch:
+      operationId: adminClearSeatDeviceLock
+      description: >
+        Device-attested, Semper-staff only. Unbind one institution seat from
+        the device it is on, so the member can move to a new one. The same
+        operation institution IT has via clearDeviceLock on
+        PATCH /v1/institutions/licenses/{licenseId}/seats/{uid}, at the staff
+        tier — staff are not in a customer's adminEmails, so that route 404s
+        for them. Clearing is not revoking: the seat, its lease and the
+        member's data are untouched, and the next device to sign in binds.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: "License or seat not found (license_not_found, seat_not_found)" }
+        '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/device-history:
+    get:
+      operationId: adminLicenseDeviceHistory
+      description: >
+        Semper-staff read of recent device bind / clear / unbind audit events
+        for one licence. Ordinary admin token (same as listing licences) —
+        not a mutation, so no device attestation / MFA step-up.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: limit
+          in: query
+          required: false
+          type: integer
+          default: 50
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid ID token }
+        '403': { description: Not an admin }
+        '404': { description: License not found }
+        '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/reconcile:
+    get:
+      operationId: adminReconcileLicenseSeats
+      description: >
+        Semper-staff only, institution licenses only. The second seat count.
+        seatsUsed, which is what institution IT sees, moves the instant a seat
+        is revoked, so it reports what IT intended. This compares every seat
+        against its holder's account and reports three buckets: active (with
+        neverClaimed as the subset nobody has taken up), revokedConfirmed, and
+        revokedStillRunning — a revoke that has not landed, either because the
+        demotion never wrote (still_licensed, repaired by revoking the seat
+        again) or because the device has not been back to hear it
+        (no_checkin_since_revoke). A read: no second factor, no writes. Costs
+        one user read per seat, so it is on demand rather than part of
+        GET /v1/admin/licenses.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: "Not an institution license, so there is no roster to reconcile (kind_not_institution)" }
+        '401': { description: Missing or invalid ID token }
+        '403': { description: Not an admin }
+        '404': { description: License not found }
+        '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/revoke:
+    post:
+      operationId: adminRevokeLicense
+      description: >
+        Device-attested, Semper-staff only. Revoke a key. Individual:
+        the redeemer drops to demo. Institution: every seat on the license
+        drops to demo and seatsUsed resets to 0 — this is the whole-key
+        revoke; for offboarding a single institution member without affecting
+        anyone else's seat, institution IT should use
+        DELETE /v1/institutions/licenses/{licenseId}/seats/{uid} instead.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: License not found }
+  # ---------------------------------------------------------------------------
+  # Pre-rename aliases of the three routes above. ESPv2 is the front door and
+  # rejects any path absent from this spec, so the aliases FastAPI serves are
+  # unreachable in production unless they are declared here too — leaving them
+  # out would make the deprecation window exist only against a directly-hit
+  # Cloud Run URL, which nothing can reach. Same backend, same auth, same
+  # handler. Delete this block and the FastAPI aliases together.
+  /v1/campus/licenses/{licenseId}/seats:
+    post:
+      operationId: campusAddSeat
+      description: Deprecated alias of POST /v1/institutions/licenses/{licenseId}/seats.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or user_not_found }
+        '409': { description: license_seats_exhausted or license_seat_disabled }
+        '429': { description: Rate limited }
+    get:
+      operationId: campusListSeats
+      description: Deprecated alias of GET /v1/institutions/licenses/{licenseId}/seats.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found }
+        '429': { description: Rate limited }
+  /v1/campus/licenses/{licenseId}/seats/{uid}:
+    patch:
+      operationId: campusPatchSeat
+      description: Deprecated alias of PATCH /v1/institutions/licenses/{licenseId}/seats/{uid}.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: empty_patch }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or seat_not_found }
+        '429': { description: Rate limited }
+    delete:
+      operationId: campusRevokeSeat
+      description: Deprecated alias of DELETE /v1/institutions/licenses/{licenseId}/seats/{uid}.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or seat_not_found }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses:
+    get:
+      operationId: institutionMyLicenses
+      description: >
+        Which institution licences the caller administers, found from their
+        verified email rather than from a licence id they already hold. This
+        is what lets one sign-in page route somebody to their own roster.
+        An empty list is the ordinary answer and is not an error. No
+        /v1/campus alias: the route is new, so nothing pre-rename calls it.
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses/{licenseId}/seats:
+    post:
+      operationId: institutionAddSeat
+      description: >
+        Put someone on this license's roster, by email. They do not need an
+        account yet: an address that has one takes a seat immediately, and an
+        address that does not becomes a pending invite, redeemed automatically
+        at that person's first sign-in. Exactly one of seat and invite is
+        returned. An invite holds no seat and consumes no slot — there is no
+        uid to entitle until it is claimed. On an assigned license a seat
+        entitles immediately; on a floating one it makes the holder eligible
+        and a slot is taken by checking out a lease.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: "OK — carries either seat or invite" }
+        '400': { description: invalid_email }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found }
+        '409': { description: "Roster full, seat on hold, or that address is already promised to a different licence (license_seats_exhausted, license_seat_disabled, invite_exists)" }
+        '429': { description: Rate limited }
+    get:
+      operationId: institutionListSeats
+      description: >
+        Institution self-service, no dashboard UI — driven by IT's own
+        tooling/curl. Requires an ID token (not device-attested) whose
+        *verified* email is present in this license's adminEmails; a
+        license id the caller does not administer 404s identically to one
+        that does not exist, so probing another institution's license ids
+        learns nothing. Lists every seat: uid, email, device lock, status,
+        plus the outstanding invites — addresses promised a place who have
+        not signed in yet. Never returns key plaintext.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: "license_not_found (unknown, not an institution license, or not administered by caller)" }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses/{licenseId}/invites/{inviteKey}:
+    delete:
+      operationId: institutionRevokeInvite
+      description: >
+        Withdraw a promise that has not been kept yet. Addressed by the invite
+        id from the seats listing rather than by email, so addresses stay out
+        of request paths and access logs. Nothing to undo on the account side:
+        an unclaimed invite never entitled anyone. Removing a member who HAS
+        signed in is the seat revoke route. An invite id belonging to another
+        licence 404s identically to one that does not exist.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: inviteKey
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or invite_not_found }
+        '429': { description: Rate limited }
+  /v1/campus/licenses/{licenseId}/invites/{inviteKey}:
+    delete:
+      operationId: campusRevokeInvite
+      description: >
+        Deprecated alias of DELETE
+        /v1/institutions/licenses/{licenseId}/invites/{inviteKey}.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: inviteKey
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or invite_not_found }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses/{licenseId}/seats/{uid}:
+    patch:
+      operationId: institutionPatchSeat
+      description: >
+        Institution self-service. clearDeviceLock=true lets a seat holder
+        re-bind to a new device without a Semper support ticket. enabled=false
+        drops the seat to demo but does NOT free the slot (still counts
+        against maxSeats); enabled=true restores the licensed mode in place,
+        no data migration either direction. At least one field is required.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: empty_patch }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or seat_not_found }
+        '429': { description: Rate limited }
+    delete:
+      operationId: institutionRevokeSeat
+      description: >
+        Institution self-service single-seat revoke: drops the holder to
+        demo in place (no data loss) and frees the slot so another domain
+        member can activate. Whole-key revoke stays on the Semper-staff
+        POST /v1/admin/licenses/{licenseId}/revoke path above.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: license_not_found or seat_not_found }
+        '429': { description: Rate limited }

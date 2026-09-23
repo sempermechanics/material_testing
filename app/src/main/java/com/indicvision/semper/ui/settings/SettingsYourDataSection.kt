@@ -3,6 +3,7 @@
 package com.indicvision.semper.ui.settings
 
 import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -10,12 +11,14 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.R
 import com.indicvision.semper.analytics.SemperAnalytics
+import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DevAuth
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionEverythingExporter
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.TransferBannerController
 import com.indicvision.semper.ui.viewer.SendToSheet
@@ -40,6 +43,43 @@ class SettingsYourDataSection(
             // Applies immediately in both directions: turning this off also
             // deletes any crash report still queued on disk.
             Diagnostics.setEnabled(activity, checked)
+        }
+        wireLegal()
+    }
+
+    /**
+     * The product-improvement consent, kept apart from diagnostics and from
+     * the Terms: it is optional, off until granted, and withdrawable here at
+     * any time. The switch reflects the last value the server confirmed.
+     */
+    private fun wireLegal() {
+        val switchImprove = activity.findViewById<SwitchMaterial>(R.id.switchImprovementConsent)
+        switchImprove.isChecked = TokenStore.improvementConsent(activity) == true
+        switchImprove.setOnCheckedChangeListener { _, checked ->
+            switchImprove.isEnabled = false
+            activity.lifecycleScope.launch {
+                val result = AuthRepository(activity).setImprovementConsent(checked)
+                switchImprove.isEnabled = true
+                result.onFailure {
+                    Timber.w(it, "Improvement consent update failed")
+                    // Revert silently: the server still holds the previous answer.
+                    switchImprove.setOnCheckedChangeListener(null)
+                    switchImprove.isChecked = !checked
+                    wireLegal()
+                    Toast.makeText(activity, R.string.terms_error_generic, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        val accepted = TokenStore.termsAcceptedVersion(activity)
+        activity.findViewById<TextView>(R.id.tvTermsAccepted).text =
+            if (accepted == null) {
+                activity.getString(R.string.settings_terms_not_accepted)
+            } else {
+                activity.getString(R.string.settings_terms_accepted_fmt, accepted)
+            }
+        activity.findViewById<View>(R.id.btnViewTerms).setOnClickListener {
+            activity.openExternalUrl(activity.getString(R.string.legal_terms_url))
         }
     }
 

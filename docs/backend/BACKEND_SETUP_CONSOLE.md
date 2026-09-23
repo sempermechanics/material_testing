@@ -142,7 +142,7 @@ manual create or labs, not the pilot CD path:
      | `GOOGLE_CLOUD_PROJECT` | your Project ID |
      | `FIREBASE_PROJECT_ID` | the Firebase project id from step 7 — omit if it is the same as above |
      | `AUTO_APPROVE_HD` | your domain, e.g. `yourdomain.com` — verified emails there are approved on first sign-in |
-     | `ADMIN_EMAILS` | comma-separated admin addresses |
+     | `ADMIN_EMAILS` | admin addresses, space-separated (commas and `;` also parse) |
      | `SUPPORT_EMAIL` | where "a new user is waiting for approval" mail goes — defaults to `support@sempermechanics.com` |
      | `NOTIFY_FROM` | verified Resend sender, e.g. `Semper <noreply@yourdomain.com>` — leave unset to disable notification mail |
 
@@ -150,7 +150,8 @@ manual create or labs, not the pilot CD path:
 
      | Name | Default | What it does |
      |---|---|---|
-     | `MAX_SESSIONS_PER_USER` | `4` | Cloud analyses per user (overridable per user by an admin) |
+     | `DEMO_MAX_ANALYSES` | `25` | Cloud analyses for an unlicensed user (overridable per user by an admin) |
+     | `LICENSED_MAX_SESSIONS_PER_USER` | `999` | Cloud analyses for a licensed user |
      | `MAX_FILES_PER_SESSION` | `600` | Files in one analysis |
      | `MAX_FRAMES_PER_ANALYSIS` | `150` | Deformed-frame ceiling |
      | `ROOT_FOLDER_ID` | the Shared Drive | A folder inside the drive to root everything under |
