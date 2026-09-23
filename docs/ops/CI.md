@@ -205,9 +205,10 @@ Environments. It:
      then always updating.
 3. Records the revision image digest.
 4. Smokes `GET /readyz` on the **tagged candidate URL**, authenticated with an ID
-   token whose audience is the service URL — production runs
-   `--no-allow-unauthenticated`, so an unauthenticated probe would only prove the
-   gateway rejects it.
+   token whose audience is the service URL — both environments run
+   `--no-allow-unauthenticated` (staging too: the opposite flag binds
+   `allUsers`), so an unauthenticated probe would only prove the
+   gateway rejects it. The deploy SA needs `run.invoker` on each service.
 5. Promotes the candidate to 100% traffic once the smoke passes (when
    `no_traffic` was used).
 

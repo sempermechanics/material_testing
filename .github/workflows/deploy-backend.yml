@@ -84,19 +84,19 @@ jobs:
           # service with its own SA (see gateway/openapi.yaml jwt_audience). A
           # publicly-invokable prod service would let callers bypass every
           # x-google-management quota by hitting the Cloud Run URL directly.
-          # Staging stays public so it can be smoke-tested without the gateway.
+          # Staging is private too: --allow-unauthenticated binds allUsers,
+          # which would undo its service-account-only invoker list on every
+          # deploy. The smoke step below already sends an ID token.
           #
-          # One-time IAM prerequisite before the first private prod deploy:
-          #   gcloud run services add-iam-policy-binding indic-api \
+          # One-time IAM prerequisite per service before its first deploy
+          # from here:
+          #   gcloud run services add-iam-policy-binding SERVICE \
           #     --member="serviceAccount:${GATEWAY_SA}" --role=roles/run.invoker
           #     --project PROJECT --region REGION
           # plus the same binding for the deploy SA, so the smoke step below can
-          # still reach /readyz. Flipping this flag first takes the API down.
-          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
-            echo "ingress=--no-allow-unauthenticated" >> "$GITHUB_OUTPUT"
-          else
-            echo "ingress=--allow-unauthenticated" >> "$GITHUB_OUTPUT"
-          fi
+          # still reach /readyz. Without it the smoke 403s and the candidate is
+          # never promoted.
+          echo "ingress=--no-allow-unauthenticated" >> "$GITHUB_OUTPUT"
 
       - id: auth
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
@@ -236,7 +236,8 @@ jobs:
             RESEND_API_KEY=resend-api-key:latest
           flags: >-
             ${{ steps.meta.outputs.ingress }} --cpu=1 --memory=512Mi
-            --min-instances=0 --max-instances=10 --concurrency=40 --timeout=300
+            --min-instances=${{ vars.MIN_INSTANCES || (github.event.inputs.environment == 'production' && '1' || '0') }}
+            --max-instances=10 --concurrency=40 --timeout=300
             --service-account=${{ vars.SERVICE_ACCOUNT_EMAIL }}
             --revision-suffix=${{ github.run_id }}-${{ github.run_attempt }}
 

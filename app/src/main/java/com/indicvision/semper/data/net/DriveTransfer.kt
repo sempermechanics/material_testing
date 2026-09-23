@@ -429,6 +429,12 @@ internal class DriveTransfer(
                         }
                         else -> {
                             val body = IndicApiHttp.bodyText(resp)
+                            if (ClientNonce.isRefusal(resp.code, body) && ClientNonce.usable()) {
+                                // Signed with a client nonce the server would not
+                                // take: go back to challenges and re-sign this window.
+                                ClientNonce.markRefused()
+                                throw IOException("client nonce refused downloading $fileId")
+                            }
                             val resume = RestoreDownloadOutcomes.shouldResumeAfterHttp(
                                 code = resp.code,
                                 attempt = attempt,

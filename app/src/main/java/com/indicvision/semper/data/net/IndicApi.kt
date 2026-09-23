@@ -16,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import timber.log.Timber
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -24,6 +25,9 @@ private const val CONNECT_TIMEOUT_S = 30L
 private const val WRITE_TIMEOUT_S = 300L
 private const val READ_TIMEOUT_S = 60L
 private const val DOWNLOAD_READ_TIMEOUT_S = 300L
+
+/** Enough of a 401 body to read its `detail` code. */
+private const val REFUSAL_PEEK_BYTES = 4096L
 
 /** Seat routes take no body; the backend reads the caller from the token. */
 private const val EMPTY_JSON = "{}"
@@ -482,8 +486,7 @@ class IndicApi private constructor(context: Context) {
         expectedBytes = length,
         rangeStart = rangeStart,
     ) { path ->
-        val nonce = fetchChallenge(idToken)
-        signedHeaders(idToken, "GET", path, ByteArray(0), nonce)
+        signedHeaders(idToken, "GET", path, ByteArray(0), nonceFor(idToken))
     }
 
     suspend fun downloadFile(
@@ -499,8 +502,7 @@ class IndicApi private constructor(context: Context) {
         expectedBytes = expectedBytes,
         onBytes = onBytes,
     ) { path ->
-        val nonce = fetchChallenge(idToken)
-        signedHeaders(idToken, "GET", path, ByteArray(0), nonce)
+        signedHeaders(idToken, "GET", path, ByteArray(0), nonceFor(idToken))
     }
 
     // ------------------------------------------------------------------- admin
@@ -531,14 +533,43 @@ class IndicApi private constructor(context: Context) {
     private fun signedPost(idToken: String, path: String, bodyBytes: ByteArray): Response =
         signedRequest(idToken, "POST", path, bodyBytes)
 
-    /** A device-signed request. The signature covers method + path + body hash. */
+    /**
+     * A device-signed request. The signature covers method + path + body hash.
+     *
+     * Signs with a [ClientNonce] when it can, saving the challenge round-trip.
+     * If the server refuses it (clock outside its window, or a backend that
+     * predates client nonces) the call is re-sent once with a server challenge;
+     * the refusal happens before the route runs, so the re-send is safe.
+     */
     private fun signedRequest(
         idToken: String,
         method: String,
         path: String,
         bodyBytes: ByteArray,
     ): Response {
-        val nonce = fetchChallenge(idToken)
+        if (ClientNonce.usable()) {
+            val resp = sendSigned(idToken, method, path, bodyBytes, ClientNonce.mint())
+            val refused = resp.code == HttpStatus.UNAUTHORIZED &&
+                ClientNonce.isRefusal(resp.code, resp.peekBody(REFUSAL_PEEK_BYTES).string())
+            if (!refused) return resp
+            resp.close()
+            ClientNonce.markRefused()
+            Timber.i("Client nonce refused; using server challenges for this process")
+        }
+        return sendSigned(idToken, method, path, bodyBytes, fetchChallenge(idToken))
+    }
+
+    /** A client nonce when usable, else a fresh server challenge. */
+    private fun nonceFor(idToken: String): String =
+        if (ClientNonce.usable()) ClientNonce.mint() else fetchChallenge(idToken)
+
+    private fun sendSigned(
+        idToken: String,
+        method: String,
+        path: String,
+        bodyBytes: ByteArray,
+        nonce: String,
+    ): Response {
         val headers = signedHeaders(idToken, method, path, bodyBytes, nonce)
         val builder = Request.Builder().url("$base$path").headers(headers)
         when (method) {
@@ -656,13 +687,10 @@ class IndicApi private constructor(context: Context) {
             // inherits both through newBuilder() below.
             .addInterceptor(RetryOnTransient())
             .addInterceptor(AppCheckHeader())
+            .addInterceptor(ClientNonce.ServerDateObserver(apiHost()))
             .apply {
                 val pins = BuildConfig.INDIC_API_CERT_PINS.trim()
-                val host = runCatching {
-                    BuildConfig.INDIC_API_BASE_URL.trimEnd('/')
-                        .removePrefix("https://")
-                        .substringBefore('/')
-                }.getOrNull().orEmpty()
+                val host = apiHost()
                 if (pins.isNotEmpty() && host.isNotEmpty()) {
                     val pinner = CertificatePinner.Builder().also { b ->
                         pins.split(',').map { it.trim() }.filter { it.isNotEmpty() }
@@ -672,6 +700,13 @@ class IndicApi private constructor(context: Context) {
                 }
             }
             .build()
+
+        /** The backend's host name, or "" when no base URL is configured. */
+        private fun apiHost(): String = runCatching {
+            BuildConfig.INDIC_API_BASE_URL.trimEnd('/')
+                .removePrefix("https://")
+                .substringBefore('/')
+        }.getOrNull().orEmpty()
 
         /** Longer read idle for large Session.zip / legacy restores through the proxy. */
         private val downloadClient = client.newBuilder()

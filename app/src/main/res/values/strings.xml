@@ -380,6 +380,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_api_off">Cloud backup is not configured on this build.</string>
     <string name="restore_failed_fmt">Restore failed. %1$s</string>
     <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
+    <string name="restore_backup_gone">This backup\'s files are no longer in cloud storage. Back the analysis up again from a phone that still has it.</string>
     <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the device to bind, then try restore again — or move the licence from the Semper account page first.</string>
     <string name="restore_not_licensed">Restore isn\'t available in demo mode.</string>
     <string name="download_not_licensed">Downloading from the cloud isn\'t available in demo mode.</string>

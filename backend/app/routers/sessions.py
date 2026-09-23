@@ -13,6 +13,7 @@ from .. import audit, drive, errors, firestore_repo as repo, statuses
 from .. import observability as obs
 from .. import rate_limit
 from .. import tasks
+from ..config import settings
 from ..deps import attested_or_mfa_user, current_user, device_or_legacy_reader, verified_device
 from ..models import SessionCreate
 from ..session_provision import provision_session
@@ -450,14 +451,17 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     # Opening a Drive resumable session per file is ~2 round-trips each; at the
     # 600-file ceiling that cannot fit in a 60s request. Hand it to Cloud Tasks
     # and let the client poll /uploads, which it already does for resume.
-    if tasks.enqueue_provision(sid):
+    # A small manifest (the common bundle upload) is quicker inline: the task
+    # hop and the client's first poll cost more than the work itself.
+    small = len(body.files) <= settings.INLINE_PROVISION_MAX_FILES
+    if not small and tasks.enqueue_provision(sid):
         repo.set_session_status(sid, statuses.SESSION_PROVISIONING)
         obs.log_event(log, logging.INFO, "session_provision_queued",
                       outcome="ok", stage="queued", count=len(body.files))
         return {"sessionId": sid, "status": statuses.SESSION_PROVISIONING, "uploads": []}
 
-    # No queue configured (local dev, tests, or an environment that has not
-    # created it): provision inline. Same outcome, slower request. Because
+    # Small manifest, or no queue configured / the enqueue failed: provision
+    # inline. Same outcome from the client's point of view. Because
     # nothing will retry, a failure here rolls the whole session back rather
     # than leaving a shell against the user's quota.
     provision_session(sid, purge_on_failure=True)

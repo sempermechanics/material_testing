@@ -248,6 +248,17 @@ class Settings:
     TASKS_INVOKER_SA = os.environ.get("TASKS_INVOKER_SA", "") or SERVICE_ACCOUNT_EMAIL
     # Bounded fan-out when the worker opens resumable sessions.
     TASKS_PROVISION_WORKERS = _env_int("TASKS_PROVISION_WORKERS", "8")
+    # Manifests this small are provisioned inside the request even when a queue
+    # exists. A bundle upload is three files (~1 s of Drive calls once the
+    # folders are cached); queueing it instead costs a task hop plus the
+    # client's first 1 s poll, so it was slower, not faster. 0 = always queue.
+    INLINE_PROVISION_MAX_FILES = _env_int("INLINE_PROVISION_MAX_FILES", "8")
+
+    # A signed call may carry a client-minted nonce `t1.<unix seconds>.<random>`
+    # instead of one from POST /v1/challenge, saving a round-trip per call. It
+    # is accepted within this many seconds of server time either way; outside
+    # it the client falls back to a challenge. 0 disables client nonces.
+    CLIENT_NONCE_WINDOW_SECONDS = _env_int("CLIENT_NONCE_WINDOW_SECONDS", "120")
 
     @property
     def tasks_enabled(self) -> bool:

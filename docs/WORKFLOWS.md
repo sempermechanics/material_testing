@@ -61,6 +61,7 @@ of these is [app/WORKFLOWS.md](app/WORKFLOWS.md).
 
 ```
 SplashActivity ─ session restore ─┬─ no session ─────────→ A1 Login
+                                  ├─ cached APPROVED ────→ A3 Home, re-checked in the background
                                   ├─ PENDING ────────────→ A2 Pending approval
                                   ├─ APPROVED / offline ─→ A3 Home
                                   └─ [debug] dev bypass ─→ A3 Home, cloud off
@@ -69,10 +70,10 @@ SplashActivity ─ session restore ─┬─ no session ────────
 | Field | Value |
 |---|---|
 | Entry | `ui/auth/SplashActivity` |
-| Chain | `data/AuthRepository` → `data/net/IndicApi.me` → `ui/auth/AccessRouter` (+ `data/AccessStatus`), `data/DevAuth` for the emulator bypass |
+| Chain | `data/AuthRepository` → `data/net/IndicApi.me` (with `getConfig` in parallel) → `ui/auth/AccessRouter` (+ `data/AccessStatus`), `data/DevAuth` for the emulator bypass. A device approved and bound last time opens Home without waiting; `ui/auth/StatusRecheck` runs the same check behind it and moves the user only on PENDING or a refused sign-in (`AuthRepository.AccessLostException`), never on a timeout or 5xx |
 | Writes | `data/net/TokenStore` cached uid / email / status / role |
 | Fails as | Routing error passed on as `DicKeys.ROUTING_ERROR`, shown by A1 as a red pill |
-| Tests | `auth/AccessRouterTest` |
+| Tests | `auth/AccessRouterTest`, `auth/StatusRecheckTest` |
 
 The quota check is **not** here — it runs in `HomeActivity.onCreate` (A3), which
 is why a capped account still lands on Home first.
