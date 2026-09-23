@@ -1,6 +1,8 @@
 """Server-side Firestore access. Clients never touch Firestore directly."""
 import logging
+import random
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 
 from google.api_core.exceptions import Aborted, AlreadyExists, NotFound
@@ -32,6 +34,7 @@ from .licenses import (
     normalize_seating,
 )
 from .models import DeviceReg, FileComplete, FileSpec, SessionCreate
+from .observability import DependencyError
 
 log = logging.getLogger("indic.firestore")
 _DB = None
@@ -113,8 +116,6 @@ def db() -> firestore.Client:
 
 def ping() -> None:
     """Cheap Firestore reachability probe for readiness."""
-    from .observability import DependencyError
-
     try:
         # A missing document is still a successful round-trip.
         # Doc ids matching __.*__ are reserved by Firestore and raise locally
@@ -1068,7 +1069,9 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
         # minted against an address alone has no lock, so a key typed here for
         # support recovery has to be able to set one rather than demand it.
         # Re-read rather than assume: bind_device_lock is first-writer-wins,
-        # and losing the race means some other device owns this licence.
+        # and losing the race means some other device owns this licence. A
+        # bind starved with the lock still empty raises DeviceLockContended
+        # (503) instead, so this never answers a mismatch nobody holds.
         bind_device_lock(ref, device_id)
         locked = (ref.get().to_dict() or {}).get("deviceIdLock") or ""
     if locked != device_id:
@@ -1659,8 +1662,26 @@ def _lock_verdict(locked, device_id: str, ref) -> tuple[str, object | None]:
     return (_LOCK_OK, None) if locked == device_id else (_LOCK_VIOLATION, None)
 
 
+#: Whole bind transactions tried before giving up, each with the client's own
+#: `_TX_ATTEMPTS` retries inside it. The client retries an aborted transaction
+#: at once, so contenders that collided keep colliding in step; the jittered
+#: pause between rounds is what lets one of them through.
+_BIND_ROUNDS = 3
+_BIND_BACKOFF_S = 0.05
+
+
+class DeviceLockContended(DependencyError):
+    """Every attempt to bind an empty device lock lost to contention, and the
+    lock is still empty. Nobody holds the licence, so this is "try again",
+    never a mismatch."""
+
+    def __init__(self):
+        super().__init__(errors.DEVICE_LOCK_CONTENDED, "firestore")
+
+
 def bind_device_lock(ref, device_id: str) -> bool:
-    """Claim an empty device lock for `device_id`. True if this call bound it.
+    """Claim an empty device lock for `device_id`. True if this call bound it,
+    False if the lock is held (by another device, or already by this one).
 
     Transactional rather than a bare update: two devices signing in at once
     both read an empty lock, and with a plain write the later one would win,
@@ -1668,8 +1689,17 @@ def bind_device_lock(ref, device_id: str) -> bool:
     to order second. Re-reading inside the transaction makes the first binding
     stick and turns the second device into a mismatch on its next request,
     which is the answer a device lock exists to give.
+
+    Losing the race is not the same as someone winning it. Firestore aborts
+    contended transactions, and a burst of them can all run out of retries
+    with nothing committed — the emulator does this to eight concurrent binds.
+    So a starved round re-reads the lock: held means another caller won and
+    this one answers False; still empty means nobody won, and the bind runs
+    again. Only after `_BIND_ROUNDS` does it give up, raising
+    `DeviceLockContended` rather than returning False, because False would
+    tell `_activate_individual` this device is a mismatch for a licence no
+    device holds.
     """
-    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _bind(tx) -> bool:
@@ -1679,14 +1709,20 @@ def bind_device_lock(ref, device_id: str) -> bool:
         tx.update(ref, {"deviceIdLock": device_id})
         return True
 
-    try:
-        return _bind(transaction)
-    except Exception as exc:  # noqa: BLE001
-        if not _lost_to_contention(exc):
-            raise
-        # Another device bound it first. This one is a mismatch from its next
-        # request onward, which revalidate_device_lock will act on.
-        return False
+    for round_ in range(_BIND_ROUNDS):
+        try:
+            return _bind(db().transaction(max_attempts=_TX_ATTEMPTS))
+        except Exception as exc:  # noqa: BLE001
+            if not _lost_to_contention(exc):
+                raise
+        snap = ref.get()
+        if not snap.exists or ((snap.to_dict() or {}).get("deviceIdLock") or ""):
+            # Another device bound it first. This one is a mismatch from its
+            # next request onward, which revalidate_device_lock will act on.
+            return False
+        if round_ + 1 < _BIND_ROUNDS:
+            time.sleep(random.uniform(0, _BIND_BACKOFF_S * 2 ** round_))
+    raise DeviceLockContended()
 
 
 def check_device_lock(user: dict, device_id: str) -> bool:
@@ -1724,7 +1760,16 @@ def revalidate_device_lock(user: dict, device_id: str | None) -> dict:
         return user
     verdict, ref = _device_lock_state(user, device_id)
     if verdict == _LOCK_UNBOUND:
-        if bind_device_lock(ref, device_id):
+        try:
+            bound = bind_device_lock(ref, device_id)
+        except DeviceLockContended:
+            # Nobody holds the lock, so this device is not a mismatch and the
+            # request it rides on should not fail for it: leave the licence
+            # unbound and let this device's next request bind it.
+            log.info("device lock bind starved uid=%s license=%s",
+                     user.get("uid"), user.get("licenseId"))
+            return user
+        if bound:
             log.info("device lock bound uid=%s license=%s",
                      user.get("uid"), user.get("licenseId"))
             # Imported here rather than at module scope: `audit` reads `db`

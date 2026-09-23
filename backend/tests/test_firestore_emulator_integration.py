@@ -648,7 +648,16 @@ def test_the_first_device_wins_an_unbound_lock(emulator_repo):
     """Bind-on-first-use is what ties an emailed licence to a device. Two
     devices signing in together both read an empty lock; a plain write would
     let the later one win, so the licence would follow whichever request
-    Firestore happened to order second."""
+    Firestore happened to order second.
+
+    The emulator aborts contended transactions, and eight binds used to be
+    able to exhaust every retry with nothing committed — each then answered
+    False, "someone else holds it", for a lock nobody held. A starved bind now
+    re-reads and runs again, and raises DeviceLockContended rather than
+    answer False while the lock is empty. So this asserts the invariant a
+    device lock exists for — never two holders, and never a refusal without
+    one — and tolerates only the outcome production also tolerates: a round
+    in which everyone was told to try again."""
     tag = uuid.uuid4().hex[:8]
     address = f"binder-{tag}@lab.org"
     license_id = _emu_individual(emulator_repo, address)
@@ -659,12 +668,30 @@ def test_the_first_device_wins_an_unbound_lock(emulator_repo):
 
     ref = emulator_repo.db().collection("licenses").document(license_id)
     devices = [f"dev-{tag}-{i}" for i in range(8)]
+
+    def _bind(device):
+        try:
+            return emulator_repo.bind_device_lock(ref, device)
+        except emulator_repo.DeviceLockContended:
+            return None
+
     with ThreadPoolExecutor(max_workers=8) as pool:
-        won = list(pool.map(lambda d: emulator_repo.bind_device_lock(ref, d), devices))
+        won = list(pool.map(_bind, devices))
 
     locked = emulator_repo.get_license(license_id)["deviceIdLock"]
-    assert sum(1 for w in won if w) == 1, "more than one device claimed the lock"
-    assert locked == devices[won.index(True)]
+    winners = [d for d, w in zip(devices, won) if w is True]
+    assert len(winners) <= 1, f"{len(winners)} devices claimed the lock: {winners}"
+    if winners:
+        assert locked == winners[0]
+    else:
+        # Everyone starved. That is only acceptable if everyone was told so:
+        # a False here would be a refusal with no holder behind it.
+        assert locked == "", f"lock holds {locked!r} but no bind reported winning"
+        assert won == [None] * len(devices), f"refused with the lock empty: {won}"
+        assert emulator_repo.bind_device_lock(ref, devices[0]) is True
+        locked = emulator_repo.get_license(license_id)["deviceIdLock"]
+        assert locked == devices[0]
+    assert locked, "no device holds the lock"
     # Every other device is now a mismatch, which is the answer a lock exists
     # to give: revalidation drops them to demo rather than re-binding.
     loser = next(d for d in devices if d != locked)

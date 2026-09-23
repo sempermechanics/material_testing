@@ -1698,6 +1698,104 @@ def test_a_key_typed_for_recovery_binds_an_unbound_licence(store):
     assert err2 == "license_device_mismatch"
 
 
+# ================================================ a starved bind
+# Firestore aborts contended transactions, and a burst of binds can all run out
+# of retries with nothing committed. Losing the race is then not the same as
+# someone winning it, and the lock must never be reported as held by another
+# device while it is empty.
+
+
+def _contended_binds(monkeypatch, starved, rival=None):
+    """Abort the first `starved` bind transactions; the rest run normally.
+
+    With `rival`, the first aborted round is the one another device won: its
+    lock is committed before this caller's transaction gives up.
+    """
+    monkeypatch.setattr(repo, "_BIND_BACKOFF_S", 0)
+    real = repo.firestore.transactional
+    calls = {"n": 0}
+
+    def _decorator(fn):
+        body = real(fn)
+
+        def _run(tx, *a, **k):
+            calls["n"] += 1
+            if calls["n"] <= starved:
+                if rival is not None:
+                    ref, device = rival
+                    ref.update({"deviceIdLock": device})
+                raise ValueError("Failed to commit transaction") from Aborted("contention")
+            return body(tx, *a, **k)
+        return _run
+    monkeypatch.setattr(repo.firestore, "transactional", _decorator)
+    return calls
+
+
+def _unbound_individual(store):
+    store._data["users"] = {}
+    minted = _mint_individual()
+    user = repo.ensure_entitlement(_signed_in(store, "solo-1", "solo@lab.org"), None)
+    ref = repo.db().collection("licenses").document(minted["license"]["id"])
+    assert store._data["licenses"][ref.id]["deviceIdLock"] == ""
+    return minted, user, ref
+
+
+def test_a_starved_bind_runs_again_while_the_lock_is_empty(store, monkeypatch):
+    _, _, ref = _unbound_individual(store)
+    calls = _contended_binds(monkeypatch, starved=repo._BIND_ROUNDS - 1)
+
+    assert repo.bind_device_lock(ref, "and-first") is True
+
+    assert calls["n"] == repo._BIND_ROUNDS
+    assert store._data["licenses"][ref.id]["deviceIdLock"] == "and-first"
+
+
+def test_a_bind_lost_to_another_device_is_a_plain_loss(store, monkeypatch):
+    minted, _, ref = _unbound_individual(store)
+    calls = _contended_binds(monkeypatch, starved=1, rival=(ref, "and-rival"))
+
+    err, _ = repo.activate_license("solo-1", "solo@lab.org", "and-first", minted["key"])
+
+    # The lock is held, so this device really is the mismatch — and one
+    # round was enough to find that out.
+    assert err == "license_device_mismatch"
+    assert calls["n"] == 1
+    assert store._data["licenses"][ref.id]["deviceIdLock"] == "and-rival"
+
+
+def test_a_starved_bind_never_reports_a_mismatch_nobody_holds(store, monkeypatch):
+    """Every round starves and the lock stays empty. Activation used to read
+    the empty lock back and answer `license_device_mismatch` — telling a
+    device it had lost a licence no device held."""
+    minted, _, ref = _unbound_individual(store)
+    _contended_binds(monkeypatch, starved=10 * repo._BIND_ROUNDS)
+
+    with pytest.raises(repo.DeviceLockContended) as raised:
+        repo.activate_license("solo-1", "solo@lab.org", "and-first", minted["key"])
+
+    assert raised.value.status_code == 503
+    assert raised.value.code == "device_lock_contended"
+    assert store._data["licenses"][ref.id]["deviceIdLock"] == ""
+
+
+def test_a_starved_bind_on_the_request_path_leaves_the_licence_unbound(store, monkeypatch):
+    """The request the bind rides on is not failed for it, and the account is
+    not demoted: nobody holds the lock, so the next request binds it."""
+    _, user, ref = _unbound_individual(store)
+    _contended_binds(monkeypatch, starved=repo._BIND_ROUNDS)
+
+    out = repo.revalidate_device_lock(dict(user), "and-first")
+
+    assert out["mode"] == "licensed"
+    assert store._data["users"]["solo-1"]["mode"] == "licensed"
+    assert store._data["licenses"][ref.id]["deviceIdLock"] == ""
+
+    bound = repo.revalidate_device_lock(dict(user), "and-first")
+
+    assert bound["mode"] == "licensed"
+    assert store._data["licenses"][ref.id]["deviceIdLock"] == "and-first"
+
+
 def test_mint_still_accepts_a_device_id_when_ops_knows_one(store):
     store._data["users"] = {}
     minted = repo.create_individual_license(

@@ -1073,6 +1073,17 @@ would silently follow whichever request Firestore ordered second. First writer
 wins, and the other device is a mismatch from its next request onward, which
 is the answer a device lock exists to give.
 
+Losing the race is not the same as someone winning it. Firestore aborts
+contended transactions, and a burst of binds can all exhaust their retries
+with nothing committed (the emulator does this to eight concurrent binds).
+`bind_device_lock` therefore re-reads a starved round: a held lock is an
+ordinary loss, an empty one runs the bind again, up to three jittered rounds.
+If every round starves it raises `DeviceLockContended` instead of reporting a
+loss, so nothing is ever told "mismatch" for a lock no device holds. On the
+request path `revalidate_device_lock` swallows it and leaves the licence
+unbound for the next request; `POST /v1/licenses/activate` answers
+`503 device_lock_contended`, and a retry binds.
+
 The same rule makes the Demo mint a compare-and-set. Several requests arrive at
 app launch; the one that loses the race to claim a real licence is still
 holding the copy of the account it read beforehand, and a blind write there
