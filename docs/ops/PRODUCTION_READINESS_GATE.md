@@ -277,9 +277,13 @@ pre-licensing documents)
       **Done 2026-09-23:** serving `indic-api-35821056144-1` (`7593692`); env,
       `/readyz` and the gateway's 401 checked, no errors since. Rollback:
       `update-traffic --to-revisions=indic-api-00067-mbp=100`.
-- [ ] Deploy the #138 console (`scripts/deploy-console.sh`): the desk reports
+- [x] Deploy the #138 console (`scripts/deploy-console.sh`): the desk reports
       every revoke and mint outcome, and asks before a second live licence for
-      the same address. Then revoke `SEMP-5MZP`.
+      the same address. **Done 2026-09-23** from `402c59d`: `config.js` carries
+      the gateway host, `operator.js` matches `main`, `/login`, `/account`,
+      `/auth/finishSignIn`, `/terms/` and `assetlinks.json` 200, preflight from
+      the custom domain through `semper-gw` 200.
+- [ ] Revoke `SEMP-5MZP` from the desk (the 500-retry duplicate beside `SEMP-EQUZ`).
 - [ ] Hand-check `/login` as an ordinary account holder (`/account` only).
 - [x] Marketing site (`IndicVision/semper-website`, Netlify): "Sign in" in the
       nav, `/dashboard/` page, `_redirects` for `/login`, `/account`,
