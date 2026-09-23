@@ -579,29 +579,57 @@ def _emu_individual(repo_, email: str):
 def test_one_individual_licence_reaches_exactly_one_account(emulator_repo):
     """An individual licence names one redeemer. Two accounts signing in with
     the same address at once — the same person on a phone and a tablet, or a
-    shared mailbox — must not both come away holding it."""
+    shared mailbox — must not both come away holding it.
+
+    The emulator can starve all eight: each transaction runs out of retries
+    and answers `_contended`, so a round may grant nothing. That is the
+    fail-closed answer — every contender is told to retry and the licence is
+    left untouched for the next request — and it is asserted as such, then the
+    race is run again, as `_race_entitlement` does for the invite races. More
+    than one winner fails on any round.
+    """
     tag = uuid.uuid4().hex[:8]
     address = f"solo-{tag}@lab.org"
     license_id = _emu_individual(emulator_repo, address)
     users = [_emu_user(emulator_repo, f"emu-{tag}-{i}", address) for i in range(8)]
     patch = {"licenseId": license_id, "mode": "licensed"}
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        results = list(pool.map(
-            lambda u: emulator_repo.claim_individual_license(
-                license_id, u["uid"], address, dict(patch),
-            ),
-            users,
-        ))
+    def claim(u):
+        return emulator_repo.claim_individual_license(license_id, u["uid"], address, dict(patch))
 
-    admitted = [u for u, err in zip(users, results) if err == ""]
+    for rounds in range(1, _RACE_ROUNDS + 1):
+        with ThreadPoolExecutor(max_workers=len(users)) as pool:
+            results = list(pool.map(claim, users))
+        # Losing is a refusal, never an exception surfacing as a 500.
+        assert all(isinstance(err, str) for err in results)
+        admitted = [u for u, err in zip(users, results) if err == ""]
+        assert len(admitted) <= 1, (
+            f"{len(admitted)} accounts claimed one individual licence in round {rounds}"
+        )
+        if admitted:
+            break
+        # Nobody won, so nobody may be told somebody else did, and nothing
+        # may be half-written.
+        assert set(results) == {emulator_repo._CONTENDED}, results
+        starved = emulator_repo.get_license(license_id)
+        assert starved["status"] == "unused" and not starved.get("redeemedByUid"), starved
+    else:
+        pytest.fail(
+            f"0 accounts claimed one individual licence in {_RACE_ROUNDS} rounds "
+            f"of {len(users)} — contention should not starve that long",
+        )
+
     stored = emulator_repo.get_license(license_id)
-
-    assert len(admitted) == 1, f"{len(admitted)} accounts claimed one individual licence"
     assert stored["redeemedByUid"] == admitted[0]["uid"]
     assert stored["status"] == "redeemed"
-    # Losing is a refusal, never an exception surfacing as a 500.
-    assert all(isinstance(err, str) for err in results)
+    losers = {err for u, err in zip(users, results) if u is not admitted[0]}
+    assert losers <= {"license_already_redeemed", emulator_repo._CONTENDED}, losers
+    holders = [
+        u["uid"] for u in users
+        if (emulator_repo.db().collection("users").document(u["uid"]).get().to_dict()
+            or {}).get("licenseId") == license_id
+    ]
+    assert holders == [admitted[0]["uid"]], f"{len(holders)} accounts hold the licence"
 
 
 def test_an_individual_invite_is_consumed_once_under_concurrency(emulator_repo):
