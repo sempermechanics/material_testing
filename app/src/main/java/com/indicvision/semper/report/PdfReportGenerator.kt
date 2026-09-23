@@ -57,9 +57,14 @@ object PdfReportGenerator {
 
     /**
      * The closing stress–strain page(s) of an all-frames report: the curve as
-     * rendered by the caller (null when it could not be drawn) and its points.
+     * rendered by the caller (null when it could not be drawn), its points and,
+     * for tensile, the elastic modulus fit.
      */
-    class StressStrainPage(val curve: StressStrain.Curve, val plot: Bitmap?)
+    class StressStrainPage(
+        val curve: StressStrain.Curve,
+        val plot: Bitmap?,
+        val modulus: ElasticModulus.Fit? = null,
+    )
 
     /**
      * The all-frames PDF: the single-frame report of [generate], repeated once
@@ -242,6 +247,7 @@ object PdfReportGenerator {
         curve.peak?.let {
             layout.drawKeyValue("Peak Stress:", "%.3f MPa at frame %d".format(Locale.US, it.stressMPa, it.frame + 1))
         }
+        page.modulus?.let { layout.drawKeyValue("Modulus E (approx.):", LabReport.modulusSummary(it)) }
         layout.advanceY(20f)
         page.plot?.let {
             layout.drawDiagnosticBlock(

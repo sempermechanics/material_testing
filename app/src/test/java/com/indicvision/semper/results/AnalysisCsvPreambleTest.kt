@@ -14,7 +14,7 @@ import java.io.File
  */
 class AnalysisCsvPreambleTest {
 
-    private fun translatedGrid(u: Float = 1.5f, v: Float = -2.25f): FloatArray {
+    private fun translatedGrid(u: Float = 1.5f, v: Float = -2.25f, exx: Float = 0.0001f): FloatArray {
         val data = FloatArray(10 * 10 * DicResult.STRIDE)
         var i = 0
         for (row in 0 until 10) {
@@ -23,7 +23,7 @@ class AnalysisCsvPreambleTest {
                 data[i + DicResult.IDX_Y] = row * 20f
                 data[i + DicResult.IDX_U] = u
                 data[i + DicResult.IDX_V] = v
-                data[i + DicResult.IDX_EXX] = 0.0001f
+                data[i + DicResult.IDX_EXX] = exx
                 data[i + DicResult.IDX_EYY] = 0.0001f
                 data[i + DicResult.IDX_EXY] = 0.0001f
                 data[i + DicResult.IDX_ZNSSD] = 0.05f
@@ -194,6 +194,58 @@ class AnalysisCsvPreambleTest {
         assertTrue(!text.contains("cross_section_mm2"))
         // 3 · 200 · 80 / (2 · 10 · 16) = 150 MPa
         assertTrue(text.lines().any { it.startsWith("frame_a.jpg,") && it.endsWith(",200.000,150.0000") })
+    }
+
+    private fun tensileFile(sweep: Boolean, testType: String): String {
+        val out = File.createTempFile("semper_csv_results", ".csv")
+        out.deleteOnExit()
+        // E = 200 GPa: stress 100 MPa per 0.5 mε.
+        val frames = (1..4).map { k ->
+            val data = translatedGrid(exx = 0.0005f * k)
+            AnalysisCsvWriter.Frame(
+                image = "frame_$k.jpg",
+                subset = 41,
+                step = 5,
+                strainWindow = 15,
+                data = { data },
+                loadN = 1250f * k,
+            )
+        }
+        val metadata = AnalysisCsvWriter.Metadata(
+            referenceName = "ref.jpg",
+            strainMethod = "VSG",
+            imgW = 640,
+            imgH = 480,
+            roiX = 0,
+            roiY = 0,
+            roiW = 640,
+            roiH = 480,
+            testType = testType,
+            crossSectionMm2 = 12.5f,
+        )
+        AnalysisCsvWriter.write(out, sweep, frames, metadata)
+        return out.readText()
+    }
+
+    @Test
+    fun `a tensile session ends with the modulus trailer after its point rows`() {
+        val text = tensileFile(sweep = false, testType = "tensile")
+
+        assertTrue(text.contains("# semper_csv_version,2\n"))
+        val trailer = text.substringAfter("# mechanical_results\n", missingDelimiterValue = "").lines()
+        val modulus = trailer[0].removePrefix("# elastic_modulus_gpa,").toFloat()
+        assertEquals(200f, modulus, 0.01f)
+        assertEquals("# elastic_fit_frames,1,4", trailer[1])
+        assertTrue(trailer[2], trailer[2].startsWith("# elastic_fit_r2,"))
+        assertEquals("", trailer[3])
+        assertEquals(4, trailer.size)
+        assertTrue(text.indexOf("# mechanical_results") > text.lastIndexOf("frame_4.jpg,"))
+    }
+
+    @Test
+    fun `sweeps and untyped sessions have no results trailer`() {
+        assertTrue(!tensileFile(sweep = true, testType = "tensile").contains("mechanical_results"))
+        assertTrue(!tensileFile(sweep = false, testType = "").contains("mechanical_results"))
     }
 
     /**

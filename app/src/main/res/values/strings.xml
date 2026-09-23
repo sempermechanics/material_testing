@@ -611,7 +611,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="test_type_subtitle">Chosen once per analysis; it decides what the wizard asks for.</string>
     <string name="test_type_tensile">Tensile test</string>
     <string name="test_type_bending">Bending test</string>
-    <string name="test_type_sub_loads">Imports the machine’s load log and plots stress against strain.</string>
+    <string name="test_type_sub_loads">Stress–strain curve and Young’s modulus E, from your photos and the machine’s load log.</string>
     <string name="test_type_sub_flexural">Imports the load log; three-point flexural stress from span, width and thickness.</string>
 
     <!-- Machine load import (wizard step 1, every test type) -->
@@ -643,7 +643,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="load_thickness">Thickness</string>
     <string name="load_axis">Strain axis</string>
     <string name="info_load_title">Machine load</string>
-    <string name="info_load_body">Import the load log the testing machine exported (CSV). One load per deformed frame is ideal; a longer log is matched by time for video frames, or resampled evenly for photos. Loads keep their sign, exactly as the machine logged them. Cross-section is the specimen area the load acts on, so stress = load ÷ area. The strain axis is the direction of loading in the image.</string>
+    <string name="info_load_body">Import the loads as a CSV, in N or kN: the file the testing machine exported, or one you type yourself with one load per photo, in the same order as the photos. A longer machine log is matched by time for video frames, or spread evenly over the photos. Loads keep their sign.\n\nStress = load ÷ cross-section area. For a round bar the area is π × d² ÷ 4 (d = diameter in mm). Strain comes from the photos, so no extensometer is needed. The strain axis is the direction the bar is pulled in the image.\n\nYoung’s modulus E is the slope of the straight, early part of the curve, so take several photos before the bar starts to yield. E from a phone camera is approximate; compare it with the value your lab gives you.</string>
     <string name="info_load_body_bending">Import the load log the testing machine exported (CSV). One load per deformed frame is ideal; a longer log is matched by time for video frames, or resampled evenly for photos. Three-point bending: flexural stress = 3 × load × span ÷ (2 × width × thickness²), the outer-fibre stress under the loading nose. Span is the distance between the supports, thickness is in the loading direction. The strain axis is the beam’s length in the image; the camera should see the tension or compression face.</string>
     <plurals name="load_warn_resampled_fmt">
         <item quantity="one">%1$d row resampled onto %2$d frames — the curve assumes frames were taken evenly through the log.</item>
@@ -672,6 +672,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="stress_strain_caption_fmt">Frame %1$d · %2$s N · %3$s MPa · %4$s mε</string>
     <string name="stress_strain_frame_skipped">This frame has no accepted points, so it is not on the curve.</string>
     <string name="stress_strain_empty">No frame has accepted points, so there is no curve.</string>
+    <string name="results_peak_stress_fmt">Peak stress: %1$s MPa (frame %2$d)</string>
+    <string name="modulus_fit_label">Elastic fit</string>
+    <string name="modulus_tensile_fmt">Young’s modulus E ≈ %1$s GPa, from the straight part of the curve (frames %2$d–%3$d, R² %4$s). Approximate: the strain comes from the camera, not an extensometer.</string>
+    <string name="modulus_tensile_none">Young’s modulus E: not found. It needs at least three photos on the straight, early part of the curve, before the peak.</string>
+    <string name="modulus_sign_caution">E came out negative or zero. Check the strain axis matches the direction the specimen is loaded in.</string>
     <string name="step_of_fmt">Step %1$d of %2$d</string>
     <string name="reference_meta_fmt">Reference · %1$d × %2$d px</string>
     
@@ -763,6 +768,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">U V Exx Eyy Exy · %1$d fields of %2$s</item>
     </plurals>
     <string name="share_pdf">PDF report</string>
+    <string name="share_lab_report">Lab report (PDF)</string>
+    <string name="share_lab_report_sub">Your experiment write-up: aim, observations, table, calculation, graphs, results</string>
     
     <string name="share_csv">CSV data</string>
     

@@ -7,6 +7,7 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.report.ElasticModulus
 import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +61,7 @@ class ViewerStressStrainHelper(
         val shown = hasLoads && !host.isSweep
         section.isVisible = shown
         if (!shown) return
-        sheetView.findViewById<TextView>(R.id.tvStressStrainTitle).setText(R.string.stress_strain_title)
+        sheetView.findViewById<TextView>(R.id.tvStressStrainTitle).setText(R.string.results_title)
         val cached = vm.stressStrain
         if (cached != null) {
             draw(sheetView, cached)
@@ -100,8 +101,10 @@ class ViewerStressStrainHelper(
     private fun draw(sheetView: View, curve: StressStrain.Curve) {
         val plot = sheetView.findViewById<VsgPlotView>(R.id.plotStressStrain)
         val caption = sheetView.findViewById<TextView>(R.id.tvStressStrainCaption)
+        val result = sheetView.findViewById<TextView>(R.id.tvStressStrainResult)
         if (curve.isEmpty) {
             plot.isVisible = false
+            result.isVisible = false
             caption.setText(R.string.stress_strain_empty)
             return
         }
@@ -109,14 +112,9 @@ class ViewerStressStrainHelper(
         plot.compactAxes = true
         val current = curve.at(host.currentFrameIndex)
         val (strainAxis, stressAxis) = axisLabels(host, curve.model)
+        val modulus = modulusOf(curve)
         plot.setData(
-            listOf(
-                VsgPlotView.Series(
-                    label = host.getString(R.string.stress_strain_title),
-                    color = VsgPlotView.paletteColor(host, 0),
-                    points = curve.plotPoints(),
-                ),
-            ),
+            plotSeries(host, curve, modulus),
             strainAxis,
             stressAxis,
             highlightX = current?.strainMilli,
@@ -134,11 +132,84 @@ class ViewerStressStrainHelper(
                 fmt(current.strainMilli),
             )
         }
+        result.isVisible = true
+        result.text = resultsText(host, curve, modulus)
     }
 
     private fun fmt(value: Float): String = String.format(Locale.US, "%.3f", value).trimEnd('0').trimEnd('.')
 
     companion object {
+        /** The tensile modulus fit, or null for a model that has none. */
+        fun modulusOf(curve: StressStrain.Curve): ElasticModulus.Fit? =
+            if (curve.model is StressStrain.Model.Axial) ElasticModulus.fit(curve) else null
+
+        /**
+         * The curve, plus — when there is a fit — the fitted elastic line as a
+         * muted second series, drawn across the frames it was fitted to.
+         */
+        fun plotSeries(
+            context: Context,
+            curve: StressStrain.Curve,
+            modulus: ElasticModulus.Fit?,
+        ): List<VsgPlotView.Series> = buildList {
+            add(
+                VsgPlotView.Series(
+                    label = context.getString(R.string.stress_strain_title),
+                    color = VsgPlotView.paletteColor(context, 0),
+                    points = curve.plotPoints(),
+                ),
+            )
+            val fitted = modulus?.let { fit -> curve.points.filter { fit.covers(it.frame) } }.orEmpty()
+            if (modulus != null && fitted.isNotEmpty()) {
+                val from = fitted.minOf { it.strainMilli }
+                val to = fitted.maxOf { it.strainMilli }
+                add(
+                    VsgPlotView.Series(
+                        label = context.getString(R.string.modulus_fit_label),
+                        color = VsgPlotView.paletteColor(context, 1),
+                        points = listOf(from to modulus.stressAt(from), to to modulus.stressAt(to)),
+                        markers = false,
+                        muted = true,
+                    ),
+                )
+            }
+        }
+
+        /**
+         * The Results summary under the curve — what the lab report's Results
+         * section asks for: E with the frames it came from, and the peak stress.
+         */
+        fun resultsText(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): String =
+            buildList {
+                if (curve.model is StressStrain.Model.Axial) {
+                    add(
+                        if (modulus == null) {
+                            context.getString(R.string.modulus_tensile_none)
+                        } else {
+                            context.getString(
+                                R.string.modulus_tensile_fmt,
+                                String.format(Locale.US, "%.1f", modulus.modulusGPa),
+                                modulus.firstFrame + 1,
+                                modulus.lastFrame + 1,
+                                String.format(Locale.US, "%.4f", modulus.r2),
+                            )
+                        },
+                    )
+                    if (modulus != null && modulus.modulusGPa <= 0f) {
+                        add(context.getString(R.string.modulus_sign_caution))
+                    }
+                }
+                curve.peak?.let { peak ->
+                    add(
+                        context.getString(
+                            R.string.results_peak_stress_fmt,
+                            String.format(Locale.US, "%.2f", peak.stressMPa),
+                            peak.frame + 1,
+                        ),
+                    )
+                }
+            }.joinToString("\n")
+
         /** Plot axis titles (strain, stress) worded for the model. */
         fun axisLabels(context: Context, model: StressStrain.Model): Pair<String, String> = when (model) {
             is StressStrain.Model.Axial ->

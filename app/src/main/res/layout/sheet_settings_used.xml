@@ -167,5 +167,14 @@
             android:layout_marginTop="6dp"
             android:textColor="@color/viewer_chrome_muted"
             android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tvStressStrainResult"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textColor="@color/viewer_chrome_text"
+            android:textSize="13sp"
+            android:visibility="gone" />
     </LinearLayout>
 </LinearLayout>
