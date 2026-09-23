@@ -1,6 +1,5 @@
 """Revoking an account, and rebinding to a new phone, must also settle the
 device records. Both used to leave stale ACTIVE device docs behind."""
-import fake_firestore
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -22,9 +21,9 @@ def _public_pem() -> str:
 
 
 @pytest.fixture
-def store(monkeypatch):
+def store(store, monkeypatch):
     pem = _public_pem()
-    s = fake_firestore.install(monkeypatch)
+    s = store
     s._data["users"] = {
         "u1": {"email": "u1@x.test", "access_status": "APPROVED", "activeDeviceId": DEV_A},
     }

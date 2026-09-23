@@ -24,10 +24,19 @@ from ..deps import (
 from ..models import SessionCreate
 from ..session_provision import provision_session
 from ..validation import PageToken, SessionId
-from .account import json_dumps
+from ._shared import clamp_page_size, json_dumps, page_block
 
 log = logging.getLogger("indic")
 router = APIRouter()
+
+
+def _owned_session(sid: str, user: dict) -> dict:
+    """The caller's session [sid]. Someone else's reads as absent, not 403, so
+    a session id cannot be probed for existence."""
+    session = repo.get_session(sid)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(404, errors.SESSION_NOT_FOUND)
+    return session
 
 
 @router.get("/v1/sessions")
@@ -47,10 +56,9 @@ def list_sessions(
     session on the *current page* still exists in Drive (bounded parallel
     probes — not a full-account N+1). Orphaned metadata on that page is purged.
     """
-    page_size = max(1, min(page_size, 100))
+    page_size = clamp_page_size(page_size, 100)
     if verify:
-        if not rate_limit.session_verify_bucket.allow(user["uid"]):
-            raise HTTPException(429, errors.RATE_LIMITED)
+        rate_limit.enforce(rate_limit.session_verify_bucket, user["uid"])
     sessions, next_token = repo.list_user_sessions(
         user["uid"], limit=page_size, page_token=page_token or None,
     )
@@ -94,12 +102,7 @@ def list_sessions(
     return {
         "sessions": sessions,
         "quota": {"used": used, "max": repo.resolve_user_config(user)["maxSessions"]},
-        "page": {
-            "size": page_size,
-            "count": len(sessions),
-            "nextPageToken": next_token,
-            "hasMore": bool(next_token),
-        },
+        "page": page_block(page_size, len(sessions), next_token),
         # `indeterminate` tells the client the verification was incomplete, so a
         # session still listed is not proof it was confirmed present.
         "verify": (
@@ -119,9 +122,7 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     only trace kept is the audit record that the erasure happened.
     """
     user, device = ctx["user"], ctx["device"]
-    session = repo.get_session(sid)
-    if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.SESSION_NOT_FOUND)
+    session = _owned_session(sid, user)
 
     folder = session.get("driveFolderId")
     if folder:
@@ -160,10 +161,8 @@ def session_uploads(
     A client that attests is always held to the strict path — see the wrapper.
     """
     user = ctx["user"]
-    session = repo.get_session(sid)
-    if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.SESSION_NOT_FOUND)
-    page_size = max(1, min(page_size, 1000))
+    session = _owned_session(sid, user)
+    page_size = clamp_page_size(page_size, 1000)
     uploads, next_token = repo.list_pending_uploads(
         sid, limit=page_size, page_token=page_token or None,
     )
@@ -174,12 +173,7 @@ def session_uploads(
         "status": session.get("status"),
         "provisionError": session.get("provisionError"),
         "uploads": uploads,
-        "page": {
-            "size": page_size,
-            "count": len(uploads),
-            "nextPageToken": next_token,
-            "hasMore": bool(next_token),
-        },
+        "page": page_block(page_size, len(uploads), next_token),
     }
 
 
@@ -195,12 +189,9 @@ def list_session_files(
     Cursor-paginated. This silently truncated at 2000 files before, which for a
     restore means a manifest quietly missing entries.
     """
-    if not rate_limit.listing_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
-    session = repo.get_session(sid)
-    if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.SESSION_NOT_FOUND)
-    page_size = max(1, min(page_size, 1000))
+    rate_limit.enforce(rate_limit.listing_bucket, user["uid"])
+    session = _owned_session(sid, user)
+    page_size = clamp_page_size(page_size, 1000)
     files, next_token = repo.list_session_files(
         sid, limit=page_size, page_token=page_token or None,
     )
@@ -210,12 +201,7 @@ def list_session_files(
         "specimen": session.get("specimen"),
         "status": session.get("status"),
         "files": files,
-        "page": {
-            "size": page_size,
-            "count": len(files),
-            "nextPageToken": next_token,
-            "hasMore": bool(next_token),
-        },
+        "page": page_block(page_size, len(files), next_token),
     }
 
 
@@ -301,9 +287,7 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     signal that the transfer completed.
     """
     user = ctx["user"]
-    session = repo.get_session(sid)
-    if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.SESSION_NOT_FOUND)
+    session = _owned_session(sid, user)
     if not repo.cloud_backup_enabled(user):
         raise HTTPException(403, errors.feature_not_licensed_detail())
     artifacts = repo.list_session_artifacts(sid)

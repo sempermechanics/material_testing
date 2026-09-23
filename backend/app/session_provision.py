@@ -98,8 +98,8 @@ def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
                                     error_code="drive_provision_failed")
         raise
 
-    repo.set_session_status(sid, "UPLOADING")
+    repo.set_session_status(sid, statuses.SESSION_UPLOADING)
     obs.log_event(log, logging.INFO, "session_provisioned", outcome="ok",
                   count=provisioned, latencyMs=round((time.monotonic() - started) * 1000, 1),
                   folderMs=round(folder_ms, 1))
-    return {"sessionId": sid, "provisioned": provisioned, "status": "UPLOADING"}
+    return {"sessionId": sid, "provisioned": provisioned, "status": statuses.SESSION_UPLOADING}

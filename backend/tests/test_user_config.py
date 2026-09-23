@@ -7,12 +7,6 @@ from app import firestore_repo as repo
 from app.config import settings
 
 
-@pytest.fixture
-def store(monkeypatch):
-    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
-    return fake_firestore.install(monkeypatch)
-
-
 def _limit_env(monkeypatch):
     monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
     monkeypatch.setattr(settings, "LICENSED_MAX_SESSIONS_PER_USER", 999)

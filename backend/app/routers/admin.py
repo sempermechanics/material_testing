@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import audit, errors, firestore_repo as repo
+from .. import audit, errors, firestore_repo as repo, statuses
 from .. import rate_limit
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
 from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
 from ..models import AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
 from ..validation import AccessStatus, DocumentId, PageToken, Uid
+from ._shared import clamp_page_size, page_block
 
 router = APIRouter()
 
@@ -22,37 +23,31 @@ def admin_list_users(
     Cursor-paginated: `limit` (1..200, default 50) and optional `page_token`.
     Response includes `nextPageToken` / `hasMore`.
     """
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
-    limit = max(1, min(limit, 200))
+    rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
+    limit = clamp_page_size(limit, 200)
     users, next_token = repo.list_users(
         status, limit=limit, page_token=page_token or None,
     )
     return {
         "users": users,
-        "page": {
-            "size": limit,
-            "count": len(users),
-            "nextPageToken": next_token,
-            "hasMore": bool(next_token),
-        },
+        "page": page_block(limit, len(users), next_token),
     }
 
 
 @router.post("/v1/admin/users/{uid}/approve", dependencies=[rate_limited(rate_limit.admin_bucket)])
 def admin_approve_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
-    if not repo.set_user_status(uid, "APPROVED"):
+    if not repo.set_user_status(uid, statuses.ACCESS_APPROVED):
         raise HTTPException(404, errors.USER_NOT_FOUND)
     audit.record(admin["uid"], action="ADMIN_APPROVE", target={"type": "user", "id": uid})
-    return {"uid": uid, "access_status": "APPROVED"}
+    return {"uid": uid, "access_status": statuses.ACCESS_APPROVED}
 
 
 @router.post("/v1/admin/users/{uid}/revoke", dependencies=[rate_limited(rate_limit.admin_bucket)])
 def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
-    if not repo.set_user_status(uid, "SUSPENDED"):
+    if not repo.set_user_status(uid, statuses.ACCESS_SUSPENDED):
         raise HTTPException(404, errors.USER_NOT_FOUND)
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
-    return {"uid": uid, "access_status": "SUSPENDED"}
+    return {"uid": uid, "access_status": statuses.ACCESS_SUSPENDED}
 
 
 @router.patch("/v1/admin/users/{uid}/config", dependencies=[rate_limited(rate_limit.admin_bucket)])
@@ -78,18 +73,12 @@ def admin_list_licenses(
     page_token: PageToken = "",
     admin=Depends(admin_user),
 ):
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
-    limit = max(1, min(limit, 200))
+    rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
+    limit = clamp_page_size(limit, 200)
     licenses, next_token = repo.list_licenses(limit=limit, page_token=page_token or None)
     return {
         "licenses": licenses,
-        "page": {
-            "size": limit,
-            "count": len(licenses),
-            "nextPageToken": next_token,
-            "hasMore": bool(next_token),
-        },
+        "page": page_block(limit, len(licenses), next_token),
     }
 
 
@@ -251,8 +240,7 @@ def admin_license_device_history(
     Read-only: ordinary admin token is enough (same as listing licences). The
     console uses this after a "New device" clear so support can see the move.
     """
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
     if repo.get_license(license_id) is None:
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     return {
@@ -279,8 +267,7 @@ def admin_reconcile_license_seats(
     user read per seat, which is why it is on demand and not folded into the
     licence listing.
     """
-    if not rate_limit.admin_bucket.allow(admin["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
     err, report = repo.reconcile_institution_seats(license_id)
     if err == errors.LICENSE_NOT_FOUND:
         raise HTTPException(404, err)

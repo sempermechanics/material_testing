@@ -817,10 +817,12 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
   tracks this as PARTIAL for that reason. On a device-signed route the bucket is
   declared as `dependencies=[deps.rate_limited(bucket)]`, which FastAPI resolves
   before `verified_device`: a 429 spends no nonce, so the app's unchanged retry
-  is accepted rather than refused as a replay. Every such 429 carries
-  `Retry-After` (seconds to the next token), which the app honours up to 8 s.
+  is accepted rather than refused as a replay. An unsigned route checks its
+  bucket in the handler with `rate_limit.enforce(bucket, key)`, the same call
+  the dependency makes. Every 429 carries `Retry-After` (seconds to the next
+  token), which the app honours up to 8 s.
   `tests/test_rate_limit_before_nonce.py` fails if a signed route checks its
-  bucket inside the handler again.
+  bucket inside the handler again, or if an unsigned 429 has no `Retry-After`.
 - **Attested upload targets:** `/uploads` hands out capability URLs and is gated
   by `device_or_legacy_reader`; production keeps `REQUIRE_ATTESTED_UPLOADS=1`
   (§4).
@@ -1169,7 +1171,7 @@ sequenceDiagram
 Activation is **in-place**: same `uid`, same user doc, only plan/license
 fields change. It never migrates, copies, or touches `sessions`/`files` — a
 dedicated test (`test_activation_is_in_place_session_data_untouched` in
-`backend/tests/test_licenses.py`) asserts session docs are byte-identical
+`backend/tests/test_licenses_institution.py`) asserts session docs are byte-identical
 before and after.
 
 ### 20.2 Not "activate once, trust forever"

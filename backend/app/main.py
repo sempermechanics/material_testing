@@ -21,7 +21,7 @@ from .routers import (
     provision_tasks,
     sessions,
 )
-from .routers.account import json_dumps  # noqa: F401
+from .routers._shared import json_dumps  # noqa: F401
 from .routers.files import _is_first_byte_request, download_file  # noqa: F401
 from .routers.health import _client_key  # noqa: F401
 from .session_provision import provision_session, purge_session  # noqa: F401

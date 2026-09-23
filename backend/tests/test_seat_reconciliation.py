@@ -8,18 +8,10 @@ comes back. These tests pin which of those count as settled and which do not.
 """
 from datetime import datetime, timedelta, timezone
 
-import fake_firestore
-import pytest
 
 from app import firestore_repo as repo
 
 NOW = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
-
-
-@pytest.fixture
-def store(monkeypatch):
-    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
-    return fake_firestore.install(monkeypatch)
 
 
 def _mint(max_seats=4):

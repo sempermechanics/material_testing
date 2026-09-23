@@ -1,0 +1,402 @@
+"""Licence terms: the campus->institution rename shims, duration and grace, renewal by PATCH."""
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+import fake_firestore
+
+from app import deps, firestore_repo as repo
+from app.config import settings
+from license_helpers import (  # noqa: F401
+    _mint_individual,
+    _mint_institution,
+    _recording_stubs,
+    _signed_in,
+)
+
+
+# ====================================================== rename compatibility
+# The campus→institution / plan→mode rename must not strand an installed app
+# or an institution IT script mid-deprecation. These pin both halves of that.
+
+@pytest.mark.asyncio
+async def test_pre_rename_campus_route_still_serves_the_same_handler(client, monkeypatch):
+    """Institution IT scripts and curl one-liners hold the old path.
+
+    /v1/campus/* is hidden from the OpenAPI schema but must keep routing, so
+    an unchanged script does not start 404ing the day this deploys.
+    """
+    from app import deps
+
+    monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "email": "it@university.edu"})
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    store._data["users"] = {
+        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+    }
+    minted = _mint_institution()
+    license_id = minted["license"]["id"]
+    repo.activate_license("student", "a@university.edu", "dev-1", minted["key"])
+
+    legacy = await client.get(f"/v1/campus/licenses/{license_id}/seats")
+    current = await client.get(f"/v1/institutions/licenses/{license_id}/seats")
+    assert legacy.status_code == 200, legacy.text
+    assert legacy.json() == current.json()
+
+
+@pytest.mark.asyncio
+async def test_admin_mint_accepts_the_pre_rename_campus_kind(client, monkeypatch):
+    """Ops tooling that still sends kind="campus" mints an institution key."""
+    fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    resp = await client.post(
+        "/v1/admin/licenses",
+        json={
+            "kind": "campus",
+            "domainLock": "university.edu",
+            "adminEmails": ["it@university.edu"],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["license"]["kind"] == "institution"
+
+
+def test_activation_resolves_a_pre_migration_license_document(store):
+    """A license minted before the rename carries kind=campus and plan, not mode.
+
+    Migration 002 rewrites these, but the dual-read window means an unmigrated
+    document must still activate — otherwise every institution seat breaks
+    between the code deploy and the migration run.
+    """
+    store._data["users"] = {
+        "u1": {"email": "student@university.edu", "access_status": "APPROVED", "plan": "demo"},
+    }
+    key = "SEMP-AAAA-BBBB-CCCC-DDDD"
+    store._data["licenses"] = {
+        repo.key_hash(key): {
+            "kind": "campus",              # pre-rename value
+            "plan": "professional",        # pre-rename field
+            "status": "active",
+            "keyPrefix": "SEMP-AAAA",
+            "domainLock": "university.edu",
+            "adminEmails": ["it@university.edu"],
+            "seatsUsed": 0,
+        },
+    }
+    err, cfg = repo.activate_license("u1", "student@university.edu", "dev-1", key)
+    assert err == ""
+    assert cfg["mode"] == "licensed"
+    assert cfg["plan"] == "professional"
+    assert cfg["licenseKind"] == "institution"
+
+
+# ============================================================ duration & grace
+# A timed license stops at expiresAt + graceDays. Entitlements are UNCHANGED
+# during grace — it exists so a renewal in flight does not interrupt work.
+
+def _timed_user(days_from_now: float, grace_days: int = 14) -> dict:
+    return {
+        "uid": "u1",
+        "mode": "licensed",
+        "licenseDuration": "timed",
+        "licenseGraceDays": grace_days,
+        "licenseExpiresAt": datetime.now(timezone.utc) + timedelta(days=days_from_now),
+    }
+
+
+def test_grace_keeps_full_entitlements_after_expiry(store):
+    cfg = repo.resolve_user_config(_timed_user(-2))
+    assert cfg["mode"] == "licensed"
+    assert cfg["inGrace"] is True
+    # The point of grace: nothing is withdrawn, only flagged.
+    assert cfg["cloudBackupEnabled"] is True
+    assert cfg["shareEnabled"] is True
+
+
+def test_before_expiry_is_licensed_and_not_in_grace(store):
+    cfg = repo.resolve_user_config(_timed_user(5))
+    assert (cfg["mode"], cfg["inGrace"]) == ("licensed", False)
+
+
+def test_past_grace_drops_to_demo(store):
+    cfg = repo.resolve_user_config(_timed_user(-20))
+    assert cfg["mode"] == "demo"
+    assert cfg["inGrace"] is False
+    assert cfg["cloudBackupEnabled"] is False
+
+
+def test_grace_boundary_is_the_last_moment_of_grace(store, monkeypatch):
+    """Entitlement ends AT graceEndsAt, not a day either side of it."""
+    expiry = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    user = {
+        "uid": "u1", "mode": "licensed", "licenseDuration": "timed",
+        "licenseGraceDays": 10, "licenseExpiresAt": expiry,
+    }
+    ends = expiry + timedelta(days=10)
+    for now, expected in [
+        (ends - timedelta(seconds=1), "licensed"),
+        (ends, "demo"),
+        (ends + timedelta(seconds=1), "demo"),
+    ]:
+        monkeypatch.setattr(repo, "_now", lambda now=now: now)
+        assert repo.effective_mode(user) == expected, now
+
+
+def test_zero_grace_is_a_hard_cliff(store):
+    cfg = repo.resolve_user_config(_timed_user(-0.001, grace_days=0))
+    assert cfg["mode"] == "demo"
+
+
+def test_perpetual_never_expires(store):
+    cfg = repo.resolve_user_config({"uid": "u1", "mode": "licensed"})
+    assert cfg["mode"] == "licensed"
+    assert cfg["licenseDuration"] == "perpetual"
+    assert cfg["licenseExpiresAt"] is None
+    assert cfg["licenseGraceEndsAt"] is None
+
+
+def test_a_license_predating_grace_gets_none_retroactively(store):
+    """Deploying a grace default must not reinstate already-expired accounts.
+
+    A user document written before graceDays existed carries no such field. If
+    that read as the fleet default, everyone who expired inside the window
+    would silently come back to licensed on deploy.
+    """
+    cfg = repo.resolve_user_config({
+        "uid": "u1",
+        "plan": "professional",  # pre-rename too, as such a document would be
+        "licenseExpiresAt": datetime.now(timezone.utc) - timedelta(days=1),
+    })
+    assert cfg["mode"] == "demo"
+    assert cfg["inGrace"] is False
+
+
+def test_expired_institution_license_drops_the_seat_holder(store):
+    """The only expiry test before this covered an individual license."""
+    store._data["users"] = {
+        "u1": {"email": "student@university.edu", "access_status": "APPROVED", "mode": "demo"},
+    }
+    minted = repo.create_institution_license(
+        domain_lock="university.edu",
+        admin_emails=["it@university.edu"],
+        created_by_uid="admin",
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=1),
+    )
+    err, cfg = repo.activate_license("u1", "student@university.edu", "dev-1", minted["key"])
+    assert err == ""
+    assert cfg["mode"] == "licensed"
+
+    seat_holder = store._data["users"]["u1"]
+    past = datetime.now(timezone.utc) - timedelta(days=365)
+    assert repo.effective_mode({**seat_holder, "licenseExpiresAt": past}) == "demo"
+
+
+def test_activating_an_expired_key_is_refused_not_silently_demoted(store):
+    """It used to "succeed": the past expiry was mirrored on, the account
+    resolved demo, and the caller got err="" with a demo config."""
+    store._data["users"] = {
+        "u1": {"email": "a@b.com", "access_status": "APPROVED", "mode": "demo"},
+    }
+    minted = repo.create_individual_license(
+        email_lock="a@b.com",
+        device_id_lock="dev-1",
+        created_by_uid="admin",
+        # Past the default grace window, not merely past expiry — a key inside
+        # grace is still entitled and must still activate.
+        expires_at=datetime.now(timezone.utc)
+        - timedelta(days=settings.LICENSE_GRACE_DAYS_DEFAULT + 1),
+    )
+    err, cfg = repo.activate_license("u1", "a@b.com", "dev-1", minted["key"])
+    assert err == "license_expired"
+    assert cfg is None
+    # And nothing was written onto the user.
+    assert "licenseId" not in store._data["users"]["u1"]
+
+
+def test_mint_records_duration_and_grace(store):
+    timed = repo.create_individual_license(
+        email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+    )
+    stored = store._data["licenses"][timed["license"]["id"]]
+    assert stored["duration"] == "timed"
+    # Stamped from the fleet default at mint, not inherited at read time.
+    assert stored["graceDays"] == settings.LICENSE_GRACE_DAYS_DEFAULT
+
+    perpetual = repo.create_individual_license(
+        email_lock="c@d.com", device_id_lock="dev-2", created_by_uid="admin",
+    )
+    assert store._data["licenses"][perpetual["license"]["id"]]["duration"] == "perpetual"
+
+
+def test_activating_inside_grace_still_works(store):
+    """Grace is entitlement, not a warning state — a key can still be redeemed
+    during it, and the redeemer lands in grace rather than being refused."""
+    store._data["users"] = {
+        "u1": {"email": "a@b.com", "access_status": "APPROVED", "mode": "demo"},
+    }
+    minted = repo.create_individual_license(
+        email_lock="a@b.com",
+        device_id_lock="dev-1",
+        created_by_uid="admin",
+        expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    err, cfg = repo.activate_license("u1", "a@b.com", "dev-1", minted["key"])
+    assert err == ""
+    assert cfg["mode"] == "licensed"
+    assert cfg["inGrace"] is True
+
+
+# ====================================================== renewal (PATCH terms)
+# Extending expiresAt has to reach people who already activated. The terms are
+# mirrored onto each user at activation so the read path needs no Firestore
+# lookup, which means editing the license alone reaches nobody.
+
+def test_extending_an_individual_license_re_entitles_the_redeemer(store):
+    store._data["users"] = {
+        "u1": {"email": "a@b.com", "access_status": "APPROVED", "mode": "demo"},
+    }
+    minted = repo.create_individual_license(
+        email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    license_id = minted["license"]["id"]
+    repo.activate_license("u1", "a@b.com", "dev-1", minted["key"])
+
+    far = datetime.now(timezone.utc) + timedelta(days=400)
+    updated = repo.update_license(license_id, {"expiresAt": far}, "admin")
+    assert updated["expiresAt"] == far
+    # The mirror moved with it — without the fan-out this would still be +1d.
+    assert store._data["users"]["u1"]["licenseExpiresAt"] == far
+
+
+def test_extending_an_institution_license_re_entitles_every_seat(store):
+    store._data["users"] = {
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u2": {"email": "b@university.edu", "access_status": "APPROVED", "mode": "demo"},
+    }
+    minted = repo.create_institution_license(
+        domain_lock="university.edu", admin_emails=["it@university.edu"],
+        created_by_uid="admin",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    license_id = minted["license"]["id"]
+    repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    repo.activate_license("u2", "b@university.edu", "dev-2", minted["key"])
+
+    far = datetime.now(timezone.utc) + timedelta(days=400)
+    repo.update_license(license_id, {"expiresAt": far}, "admin")
+    assert store._data["users"]["u1"]["licenseExpiresAt"] == far
+    assert store._data["users"]["u2"]["licenseExpiresAt"] == far
+
+
+def test_extending_skips_a_revoked_seat(store):
+    """A revoked seat holds no entitlement. Re-stamping its mirror would
+    resurrect the member on the next resolve."""
+    store._data["users"] = {
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u2": {"email": "b@university.edu", "access_status": "APPROVED", "mode": "demo"},
+    }
+    minted = repo.create_institution_license(
+        domain_lock="university.edu", admin_emails=["it@university.edu"],
+        created_by_uid="admin",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    license_id = minted["license"]["id"]
+    repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    repo.activate_license("u2", "b@university.edu", "dev-2", minted["key"])
+    repo.revoke_institution_seat(license_id, "u2")
+
+    far = datetime.now(timezone.utc) + timedelta(days=400)
+    repo.update_license(license_id, {"expiresAt": far}, "admin")
+    assert store._data["users"]["u1"]["licenseExpiresAt"] == far
+    assert store._data["users"]["u2"]["mode"] == "demo"
+
+
+def test_extending_does_not_touch_someone_on_a_different_license(store):
+    store._data["users"] = {
+        "u1": {"email": "a@b.com", "access_status": "APPROVED", "mode": "demo"},
+    }
+    first = repo.create_individual_license(
+        email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    repo.activate_license("u1", "a@b.com", "dev-1", first["key"])
+    # u1 moves to a second key; the first license no longer speaks for them.
+    second = repo.create_individual_license(
+        email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
+    )
+    repo.activate_license("u1", "a@b.com", "dev-1", second["key"])
+
+    far = datetime.now(timezone.utc) + timedelta(days=400)
+    repo.update_license(first["license"]["id"], {"expiresAt": far}, "admin")
+    # The second license is perpetual, so activating it cleared the mirror.
+    # The fan-out must leave it cleared rather than stamping the first
+    # license's new expiry onto someone who has moved off it.
+    assert store._data["users"]["u1"].get("licenseExpiresAt") is None
+
+
+def test_extending_a_perpetual_license_makes_it_timed(store):
+    minted = repo.create_individual_license(
+        email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
+    )
+    assert minted["license"]["id"] in store._data["licenses"]
+    far = datetime.now(timezone.utc) + timedelta(days=30)
+    repo.update_license(minted["license"]["id"], {"expiresAt": far}, "admin")
+    assert store._data["licenses"][minted["license"]["id"]]["duration"] == "timed"
+
+
+def test_update_unknown_license_is_none(store):
+    assert repo.update_license("nope", {"graceDays": 5}, "admin") is None
+
+
+@pytest.mark.asyncio
+async def test_admin_extend_over_http(client, monkeypatch):
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    store._data["users"] = {
+        "u1": {"email": "a@b.com", "access_status": "APPROVED", "mode": "demo"},
+    }
+    minted = repo.create_individual_license(
+        email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    license_id = minted["license"]["id"]
+    repo.activate_license("u1", "a@b.com", "dev-1", minted["key"])
+
+    resp = await client.patch(
+        f"/v1/admin/licenses/{license_id}",
+        json={"expiresAt": "2030-01-01T00:00:00Z", "graceDays": 30},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["duration"] == "timed"
+    assert store._data["users"]["u1"]["licenseGraceDays"] == 30
+
+
+@pytest.mark.asyncio
+async def test_admin_extend_rejects_an_empty_patch(client, monkeypatch):
+    fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    resp = await client.patch("/v1/admin/licenses/whatever", json={})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_me_reports_the_license_summary(client, monkeypatch):
+    fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    expiry = datetime.now(timezone.utc) - timedelta(days=1)
+    monkeypatch.setattr(deps, "_DEV_USER", {
+        **deps._DEV_USER,
+        "licenseExpiresAt": expiry, "licenseGraceDays": 14,
+        "licenseDuration": "timed", "licenseKind": "institution",
+    })
+    body = (await client.get("/v1/me")).json()
+    assert body["license"]["mode"] == "licensed"
+    assert body["license"]["inGrace"] is True
+    assert body["license"]["duration"] == "timed"
+    assert body["license"]["kind"] == "institution"
+    # Identity is unchanged — this is additive.
+    assert body["uid"] == "dev-user"
+    assert body["access_status"] == "APPROVED"

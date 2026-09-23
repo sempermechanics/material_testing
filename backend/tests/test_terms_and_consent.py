@@ -5,27 +5,12 @@ and version-checked; the consent is optional, off until granted, and revocable.
 Both must work for a PENDING account, because the gate runs at registration,
 before an operator approves anyone.
 """
-import fake_firestore
 import pytest
 
-from app import audit, deps, firestore_repo as repo, legal
+from app import deps, legal
 from app.config import settings
 
 UID = "terms-uid"
-
-
-@pytest.fixture
-def store(monkeypatch):
-    store = fake_firestore.install(monkeypatch)
-    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
-    return store
-
-
-@pytest.fixture
-def audited(monkeypatch):
-    seen = []
-    monkeypatch.setattr(audit, "record", lambda *a, **k: seen.append(k))
-    return seen
 
 
 def _sign_in_as(monkeypatch, store, status):

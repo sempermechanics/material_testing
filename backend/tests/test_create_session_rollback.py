@@ -6,11 +6,9 @@ session — which would be invisible to the quota and never reclaimed. On such a
 failure the reserved session (and any file docs already written) are rolled back
 so nothing lingers against the user's quota.
 """
-import fake_firestore
 import pytest
 
 from app import audit, drive
-from app import firestore_repo as repo
 
 DEV_UID = "dev-user"  # deps._DEV_USER in DEV_INSECURE_AUTH mode
 _SHA = "a" * 64
@@ -21,10 +19,8 @@ def _file(name: str) -> dict:
 
 
 @pytest.fixture
-def store(monkeypatch):
-    store = fake_firestore.install(monkeypatch)
+def store(store, monkeypatch):
     store._data["users"] = {DEV_UID: {"email": "dev@test", "access_status": "APPROVED"}}
-    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     monkeypatch.setattr(audit, "record", lambda *a, **k: None)
     monkeypatch.setattr(drive, "access_token", lambda: "tok")
     monkeypatch.setattr(
