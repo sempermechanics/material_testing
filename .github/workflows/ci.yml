@@ -101,13 +101,20 @@ jobs:
     # against the CSP that forbids it, ids the module asks for, deploy
     # placeholders still unsubstituted, rewrite targets that exist, and every
     # /v1 path declared on the gateway. Seconds to run, so it runs on every
-    # event rather than behind a path filter.
+    # event rather than behind a path filter. The node tests cover the
+    # DOM-free helpers in console/util.js (roster cells, escaping); sign-in
+    # and step-up still need Firebase fixtures and are hand-checked (TD-22).
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
       - run: python scripts/check_console.py
+      - name: Console helper tests
+        run: node --test "firebase-hosting/tests/*.test.mjs"
 
   # ===================================================================
   # Path filters — same rules on PR and push. Prove only what the diff

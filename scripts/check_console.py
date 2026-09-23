@@ -99,7 +99,7 @@ def check_scripts() -> None:
                 # all, so the check would pass on anything.
                 proc = subprocess.run(
                     [node, "--input-type=module", "--check"],
-                    input=read(module), capture_output=True, text=True,
+                    input=read(module), capture_output=True, text=True, encoding="utf-8",
                 )
                 if proc.returncode != 0:
                     detail = proc.stderr.strip().splitlines()

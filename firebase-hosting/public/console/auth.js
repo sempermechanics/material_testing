@@ -606,20 +606,9 @@ export function setStatus(message, isError = false) {
   el.className = isError ? "muted err" : "muted";
 }
 
-/** Escape text before it reaches innerHTML. Emails and names come from users. */
-export function esc(value) {
-  return String(value ?? "").replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
-  );
-}
-
-/** A short, readable rendering of an ISO instant, or an em dash for null. */
-export function when(iso) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
-}
+// Pure helpers live in util.js, where `node --test` can reach them; the pages
+// keep importing them from here.
+export { esc, when } from "./util.js";
 
 /**
  * Confirm a destructive act by making the operator type the thing's name.
