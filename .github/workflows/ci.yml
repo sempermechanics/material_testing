@@ -20,6 +20,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only by default; jobs that prune caches or read PRs widen it themselves.
+permissions:
+  contents: read
+
 jobs:
   secret-scan:
     name: Secret scan (full history)
@@ -55,8 +59,13 @@ jobs:
         run: |
           set -euo pipefail
           VER=8.28.0
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" \
-            | tar -xz gitleaks
+          BASE="https://github.com/gitleaks/gitleaks/releases/download/v${VER}"
+          TARBALL="gitleaks_${VER}_linux_x64.tar.gz"
+          curl -sSfLO "${BASE}/${TARBALL}"
+          # Verify against the release's published checksums before running it.
+          curl -sSfL "${BASE}/gitleaks_${VER}_checksums.txt" \
+            | grep " ${TARBALL}$" | sha256sum -c -
+          tar -xzf "${TARBALL}" gitleaks
           ./gitleaks detect --source . --config .gitleaks.toml --verbose --redact \
             --log-opts="${BASE_SHA}..HEAD"
 
@@ -291,8 +300,10 @@ jobs:
           :app:lintDebug
           :app:compileReleaseKotlin
 
-      - name: Kotlin coverage (report-only)
-        run: ./gradlew --console=plain :app:koverLog
+      # koverVerify enforces the `minBound` in app/build.gradle.kts (TD-38);
+      # koverLog prints the measured number so a raise has evidence.
+      - name: Kotlin coverage floor
+        run: ./gradlew --console=plain :app:koverLog :app:koverVerify
 
   # ===================================================================
   # Tier 2 — Engine host / sanitizers
@@ -428,7 +439,7 @@ jobs:
       # --ignore-vuln rather than deleting the gate.
       - name: Audit dependencies
         run: |
-          pip install pip-audit
+          pip install pip-audit==2.10.1
           pip-audit -r requirements.txt --strict
 
       # The image installs from requirements.lock with --require-hashes. Prove it
@@ -489,7 +500,7 @@ jobs:
       # code against a real Firestore.
       - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Set up Java for the emulator
         uses: actions/setup-java@v6
@@ -502,7 +513,7 @@ jobs:
           GOOGLE_CLOUD_PROJECT: semper-ci-emulator
           FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
         run: |
-          npm install -g firebase-tools@13
+          npm install -g firebase-tools@13.35.1
           firebase emulators:exec \
             --only firestore \
             --config firebase.emulator.json \
@@ -665,7 +676,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Run startup Macrobenchmarks
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           # Same image as tier 3. API 37 empties gfxinfo framestats, so
           # startActivityAndWait cannot confirm launch.

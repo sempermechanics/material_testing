@@ -130,9 +130,8 @@ in a drive-by. Settings / wizard settings XML stay under `TooManyViews` by
 inflating through `SettingsScrollContentView` /
 `WizardStepSettingsContentView`.
 
-Kover `minBound` is configured at 27 (`app/build.gradle.kts`) but report-only:
-CI runs `:app:koverLog` and `ciReleaseGate` does not include `koverVerify`,
-until TD-38 wires it (measured 31.9 % on 2026-09-23). Macrobenchmark CI is
+Kover `minBound` is 27 (`app/build.gradle.kts`), enforced by `:app:koverVerify`
+in CI tier 1 and `ciReleaseGate` (measured 32.1 % on 2026-09-23). Macrobenchmark CI is
 emulator **smoke** (`suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`), API 34, no
 numeric thresholds.
 

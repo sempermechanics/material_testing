@@ -97,6 +97,10 @@ android {
     namespace = "com.indicvision.semper"
     // core-ktx 1.19+ (gradle-deps) requires compileSdk 37+ (AAR metadata).
     compileSdk = 37
+    // Pinned (TD-37): the engine builds with -ffast-math and the .dat oracles
+    // are bit-exact, so a compiler change must be a deliberate edit, not a side
+    // effect of an AGP bump. This is AGP 9.3.2's default NDK as of 2026-09-23.
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "com.indicvision.semper"
@@ -218,11 +222,16 @@ android {
             if (releaseKeystore != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            // Keep the build offline/credential-free: the plugin still injects the
-            // build-ID resource the SDK needs, it just skips uploading the R8
-            // mapping to Firebase at build time.
+            // Local builds stay offline: the plugin still injects the build-ID
+            // resource the SDK needs and skips the mapping upload. The release
+            // workflow passes -PuploadCrashlyticsMapping=true so Crashlytics keeps
+            // the R8 mapping privately for the project's life (TD-40); the
+            // workflow artifact alone expires after 90 days, and attaching it to
+            // the public GitHub Release would undo the obfuscation.
             configure<CrashlyticsExtension> {
-                mappingFileUploadEnabled = false
+                mappingFileUploadEnabled =
+                    (project.findProperty("uploadCrashlyticsMapping") as String?)
+                        ?.equals("true", ignoreCase = true) == true
             }
         }
         // Non-debuggable, debug-signed release-like variant for Macrobenchmark.

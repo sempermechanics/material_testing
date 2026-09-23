@@ -9,11 +9,17 @@ useDefault = true
 
 [allowlist]
 description = "Public/client identifiers and deleted historical noise (not Admin secrets)"
+# Paths stay exempt only while something legitimately lives there. Firebase
+# client config is public by design. SupabaseManager.kt was added in the
+# allowlisted b9e9065 and changed in three more commits (9a72b92, f2ffb67,
+# ffbe54e) before its deletion in 747d371, so its rule stays until a
+# full-history scan shows those three add nothing (TD-47). local.properties is NOT exempt: its one
+# historical add (46e50fd) is allowlisted by commit below, so a future
+# accidental commit of it — the file that holds signing and API settings —
+# gets scanned. The website-sync patch rule matched no file in any ref.
 paths = [
   '''(^|/)google-services\.json$''',
-  '''(^|/)local\.properties$''',
   '''(^|/)SupabaseManager\.kt$''',
-  '''^docs/ops/website-sync/.*\.patch$''',
 ]
 commits = [
   '''9a3623ad444512d0f8033a3aa067e44bdf0e7347''',

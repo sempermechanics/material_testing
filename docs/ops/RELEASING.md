@@ -16,7 +16,7 @@ Private alpha uses the same **`beta`** Release channel — there is no separate
 3. Smoke sign-in, one analysis, backup/sync, and open results. Do not publish to
    Play or the public website for this ring.
 
-Archive the R8 mapping artifact before 90-day expiry (same as any beta).
+Check the R8 mapping reached Crashlytics (the release build uploads it); the workflow artifact is a 90-day fallback.
 
 ## Versioning
 
@@ -119,8 +119,10 @@ so none of the signing steps run if any of the above fails.
 **The R8 mapping is not attached to the GitHub Release, deliberately.** It is the
 deobfuscation key — publishing it would undo the obfuscation for everyone — but
 without it a field stack trace from that build is unreadable, and it cannot be
-regenerated afterwards. Archive it somewhere durable before the 90-day artifact
-retention expires. This is a step you have to take by hand.
+regenerated afterwards. The build passes `-PuploadCrashlyticsMapping=true`, so
+the Crashlytics Gradle plugin uploads the mapping to Firebase and field crashes
+stay readable there for the life of the project (TD-40). The 90-day workflow
+artifact is only the fallback for a manual `retrace`. Local builds never upload.
 
 ### `publish`
 

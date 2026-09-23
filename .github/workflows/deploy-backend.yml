@@ -63,6 +63,8 @@ jobs:
 
   deploy:
     needs: test
+    # Production ships only what is on main; staging may deploy a branch.
+    if: github.event.inputs.environment != 'production' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
     steps:
@@ -70,10 +72,15 @@ jobs:
 
       - id: meta
         name: Resolve service name
+        # Inputs via env, not ${{ }} in the script, so a crafted value cannot
+        # become shell.
+        env:
+          SVC_INPUT: ${{ github.event.inputs.service }}
+          TARGET_ENV: ${{ github.event.inputs.environment }}
         run: |
-          SVC="${{ github.event.inputs.service }}"
+          SVC="${SVC_INPUT}"
           if [ -z "$SVC" ]; then
-            if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            if [ "${TARGET_ENV}" = "production" ]; then
               SVC="semper-api"
             else
               SVC="semper-api-staging"

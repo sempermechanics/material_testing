@@ -152,7 +152,8 @@ jobs:
             -PnativeCompilerLauncher=ccache \
             -PversionName="${VERSION_NAME}" \
             -PversionCode="${{ github.run_number }}" \
-            -PrequireCloudApi=true
+            -PrequireCloudApi=true \
+            -PuploadCrashlyticsMapping=true
 
       - name: Verify arm64-v8a .so in release APK
         run: |
@@ -229,8 +230,9 @@ jobs:
       # the mapping for the exact build that produced it. It cannot be regenerated
       # afterwards — if this file is lost, those crashes stay unreadable forever.
       # Deliberately NOT attached to the GitHub release: it is the deobfuscation
-      # key, and publishing it would undo the obfuscation for everyone. Archive it
-      # somewhere durable before the 90-day artifact retention expires.
+      # key, and publishing it would undo the obfuscation for everyone. The
+      # durable copy is Crashlytics (-PuploadCrashlyticsMapping=true above,
+      # TD-40); this artifact is the 90-day fallback for a manual retrace.
       - name: Upload R8 mapping
         uses: actions/upload-artifact@v7
         with:
