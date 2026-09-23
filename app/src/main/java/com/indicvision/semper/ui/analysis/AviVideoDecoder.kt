@@ -99,6 +99,7 @@ internal class AviVideoDecoder private constructor(
                 fpsKnown = video.fps > 0.0,
                 width = video.width,
                 height = video.height,
+                rotationDegrees = 0,
             )
         }
 

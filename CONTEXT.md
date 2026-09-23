@@ -137,6 +137,21 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-09-23)
 
+**MP4 frames decode forward (`fix/mp4-decode-forward`, on top of
+`fix/video-estimate-snackbar`).** MP4 extraction asked the retriever for the
+*sync* frame nearest each sample, so every sample within a GOP came back as
+the same I-frame; a phone clip gave 26 identical frames and zero displacement.
+Ported the parent repo's `HardwareVideoDecoder` (from its 571a82c, 40bab6a and
+151a8ba): `MediaExtractor` + `MediaCodec`, lossless Y plane, decoding forward
+to the requested frame, then the retriever as a last resort, now asking for the
+exact frame first. The parent's **Keyframes (DIC)** sampling mode was not
+ported: it spaces frames by the encoder's GOP rather than a chosen rate, and
+machine loads are matched by time, so evenly spaced frames suit a stress–strain
+curve better. On the emulator the
+real clip now yields frames that match the source, and
+`VideoFrameExtractionDeviceTest` passes 6/6. Not yet tried on a physical
+device's vendor decoder (§5.1a.12).
+
 **Video sampling and long snackbars (`fix/video-estimate-snackbar`).** The
 sampling sheet promised one frame more than extraction delivered whenever the
 segment reached the clip's end, because it sampled at the end itself, where

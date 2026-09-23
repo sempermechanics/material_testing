@@ -83,6 +83,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="video_codec_unsupported">This AVI holds %1$s video, which this device has no decoder for. Re-save it as MP4 (H.264), or export the frames as PNG and import them as images.</string>
     <string name="video_extract_insufficient">Could not extract enough frames from this segment.</string>
     <string name="video_read_error">Failed to read video: %1$s</string>
+    <string name="video_extracting_progress_fmt">Extracting frame %1$d of %2$d</string>
     <string name="error_loading_images">Error loading images: %1$s</string>
     
 

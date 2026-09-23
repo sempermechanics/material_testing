@@ -399,6 +399,15 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | [ ] 5.1a.9 | Pick an `.avi` that is truncated or not a video at all | The ordinary "could not read this video" snackbar — no crash |
 | [ ] 5.1a.10 | Leave the segment at the whole clip and the rate at the source's own, then **Extract** | The deformed count is exactly the sheet's estimate minus the reference — a 20-frame clip gives 1 + 19, not a promised 21 |
 | [ ] 5.1a.11 | Read the codec snackbar from 5.1a.8 | The whole message shows — both remedies, not cut after two lines — and it stays up long enough to read (about 9 s) |
+| [ ] 5.1a.12 | Extract a phone-recorded MP4 over the whole clip, then scrub the deformed frames | Consecutive frames differ wherever the specimen moved — not runs of one repeated I-frame — and the displacement field is not zero |
+
+`VideoFrameExtractionDeviceTest` (instrumented) covers the extraction itself on
+an emulator: it encodes MP4 and AVI (Y800, MJPG, H.264) clips whose frames are
+stamped with their own index, and checks that each sample is the frame asked
+for, that portrait rotation is honoured, that every PNG came from the lossless
+Y-plane path rather than the retriever fallback, and that the frame times load
+mapping uses are the sampled times. The rows above remain for the sheet itself
+and for real vendor decoders and camera files.
 
 ### 5.2 Step 2 — Confirm settings
 
