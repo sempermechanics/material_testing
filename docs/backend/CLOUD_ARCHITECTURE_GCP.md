@@ -897,7 +897,12 @@ replace the serving revision and hope:
    the *service URL* as its audience (both environments run
    `--no-allow-unauthenticated`, so an unauthenticated probe would only ever
    prove that the gateway rejects it).
-3. Promote the candidate to 100% traffic only if the smoke passes (update path).
+3. Promote the candidate to 100% traffic only if the smoke passes (update path):
+   `update-traffic --to-latest`, after checking the latest ready revision *is*
+   the candidate, removing every `cand-*` tag in the same call. Traffic then
+   follows the latest revision, so a later `gcloud run services update` serves
+   without a manual traffic move; the next deploy's `no_traffic` pins LATEST to
+   the serving revision by name before its candidate appears.
 
 On an update deploy, if the smoke fails there is nothing to roll back — the
 candidate never carried traffic. Rollback is only relevant if a later step fails
