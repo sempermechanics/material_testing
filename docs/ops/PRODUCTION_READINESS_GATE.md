@@ -347,14 +347,19 @@ pre-licensing documents)
       `semper-gw` on `v202609230812` (the diff against `v202609211150` was
       the `/readyz` block only). Checked: `/readyz` through the gateway → 404,
       unauthenticated `/v1/config` → 401, the console preflight → 200 with
-      ACAO, invokers unchanged. Rollback: `update-traffic
-      --to-revisions=indic-api-35821056144-1=100`, gateway
-      `--api-config=v202609211150`.
+      ACAO, invokers unchanged. Superseded the same day by the rename
+      (#146): production is `semper-api-35844549945-1` (`d518179`) behind
+      `v202609230845`; `indic-api`, its revisions and the older gateway
+      configs are deleted. Rollback: `gcloud run deploy semper-api --image
+      …/cloud-run-source-deploy/semper-api:rollback-c0c0ce3` (the
+      `c0c0ce3` image, kept under the new package).
 - [ ] A signed call from a new build carries a `t1.` nonce and no
       `POST /v1/challenge` precedes it (next app release).
-- [ ] The next backup's session reaches `UPLOADING` through the queue with no
-      `provision_enqueue_failed` event (proves the Tasks grant).
-- [ ] Prune the tagged `cand-*` revisions so none holds a warm instance.
+- [ ] The next backup's session reaches `UPLOADING` through `semper-provision`
+      with no `provision_enqueue_failed` event (proves the Tasks grant).
+- [x] Prune the tagged `cand-*` revisions so none holds a warm instance.
+      Moot: they went with `indic-api` (deleted 2026-09-23); `semper-api` has
+      one revision.
 
 ## Contention fixes found by the emulator tier
 

@@ -165,13 +165,16 @@ files or fewer inline, keeps one warm instance in production with one worker,
 logs a failed Cloud Tasks enqueue at ERROR, and answers `drive_file_gone`
 instead of a retried 502 when a backed-up file is gone from Drive. `/readyz`
 is off the gateway, staging deploys private, and the setup guide no longer
-advises `allUsers`. Production serves `c0c0ce3` (`indic-api-35835537292-1`,
-one warm instance) behind gateway config `v202609230812`; the Cloud Tasks
+advises `allUsers`. It first served as `c0c0ce3` on `indic-api`; after the
+rename (#146) production is `semper-api-35844549945-1` (`d518179`, one warm
+instance) behind gateway config `v202609230845`, and the old service, its
+`cand-*` tags and the older gateway configs are deleted. The Cloud Tasks
 `serviceAccountUser` grant and the staging deployer invoker are applied.
-Still owed: proof that the next backup goes through the queue, the app side
-(ships with the next release), and `cand-*` pruning —
+Still owed: proof that the next backup goes through `semper-provision`, and
+the app side (ships with the next release) —
 [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
-Rollback: revision `indic-api-35821056144-1`, gateway `v202609211150`.
+Rollback: `gcloud run deploy semper-api --image
+…/cloud-run-source-deploy/semper-api:rollback-c0c0ce3`.
 
 **Licensing is live in production (2026-09-21/22).** `indic-api` serves
 `d6b1b64` (`main` after #116) behind the `semper-gw` gateway config
