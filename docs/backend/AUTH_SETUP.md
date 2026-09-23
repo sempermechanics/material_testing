@@ -202,6 +202,25 @@ The client half fails open — see
 [ARCHITECTURE.md](../app/ARCHITECTURE.md#the-two-interceptors-on-the-shared-client).
 Go to `enforce` only once `monitor` shows the missing-token rate at zero.
 
+**Project setup (not done yet).** The app attests against the Auth project
+(`indicvision-dic-app-auth`, number `171818100029`), and on 2026-09-23 that
+project had neither `firebaseappcheck.googleapis.com` nor
+`playintegrity.googleapis.com` enabled: every token exchange answered `403 …
+Firebase App Check API has not been used in project 171818100029`, so no build
+has ever sent a token. Before `monitor` means anything:
+
+1. Enable both APIs on the Auth project.
+2. Firebase Console → App Check → register the Android app with the **Play
+   Integrity** provider, using the Play **app signing** certificate's SHA-256.
+3. Play Console → App integrity → link the same Cloud project.
+
+A sideloaded debug build still gets no token after that (Play Integrity does
+not recognise it); a debug-provider token registered in the console is the way
+to exercise the path from one. The app installs its provider on every build
+with a backend except while the emulator sign-in bypass is active
+(`wantsAppCheck` in `SemperApp.kt`) — before 2026-09-23 it keyed on the
+`DEV_AUTH_BYPASS` build flag, which skipped debug builds on real phones too.
+
 ## 3a. Terms acceptance (clickwrap) and the improvement consent
 
 Signing in proves identity; it does not bind anyone to the Terms. The app

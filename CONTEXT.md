@@ -176,9 +176,16 @@ no name search for an id minted in the same request, and a retry reuses the
 stored folder. `session_provisioned` logs `folderMs`. The next Pixel backup
 provisioned in 2.40 s (folders 1.23 s), `POST /v1/sessions` 3.12 s.
 
-**Deploys prune their tags (branch `chore/prune-cand-tags`).** The promote
+**App Check attests on real phones (branch `fix/appcheck-real-phones`).** The
+provider was skipped whenever the `DEV_AUTH_BYPASS` build flag was on — every
+debug build, real phones included. It now keys on the bypass being active
+(emulator only). That exposed that the Auth project has the App Check and Play
+Integrity APIs disabled, so no build has ever sent a token; setup steps are in
+AUTH_SETUP §3.2 and a gate row. Harmless while `APP_CHECK_MODE=off`.
+
+**Deploys prune their tags (#151, deployed 2026-09-23).** The promote
 routes `--to-latest` and drops every `cand-*` tag in the same call (TD-32
-closed). Unproven until the next staging deploy.
+closed; #151, deployed to both environments with no tags left).
 
 **Backend names standardised (2026-09-23, #146, deployed).** Cloud Run
 services are rebuilt as `semper-api` / `semper-api-staging` with queues
