@@ -351,12 +351,14 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | [ ] 5.1a.7 | Pick an `.avi` from a lab or UTM camera (uncompressed or motion-JPEG) | Sampling sheet opens with its resolution, rate and duration; **Extract** writes the same lossless grayscale frames an MP4 does |
 | [ ] 5.1a.8 | Pick an `.avi` whose codec this device has no decoder for (Xvid on a device without MPEG-4 ASP) | Snackbar naming the four-letter codec and what to do instead, with **Why?** → video-read FAQ |
 | [ ] 5.1a.9 | Pick an `.avi` that is truncated or not a video at all | The ordinary "could not read this video" snackbar — no crash |
+| [ ] 5.1a.10 | **Fixed interval**, whole clip, the source's own rate, then **Extract** | The deformed count is exactly the sheet's estimate minus the reference — a 20-frame clip gives 1 + 19, not a promised 21 |
+| [ ] 5.1a.11 | Read the codec snackbar from 5.1a.8 | The whole message shows — both remedies, not cut after two lines — and it stays up long enough to read (about 9 s) |
 
 `VideoFrameExtractionDeviceTest` (instrumented) covers the extraction itself on an
 emulator: it encodes MP4 and AVI (Y800, MJPG, H.264) clips whose frames are stamped
 with their own index, and checks keyframe and fixed-interval picks, portrait
 rotation, and that every PNG came from the lossless Y-plane path rather than the
-retriever fallback. Rows 5.1a.1–9 remain for the sheet itself and for real
+retriever fallback. Rows 5.1a.1–11 remain for the sheet itself and for real
 vendor decoders and camera AVIs.
 
 ### 5.2 Step 2 — Confirm settings

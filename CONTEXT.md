@@ -133,6 +133,15 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-09-23)
 
+**Video sampling and long snackbars (`fix/video-estimate-snackbar`).** The
+sampling sheet promised one frame more than a fixed-interval extraction
+delivered whenever the segment reached the clip's end: it sampled at the end
+itself, where no frame starts. The sheet now caps the segment at
+`VideoKeyframeHelper.lastFrameStartMs` and counts `uniformTimestampsUs`, which
+the retriever fallback now uses too. `FaqRedirect.snackbar` shows up to five
+lines and stays up as long as its message takes to read, capped at 10 s.
+Same fix as material_testing #9.
+
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
