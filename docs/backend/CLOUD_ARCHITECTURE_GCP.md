@@ -116,10 +116,14 @@ browser call must prove instead is a **completed second factor and a recent
 sign-in**, both read from the ID token by Cloud Run (§20.8). CORS decides only
 which origins' pages may *read* a response — bearer tokens, no cookies — so it
 is not an authorisation control and nothing relies on it as one. (3)
-Gateway↔Cloud Run: Cloud Run is not public. `run.invoker` is held by the
-gateway's service account and by the API's own, which Cloud Tasks uses to call
-back for provisioning — never `allUsers` — so the only way in from outside is
-through the gateway's JWT check and its declared paths. (4) Cloud
+Gateway↔Cloud Run: Cloud Run is not public, and never `allUsers`.
+`run.invoker` is held by the gateway's service account, by the API's own
+(which Cloud Tasks uses to call back for provisioning), by the deployer (the
+candidate `/readyz` smoke calls the revision directly) and by the owner
+account for hand checks. Every other way in from outside passes the
+gateway's JWT check and its declared paths — and each of those four still
+needs a Firebase ID token for any `/v1/*` route, because Cloud Run verifies
+the token itself. (4) Cloud
 Run↔Google APIs: keyless, via the metadata server + IAM Credentials. (5)
 Device↔Drive: capability-scoped — the resumable session URI authorizes writes
 to *exactly one file*, nothing else.
