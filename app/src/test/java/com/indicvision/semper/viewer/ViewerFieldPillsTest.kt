@@ -3,10 +3,10 @@ package com.indicvision.semper.viewer
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.material.button.MaterialButton
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
+import com.indicvision.semper.ui.viewer.ViewerArgs
 import com.indicvision.semper.ui.viewer.ViewerFieldPills
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -64,12 +64,8 @@ class ViewerFieldPillsTest {
     }
 
     private fun intent(): Intent =
-        Intent(ApplicationProvider.getApplicationContext(), ResultViewerActivity::class.java)
-            .putExtra(DicKeys.IMG_W, GRID * STEP)
-            .putExtra(DicKeys.IMG_H, GRID * STEP)
-            .putExtra(DicKeys.STEP, STEP)
-            .putExtra(DicKeys.BATCH_DIR_PATH, batchDir.absolutePath)
-            .putExtra(DicKeys.START_FRAME, 0)
+        ViewerArgs.ofFrames(batchDir.absolutePath, GRID * STEP, GRID * STEP, STEP, startFrame = 0)
+            .toIntent(ApplicationProvider.getApplicationContext())
 
     private fun ResultViewerActivity.fieldFab(): MaterialButton = findViewById(R.id.btnFieldFab)
 

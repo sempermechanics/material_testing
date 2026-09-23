@@ -13,7 +13,6 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.FieldHistogram
 import com.indicvision.semper.R
@@ -41,9 +40,9 @@ object ViewerSettingsSheet {
      * short?" has to be answerable months later without remembering the run.
      */
     private fun stopRows(host: ResultViewerActivity): List<Pair<String, String>> {
-        val stopCode = host.intent.getIntExtra(DicKeys.STOP_CODE, 0)
+        val stopCode = host.args.stopCode
         if (stopCode == 0) return emptyList()
-        val planned = host.intent.getIntExtra(DicKeys.PLANNED_FRAMES, 0)
+        val planned = host.args.plannedFrames
         return buildList {
             add(
                 host.getString(R.string.setting_stopped_early) to
@@ -64,18 +63,20 @@ object ViewerSettingsSheet {
     }
 
     /**
-     * Every row the sheet shows for the frame on screen, in order.
+     * Every row the sheet shows for the frame on screen, in order. Internal so
+     * `ViewerEntryParityDeviceTest` can compare them across entry points.
      */
-    private fun entriesFor(host: ResultViewerActivity): List<Pair<String, String>> {
-        val roiW = host.intent.getIntExtra(DicKeys.ROI_W, 0)
-        val roiH = host.intent.getIntExtra(DicKeys.ROI_H, 0)
+    internal fun entriesFor(host: ResultViewerActivity): List<Pair<String, String>> {
+        val args = host.args
+        val roiW = args.roiW
+        val roiH = args.roiH
         // A sweep varies the settings frame by frame, so the sheet must describe
         // the combination on screen rather than the one the run started with.
         val frame = host.currentFrameIndex
         val subset = host.sweepSubsets?.getOrNull(frame)
-            ?: host.intent.getIntExtra(DicKeys.SUBSET_SIZE, 0)
+            ?: args.subsetSize
         val strainWin = host.sweepStrainWins?.getOrNull(frame)
-            ?: host.intent.getIntExtra(DicKeys.STRAIN_WINDOW, 0)
+            ?: args.strainWindow
         return buildList {
             add(host.getString(R.string.setting_subset) to host.getString(R.string.setting_px_fmt, subset))
             add(host.getString(R.string.setting_step) to host.getString(R.string.setting_px_fmt, host.step))
@@ -87,7 +88,7 @@ object ViewerSettingsSheet {
             // no separate row for a number that adds no information beyond them.
             add(
                 host.getString(R.string.setting_strain_method) to
-                    (host.intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG"),
+                    args.strainMethod,
             )
             addAll(stopRows(host))
             // ROI is only meaningful when one was actually recorded.
@@ -97,16 +98,16 @@ object ViewerSettingsSheet {
                         R.string.setting_roi_fmt,
                         roiW,
                         roiH,
-                        host.intent.getIntExtra(DicKeys.ROI_X, 0),
-                        host.intent.getIntExtra(DicKeys.ROI_Y, 0),
+                        args.roiX,
+                        args.roiY,
                     ),
                 )
             }
             add(
                 host.getString(R.string.setting_image_size) to host.getString(
                     R.string.setting_size_fmt,
-                    host.intent.getIntExtra(DicKeys.IMG_W, 0),
-                    host.intent.getIntExtra(DicKeys.IMG_H, 0),
+                    args.imgW,
+                    args.imgH,
                 ),
             )
         }
@@ -125,7 +126,7 @@ object ViewerSettingsSheet {
             ?.setBackgroundColor(Color.TRANSPARENT)
 
         view.findViewById<TextView>(R.id.tvSettingsUsedSpecimen).text =
-            host.intent.getStringExtra(DicKeys.REF_NAME).orEmpty()
+            host.args.refName
 
         view.findViewById<TextView>(R.id.tvSheetStats).text = host.detailStatsText()
         populateHistogram(host, view)

@@ -1,14 +1,13 @@
 package com.indicvision.semper.viewer
 
-import android.content.Intent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
+import com.indicvision.semper.ui.viewer.ViewerArgs
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -65,14 +64,10 @@ class FrameNumberEntryTest {
     }
 
     private fun viewer(): ResultViewerActivity {
-        val intent = Intent(ApplicationProvider.getApplicationContext(), ResultViewerActivity::class.java)
-            .putExtra(DicKeys.IMG_W, GRID * STEP)
-            .putExtra(DicKeys.IMG_H, GRID * STEP)
-            .putExtra(DicKeys.STEP, STEP)
-            .putExtra(DicKeys.BATCH_DIR_PATH, batchDir.absolutePath)
-            // START_FRAME opens on a frame rather than the summary, which is what
-            // the frame field is about.
-            .putExtra(DicKeys.START_FRAME, 0)
+        // startFrame opens on a frame rather than the summary, which is what
+        // the frame field is about.
+        val intent = ViewerArgs.ofFrames(batchDir.absolutePath, GRID * STEP, GRID * STEP, STEP, startFrame = 0)
+            .toIntent(ApplicationProvider.getApplicationContext())
         return Robolectric.buildActivity(ResultViewerActivity::class.java, intent).setup().get().also {
             shadowOf(it.mainLooper).idle()
         }

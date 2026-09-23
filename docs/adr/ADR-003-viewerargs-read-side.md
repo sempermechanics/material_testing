@@ -98,10 +98,39 @@ no I/O.
 
 ## Action items
 
-1. [ ] `ViewerArgs.from` + default table + `Timber.w` on defaulted keys.
-2. [ ] Four readers take `ViewerArgs`; lattice hop re-packs.
-3. [ ] Seed activities and Robolectric tests build `ViewerArgs`.
-4. [ ] Tests: round trip `from(toIntent(x)) == x`; legacy-extras fixture;
-       `ViewerArgsTest` value parity between the two entry points.
-5. [ ] Emulator: `ViewerEntryParityDeviceTest`, `LatticeToViewerHopTest`.
-6. [ ] Close TD-3 and TD-61.
+1. [x] `ViewerArgs.from` + one default per field + `Timber.w` naming each
+       key filled from the record or defaulted.
+2. [x] Four readers take `ViewerArgs`; the lattice hop re-packs
+       (`args.copy(startFrame = n).toIntent`).
+3. [x] Seed activities and Robolectric tests build `ViewerArgs`
+       (`ViewerArgs.ofFrames`).
+4. [x] `ViewerArgsTest` (11): single-run and sweep round trips, Home's Intent
+       reads back as Home's args, the hop, a legacy `SWEEP_SKIP_*` fixture,
+       record fallback, defaults with no record.
+5. [x] Emulator: `ViewerEntryParityDeviceTest` (2), which covers the hop too
+       instead of a separate `LatticeToViewerHopTest`.
+6. [x] Close TD-3 and TD-61.
+
+## As built (2026-09-23)
+
+- **The record is a lambda, read only for a missing key.**
+  `from(intent, record: () -> SessionRecord?)`. The Trade-off analysis above
+  was wrong that the lookup is free: `ResultViewerActivity` warms
+  `sessionRecord` on the IO dispatcher, so a synchronous read in `onCreate`
+  would have been a main-thread index read on every open. Today's writers put
+  every key, so the lambda never runs for them.
+- **A present key wins even when its value is null.** `ENGINE_STATS` and
+  `SESSION_ID` can legitimately be null (a seeded viewer, a sweep that solved
+  nothing); only an *absent* key falls back.
+- **The defaults** are step 5, subset 41, strain window 15 and the whole image
+  as ROI. They were step 5 or 1, subset 41 or 0, and ROI image-size or 0,
+  depending on the reader.
+- **`engineStats` is `List<Float>?`**, so `ViewerArgs` equality means
+  something and the round-trip tests compare whole objects.
+- **`startFrame` picks the destination.** A sweep opens on its lattice unless
+  a node has been picked; the hop is `copy(startFrame = n)`.
+- **Sweep keys never fall back to the record**: their absence is what makes an
+  Intent a single run. Legacy `SWEEP_SKIP_*` arrays fold into `skippedJson`.
+- **What still differs between the entry points is intended**: `defPath` and
+  `defFilePaths`, the fresh run's own image paths. The viewer prefers the
+  persisted originals either way.
