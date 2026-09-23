@@ -133,6 +133,18 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-09-23)
 
+**A 429 no longer spends the nonce (branch `fix/rate-limit-before-nonce`).**
+Erasing seven analyses from a Pixel 6 left two in the cloud: past the erase
+bucket's burst of three, each delete got a 429, and the app's unchanged retry
+came back 401 `nonce_invalid_or_replayed`, because the bucket was checked in
+the handler after `verified_device` had claimed the nonce. The 401 also made
+the app drop client nonces for the rest of its process, so from then on the
+retry replayed a consumed server challenge and nothing recovered. The 21
+signed routes now take their bucket as `dependencies=[rate_limited(...)]`,
+resolved before the nonce is touched, and their 429s send `Retry-After`. No app
+change; installed builds are fixed by the deploy. Nothing was lost: a failed
+cloud erase keeps the local copy, so the two analyses can be erased again.
+
 **A starved device-lock bind is not a loss (`fix/deflake-device-lock-test`).**
 The emulator test `test_the_first_device_wins_an_unbound_lock` flaked (2 in 10
 locally, and on PR #148) with **zero** winners: all eight binds exhausted their

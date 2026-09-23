@@ -285,7 +285,11 @@ pre-licensing documents)
       the custom domain through `semper-gw` 200.
 - [x] Revoke `SEMP-5MZP` from the desk (the 500-retry duplicate beside `SEMP-EQUZ`).
       **Done 2026-09-23** by the operator on the deployed #138 desk.
-- [ ] Hand-check `/login` as an ordinary account holder (`/account` only).
+- [x] Hand-check `/login` as an ordinary account holder (`/account` only).
+      **Done 2026-09-23**: `/login` read `/v1/me` and
+      `/v1/institutions/licenses`, found neither staff role nor institution,
+      and sent the account to `/account`, which showed **demo**; every
+      preflight and call 200 through the production gateway.
 - [x] Marketing site (`IndicVision/semper-website`, Netlify): "Sign in" in the
       nav, `/dashboard/` page, `_redirects` for `/login`, `/account`,
       `/terms/*` → `app.sempermechanics.com`. `curl -sI https://sempermechanics.com/terms/`
@@ -362,11 +366,18 @@ pre-licensing documents)
       `c0c0ce3` image, kept under the new package).
 - [ ] A signed call from a new build carries a `t1.` nonce and no
       `POST /v1/challenge` precedes it (next app release).
-- [ ] A session over `INLINE_PROVISION_MAX_FILES` (8) files reaches
+- [x] A session over `INLINE_PROVISION_MAX_FILES` (8) files reaches
       `UPLOADING` through `semper-provision` with no `provision_enqueue_failed`
       event (proves the Tasks grant). A phone backup cannot prove it: a bundle
       is 3 files and provisions inline. Two Pixel 6 backups on 2026-09-23 did
       that — `POST /v1/sessions` 6.06 s / 4.05 s, provisioning 5.37 s / 3.43 s.
+      **Proven 2026-09-23** with the threshold set to `0` for the test, so the
+      3-file Pixel 6 bundle took the queue path, then removed:
+      staging (`semper-provision-staging`) and production (`semper-provision`,
+      revision `semper-api-00006-gq5`) each logged `session_provision_queued`,
+      a `Google-Cloud-Tasks` `POST /v1/tasks/provision-session` 200 and
+      `session_provisioned` (production `latencyMs` 2752, `folderMs` 1653);
+      `POST /v1/sessions` returned in 1.20 s and all three files completed.
 - [x] Inline provisioning after the folder change (check-and-create run
       concurrently, no name search for the new session folder): a phone backup's
       `session_provisioned` shows `folderMs` and `latencyMs` well under the

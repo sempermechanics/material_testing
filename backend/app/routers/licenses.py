@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
-from ..deps import attested_or_mfa_user, current_user
+from ..deps import attested_or_mfa_user, current_user, rate_limited
 from ..models import LicenseActivate
 from ..validation import require_header_identifier
 
@@ -104,7 +104,10 @@ def release_lease(user=Depends(current_user)):
     return {"config": config}
 
 
-@router.post("/v1/licenses/unbind")
+@router.post(
+    "/v1/licenses/unbind",
+    dependencies=[rate_limited(rate_limit.license_activate_bucket)],
+)
 def unbind_device(ctx=Depends(attested_or_mfa_user)):
     """"Use Semper on a different device" — the holder's own device change.
 
@@ -132,8 +135,6 @@ def unbind_device(ctx=Depends(attested_or_mfa_user)):
     user has legitimately just moved to.
     """
     user = ctx["user"]
-    if not rate_limit.license_activate_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     license_id = user.get("licenseId") or ""
     if not license_id:
         raise HTTPException(404, errors.NO_LICENSE)
