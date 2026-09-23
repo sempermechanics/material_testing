@@ -101,7 +101,10 @@ replaying one that may have expired while it waited.
 
 `RetryOnTransient` retries **429 unconditionally** — the token bucket
 (`backend/app/rate_limit.py`) and the gateway quota both reject before the
-handler runs, so nothing happened. **503 is not the same promise**: ESPv2 emits
+handler runs, so nothing happened. On a device-signed route that includes the
+nonce: the bucket is a route dependency (`deps.rate_limited`) resolved ahead of
+`verified_device`, so the unchanged retry is not a replay, and the 429 carries
+`Retry-After` for when the bucket next has a token. **503 is not the same promise**: ESPv2 emits
 it before *and* after handing a request on, so it is retried only for GET and
 for the POSTs whose handlers are idempotent by contract. Session create and the
 upload broker are deliberately absent — a duplicate there costs a Drive object.
