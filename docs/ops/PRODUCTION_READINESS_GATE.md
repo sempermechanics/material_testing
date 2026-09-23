@@ -325,9 +325,11 @@ pre-licensing documents)
       Granted 2026-09-23 (verified with `get-iam-policy`). Check still owed:
       the next backup's session reaches `UPLOADING` through the queue, and no
       `provision_enqueue_failed` events once this branch is deployed.
-- [ ] Give `indic-deployer@` `run.invoker` on `indic-api-staging` before the
+- [x] Give `indic-deployer@` `run.invoker` on `indic-api-staging` before the
       next staging deploy: the workflow now deploys staging private
       (`--no-allow-unauthenticated`), so the candidate smoke needs it.
+      Granted 2026-09-23; staging invokers are now `indic-gw@`,
+      `indic-deployer@` and `domain:indicvision.com`.
 - [ ] Deploy to production (min-instances 1, one worker, client nonces,
       `/readyz` no longer on the gateway — redeploy the gateway config from
       `backend/gateway/openapi.yaml`). Check: `/readyz` through the gateway
