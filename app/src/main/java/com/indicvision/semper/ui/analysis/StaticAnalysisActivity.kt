@@ -835,6 +835,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun showVideoSamplingDialog(uri: Uri, meta: VideoMeta) {
         val view = layoutInflater.inflate(R.layout.dialog_video_sampling, null)
         val tvInfo = view.findViewById<TextView>(R.id.tvVideoInfo)
+        val toggleMode = view.findViewById<MaterialButtonToggleGroup>(R.id.toggleExtractMode)
+        val layoutFps = view.findViewById<View>(R.id.layoutFps)
         val sliderFps = view.findViewById<com.google.android.material.slider.Slider>(R.id.sliderFps)
         val tvFps = view.findViewById<TextView>(R.id.tvFpsValue)
         val range = view.findViewById<com.google.android.material.slider.RangeSlider>(R.id.rangeSegment)
@@ -874,10 +876,23 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
         val btnExtract = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnExtractFrames)
         fun refreshEstimate() {
-            val n = estimate()
-            val capped = if (n >= maxFrames) getString(R.string.video_capped_suffix) else ""
-            tvEstimate.text = "≈ $n frame(s): 1 reference + ${(n - 1).coerceAtLeast(0)} deformed$capped"
-            btnExtract.text = resources.getQuantityString(R.plurals.extract_n_frames_fmt, n, n)
+            val isKeyframeMode = toggleMode.checkedButtonId == R.id.btnModeKeyframes
+            if (isKeyframeMode) {
+                tvEstimate.text = getString(R.string.video_keyframes_estimate_note)
+                btnExtract.setText(R.string.extract_frames_title)
+            } else {
+                val n = estimate()
+                val capped = if (n >= maxFrames) getString(R.string.video_capped_suffix) else ""
+                tvEstimate.text = "≈ $n frame(s): 1 reference + ${(n - 1).coerceAtLeast(0)} deformed$capped"
+                btnExtract.text = resources.getQuantityString(R.plurals.extract_n_frames_fmt, n, n)
+            }
+        }
+
+        toggleMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            val isKeyframeMode = checkedId == R.id.btnModeKeyframes
+            layoutFps.visibility = if (isKeyframeMode) View.GONE else View.VISIBLE
+            refreshEstimate()
         }
 
         sliderFps.addOnChangeListener { _, v, _ ->
@@ -897,16 +912,23 @@ class StaticAnalysisActivity : AppCompatActivity() {
         sheet.setContentView(view)
         btnExtract.setOnClickListener {
             sheet.dismiss()
+            val preferKeyframes = toggleMode.checkedButtonId == R.id.btnModeKeyframes
             val fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1)
             val startMs = (range.values.first() * 1000).toLong()
             val endMs = (range.values.last() * 1000).toLong()
-            extractVideoFrames(uri, fpsExtract, startMs, endMs)
+            extractVideoFrames(uri, fpsExtract, startMs, endMs, preferKeyframes)
         }
         sheet.show()
     }
 
     /** Extracts frames at [fpsExtract] over [startMs, endMs] with the progress overlay. */
-    private fun extractVideoFrames(uri: Uri, fpsExtract: Double, startMs: Long, endMs: Long) {
+    private fun extractVideoFrames(
+        uri: Uri,
+        fpsExtract: Double,
+        startMs: Long,
+        endMs: Long,
+        preferKeyframes: Boolean = true,
+    ) {
         if (isProcessing) return
         isProcessing = true
         checkReady()
@@ -920,6 +942,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             cacheDir = cacheDir,
             tvResult = tvResult,
             overlayHelper = overlayHelper,
+            preferKeyframes = preferKeyframes,
             onApplied = { applied ->
                 applied.refPreview?.let { refPreviewBmp = it }
                 wizardSlots.refreshRefSlot(refPreviewBmp)

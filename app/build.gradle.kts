@@ -362,6 +362,10 @@ detekt {
     baseline = file("detekt-baseline.xml")
 }
 
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = "17"
+}
+
 // Coverage: exclude view classes only — ViewModels and the pure helpers that
 // live alongside them (AnalysisViewModel, FrameOrderHelper, …) are the app's
 // highest-churn logic and were invisible while the whole `ui` package was
