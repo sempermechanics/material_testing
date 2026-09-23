@@ -202,14 +202,14 @@ Remaining from the 2026-08-31 efficiency pass (the three higher-impact items —
 Firestore read order, SessionZip CRC reuse, viewer chrome animator guard — are
 shipped):
 
-- `DicUploadWorker`'s progress sampler writes to the WorkManager DB every 700 ms
-  with no change guard (`DicUploadWorker.kt:446-458`; the "~650 of ~857 writes"
-  estimate is from a measured run, not re-checkable from the code).
+- ~~`DicUploadWorker`'s progress sampler writes every 700 ms with no change
+  guard.~~ **Done:** `UploadProgressSampler` publishes only when phase or percent
+  moves (`UploadProgressSamplerTest`).
 - `SettingsActivity` calls `listCompleted` (`SettingsActivity.kt:240`), which has
-  no cache. The earlier proposal to reuse `listRestorable`'s 60-second cache was
-  based on a wrong premise: `listRestorable` / `listRestorableSessions` have **no
-  live caller** (`CloudRestore.kt:209-277`), so that cache is dead code. The fix
-  is to move the cache onto `listCompleted` and delete the dead pair (TD-51).
+  no cache. The dead `listRestorable` pair and its 60-second cache were deleted
+  (TD-51), so a cache for `listCompleted` would be new code, and it would need
+  the invalidation the old one had after restores and erasures. Only worth it
+  if the settings open is measurably slow.
 - A session's file collection is paged twice on the **inline** provision path —
   once in `session_provision.py:51` and again by `list_pending_uploads` in
   `routers/sessions.py:469` — not twice inside `session_provision` as previously

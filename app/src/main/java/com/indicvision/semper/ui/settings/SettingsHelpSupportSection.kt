@@ -79,10 +79,9 @@ class SettingsHelpSupportSection(
         val body = buildString {
             append("\n\n---\n")
             append("Account: ").append(account).append('\n')
-            // Same guard as the Account section: a Keystore that refuses to open
-            // must not cost the user their way of reaching support.
-            val deviceId = runCatching { DeviceKeyManager(activity).getDeviceId() }
-                .getOrDefault("(unavailable)")
+            // The Keystore-free lookup: a Keystore that refuses to open must not
+            // cost the user their way of reaching support.
+            val deviceId = DeviceKeyManager.deviceId(activity)
             append("Device ID: ").append(deviceId).append('\n')
             append("App: ").append(BuildConfig.VERSION_NAME)
                 .append(" (").append(BuildConfig.VERSION_CODE).append(")\n")

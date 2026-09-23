@@ -20,6 +20,7 @@ import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.MeResponse
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -150,7 +151,7 @@ class AuthRepository(context: Context) {
      */
     suspend fun signUpWithPassword(email: String, password: String): Result<String> = firebaseThen("password_signup") {
         val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
-        runCatching { result.user?.sendEmailVerification()?.await() }
+        suspendRunCatching { result.user?.sendEmailVerification()?.await() }
             .onFailure { Timber.w(it, "Could not send verification email") }
         result
     }
@@ -389,7 +390,7 @@ class AuthRepository(context: Context) {
     private suspend fun syncPendingTermsAcceptance(token: String) {
         if (TokenStore.isTermsAcceptanceSynced(appContext)) return
         val version = TokenStore.termsAcceptedVersion(appContext) ?: return
-        runCatching { api.acceptTerms(token, version) }
+        suspendRunCatching { api.acceptTerms(token, version) }
             .onSuccess { TokenStore.setTermsAccepted(appContext, version, synced = true) }
             .onFailure { Timber.d(it, "Terms acceptance still not synced") }
     }
@@ -531,7 +532,7 @@ class AuthRepository(context: Context) {
      */
     private suspend fun unverifiedEmailError(user: FirebaseUser): Exception? {
         if (!needsEmailVerification(user)) return null
-        runCatching { auth.currentUser?.sendEmailVerification()?.await() }
+        suspendRunCatching { auth.currentUser?.sendEmailVerification()?.await() }
             .onFailure { Timber.w(it, "Could not re-send verification email") }
         val email = user.email.orEmpty()
         signOut()
@@ -577,7 +578,7 @@ class AuthRepository(context: Context) {
         if (user.providerData.none { it.providerId == EmailAuthProvider.PROVIDER_ID }) return false
         // Someone who just clicked the link in a browser is still unverified in
         // this cached user object; reload before judging them.
-        runCatching { user.reload().await() }
+        suspendRunCatching { user.reload().await() }
             .onFailure { Timber.d(it, "Could not refresh verification state; using cached value") }
         return auth.currentUser?.isEmailVerified == false
     }
@@ -588,7 +589,7 @@ class AuthRepository(context: Context) {
             // /v1/me and /v1/config are independent reads: in parallel they cost
             // one round-trip instead of two. A failed /me cancels the config call.
             val (me, config) = coroutineScope {
-                val config = async { runCatching { api.getConfig(token) } }
+                val config = async { suspendRunCatching { api.getConfig(token) } }
                 api.me(token) to config.await() // 200 = APPROVED
             }
             TokenStore.setStatus(appContext, AccessStatus.APPROVED)

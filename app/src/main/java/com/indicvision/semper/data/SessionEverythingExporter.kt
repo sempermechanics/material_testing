@@ -5,7 +5,9 @@
 package com.indicvision.semper.data
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -47,6 +49,9 @@ object SessionEverythingExporter {
         try {
             ZipOutputStream(master.outputStream().buffered()).use { masterZip ->
                 sessions.forEachIndexed { index, record ->
+                    // The copy below is blocking IO, so cancellation (the
+                    // banner's Cancel) is only seen here, between sessions.
+                    ensureActive()
                     onProgress(index + 1, sessions.size)
                     val sessionZip = buildSessionEverythingZip(app, record, stagingRoot, index, ts)
                         ?: return@forEachIndexed
@@ -62,6 +67,9 @@ object SessionEverythingExporter {
                 return@withContext null
             }
             Result(master, sessions.size)
+        } catch (e: CancellationException) {
+            master.delete()
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Master session export failed")
             master.delete()
@@ -129,6 +137,9 @@ object SessionEverythingExporter {
                 writeSessionEntries(zipOut, sessionDir, work, refFile, rawDeformedDir, csvFile, ts)
             }
             zip.takeIf { it.length() > 0L }
+        } catch (e: CancellationException) {
+            zip.delete()
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Session zip failed for %s", record.id)
             zip.delete()
@@ -162,6 +173,8 @@ object SessionEverythingExporter {
                 csvFile = csvFile,
                 writeReports = true,
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Report staging failed for %s — packing raw session files", record.id)
         }

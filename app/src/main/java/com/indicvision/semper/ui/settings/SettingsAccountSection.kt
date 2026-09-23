@@ -20,7 +20,7 @@ class SettingsAccountSection(
     fun wire() {
         activity.findViewById<TextView>(R.id.tvAccountEmail).text =
             TokenStore.cachedEmail(activity).orEmpty()
-        val deviceId = runCatching { DeviceKeyManager(activity).getDeviceId() }.getOrDefault("")
+        val deviceId = DeviceKeyManager.deviceId(activity)
         activity.findViewById<TextView>(R.id.tvAccountDevice).text =
             activity.getString(R.string.account_device_id_fmt, deviceId)
 

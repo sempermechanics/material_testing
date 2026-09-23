@@ -25,6 +25,7 @@ import com.indicvision.semper.data.isTrustedAuthLink
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -425,7 +426,7 @@ class AuthActivity : AppCompatActivity() {
      * accepted, so a rejected password is never stored.
      */
     private suspend fun offerToSavePassword(email: String, password: String) {
-        runCatching {
+        suspendRunCatching {
             CredentialManager.create(this)
                 .createCredential(this, CreatePasswordRequest(email, password))
         }.onFailure { Timber.d(it, "Password not saved (declined or unsupported)") }

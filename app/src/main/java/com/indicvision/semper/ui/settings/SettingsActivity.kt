@@ -527,7 +527,6 @@ class SettingsActivity : AppCompatActivity() {
                     val cloudId = info.tags.firstOrNull { it.startsWith("restore-") }
                         ?.removePrefix("restore-")
                         ?: info.outputData.getString(CloudRestore.KEY_CLOUD_SESSION_ID)
-                        ?: info.progress.getString(CloudRestore.KEY_CLOUD_SESSION_ID)
                     val key = cloudId.orEmpty()
                     when (info.state) {
                         WorkInfo.State.RUNNING -> {

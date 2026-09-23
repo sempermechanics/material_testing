@@ -66,7 +66,7 @@ class SessionLimitActivity : AppCompatActivity() {
     /** Opens the mail app pre-filled to support with account + device context. */
     private fun emailSupport() {
         val email = TokenStore.cachedEmail(this) ?: "(unknown account)"
-        val deviceId = DeviceKeyManager(this).getDeviceId()
+        val deviceId = DeviceKeyManager.deviceId(this)
         val used = TokenStore.quotaUsed(this)
         val max = TokenStore.quotaMax(this)
         val body = buildString {

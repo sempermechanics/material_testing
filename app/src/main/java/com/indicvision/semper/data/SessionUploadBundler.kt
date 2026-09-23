@@ -25,6 +25,8 @@ import com.indicvision.semper.ui.viewer.HeatmapFit
 import com.indicvision.semper.ui.viewer.SummaryAnimation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -134,6 +136,9 @@ object SessionUploadBundler {
         val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, csvMetadata) }
         try {
             record.defNames.forEachIndexed { index, defName ->
+                // Rendering is blocking; check per frame so a cancelled export
+                // or upload stops within one frame, not one session.
+                ensureActive()
                 val datFile = SessionPaths.frameDat(sessionDir, index)
                 if (!datFile.exists()) {
                     onFrame(index + 1, frameTotal)
@@ -201,6 +206,7 @@ object SessionUploadBundler {
         }
         // Per-field looping GIFs for single-setting backups only. Sweeps are
         // parameter combinations, not a time series — no animations folder.
+        ensureActive()
         val animations =
             if (canReport && !record.isSweep) {
                 stageAnimations(context, record, sessionDir, processedDir)
@@ -256,6 +262,7 @@ object SessionUploadBundler {
         val ranges = SummaryAnimation.globalRanges(batchFiles, rangesFile)
         var gifs = 0
         for ((label, dataIndex) in SummaryAnimation.FIELDS) {
+            currentCoroutineContext().ensureActive() // one GIF per check, like the frame loop
             val bounds = ranges[dataIndex] ?: continue
             try {
                 if (animation.build(dataIndex, label, bounds) != null) gifs++

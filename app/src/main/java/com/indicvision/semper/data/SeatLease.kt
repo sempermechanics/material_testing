@@ -5,6 +5,7 @@ import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.util.suspendRunCatching
 import timber.log.Timber
 
 /**
@@ -61,7 +62,7 @@ object SeatLease {
         val api = IndicApi.get(context)
         val token = if (api.enabled) TokenProvider.usableIdToken() else null
         if (token == null) return
-        val refreshed = runCatching { api.getConfig(token) }
+        val refreshed = suspendRunCatching { api.getConfig(token) }
             .onSuccess { AppRemoteConfig.apply(context, it) }
             .onFailure {
                 AppRemoteConfig.recordFetchFailure(context)
@@ -83,7 +84,7 @@ object SeatLease {
     ): Boolean {
         val idToken = if (shouldRelease() && apiEnabled()) token() else null
         if (idToken == null) return false
-        return runCatching {
+        return suspendRunCatching {
             applyConfig(release(idToken))
             true
         }.onFailure { Timber.w(it, "Could not release floating seat on sign-out") }
@@ -100,7 +101,7 @@ object SeatLease {
     ): Boolean {
         val idToken = if (shouldHeartbeat() && apiEnabled()) token() else null
         if (idToken == null) return false
-        return runCatching {
+        return suspendRunCatching {
             applyConfig(checkout(idToken))
             true
         }.onFailure { Timber.w(it, "Floating-seat heartbeat failed") }
