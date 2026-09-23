@@ -144,6 +144,18 @@ and binds again (three jittered rounds); if every round starves it raises
 the request path, leaving the licence unbound for the next request). Details:
 [CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md) §20.1.
 
+**Upload stops retrying a session whose files are gone
+(#148, merged 2026-09-23).** `DicUploadWorker` returned `Result.retry()`
+forever when report staging came out incomplete, so a session whose `.dat`
+files had been deleted sat on "upload pending" for days (Pixel 6, since
+2026-09-21). `UploadWorkOutcomes.classifyIncompleteStaging` now keeps retrying
+only while the inputs are on disk, the row was saved under 15 min ago, or they
+have been missing for under 10 min (timed by an `upload_inputs_missing_since`
+marker in the session folder and restarted whenever the row is re-saved, so a
+re-run's brief `.dat` gap does not count). Otherwise the worker fails with
+`cloud_backup_failed_missing_files`, which shows on the Home FAILED badge and
+its dialog.
+
 **Video sampling and long snackbars (`fix/video-estimate-snackbar`).** The
 sampling sheet promised one frame more than a fixed-interval extraction
 delivered whenever the segment reached the clip's end: it sampled at the end
@@ -156,10 +168,19 @@ Same fix as material_testing #9.
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
-**Backend names standardised (2026-09-23, `chore/semper-names`).** Cloud Run
+**Quicker session setup (branch `perf/inline-provision`, 2026-09-23).** Two
+Pixel 6 backups spent 5.37 s and 3.43 s provisioning inline (a bundle is 3
+files, under the queue threshold). The folder step made three Drive calls in a
+row; now the cached `session/` check and the new session folder's create run
+together, with no name search for an id minted in the same request, and a
+retry reuses the stored folder. `session_provisioned` logs `folderMs`.
+
+**Backend names standardised (2026-09-23, #146, deployed).** Cloud Run
 services are rebuilt as `semper-api` / `semper-api-staging` with queues
 `semper-provision` / `semper-provision-staging`; the gateways point at them and
-the old `indic-api*` services and `indic-provision` queue are removed once idle.
+the old `indic-api*` services, their images and the `indic-provision` queue are
+deleted. Rollback images: `semper-api:rollback-c0c0ce3`,
+`semper-api-staging:rollback-prev`.
 Staging now has its own queue and task target (environment-scoped GitHub vars).
 The legacy `indic-gw` gateway is deleted. Service-account emails and project IDs
 keep their `indic-*` names — see the names table in

@@ -1,6 +1,7 @@
 package com.indicvision.semper.cloud
 
 import androidx.work.ListenableWorker
+import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.UploadWorkOutcomes
 import com.indicvision.semper.util.Digests
 import org.junit.Assert.assertEquals
@@ -189,6 +190,90 @@ class DicUploadWorkerOutcomesTest {
 
             File(dir, "reports/Master_Report_Frame_1.pdf").delete()
             assertFalse(UploadWorkOutcomes.bundleArtifactsReady(dir))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `incomplete staging retries while the session may still be writing`() {
+        val gone = UploadWorkOutcomes.IncompleteStaging.INPUTS_GONE
+        val retry = UploadWorkOutcomes.IncompleteStaging.RETRY
+        val old = UploadWorkOutcomes.STAGING_INPUT_GRACE_MS * 200
+        val grace = UploadWorkOutcomes.INPUTS_MISSING_GRACE_MS
+
+        // Inputs on disk: the bake itself missed, so a later pass may succeed.
+        assertEquals(retry, UploadWorkOutcomes.classifyIncompleteStaging(true, old, missingForMs = old))
+        // Just saved: a re-run may still be rewriting its .dat files.
+        assertEquals(retry, UploadWorkOutcomes.classifyIncompleteStaging(false, 60_000L, missingForMs = old))
+        // Old session, but only just seen missing: a retry that landed in a re-run's gap.
+        assertEquals(retry, UploadWorkOutcomes.classifyIncompleteStaging(false, old, missingForMs = grace - 1))
+        // Old and missing for the whole grace: gone for good (the Sep 21 Pixel 6 session).
+        assertEquals(gone, UploadWorkOutcomes.classifyIncompleteStaging(false, old, missingForMs = grace))
+    }
+
+    @Test
+    fun `missing-since marker times how long the inputs have been gone`() {
+        val dir = createTempDirectory(prefix = "upload-session-").toFile()
+        val marker = File(dir, UploadWorkOutcomes.INPUTS_MISSING_MARKER)
+        val savedAt = 1_000_000L
+        try {
+            // First sighting stamps the marker and counts from zero.
+            assertEquals(0L, UploadWorkOutcomes.inputsMissingForMs(dir, false, savedAt, now = 2_000_000L))
+            assertEquals("2000000", marker.readText())
+            // Later sightings measure from that stamp.
+            assertEquals(500L, UploadWorkOutcomes.inputsMissingForMs(dir, false, savedAt, now = 2_000_500L))
+
+            // Inputs back on disk clear it.
+            assertEquals(0L, UploadWorkOutcomes.inputsMissingForMs(dir, true, savedAt, now = 3_000_000L))
+            assertFalse(marker.exists())
+
+            // A stamp from before the row was re-saved (re-run / restore) restarts.
+            marker.writeText("1500000")
+            assertEquals(0L, UploadWorkOutcomes.inputsMissingForMs(dir, false, savedAt = 1_800_000L, now = 4_000_000L))
+            assertEquals("4000000", marker.readText())
+
+            // An unreadable stamp restarts too.
+            marker.writeText("garbage")
+            assertEquals(0L, UploadWorkOutcomes.inputsMissingForMs(dir, false, savedAt, now = 5_000_000L))
+            assertEquals("5000000", marker.readText())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `missing-since falls back to session age when the marker cannot be written`() {
+        val parent = createTempDirectory(prefix = "upload-session-").toFile()
+        try {
+            // The session dir itself is gone, so there is nowhere to stamp.
+            val gone = File(parent, "deleted")
+            assertEquals(
+                4_000L,
+                UploadWorkOutcomes.inputsMissingForMs(gone, false, savedAt = 1_000L, now = 5_000L),
+            )
+        } finally {
+            parent.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `staging inputs need the reference and at least one frame dat`() {
+        val dir = createTempDirectory(prefix = "upload-session-").toFile()
+        try {
+            val ref = File(dir, "Reference.png")
+            assertFalse(UploadWorkOutcomes.stagingInputsOnDisk(dir, frameCount = 3, refFile = ref))
+
+            ref.writeBytes(byteArrayOf(1, 2, 3))
+            assertFalse(UploadWorkOutcomes.stagingInputsOnDisk(dir, frameCount = 3, refFile = ref))
+
+            SessionPaths.frameDat(dir, 2).writeBytes(byteArrayOf(0))
+            assertTrue(UploadWorkOutcomes.stagingInputsOnDisk(dir, frameCount = 3, refFile = ref))
+            // A .dat past the recorded frame count is not one of this session's frames.
+            assertFalse(UploadWorkOutcomes.stagingInputsOnDisk(dir, frameCount = 2, refFile = ref))
+
+            ref.delete()
+            assertFalse(UploadWorkOutcomes.stagingInputsOnDisk(dir, frameCount = 3, refFile = ref))
         } finally {
             dir.deleteRecursively()
         }

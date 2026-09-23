@@ -329,8 +329,14 @@ Three properties worth knowing before you change this path:
   kept on `users/{uid}` (`driveFolderId`, `driveSessionsFolderId`). A later
   session checks the cached `sessions` folder still exists (one `files.get`)
   and creates only its own folder, instead of four sequential list-or-create
-  calls from the root. A deleted or moved folder fails that check and the
-  full walk runs again and re-caches.
+  calls from the root. The check and the create run concurrently, and the
+  session folder is created without a name search (its id was minted by this
+  request), so a warm upload spends one Drive round-trip on folders before the
+  resumable sessions open in parallel. A deleted or trashed folder fails the
+  check: the folder just made under it is deleted and the full walk runs again
+  and re-caches. A Cloud Tasks retry reuses the session's stored
+  `driveFolderId` instead of creating a second one. `session_provisioned`
+  logs `folderMs` (the folder phase) next to `latencyMs` (the whole provision).
 
 `/v1/tasks/provision-session` is authenticated by `tasks.tasks_caller`, not by
 anything in `deps.py`: the caller is Google, so there is no uid, no device and no

@@ -360,6 +360,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_backup_failed_too_large">This analysis is too large to back up.</string>
     <string name="cloud_backup_failed_oom">Not enough memory on this device to prepare the backup. Try again after closing other apps, or use a device with more RAM.</string>
     <string name="cloud_backup_failed_provision">Cloud backup setup could not be completed. Tap Try again.</string>
+    <string name="cloud_backup_failed_missing_files">This analysis\'s results are no longer on this device, so it can\'t be backed up.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
     <string name="cloud_delete_backup_title">Delete from backup</string>
     <string name="cloud_delete_backup_body">Choose what to remove for this analysis.\n\nDeleting the cloud backup is permanent — the raw images, results and report are erased from the cloud and cannot be recovered.</string>

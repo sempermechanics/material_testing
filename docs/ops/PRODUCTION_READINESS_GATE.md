@@ -355,8 +355,15 @@ pre-licensing documents)
       `c0c0ce3` image, kept under the new package).
 - [ ] A signed call from a new build carries a `t1.` nonce and no
       `POST /v1/challenge` precedes it (next app release).
-- [ ] The next backup's session reaches `UPLOADING` through `semper-provision`
-      with no `provision_enqueue_failed` event (proves the Tasks grant).
+- [ ] A session over `INLINE_PROVISION_MAX_FILES` (8) files reaches
+      `UPLOADING` through `semper-provision` with no `provision_enqueue_failed`
+      event (proves the Tasks grant). A phone backup cannot prove it: a bundle
+      is 3 files and provisions inline. Two Pixel 6 backups on 2026-09-23 did
+      that — `POST /v1/sessions` 6.06 s / 4.05 s, provisioning 5.37 s / 3.43 s.
+- [ ] Inline provisioning after the folder change (check-and-create run
+      concurrently, no name search for the new session folder): a phone backup's
+      `session_provisioned` shows `folderMs` and `latencyMs` well under the
+      3.43 s above.
 - [x] Prune the tagged `cand-*` revisions so none holds a warm instance.
       Moot: they went with `indic-api` (deleted 2026-09-23); `semper-api` has
       one revision.
