@@ -131,10 +131,20 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-22)
+## Current state (2026-09-23)
 
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
+
+**Video import reads AVI (#139, `feat/avi-video-import`, open).** #136 landed
+the keyframe/uniform extraction path that pulls frames out of the raw Y plane;
+#139 adds the container Android itself cannot open. `AviReader` demuxes RIFF,
+`AviLuma` reads the uncompressed layouts losslessly, `MjpegHuffman` repairs
+tableless motion-JPEG frames and `AviCodecDecoder` hands Xvid/H.264 samples to
+the platform codecs — no new dependency, no APK growth. A codec the device
+cannot decode is now named in the error instead of failing blank. Untried on a
+real AVI on a device: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a rows
+7-9. The same change is being ported to `sempermechanics/material_testing`.
 
 **Licensing is live in production (2026-09-21/22).** `indic-api` serves
 `d6b1b64` (`main` after #116) behind the `semper-gw` gateway config
